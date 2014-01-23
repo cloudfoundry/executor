@@ -47,9 +47,6 @@ var _ = Describe("Executor", func() {
 	Describe("Handling RunOnces", func() {
 		BeforeEach(func() {
 			go executor.HandleRunOnces()
-
-			// wait for watcher to be ready
-			time.Sleep(100 * time.Millisecond)
 		})
 
 		Context("when it sees a desired RunOnce", func() {

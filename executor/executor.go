@@ -4,6 +4,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-cf-experimental/runtime-schema/models"
 	"github.com/vito/gordon"
+	"time"
 
 	Bbs "github.com/pivotal-cf-experimental/runtime-schema/bbs"
 )
@@ -58,7 +59,13 @@ func (e *Executor) HandleRunOnces() {
 }
 
 func (e *Executor) StopHandlingRunOnces() {
-	e.stopHandlingRunOnces <- true
+	for {
+		select {
+		case e.stopHandlingRunOnces <- true:
+			return
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func (e *Executor) runOnce(runOnce models.RunOnce) {
