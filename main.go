@@ -56,9 +56,10 @@ func main() {
 		log.Fatalln("warden is not up!", err)
 	}
 
-	fmt.Println("Watching for RunOnces!")
-
 	executor := executor.New(bbs, wardenClient)
 
 	executor.HandleRunOnces()
+
+	fmt.Println("Watching for RunOnces!")
+	select {}
 }

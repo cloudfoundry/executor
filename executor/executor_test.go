@@ -2,6 +2,7 @@ package executor_test
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -29,7 +30,6 @@ var _ = Describe("Executor", func() {
 		runOnce = models.RunOnce{
 			Guid: "totally-unique",
 		}
-
 	})
 
 	Describe("Executor IDs", func() {
@@ -45,11 +45,11 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Handling RunOnces", func() {
-		BeforeEach(func() {
-			go executor.HandleRunOnces()
-		})
-
 		Context("when it sees a desired RunOnce", func() {
+			BeforeEach(func() {
+				executor.HandleRunOnces()
+			})
+
 			AfterEach(func() {
 				executor.StopHandlingRunOnces()
 			})
@@ -83,7 +83,7 @@ var _ = Describe("Executor", func() {
 					runOnces, _ := bbs.GetAllStartingRunOnces()
 					runningRunOnce := runOnces[0]
 					Ω(runningRunOnce.Guid).Should(Equal(runOnce.Guid))
-					Ω(gordon.CreatedHandles).Should(ContainElement(runningRunOnce.ContainerHandle))
+					Ω(gordon.CreatedHandles()).Should(ContainElement(runningRunOnce.ContainerHandle))
 				})
 			})
 
@@ -102,7 +102,7 @@ var _ = Describe("Executor", func() {
 
 					runOnces, _ := bbs.GetAllStartingRunOnces()
 					Ω(runOnces).Should(BeEmpty())
-					Ω(gordon.CreatedHandles).Should(BeEmpty())
+					Ω(gordon.CreatedHandles()).Should(BeEmpty())
 				})
 			})
 
@@ -124,7 +124,7 @@ var _ = Describe("Executor", func() {
 
 					runOnces, _ := bbs.GetAllStartingRunOnces()
 					Ω(runOnces).Should(BeEmpty())
-					Ω(gordon.CreatedHandles).Should(BeEmpty())
+					Ω(gordon.CreatedHandles()).Should(BeEmpty())
 				})
 			})
 
@@ -145,22 +145,28 @@ var _ = Describe("Executor", func() {
 						return runOnces
 					}).Should(HaveLen(1))
 
-					Eventually(func() []string { return gordon.DestroyedHandles }).Should(HaveLen(1))
-					Ω(gordon.DestroyedHandles).Should(Equal(gordon.CreatedHandles))
+					Eventually(func() []string { return gordon.DestroyedHandles() }).Should(HaveLen(1))
+					Ω(gordon.DestroyedHandles()).Should(Equal(gordon.CreatedHandles()))
 				})
 			})
 		})
 
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
+				executor.HandleRunOnces()
+
 				etcdRunner.Stop()
 				time.Sleep(200 * time.Millisecond) //give the etcd driver time to realize we timed out.  the etcd driver is hardcoded to have a 200 ms timeout
-				etcdRunner.Start()
 
+				etcdRunner.Start()
 				time.Sleep(200 * time.Millisecond) //give the etcd driver a chance to connect
 
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				executor.StopHandlingRunOnces()
 			})
 
 			It("should handle any new desired RunOnces", func() {
@@ -173,6 +179,7 @@ var _ = Describe("Executor", func() {
 
 		Context("when told to stop handling RunOnces", func() {
 			BeforeEach(func() {
+				executor.HandleRunOnces()
 				executor.StopHandlingRunOnces()
 			})
 
@@ -183,6 +190,55 @@ var _ = Describe("Executor", func() {
 				time.Sleep(1 * time.Second)
 				runOnces, _ := bbs.GetAllClaimedRunOnces()
 				Ω(runOnces).Should(BeEmpty())
+			})
+		})
+
+		Context("when two executors are fighting for a RunOnce", func() {
+			var otherExecutor *Executor
+
+			BeforeEach(func() {
+				executor.HandleRunOnces()
+
+				otherExecutor = New(bbs, gordon)
+				otherExecutor.HandleRunOnces()
+			})
+
+			AfterEach(func() {
+				executor.StopHandlingRunOnces()
+				otherExecutor.StopHandlingRunOnces()
+			})
+
+			It("the winner should be randomly distributed", func() {
+				samples := 40
+
+				//generate N desired run onces
+				for i := 0; i < samples; i++ {
+					runOnce := models.RunOnce{
+						Guid: fmt.Sprintf("totally-unique-%d", i),
+					}
+					err := bbs.DesireRunOnce(runOnce)
+					Ω(err).ShouldNot(HaveOccurred())
+				}
+
+				//eventually all N should be claimed
+				Eventually(func() []models.RunOnce {
+					runOnces, _ := bbs.GetAllClaimedRunOnces()
+					return runOnces
+				}, 5).Should(HaveLen(samples))
+
+				//figure out who claimed the run onces
+				claimedRunOnces, _ := bbs.GetAllClaimedRunOnces()
+				handlers := map[string]int{}
+
+				for _, claimedRunOnce := range claimedRunOnces {
+					handlers[claimedRunOnce.ExecutorID] += 1
+				}
+
+				//assert that at least both executors are participating
+				//these might appear flakey, but the odds of failing should be really really low...
+				Ω(handlers).Should(HaveLen(2))
+				Ω(handlers[executor.ID()]).Should(BeNumerically(">", 3))
+				Ω(handlers[otherExecutor.ID()]).Should(BeNumerically(">", 3))
 			})
 		})
 	})

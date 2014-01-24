@@ -4,6 +4,8 @@ import (
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-cf-experimental/runtime-schema/models"
 	"github.com/vito/gordon"
+	"math/rand"
+	"sync"
 	"time"
 
 	Bbs "github.com/pivotal-cf-experimental/runtime-schema/bbs"
@@ -15,13 +17,14 @@ type Executor struct {
 	bbs          Bbs.ExecutorBBS
 	wardenClient gordon.Client
 
-	stopHandlingRunOnces chan<- bool
+	runOnceGroup         *sync.WaitGroup
+	stopHandlingRunOnces chan bool
 }
 
 func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
-	uuid, ohgodno := uuid.NewV4()
-	if ohgodno != nil {
-		panic("wtf?: " + ohgodno.Error())
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		panic("Failed to generate a random guid....:" + err.Error())
 	}
 
 	return &Executor{
@@ -29,6 +32,7 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
 
 		bbs:          bbs,
 		wardenClient: wardenClient,
+		runOnceGroup: &sync.WaitGroup{},
 	}
 }
 
@@ -37,39 +41,58 @@ func (e *Executor) ID() string {
 }
 
 func (e *Executor) HandleRunOnces() {
-	for {
+	ready := make(chan bool)
+	e.stopHandlingRunOnces = make(chan bool)
+
+	go func() {
 		runOnces, stop, errors := e.bbs.WatchForDesiredRunOnce()
+		ready <- true
 
-		e.stopHandlingRunOnces = stop
-
-	INNER:
 		for {
-			select {
-			case runOnce, ok := <-runOnces:
-				if !ok {
-					return
-				}
+		INNER:
+			for {
+				select {
+				case runOnce, ok := <-runOnces:
+					if !ok {
+						return
+					}
 
-				go e.runOnce(runOnce)
-			case <-errors:
-				break INNER
+					e.runOnceGroup.Add(1)
+					go e.runOnce(runOnce)
+				case <-e.stopHandlingRunOnces:
+					stop <- true
+					return
+				case <-errors:
+					break INNER
+				}
 			}
+
+			runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
 		}
-	}
+	}()
+
+	<-ready
 }
 
+//StopHandlingRunOnces is used mainly in test to avoid having multiple executors
+//running concurrently from polluting the tests
 func (e *Executor) StopHandlingRunOnces() {
-	for {
-		select {
-		case e.stopHandlingRunOnces <- true:
-			return
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
+	//tell the watcher to stop
+	e.stopHandlingRunOnces <- true
+	//wait for any running runOnce goroutines to end
+	e.runOnceGroup.Wait()
+}
+
+func (e *Executor) sleepForARandomInterval() {
+	interval := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(100)
+	time.Sleep(time.Duration(interval) * time.Millisecond)
 }
 
 func (e *Executor) runOnce(runOnce models.RunOnce) {
+	defer e.runOnceGroup.Done()
 	runOnce.ExecutorID = e.id
+
+	e.sleepForARandomInterval()
 
 	err := e.bbs.ClaimRunOnce(runOnce)
 	if err != nil {
