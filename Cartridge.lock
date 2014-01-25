@@ -9,3 +9,5 @@ github.com/coreos/go-systemd	ae95250ce5abe29f1af2a737caabbfdb561918c0
 github.com/nu7hatch/gouuid	179d4d0c4d8d407a32af483c2354df1d2c91e6c3
 github.com/samuel/go-zookeeper	897888e14f7bd6c1c9a70e2973d0f5fbdb28bde0
 github.com/vito/gordon	dd0fca5043eb28525a337f607a3e1a1963166634
+github.com/onsi/ginkgo	70bba40592331fc3aa81ac7cc48b51167349d893
+github.com/onsi/gomega	d7685fbd45fb7bef327b43ca2781368c68bf72b7
