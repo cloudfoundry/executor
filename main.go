@@ -8,10 +8,10 @@ import (
 
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
-	Bbs "github.com/pivotal-cf-experimental/runtime-schema/bbs"
+	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/vito/gordon"
 
-	"github.com/pivotal-cf-experimental/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/executor"
 )
 
 var wardenNetwork = flag.String(

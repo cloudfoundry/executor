@@ -2,13 +2,13 @@ package executor
 
 import (
 	"github.com/nu7hatch/gouuid"
-	"github.com/pivotal-cf-experimental/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
 	"math/rand"
 	"sync"
 	"time"
 
-	Bbs "github.com/pivotal-cf-experimental/runtime-schema/bbs"
+	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 )
 
 type Executor struct {
