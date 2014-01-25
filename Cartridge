@@ -14,3 +14,4 @@ github.com/vito/gordon origin/master
 # tests
 github.com/onsi/ginkgo origin/master
 github.com/onsi/gomega origin/master
+github.com/coreos/etcd origin/master

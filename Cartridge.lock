@@ -11,3 +11,4 @@ github.com/samuel/go-zookeeper	897888e14f7bd6c1c9a70e2973d0f5fbdb28bde0
 github.com/vito/gordon	dd0fca5043eb28525a337f607a3e1a1963166634
 github.com/onsi/ginkgo	70bba40592331fc3aa81ac7cc48b51167349d893
 github.com/onsi/gomega	d7685fbd45fb7bef327b43ca2781368c68bf72b7
+github.com/coreos/etcd	1b00c449a5b0ea26b6877278b278da9b3a9e6651
