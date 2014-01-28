@@ -4,7 +4,7 @@ code.google.com/p/gogoprotobuf/proto origin/master
 github.com/cloudfoundry-incubator/runtime-schema origin/master
 github.com/cloudfoundry/gunk origin/master
 github.com/cloudfoundry/storeadapter origin/master
-github.com/coreos/go-etcd origin/master
+github.com/coreos/go-etcd/etcd origin/master
 github.com/coreos/go-log/log origin/master
 github.com/coreos/go-systemd origin/master
 github.com/nu7hatch/gouuid origin/master
