@@ -1,14 +1,1 @@
-bitbucket.org/kardianos/osext	364fb577de68
-code.google.com/p/gogoprotobuf/proto	a35ad7295e7ff41bc6a5e625e5e17486845cc225
-github.com/cloudfoundry-incubator/runtime-schema	e5198856cf01367c5224a268c850c65966766f16
-github.com/cloudfoundry/gunk	24e811fc31d116330aaadfa9ff8e6693580436e1
-github.com/cloudfoundry/storeadapter	bf8788eab3f955b8ad3e127b319c1634fb4988e4
-github.com/coreos/go-etcd/etcd	5c0151c64399ff9a8087c2e29ae96145ede7cfc2
-github.com/coreos/go-log/log	70d039bee4b0e389e5be560491d8291708506f59
-github.com/coreos/go-systemd	ae95250ce5abe29f1af2a737caabbfdb561918c0
-github.com/nu7hatch/gouuid	179d4d0c4d8d407a32af483c2354df1d2c91e6c3
-github.com/samuel/go-zookeeper/zk	897888e14f7bd6c1c9a70e2973d0f5fbdb28bde0
-github.com/vito/gordon	dd0fca5043eb28525a337f607a3e1a1963166634
-github.com/onsi/ginkgo	c6d536e4cd9a6081767209fed9807811949a4033
-github.com/onsi/gomega	d7685fbd45fb7bef327b43ca2781368c68bf72b7
-github.com/coreos/etcd	1b00c449a5b0ea26b6877278b278da9b3a9e6651
+../../../../Cartridge.lock
