@@ -2,7 +2,7 @@ bitbucket.org/kardianos/osext	364fb577de68
 code.google.com/p/gogoprotobuf/proto	a35ad7295e7ff41bc6a5e625e5e17486845cc225
 github.com/cloudfoundry-incubator/runtime-schema	e5198856cf01367c5224a268c850c65966766f16
 github.com/cloudfoundry/gunk	24e811fc31d116330aaadfa9ff8e6693580436e1
-github.com/cloudfoundry/storeadapter	bf8788eab3f955b8ad3e127b319c1634fb4988e4
+github.com/cloudfoundry/storeadapter	65e027c78f08cd898e6b0ea0cb340d811a3a969f
 github.com/coreos/go-etcd/etcd	5c0151c64399ff9a8087c2e29ae96145ede7cfc2
 github.com/coreos/go-log/log	70d039bee4b0e389e5be560491d8291708506f59
 github.com/coreos/go-systemd	ae95250ce5abe29f1af2a737caabbfdb561918c0
