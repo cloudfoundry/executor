@@ -6,18 +6,18 @@ import (
 	"os/signal"
 	"testing"
 
-	"github.com/cloudfoundry/storeadapter/storerunner"
+	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var etcdRunner *storerunner.ETCDClusterRunner
+var etcdRunner *etcdstorerunner.ETCDClusterRunner
 
 func TestExecutor(t *testing.T) {
 	registerSignalHandler()
 	RegisterFailHandler(Fail)
 
-	etcdRunner = storerunner.NewETCDClusterRunner(5001+config.GinkgoConfig.ParallelNode, 1)
+	etcdRunner = etcdstorerunner.NewETCDClusterRunner(5001+config.GinkgoConfig.ParallelNode, 1)
 	etcdRunner.Start()
 
 	RunSpecs(t, "Executor Suite")

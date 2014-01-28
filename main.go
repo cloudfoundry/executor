@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/cloudfoundry/storeadapter"
-	"github.com/cloudfoundry/storeadapter/workerpool"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
+	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/executor"
@@ -35,7 +35,7 @@ var etcdMachines = flag.String(
 func main() {
 	flag.Parse()
 
-	etcdAdapter := storeadapter.NewETCDStoreAdapter(
+	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdMachines, ","),
 		workerpool.NewWorkerPool(10),
 	)
