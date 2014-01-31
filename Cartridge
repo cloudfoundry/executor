@@ -10,6 +10,7 @@ github.com/coreos/go-systemd origin/master
 github.com/nu7hatch/gouuid origin/master
 github.com/samuel/go-zookeeper/zk origin/master
 github.com/vito/gordon origin/master
+github.com/cloudfoundry/gosteno origin/master
 
 # tests
 github.com/onsi/ginkgo origin/master

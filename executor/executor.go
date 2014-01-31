@@ -1,14 +1,15 @@
 package executor
 
 import (
-	"github.com/nu7hatch/gouuid"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
 	"math/rand"
 	"sync"
 	"time"
 
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	steno "github.com/cloudfoundry/gosteno"
 )
 
 type Executor struct {
@@ -19,6 +20,8 @@ type Executor struct {
 
 	runOnceGroup         *sync.WaitGroup
 	stopHandlingRunOnces chan bool
+
+	logger *steno.Logger
 }
 
 func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
@@ -33,6 +36,8 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
 		bbs:          bbs,
 		wardenClient: wardenClient,
 		runOnceGroup: &sync.WaitGroup{},
+
+		logger: steno.NewLogger("Executor"),
 	}
 }
 
@@ -110,7 +115,36 @@ func (e *Executor) runOnce(runOnce models.RunOnce) {
 	if err != nil {
 		_, err := e.wardenClient.Destroy(runOnce.ContainerHandle)
 		if err != nil {
-			println("failed to clean up container: " + runOnce.ContainerHandle)
+			e.logger.Errord(map[string]interface{}{
+				"ContainerHandle": runOnce.ContainerHandle,
+			}, "failed to destroy container")
 		}
 	}
+}
+
+func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
+
+	stopChannel := make(chan bool, 1)
+
+	go func() {
+		ticker := time.NewTicker(period)
+		for {
+			select {
+			case (<-ticker.C):
+				success, err := e.bbs.GrabRunOnceLock(period)
+				if err != nil {
+					e.logger.Errord(map[string]interface{}{
+						"error": err.Error(),
+					}, "error when grabbing converge lock")
+				} else if success {
+					e.bbs.ConvergeRunOnce()
+				}
+			case (<-stopChannel):
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+
+	return stopChannel
 }

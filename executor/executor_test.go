@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/vito/gordon/fake_gordon"
 )
 
@@ -19,17 +21,24 @@ var _ = Describe("Executor", func() {
 		runOnce  models.RunOnce
 		executor *Executor
 		gordon   *fake_gordon.FakeGordon
+		testSink *steno.TestingSink
 	)
 
 	BeforeEach(func() {
+		testSink = steno.NewTestingSink()
+		stenoConfig := steno.Config{
+			Sinks: []steno.Sink{testSink},
+		}
+		steno.Init(&stenoConfig)
+
 		bbs = Bbs.New(etcdRunner.Adapter())
 		gordon = fake_gordon.New()
-
-		executor = New(bbs, gordon)
 
 		runOnce = models.RunOnce{
 			Guid: "totally-unique",
 		}
+
+		executor = New(bbs, gordon)
 	})
 
 	Describe("Executor IDs", func() {
@@ -150,7 +159,9 @@ var _ = Describe("Executor", func() {
 				})
 			})
 		})
+		Context("when RunOnces are already available", func() {
 
+		})
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
 				executor.HandleRunOnces()
@@ -240,6 +251,67 @@ var _ = Describe("Executor", func() {
 				Ω(handlers[executor.ID()]).Should(BeNumerically(">", 3))
 				Ω(handlers[otherExecutor.ID()]).Should(BeNumerically(">", 3))
 			})
+		})
+	})
+
+	Describe("Convergence", func() {
+		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
+		BeforeEach(func() {
+			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{LockIsGrabbable: true}
+			bbs.ExecutorBBS = fakeExecutorBBS
+		})
+
+		It("converges runOnces on a regular interval", func() {
+			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			defer func() {
+				stopChannel <- true
+			}()
+
+			Eventually(func() int {
+				return fakeExecutorBBS.CallsToConverge
+			}, 1.0, 0.1).Should(BeNumerically(">", 2))
+		})
+
+		It("stops convergence when told", func() {
+			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+
+			count := 1
+			Eventually(func() int {
+				if fakeExecutorBBS.CallsToConverge > 0 && stopChannel != nil {
+					stopChannel <- true
+					stopChannel = nil
+				}
+				diff := fakeExecutorBBS.CallsToConverge - count
+				count = fakeExecutorBBS.CallsToConverge
+				return diff
+			}, 1.0, 0.1).Should(Equal(0))
+		})
+
+		It("should only converge if it has the lock", func() {
+			fakeExecutorBBS.LockIsGrabbable = false
+
+			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			defer func() {
+				stopChannel <- true
+			}()
+
+			time.Sleep(20 * time.Millisecond)
+			Ω(fakeExecutorBBS.CallsToConverge).To(Equal(0))
+		})
+
+		It("logs an error message when GrabLock fails", func() {
+			fakeExecutorBBS.ErrorOnGrabLock = errors.New("Danger! Will Robinson, Danger!")
+			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			defer func() {
+				stopChannel <- true
+			}()
+
+			Eventually(func() string {
+				if len(testSink.Records) > 0 {
+					return testSink.Records[len(testSink.Records)-1].Message
+				}
+				return ""
+			}, 1.0, 0.1).Should(Equal("error when grabbing converge lock"))
 		})
 	})
 })
