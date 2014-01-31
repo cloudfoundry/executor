@@ -2,13 +2,14 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/executor"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
@@ -32,8 +33,27 @@ var etcdMachines = flag.String(
 	"comma-separated list of etcd addresses (http://ip:port)",
 )
 
+var logLevel = flag.String(
+	"logLevel",
+	"info",
+	"the logging level (none, fatal, error, warn, info, debug, debug1, debug2, all)",
+)
+
 func main() {
 	flag.Parse()
+
+	l, err := steno.GetLogLevel(*logLevel)
+	if err != nil {
+		log.Fatalf("Invalid loglevel: %s\n", *logLevel)
+	}
+
+	stenoConfig := steno.Config{
+		Level: l,
+		Sinks: []steno.Sink{steno.NewIOSink(os.Stdout)},
+	}
+
+	steno.Init(&stenoConfig)
+	logger := steno.NewLogger("main")
 
 	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdMachines, ","),
@@ -41,9 +61,12 @@ func main() {
 	)
 
 	bbs := Bbs.New(etcdAdapter)
-	err := etcdAdapter.Connect()
+	err = etcdAdapter.Connect()
 	if err != nil {
-		log.Fatalln("failed to get etcdAdapter to connect")
+		logger.Errord(map[string]interface{}{
+			"error": err,
+		}, "failed to get etcdAdapter to connect")
+		os.Exit(1)
 	}
 
 	wardenClient := gordon.NewClient(&gordon.ConnectionInfo{
@@ -53,15 +76,18 @@ func main() {
 
 	err = wardenClient.Connect()
 	if err != nil {
-		log.Fatalln("warden is not up!", err)
+		logger.Errord(map[string]interface{}{
+			"error": err,
+		}, "warden is not up!")
+		os.Exit(1)
 	}
 
 	executor := executor.New(bbs, wardenClient)
 
 	executor.HandleRunOnces()
-	fmt.Println("Watching for RunOnces!")
+	logger.Infof("Watching for RunOnces!")
 
 	executor.ConvergeRunOnces(30 * time.Second)
-	fmt.Println("Converging RunOnces!")
+	logger.Infof("Converging RunOnces!")
 	select {}
 }
