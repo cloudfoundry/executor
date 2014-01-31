@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
+	"github.com/cloudfoundry-incubator/executor/executor"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
-
-	"github.com/cloudfoundry-incubator/executor/executor"
 )
 
 var wardenNetwork = flag.String(
@@ -59,7 +59,9 @@ func main() {
 	executor := executor.New(bbs, wardenClient)
 
 	executor.HandleRunOnces()
-
 	fmt.Println("Watching for RunOnces!")
+
+	executor.ConvergeRunOnces(30 * time.Second)
+	fmt.Println("Converging RunOnces!")
 	select {}
 }
