@@ -89,5 +89,6 @@ func main() {
 
 	executor.ConvergeRunOnces(30 * time.Second)
 	logger.Infof("Converging RunOnces!")
+
 	select {}
 }

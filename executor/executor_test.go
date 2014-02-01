@@ -159,9 +159,11 @@ var _ = Describe("Executor", func() {
 				})
 			})
 		})
+
 		Context("when RunOnces are already available", func() {
 
 		})
+
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
 				executor.HandleRunOnces()
@@ -270,6 +272,17 @@ var _ = Describe("Executor", func() {
 			Eventually(func() int {
 				return fakeExecutorBBS.CallsToConverge
 			}, 1.0, 0.1).Should(BeNumerically(">", 2))
+		})
+
+		It("converges immediately without waiting for the iteration", func() {
+			stopChannel := executor.ConvergeRunOnces(1 * time.Minute)
+			defer func() {
+				stopChannel <- true
+			}()
+
+			Eventually(func() int {
+				return fakeExecutorBBS.CallsToConverge
+			}, 1.0, 0.1).Should(BeNumerically("==", 1))
 		})
 
 		It("stops convergence when told", func() {

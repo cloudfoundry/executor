@@ -123,23 +123,19 @@ func (e *Executor) runOnce(runOnce models.RunOnce) {
 }
 
 func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
+	e.converge(period)
 
 	stopChannel := make(chan bool, 1)
 
 	go func() {
 		ticker := time.NewTicker(period)
+
 		for {
 			select {
-			case (<-ticker.C):
-				success, err := e.bbs.GrabRunOnceLock(period)
-				if err != nil {
-					e.logger.Errord(map[string]interface{}{
-						"error": err.Error(),
-					}, "error when grabbing converge lock")
-				} else if success {
-					e.bbs.ConvergeRunOnce()
-				}
-			case (<-stopChannel):
+			case <-ticker.C:
+				e.converge(period)
+
+			case <-stopChannel:
 				ticker.Stop()
 				return
 			}
@@ -147,4 +143,16 @@ func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
 	}()
 
 	return stopChannel
+}
+
+func (e *Executor) converge(period time.Duration) {
+	success, err := e.bbs.GrabRunOnceLock(period)
+
+	if err != nil {
+		e.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "error when grabbing converge lock")
+	} else if success {
+		e.bbs.ConvergeRunOnce()
+	}
 }
