@@ -66,10 +66,8 @@ func (e *Executor) HandleRunOnces() {
 						return
 					}
 
-					if e.taskRegistry.HasCapacityForRunOnce(runOnce) {
-						e.runOnceGroup.Add(1)
-						go e.runOnce(runOnce)
-					}
+					e.runOnceGroup.Add(1)
+					go e.runOnce(runOnce)
 				case <-e.stopHandlingRunOnces:
 					stop <- true
 					return
@@ -101,6 +99,11 @@ func (e *Executor) sleepForARandomInterval() {
 
 func (e *Executor) runOnce(runOnce models.RunOnce) {
 	defer e.runOnceGroup.Done()
+	if !e.taskRegistry.AddRunOnce(runOnce) {
+		return
+	}
+	//defer RemoveRunOnce()
+
 	runOnce.ExecutorID = e.id
 
 	e.sleepForARandomInterval()

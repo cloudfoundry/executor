@@ -14,39 +14,37 @@ var _ = Describe("TaskRegistry", func() {
 
 	BeforeEach(func() {
 		runOnce = models.RunOnce{
-			MemoryMB: 256,
-			DiskMB:   1024,
+			MemoryMB: 255,
+			DiskMB:   1023,
 		}
 		taskRegistry = NewTaskRegistry(256, 1024)
 	})
 
-	Describe("HasCapacityForRunOnce", func() {
-		It("Returns true when there are enough resources", func() {
-			Ω(taskRegistry.HasCapacityForRunOnce(runOnce)).To(BeTrue())
-		})
-
-		It("Returns false when it doesn't have enough memory", func() {
-			taskRegistry.AddRunOnce(models.RunOnce{
-				MemoryMB: 1,
-			})
-
-			Ω(taskRegistry.HasCapacityForRunOnce(runOnce)).To(BeFalse())
-		})
-
-		It("Returns false when it doesn't have enough disk", func() {
-			taskRegistry.AddRunOnce(models.RunOnce{
-				DiskMB: 1,
-			})
-
-			Ω(taskRegistry.HasCapacityForRunOnce(runOnce)).To(BeFalse())
-		})
-
-	})
-
 	Describe("AddRunOnce", func() {
-		It("Adds a RunOnce to the registry", func() {
-			taskRegistry.AddRunOnce(runOnce)
+		It("Returns true and adds something to the registry when there are enough resources", func() {
+			Ω(taskRegistry.AddRunOnce(runOnce)).To(BeTrue())
 			Ω(taskRegistry.RunOnces()[runOnce.Guid]).To(Equal(runOnce))
+		})
+
+		Context("When there aren't enough resources", func() {
+			BeforeEach(func() {
+				taskRegistry.AddRunOnce(runOnce)
+				Ω(taskRegistry.RunOnces()).To(HaveLen(1))
+			})
+
+			It("Returns false and adds nothing when the new RunOnce needs more memory than is available", func() {
+				Ω(taskRegistry.AddRunOnce(models.RunOnce{
+					MemoryMB: 2,
+				})).To(BeFalse())
+				Ω(taskRegistry.RunOnces()).To(HaveLen(1))
+			})
+
+			It("Returns false and adds nothing when the new RunOnce needs more disk than is available", func() {
+				Ω(taskRegistry.AddRunOnce(models.RunOnce{
+					DiskMB: 2,
+				})).To(BeFalse())
+				Ω(taskRegistry.RunOnces()).To(HaveLen(1))
+			})
 		})
 	})
 })

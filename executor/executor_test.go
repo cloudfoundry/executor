@@ -211,13 +211,6 @@ var _ = Describe("Executor", func() {
 
 		Context("when the executor is out of resources", func() {
 			BeforeEach(func() {
-				taskRegistry.AddRunOnce(
-					models.RunOnce{
-						MemoryMB: 256,
-						DiskMB:   1024,
-					},
-				)
-
 				executor.HandleRunOnces()
 			})
 
@@ -227,6 +220,15 @@ var _ = Describe("Executor", func() {
 
 			It("doesn't pick up another desired RunOnce", func() {
 				err := bbs.DesireRunOnce(models.RunOnce{
+					Guid:     "Let me use all of your memory!",
+					MemoryMB: 256,
+				})
+				Eventually(func() []models.RunOnce {
+					runOnces, _ := bbs.GetAllClaimedRunOnces()
+					return runOnces
+				}).Should(HaveLen(1))
+
+				err = bbs.DesireRunOnce(models.RunOnce{
 					Guid:     "I want some memory!",
 					MemoryMB: 1,
 				})
@@ -235,7 +237,7 @@ var _ = Describe("Executor", func() {
 				Consistently(func() []models.RunOnce {
 					runOnces, _ := bbs.GetAllClaimedRunOnces()
 					return runOnces
-				}).Should(BeEmpty())
+				}).Should(HaveLen(1))
 			})
 		})
 
