@@ -1,6 +1,10 @@
 github.com/cloudfoundry-incubator/runtime-schema *
 github.com/cloudfoundry/gunk *
 github.com/cloudfoundry/storeadapter *
+
+github.com/vito/gordon origin/master
+github.com/cloudfoundry/gosteno origin/master
+
 bitbucket.org/kardianos/osext tip
 code.google.com/p/gogoprotobuf/proto origin/master
 github.com/coreos/go-etcd/etcd origin/master
@@ -8,8 +12,6 @@ github.com/coreos/go-log/log origin/master
 github.com/coreos/go-systemd origin/master
 github.com/nu7hatch/gouuid origin/master
 github.com/samuel/go-zookeeper/zk origin/master
-github.com/vito/gordon origin/master
-github.com/cloudfoundry/gosteno origin/master
 
 github.com/onsi/ginkgo origin/master test
 github.com/onsi/gomega origin/master test
