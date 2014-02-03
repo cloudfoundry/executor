@@ -5,11 +5,11 @@ set -e -x
 
 FIRST_GOPATH=`echo $GOPATH | cut -d':' -f1`
 
-executor_root=$PWD
+source_root=$PWD
 
 pushd $FIRST_GOPATH
-git clone https://github.com/cloudfoundry-incubator/diego-workspace
-cp ./diego-workspace/Cartridge.lock $executor_root
+  git clone https://github.com/cloudfoundry-incubator/diego-workspace
+  cp ./diego-workspace/Cartridge.lock $source_root
 popd
 
 mkdir -p $FIRST_GOPATH/bin
