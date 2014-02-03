@@ -5,7 +5,7 @@ set -e -x
 
 FIRST_GOPATH=`echo $GOPATH | cut -d':' -f1`
 
-executor_root=$(dirname $(dirname $0))
+executor_root=$PWD
 
 pushd $FIRST_GOPATH
 git clone https://github.com/cloudfoundry-incubator/diego-workspace
