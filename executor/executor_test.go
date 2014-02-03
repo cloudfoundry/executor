@@ -17,11 +17,12 @@ import (
 
 var _ = Describe("Executor", func() {
 	var (
-		bbs      *Bbs.BBS
-		runOnce  models.RunOnce
-		executor *Executor
-		gordon   *fake_gordon.FakeGordon
-		testSink *steno.TestingSink
+		bbs          *Bbs.BBS
+		runOnce      models.RunOnce
+		executor     *Executor
+		taskRegistry *TaskRegistry
+		gordon       *fake_gordon.FakeGordon
+		testSink     *steno.TestingSink
 	)
 
 	BeforeEach(func() {
@@ -33,18 +34,19 @@ var _ = Describe("Executor", func() {
 
 		bbs = Bbs.New(etcdRunner.Adapter())
 		gordon = fake_gordon.New()
+		taskRegistry = NewTaskRegistry(256, 1024)
 
 		runOnce = models.RunOnce{
 			Guid: "totally-unique",
 		}
 
-		executor = New(bbs, gordon)
+		executor = New(bbs, gordon, taskRegistry)
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor1 := New(bbs, gordon)
-			executor2 := New(bbs, gordon)
+			executor1 := New(bbs, gordon, taskRegistry)
+			executor2 := New(bbs, gordon, taskRegistry)
 
 			Ω(executor1.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())
@@ -200,9 +202,40 @@ var _ = Describe("Executor", func() {
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				time.Sleep(1 * time.Second)
-				runOnces, _ := bbs.GetAllClaimedRunOnces()
-				Ω(runOnces).Should(BeEmpty())
+				Consistently(func() []models.RunOnce {
+					runOnces, _ := bbs.GetAllClaimedRunOnces()
+					return runOnces
+				}).Should(BeEmpty())
+			})
+		})
+
+		Context("when the executor is out of resources", func() {
+			BeforeEach(func() {
+				taskRegistry.AddRunOnce(
+					models.RunOnce{
+						MemoryMB: 256,
+						DiskMB:   1024,
+					},
+				)
+
+				executor.HandleRunOnces()
+			})
+
+			AfterEach(func() {
+				executor.StopHandlingRunOnces()
+			})
+
+			It("doesn't pick up another desired RunOnce", func() {
+				err := bbs.DesireRunOnce(models.RunOnce{
+					Guid:     "I want some memory!",
+					MemoryMB: 1,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Consistently(func() []models.RunOnce {
+					runOnces, _ := bbs.GetAllClaimedRunOnces()
+					return runOnces
+				}).Should(BeEmpty())
 			})
 		})
 
@@ -212,7 +245,7 @@ var _ = Describe("Executor", func() {
 			BeforeEach(func() {
 				executor.HandleRunOnces()
 
-				otherExecutor = New(bbs, gordon)
+				otherExecutor = New(bbs, gordon, taskRegistry)
 				otherExecutor.HandleRunOnces()
 			})
 

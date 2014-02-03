@@ -22,9 +22,11 @@ type Executor struct {
 	stopHandlingRunOnces chan bool
 
 	logger *steno.Logger
+
+	taskRegistry *TaskRegistry
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
+func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *TaskRegistry) *Executor {
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		panic("Failed to generate a random guid....:" + err.Error())
@@ -38,6 +40,8 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client) *Executor {
 		runOnceGroup: &sync.WaitGroup{},
 
 		logger: steno.NewLogger("Executor"),
+
+		taskRegistry: taskRegistry,
 	}
 }
 
@@ -62,8 +66,10 @@ func (e *Executor) HandleRunOnces() {
 						return
 					}
 
-					e.runOnceGroup.Add(1)
-					go e.runOnce(runOnce)
+					if e.taskRegistry.HasCapacityForRunOnce(runOnce) {
+						e.runOnceGroup.Add(1)
+						go e.runOnce(runOnce)
+					}
 				case <-e.stopHandlingRunOnces:
 					stop <- true
 					return
