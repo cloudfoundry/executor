@@ -39,6 +39,18 @@ var logLevel = flag.String(
 	"the logging level (none, fatal, error, warn, info, debug, debug1, debug2, all)",
 )
 
+var memoryMB = flag.Int(
+	"memoryMB",
+	0,
+	"the amount of memory the executor has available in megabytes",
+)
+
+var diskMB = flag.Int(
+	"diskMB",
+	0,
+	"the amount of disk the executor has available in megabytes",
+)
+
 func main() {
 	flag.Parse()
 
@@ -82,7 +94,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	executor := executor.New(bbs, wardenClient)
+	if *memoryMB <= 0 || *diskMB <= 0 {
+		logger.Error("memory and disk capacity must be specified on startup!")
+		os.Exit(1)
+	}
+	taskRegistry := executor.NewTaskRegistry(*memoryMB, *diskMB)
+	executor := executor.New(bbs, wardenClient, taskRegistry)
 
 	executor.HandleRunOnces()
 	logger.Infof("Watching for RunOnces!")
