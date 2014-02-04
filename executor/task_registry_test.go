@@ -16,6 +16,7 @@ var _ = Describe("TaskRegistry", func() {
 		runOnce = models.RunOnce{
 			MemoryMB: 255,
 			DiskMB:   1023,
+			Guid:     "I be totally yooniq, yo",
 		}
 		taskRegistry = NewTaskRegistry(256, 1024)
 	})
@@ -45,6 +46,23 @@ var _ = Describe("TaskRegistry", func() {
 				})).To(BeFalse())
 				Ω(taskRegistry.RunOnces()).To(HaveLen(1))
 			})
+		})
+	})
+
+	Describe("RemoveRunOnce", func() {
+		BeforeEach(func() {
+			taskRegistry.AddRunOnce(runOnce)
+		})
+
+		It("should reclaim the disk and memory from the RunOnce", func() {
+
+			originalMemory := taskRegistry.AvailableMemoryMB()
+			originalDisk := taskRegistry.AvailableDiskMB()
+
+			taskRegistry.RemoveRunOnce(runOnce)
+
+			Ω(taskRegistry.AvailableMemoryMB()).To(Equal(originalMemory + runOnce.MemoryMB))
+			Ω(taskRegistry.AvailableDiskMB()).To(Equal(originalDisk + runOnce.DiskMB))
 		})
 	})
 })

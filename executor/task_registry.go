@@ -25,26 +25,33 @@ func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) bool {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	if !registry.hasCapacityForRunOnce(runOnce) {
+	if !registry.HasCapacityForRunOnce(runOnce) {
 		return false
 	}
 	registry.runOnces[runOnce.Guid] = runOnce
 	return true
 }
 
-func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce models.RunOnce) bool {
-	if runOnce.MemoryMB > registry.availableMemoryMB() {
+func (registry *TaskRegistry) RemoveRunOnce(runOnce models.RunOnce) {
+	registry.lock.Lock()
+	defer registry.lock.Unlock()
+
+	delete(registry.runOnces, runOnce.Guid)
+}
+
+func (registry *TaskRegistry) HasCapacityForRunOnce(runOnce models.RunOnce) bool {
+	if runOnce.MemoryMB > registry.AvailableMemoryMB() {
 		return false
 	}
 
-	if runOnce.DiskMB > registry.availableDiskMB() {
+	if runOnce.DiskMB > registry.AvailableDiskMB() {
 		return false
 	}
 
 	return true
 }
 
-func (registry *TaskRegistry) availableMemoryMB() int {
+func (registry *TaskRegistry) AvailableMemoryMB() int {
 	usedMemory := 0
 	for _, r := range registry.runOnces {
 		usedMemory = usedMemory + r.MemoryMB
@@ -52,7 +59,7 @@ func (registry *TaskRegistry) availableMemoryMB() int {
 	return registry.ExecutorMemoryMB - usedMemory
 }
 
-func (registry *TaskRegistry) availableDiskMB() int {
+func (registry *TaskRegistry) AvailableDiskMB() int {
 	usedDisk := 0
 	for _, r := range registry.runOnces {
 		usedDisk = usedDisk + r.DiskMB

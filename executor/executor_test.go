@@ -37,7 +37,9 @@ var _ = Describe("Executor", func() {
 		taskRegistry = NewTaskRegistry(256, 1024)
 
 		runOnce = models.RunOnce{
-			Guid: "totally-unique",
+			Guid:     "totally-unique",
+			MemoryMB: 256,
+			DiskMB:   1024,
 		}
 
 		executor = New(bbs, gordon, taskRegistry)
@@ -96,6 +98,46 @@ var _ = Describe("Executor", func() {
 					Ω(runningRunOnce.Guid).Should(Equal(runOnce.Guid))
 					Ω(gordon.CreatedHandles()).Should(ContainElement(runningRunOnce.ContainerHandle))
 				})
+
+				It("should clean up after the RunOnce is finished", func() {
+					//Since the first runOnce fills the system to capacity, we can test cleanup by
+					//running a second runOnce of the same size.
+
+					//Wait until the first runOnce finishes
+					Eventually(func() []models.RunOnce {
+						runOnces, err := bbs.GetAllCompletedRunOnces()
+						Ω(err).ShouldNot(HaveOccurred())
+						return runOnces
+					}, 1.5).Should(HaveLen(1))
+
+					bbs.ResolveRunOnce(runOnce)
+
+					Eventually(func() []models.RunOnce {
+						runOnces, err := bbs.GetAllPendingRunOnces()
+						Ω(err).ShouldNot(HaveOccurred())
+						return runOnces
+					}).Should(HaveLen(0))
+
+					runTwice := models.RunOnce{
+						Guid:     "not-totally-unique",
+						MemoryMB: 256,
+						DiskMB:   1024,
+					}
+
+					err := bbs.DesireRunOnce(runTwice)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(func() []models.RunOnce {
+						runOnces, err := bbs.GetAllClaimedRunOnces()
+						Ω(err).ShouldNot(HaveOccurred())
+						return runOnces
+					}, 1.5).Should(HaveLen(2))
+
+					runOnces, _ := bbs.GetAllClaimedRunOnces()
+					runningRunOnce := runOnces[1]
+					Ω(runningRunOnce.Guid).Should(Equal(runTwice.Guid))
+					Ω(runningRunOnce.ExecutorID).Should(Equal(executor.ID()))
+				}, 5.0)
 			})
 
 			Context("but it's already been claimed", func() {
@@ -222,6 +264,7 @@ var _ = Describe("Executor", func() {
 				err := bbs.DesireRunOnce(models.RunOnce{
 					Guid:     "Let me use all of your memory!",
 					MemoryMB: 256,
+					Actions:  []models.ExecutorAction{models.NewCopyAction("thing", "other thing", false, true)},
 				})
 				Eventually(func() []models.RunOnce {
 					runOnces, _ := bbs.GetAllClaimedRunOnces()
@@ -237,8 +280,8 @@ var _ = Describe("Executor", func() {
 				Consistently(func() []models.RunOnce {
 					runOnces, _ := bbs.GetAllClaimedRunOnces()
 					return runOnces
-				}).Should(HaveLen(1))
-			})
+				}, 0.33).Should(HaveLen(1))
+			}, 5.0)
 		})
 
 		Context("when two executors are fighting for a RunOnce", func() {

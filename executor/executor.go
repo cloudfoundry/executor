@@ -102,7 +102,7 @@ func (e *Executor) runOnce(runOnce models.RunOnce) {
 	if !e.taskRegistry.AddRunOnce(runOnce) {
 		return
 	}
-	//defer RemoveRunOnce()
+	defer e.taskRegistry.RemoveRunOnce(runOnce)
 
 	runOnce.ExecutorID = e.id
 
@@ -129,6 +129,14 @@ func (e *Executor) runOnce(runOnce models.RunOnce) {
 			}, "failed to destroy container")
 		}
 	}
+
+	//standin for actually doing things
+	numberOfActions := len(runOnce.Actions)
+	if numberOfActions > 0 {
+		time.Sleep(time.Duration(numberOfActions) * time.Second)
+	}
+
+	defer e.bbs.CompleteRunOnce(runOnce)
 }
 
 func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
