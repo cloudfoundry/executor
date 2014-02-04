@@ -3,9 +3,11 @@ package executor_test
 import (
 	"errors"
 	"fmt"
+	"github.com/onsi/ginkgo/config"
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -15,12 +17,14 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 )
 
+var registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
+
 var _ = Describe("Executor", func() {
 	var (
 		bbs          *Bbs.BBS
 		runOnce      models.RunOnce
 		executor     *Executor
-		taskRegistry *TaskRegistry
+		taskRegistry *taskregistry.TaskRegistry
 		gordon       *fake_gordon.FakeGordon
 		testSink     *steno.TestingSink
 	)
@@ -34,7 +38,7 @@ var _ = Describe("Executor", func() {
 
 		bbs = Bbs.New(etcdRunner.Adapter())
 		gordon = fake_gordon.New()
-		taskRegistry = NewTaskRegistry(256, 1024)
+		taskRegistry = taskregistry.NewTaskRegistry(registryFileName, 256, 1024)
 
 		runOnce = models.RunOnce{
 			Guid:     "totally-unique",

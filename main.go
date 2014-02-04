@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
@@ -49,6 +50,12 @@ var diskMB = flag.Int(
 	"diskMB",
 	0,
 	"the amount of disk the executor has available in megabytes",
+)
+
+var registrySnapshotFile = flag.String(
+	"registrySnapshotFile",
+	"registry_snapshot",
+	"the location, on disk, where the task registry snapshot should be stored",
 )
 
 func main() {
@@ -99,9 +106,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskRegistry, err := executor.LoadTaskRegistry(*memoryMB, *diskMB)
+	taskRegistry, err := taskregistry.LoadTaskRegistryFromDisk(*registrySnapshotFile, *memoryMB, *diskMB)
 	if err != nil {
-		taskRegistry = executor.NewTaskRegistry(*memoryMB, *diskMB)
+		taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 

@@ -1,4 +1,4 @@
-package executor
+package taskregistry
 
 import (
 	"encoding/json"
@@ -18,19 +18,21 @@ type TaskRegistry struct {
 	ExecutorDiskMB   int
 	RunOnces         map[string]models.RunOnce
 	lock             *sync.Mutex
+	fileName         string
 }
 
-func NewTaskRegistry(memoryMB int, diskMB int) *TaskRegistry {
+func NewTaskRegistry(fileName string, memoryMB int, diskMB int) *TaskRegistry {
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
 		RunOnces:         make(map[string]models.RunOnce),
 		lock:             &sync.Mutex{},
+		fileName:         fileName,
 	}
 }
 
-func LoadTaskRegistryFromDisk(memoryMB int, diskMB int) (*TaskRegistry, error) {
-	taskRegistry := NewTaskRegistry(memoryMB, diskMB)
+func LoadTaskRegistryFromDisk(filename string, memoryMB int, diskMB int) (*TaskRegistry, error) {
+	taskRegistry := NewTaskRegistry(filename, memoryMB, diskMB)
 	err := taskRegistry.hydrateFromDisk()
 	if err != nil {
 		return nil, err
@@ -84,26 +86,17 @@ func (registry *TaskRegistry) AvailableDiskMB() int {
 	return registry.ExecutorDiskMB - usedDisk
 }
 
-func (registry *TaskRegistry) WriteToDisk() {
-	fo, err := os.Create("saved_registry")
+func (registry *TaskRegistry) WriteToDisk() error {
+	data, err := json.Marshal(registry)
 	if err != nil {
-		//TODO: log and return the error, don't panic
-		panic(err)
+		return err
 	}
-	// close fo on exit and check for its returned error
-	defer func() {
-		if err := fo.Close(); err != nil {
-			//TODO: log and return the error, don't panic
-			panic(err)
-		}
-	}()
-
-	json.NewEncoder(fo).Encode(registry)
+	return ioutil.WriteFile(registry.fileName, data, os.ModePerm)
 }
 
 func (registry *TaskRegistry) hydrateFromDisk() error {
 	var loadedTaskRegistry *TaskRegistry
-	bytes, err := ioutil.ReadFile("saved_registry")
+	bytes, err := ioutil.ReadFile(registry.fileName)
 	if err != nil {
 		return err
 	}

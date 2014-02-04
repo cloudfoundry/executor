@@ -1,15 +1,19 @@
-package executor_test
+package taskregistry_test
 
 import (
+	"fmt"
+	"github.com/onsi/ginkgo/config"
 	"io/ioutil"
 	"os"
 
-	. "github.com/cloudfoundry-incubator/executor/executor"
+	. "github.com/cloudfoundry-incubator/executor/taskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+var registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 
 var _ = Describe("TaskRegistry", func() {
 	var taskRegistry *TaskRegistry
@@ -21,7 +25,7 @@ var _ = Describe("TaskRegistry", func() {
 			DiskMB:   1023,
 			Guid:     "I be totally yooniq, yo",
 		}
-		taskRegistry = NewTaskRegistry(256, 1024)
+		taskRegistry = NewTaskRegistry(registryFileName, 256, 1024)
 	})
 
 	Describe("AddRunOnce", func() {
@@ -68,6 +72,13 @@ var _ = Describe("TaskRegistry", func() {
 		})
 	})
 
+	Describe("WriteToDisk", func() {
+		It("Returns an error if the file cannot be written to", func() {
+			taskRegistry = NewTaskRegistry("/tmp", 256, 1024)
+			Ω(taskRegistry.WriteToDisk()).To(HaveOccurred())
+		})
+	})
+
 	Describe("LoadTaskRegistryFromDisk", func() {
 		var runOnce models.RunOnce
 		var diskRegistry *TaskRegistry
@@ -78,18 +89,19 @@ var _ = Describe("TaskRegistry", func() {
 
 		Context("When there is a valid task registry on disk", func() {
 			BeforeEach(func() {
-				diskRegistry = NewTaskRegistry(512, 2048)
+				diskRegistry = NewTaskRegistry(registryFileName, 512, 2048)
 				runOnce = models.RunOnce{
 					Guid:     "a guid",
 					MemoryMB: 256,
 					DiskMB:   1024,
 				}
 				diskRegistry.AddRunOnce(runOnce)
-				diskRegistry.WriteToDisk()
+				err := diskRegistry.WriteToDisk()
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should load up the task registry and return it", func() {
-				loadedTaskRegistry, err := LoadTaskRegistryFromDisk(512, 2048)
+				loadedTaskRegistry, err := LoadTaskRegistryFromDisk(registryFileName, 512, 2048)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(loadedTaskRegistry.RunOnces).To(HaveLen(1))
@@ -102,7 +114,7 @@ var _ = Describe("TaskRegistry", func() {
 			Context("When the memory or disk change", func() {
 				Context("when there is sufficient memory and disk for the registered tasks", func() {
 					It("should update the registry with the new memory and disk values", func() {
-						loadedTaskRegistry, err := LoadTaskRegistryFromDisk(513, 2049)
+						loadedTaskRegistry, err := LoadTaskRegistryFromDisk(registryFileName, 513, 2049)
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(loadedTaskRegistry.ExecutorMemoryMB).To(Equal(513))
 						Ω(loadedTaskRegistry.ExecutorDiskMB).To(Equal(2049))
@@ -111,14 +123,14 @@ var _ = Describe("TaskRegistry", func() {
 
 				Context("when there is insufficient memory for the registered tasks", func() {
 					It("should log and return an error", func() {
-						_, err := LoadTaskRegistryFromDisk(255, 1024)
+						_, err := LoadTaskRegistryFromDisk(registryFileName, 255, 1024)
 						Ω(err).Should(Equal(ErrorNotEnoughMemoryWhenLoadingSnapshot))
 					})
 				})
 
 				Context("when there is insufficient disk for the registered tasks", func() {
 					It("should log and return an error", func() {
-						_, err := LoadTaskRegistryFromDisk(256, 1023)
+						_, err := LoadTaskRegistryFromDisk(registryFileName, 256, 1023)
 						Ω(err).Should(Equal(ErrorNotEnoughDiskWhenLoadingSnapshot))
 					})
 				})
@@ -127,18 +139,18 @@ var _ = Describe("TaskRegistry", func() {
 
 		Context("when the file on disk is invalid", func() {
 			BeforeEach(func() {
-				ioutil.WriteFile("saved_registry", []byte("ß"), os.ModePerm)
+				ioutil.WriteFile(registryFileName, []byte("ß"), os.ModePerm)
 			})
 
 			It("should return an error", func() {
-				_, err := LoadTaskRegistryFromDisk(4096, 4096)
+				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
 
 		Context("When there is not a task registry on disk", func() {
 			It("should return an error", func() {
-				_, err := LoadTaskRegistryFromDisk(4096, 4096)
+				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
 				Ω(err).Should(HaveOccurred())
 			})
 		})

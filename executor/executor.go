@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
@@ -23,10 +24,10 @@ type Executor struct {
 
 	logger *steno.Logger
 
-	taskRegistry *TaskRegistry
+	taskRegistry *taskregistry.TaskRegistry
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *TaskRegistry) *Executor {
+func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregistry.TaskRegistry) *Executor {
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		panic("Failed to generate a random guid....:" + err.Error())
