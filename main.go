@@ -98,7 +98,11 @@ func main() {
 		logger.Error("memory and disk capacity must be specified on startup!")
 		os.Exit(1)
 	}
-	taskRegistry := executor.NewTaskRegistry(*memoryMB, *diskMB)
+
+	taskRegistry, err := executor.LoadTaskRegistry(*memoryMB, *diskMB)
+	if err != nil {
+		taskRegistry = executor.NewTaskRegistry(*memoryMB, *diskMB)
+	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 
 	executor.HandleRunOnces()
