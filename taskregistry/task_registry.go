@@ -10,6 +10,8 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
+var ErrorRegistrySnapshotDoesNotExist = errors.New("Registry snapshot does not exist")
+var ErrorRegistrySnapshotHasInvalidJSON = errors.New("Registry snapshot has invalid JSON")
 var ErrorNotEnoughMemoryWhenLoadingSnapshot = errors.New("Insufficient memory when loading snapshot")
 var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("Insufficient disk when loading snapshot")
 
@@ -98,22 +100,20 @@ func (registry *TaskRegistry) hydrateFromDisk() error {
 	var loadedTaskRegistry *TaskRegistry
 	bytes, err := ioutil.ReadFile(registry.fileName)
 	if err != nil {
-		return err
+		return ErrorRegistrySnapshotDoesNotExist
 	}
 	err = json.Unmarshal(bytes, &loadedTaskRegistry)
 	if err != nil {
-		return err
+		return ErrorRegistrySnapshotHasInvalidJSON
 	}
 
 	registry.RunOnces = loadedTaskRegistry.RunOnces
 
 	if registry.AvailableMemoryMB() < 0 {
-		//TODO: log
 		return ErrorNotEnoughMemoryWhenLoadingSnapshot
 	}
 
 	if registry.AvailableDiskMB() < 0 {
-		//TODO: log
 		return ErrorNotEnoughDiskWhenLoadingSnapshot
 	}
 

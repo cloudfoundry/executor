@@ -28,6 +28,10 @@ var _ = Describe("TaskRegistry", func() {
 		taskRegistry = NewTaskRegistry(registryFileName, 256, 1024)
 	})
 
+	AfterEach(func() {
+		os.Remove(registryFileName)
+	})
+
 	Describe("AddRunOnce", func() {
 		It("Returns true and adds something to the registry when there are enough resources", func() {
 			Ω(taskRegistry.AddRunOnce(runOnce)).To(BeTrue())
@@ -82,10 +86,6 @@ var _ = Describe("TaskRegistry", func() {
 	Describe("LoadTaskRegistryFromDisk", func() {
 		var runOnce models.RunOnce
 		var diskRegistry *TaskRegistry
-
-		AfterEach(func() {
-			os.Remove("saved_registry")
-		})
 
 		Context("When there is a valid task registry on disk", func() {
 			BeforeEach(func() {
@@ -144,14 +144,14 @@ var _ = Describe("TaskRegistry", func() {
 
 			It("should return an error", func() {
 				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
-				Ω(err).Should(HaveOccurred())
+				Ω(err).Should(Equal(ErrorRegistrySnapshotHasInvalidJSON))
 			})
 		})
 
 		Context("When there is not a task registry on disk", func() {
 			It("should return an error", func() {
 				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
-				Ω(err).Should(HaveOccurred())
+				Ω(err).Should(Equal(ErrorRegistrySnapshotDoesNotExist))
 			})
 		})
 	})

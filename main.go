@@ -108,7 +108,23 @@ func main() {
 
 	taskRegistry, err := taskregistry.LoadTaskRegistryFromDisk(*registrySnapshotFile, *memoryMB, *diskMB)
 	if err != nil {
-		taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
+		switch err {
+		case taskregistry.ErrorRegistrySnapshotHasInvalidJSON:
+			logger.Error("corrupt registry snapshot detected.  aborting!")
+			os.Exit(1)
+		case taskregistry.ErrorNotEnoughMemoryWhenLoadingSnapshot:
+			logger.Error("memory requirements in snapshot exceed the configured memory limit.  aborting!")
+			os.Exit(1)
+		case taskregistry.ErrorNotEnoughDiskWhenLoadingSnapshot:
+			logger.Error("disk requirements in snapshot exceed the configured memory limit.  aborting!")
+			os.Exit(1)
+		case taskregistry.ErrorRegistrySnapshotDoesNotExist:
+			logger.Info("Didn't find snapshot.  Creating new registry.")
+			taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
+		default:
+			logger.Errorf("woah, woah, woah.  what happened with the snapshot?", err.Error())
+			os.Exit(1)
+		}
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 
