@@ -51,7 +51,7 @@ func (e *Executor) ID() string {
 }
 
 func (e *Executor) HandleRunOnces() error {
-	stopMaintainingPresence, err := e.bbs.MaintainPresence(60, e.ID())
+	stopMaintainingPresence, err := e.bbs.MaintainExecutorPresence(60, e.ID())
 	if err != nil {
 		return err
 	}

@@ -9,5 +9,5 @@ import (
 
 func TestTask_registry(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Task_registry Suite")
+	RunSpecs(t, "Task Registry Suite")
 }
