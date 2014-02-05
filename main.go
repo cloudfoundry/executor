@@ -102,7 +102,7 @@ func main() {
 	}
 
 	if *memoryMB <= 0 || *diskMB <= 0 {
-		logger.Error("memory and disk capacity must be specified on startup!")
+		logger.Error("valid memory and disk capacity must be specified on startup!")
 		os.Exit(1)
 	}
 
