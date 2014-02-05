@@ -268,7 +268,9 @@ var _ = Describe("Executor", func() {
 				err := bbs.DesireRunOnce(models.RunOnce{
 					Guid:     "Let me use all of your memory!",
 					MemoryMB: 256,
-					Actions:  []models.ExecutorAction{models.NewCopyAction("thing", "other thing", false, true)},
+					Actions: []models.ExecutorAction{
+						{models.CopyAction{From: "thing", To: "other thing", Extract: false, Compress: true}},
+					},
 				})
 				Eventually(func() []models.RunOnce {
 					runOnces, _ := bbs.GetAllClaimedRunOnces()
