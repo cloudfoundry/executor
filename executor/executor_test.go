@@ -208,10 +208,6 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Context("when RunOnces are already available", func() {
-
-		})
-
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
 				executor.HandleRunOnces()
@@ -336,6 +332,28 @@ var _ = Describe("Executor", func() {
 				Ω(handlers).Should(HaveLen(2))
 				Ω(handlers[executor.ID()]).Should(BeNumerically(">", 3))
 				Ω(handlers[otherExecutor.ID()]).Should(BeNumerically(">", 3))
+			})
+		})
+	})
+
+	Describe("Maintaining Presence", func() {
+		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
+		BeforeEach(func() {
+			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{LockIsGrabbable: true}
+			bbs.ExecutorBBS = fakeExecutorBBS
+		})
+
+		It("should maintain presence", func() {
+			executor.HandleRunOnces()
+			Ω(fakeExecutorBBS.MaintainingPresenceHeartbeatInterval).Should(BeNumerically("==", 60))
+			Ω(fakeExecutorBBS.MaintainingPresenceExecutorID).Should(Equal(executor.ID()))
+		})
+
+		Context("when maintaining presence fails to start", func() {
+			It("should return an error", func() {
+				fakeExecutorBBS.MaintainingPresenceError = errors.New("oops")
+				err := executor.HandleRunOnces()
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

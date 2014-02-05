@@ -50,7 +50,11 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) HandleRunOnces() {
+func (e *Executor) HandleRunOnces() error {
+	stopMaintainingPresence, err := e.bbs.MaintainPresence(60, e.ID())
+	if err != nil {
+		return err
+	}
 	ready := make(chan bool)
 	e.stopHandlingRunOnces = make(chan bool)
 
@@ -71,6 +75,7 @@ func (e *Executor) HandleRunOnces() {
 					go e.runOnce(runOnce)
 				case <-e.stopHandlingRunOnces:
 					stop <- true
+					close(stopMaintainingPresence)
 					return
 				case <-errors:
 					break INNER
@@ -82,6 +87,7 @@ func (e *Executor) HandleRunOnces() {
 	}()
 
 	<-ready
+	return nil
 }
 
 //StopHandlingRunOnces is used mainly in test to avoid having multiple executors

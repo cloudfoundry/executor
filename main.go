@@ -122,13 +122,17 @@ func main() {
 			logger.Info("Didn't find snapshot.  Creating new registry.")
 			taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
 		default:
-			logger.Errorf("woah, woah, woah.  what happened with the snapshot?", err.Error())
+			logger.Errorf("woah, woah, woah.  what happened with the snapshot?: %s", err.Error())
 			os.Exit(1)
 		}
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 
-	executor.HandleRunOnces()
+	err = executor.HandleRunOnces()
+	if err != nil {
+		logger.Errorf("failed to start handling run onces: %s", err.Error())
+		os.Exit(1)
+	}
 	logger.Infof("Watching for RunOnces!")
 
 	executor.ConvergeRunOnces(30 * time.Second)
