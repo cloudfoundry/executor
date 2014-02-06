@@ -22,6 +22,8 @@ type Executor struct {
 	runOnceGroup         *sync.WaitGroup
 	stopHandlingRunOnces chan bool
 
+	stopMaintainingPresence chan bool
+
 	logger *steno.Logger
 
 	taskRegistry *taskregistry.TaskRegistry
@@ -50,11 +52,30 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) HandleRunOnces() error {
-	stopMaintainingPresence, err := e.bbs.MaintainExecutorPresence(60, e.ID())
+func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
+	stopMaintainingPresence, maintainingPresenceErrors, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
 	if err != nil {
 		return err
 	}
+
+	stop := make(chan bool)
+
+	go func() {
+		select {
+		case <-stop:
+			stopMaintainingPresence <- true
+
+		case <-maintainingPresenceErrors:
+			close(e.stopHandlingRunOnces)
+		}
+	}()
+
+	e.stopMaintainingPresence = stop
+
+	return nil
+}
+
+func (e *Executor) HandleRunOnces() error {
 	ready := make(chan bool)
 	e.stopHandlingRunOnces = make(chan bool)
 
@@ -72,10 +93,10 @@ func (e *Executor) HandleRunOnces() error {
 					}
 
 					e.runOnceGroup.Add(1)
+
 					go e.runOnce(runOnce)
 				case <-e.stopHandlingRunOnces:
 					stop <- true
-					close(stopMaintainingPresence)
 					return
 				case <-errors:
 					break INNER
@@ -93,8 +114,16 @@ func (e *Executor) HandleRunOnces() error {
 //StopHandlingRunOnces is used mainly in test to avoid having multiple executors
 //running concurrently from polluting the tests
 func (e *Executor) StopHandlingRunOnces() {
+	// stop maintaining our presence
+	if e.stopMaintainingPresence != nil {
+		close(e.stopMaintainingPresence)
+	}
+
 	//tell the watcher to stop
-	e.stopHandlingRunOnces <- true
+	if e.stopHandlingRunOnces != nil {
+		close(e.stopHandlingRunOnces)
+	}
+
 	//wait for any running runOnce goroutines to end
 	e.runOnceGroup.Wait()
 }

@@ -337,23 +337,58 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Maintaining Presence", func() {
-		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
-		BeforeEach(func() {
-			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{LockIsGrabbable: true}
-			bbs.ExecutorBBS = fakeExecutorBBS
-		})
-
 		It("should maintain presence", func() {
-			executor.HandleRunOnces()
-			Ω(fakeExecutorBBS.MaintainingPresenceHeartbeatInterval).Should(BeNumerically("==", 60))
-			Ω(fakeExecutorBBS.MaintainingPresenceExecutorID).Should(Equal(executor.ID()))
+			err := executor.MaintainPresence(60)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Eventually(func() interface{} {
+				arr, _ := bbs.GetAllExecutors()
+				return arr
+			}).Should(HaveLen(1))
+
+			executors, err := bbs.GetAllExecutors()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(executors[0]).Should(Equal(executor.ID()))
 		})
 
 		Context("when maintaining presence fails to start", func() {
+			BeforeEach(func() {
+				etcdRunner.Stop()
+			})
+
+			AfterEach(func() {
+				etcdRunner.Start()
+			})
+
 			It("should return an error", func() {
-				fakeExecutorBBS.MaintainingPresenceError = errors.New("oops")
-				err := executor.HandleRunOnces()
+				err := executor.MaintainPresence(60)
 				Ω(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("when we fail to maintain our presence", func() {
+			BeforeEach(func() {
+				executor.HandleRunOnces()
+
+				executor.MaintainPresence(1)
+			})
+
+			It("stops handling RunOnces", func() {
+				time.Sleep(1 * time.Second)
+
+				// delete its key (and everything else lol)
+				etcdRunner.Reset()
+
+				time.Sleep(2 * time.Second)
+
+				err := bbs.DesireRunOnce(runOnce)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Consistently(func() []models.RunOnce {
+					runOnces, err := bbs.GetAllClaimedRunOnces()
+					Ω(err).ShouldNot(HaveOccurred())
+					return runOnces
+				}).Should(HaveLen(0))
 			})
 		})
 	})
