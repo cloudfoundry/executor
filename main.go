@@ -2,12 +2,14 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudfoundry-incubator/executor/actionrunner"
 	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
@@ -128,7 +130,10 @@ func main() {
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 
-	err = executor.HandleRunOnces()
+	theFlash := actionrunner.New(wardenClient)
+	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash)
+
+	err = executor.Handle(runOnceHandler)
 	if err != nil {
 		logger.Errorf("failed to start handling run onces: %s", err.Error())
 		os.Exit(1)

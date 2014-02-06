@@ -1,11 +1,12 @@
 package executor
 
 import (
+	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"math/rand"
+
 	"github.com/nu7hatch/gouuid"
 	"github.com/vito/gordon"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -76,7 +77,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
 	return nil
 }
 
-func (e *Executor) HandleRunOnces() error {
+func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface) error {
 	ready := make(chan bool)
 	e.stopHandlingRunOnces = make(chan bool)
 
@@ -95,7 +96,11 @@ func (e *Executor) HandleRunOnces() error {
 
 					e.runOnceGroup.Add(1)
 
-					go e.runOnce(runOnce)
+					go func() {
+						e.sleepForARandomInterval()
+						runOnceHandler.RunOnce(runOnce, e.id)
+						e.runOnceGroup.Done()
+					}()
 				case <-e.stopHandlingRunOnces:
 					stop <- true
 					return
@@ -114,7 +119,7 @@ func (e *Executor) HandleRunOnces() error {
 
 //StopHandlingRunOnces is used mainly in test to avoid having multiple executors
 //running concurrently from polluting the tests
-func (e *Executor) StopHandlingRunOnces() {
+func (e *Executor) StopHandling() {
 	// stop maintaining our presence
 	if e.stopMaintainingPresence != nil {
 		close(e.stopMaintainingPresence)
@@ -127,53 +132,6 @@ func (e *Executor) StopHandlingRunOnces() {
 
 	//wait for any running runOnce goroutines to end
 	e.runOnceGroup.Wait()
-}
-
-func (e *Executor) sleepForARandomInterval() {
-	interval := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(100)
-	time.Sleep(time.Duration(interval) * time.Millisecond)
-}
-
-func (e *Executor) runOnce(runOnce models.RunOnce) {
-	defer e.runOnceGroup.Done()
-	if !e.taskRegistry.AddRunOnce(runOnce) {
-		return
-	}
-	defer e.taskRegistry.RemoveRunOnce(runOnce)
-
-	runOnce.ExecutorID = e.id
-
-	e.sleepForARandomInterval()
-
-	err := e.bbs.ClaimRunOnce(runOnce)
-	if err != nil {
-		return
-	}
-
-	createResponse, err := e.wardenClient.Create()
-	if err != nil {
-		return
-	}
-
-	runOnce.ContainerHandle = createResponse.GetHandle()
-
-	err = e.bbs.StartRunOnce(runOnce)
-	if err != nil {
-		_, err := e.wardenClient.Destroy(runOnce.ContainerHandle)
-		if err != nil {
-			e.logger.Errord(map[string]interface{}{
-				"ContainerHandle": runOnce.ContainerHandle,
-			}, "failed to destroy container")
-		}
-	}
-
-	//standin for actually doing things
-	numberOfActions := len(runOnce.Actions)
-	if numberOfActions > 0 {
-		time.Sleep(time.Duration(numberOfActions) * time.Second)
-	}
-
-	defer e.bbs.CompleteRunOnce(runOnce)
 }
 
 func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
@@ -197,6 +155,11 @@ func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
 	}()
 
 	return stopChannel
+}
+
+func (e *Executor) sleepForARandomInterval() {
+	interval := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(100)
+	time.Sleep(time.Duration(interval) * time.Millisecond)
 }
 
 func (e *Executor) converge(period time.Duration) {

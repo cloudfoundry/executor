@@ -7,6 +7,7 @@ import (
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/fakerunoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
@@ -26,9 +27,16 @@ var _ = Describe("Executor", func() {
 		gordon           *fake_gordon.FakeGordon
 		testSink         *steno.TestingSink
 		registryFileName string
+
+		startingMemory int
+		startingDisk   int
 	)
 
+	var fakeRunOnceHandler *fakerunoncehandler.FakeRunOnceHandler
+
 	BeforeEach(func() {
+		fakeRunOnceHandler = fakerunoncehandler.New()
+
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 		testSink = steno.NewTestingSink()
 		stenoConfig := steno.Config{
@@ -38,7 +46,10 @@ var _ = Describe("Executor", func() {
 
 		bbs = Bbs.New(etcdRunner.Adapter())
 		gordon = fake_gordon.New()
-		taskRegistry = taskregistry.NewTaskRegistry(registryFileName, 256, 1024)
+
+		startingMemory = 256
+		startingDisk = 1024
+		taskRegistry = taskregistry.NewTaskRegistry(registryFileName, startingMemory, startingDisk)
 
 		runOnce = models.RunOnce{
 			Guid:     "totally-unique",
@@ -61,156 +72,10 @@ var _ = Describe("Executor", func() {
 		})
 	})
 
-	Describe("Handling RunOnces", func() {
-		Context("when it sees a desired RunOnce", func() {
-			BeforeEach(func() {
-				executor.HandleRunOnces()
-			})
-
-			AfterEach(func() {
-				executor.StopHandlingRunOnces()
-			})
-
-			Context("when all is well", func() {
-				BeforeEach(func() {
-					err := bbs.DesireRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("eventually is claimed", func() {
-					Eventually(func() []models.RunOnce {
-						runOnces, err := bbs.GetAllClaimedRunOnces()
-						Ω(err).ShouldNot(HaveOccurred())
-						return runOnces
-					}).Should(HaveLen(1))
-
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					runningRunOnce := runOnces[0]
-					Ω(runningRunOnce.Guid).Should(Equal(runOnce.Guid))
-					Ω(runningRunOnce.ExecutorID).Should(Equal(executor.ID()))
-				})
-
-				It("eventually creates a container and starts running", func() {
-					Eventually(func() []models.RunOnce {
-						runOnces, err := bbs.GetAllStartingRunOnces()
-						Ω(err).ShouldNot(HaveOccurred())
-						return runOnces
-					}).Should(HaveLen(1))
-
-					runOnces, _ := bbs.GetAllStartingRunOnces()
-					runningRunOnce := runOnces[0]
-					Ω(runningRunOnce.Guid).Should(Equal(runOnce.Guid))
-					Ω(gordon.CreatedHandles()).Should(ContainElement(runningRunOnce.ContainerHandle))
-				})
-
-				It("should clean up after the RunOnce is finished", func() {
-					//Since the first runOnce fills the system to capacity, we can test cleanup by
-					//running a second runOnce of the same size.
-
-					//Wait until the first runOnce finishes
-					Eventually(func() []models.RunOnce {
-						runOnces, err := bbs.GetAllCompletedRunOnces()
-						Ω(err).ShouldNot(HaveOccurred())
-						return runOnces
-					}, 1.5).Should(HaveLen(1))
-
-					bbs.ResolveRunOnce(runOnce)
-
-					Eventually(func() []models.RunOnce {
-						runOnces, err := bbs.GetAllPendingRunOnces()
-						Ω(err).ShouldNot(HaveOccurred())
-						return runOnces
-					}).Should(HaveLen(0))
-
-					runTwice := models.RunOnce{
-						Guid:     "not-totally-unique",
-						MemoryMB: 256,
-						DiskMB:   1024,
-					}
-
-					err := bbs.DesireRunOnce(runTwice)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					Eventually(func() []models.RunOnce {
-						runOnces, err := bbs.GetAllClaimedRunOnces()
-						Ω(err).ShouldNot(HaveOccurred())
-						return runOnces
-					}, 1.5).Should(HaveLen(2))
-
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					runningRunOnce := runOnces[1]
-					Ω(runningRunOnce.Guid).Should(Equal(runTwice.Guid))
-					Ω(runningRunOnce.ExecutorID).Should(Equal(executor.ID()))
-				}, 5.0)
-			})
-
-			Context("but it's already been claimed", func() {
-				BeforeEach(func() {
-					runOnce.ExecutorID = "fitter, faster, more educated"
-					err := bbs.ClaimRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					err = bbs.DesireRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("bails", func() {
-					time.Sleep(1 * time.Second)
-
-					runOnces, _ := bbs.GetAllStartingRunOnces()
-					Ω(runOnces).Should(BeEmpty())
-					Ω(gordon.CreatedHandles()).Should(BeEmpty())
-				})
-			})
-
-			Context("when it fails to make a container", func() {
-				BeforeEach(func() {
-					gordon.CreateError = errors.New("No container for you")
-
-					err := bbs.DesireRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("bails without creating a starting RunOnce", func() {
-					Eventually(func() []models.RunOnce {
-						runOnces, _ := bbs.GetAllClaimedRunOnces()
-						return runOnces
-					}).Should(HaveLen(1))
-
-					time.Sleep(1 * time.Second)
-
-					runOnces, _ := bbs.GetAllStartingRunOnces()
-					Ω(runOnces).Should(BeEmpty())
-					Ω(gordon.CreatedHandles()).Should(BeEmpty())
-				})
-			})
-
-			Context("when it fails to create a start RunOnce", func() {
-				BeforeEach(func() {
-					runOnce.ExecutorID = "this really shouldn't happen..."
-					runOnce.ContainerHandle = "...but somehow it did."
-					err := bbs.StartRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					err = bbs.DesireRunOnce(runOnce)
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("should destroy the container", func() {
-					Eventually(func() []models.RunOnce {
-						runOnces, _ := bbs.GetAllClaimedRunOnces()
-						return runOnces
-					}).Should(HaveLen(1))
-
-					Eventually(func() []string { return gordon.DestroyedHandles() }).Should(HaveLen(1))
-					Ω(gordon.DestroyedHandles()).Should(Equal(gordon.CreatedHandles()))
-				})
-			})
-		})
-
+	Describe("Handling", func() {
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
-				executor.HandleRunOnces()
+				executor.Handle(fakeRunOnceHandler)
 
 				etcdRunner.Stop()
 				time.Sleep(200 * time.Millisecond) //give the etcd driver time to realize we timed out.  the etcd driver is hardcoded to have a 200 ms timeout
@@ -223,82 +88,45 @@ var _ = Describe("Executor", func() {
 			})
 
 			AfterEach(func() {
-				executor.StopHandlingRunOnces()
+				executor.StopHandling()
 			})
 
 			It("should handle any new desired RunOnces", func() {
-				Eventually(func() []models.RunOnce {
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					return runOnces
-				}).Should(HaveLen(1))
+				Eventually(func() int {
+					return fakeRunOnceHandler.NumberOfCalls
+				}).Should(Equal(1))
 			})
 		})
 
-		Context("when told to stop handling RunOnces", func() {
+		Context("when told to stop handling", func() {
 			BeforeEach(func() {
-				executor.HandleRunOnces()
-				executor.StopHandlingRunOnces()
+				executor.Handle(fakeRunOnceHandler)
+				executor.StopHandling()
 			})
 
 			It("does not handle any new desired RunOnces", func() {
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Consistently(func() []models.RunOnce {
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					return runOnces
-				}).Should(BeEmpty())
+				Consistently(func() int {
+					return fakeRunOnceHandler.NumberOfCalls
+				}).Should(Equal(0))
 			})
-		})
-
-		Context("when the executor is out of resources", func() {
-			BeforeEach(func() {
-				executor.HandleRunOnces()
-			})
-
-			AfterEach(func() {
-				executor.StopHandlingRunOnces()
-			})
-
-			It("doesn't pick up another desired RunOnce", func() {
-				err := bbs.DesireRunOnce(models.RunOnce{
-					Guid:     "Let me use all of your memory!",
-					MemoryMB: 256,
-					Actions: []models.ExecutorAction{
-						{models.CopyAction{From: "thing", To: "other thing", Extract: false, Compress: true}},
-					},
-				})
-				Eventually(func() []models.RunOnce {
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					return runOnces
-				}).Should(HaveLen(1))
-
-				err = bbs.DesireRunOnce(models.RunOnce{
-					Guid:     "I want some memory!",
-					MemoryMB: 1,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Consistently(func() []models.RunOnce {
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					return runOnces
-				}, 0.33).Should(HaveLen(1))
-			}, 5.0)
 		})
 
 		Context("when two executors are fighting for a RunOnce", func() {
 			var otherExecutor *Executor
 
 			BeforeEach(func() {
-				executor.HandleRunOnces()
+				executor.Handle(fakeRunOnceHandler)
 
 				otherExecutor = New(bbs, gordon, taskRegistry)
-				otherExecutor.HandleRunOnces()
+				otherExecutor.Handle(fakeRunOnceHandler)
 			})
 
 			AfterEach(func() {
-				executor.StopHandlingRunOnces()
-				otherExecutor.StopHandlingRunOnces()
+				executor.StopHandling()
+				otherExecutor.StopHandling()
 			})
 
 			It("the winner should be randomly distributed", func() {
@@ -313,25 +141,22 @@ var _ = Describe("Executor", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 				}
 
-				//eventually all N should be claimed
-				Eventually(func() []models.RunOnce {
-					runOnces, _ := bbs.GetAllClaimedRunOnces()
-					return runOnces
-				}, 5).Should(HaveLen(samples))
+				//eventually the runoncehandlers should have been called N times
+				Eventually(func() int {
+					return fakeRunOnceHandler.NumberOfCalls
+				}, 5).Should(Equal(samples))
 
-				//figure out who claimed the run onces
-				claimedRunOnces, _ := bbs.GetAllClaimedRunOnces()
-				handlers := map[string]int{}
-
-				for _, claimedRunOnce := range claimedRunOnces {
-					handlers[claimedRunOnce.ExecutorID] += 1
+				var numberHandledByFirst int
+				var numberHandledByOther int
+				for _, executorId := range fakeRunOnceHandler.HandledRunOnces {
+					if executor.ID() == executorId {
+						numberHandledByFirst++
+					} else if otherExecutor.ID() == executorId {
+						numberHandledByOther++
+					}
 				}
-
-				//assert that at least both executors are participating
-				//these might appear flakey, but the odds of failing should be really really low...
-				Ω(handlers).Should(HaveLen(2))
-				Ω(handlers[executor.ID()]).Should(BeNumerically(">", 3))
-				Ω(handlers[otherExecutor.ID()]).Should(BeNumerically(">", 3))
+				Ω(numberHandledByFirst).Should(BeNumerically(">", 3))
+				Ω(numberHandledByOther).Should(BeNumerically(">", 3))
 			})
 		})
 	})
@@ -368,12 +193,12 @@ var _ = Describe("Executor", func() {
 
 		Context("when we fail to maintain our presence", func() {
 			BeforeEach(func() {
-				executor.HandleRunOnces()
+				executor.Handle(fakeRunOnceHandler)
 
 				executor.MaintainPresence(1)
 			})
 
-			It("stops handling RunOnces", func() {
+			It("stops handling", func() {
 				time.Sleep(1 * time.Second)
 
 				// delete its key (and everything else lol)
@@ -384,16 +209,14 @@ var _ = Describe("Executor", func() {
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Consistently(func() []models.RunOnce {
-					runOnces, err := bbs.GetAllClaimedRunOnces()
-					Ω(err).ShouldNot(HaveOccurred())
-					return runOnces
-				}).Should(HaveLen(0))
+				Consistently(func() int {
+					return fakeRunOnceHandler.NumberOfCalls
+				}).Should(Equal(0))
 			})
 		})
 	})
 
-	Describe("Convergence", func() {
+	Describe("Converging RunOnces", func() {
 		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
 		BeforeEach(func() {
 			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{LockIsGrabbable: true}
