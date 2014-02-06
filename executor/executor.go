@@ -66,6 +66,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
 			stopMaintainingPresence <- true
 
 		case <-maintainingPresenceErrors:
+			e.logger.Warn("executor.maintaining-presence.failed")
 			close(e.stopHandlingRunOnces)
 		}
 	}()
