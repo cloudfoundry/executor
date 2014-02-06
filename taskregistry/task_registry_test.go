@@ -13,13 +13,13 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
-
 var _ = Describe("TaskRegistry", func() {
 	var taskRegistry *TaskRegistry
 	var runOnce models.RunOnce
+	var registryFileName string
 
 	BeforeEach(func() {
+		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 		runOnce = models.RunOnce{
 			MemoryMB: 255,
 			DiskMB:   1023,

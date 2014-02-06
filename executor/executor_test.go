@@ -17,19 +17,19 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 )
 
-var registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
-
 var _ = Describe("Executor", func() {
 	var (
-		bbs          *Bbs.BBS
-		runOnce      models.RunOnce
-		executor     *Executor
-		taskRegistry *taskregistry.TaskRegistry
-		gordon       *fake_gordon.FakeGordon
-		testSink     *steno.TestingSink
+		bbs              *Bbs.BBS
+		runOnce          models.RunOnce
+		executor         *Executor
+		taskRegistry     *taskregistry.TaskRegistry
+		gordon           *fake_gordon.FakeGordon
+		testSink         *steno.TestingSink
+		registryFileName string
 	)
 
 	BeforeEach(func() {
+		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 		testSink = steno.NewTestingSink()
 		stenoConfig := steno.Config{
 			Sinks: []steno.Sink{testSink},
