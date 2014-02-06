@@ -8,14 +8,13 @@ FIRST_GOPATH=`echo $GOPATH | cut -d':' -f1`
 mkdir -p $FIRST_GOPATH/bin
 export PATH=$FIRST_GOPATH/bin:$PATH
 
-go get -v github.com/vito/gocart
-
-gocart
-go install github.com/onsi/ginkgo/ginkgo
+go get -d -u github.com/coreos/etcd
 
 pushd $FIRST_GOPATH/src/github.com/coreos/etcd
   ./build
   cp bin/etcd $FIRST_GOPATH/bin
 popd
 
-ginkgo -r -i -skipMeasurements -randomizeAllSpecs "$@"
+export GOPATH=$PWD/Godeps/_workspace:$GOPATH
+
+go test -v "$@" ./...
