@@ -42,11 +42,14 @@ type FakeGordon struct {
 	StreamError error
 
 	scriptsThatRan      []*RunningScript
+	runCallbacks        map[*RunningScript]RunCallback
 	runReturnStatusCode uint32
 	runReturnError      error
 
 	lock *sync.Mutex
 }
+
+type RunCallback func() (*warden.RunResponse, error)
 
 type RunningScript struct {
 	Handle string
@@ -85,6 +88,7 @@ func (f *FakeGordon) Reset() {
 	f.StreamError = nil
 
 	f.scriptsThatRan = make([]*RunningScript, 0)
+	f.runCallbacks = make(map[*RunningScript]RunCallback)
 	f.runReturnStatusCode = 0
 	f.runReturnError = nil
 }
@@ -212,13 +216,27 @@ func (f *FakeGordon) SetRunReturnValues(statusCode uint32, err error) {
 	f.runReturnError = err
 }
 
+func (f *FakeGordon) WhenRunning(handle string, script string, callback RunCallback) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.runCallbacks[&RunningScript{handle, script}] = callback
+}
+
 func (f *FakeGordon) Run(handle string, script string) (*warden.RunResponse, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+
 	f.scriptsThatRan = append(f.scriptsThatRan, &RunningScript{
 		Handle: handle,
 		Script: script,
 	})
+
+	for ro, cb := range f.runCallbacks {
+		if ro.Handle == handle && ro.Script == script {
+			return cb()
+		}
+	}
 
 	return &warden.RunResponse{ExitStatus: proto.Uint32(f.runReturnStatusCode)}, f.runReturnError
 }

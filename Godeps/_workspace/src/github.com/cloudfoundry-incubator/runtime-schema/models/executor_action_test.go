@@ -1,12 +1,13 @@
 package models_test
 
 import (
+	"encoding/json"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/models"
-
-	"encoding/json"
 )
 
 var _ = Describe("ExecutorAction", func() {
@@ -63,10 +64,11 @@ var _ = Describe("ExecutorAction", func() {
 
 	Describe("Run", func() {
 		itSerializesAndDeserializes(
-			`{"action":"run","args":{"script":"rm -rf /"}}`,
+			`{"action":"run","args":{"script":"rm -rf /","timeout_in_seconds":10}}`,
 			ExecutorAction{
 				Action: RunAction{
-					Script: "rm -rf /",
+					Script:  "rm -rf /",
+					Timeout: 10 * time.Second,
 				},
 			},
 		)
