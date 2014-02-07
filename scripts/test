@@ -3,19 +3,14 @@
 
 set -e -x
 
+export GOPATH=$PWD/Godeps/_workspace:$GOPATH
+
 FIRST_GOPATH=`echo $GOPATH | cut -d':' -f1`
 
 mkdir -p $FIRST_GOPATH/bin
 export PATH=$FIRST_GOPATH/bin:$PATH
 
-go get -d -u github.com/coreos/etcd
-
-pushd $FIRST_GOPATH/src/github.com/coreos/etcd
-  ./build
-  cp bin/etcd $FIRST_GOPATH/bin
-popd
-
-export GOPATH=$PWD/Godeps/_workspace:$GOPATH
+go get -u github.com/coreos/etcd
 
 go install github.com/onsi/ginkgo/ginkgo
 
