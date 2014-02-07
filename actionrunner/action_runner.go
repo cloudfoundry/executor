@@ -2,8 +2,11 @@ package actionrunner
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
+	"github.com/vito/gordon/warden"
 )
 
 type ActionRunnerInterface interface {
@@ -12,6 +15,14 @@ type ActionRunnerInterface interface {
 
 type ActionRunner struct {
 	wardenClient gordon.Client
+}
+
+type RunActionTimeoutError struct {
+	Action models.RunAction
+}
+
+func (e RunActionTimeoutError) Error() string {
+	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
 
 func New(wardenClient gordon.Client) *ActionRunner {
@@ -38,15 +49,39 @@ func (runner *ActionRunner) Run(containerHandle string, actions []models.Executo
 }
 
 func (runner *ActionRunner) performRunAction(containerHandle string, action models.RunAction) error {
-	runResponse, err := runner.wardenClient.Run(containerHandle, action.Script)
+	response := make(chan *warden.RunResponse, 1)
+	errChan := make(chan error, 1)
 
-	if err != nil {
+	var timeoutChan <-chan time.Time
+
+	if action.Timeout != 0 {
+		timeoutChan = time.After(action.Timeout)
+	}
+
+	go func() {
+		runResponse, err := runner.wardenClient.Run(containerHandle, action.Script)
+
+		if err != nil {
+			errChan <- err
+		} else {
+			response <- runResponse
+		}
+	}()
+
+	select {
+	case runResponse := <-response:
+		if runResponse.GetExitStatus() != 0 {
+			return fmt.Errorf("Process returned with exit value: %d", runResponse.GetExitStatus())
+		}
+
+		return nil
+
+	case err := <-errChan:
 		return err
+
+	case <-timeoutChan:
+		return RunActionTimeoutError{Action: action}
 	}
 
-	if runResponse.GetExitStatus() != 0 {
-		return fmt.Errorf("Process returned with exit value: %d", runResponse.GetExitStatus())
-	}
-
-	return nil
+	panic("unreachable")
 }
