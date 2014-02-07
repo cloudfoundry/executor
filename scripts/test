@@ -17,4 +17,6 @@ popd
 
 export GOPATH=$PWD/Godeps/_workspace:$GOPATH
 
-go test -v "$@" ./...
+go install github.com/onsi/ginkgo/ginkgo
+
+ginkgo -r -failOnPending -randomizeAllSpecs
