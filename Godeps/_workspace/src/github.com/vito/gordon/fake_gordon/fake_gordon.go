@@ -41,9 +41,16 @@ type FakeGordon struct {
 
 	StreamError error
 
-	RunError error
+	scriptsThatRan      []*RunningScript
+	runReturnStatusCode uint32
+	runReturnError      error
 
 	lock *sync.Mutex
+}
+
+type RunningScript struct {
+	Handle string
+	Script string
 }
 
 func New() *FakeGordon {
@@ -76,7 +83,10 @@ func (f *FakeGordon) Reset() {
 	f.InfoError = nil
 	f.CopyInError = nil
 	f.StreamError = nil
-	f.RunError = nil
+
+	f.scriptsThatRan = make([]*RunningScript, 0)
+	f.runReturnStatusCode = 0
+	f.runReturnError = nil
 }
 
 func (f *FakeGordon) Connect() error {
@@ -189,7 +199,26 @@ func (f *FakeGordon) Stream(handle string, jobID uint32) (<-chan *warden.StreamR
 	return nil, f.StreamError
 }
 
-func (f *FakeGordon) Run(handle, script string) (*warden.RunResponse, error) {
-	panic("NOOP!")
-	return nil, f.RunError
+func (f *FakeGordon) ScriptsThatRan() []*RunningScript {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	return f.scriptsThatRan
+}
+
+func (f *FakeGordon) SetRunReturnValues(statusCode uint32, err error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.runReturnStatusCode = statusCode
+	f.runReturnError = err
+}
+
+func (f *FakeGordon) Run(handle string, script string) (*warden.RunResponse, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.scriptsThatRan = append(f.scriptsThatRan, &RunningScript{
+		Handle: handle,
+		Script: script,
+	})
+
+	return &warden.RunResponse{ExitStatus: proto.Uint32(f.runReturnStatusCode)}, f.runReturnError
 }
