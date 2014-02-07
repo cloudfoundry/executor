@@ -15,8 +15,8 @@ pushd $FIRST_GOPATH/src/github.com/coreos/etcd
   cp bin/etcd $FIRST_GOPATH/bin
 popd
 
-go install github.com/onsi/ginkgo/ginkgo
-
 export GOPATH=$PWD/Godeps/_workspace:$GOPATH
+
+go install github.com/onsi/ginkgo/ginkgo
 
 ginkgo -r -failOnPending -randomizeAllSpecs
