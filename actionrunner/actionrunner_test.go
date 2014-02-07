@@ -5,6 +5,7 @@ import (
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,14 +15,16 @@ import (
 
 var _ = Describe("ActionRunner", func() {
 	var (
-		actions []models.ExecutorAction
-		runner  *ActionRunner
-		gordon  *fake_gordon.FakeGordon
+		actions     []models.ExecutorAction
+		runner      *ActionRunner
+		gordon      *fake_gordon.FakeGordon
+		linuxPlugin *linuxplugin.LinuxPlugin
 	)
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
-		runner = New(gordon)
+		linuxPlugin = linuxplugin.New()
+		runner = New(gordon, linuxPlugin)
 	})
 
 	Describe("Running the RunAction", func() {
@@ -30,6 +33,9 @@ var _ = Describe("ActionRunner", func() {
 				{
 					models.RunAction{
 						Script: "sudo reboot",
+						Env: map[string]string{
+							"A": "1",
+						},
 					},
 				},
 			}
@@ -42,7 +48,7 @@ var _ = Describe("ActionRunner", func() {
 
 				runningScript := gordon.ScriptsThatRan()[0]
 				Ω(runningScript.Handle).Should(Equal("handle-x"))
-				Ω(runningScript.Script).Should(Equal("sudo reboot"))
+				Ω(runningScript.Script).Should(Equal("export A=\"1\"\nsudo reboot"))
 			})
 		})
 

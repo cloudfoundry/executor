@@ -2,13 +2,14 @@ package main
 
 import (
 	"flag"
-	"github.com/cloudfoundry-incubator/executor/actionrunner"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -130,7 +131,8 @@ func main() {
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 
-	theFlash := actionrunner.New(wardenClient)
+	linuxPlugin := linuxplugin.New()
+	theFlash := actionrunner.New(wardenClient, linuxPlugin)
 	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash)
 
 	err = executor.Handle(runOnceHandler)

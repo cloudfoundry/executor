@@ -13,8 +13,13 @@ type ActionRunnerInterface interface {
 	Run(containerHandle string, actions []models.ExecutorAction) error
 }
 
+type BackendPlugin interface {
+	BuildRunScript(models.RunAction) string
+}
+
 type ActionRunner struct {
-	wardenClient gordon.Client
+	wardenClient  gordon.Client
+	backendPlugin BackendPlugin
 }
 
 type RunActionTimeoutError struct {
@@ -25,9 +30,10 @@ func (e RunActionTimeoutError) Error() string {
 	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
 
-func New(wardenClient gordon.Client) *ActionRunner {
+func New(wardenClient gordon.Client, backendPlugin BackendPlugin) *ActionRunner {
 	return &ActionRunner{
-		wardenClient: wardenClient,
+		wardenClient:  wardenClient,
+		backendPlugin: backendPlugin,
 	}
 }
 
@@ -59,7 +65,10 @@ func (runner *ActionRunner) performRunAction(containerHandle string, action mode
 	}
 
 	go func() {
-		runResponse, err := runner.wardenClient.Run(containerHandle, action.Script)
+		runResponse, err := runner.wardenClient.Run(
+			containerHandle,
+			runner.backendPlugin.BuildRunScript(action),
+		)
 
 		if err != nil {
 			errChan <- err
