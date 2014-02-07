@@ -1,6 +1,7 @@
 package executor_test
 
 import (
+	"github.com/cloudfoundry/gosteno"
 	"github.com/onsi/ginkgo/config"
 	"os"
 	"os/signal"
@@ -26,6 +27,8 @@ func TestExecutor(t *testing.T) {
 }
 
 var _ = BeforeEach(func() {
+	gosteno.EnterTestMode()
+
 	etcdRunner.Stop()
 	etcdRunner.Start()
 })

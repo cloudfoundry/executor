@@ -3,6 +3,7 @@ package executor_test
 import (
 	"errors"
 	"fmt"
+	"github.com/cloudfoundry/gosteno"
 	"github.com/onsi/ginkgo/config"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vito/gordon/fake_gordon"
@@ -25,7 +25,6 @@ var _ = Describe("Executor", func() {
 		executor         *Executor
 		taskRegistry     *taskregistry.TaskRegistry
 		gordon           *fake_gordon.FakeGordon
-		testSink         *steno.TestingSink
 		registryFileName string
 
 		startingMemory int
@@ -38,11 +37,6 @@ var _ = Describe("Executor", func() {
 		fakeRunOnceHandler = fakerunoncehandler.New()
 
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
-		testSink = steno.NewTestingSink()
-		stenoConfig := steno.Config{
-			Sinks: []steno.Sink{testSink},
-		}
-		steno.Init(&stenoConfig)
 
 		bbs = Bbs.New(etcdRunner.Adapter())
 		gordon = fake_gordon.New()
@@ -278,6 +272,8 @@ var _ = Describe("Executor", func() {
 			defer func() {
 				stopChannel <- true
 			}()
+
+			testSink := gosteno.GetMeTheGlobalTestSink()
 
 			Eventually(func() string {
 				if len(testSink.Records) > 0 {

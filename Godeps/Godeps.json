@@ -19,8 +19,8 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
-			"Comment": "scotty_09012012-35-ge5bd98f",
-			"Rev": "e5bd98f9075071b95aecef26c7d5aa1ee2cd682d"
+			"Comment": "scotty_09012012-37-gb73889e",
+			"Rev": "b73889e1b4e9e2c99103929016324ccf4f1d00ce"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",

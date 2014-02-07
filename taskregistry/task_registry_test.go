@@ -33,28 +33,32 @@ var _ = Describe("TaskRegistry", func() {
 	})
 
 	Describe("AddRunOnce", func() {
-		It("Returns true and adds something to the registry when there are enough resources", func() {
-			Ω(taskRegistry.AddRunOnce(runOnce)).To(BeTrue())
+		It("adds something to the registry when there are enough resources", func() {
+			err := taskRegistry.AddRunOnce(runOnce)
+			Ω(err).ShouldNot(HaveOccurred())
 			Ω(taskRegistry.RunOnces[runOnce.Guid]).To(Equal(runOnce))
 		})
 
 		Context("When there aren't enough resources", func() {
 			BeforeEach(func() {
-				taskRegistry.AddRunOnce(runOnce)
+				err := taskRegistry.AddRunOnce(runOnce)
+				Ω(err).ShouldNot(HaveOccurred())
 				Ω(taskRegistry.RunOnces).To(HaveLen(1))
 			})
 
-			It("Returns false and adds nothing when the new RunOnce needs more memory than is available", func() {
-				Ω(taskRegistry.AddRunOnce(models.RunOnce{
+			It("Returns an error and adds nothing when the new RunOnce needs more memory than is available", func() {
+				err := taskRegistry.AddRunOnce(models.RunOnce{
 					MemoryMB: 2,
-				})).To(BeFalse())
+				})
+				Ω(err).Should(HaveOccurred())
 				Ω(taskRegistry.RunOnces).To(HaveLen(1))
 			})
 
-			It("Returns false and adds nothing when the new RunOnce needs more disk than is available", func() {
-				Ω(taskRegistry.AddRunOnce(models.RunOnce{
+			It("Returns an error and adds nothing when the new RunOnce needs more disk than is available", func() {
+				err := taskRegistry.AddRunOnce(models.RunOnce{
 					DiskMB: 2,
-				})).To(BeFalse())
+				})
+				Ω(err).Should(HaveOccurred())
 				Ω(taskRegistry.RunOnces).To(HaveLen(1))
 			})
 		})
@@ -62,7 +66,8 @@ var _ = Describe("TaskRegistry", func() {
 
 	Describe("RemoveRunOnce", func() {
 		BeforeEach(func() {
-			taskRegistry.AddRunOnce(runOnce)
+			err := taskRegistry.AddRunOnce(runOnce)
+			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should reclaim the disk and memory from the RunOnce", func() {
@@ -107,8 +112,8 @@ var _ = Describe("TaskRegistry", func() {
 				Ω(loadedTaskRegistry.RunOnces).To(HaveLen(1))
 				Ω(loadedTaskRegistry.RunOnces["a guid"]).To(Equal(runOnce))
 
-				addedRunOnce := loadedTaskRegistry.AddRunOnce(models.RunOnce{Guid: "another guid", MemoryMB: 1, DiskMB: 1})
-				Ω(addedRunOnce).To(BeTrue())
+				err = loadedTaskRegistry.AddRunOnce(models.RunOnce{Guid: "another guid", MemoryMB: 1, DiskMB: 1})
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			Context("When the memory or disk change", func() {

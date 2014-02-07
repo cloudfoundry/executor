@@ -3,6 +3,7 @@ package taskregistry
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -14,6 +15,15 @@ var ErrorRegistrySnapshotDoesNotExist = errors.New("Registry snapshot does not e
 var ErrorRegistrySnapshotHasInvalidJSON = errors.New("Registry snapshot has invalid JSON")
 var ErrorNotEnoughMemoryWhenLoadingSnapshot = errors.New("Insufficient memory when loading snapshot")
 var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("Insufficient disk when loading snapshot")
+
+type TaskRegistryInterface interface {
+	AddRunOnce(runOnce models.RunOnce) error
+	RemoveRunOnce(runOnce models.RunOnce)
+	HasCapacityForRunOnce(runOnce models.RunOnce) bool
+	AvailableMemoryMB() int
+	AvailableDiskMB() int
+	WriteToDisk() error
+}
 
 type TaskRegistry struct {
 	ExecutorMemoryMB int
@@ -42,15 +52,15 @@ func LoadTaskRegistryFromDisk(filename string, memoryMB int, diskMB int) (*TaskR
 	return taskRegistry, nil
 }
 
-func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) bool {
+func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
 	if !registry.HasCapacityForRunOnce(runOnce) {
-		return false
+		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.AvailableMemoryMB(), registry.AvailableDiskMB())
 	}
 	registry.RunOnces[runOnce.Guid] = runOnce
-	return true
+	return nil
 }
 
 func (registry *TaskRegistry) RemoveRunOnce(runOnce models.RunOnce) {

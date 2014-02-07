@@ -21,10 +21,10 @@ type RunOnceHandler struct {
 
 	logger *steno.Logger
 
-	taskRegistry *taskregistry.TaskRegistry
+	taskRegistry taskregistry.TaskRegistryInterface
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregistry.TaskRegistry, actionRunner actionrunner.ActionRunnerInterface) *RunOnceHandler {
+func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry taskregistry.TaskRegistryInterface, actionRunner actionrunner.ActionRunnerInterface) *RunOnceHandler {
 	return &RunOnceHandler{
 		bbs:          bbs,
 		wardenClient: wardenClient,
@@ -36,15 +36,16 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregi
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string) {
 	// reserve resources
-	if !handler.taskRegistry.AddRunOnce(runOnce) {
-		handler.logger.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, handler.taskRegistry.AvailableMemoryMB(), handler.taskRegistry.AvailableDiskMB())
+	err := handler.taskRegistry.AddRunOnce(runOnce)
+	if err != nil {
+		handler.logger.Errorf("failed to allocate resources for run once: %s", err.Error())
 		return
 	}
 	defer handler.taskRegistry.RemoveRunOnce(runOnce)
 
 	// claim the RunOnce
 	runOnce.ExecutorID = executorId
-	err := handler.bbs.ClaimRunOnce(runOnce)
+	err = handler.bbs.ClaimRunOnce(runOnce)
 	if err != nil {
 		handler.logger.Errorf("failed claim run once: %s", err.Error())
 		return
