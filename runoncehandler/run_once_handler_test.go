@@ -34,7 +34,11 @@ var _ = Describe("RunOnceHandler", func() {
 		runOnce = models.RunOnce{
 			Guid: "totally-unique",
 			Actions: []models.ExecutorAction{
-				{models.RunAction{"sudo reboot"}},
+				{
+					models.RunAction{
+						Script: "sudo reboot",
+					},
+				},
 			},
 		}
 
