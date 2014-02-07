@@ -4,20 +4,6 @@ type TestingSink struct {
 	Records []*Record
 }
 
-var theGlobalTestSink *TestingSink
-
-func EnterTestMode() {
-	theGlobalTestSink = NewTestingSink()
-	stenoConfig := Config{
-		Sinks: []Sink{theGlobalTestSink},
-	}
-	Init(&stenoConfig)
-}
-
-func GetMeTheGlobalTestSink() *TestingSink {
-	return theGlobalTestSink
-}
-
 func NewTestingSink() *TestingSink {
 	return &TestingSink{
 		Records: make([]*Record, 0, 10),

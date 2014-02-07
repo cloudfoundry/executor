@@ -11,16 +11,16 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "9367e04c8c9f7d3814dfcbdfe577671b9a936b9e"
+			"Rev": "c1a4eaafe92d8cb365b47e7e80619ed5c9f54d2e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "9367e04c8c9f7d3814dfcbdfe577671b9a936b9e"
+			"Rev": "c1a4eaafe92d8cb365b47e7e80619ed5c9f54d2e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
-			"Comment": "scotty_09012012-37-gb73889e",
-			"Rev": "b73889e1b4e9e2c99103929016324ccf4f1d00ce"
+			"Comment": "scotty_09012012-35-ge5bd98f",
+			"Rev": "e5bd98f9075071b95aecef26c7d5aa1ee2cd682d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -37,11 +37,11 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "a13e218187dddef3e6d68f1062ffdcb4ec06bdf0"
+			"Rev": "dc83f6705d743045e1d2d399bfe0104501a25668"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "eb4854fbb3636f8ca054586384addf7f1b048466"
+			"Rev": "96f78f1eec17555a416b86839fe5a3c1c2086c8a"
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",

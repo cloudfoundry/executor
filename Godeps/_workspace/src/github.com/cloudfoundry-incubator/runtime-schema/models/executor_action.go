@@ -17,6 +17,7 @@ type CopyAction struct {
 
 type RunAction struct {
 	Script  string
+	Env     map[string]string
 	Timeout time.Duration
 }
 
@@ -30,14 +31,16 @@ type ExecutorAction struct {
 }
 
 type runActionSerialized struct {
-	Script           string `json:"script"`
-	TimeoutInSeconds uint64 `json:"timeout_in_seconds"`
+	Script           string            `json:"script"`
+	TimeoutInSeconds uint64            `json:"timeout_in_seconds"`
+	Env              map[string]string `json:"env"`
 }
 
 func (a RunAction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(runActionSerialized{
 		Script:           a.Script,
 		TimeoutInSeconds: uint64(a.Timeout / time.Second),
+		Env:              a.Env,
 	})
 }
 
@@ -51,6 +54,7 @@ func (a *RunAction) UnmarshalJSON(payload []byte) error {
 
 	a.Script = intermediate.Script
 	a.Timeout = time.Duration(intermediate.TimeoutInSeconds) * time.Second
+	a.Env = intermediate.Env
 
 	return nil
 }

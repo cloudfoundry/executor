@@ -34,7 +34,7 @@ var _ = Describe("ExecutorAction", func() {
 
 				json, err := json.Marshal(&marshalledAction)
 				Ω(err).Should(BeNil())
-				Ω(string(json)).Should(Equal(actionPayload))
+				Ω(json).Should(MatchJSON(actionPayload))
 			})
 		})
 
@@ -50,7 +50,15 @@ var _ = Describe("ExecutorAction", func() {
 
 	Describe("Copy", func() {
 		itSerializesAndDeserializes(
-			`{"action":"copy","args":{"from":"old_location","to":"new_location","extract":true,"compress":true}}`,
+			`{
+				"action": "copy",
+				"args": {
+					"from": "old_location",
+					"to": "new_location",
+					"extract": true,
+					"compress": true
+				}
+			}`,
 			ExecutorAction{
 				Action: CopyAction{
 					From:     "old_location",
@@ -64,11 +72,25 @@ var _ = Describe("ExecutorAction", func() {
 
 	Describe("Run", func() {
 		itSerializesAndDeserializes(
-			`{"action":"run","args":{"script":"rm -rf /","timeout_in_seconds":10}}`,
+			`{
+				"action": "run",
+				"args": {
+					"script": "rm -rf /",
+					"timeout_in_seconds": 10,
+					"env": {
+						"FOO": "1",
+						"BAR": "2"
+					}
+				}
+			}`,
 			ExecutorAction{
 				Action: RunAction{
 					Script:  "rm -rf /",
 					Timeout: 10 * time.Second,
+					Env: map[string]string{
+						"FOO": "1",
+						"BAR": "2",
+					},
 				},
 			},
 		)
