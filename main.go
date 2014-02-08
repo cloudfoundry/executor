@@ -61,6 +61,18 @@ var registrySnapshotFile = flag.String(
 	"the location, on disk, where the task registry snapshot should be stored",
 )
 
+var convergenceInterval = flag.Int(
+	"convergenceInterval",
+	30,
+	"the interval, in seconds, between convergences",
+)
+
+var heartbeatInterval = flag.Uint64(
+	"heartbeatInterval",
+	60,
+	"the interval, in seconds, between heartbeats for maintaining presence",
+)
+
 func main() {
 	flag.Parse()
 
@@ -130,6 +142,11 @@ func main() {
 		}
 	}
 	executor := executor.New(bbs, wardenClient, taskRegistry)
+	err = executor.MaintainPresence(*heartbeatInterval)
+	if err != nil {
+		logger.Errorf("failed to start maintaining presence: %s", err.Error())
+		os.Exit(1)
+	}
 
 	linuxPlugin := linuxplugin.New()
 	theFlash := actionrunner.New(wardenClient, linuxPlugin)
@@ -142,7 +159,7 @@ func main() {
 	}
 	logger.Infof("Watching for RunOnces!")
 
-	executor.ConvergeRunOnces(30 * time.Second)
+	executor.ConvergeRunOnces(time.Duration(*convergenceInterval) * time.Second)
 	logger.Infof("Converging RunOnces!")
 
 	select {}
