@@ -4,7 +4,9 @@ import (
 	"flag"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
@@ -141,12 +143,43 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	executor := executor.New(bbs, wardenClient, taskRegistry)
 	err = executor.MaintainPresence(*heartbeatInterval)
 	if err != nil {
 		logger.Errorf("failed to start maintaining presence: %s", err.Error())
 		os.Exit(1)
 	}
+
+	signals := make(chan os.Signal, 1)
+
+	go func() {
+		<-signals
+
+		err := taskRegistry.WriteToDisk()
+		if err != nil {
+			logger.Errord(
+				map[string]interface{}{
+					"error":            err,
+					"snapshotLocation": *registrySnapshotFile,
+				},
+				"executor.snapshot.write-failed",
+			)
+
+			os.Exit(1)
+		} else {
+			logger.Debugd(
+				map[string]interface{}{
+					"snapshotLocation": *registrySnapshotFile,
+				},
+				"executor.snapshot.saved",
+			)
+		}
+
+		os.Exit(0)
+	}()
+
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
 	linuxPlugin := linuxplugin.New()
 	theFlash := actionrunner.New(wardenClient, linuxPlugin)
@@ -157,9 +190,11 @@ func main() {
 		logger.Errorf("failed to start handling run onces: %s", err.Error())
 		os.Exit(1)
 	}
+
 	logger.Infof("Watching for RunOnces!")
 
 	executor.ConvergeRunOnces(time.Duration(*convergenceInterval) * time.Second)
+
 	logger.Infof("Converging RunOnces!")
 
 	select {}
