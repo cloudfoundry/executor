@@ -22,17 +22,19 @@ var _ = Describe("RunOnceHandler", func() {
 		fakeTaskRegistry *faketaskregistry.FakeTaskRegistry
 		gordon           *fake_gordon.FakeGordon
 		actionRunner     *fakeactionrunner.FakeActionRunner
+		stack            string
 	)
 
 	BeforeEach(func() {
 		bbs = fakebbs.NewFakeExecutorBBS()
 		gordon = fake_gordon.New()
 		actionRunner = fakeactionrunner.New()
-
 		fakeTaskRegistry = faketaskregistry.New()
+		stack = "penguin"
 
 		runOnce = models.RunOnce{
-			Guid: "totally-unique",
+			Guid:  "totally-unique",
+			Stack: "penguin",
 			Actions: []models.ExecutorAction{
 				{
 					models.RunAction{
@@ -42,7 +44,7 @@ var _ = Describe("RunOnceHandler", func() {
 			},
 		}
 
-		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner)
+		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner, stack)
 	})
 
 	Describe("Handling a RunOnce", func() {
@@ -50,107 +52,129 @@ var _ = Describe("RunOnceHandler", func() {
 			handler.RunOnce(runOnce, "executor-id")
 		})
 
-		Context("When there are enough resources to claim the RunOnce", func() {
-			It("should allocate resources", func() {
-				Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
-			})
-
-			Context("When the RunOnce can be claimed", func() {
-				It("claims it", func() {
-					Ω(bbs.ClaimedRunOnce.Guid).Should(Equal(runOnce.Guid))
-					Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("executor-id"))
+		Context("when the RunOnce's stack matches the executor's stack", func() {
+			Context("When there are enough resources to claim the RunOnce", func() {
+				It("should allocate resources", func() {
+					Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
 				})
 
-				Context("When a container can be made", func() {
-					It("should make the container", func() {
-						Ω(gordon.CreatedHandles()).Should(HaveLen(1))
+				Context("When the RunOnce can be claimed", func() {
+					It("claims it", func() {
+						Ω(bbs.ClaimedRunOnce.Guid).Should(Equal(runOnce.Guid))
+						Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("executor-id"))
 					})
 
-					Context("When the RunOnce can be put into the starting state", func() {
-						It("should mark the RunOnce as started", func() {
-							Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
+					Context("When a container can be made", func() {
+						It("should make the container", func() {
+							Ω(gordon.CreatedHandles()).Should(HaveLen(1))
 						})
 
-						It("should start running the actions", func() {
-							Ω(actionRunner.ContainerHandle).Should(Equal(gordon.CreatedHandles()[0]))
-							Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
-						})
+						Context("When the RunOnce can be put into the starting state", func() {
+							It("should mark the RunOnce as started", func() {
+								Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
+							})
 
-						Context("when the RunOnce actions succeed", func() {
-							It("should deallocate resources and mark the RunOnce as completed (succesfully)", func() {
-								Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
-								Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
+							It("should start running the actions", func() {
+								Ω(actionRunner.ContainerHandle).Should(Equal(gordon.CreatedHandles()[0]))
+								Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
+							})
 
-								Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
-								Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
+							Context("when the RunOnce actions succeed", func() {
+								It("should deallocate resources and mark the RunOnce as completed (succesfully)", func() {
+									Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
+									Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
+
+									Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
+									Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
+								})
+							})
+
+							Context("when the RunOnce actions fail", func() {
+								BeforeEach(func() {
+									actionRunner.RunError = errors.New("Asplosions!")
+								})
+
+								It("should deallocate resources and mark the RunOnce as completed (unsuccesfully)", func() {
+									Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
+									Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
+									Ω(bbs.CompletedRunOnce.FailureReason).Should(Equal("Asplosions!"))
+
+									Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
+									Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
+								})
 							})
 						})
 
-						Context("when the RunOnce actions fail", func() {
+						Context("When the RunOnce fails to be put into the starting state", func() {
 							BeforeEach(func() {
-								actionRunner.RunError = errors.New("Asplosions!")
+								bbs.StartRunOnceErr = errors.New("bam!")
 							})
 
-							It("should deallocate resources and mark the RunOnce as completed (unsuccesfully)", func() {
-								Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
-								Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
-								Ω(bbs.CompletedRunOnce.FailureReason).Should(Equal("Asplosions!"))
+							It("should destroy the container and deallocate resources", func() {
+								Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
+								Ω(gordon.DestroyedHandles()).Should(Equal(gordon.CreatedHandles()))
 
 								Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
-								Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
 							})
 						})
 					})
 
-					Context("When the RunOnce fails to be put into the starting state", func() {
+					Context("when a container cannot be made", func() {
 						BeforeEach(func() {
-							bbs.StartRunOnceErr = errors.New("bam!")
+							gordon.CreateError = errors.New("No container for you")
 						})
 
-						It("should destroy the container and deallocate resources", func() {
-							Ω(gordon.DestroyedHandles()).Should(HaveLen(1))
-							Ω(gordon.DestroyedHandles()).Should(Equal(gordon.CreatedHandles()))
+						It("does not create a starting RunOnce and it deallocates resources", func() {
+							Ω(bbs.StartedRunOnce).Should(BeZero())
 
 							Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
 						})
 					})
 				})
 
-				Context("when a container cannot be made", func() {
+				Context("When the RunOnce cannot be claimed", func() {
 					BeforeEach(func() {
-						gordon.CreateError = errors.New("No container for you")
+						bbs.ClaimRunOnceErr = errors.New("bam!")
 					})
 
-					It("does not create a starting RunOnce and it deallocates resources", func() {
+					It("does not start the run once, create a container, or set aside resources for it", func() {
 						Ω(bbs.StartedRunOnce).Should(BeZero())
 
+						Ω(gordon.CreatedHandles()).Should(BeEmpty())
 						Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
 					})
 				})
 			})
 
-			Context("When the RunOnce cannot be claimed", func() {
+			Context("When there are not enough resources to claim the RunOnce", func() {
 				BeforeEach(func() {
-					bbs.ClaimRunOnceErr = errors.New("bam!")
+					fakeTaskRegistry.AddRunOnceErr = errors.New("No room at the inn!")
 				})
 
-				It("does not start the run once, create a container, or set aside resources for it", func() {
-					Ω(bbs.StartedRunOnce).Should(BeZero())
-
-					Ω(gordon.CreatedHandles()).Should(BeEmpty())
-					Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
+				It("should not claim the run once or reserve resources", func() {
+					Ω(fakeTaskRegistry.RegisteredRunOnces).ShouldNot(ContainElement(runOnce))
+					Ω(bbs.ClaimedRunOnce).Should(BeZero())
 				})
 			})
 		})
 
-		Context("When there are not enough resources to claim the RunOnce", func() {
+		Context("when the RunOnce stack is empty", func() {
 			BeforeEach(func() {
-				fakeTaskRegistry.AddRunOnceErr = errors.New("No room at the inn!")
+				runOnce.Stack = ""
 			})
 
-			It("should not claim the run once or reserve resources", func() {
+			It("should pick up the RunOnce", func() {
+				Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
+			})
+		})
+
+		Context("when the RunOnce stack does not match the executor's stack", func() {
+			BeforeEach(func() {
+				runOnce.Stack = "lion"
+			})
+
+			It("should not pick up the RunOnce", func() {
 				Ω(fakeTaskRegistry.RegisteredRunOnces).ShouldNot(ContainElement(runOnce))
-				Ω(bbs.ClaimedRunOnce).Should(BeZero())
 			})
 		})
 	})

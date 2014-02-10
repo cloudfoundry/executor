@@ -171,5 +171,6 @@ func (e *Executor) converge(period time.Duration) {
 		}, "error when grabbing converge lock")
 	} else if success {
 		e.bbs.ConvergeRunOnce()
+		e.logger.Info("Converged RunOnce")
 	}
 }

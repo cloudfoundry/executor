@@ -1,6 +1,7 @@
 package bbs
 
 import (
+	"fmt"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
 	"path"
@@ -310,7 +311,7 @@ func (self *executorBBS) ConvergeRunOnce() {
 
 	for _, node := range []storeadapter.StoreNode{claimed, running, completed} {
 		for _, node := range node.ChildNodes {
-			guid := node.KeyComponents()[2]
+			guid := node.KeyComponents()[3]
 
 			_, isPending := pending.Lookup(guid)
 			if !isPending {
@@ -321,6 +322,13 @@ func (self *executorBBS) ConvergeRunOnce() {
 
 	self.store.SetMulti(storeNodesToSet)
 	self.store.Delete(keysToDelete...)
+}
+
+func (self *BBS) printNodes(message string, nodes []storeadapter.StoreNode) {
+	fmt.Println(message)
+	for _, node := range nodes {
+		fmt.Printf("    %s [%d]: %s\n", node.Key, node.TTL, string(node.Value))
+	}
 }
 
 func verifyExecutorIsPresent(node storeadapter.StoreNode, executorState storeadapter.StoreNode) bool {

@@ -75,6 +75,12 @@ var heartbeatInterval = flag.Uint64(
 	"the interval, in seconds, between heartbeats for maintaining presence",
 )
 
+var stack = flag.String(
+	"stack",
+	"default",
+	"the executor stack",
+)
+
 func main() {
 	flag.Parse()
 
@@ -151,6 +157,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	logger.Infof("Starting executor: ID=%s, stack=%s", executor.ID(), *stack)
+
 	signals := make(chan os.Signal, 1)
 
 	go func() {
@@ -183,7 +191,7 @@ func main() {
 
 	linuxPlugin := linuxplugin.New()
 	theFlash := actionrunner.New(wardenClient, linuxPlugin)
-	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash)
+	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash, *stack)
 
 	err = executor.Handle(runOnceHandler)
 	if err != nil {
@@ -194,8 +202,6 @@ func main() {
 	logger.Infof("Watching for RunOnces!")
 
 	executor.ConvergeRunOnces(time.Duration(*convergenceInterval) * time.Second)
-
-	logger.Infof("Converging RunOnces!")
 
 	select {}
 }

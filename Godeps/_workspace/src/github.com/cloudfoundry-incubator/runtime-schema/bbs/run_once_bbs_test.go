@@ -528,6 +528,13 @@ var _ = Describe("RunOnce BBS", func() {
 					close(done)
 				})
 
+				It("should not delete the claim key", func() {
+					bbs.ConvergeRunOnce()
+
+					_, err := store.Get("/v1/run_once/claimed/some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
 				Context("and the associated executor is still alive", func() {
 					BeforeEach(func() {
 						stop, _, err := bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
@@ -571,6 +578,13 @@ var _ = Describe("RunOnce BBS", func() {
 					Ω(<-events).Should(Equal(otherRunOnce))
 
 					close(done)
+				})
+
+				It("should not delete the running key", func() {
+					bbs.ConvergeRunOnce()
+
+					_, err := store.Get("/v1/run_once/running/some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				Context("and the associated executor is still alive", func() {
@@ -626,6 +640,13 @@ var _ = Describe("RunOnce BBS", func() {
 					Ω(<-events).Should(Equal(runOnce))
 
 					close(done)
+				})
+
+				It("should not delete the completed key", func() {
+					bbs.ConvergeRunOnce()
+
+					_, err := store.Get("/v1/run_once/completed/some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 			})
 

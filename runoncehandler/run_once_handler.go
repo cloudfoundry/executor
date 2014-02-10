@@ -22,19 +22,28 @@ type RunOnceHandler struct {
 	logger *steno.Logger
 
 	taskRegistry taskregistry.TaskRegistryInterface
+
+	stack string
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry taskregistry.TaskRegistryInterface, actionRunner actionrunner.ActionRunnerInterface) *RunOnceHandler {
+func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry taskregistry.TaskRegistryInterface, actionRunner actionrunner.ActionRunnerInterface, stack string) *RunOnceHandler {
 	return &RunOnceHandler{
 		bbs:          bbs,
 		wardenClient: wardenClient,
 		taskRegistry: taskRegistry,
 		actionRunner: actionRunner,
 		logger:       steno.NewLogger("RunOnceHandler"),
+		stack:        stack,
 	}
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string) {
+	// check for stack compatibility
+	if runOnce.Stack != "" && handler.stack != runOnce.Stack {
+		handler.logger.Infof("runonce.stack.mismatch - RunOnce stack:%s, Executor stack:%s", runOnce.Stack, handler.stack)
+		return
+	}
+
 	// reserve resources
 	err := handler.taskRegistry.AddRunOnce(runOnce)
 	if err != nil {
@@ -45,6 +54,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 
 	// claim the RunOnce
 	runOnce.ExecutorID = executorId
+	handler.logger.Infof("executor.claiming.runonce: %s", runOnce.Guid)
 	err = handler.bbs.ClaimRunOnce(runOnce)
 	if err != nil {
 		handler.logger.Errorf("failed claim run once: %s", err.Error())
@@ -68,6 +78,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 	}()
 
 	// mark the RunOnce as started
+	handler.logger.Infof("executor.starting.runonce: %s", runOnce.Guid)
 	err = handler.bbs.StartRunOnce(runOnce)
 	if err != nil {
 		handler.logger.Errorf("failed to transition RunOnce to running state: %s", err.Error())
@@ -83,6 +94,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 	}
 
 	// mark the task as completed
+	handler.logger.Infof("executor.completed.runonce: %s", runOnce.Guid)
 	err = handler.bbs.CompleteRunOnce(runOnce)
 	if err != nil {
 		handler.logger.Errorf("failed to transition RunOnce to completed state: %s", err.Error())
