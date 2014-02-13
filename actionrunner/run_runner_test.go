@@ -8,6 +8,7 @@ import (
 	"code.google.com/p/gogoprotobuf/proto"
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter/fakeemitter"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -25,6 +26,7 @@ var _ = Describe("RunRunner", func() {
 		uploader    *fakeuploader.FakeUploader
 		gordon      *fake_gordon.FakeGordon
 		linuxPlugin *linuxplugin.LinuxPlugin
+		emitter     *fakeemitter.FakeEmitter
 	)
 
 	var stream chan *warden.ProcessPayload
@@ -57,7 +59,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("executes the command in the passed-in container", func() {
-			err := runner.Run("handle-x", actions)
+			err := runner.Run("handle-x", emitter, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runningScript := gordon.ScriptsThatRan()[0]
@@ -72,7 +74,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("should return the error", func() {
-			err := runner.Run("handle-x", actions)
+			err := runner.Run("handle-x", emitter, actions)
 			Ω(err).Should(Equal(errors.New("I, like, tried but failed")))
 		})
 	})
@@ -83,7 +85,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("should return an error with the exit code", func() {
-			err := runner.Run("handle-x", actions)
+			err := runner.Run("handle-x", emitter, actions)
 			Ω(err.Error()).Should(ContainSubstring("19"))
 		})
 	})
@@ -95,7 +97,7 @@ var _ = Describe("RunRunner", func() {
 				stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 			}()
 
-			err := runner.Run("handle-x", actions)
+			err := runner.Run("handle-x", emitter, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
@@ -116,7 +118,7 @@ var _ = Describe("RunRunner", func() {
 			It("succeeds", func() {
 				stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 
-				err := runner.Run("handle-x", actions)
+				err := runner.Run("handle-x", emitter, actions)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -128,13 +130,42 @@ var _ = Describe("RunRunner", func() {
 					stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 				}()
 
-				err := runner.Run("handle-x", actions)
+				err := runner.Run("handle-x", emitter, actions)
 				Ω(err).Should(HaveOccurred())
 				Ω(err).Should(Equal(RunActionTimeoutError{models.RunAction{
 					Script:  "sudo reboot",
 					Timeout: 100 * time.Millisecond,
 				}}))
 			})
+		})
+	})
+
+	Context("when given an emitter", func() {
+		stdout := warden.ProcessPayload_stdout
+		stderr := warden.ProcessPayload_stderr
+
+		BeforeEach(func() {
+			emitter = fakeemitter.New()
+
+			stream <- &warden.ProcessPayload{
+				Source: &stdout,
+				Data:   proto.String("hi out"),
+			}
+
+			stream <- &warden.ProcessPayload{
+				Source: &stderr,
+				Data:   proto.String("hi err"),
+			}
+
+			stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
+		})
+
+		It("emits the output chunks as they come in", func() {
+			err := runner.Run("handle-x", emitter, actions)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(emitter.EmittedStdout).Should(ContainElement("hi out"))
+			Ω(emitter.EmittedStderr).Should(ContainElement("hi err"))
 		})
 	})
 })

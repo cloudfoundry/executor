@@ -2,11 +2,16 @@ package runoncehandler_test
 
 import (
 	"errors"
+	"fmt"
+	"github.com/onsi/ginkgo/config"
+	"net"
+
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -17,12 +22,17 @@ var _ = Describe("RunOnceHandler", func() {
 	var (
 		handler *RunOnceHandler
 
-		bbs              *fakebbs.FakeExecutorBBS
-		runOnce          models.RunOnce
-		fakeTaskRegistry *faketaskregistry.FakeTaskRegistry
-		gordon           *fake_gordon.FakeGordon
-		actionRunner     *fakeactionrunner.FakeActionRunner
-		stack            string
+		bbs               *fakebbs.FakeExecutorBBS
+		runOnce           models.RunOnce
+		fakeTaskRegistry  *faketaskregistry.FakeTaskRegistry
+		gordon            *fake_gordon.FakeGordon
+		actionRunner      *fakeactionrunner.FakeActionRunner
+		loggregatorServer string
+		loggregatorSecret string
+		stack             string
+
+		// so we can initialize an emitter :(
+		fakeLoggregatorServer *net.UDPConn
 	)
 
 	BeforeEach(func() {
@@ -30,6 +40,9 @@ var _ = Describe("RunOnceHandler", func() {
 		gordon = fake_gordon.New()
 		actionRunner = fakeactionrunner.New()
 		fakeTaskRegistry = faketaskregistry.New()
+		loggregatorPort := 3456 + config.GinkgoConfig.ParallelNode
+		loggregatorServer = fmt.Sprintf("127.0.0.1:%d", loggregatorPort)
+		loggregatorSecret = "conspiracy"
 		stack = "penguin"
 
 		runOnce = models.RunOnce{
@@ -44,7 +57,7 @@ var _ = Describe("RunOnceHandler", func() {
 			},
 		}
 
-		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner, stack)
+		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner, loggregatorServer, loggregatorSecret, stack)
 	})
 
 	Describe("Handling a RunOnce", func() {
@@ -77,6 +90,54 @@ var _ = Describe("RunOnceHandler", func() {
 							It("should start running the actions", func() {
 								Ω(actionRunner.ContainerHandle).Should(Equal(gordon.CreatedHandles()[0]))
 								Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
+							})
+
+							It("should not initialize emitter", func() {
+								Ω(actionRunner.Emitter).Should(BeNil())
+							})
+
+							Context("and logs are configured for the RunOnce", func() {
+								BeforeEach(func() {
+									index := 356
+
+									runOnce = models.RunOnce{
+										Guid:  "totally-unique",
+										Stack: "penguin",
+										Actions: []models.ExecutorAction{
+											{
+												models.RunAction{
+													Script: "sudo reboot",
+												},
+											},
+										},
+										Log: models.LogConfig{
+											Guid:       "totally-unique",
+											SourceName: "XYZ",
+											Index:      &index,
+										},
+									}
+
+									var err error
+
+									addr, err := net.ResolveUDPAddr("udp", loggregatorServer)
+									Ω(err).ShouldNot(HaveOccurred())
+
+									fakeLoggregatorServer, err = net.ListenUDP("udp", addr)
+									Ω(err).ShouldNot(HaveOccurred())
+								})
+
+								AfterEach(func() {
+									fakeLoggregatorServer.Close()
+								})
+
+								It("should run the actions with an emitter", func() {
+									Ω(actionRunner.Emitter).ShouldNot(BeNil())
+
+									emitter := actionRunner.Emitter.(*emitter.AppEmitter)
+									Ω(emitter.Guid).Should(Equal("totally-unique"))
+									Ω(emitter.SourceName).Should(Equal("XYZ"))
+									Ω(*(emitter.Index)).Should(Equal(356))
+								})
 							})
 
 							Context("when the RunOnce actions succeed", func() {

@@ -7,6 +7,7 @@ import (
 
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter/fakeemitter"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -23,6 +24,7 @@ var _ = Describe("UploadRunner", func() {
 		downloader *fakedownloader.FakeDownloader
 		uploader   *fakeuploader.FakeUploader
 		gordon     *fake_gordon.FakeGordon
+		emitter    *fakeemitter.FakeEmitter
 		err        error
 	)
 
@@ -44,7 +46,7 @@ var _ = Describe("UploadRunner", func() {
 	})
 
 	JustBeforeEach(func() {
-		err = runner.Run("handle-x", actions)
+		err = runner.Run("handle-x", emitter, actions)
 	})
 
 	It("should upload the file to a URL", func() {

@@ -23,6 +23,30 @@
 			"Rev": "b73889e1b4e9e2c99103929016324ccf4f1d00ce"
 		},
 		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
+			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
 			"Rev": "1cbdbf854a486e0a10942e87edd3757f1ac6667a"
 		},
@@ -45,7 +69,7 @@
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",
-			"Rev": "9f15c2c9992a7b684ea52b45b16986001d5ee967"
+			"Rev": "22f5a6af42d928e4d4f110a9da564210f5db3f58"
 		}
 	]
 }

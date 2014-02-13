@@ -46,7 +46,7 @@ var _ = Describe("DownloadRunner", func() {
 	})
 
 	JustBeforeEach(func() {
-		err = runner.Run("handle-x", actions)
+		err = runner.Run("handle-x", nil, actions)
 	})
 
 	It("should download the file from a URL", func() {

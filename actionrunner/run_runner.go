@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/vito/gordon"
+	"github.com/vito/gordon/warden"
 
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -21,7 +23,7 @@ func NewRunRunner(wardenClient gordon.Client, backendPlugin BackendPlugin) *RunR
 	}
 }
 
-func (runner *RunRunner) perform(containerHandle string, action models.RunAction) error {
+func (runner *RunRunner) perform(containerHandle string, emitter emitter.Emitter, action models.RunAction) error {
 	exitStatusChan := make(chan uint32, 1)
 	errChan := make(chan error, 1)
 
@@ -45,6 +47,16 @@ func (runner *RunRunner) perform(containerHandle string, action models.RunAction
 		for payload := range stream {
 			if payload.ExitStatus != nil {
 				exitStatusChan <- payload.GetExitStatus()
+				break
+			}
+
+			if emitter != nil {
+				switch *payload.Source {
+				case warden.ProcessPayload_stdout:
+					emitter.EmitStdout(payload.GetData())
+				case warden.ProcessPayload_stderr:
+					emitter.EmitStderr(payload.GetData())
+				}
 			}
 		}
 	}()

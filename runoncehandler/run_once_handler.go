@@ -2,6 +2,7 @@ package runoncehandler
 
 import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -19,6 +20,9 @@ type RunOnceHandler struct {
 	wardenClient gordon.Client
 	actionRunner actionrunner.ActionRunnerInterface
 
+	loggregatorServer string
+	loggregatorSecret string
+
 	logger *steno.Logger
 
 	taskRegistry taskregistry.TaskRegistryInterface
@@ -26,14 +30,24 @@ type RunOnceHandler struct {
 	stack string
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry taskregistry.TaskRegistryInterface, actionRunner actionrunner.ActionRunnerInterface, stack string) *RunOnceHandler {
+func New(
+	bbs Bbs.ExecutorBBS,
+	wardenClient gordon.Client,
+	taskRegistry taskregistry.TaskRegistryInterface,
+	actionRunner actionrunner.ActionRunnerInterface,
+	loggregatorServer string,
+	loggregatorSecret string,
+	stack string,
+) *RunOnceHandler {
 	return &RunOnceHandler{
-		bbs:          bbs,
-		wardenClient: wardenClient,
-		taskRegistry: taskRegistry,
-		actionRunner: actionRunner,
-		logger:       steno.NewLogger("RunOnceHandler"),
-		stack:        stack,
+		bbs:               bbs,
+		wardenClient:      wardenClient,
+		taskRegistry:      taskRegistry,
+		actionRunner:      actionRunner,
+		loggregatorServer: loggregatorServer,
+		loggregatorSecret: loggregatorSecret,
+		logger:            steno.NewLogger("RunOnceHandler"),
+		stack:             stack,
 	}
 }
 
@@ -85,8 +99,20 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 		return
 	}
 
+	var em emitter.Emitter
+
+	if runOnce.Log.SourceName != "" {
+		em = emitter.New(
+			handler.loggregatorServer,
+			handler.loggregatorSecret,
+			runOnce.Log.SourceName,
+			runOnce.Log.Guid,
+			runOnce.Log.Index,
+		)
+	}
+
 	// perform the actions
-	err = handler.actionRunner.Run(runOnce.ContainerHandle, runOnce.Actions)
+	err = handler.actionRunner.Run(runOnce.ContainerHandle, em, runOnce.Actions)
 	if err != nil {
 		handler.logger.Errorf("failed to run RunOnce actions: %s", err.Error())
 		runOnce.Failed = true

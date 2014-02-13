@@ -82,6 +82,18 @@ var tempDir = flag.String(
 	"location to store temporary assets",
 )
 
+var loggregatorServer = flag.String(
+	"loggregatorServer",
+	"",
+	"loggregator server to emit logs to",
+)
+
+var loggregatorSecret = flag.String(
+	"loggregatorSecret",
+	"",
+	"secret for the loggregator server",
+)
+
 var stack = flag.String(
 	"stack",
 	"default",
@@ -198,8 +210,17 @@ func main() {
 
 	linuxPlugin := linuxplugin.New()
 	downloader := downloader.New()
-	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, *tempDir)
-	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash, *stack)
+	actionRunner := actionrunner.New(wardenClient, linuxPlugin, downloader, *tempDir)
+
+	runOnceHandler := runoncehandler.New(
+		bbs,
+		wardenClient,
+		taskRegistry,
+		actionRunner,
+		*loggregatorServer,
+		*loggregatorSecret,
+		*stack,
+	)
 
 	err = executor.Handle(runOnceHandler)
 	if err != nil {

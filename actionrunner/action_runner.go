@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
 )
 
 type ActionRunnerInterface interface {
-	Run(containerHandle string, actions []models.ExecutorAction) error
+	Run(containerHandle string, emitter emitter.Emitter, actions []models.ExecutorAction) error
 }
 
 type BackendPlugin interface {
@@ -43,12 +44,12 @@ func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader dow
 	}
 }
 
-func (runner *ActionRunner) Run(containerHandle string, actions []models.ExecutorAction) error {
+func (runner *ActionRunner) Run(containerHandle string, emitter emitter.Emitter, actions []models.ExecutorAction) error {
 	for _, action := range actions {
 		var err error
 		switch a := action.Action.(type) {
 		case models.RunAction:
-			err = runner.performRunAction(containerHandle, a)
+			err = runner.performRunAction(containerHandle, emitter, a)
 		case models.DownloadAction:
 			err = runner.performDownloadAction(containerHandle, a)
 		case models.UploadAction:
@@ -62,9 +63,9 @@ func (runner *ActionRunner) Run(containerHandle string, actions []models.Executo
 	return nil
 }
 
-func (runner *ActionRunner) performRunAction(containerHandle string, action models.RunAction) error {
+func (runner *ActionRunner) performRunAction(containerHandle string, emitter emitter.Emitter, action models.RunAction) error {
 	runRunner := NewRunRunner(runner.wardenClient, runner.backendPlugin)
-	return runRunner.perform(containerHandle, action)
+	return runRunner.perform(containerHandle, emitter, action)
 }
 
 func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
