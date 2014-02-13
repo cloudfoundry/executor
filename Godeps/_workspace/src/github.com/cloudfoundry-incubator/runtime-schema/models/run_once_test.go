@@ -17,15 +17,20 @@ var _ = Describe("RunOnce", func() {
 		"executor_id":"executor",
 		"actions":[
 			{
-				"action":"copy",
-				"args":{"from":"old_location","to":"new_location","extract":true,"compress":true}
+				"action":"download",
+				"args":{"from":"old_location","to":"new_location","extract":true}
 			}
 		],
 		"container_handle":"17fgsafdfcvc",
 		"failed":true,
 		"failure_reason":"because i said so",
 		"memory_mb":256,
-		"disk_mb":1024
+		"disk_mb":1024,
+		"log": {
+			"guid": "123",
+			"type": "APP",
+			"index": 42
+		}
 	}`
 
 	BeforeEach(func() {
@@ -35,13 +40,17 @@ var _ = Describe("RunOnce", func() {
 			Stack:   "some-stack",
 			Actions: []ExecutorAction{
 				{
-					Action: CopyAction{
-						From:     "old_location",
-						To:       "new_location",
-						Extract:  true,
-						Compress: true,
+					Action: DownloadAction{
+						From:    "old_location",
+						To:      "new_location",
+						Extract: true,
 					},
 				},
+			},
+			Log: LogConfig{
+				Guid:  "123",
+				Type:  "APP",
+				Index: 42,
 			},
 			ExecutorID:      "executor",
 			ContainerHandle: "17fgsafdfcvc",

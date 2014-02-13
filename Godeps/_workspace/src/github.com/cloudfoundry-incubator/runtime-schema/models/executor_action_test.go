@@ -48,23 +48,21 @@ var _ = Describe("ExecutorAction", func() {
 		})
 	}
 
-	Describe("Copy", func() {
+	Describe("Download", func() {
 		itSerializesAndDeserializes(
 			`{
-				"action": "copy",
+				"action": "download",
 				"args": {
-					"from": "old_location",
-					"to": "new_location",
-					"extract": true,
-					"compress": true
+					"from": "web_location",
+					"to": "local_location",
+					"extract": true
 				}
 			}`,
 			ExecutorAction{
-				Action: CopyAction{
-					From:     "old_location",
-					To:       "new_location",
-					Extract:  true,
-					Compress: true,
+				Action: DownloadAction{
+					From:    "web_location",
+					To:      "local_location",
+					Extract: true,
 				},
 			},
 		)

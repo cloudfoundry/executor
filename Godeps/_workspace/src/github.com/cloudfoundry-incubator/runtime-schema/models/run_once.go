@@ -10,6 +10,7 @@ type RunOnce struct {
 	Stack    string           `json:"stack"`
 	MemoryMB int              `json:"memory_mb"`
 	DiskMB   int              `json:"disk_mb"`
+	Log      LogConfig        `json:"log"`
 
 	// this is so that any stager can process a complete event,
 	// because the CC <-> Stager interaction is a one-to-one request-response
@@ -23,6 +24,12 @@ type RunOnce struct {
 
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
+}
+
+type LogConfig struct {
+	Guid  string `json:"guid"`
+	Type  string `json:"type"`
+	Index int    `json:"index"`
 }
 
 func NewRunOnceFromJSON(payload []byte) (RunOnce, error) {

@@ -8,11 +8,10 @@ import (
 
 var InvalidActionConversion = errors.New("Invalid Action Conversion")
 
-type CopyAction struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Extract  bool   `json:"extract"`
-	Compress bool   `json:"compress"`
+type DownloadAction struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Extract bool   `json:"extract"`
 }
 
 type RunAction struct {
@@ -69,8 +68,8 @@ func (a ExecutorAction) MarshalJSON() ([]byte, error) {
 	}
 
 	switch a.Action.(type) {
-	case CopyAction:
-		envelope.Name = "copy"
+	case DownloadAction:
+		envelope.Name = "download"
 	case RunAction:
 		envelope.Name = "run"
 	default:
@@ -91,8 +90,8 @@ func (a *ExecutorAction) UnmarshalJSON(bytes []byte) error {
 	}
 
 	switch envelope.Name {
-	case "copy":
-		copyAction := CopyAction{}
+	case "download":
+		copyAction := DownloadAction{}
 		err = json.Unmarshal(*envelope.ActionPayload, &copyAction)
 		a.Action = copyAction
 	case "run":
