@@ -2,8 +2,14 @@ package actionrunner
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
 )
@@ -19,6 +25,7 @@ type BackendPlugin interface {
 type ActionRunner struct {
 	wardenClient  gordon.Client
 	backendPlugin BackendPlugin
+	downloader    downloader.Downloader
 }
 
 type RunActionTimeoutError struct {
@@ -29,10 +36,11 @@ func (e RunActionTimeoutError) Error() string {
 	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
 
-func New(wardenClient gordon.Client, backendPlugin BackendPlugin) *ActionRunner {
+func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader) *ActionRunner {
 	return &ActionRunner{
 		wardenClient:  wardenClient,
 		backendPlugin: backendPlugin,
+		downloader:    downloader,
 	}
 }
 
@@ -42,8 +50,8 @@ func (runner *ActionRunner) Run(containerHandle string, actions []models.Executo
 		switch a := action.Action.(type) {
 		case models.RunAction:
 			err = runner.performRunAction(containerHandle, a)
-		case models.CopyAction:
-			// Copy
+		case models.DownloadAction:
+			err = runner.performDownloadAction(containerHandle, a)
 		}
 		if err != nil {
 			return err
@@ -97,4 +105,52 @@ func (runner *ActionRunner) performRunAction(containerHandle string, action mode
 	}
 
 	panic("unreachable")
+}
+
+func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
+	url, err := url.Parse(action.From)
+	if err != nil {
+		return err
+	}
+
+	downloadedFile, err := ioutil.TempFile(os.TempDir(), "test-downloaded")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		downloadedFile.Close()
+		os.RemoveAll(downloadedFile.Name())
+	}()
+
+	err = runner.downloader.Download(url, downloadedFile)
+	if err != nil {
+		return err
+	}
+
+	if action.Extract {
+		extractor := extractor.New()
+		extractedFilesLocation, err := extractor.Extract(downloadedFile.Name())
+		defer os.RemoveAll(extractedFilesLocation)
+
+		if err != nil {
+			return err
+		}
+
+		return filepath.Walk(extractedFilesLocation, func(path string, info os.FileInfo, err error) error {
+			relativePath, err := filepath.Rel(extractedFilesLocation, path)
+			if err != nil {
+				return err
+			}
+			wardenPath := filepath.Join(action.To, relativePath)
+			_, err = runner.wardenClient.CopyIn(containerHandle, path, wardenPath)
+			return err
+		})
+	} else {
+		_, err = runner.wardenClient.CopyIn(containerHandle, downloadedFile.Name(), action.To)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

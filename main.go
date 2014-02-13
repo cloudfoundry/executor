@@ -190,7 +190,8 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
 	linuxPlugin := linuxplugin.New()
-	theFlash := actionrunner.New(wardenClient, linuxPlugin)
+	downloader := downloader.New()
+	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader)
 	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash, *stack)
 
 	err = executor.Handle(runOnceHandler)
