@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"log"
 	"os"
 	"os/signal"
@@ -73,6 +74,12 @@ var heartbeatInterval = flag.Uint64(
 	"heartbeatInterval",
 	60,
 	"the interval, in seconds, between heartbeats for maintaining presence",
+)
+
+var tempDir = flag.String(
+	"tempDir",
+	"/tmp",
+	"location to store temporary assets",
 )
 
 var stack = flag.String(
@@ -191,7 +198,7 @@ func main() {
 
 	linuxPlugin := linuxplugin.New()
 	downloader := downloader.New()
-	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader)
+	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, *tempDir)
 	runOnceHandler := runoncehandler.New(bbs, wardenClient, taskRegistry, theFlash, *stack)
 
 	err = executor.Handle(runOnceHandler)

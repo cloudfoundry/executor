@@ -28,7 +28,7 @@ var _ = Describe("DownloadRunner", func() {
 		gordon = fake_gordon.New()
 		downloader = &fakedownloader.FakeDownloader{}
 		linuxPlugin := linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader)
+		runner = New(gordon, linuxPlugin, downloader, os.TempDir())
 
 		actions = []models.ExecutorAction{
 			{

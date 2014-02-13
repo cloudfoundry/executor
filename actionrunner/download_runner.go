@@ -15,12 +15,14 @@ import (
 type DownloadRunner struct {
 	downloader   downloader.Downloader
 	wardenClient gordon.Client
+	tempDir      string
 }
 
-func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client) *DownloadRunner {
+func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client, tempDir string) *DownloadRunner {
 	return &DownloadRunner{
 		downloader:   downloader,
 		wardenClient: wardenClient,
+		tempDir:      tempDir,
 	}
 }
 
@@ -30,7 +32,7 @@ func (downloadRunner *DownloadRunner) Perform(containerHandle string, action mod
 		return err
 	}
 
-	downloadedFile, err := ioutil.TempFile(os.TempDir(), "downloaded")
+	downloadedFile, err := ioutil.TempFile(downloadRunner.tempDir, "downloaded")
 	if err != nil {
 		return err
 	}
@@ -45,15 +47,18 @@ func (downloadRunner *DownloadRunner) Perform(containerHandle string, action mod
 	}
 
 	if action.Extract {
-		extractor := extractor.New()
-
-		extractedFilesLocation, err := extractor.Extract(downloadedFile.Name())
-		defer os.RemoveAll(extractedFilesLocation)
+		extractionDir, err := ioutil.TempDir(downloadRunner.tempDir, "extracted")
 		if err != nil {
 			return err
 		}
 
-		return downloadRunner.copyExtractedFiles(containerHandle, extractedFilesLocation, action.To)
+		err = extractor.Extract(downloadedFile.Name(), extractionDir)
+		defer os.RemoveAll(extractionDir)
+		if err != nil {
+			return err
+		}
+
+		return downloadRunner.copyExtractedFiles(containerHandle, extractionDir, action.To)
 	} else {
 		_, err = downloadRunner.wardenClient.CopyIn(containerHandle, downloadedFile.Name(), action.To)
 		return err

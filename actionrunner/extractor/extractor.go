@@ -5,35 +5,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/nu7hatch/gouuid"
 )
 
-type Extractor interface {
-	Extract(src string) (dst string, err error)
-}
-
-type ZipExtractor struct{}
-
-func New() Extractor {
-	return &ZipExtractor{}
-}
-
-func (extractor *ZipExtractor) Extract(src string) (string, error) {
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		panic("Failed to generate a random guid....:" + err.Error())
-	}
-
-	destination := filepath.Join("/tmp", uuid.String())
-	err = os.MkdirAll(destination, 0700)
-	if err != nil {
-		return "", err
-	}
-
+func Extract(src string, destination string) error {
 	files, err := zip.OpenReader(src)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer files.Close()
 
@@ -43,24 +20,24 @@ func (extractor *ZipExtractor) Extract(src string) (string, error) {
 		path := filepath.Join(destination, file.Name)
 		err = os.MkdirAll(filepath.Dir(path), os.ModeDir|os.ModePerm)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		//Open the file for reading
 		readCloser, err := file.Open()
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		// If it's a file, write out the file
 		if !file.FileInfo().IsDir() {
 			fileCopy, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, file.FileInfo().Mode())
 			if err != nil {
-				return "", err
+				return err
 			}
 			_, err = io.Copy(fileCopy, readCloser)
 			if err != nil {
-				return "", err
+				return err
 			}
 			fileCopy.Close()
 		}
@@ -70,5 +47,5 @@ func (extractor *ZipExtractor) Extract(src string) (string, error) {
 	}
 
 	os.Remove(src)
-	return destination, nil
+	return nil
 }

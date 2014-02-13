@@ -21,6 +21,7 @@ type ActionRunner struct {
 	wardenClient  gordon.Client
 	backendPlugin BackendPlugin
 	downloader    downloader.Downloader
+	tempDir       string
 }
 
 type RunActionTimeoutError struct {
@@ -31,11 +32,12 @@ func (e RunActionTimeoutError) Error() string {
 	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
 
-func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader) *ActionRunner {
+func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader, tempDir string) *ActionRunner {
 	return &ActionRunner{
 		wardenClient:  wardenClient,
 		backendPlugin: backendPlugin,
 		downloader:    downloader,
+		tempDir:       tempDir,
 	}
 }
 
@@ -103,6 +105,6 @@ func (runner *ActionRunner) performRunAction(containerHandle string, action mode
 }
 
 func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
-	downloadRunner := NewDownloadRunner(runner.downloader, runner.wardenClient)
+	downloadRunner := NewDownloadRunner(runner.downloader, runner.wardenClient, runner.tempDir)
 	return downloadRunner.Perform(containerHandle, action)
 }

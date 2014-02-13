@@ -2,6 +2,7 @@ package actionrunner_test
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"code.google.com/p/gogoprotobuf/proto"
@@ -30,7 +31,7 @@ var _ = Describe("ActionRunner", func() {
 		gordon = fake_gordon.New()
 		downloader = &fakedownloader.FakeDownloader{}
 		linuxPlugin = linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader)
+		runner = New(gordon, linuxPlugin, downloader, os.TempDir())
 	})
 
 	Describe("Running the RunAction", func() {
