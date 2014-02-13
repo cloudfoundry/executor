@@ -28,12 +28,14 @@ var _ = Describe("RunOnce", func() {
 		"disk_mb":1024,
 		"log": {
 			"guid": "123",
-			"type": "APP",
+			"source_name": "APP",
 			"index": 42
 		}
 	}`
 
 	BeforeEach(func() {
+		index := 42
+
 		runOnce = RunOnce{
 			Guid:    "some-guid",
 			ReplyTo: "some-requester",
@@ -48,9 +50,9 @@ var _ = Describe("RunOnce", func() {
 				},
 			},
 			Log: LogConfig{
-				Guid:  "123",
-				Type:  "APP",
-				Index: 42,
+				Guid:       "123",
+				SourceName: "APP",
+				Index:      &index,
 			},
 			ExecutorID:      "executor",
 			ContainerHandle: "17fgsafdfcvc",

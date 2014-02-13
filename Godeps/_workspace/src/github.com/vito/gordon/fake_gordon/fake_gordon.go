@@ -37,6 +37,8 @@ type FakeGordon struct {
 
 	InfoError error
 
+	CopyInError error
+
 	AttachError error
 
 	scriptsThatRan              []*RunningScript
@@ -45,11 +47,7 @@ type FakeGordon struct {
 	runReturnProcessPayloadChan <-chan *warden.ProcessPayload
 	runReturnError              error
 
-	copiedIn    []*CopiedIn
-	copyInError error
-
-	copiedOut    []*CopiedOut
-	copyOutError error
+	copiedIn []*CopiedIn
 
 	lock *sync.Mutex
 }
@@ -62,16 +60,8 @@ type RunningScript struct {
 }
 
 type CopiedIn struct {
-	Handle string
-	Src    string
-	Dst    string
-}
-
-type CopiedOut struct {
-	Handle string
-	Src    string
-	Dst    string
-	Owner  string
+	Src string
+	Dst string
 }
 
 func New() *FakeGordon {
@@ -102,17 +92,13 @@ func (f *FakeGordon) Reset() {
 	f.GetDiskLimitError = nil
 	f.ListError = nil
 	f.InfoError = nil
+	f.CopyInError = nil
 	f.AttachError = nil
 
 	f.scriptsThatRan = make([]*RunningScript, 0)
 	f.runCallbacks = make(map[*RunningScript]RunCallback)
 	f.runReturnProcessID = 0
 	f.runReturnError = nil
-
-	f.copyInError = nil
-	f.copyOutError = nil
-	f.copiedIn = []*CopiedIn{}
-	f.copiedOut = []*CopiedOut{}
 }
 
 func (f *FakeGordon) Connect() error {
@@ -206,66 +192,20 @@ func (f *FakeGordon) Info(handle string) (*warden.InfoResponse, error) {
 }
 
 func (f *FakeGordon) CopyIn(handle, src, dst string) (*warden.CopyInResponse, error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	if f.copyInError != nil {
-		return nil, f.copyInError
+	if f.CopyInError != nil {
+		return nil, f.CopyInError
 	}
 
 	f.copiedIn = append(f.copiedIn, &CopiedIn{
-		Handle: handle,
-		Src:    src,
-		Dst:    dst,
+		Src: src,
+		Dst: dst,
 	})
 
 	return &warden.CopyInResponse{}, nil
 }
 
 func (f *FakeGordon) ThingsCopiedIn() []*CopiedIn {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	return f.copiedIn
-}
-
-func (f *FakeGordon) SetCopyInErr(err error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	f.copyInError = err
-}
-
-func (f *FakeGordon) CopyOut(handle, src, dst, owner string) (*warden.CopyOutResponse, error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	if f.copyOutError != nil {
-		return nil, f.copyOutError
-	}
-
-	f.copiedOut = append(f.copiedOut, &CopiedOut{
-		Handle: handle,
-		Src:    src,
-		Dst:    dst,
-		Owner:  owner,
-	})
-
-	return &warden.CopyOutResponse{}, nil
-}
-
-func (f *FakeGordon) ThingsCopiedOut() []*CopiedOut {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	return f.copiedOut
-}
-
-func (f *FakeGordon) SetCopyOutErr(err error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	f.copyOutError = err
 }
 
 func (f *FakeGordon) Attach(handle string, jobID uint32) (<-chan *warden.ProcessPayload, error) {

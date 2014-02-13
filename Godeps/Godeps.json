@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "5ad34ffef55c3655a6ca3f46adf798484c3e1e2e"
+			"Rev": "eff0d2905679f25d60800dda2d6fde3ffa634103"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "82d59868349d813899593f802983da9c1a50a148"
+			"Rev": "95edbb936e82847e11717a9689d4e82443f30977"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "82d59868349d813899593f802983da9c1a50a148"
+			"Rev": "95edbb936e82847e11717a9689d4e82443f30977"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -45,7 +45,7 @@
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",
-			"Rev": "22f5a6af42d928e4d4f110a9da564210f5db3f58"
+			"Rev": "9f15c2c9992a7b684ea52b45b16986001d5ee967"
 		}
 	]
 }
