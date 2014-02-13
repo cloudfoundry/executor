@@ -1,9 +1,9 @@
 package extractor_test
 
 import (
-	"archive/zip"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	. "github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
@@ -12,41 +12,46 @@ import (
 )
 
 var _ = Describe("Extractor", func() {
-	var zipFileLocation string
 	var extractor Extractor
 
 	BeforeEach(func() {
-		file, err := ioutil.TempFile(os.TempDir(), "test-zip")
+		err := exec.Command("cp", "../fixtures/fixture.zip", "../fixtures/fixture_test.zip").Run()
 		Ω(err).ShouldNot(HaveOccurred())
-
-		zipFileLocation = file.Name()
-
-		zipWriter := zip.NewWriter(file)
-
-		writer, err := zipWriter.CreateHeader(&zip.FileHeader{
-			Name: "JerryMaguire",
-		})
-		Ω(err).ShouldNot(HaveOccurred())
-
-		_, err = writer.Write([]byte("Show me the data!"))
-		Ω(err).ShouldNot(HaveOccurred())
-
-		err = zipWriter.Close()
-		Ω(err).ShouldNot(HaveOccurred())
-
 		extractor = New()
 	})
 
-	It("should download and extract zip files", func() {
-		destination, err := extractor.Extract(zipFileLocation)
+	It("should extract zip files, generating directories, and honoring file permissions", func() {
+		destination, err := extractor.Extract("../fixtures/fixture_test.zip")
 		Ω(err).ShouldNot(HaveOccurred())
 		defer func() {
 			os.RemoveAll(destination) //Tidy up!
 		}()
 
-		fileContents, err := ioutil.ReadFile(filepath.Join(destination, "JerryMaguire"))
+		fileContents, err := ioutil.ReadFile(filepath.Join(destination, "fixture", "file"))
+		Ω(err).ShouldNot(HaveOccurred())
+		Ω(string(fileContents)).Should(Equal("I am a file"))
+
+		fileContents, err = ioutil.ReadFile(filepath.Join(destination, "fixture", "iamadirectory", "another_file"))
+		Ω(err).ShouldNot(HaveOccurred())
+		Ω(string(fileContents)).Should(Equal("I am another file"))
+
+		f, err := os.Open(filepath.Join(destination, "fixture", "iamadirectory", "supervirus.exe"))
 		Ω(err).ShouldNot(HaveOccurred())
 
-		Ω(fileContents).To(ContainSubstring("the data!"))
+		info, err := f.Stat()
+		Ω(err).ShouldNot(HaveOccurred())
+
+		Ω(info.Mode()).Should(Equal(os.FileMode(0755)))
+	})
+
+	It("should delete the zip file when its done", func() {
+		destination, err := extractor.Extract("../fixtures/fixture_test.zip")
+		Ω(err).ShouldNot(HaveOccurred())
+		defer func() {
+			os.RemoveAll(destination) //Tidy up!
+		}()
+
+		_, err = extractor.Extract("../fixtures/fixture_test.zip")
+		Ω(err).Should(HaveOccurred())
 	})
 })

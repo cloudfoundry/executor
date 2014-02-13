@@ -3,7 +3,6 @@ package extractor
 import (
 	"archive/zip"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -26,7 +25,7 @@ func (extractor *ZipExtractor) Extract(src string) (string, error) {
 		panic("Failed to generate a random guid....:" + err.Error())
 	}
 
-	destination := "./" + uuid.String()
+	destination := filepath.Join("/tmp", uuid.String())
 	err = os.MkdirAll(destination, 0700)
 	if err != nil {
 		return "", err
@@ -34,13 +33,13 @@ func (extractor *ZipExtractor) Extract(src string) (string, error) {
 
 	files, err := zip.OpenReader(src)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 	defer files.Close()
 
 	// We loop over all files in the zip archive
 	for _, file := range files.File { //ignore the index
-		// If it's a directory, create the directory
+		// Always make the directory for the file
 		path := filepath.Join(destination, file.Name)
 		err = os.MkdirAll(filepath.Dir(path), os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -55,7 +54,7 @@ func (extractor *ZipExtractor) Extract(src string) (string, error) {
 
 		// If it's a file, write out the file
 		if !file.FileInfo().IsDir() {
-			fileCopy, err := os.Create(path)
+			fileCopy, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, file.FileInfo().Mode())
 			if err != nil {
 				return "", err
 			}
