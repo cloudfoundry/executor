@@ -26,7 +26,7 @@ func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Cli
 	}
 }
 
-func (downloadRunner *DownloadRunner) Perform(containerHandle string, action models.DownloadAction) error {
+func (downloadRunner *DownloadRunner) perform(containerHandle string, action models.DownloadAction) error {
 	url, err := url.Parse(action.From)
 	if err != nil {
 		return err
