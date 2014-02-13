@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
-	"github.com/vito/gordon/warden"
 )
 
 type ActionRunnerInterface interface {
@@ -55,7 +54,7 @@ func (runner *ActionRunner) Run(containerHandle string, actions []models.Executo
 }
 
 func (runner *ActionRunner) performRunAction(containerHandle string, action models.RunAction) error {
-	response := make(chan *warden.RunResponse, 1)
+	exitStatusChan := make(chan uint32, 1)
 	errChan := make(chan error, 1)
 
 	var timeoutChan <-chan time.Time
@@ -65,22 +64,27 @@ func (runner *ActionRunner) performRunAction(containerHandle string, action mode
 	}
 
 	go func() {
-		runResponse, err := runner.wardenClient.Run(
+		_, stream, err := runner.wardenClient.Run(
 			containerHandle,
 			runner.backendPlugin.BuildRunScript(action),
 		)
 
 		if err != nil {
 			errChan <- err
-		} else {
-			response <- runResponse
+			return
+		}
+
+		for payload := range stream {
+			if payload.ExitStatus != nil {
+				exitStatusChan <- payload.GetExitStatus()
+			}
 		}
 	}()
 
 	select {
-	case runResponse := <-response:
-		if runResponse.GetExitStatus() != 0 {
-			return fmt.Errorf("Process returned with exit value: %d", runResponse.GetExitStatus())
+	case exitStatus := <-exitStatusChan:
+		if exitStatus != 0 {
+			return fmt.Errorf("Process returned with exit value: %d", exitStatus)
 		}
 
 		return nil
