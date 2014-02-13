@@ -66,3 +66,34 @@ func (fakeBBS *FakeExecutorBBS) ConvergeRunOnce() {
 func (fakeBBS *FakeExecutorBBS) GrabRunOnceLock(time.Duration) (bool, error) {
 	return fakeBBS.LockIsGrabbable, fakeBBS.ErrorOnGrabLock
 }
+
+type FakeStagerBBS struct {
+	ResolvedRunOnce   models.RunOnce
+	ResolveRunOnceErr error
+
+	CalledCompletedRunOnce  chan bool
+	CompletedRunOnceChan    chan models.RunOnce
+	CompletedRunOnceErrChan chan error
+}
+
+func NewFakeStagerBBS() *FakeStagerBBS {
+	return &FakeStagerBBS{
+		CalledCompletedRunOnce: make(chan bool),
+	}
+}
+
+func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
+	fakeBBS.CompletedRunOnceChan = make(chan models.RunOnce)
+	fakeBBS.CompletedRunOnceErrChan = make(chan error)
+	fakeBBS.CalledCompletedRunOnce <- true
+	return fakeBBS.CompletedRunOnceChan, nil, fakeBBS.CompletedRunOnceErrChan
+}
+
+func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce models.RunOnce) error {
+	panic("implement me!")
+}
+
+func (fakeBBS *FakeStagerBBS) ResolveRunOnce(runOnce models.RunOnce) error {
+	fakeBBS.ResolvedRunOnce = runOnce
+	return fakeBBS.ResolveRunOnceErr
+}
