@@ -68,6 +68,24 @@ var _ = Describe("ExecutorAction", func() {
 		)
 	})
 
+	Describe("Upload", func() {
+		itSerializesAndDeserializes(
+			`{
+				"action": "upload",
+				"args": {
+					"from": "local_location",
+					"to": "web_location"
+				}
+			}`,
+			ExecutorAction{
+				Action: UploadAction{
+					From: "local_location",
+					To:   "web_location",
+				},
+			},
+		)
+	})
+
 	Describe("Run", func() {
 		itSerializesAndDeserializes(
 			`{

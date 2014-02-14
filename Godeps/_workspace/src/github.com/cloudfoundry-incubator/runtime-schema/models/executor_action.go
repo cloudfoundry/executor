@@ -14,6 +14,11 @@ type DownloadAction struct {
 	Extract bool   `json:"extract"`
 }
 
+type UploadAction struct {
+	To   string `json:"to"`
+	From string `json:"from"`
+}
+
 type RunAction struct {
 	Script  string
 	Env     map[string]string
@@ -72,6 +77,8 @@ func (a ExecutorAction) MarshalJSON() ([]byte, error) {
 		envelope.Name = "download"
 	case RunAction:
 		envelope.Name = "run"
+	case UploadAction:
+		envelope.Name = "upload"
 	default:
 		return nil, InvalidActionConversion
 	}
@@ -91,13 +98,17 @@ func (a *ExecutorAction) UnmarshalJSON(bytes []byte) error {
 
 	switch envelope.Name {
 	case "download":
-		copyAction := DownloadAction{}
-		err = json.Unmarshal(*envelope.ActionPayload, &copyAction)
-		a.Action = copyAction
+		downloadAction := DownloadAction{}
+		err = json.Unmarshal(*envelope.ActionPayload, &downloadAction)
+		a.Action = downloadAction
 	case "run":
 		runAction := RunAction{}
 		err = json.Unmarshal(*envelope.ActionPayload, &runAction)
 		a.Action = runAction
+	case "upload":
+		uploadAction := UploadAction{}
+		err = json.Unmarshal(*envelope.ActionPayload, &uploadAction)
+		a.Action = uploadAction
 	default:
 		err = InvalidActionConversion
 	}
