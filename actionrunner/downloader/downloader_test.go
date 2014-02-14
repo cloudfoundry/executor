@@ -28,6 +28,7 @@ var _ = Describe("Downloader", func() {
 		var file *os.File
 
 		BeforeEach(func() {
+			serverRequestUrls = []string{}
 			file, _ = ioutil.TempFile("", "foo")
 		})
 

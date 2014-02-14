@@ -2,12 +2,14 @@ package actionrunner_test
 
 import (
 	"archive/zip"
+	"errors"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"io/ioutil"
 	"os"
 
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon/fake_gordon"
 
@@ -20,6 +22,7 @@ var _ = Describe("DownloadRunner", func() {
 		actions    []models.ExecutorAction
 		runner     *ActionRunner
 		downloader *fakedownloader.FakeDownloader
+		uploader   *fakeuploader.FakeUploader
 		gordon     *fake_gordon.FakeGordon
 		err        error
 	)
@@ -27,8 +30,9 @@ var _ = Describe("DownloadRunner", func() {
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
 		downloader = &fakedownloader.FakeDownloader{}
+		uploader = &fakeuploader.FakeUploader{}
 		linuxPlugin := linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader, os.TempDir())
+		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir())
 
 		actions = []models.ExecutorAction{
 			{
@@ -51,7 +55,19 @@ var _ = Describe("DownloadRunner", func() {
 
 	It("should place the file in the container", func() {
 		copied_file := gordon.ThingsCopiedIn()[0]
+		Ω(copied_file.Handle).To(Equal("handle-x"))
 		Ω(copied_file.Dst).To(Equal("/Antarctica"))
+		Ω(err).ShouldNot(HaveOccurred())
+	})
+
+	Context("when there is an error copying the file in", func() {
+		BeforeEach(func() {
+			gordon.SetCopyInErr(errors.New("no room in the copy inn"))
+		})
+
+		It("should return said error", func() {
+			Ω(err).Should(Equal(errors.New("no room in the copy inn")))
+		})
 	})
 
 	Context("when there is an error downloading", func() {

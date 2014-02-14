@@ -8,6 +8,7 @@ import (
 	"code.google.com/p/gogoprotobuf/proto"
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
@@ -21,6 +22,7 @@ var _ = Describe("RunRunner", func() {
 		actions     []models.ExecutorAction
 		runner      *ActionRunner
 		downloader  *fakedownloader.FakeDownloader
+		uploader    *fakeuploader.FakeUploader
 		gordon      *fake_gordon.FakeGordon
 		linuxPlugin *linuxplugin.LinuxPlugin
 	)
@@ -30,8 +32,9 @@ var _ = Describe("RunRunner", func() {
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
 		downloader = &fakedownloader.FakeDownloader{}
+		uploader = &fakeuploader.FakeUploader{}
 		linuxPlugin = linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader, os.TempDir())
+		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir())
 
 		actions = []models.ExecutorAction{
 			{
