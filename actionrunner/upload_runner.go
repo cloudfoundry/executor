@@ -26,18 +26,25 @@ func NewUploadRunner(uploader uploader.Uploader, wardenClient gordon.Client, tem
 }
 
 func (uploadRunner *UploadRunner) perform(containerHandle string, action models.UploadAction) error {
-	fileToUpload, err := ioutil.TempFile(uploadRunner.tempDir, "upload")
+	tempFile, err := ioutil.TempFile(uploadRunner.tempDir, "upload")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(fileToUpload.Name())
+	fileName := tempFile.Name()
+	tempFile.Close()
+	defer os.RemoveAll(fileName)
 
 	currentUser, err := user.Current()
 	if err != nil {
 		panic("existential failure: " + err.Error())
 	}
 
-	_, err = uploadRunner.wardenClient.CopyOut(containerHandle, action.From, fileToUpload.Name(), currentUser.Username)
+	_, err = uploadRunner.wardenClient.CopyOut(containerHandle, action.From, fileName, currentUser.Username)
+	if err != nil {
+		return err
+	}
+
+	fileToUpload, err := os.Open(fileName)
 	if err != nil {
 		return err
 	}
