@@ -6,6 +6,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"os"
+	"sync"
+	"time"
 
 	"io/ioutil"
 	"net/http"
@@ -18,11 +20,13 @@ var _ = Describe("Uploader", func() {
 	var testServer *httptest.Server
 	var serverRequests []*http.Request
 	var serverRequestBody []string
+	var lock *sync.Mutex
 
 	BeforeEach(func() {
 		serverRequestBody = []string{}
 		serverRequests = []*http.Request{}
-		uploader = New()
+		uploader = New(100 * time.Millisecond)
+		lock = &sync.Mutex{}
 	})
 
 	Describe("upload", func() {
@@ -68,6 +72,36 @@ var _ = Describe("Uploader", func() {
 				Ω(request.URL.Path).Should(Equal("/somepath"))
 				Ω(request.Header.Get("Content-Type")).Should(Equal("application/octet-stream"))
 				Ω(string(data)).Should(Equal("content that we can check later"))
+			})
+		})
+
+		Context("when the upload times out", func() {
+			var attemptCount int
+			BeforeEach(func() {
+				attemptCount = 0
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					lock.Lock()
+					attemptCount++
+					lock.Unlock()
+
+					time.Sleep(300 * time.Millisecond)
+					fmt.Fprintln(w, "Hello, client")
+				}))
+
+				serverUrl := testServer.URL + "/somepath"
+				url, _ = url.Parse(serverUrl)
+			})
+
+			It("should retry 3 times", func() {
+				uploader.Upload(file, url)
+				lock.Lock()
+				Ω(attemptCount).Should(Equal(3))
+				lock.Unlock()
+			})
+
+			It("should return an error", func() {
+				err := uploader.Upload(file, url)
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 

@@ -6,20 +6,39 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 type Downloader interface {
 	Download(url *url.URL, destinationFile *os.File) error
 }
 
-type URLDownloader struct{}
+type URLDownloader struct {
+	timeout time.Duration
+}
 
-func New() Downloader {
-	return &URLDownloader{}
+func New(timeout time.Duration) Downloader {
+	return &URLDownloader{
+		timeout: timeout,
+	}
 }
 
 func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File) error {
-	resp, err := http.Get(url.String())
+	httpTransport := &http.Transport{
+		ResponseHeaderTimeout: downloader.timeout,
+	}
+	httpClient := &http.Client{
+		Transport: httpTransport,
+	}
+
+	var resp *http.Response
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		resp, err = httpClient.Get(url.String())
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"log"
 	"os"
 	"os/signal"
@@ -164,7 +165,7 @@ func main() {
 			logger.Info("Didn't find snapshot.  Creating new registry.")
 			taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
 		default:
-			logger.Errorf("woah, woah, woah.  what happened with the snapshot?: %s", err.Error())
+			logger.Errorf("woah, woah, woah!  what happened with the snapshot?: %s", err.Error())
 			os.Exit(1)
 		}
 	}
@@ -209,14 +210,15 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
 	linuxPlugin := linuxplugin.New()
-	downloader := downloader.New()
-	actionRunner := actionrunner.New(wardenClient, linuxPlugin, downloader, *tempDir)
+	downloader := downloader.New(10 * time.Minute)
+	uploader := uploader.New(10 * time.Minute)
+	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, uploader, *tempDir)
 
 	runOnceHandler := runoncehandler.New(
 		bbs,
 		wardenClient,
 		taskRegistry,
-		actionRunner,
+		theFlash,
 		*loggregatorServer,
 		*loggregatorSecret,
 		*stack,
