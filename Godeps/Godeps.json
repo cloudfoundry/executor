@@ -61,7 +61,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "d71f32f5dc46c47cafde0b96a628e3594e96b75a"
+			"Rev": "884dab811fc3c75f6c9cc51254601b426049cd98"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",

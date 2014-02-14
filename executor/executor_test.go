@@ -87,7 +87,7 @@ var _ = Describe("Executor", func() {
 
 			It("should handle any new desired RunOnces", func() {
 				Eventually(func() int {
-					return fakeRunOnceHandler.NumberOfCalls
+					return fakeRunOnceHandler.NumberOfCalls()
 				}).Should(Equal(1))
 			})
 		})
@@ -103,7 +103,7 @@ var _ = Describe("Executor", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Consistently(func() int {
-					return fakeRunOnceHandler.NumberOfCalls
+					return fakeRunOnceHandler.NumberOfCalls()
 				}).Should(Equal(0))
 			})
 		})
@@ -137,12 +137,12 @@ var _ = Describe("Executor", func() {
 
 				//eventually the runoncehandlers should have been called N times
 				Eventually(func() int {
-					return fakeRunOnceHandler.NumberOfCalls
+					return fakeRunOnceHandler.NumberOfCalls()
 				}, 5).Should(Equal(samples))
 
 				var numberHandledByFirst int
 				var numberHandledByOther int
-				for _, executorId := range fakeRunOnceHandler.HandledRunOnces {
+				for _, executorId := range fakeRunOnceHandler.HandledRunOnces() {
 					if executor.ID() == executorId {
 						numberHandledByFirst++
 					} else if otherExecutor.ID() == executorId {
@@ -204,7 +204,7 @@ var _ = Describe("Executor", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Consistently(func() int {
-					return fakeRunOnceHandler.NumberOfCalls
+					return fakeRunOnceHandler.NumberOfCalls()
 				}).Should(Equal(0))
 			})
 		})

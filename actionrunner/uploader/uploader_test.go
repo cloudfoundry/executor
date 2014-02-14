@@ -25,6 +25,7 @@ var _ = Describe("Uploader", func() {
 	var lock *sync.Mutex
 
 	BeforeEach(func() {
+		testServer = nil
 		serverRequestBody = []string{}
 		serverRequests = []*http.Request{}
 		uploader = New(100*time.Millisecond, steno.NewLogger("test-logger"))
@@ -43,7 +44,9 @@ var _ = Describe("Uploader", func() {
 
 		AfterEach(func() {
 			file.Close()
-			testServer.Close()
+			if testServer != nil {
+				testServer.Close()
+			}
 		})
 
 		Context("when the upload is successful", func() {
@@ -111,7 +114,7 @@ var _ = Describe("Uploader", func() {
 			BeforeEach(func() {
 				// No server to handle things!
 
-				serverUrl := testServer.URL + "/somepath"
+				serverUrl := "http://127.0.0.1:54321/somepath"
 				url, _ = url.Parse(serverUrl)
 			})
 
