@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"os"
 	"time"
+
+	steno "github.com/cloudfoundry/gosteno"
 )
 
 type Uploader interface {
@@ -14,11 +16,13 @@ type Uploader interface {
 
 type URLUploader struct {
 	timeout time.Duration
+	logger  *steno.Logger
 }
 
-func New(timeout time.Duration) Uploader {
+func New(timeout time.Duration, logger *steno.Logger) Uploader {
 	return &URLUploader{
 		timeout: timeout,
+		logger:  logger,
 	}
 }
 
@@ -33,6 +37,7 @@ func (uploader *URLUploader) Upload(sourceFile *os.File, url *url.URL) error {
 	var resp *http.Response
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
+		uploader.logger.Infof("uploader.attempt #%d", attempt)
 		resp, err = httpClient.Post(url.String(), "application/octet-stream", sourceFile)
 		if err == nil {
 			break

@@ -2,17 +2,19 @@ package uploader_test
 
 import (
 	"fmt"
-	. "github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"os"
-	"sync"
-	"time"
-
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"sync"
+	"time"
+
+	. "github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	steno "github.com/cloudfoundry/gosteno"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Uploader", func() {
@@ -25,7 +27,7 @@ var _ = Describe("Uploader", func() {
 	BeforeEach(func() {
 		serverRequestBody = []string{}
 		serverRequests = []*http.Request{}
-		uploader = New(100 * time.Millisecond)
+		uploader = New(100*time.Millisecond, steno.NewLogger("test-logger"))
 		lock = &sync.Mutex{}
 	})
 

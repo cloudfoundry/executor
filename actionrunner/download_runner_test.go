@@ -11,6 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
 
 	. "github.com/onsi/ginkgo"
@@ -32,7 +33,7 @@ var _ = Describe("DownloadRunner", func() {
 		downloader = &fakedownloader.FakeDownloader{}
 		uploader = &fakeuploader.FakeUploader{}
 		linuxPlugin := linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir())
+		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir(), steno.NewLogger("test-logger"))
 
 		actions = []models.ExecutorAction{
 			{

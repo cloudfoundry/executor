@@ -30,7 +30,7 @@ type Executor struct {
 	taskRegistry *taskregistry.TaskRegistry
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregistry.TaskRegistry) *Executor {
+func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregistry.TaskRegistry, logger *steno.Logger) *Executor {
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		panic("Failed to generate a random guid....:" + err.Error())
@@ -43,7 +43,7 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregi
 		wardenClient: wardenClient,
 		runOnceGroup: &sync.WaitGroup{},
 
-		logger: steno.NewLogger("Executor"),
+		logger: logger,
 
 		taskRegistry: taskRegistry,
 	}

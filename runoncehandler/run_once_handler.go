@@ -38,6 +38,7 @@ func New(
 	loggregatorServer string,
 	loggregatorSecret string,
 	stack string,
+	logger *steno.Logger,
 ) *RunOnceHandler {
 	return &RunOnceHandler{
 		bbs:               bbs,
@@ -46,7 +47,7 @@ func New(
 		actionRunner:      actionRunner,
 		loggregatorServer: loggregatorServer,
 		loggregatorSecret: loggregatorSecret,
-		logger:            steno.NewLogger("RunOnceHandler"),
+		logger:            logger,
 		stack:             stack,
 	}
 }
@@ -54,48 +55,48 @@ func New(
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string) {
 	// check for stack compatibility
 	if runOnce.Stack != "" && handler.stack != runOnce.Stack {
-		handler.logger.Infof("runonce.stack.mismatch - RunOnce stack:%s, Executor stack:%s", runOnce.Stack, handler.stack)
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "desired-stack": runOnce.Stack, "executor-stack": handler.stack}, "runonce.stack.mismatch")
 		return
 	}
 
 	// reserve resources
 	err := handler.taskRegistry.AddRunOnce(runOnce)
 	if err != nil {
-		handler.logger.Errorf("failed to allocate resources for run once: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.insufficient.resources")
 		return
 	}
 	defer handler.taskRegistry.RemoveRunOnce(runOnce)
 
 	// claim the RunOnce
 	runOnce.ExecutorID = executorId
-	handler.logger.Infof("executor.claiming.runonce: %s", runOnce.Guid)
+	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.claim")
+
 	err = handler.bbs.ClaimRunOnce(runOnce)
 	if err != nil {
-		handler.logger.Errorf("failed claim run once: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.claim.failed")
 		return
 	}
 
 	// create the container
 	createResponse, err := handler.wardenClient.Create()
 	if err != nil {
-		handler.logger.Errorf("failed to create warden container: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.container-create.failed")
 		return
 	}
 	runOnce.ContainerHandle = createResponse.GetHandle()
+	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle}, "runonce.container-create.success")
 	defer func() {
 		_, err := handler.wardenClient.Destroy(runOnce.ContainerHandle)
 		if err != nil {
-			handler.logger.Errord(map[string]interface{}{
-				"ContainerHandle": runOnce.ContainerHandle,
-			}, "failed to destroy container")
+			handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.container-destroy.failed")
 		}
 	}()
 
 	// mark the RunOnce as started
-	handler.logger.Infof("executor.starting.runonce: %s", runOnce.Guid)
+	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.start")
 	err = handler.bbs.StartRunOnce(runOnce)
 	if err != nil {
-		handler.logger.Errorf("failed to transition RunOnce to running state: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.start.failed")
 		return
 	}
 
@@ -114,16 +115,16 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 	// perform the actions
 	err = handler.actionRunner.Run(runOnce.ContainerHandle, em, runOnce.Actions)
 	if err != nil {
-		handler.logger.Errorf("failed to run RunOnce actions: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
 		runOnce.Failed = true
 		runOnce.FailureReason = err.Error()
 	}
 
 	// mark the task as completed
-	handler.logger.Infof("executor.completed.runonce: %s", runOnce.Guid)
+	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.complete")
 	err = handler.bbs.CompleteRunOnce(runOnce)
 	if err != nil {
-		handler.logger.Errorf("failed to transition RunOnce to completed state: %s", err.Error())
+		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.complete.failed")
 		return
 	}
 }

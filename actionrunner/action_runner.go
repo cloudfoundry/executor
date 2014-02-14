@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 )
 
@@ -24,6 +25,7 @@ type ActionRunner struct {
 	downloader    downloader.Downloader
 	uploader      uploader.Uploader
 	tempDir       string
+	logger        *steno.Logger
 }
 
 type RunActionTimeoutError struct {
@@ -34,13 +36,14 @@ func (e RunActionTimeoutError) Error() string {
 	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
 
-func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader, uploader uploader.Uploader, tempDir string) *ActionRunner {
+func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader, uploader uploader.Uploader, tempDir string, logger *steno.Logger) *ActionRunner {
 	return &ActionRunner{
 		wardenClient:  wardenClient,
 		backendPlugin: backendPlugin,
 		downloader:    downloader,
 		uploader:      uploader,
 		tempDir:       tempDir,
+		logger:        logger,
 	}
 }
 
@@ -49,10 +52,13 @@ func (runner *ActionRunner) Run(containerHandle string, emitter emitter.Emitter,
 		var err error
 		switch a := action.Action.(type) {
 		case models.RunAction:
+			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.run-action")
 			err = runner.performRunAction(containerHandle, emitter, a)
 		case models.DownloadAction:
+			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.download-action")
 			err = runner.performDownloadAction(containerHandle, a)
 		case models.UploadAction:
+			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.upload-action")
 			err = runner.performUploadAction(containerHandle, a)
 		}
 		if err != nil {

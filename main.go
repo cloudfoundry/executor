@@ -115,7 +115,7 @@ func main() {
 	}
 
 	steno.Init(&stenoConfig)
-	logger := steno.NewLogger("main")
+	logger := steno.NewLogger("executor")
 
 	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdMachines, ","),
@@ -170,7 +170,7 @@ func main() {
 		}
 	}
 
-	executor := executor.New(bbs, wardenClient, taskRegistry)
+	executor := executor.New(bbs, wardenClient, taskRegistry, logger)
 	err = executor.MaintainPresence(*heartbeatInterval)
 	if err != nil {
 		logger.Errorf("failed to start maintaining presence: %s", err.Error())
@@ -210,9 +210,9 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 
 	linuxPlugin := linuxplugin.New()
-	downloader := downloader.New(10 * time.Minute)
-	uploader := uploader.New(10 * time.Minute)
-	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, uploader, *tempDir)
+	downloader := downloader.New(10*time.Minute, logger)
+	uploader := uploader.New(10*time.Minute, logger)
+	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, uploader, *tempDir, logger)
 
 	runOnceHandler := runoncehandler.New(
 		bbs,
@@ -222,6 +222,7 @@ func main() {
 		*loggregatorServer,
 		*loggregatorSecret,
 		*stack,
+		logger,
 	)
 
 	err = executor.Handle(runOnceHandler)

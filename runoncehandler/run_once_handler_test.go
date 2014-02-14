@@ -15,6 +15,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
 )
 
@@ -57,7 +58,7 @@ var _ = Describe("RunOnceHandler", func() {
 			},
 		}
 
-		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner, loggregatorServer, loggregatorSecret, stack)
+		handler = New(bbs, gordon, fakeTaskRegistry, actionRunner, loggregatorServer, loggregatorSecret, stack, steno.NewLogger("test-logger"))
 	})
 
 	Describe("Handling a RunOnce", func() {

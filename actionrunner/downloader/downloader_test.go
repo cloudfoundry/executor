@@ -2,15 +2,16 @@ package downloader_test
 
 import (
 	"fmt"
-	. "github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"os"
-	"sync"
-	"time"
-
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"sync"
+	"time"
+
+	. "github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	steno "github.com/cloudfoundry/gosteno"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,7 +24,7 @@ var _ = Describe("Downloader", func() {
 	var lock *sync.Mutex
 
 	BeforeEach(func() {
-		downloader = New(100 * time.Millisecond)
+		downloader = New(100*time.Millisecond, steno.NewLogger("test-logger"))
 		lock = &sync.Mutex{}
 	})
 

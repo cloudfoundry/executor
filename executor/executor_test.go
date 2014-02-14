@@ -3,7 +3,7 @@ package executor_test
 import (
 	"errors"
 	"fmt"
-	"github.com/cloudfoundry/gosteno"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/onsi/ginkgo/config"
 	"time"
 
@@ -51,13 +51,13 @@ var _ = Describe("Executor", func() {
 			DiskMB:   1024,
 		}
 
-		executor = New(bbs, gordon, taskRegistry)
+		executor = New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor1 := New(bbs, gordon, taskRegistry)
-			executor2 := New(bbs, gordon, taskRegistry)
+			executor1 := New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
+			executor2 := New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
 
 			Ω(executor1.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())
@@ -114,7 +114,7 @@ var _ = Describe("Executor", func() {
 			BeforeEach(func() {
 				executor.Handle(fakeRunOnceHandler)
 
-				otherExecutor = New(bbs, gordon, taskRegistry)
+				otherExecutor = New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
 				otherExecutor.Handle(fakeRunOnceHandler)
 			})
 
@@ -273,7 +273,7 @@ var _ = Describe("Executor", func() {
 				stopChannel <- true
 			}()
 
-			testSink := gosteno.GetMeTheGlobalTestSink()
+			testSink := steno.GetMeTheGlobalTestSink()
 
 			Eventually(func() string {
 				if len(testSink.Records) > 0 {
