@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "eff0d2905679f25d60800dda2d6fde3ffa634103"
+			"Rev": "5ad34ffef55c3655a6ca3f46adf798484c3e1e2e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
