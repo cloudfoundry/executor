@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -12,7 +12,7 @@ import (
 )
 
 type ActionRunnerInterface interface {
-	Run(containerHandle string, emitter emitter.Emitter, actions []models.ExecutorAction) error
+	Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) error
 }
 
 type BackendPlugin interface {
@@ -47,13 +47,13 @@ func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader dow
 	}
 }
 
-func (runner *ActionRunner) Run(containerHandle string, emitter emitter.Emitter, actions []models.ExecutorAction) error {
+func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) error {
 	for _, action := range actions {
 		var err error
 		switch a := action.Action.(type) {
 		case models.RunAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.run-action")
-			err = runner.performRunAction(containerHandle, emitter, a)
+			err = runner.performRunAction(containerHandle, streamer, a)
 		case models.DownloadAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.download-action")
 			err = runner.performDownloadAction(containerHandle, a)
@@ -69,9 +69,9 @@ func (runner *ActionRunner) Run(containerHandle string, emitter emitter.Emitter,
 	return nil
 }
 
-func (runner *ActionRunner) performRunAction(containerHandle string, emitter emitter.Emitter, action models.RunAction) error {
+func (runner *ActionRunner) performRunAction(containerHandle string, streamer logstreamer.LogStreamer, action models.RunAction) error {
 	runRunner := NewRunRunner(runner.wardenClient, runner.backendPlugin)
-	return runRunner.perform(containerHandle, emitter, action)
+	return runRunner.perform(containerHandle, streamer, action)
 }
 
 func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {

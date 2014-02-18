@@ -1,0 +1,13 @@
+package logstreamer_test
+
+import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"testing"
+)
+
+func TestLogStreamer(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Log Streamer Suite")
+}

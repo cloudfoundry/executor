@@ -2,11 +2,13 @@ package runoncehandler
 
 import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"strconv"
 
 	"github.com/vito/gordon"
 )
@@ -100,20 +102,19 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 		return
 	}
 
-	var em emitter.Emitter
+	var streamer logstreamer.LogStreamer
 
 	if runOnce.Log.SourceName != "" {
-		em = emitter.New(
-			handler.loggregatorServer,
-			handler.loggregatorSecret,
-			runOnce.Log.SourceName,
-			runOnce.Log.Guid,
-			runOnce.Log.Index,
-		)
+		sourceId := ""
+		if runOnce.Log.Index != nil {
+			sourceId = strconv.Itoa(*runOnce.Log.Index)
+		}
+		logEmitter, _ := emitter.NewEmitter(handler.loggregatorServer, runOnce.Log.SourceName, sourceId, handler.loggregatorSecret, nil)
+		streamer = logstreamer.New(runOnce.Log.Guid, logEmitter)
 	}
 
 	// perform the actions
-	err = handler.actionRunner.Run(runOnce.ContainerHandle, em, runOnce.Actions)
+	err = handler.actionRunner.Run(runOnce.ContainerHandle, streamer, runOnce.Actions)
 	if err != nil {
 		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
 		runOnce.Failed = true

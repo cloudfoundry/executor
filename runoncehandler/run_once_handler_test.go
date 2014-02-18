@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/emitter"
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -93,14 +92,12 @@ var _ = Describe("RunOnceHandler", func() {
 								Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
 							})
 
-							It("should not initialize emitter", func() {
-								Ω(actionRunner.Emitter).Should(BeNil())
+							It("should not initialize the streamer", func() {
+								Ω(actionRunner.Streamer).Should(BeNil())
 							})
 
 							Context("and logs are configured for the RunOnce", func() {
 								BeforeEach(func() {
-									index := 356
-
 									runOnce = models.RunOnce{
 										Guid:  "totally-unique",
 										Stack: "penguin",
@@ -114,7 +111,7 @@ var _ = Describe("RunOnceHandler", func() {
 										Log: models.LogConfig{
 											Guid:       "totally-unique",
 											SourceName: "XYZ",
-											Index:      &index,
+											Index:      nil,
 										},
 									}
 
@@ -131,13 +128,8 @@ var _ = Describe("RunOnceHandler", func() {
 									fakeLoggregatorServer.Close()
 								})
 
-								It("should run the actions with an emitter", func() {
-									Ω(actionRunner.Emitter).ShouldNot(BeNil())
-
-									emitter := actionRunner.Emitter.(*emitter.AppEmitter)
-									Ω(emitter.Guid).Should(Equal("totally-unique"))
-									Ω(emitter.SourceName).Should(Equal("XYZ"))
-									Ω(*(emitter.Index)).Should(Equal(356))
+								It("should run the actions with a streamer", func() {
+									Ω(actionRunner.Streamer).ShouldNot(BeNil())
 								})
 							})
 
