@@ -17,6 +17,7 @@ type ActionRunnerInterface interface {
 
 type BackendPlugin interface {
 	BuildRunScript(models.RunAction) string
+	BuildCreateDirectoryRecursivelyCommand(string) string
 }
 
 type ActionRunner struct {
@@ -75,7 +76,7 @@ func (runner *ActionRunner) performRunAction(containerHandle string, streamer lo
 }
 
 func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
-	downloadRunner := NewDownloadRunner(runner.downloader, runner.wardenClient, runner.tempDir)
+	downloadRunner := NewDownloadRunner(runner.downloader, runner.wardenClient, runner.tempDir, runner.backendPlugin)
 	return downloadRunner.perform(containerHandle, action)
 }
 

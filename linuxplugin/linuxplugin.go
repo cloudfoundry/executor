@@ -25,3 +25,7 @@ func (p LinuxPlugin) BuildRunScript(run models.RunAction) string {
 
 	return script
 }
+
+func (p LinuxPlugin) BuildCreateDirectoryRecursivelyCommand(path string) string {
+	return fmt.Sprintf("mkdir -p %s", path)
+}

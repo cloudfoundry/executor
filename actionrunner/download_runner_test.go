@@ -39,7 +39,7 @@ var _ = Describe("DownloadRunner", func() {
 			{
 				models.DownloadAction{
 					From:    "http://mr_jones",
-					To:      "/Antarctica",
+					To:      "/tmp/Antarctica",
 					Extract: false,
 				},
 			},
@@ -57,8 +57,14 @@ var _ = Describe("DownloadRunner", func() {
 	It("should place the file in the container", func() {
 		copied_file := gordon.ThingsCopiedIn()[0]
 		Ω(copied_file.Handle).To(Equal("handle-x"))
-		Ω(copied_file.Dst).To(Equal("/Antarctica"))
+		Ω(copied_file.Dst).To(Equal("/tmp/Antarctica"))
 		Ω(err).ShouldNot(HaveOccurred())
+	})
+
+	It("should create the parent of destination directory", func() {
+		scriptThatRun := gordon.ScriptsThatRan()[0]
+		Ω(scriptThatRun.Handle).To(Equal("handle-x"))
+		Ω(scriptThatRun.Script).To(Equal("mkdir -p /tmp"))
 	})
 
 	Context("when there is an error copying the file in", func() {
@@ -113,6 +119,7 @@ var _ = Describe("DownloadRunner", func() {
 		})
 
 		It("should download the zipped file and send the contents to the container", func() {
+			Ω(gordon.ScriptsThatRan)
 			Ω(gordon.ThingsCopiedIn()[0].Dst).To(Equal("/Antarctica"))
 			Ω(gordon.ThingsCopiedIn()[1].Dst).To(Equal("/Antarctica/directory"))
 			Ω(gordon.ThingsCopiedIn()[2].Dst).To(Equal("/Antarctica/directory/second_file"))

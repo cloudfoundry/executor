@@ -13,16 +13,18 @@ import (
 )
 
 type DownloadRunner struct {
-	downloader   downloader.Downloader
-	wardenClient gordon.Client
-	tempDir      string
+	downloader    downloader.Downloader
+	wardenClient  gordon.Client
+	tempDir       string
+	backendPlugin BackendPlugin
 }
 
-func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client, tempDir string) *DownloadRunner {
+func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client, tempDir string, backendPlugin BackendPlugin) *DownloadRunner {
 	return &DownloadRunner{
-		downloader:   downloader,
-		wardenClient: wardenClient,
-		tempDir:      tempDir,
+		downloader:    downloader,
+		wardenClient:  wardenClient,
+		tempDir:       tempDir,
+		backendPlugin: backendPlugin,
 	}
 }
 
@@ -42,6 +44,12 @@ func (downloadRunner *DownloadRunner) perform(containerHandle string, action mod
 	}()
 
 	err = downloadRunner.downloader.Download(url, downloadedFile)
+	if err != nil {
+		return err
+	}
+
+	createParentDirCommand := downloadRunner.backendPlugin.BuildCreateDirectoryRecursivelyCommand(filepath.Dir(action.To))
+	_, _, err = downloadRunner.wardenClient.Run(containerHandle, createParentDirCommand)
 	if err != nil {
 		return err
 	}
