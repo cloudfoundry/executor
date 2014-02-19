@@ -19,9 +19,6 @@ var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("Insufficient disk when l
 type TaskRegistryInterface interface {
 	AddRunOnce(runOnce models.RunOnce) error
 	RemoveRunOnce(runOnce models.RunOnce)
-	HasCapacityForRunOnce(runOnce models.RunOnce) bool
-	AvailableMemoryMB() int
-	AvailableDiskMB() int
 	WriteToDisk() error
 }
 
@@ -56,8 +53,8 @@ func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	if !registry.HasCapacityForRunOnce(runOnce) {
-		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.AvailableMemoryMB(), registry.AvailableDiskMB())
+	if !registry.hasCapacityForRunOnce(runOnce) {
+		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
 	}
 	registry.RunOnces[runOnce.Guid] = runOnce
 	return nil
@@ -70,35 +67,10 @@ func (registry *TaskRegistry) RemoveRunOnce(runOnce models.RunOnce) {
 	delete(registry.RunOnces, runOnce.Guid)
 }
 
-func (registry *TaskRegistry) HasCapacityForRunOnce(runOnce models.RunOnce) bool {
-	if runOnce.MemoryMB > registry.AvailableMemoryMB() {
-		return false
-	}
-
-	if runOnce.DiskMB > registry.AvailableDiskMB() {
-		return false
-	}
-
-	return true
-}
-
-func (registry *TaskRegistry) AvailableMemoryMB() int {
-	usedMemory := 0
-	for _, r := range registry.RunOnces {
-		usedMemory = usedMemory + r.MemoryMB
-	}
-	return registry.ExecutorMemoryMB - usedMemory
-}
-
-func (registry *TaskRegistry) AvailableDiskMB() int {
-	usedDisk := 0
-	for _, r := range registry.RunOnces {
-		usedDisk = usedDisk + r.DiskMB
-	}
-	return registry.ExecutorDiskMB - usedDisk
-}
-
 func (registry *TaskRegistry) WriteToDisk() error {
+	registry.lock.Lock()
+	defer registry.lock.Unlock()
+
 	data, err := json.Marshal(registry)
 	if err != nil {
 		return err
@@ -107,6 +79,9 @@ func (registry *TaskRegistry) WriteToDisk() error {
 }
 
 func (registry *TaskRegistry) hydrateFromDisk() error {
+	registry.lock.Lock()
+	defer registry.lock.Unlock()
+
 	var loadedTaskRegistry *TaskRegistry
 	bytes, err := ioutil.ReadFile(registry.fileName)
 	if err != nil {
@@ -119,13 +94,41 @@ func (registry *TaskRegistry) hydrateFromDisk() error {
 
 	registry.RunOnces = loadedTaskRegistry.RunOnces
 
-	if registry.AvailableMemoryMB() < 0 {
+	if registry.availableMemoryMB() < 0 {
 		return ErrorNotEnoughMemoryWhenLoadingSnapshot
 	}
 
-	if registry.AvailableDiskMB() < 0 {
+	if registry.availableDiskMB() < 0 {
 		return ErrorNotEnoughDiskWhenLoadingSnapshot
 	}
 
 	return nil
+}
+
+func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce models.RunOnce) bool {
+	if runOnce.MemoryMB > registry.availableMemoryMB() {
+		return false
+	}
+
+	if runOnce.DiskMB > registry.availableDiskMB() {
+		return false
+	}
+
+	return true
+}
+
+func (registry *TaskRegistry) availableMemoryMB() int {
+	usedMemory := 0
+	for _, r := range registry.RunOnces {
+		usedMemory = usedMemory + r.MemoryMB
+	}
+	return registry.ExecutorMemoryMB - usedMemory
+}
+
+func (registry *TaskRegistry) availableDiskMB() int {
+	usedDisk := 0
+	for _, r := range registry.RunOnces {
+		usedDisk = usedDisk + r.DiskMB
+	}
+	return registry.ExecutorDiskMB - usedDisk
 }

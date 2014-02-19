@@ -25,7 +25,4 @@ func (fakeRegistry *FakeTaskRegistry) RemoveRunOnce(runOnce models.RunOnce) {
 	fakeRegistry.UnregisteredRunOnces = append(fakeRegistry.UnregisteredRunOnces, runOnce)
 }
 
-func (fakeRegistry *FakeTaskRegistry) HasCapacityForRunOnce(runOnce models.RunOnce) bool { return false }
-func (fakeRegistry *FakeTaskRegistry) AvailableMemoryMB() int                            { return 0 }
-func (fakeRegistry *FakeTaskRegistry) AvailableDiskMB() int                              { return 0 }
-func (fakeRegistry *FakeTaskRegistry) WriteToDisk() error                                { return nil }
+func (fakeRegistry *FakeTaskRegistry) WriteToDisk() error { return nil }

@@ -71,13 +71,10 @@ var _ = Describe("TaskRegistry", func() {
 		})
 
 		It("should reclaim the disk and memory from the RunOnce", func() {
-			originalMemory := taskRegistry.AvailableMemoryMB()
-			originalDisk := taskRegistry.AvailableDiskMB()
-
 			taskRegistry.RemoveRunOnce(runOnce)
 
-			Ω(taskRegistry.AvailableMemoryMB()).To(Equal(originalMemory + runOnce.MemoryMB))
-			Ω(taskRegistry.AvailableDiskMB()).To(Equal(originalDisk + runOnce.DiskMB))
+			err := taskRegistry.AddRunOnce(runOnce)
+			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
 
