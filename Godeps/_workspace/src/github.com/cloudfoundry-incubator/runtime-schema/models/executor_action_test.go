@@ -93,19 +93,19 @@ var _ = Describe("ExecutorAction", func() {
 				"args": {
 					"script": "rm -rf /",
 					"timeout_in_seconds": 10,
-					"env": {
-						"FOO": "1",
-						"BAR": "2"
-					}
+					"env": [
+						["FOO", "1"],
+						["BAR", "2"]
+					]
 				}
 			}`,
 			ExecutorAction{
 				Action: RunAction{
 					Script:  "rm -rf /",
 					Timeout: 10 * time.Second,
-					Env: map[string]string{
-						"FOO": "1",
-						"BAR": "2",
+					Env: [][]string{
+						{"FOO", "1"},
+						{"BAR", "2"},
 					},
 				},
 			},

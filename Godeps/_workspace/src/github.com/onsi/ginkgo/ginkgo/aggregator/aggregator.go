@@ -159,13 +159,15 @@ func (aggregator *Aggregator) announceExample(exampleSummary *types.ExampleSumma
 			} else {
 				aggregator.stenographer.AnnounceSuccesfulExample(exampleSummary)
 			}
-		} else {
-			aggregator.stenographer.AnnounceSuccesfulExample(exampleSummary)
 		}
 	case types.ExampleStatePending:
-		aggregator.stenographer.AnnouncePendingExample(exampleSummary, aggregator.config.NoisyPendings && !aggregator.config.Succinct)
+		if !aggregator.config.Succinct {
+			aggregator.stenographer.AnnouncePendingExample(exampleSummary, aggregator.config.NoisyPendings, aggregator.config.Succinct)
+		}
 	case types.ExampleStateSkipped:
-		aggregator.stenographer.AnnounceSkippedExample(exampleSummary)
+		if !aggregator.config.Succinct {
+			aggregator.stenographer.AnnounceSkippedExample(exampleSummary)
+		}
 	case types.ExampleStateTimedOut:
 		aggregator.stenographer.AnnounceExampleTimedOut(exampleSummary, aggregator.config.Succinct)
 	case types.ExampleStatePanicked:

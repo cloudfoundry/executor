@@ -22,7 +22,7 @@ type Emitter interface {
 	EmitLogMessage(*logmessage.LogMessage)
 }
 
-type loggregatoremitter struct {
+type LoggregatorEmitter struct {
 	LoggregatorClient loggregatorclient.LoggregatorClient
 	sn                string
 	sId               string
@@ -40,7 +40,7 @@ func splitMessage(message string) []string {
 	})
 }
 
-func (e *loggregatoremitter) Emit(appid, message string) {
+func (e *LoggregatorEmitter) Emit(appid, message string) {
 	if isEmpty(appid) || isEmpty(message) {
 		return
 	}
@@ -50,7 +50,7 @@ func (e *loggregatoremitter) Emit(appid, message string) {
 	e.EmitLogMessage(logMessage)
 }
 
-func (e *loggregatoremitter) EmitError(appid, message string) {
+func (e *LoggregatorEmitter) EmitError(appid, message string) {
 	if isEmpty(appid) || isEmpty(message) {
 		return
 	}
@@ -60,7 +60,7 @@ func (e *loggregatoremitter) EmitError(appid, message string) {
 	e.EmitLogMessage(logMessage)
 }
 
-func (e *loggregatoremitter) EmitLogMessage(logMessage *logmessage.LogMessage) {
+func (e *LoggregatorEmitter) EmitLogMessage(logMessage *logmessage.LogMessage) {
 	messages := splitMessage(string(logMessage.GetMessage()))
 
 	for _, message := range messages {
@@ -96,12 +96,12 @@ func (e *loggregatoremitter) EmitLogMessage(logMessage *logmessage.LogMessage) {
 	}
 }
 
-func NewEmitter(loggregatorServer, sourceName, sourceId, sharedSecret string, logger *gosteno.Logger) (*loggregatoremitter, error) {
+func NewEmitter(loggregatorServer, sourceName, sourceId, sharedSecret string, logger *gosteno.Logger) (*LoggregatorEmitter, error) {
 	if logger == nil {
 		logger = gosteno.NewLogger("loggregatorlib.emitter")
 	}
 
-	e := &loggregatoremitter{sharedSecret: sharedSecret}
+	e := &LoggregatorEmitter{sharedSecret: sharedSecret}
 
 	e.sn = sourceName
 	e.logger = logger
@@ -112,7 +112,7 @@ func NewEmitter(loggregatorServer, sourceName, sourceId, sharedSecret string, lo
 	return e, nil
 }
 
-func (e *loggregatoremitter) newLogMessage(appId, message string, mt logmessage.LogMessage_MessageType) *logmessage.LogMessage {
+func (e *LoggregatorEmitter) newLogMessage(appId, message string, mt logmessage.LogMessage_MessageType) *logmessage.LogMessage {
 	currentTime := time.Now()
 
 	return &logmessage.LogMessage{
@@ -125,7 +125,7 @@ func (e *loggregatoremitter) newLogMessage(appId, message string, mt logmessage.
 	}
 }
 
-func (e *loggregatoremitter) newLogEnvelope(appId string, message *logmessage.LogMessage) (*logmessage.LogEnvelope, error) {
+func (e *LoggregatorEmitter) newLogEnvelope(appId string, message *logmessage.LogMessage) (*logmessage.LogEnvelope, error) {
 	envelope := &logmessage.LogEnvelope{
 		LogMessage: message,
 		RoutingKey: proto.String(appId),

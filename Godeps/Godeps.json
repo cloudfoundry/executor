@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "5ad34ffef55c3655a6ca3f46adf798484c3e1e2e"
+			"Rev": "eff0d2905679f25d60800dda2d6fde3ffa634103"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "95edbb936e82847e11717a9689d4e82443f30977"
+			"Rev": "4cc80444bfcf920bee3bfbfce0f95f16bd511468"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "95edbb936e82847e11717a9689d4e82443f30977"
+			"Rev": "4cc80444bfcf920bee3bfbfce0f95f16bd511468"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -24,27 +24,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "9b676e7cd8a5724651a954e2b4639dc20fe48729"
+			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -61,7 +61,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "884dab811fc3c75f6c9cc51254601b426049cd98"
+			"Rev": "d71f32f5dc46c47cafde0b96a628e3594e96b75a"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",

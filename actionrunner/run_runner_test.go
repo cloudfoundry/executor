@@ -43,8 +43,8 @@ var _ = Describe("RunRunner", func() {
 			{
 				models.RunAction{
 					Script: "sudo reboot",
-					Env: map[string]string{
-						"A": "1",
+					Env: [][]string{
+						{"A", "1"},
 					},
 				},
 			},

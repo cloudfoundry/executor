@@ -15,10 +15,12 @@ func New() *LinuxPlugin {
 func (p LinuxPlugin) BuildRunScript(run models.RunAction) string {
 	script := ""
 
-	for key, val := range run.Env {
+	for _, envPair := range run.Env {
 		// naively assumes Go's string quotes are compatible with Bash,
 		// which it's not. See http://golang.org/ref/spec#String_literals
-		script += fmt.Sprintf("export %s=%q\n", key, val)
+		if len(envPair) == 2 {
+			script += fmt.Sprintf("export %s=%q\n", envPair[0], envPair[1])
+		}
 	}
 
 	script += run.Script

@@ -21,7 +21,7 @@ type UploadAction struct {
 
 type RunAction struct {
 	Script  string
-	Env     map[string]string
+	Env     [][]string
 	Timeout time.Duration
 }
 
@@ -35,9 +35,9 @@ type ExecutorAction struct {
 }
 
 type runActionSerialized struct {
-	Script           string            `json:"script"`
-	TimeoutInSeconds uint64            `json:"timeout_in_seconds"`
-	Env              map[string]string `json:"env"`
+	Script           string     `json:"script"`
+	TimeoutInSeconds uint64     `json:"timeout_in_seconds"`
+	Env              [][]string `json:"env"`
 }
 
 func (a RunAction) MarshalJSON() ([]byte, error) {

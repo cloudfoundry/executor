@@ -18,13 +18,30 @@ var _ = Describe("LinuxPlugin", func() {
 		It("returns the script prepended by exported environment variables", func() {
 			Ω(plugin.BuildRunScript(models.RunAction{
 				Script: "sudo reboot",
-				Env: map[string]string{
-					"FOO": "1",
-					"BAR": "2",
+				Env: [][]string{
+					{"FOO", "1"},
+					{"BAR", "2"},
 				},
 			})).Should(Equal(`export FOO="1"
 export BAR="2"
 sudo reboot`))
+		})
+
+		Context("when the environment variables are messed up", func() {
+			It("ignores the messed up env variables", func() {
+				Ω(plugin.BuildRunScript(models.RunAction{
+					Script: "sudo reboot",
+					Env: [][]string{
+						{"FOO", "1"},
+						{},
+						{"BAZ"},
+						{"BANANA", "TOO", "LONG"},
+						{"BAR", "2"},
+					},
+				})).Should(Equal(`export FOO="1"
+export BAR="2"
+sudo reboot`))
+			})
 		})
 	})
 
