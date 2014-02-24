@@ -6,19 +6,24 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/nu7hatch/gouuid"
 	"path"
+	"sync"
 	"time"
 )
 
 type ETCDStoreAdapter struct {
-	urls       []string
-	client     *etcd.Client
-	workerPool *workerpool.WorkerPool
+	urls              []string
+	client            *etcd.Client
+	workerPool        *workerpool.WorkerPool
+	inflightWatches   map[chan bool]bool
+	inflightWatchLock *sync.Mutex
 }
 
 func NewETCDStoreAdapter(urls []string, workerPool *workerpool.WorkerPool) *ETCDStoreAdapter {
 	return &ETCDStoreAdapter{
-		urls:       urls,
-		workerPool: workerPool,
+		urls:              urls,
+		workerPool:        workerPool,
+		inflightWatches:   map[chan bool]bool{},
+		inflightWatchLock: &sync.Mutex{},
 	}
 }
 
@@ -30,6 +35,7 @@ func (adapter *ETCDStoreAdapter) Connect() error {
 
 func (adapter *ETCDStoreAdapter) Disconnect() error {
 	adapter.workerPool.StopWorkers()
+	adapter.cancelInflightWatches()
 
 	return nil
 }
@@ -220,29 +226,50 @@ func (adapter *ETCDStoreAdapter) UpdateDirTTL(key string, ttl uint64) error {
 	return adapter.convertError(<-results)
 }
 
-func (adapter *ETCDStoreAdapter) dispatchWatchEvents(key string, events chan<- storeadapter.WatchEvent, stop <-chan bool, errors chan<- error) {
+func (adapter *ETCDStoreAdapter) dispatchWatchEvents(key string, events chan<- storeadapter.WatchEvent, stop chan bool, errors chan<- error) {
 	var index uint64
+	adapter.registerInflightWatch(stop)
+
+	defer close(events)
+	defer close(errors)
+	defer adapter.unregisterInflightWatch(stop)
 
 	for {
-		response, err := adapter.client.Watch(key, index, true, nil, nil)
+		response, err := adapter.client.Watch(key, index, true, nil, stop)
 		if err != nil {
 			if adapter.isEventIndexClearedError(err) {
 				index++
 				continue
+			} else if err == etcd.ErrWatchStoppedByUser {
+				return
 			} else {
 				errors <- adapter.convertError(err)
 				return
 			}
 		}
 
-		select {
-		case events <- adapter.makeWatchEvent(response):
-		case <-stop:
-			close(events)
-			return
-		}
-
+		events <- adapter.makeWatchEvent(response)
 		index = response.Node.ModifiedIndex + 1
+	}
+}
+
+func (adapter *ETCDStoreAdapter) registerInflightWatch(stop chan bool) {
+	adapter.inflightWatchLock.Lock()
+	defer adapter.inflightWatchLock.Unlock()
+	adapter.inflightWatches[stop] = true
+}
+
+func (adapter *ETCDStoreAdapter) unregisterInflightWatch(stop chan bool) {
+	adapter.inflightWatchLock.Lock()
+	defer adapter.inflightWatchLock.Unlock()
+	delete(adapter.inflightWatches, stop)
+}
+
+func (adapter *ETCDStoreAdapter) cancelInflightWatches() {
+	adapter.inflightWatchLock.Lock()
+	defer adapter.inflightWatchLock.Unlock()
+	for stop := range adapter.inflightWatches {
+		close(stop)
 	}
 }
 

@@ -54,7 +54,7 @@ func (e *Executor) ID() string {
 }
 
 func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
-	stopMaintainingPresence, maintainingPresenceErrors, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
+	presence, maintainingPresenceErrors, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
 	go func() {
 		select {
 		case <-stop:
-			stopMaintainingPresence <- true
+			presence.Remove()
 
 		case <-maintainingPresenceErrors:
 			e.logger.Warn("executor.maintaining-presence.failed")

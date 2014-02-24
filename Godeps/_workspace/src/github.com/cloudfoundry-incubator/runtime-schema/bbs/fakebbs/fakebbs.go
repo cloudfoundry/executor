@@ -1,10 +1,20 @@
 package fakebbs
 
 import (
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"time"
 )
+
+type FakePresence struct {
+	Removed bool
+}
+
+func (p *FakePresence) Remove() error {
+	p.Removed = true
+	return nil
+}
 
 type FakeExecutorBBS struct {
 	CallsToConverge int
@@ -13,7 +23,7 @@ type FakeExecutorBBS struct {
 
 	MaintainingPresenceHeartbeatInterval uint64
 	MaintainingPresenceExecutorID        string
-	MaintainingPresenceStopChannel       chan bool
+	MaintainingPresencePresence          *FakePresence
 	MaintainingPresenceErrorChannel      chan error
 	MaintainingPresenceError             error
 
@@ -31,13 +41,13 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	return &FakeExecutorBBS{}
 }
 
-func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (chan bool, chan error, error) {
+func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (bbs.PresenceInterface, chan error, error) {
 	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatIntervalInSeconds
 	fakeBBS.MaintainingPresenceExecutorID = executorID
-	fakeBBS.MaintainingPresenceStopChannel = make(chan bool)
+	fakeBBS.MaintainingPresencePresence = &FakePresence{}
 	fakeBBS.MaintainingPresenceErrorChannel = make(chan error)
 
-	return fakeBBS.MaintainingPresenceStopChannel, fakeBBS.MaintainingPresenceErrorChannel, fakeBBS.MaintainingPresenceError
+	return fakeBBS.MaintainingPresencePresence, fakeBBS.MaintainingPresenceErrorChannel, fakeBBS.MaintainingPresenceError
 }
 
 func (fakeBBS *FakeExecutorBBS) WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
@@ -96,4 +106,8 @@ func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce models.RunOnce) error {
 func (fakeBBS *FakeStagerBBS) ResolveRunOnce(runOnce models.RunOnce) error {
 	fakeBBS.ResolvedRunOnce = runOnce
 	return fakeBBS.ResolveRunOnceErr
+}
+
+func (fakeBBS *FakeStagerBBS) GetAvailableFileServer() (string, error) {
+	panic("implement me!")
 }

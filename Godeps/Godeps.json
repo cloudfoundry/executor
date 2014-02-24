@@ -11,11 +11,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "4cc80444bfcf920bee3bfbfce0f95f16bd511468"
+			"Rev": "c0910da3330b94683a012baeb4b302dab441b0ea"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "4cc80444bfcf920bee3bfbfce0f95f16bd511468"
+			"Rev": "c0910da3330b94683a012baeb4b302dab441b0ea"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -24,36 +24,36 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "bfbb55113cccc82c40493d1bd23b6844220afaf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "1cbdbf854a486e0a10942e87edd3757f1ac6667a"
+			"Rev": "3bffe313636bb48c0ae2f7cc36c3d43a30e65e09"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-75-g5c0151c",
-			"Rev": "5c0151c64399ff9a8087c2e29ae96145ede7cfc2"
+			"Comment": "v0.2.0-rc1-89-g16829f2",
+			"Rev": "16829f2f1159e7ff055b6070f369b60e4a037242"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -61,7 +61,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "d71f32f5dc46c47cafde0b96a628e3594e96b75a"
+			"Rev": "884dab811fc3c75f6c9cc51254601b426049cd98"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",

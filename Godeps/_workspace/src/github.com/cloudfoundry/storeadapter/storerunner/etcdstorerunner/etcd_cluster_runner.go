@@ -6,6 +6,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	. "github.com/onsi/gomega"
+	"log"
 
 	etcdclient "github.com/coreos/go-etcd/etcd"
 
@@ -98,6 +99,10 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 			etcd.nukeArtifacts(i)
 		}
 
+		if etcd.detectRunningEtcd(i) {
+			log.Fatalf("Detected an ETCD already running on %s", etcd.clientUrl(i))
+		}
+
 		os.MkdirAll(etcd.tmpPath(i), 0700)
 		args := []string{"-data-dir", etcd.tmpPath(i), "-addr", etcd.clientUrl(i), "-peer-addr", etcd.serverUrl(i), "-name", etcd.nodeName(i)}
 		if i != 0 {
@@ -110,8 +115,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 		Ω(err).ShouldNot(HaveOccurred(), "Make sure etcd is compiled and on your $PATH.")
 
 		Eventually(func() bool {
-			client := etcdclient.NewClient([]string{})
-			return client.SetCluster([]string{"http://" + etcd.clientUrl(i)})
+			return etcd.detectRunningEtcd(i)
 		}, 3, 0.05).Should(BeTrue(), "Expected ETCD to be up and running")
 	}
 
@@ -132,6 +136,11 @@ func (etcd *ETCDClusterRunner) stop(nuke bool) {
 		etcd.running = false
 		etcd.client = nil
 	}
+}
+
+func (etcd *ETCDClusterRunner) detectRunningEtcd(index int) bool {
+	client := etcdclient.NewClient([]string{})
+	return client.SetCluster([]string{"http://" + etcd.clientUrl(index)})
 }
 
 func (etcd *ETCDClusterRunner) fastForwardTime(etcdNode etcdclient.Node, seconds int) {

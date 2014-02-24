@@ -9,8 +9,10 @@ import (
 
 //Bulletin Board System/Store
 
+const SchemaRoot = "/v1/"
+
 type ExecutorBBS interface {
-	MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (chan bool, chan error, error)
+	MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (PresenceInterface, chan error, error)
 	WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) //filter out delete...
 
 	ClaimRunOnce(models.RunOnce) error
@@ -26,18 +28,26 @@ type StagerBBS interface {
 
 	DesireRunOnce(models.RunOnce) error
 	ResolveRunOnce(models.RunOnce) error
+
+	GetAvailableFileServer() (string, error)
+}
+
+type FileServerBBS interface {
+	MaintainFileServerPresence(heartbeatIntervalInSeconds uint64, fileServerURL string, fileServerId string) (PresenceInterface, chan error, error)
 }
 
 func New(store storeadapter.StoreAdapter) *BBS {
 	return &BBS{
-		ExecutorBBS: &executorBBS{store: store},
-		StagerBBS:   &stagerBBS{store: store},
-		store:       store,
+		ExecutorBBS:   &executorBBS{store: store},
+		StagerBBS:     &stagerBBS{store: store},
+		FileServerBBS: &fileServerBBS{store: store},
+		store:         store,
 	}
 }
 
 type BBS struct {
 	ExecutorBBS
 	StagerBBS
+	FileServerBBS
 	store storeadapter.StoreAdapter
 }

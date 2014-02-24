@@ -9,7 +9,6 @@ import (
 )
 
 const ClaimTTL uint64 = 10 //seconds
-const SchemaRoot = "/v1/"
 const RunOnceSchemaRoot = SchemaRoot + "run_once"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 
@@ -140,46 +139,10 @@ func (self *stagerBBS) ResolveRunOnce(runOnce models.RunOnce) error {
 	})
 }
 
-func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (chan bool, chan error, error) {
-	err := self.store.SetMulti([]storeadapter.StoreNode{
-		{
-			Key:   executorSchemaPath(executorId),
-			Value: []byte{},
-			TTL:   heartbeatIntervalInSeconds,
-		},
-	})
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stop := make(chan bool)
-	errors := make(chan error)
-
-	go func() {
-		ticker := time.NewTicker(time.Duration(heartbeatIntervalInSeconds) * time.Second / 2)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				err := self.store.Update(storeadapter.StoreNode{
-					Key:   executorSchemaPath(executorId),
-					Value: []byte{},
-					TTL:   heartbeatIntervalInSeconds,
-				})
-
-				if err != nil {
-					errors <- err
-					return
-				}
-			case <-stop:
-				return
-			}
-		}
-	}()
-
-	return stop, errors, nil
+func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, chan error, error) {
+	presence := NewPresence(self.store, executorSchemaPath(executorId), []byte{})
+	errors, err := presence.Maintain(heartbeatIntervalInSeconds)
+	return presence, errors, err
 }
 
 func (self *BBS) GetAllExecutors() ([]string, error) {

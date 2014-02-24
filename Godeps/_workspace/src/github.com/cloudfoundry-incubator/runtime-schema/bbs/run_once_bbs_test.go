@@ -90,16 +90,20 @@ var _ = Describe("RunOnce BBS", func() {
 			executorId string
 			interval   uint64
 			errors     chan error
-			stop       chan bool
 			err        error
+			presence   PresenceInterface
 		)
 
 		BeforeEach(func() {
 			executorId = "stubExecutor"
 			interval = uint64(1)
 
-			stop, errors, err = bbs.MaintainExecutorPresence(interval, executorId)
+			presence, errors, err = bbs.MaintainExecutorPresence(interval, executorId)
 			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			presence.Remove()
 		})
 
 		It("should put /executor/EXECUTOR_ID in the store with a TTL", func() {
@@ -110,34 +114,6 @@ var _ = Describe("RunOnce BBS", func() {
 				Value: []byte{},
 				TTL:   interval, // move to config one day
 			}))
-
-			close(stop)
-		})
-
-		It("should periodically maintain the TTL", func() {
-			time.Sleep(2 * time.Second)
-
-			_, err = store.Get("/v1/executor/" + executorId)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			close(stop)
-		})
-
-		It("should report an error and stop trying if it fails to update the TTL", func() {
-			err = store.Delete("/v1/executor/" + executorId)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Eventually(errors, 2).Should(Receive())
-			close(stop)
-		})
-
-		It("should be possible to stop maintaining presence", func() {
-			close(stop)
-
-			time.Sleep(2 * time.Second)
-
-			_, err = store.Get("/v1/executor/" + executorId)
-			Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
 		})
 	})
 
@@ -148,10 +124,10 @@ var _ = Describe("RunOnce BBS", func() {
 
 			Ω(executors).Should(BeEmpty())
 
-			stopA, _, err := bbs.MaintainExecutorPresence(1, "executor-a")
+			presenceA, _, err := bbs.MaintainExecutorPresence(1, "executor-a")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			stopB, _, err := bbs.MaintainExecutorPresence(1, "executor-b")
+			presenceB, _, err := bbs.MaintainExecutorPresence(1, "executor-b")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() []string {
@@ -164,8 +140,8 @@ var _ = Describe("RunOnce BBS", func() {
 				return executors
 			}).Should(ContainElement("executor-b"))
 
-			close(stopA)
-			close(stopB)
+			presenceA.Remove()
+			presenceB.Remove()
 		})
 	})
 
@@ -536,10 +512,16 @@ var _ = Describe("RunOnce BBS", func() {
 				})
 
 				Context("and the associated executor is still alive", func() {
+					var presence PresenceInterface
+
 					BeforeEach(func() {
-						stop, _, err := bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
+						var err error
+						presence, _, err = bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
 						Ω(err).ShouldNot(HaveOccurred())
-						close(stop)
+					})
+
+					AfterEach(func() {
+						presence.Remove()
 					})
 
 					It("should not mark the task as completed/failed", func() {
@@ -588,10 +570,16 @@ var _ = Describe("RunOnce BBS", func() {
 				})
 
 				Context("and the associated executor is still alive", func() {
+					var presence PresenceInterface
+
 					BeforeEach(func() {
-						stop, _, err := bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
+						var err error
+						presence, _, err = bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
 						Ω(err).ShouldNot(HaveOccurred())
-						close(stop)
+					})
+
+					AfterEach(func() {
+						presence.Remove()
 					})
 
 					It("should not mark the task as completed/failed", func() {
