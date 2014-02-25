@@ -22,6 +22,7 @@ var _ = Describe("RunOnce", func() {
 			}
 		],
 		"container_handle":"17fgsafdfcvc",
+		"result": "turboencabulated",
 		"failed":true,
 		"failure_reason":"because i said so",
 		"memory_mb":256,
@@ -56,6 +57,7 @@ var _ = Describe("RunOnce", func() {
 			},
 			ExecutorID:      "executor",
 			ContainerHandle: "17fgsafdfcvc",
+			Result:          "turboencabulated",
 			Failed:          true,
 			FailureReason:   "because i said so",
 			MemoryMB:        256,

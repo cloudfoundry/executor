@@ -111,4 +111,20 @@ var _ = Describe("ExecutorAction", func() {
 			},
 		)
 	})
+
+	Describe("FetchResult", func() {
+		itSerializesAndDeserializes(
+			`{
+				"action": "fetch_result",
+				"args": {
+					"file": "/tmp/foo"
+				}
+			}`,
+			ExecutorAction{
+				Action: FetchResultAction{
+					File: "/tmp/foo",
+				},
+			},
+		)
+	})
 })
