@@ -134,9 +134,14 @@ var _ = Describe("RunOnceHandler", func() {
 							})
 
 							Context("when the RunOnce actions succeed", func() {
-								It("should deallocate resources and mark the RunOnce as completed (succesfully)", func() {
+								BeforeEach(func() {
+									actionRunner.RunResult = "runonce-result"
+								})
+
+								It("should deallocate resources and mark the RunOnce as completed and attach the action results (succesfully)", func() {
 									Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
 									Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
+									Ω(bbs.CompletedRunOnce.Result).Should(Equal("runonce-result"))
 
 									Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
 									Ω(gordon.DestroyedHandles()).Should(HaveLen(1))

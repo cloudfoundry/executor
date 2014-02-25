@@ -12,7 +12,7 @@ import (
 )
 
 type ActionRunnerInterface interface {
-	Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) error
+	Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (result string, err error)
 }
 
 type BackendPlugin interface {
@@ -48,7 +48,8 @@ func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader dow
 	}
 }
 
-func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) error {
+func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (string, error) {
+	result := ""
 	for _, action := range actions {
 		var err error
 		switch a := action.Action.(type) {
@@ -61,13 +62,16 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 		case models.UploadAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.upload-action")
 			err = runner.performUploadAction(containerHandle, a)
+		case models.FetchResultAction:
+			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.fetch-result-action")
+			result, err = runner.performFetchResultAction(containerHandle, a)
 		}
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 func (runner *ActionRunner) performRunAction(containerHandle string, streamer logstreamer.LogStreamer, action models.RunAction) error {
@@ -83,4 +87,9 @@ func (runner *ActionRunner) performDownloadAction(containerHandle string, action
 func (runner *ActionRunner) performUploadAction(containerHandle string, action models.UploadAction) error {
 	uploadRunner := NewUploadRunner(runner.uploader, runner.wardenClient, runner.tempDir)
 	return uploadRunner.perform(containerHandle, action)
+}
+
+func (runner *ActionRunner) performFetchResultAction(containerHandle string, action models.FetchResultAction) (string, error) {
+	fetchResultRunner := NewFetchResultRunner(runner.wardenClient, runner.tempDir)
+	return fetchResultRunner.perform(containerHandle, action)
 }

@@ -3,16 +3,10 @@ package actionrunner_test
 import (
 	"archive/zip"
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"io/ioutil"
 	"os"
 
-	. "github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon/fake_gordon"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -20,21 +14,11 @@ import (
 
 var _ = Describe("DownloadRunner", func() {
 	var (
-		actions    []models.ExecutorAction
-		runner     *ActionRunner
-		downloader *fakedownloader.FakeDownloader
-		uploader   *fakeuploader.FakeUploader
-		gordon     *fake_gordon.FakeGordon
-		err        error
+		actions []models.ExecutorAction
+		err     error
 	)
 
 	BeforeEach(func() {
-		gordon = fake_gordon.New()
-		downloader = &fakedownloader.FakeDownloader{}
-		uploader = &fakeuploader.FakeUploader{}
-		linuxPlugin := linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir(), steno.NewLogger("test-logger"))
-
 		actions = []models.ExecutorAction{
 			{
 				models.DownloadAction{
@@ -47,7 +31,7 @@ var _ = Describe("DownloadRunner", func() {
 	})
 
 	JustBeforeEach(func() {
-		err = runner.Run("handle-x", nil, actions)
+		_, err = runner.Run("handle-x", nil, actions)
 	})
 
 	It("should download the file from a URL", func() {

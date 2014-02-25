@@ -2,43 +2,28 @@ package actionrunner_test
 
 import (
 	"errors"
-	"os"
 	"time"
 
 	"code.google.com/p/gogoprotobuf/proto"
 	. "github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 )
 
+// additional common variables defined in the actionrunner_suite_test
+
 var _ = Describe("RunRunner", func() {
 	var (
-		actions     []models.ExecutorAction
-		runner      *ActionRunner
-		downloader  *fakedownloader.FakeDownloader
-		uploader    *fakeuploader.FakeUploader
-		gordon      *fake_gordon.FakeGordon
-		linuxPlugin *linuxplugin.LinuxPlugin
-		streamer    *fakelogstreamer.FakeLogStreamer
+		actions  []models.ExecutorAction
+		streamer *fakelogstreamer.FakeLogStreamer
 	)
 
 	var stream chan *warden.ProcessPayload
 
 	BeforeEach(func() {
-		gordon = fake_gordon.New()
-		downloader = &fakedownloader.FakeDownloader{}
-		uploader = &fakeuploader.FakeUploader{}
-		linuxPlugin = linuxplugin.New()
-		runner = New(gordon, linuxPlugin, downloader, uploader, os.TempDir(), steno.NewLogger("test-logger"))
-
 		actions = []models.ExecutorAction{
 			{
 				models.RunAction{
@@ -60,7 +45,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("executes the command in the passed-in container", func() {
-			err := runner.Run("handle-x", nil, actions)
+			_, err := runner.Run("handle-x", nil, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runningScript := gordon.ScriptsThatRan()[0]
@@ -75,7 +60,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("should return the error", func() {
-			err := runner.Run("handle-x", nil, actions)
+			_, err := runner.Run("handle-x", nil, actions)
 			Ω(err).Should(Equal(errors.New("I, like, tried but failed")))
 		})
 	})
@@ -86,7 +71,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("should return an error with the exit code", func() {
-			err := runner.Run("handle-x", nil, actions)
+			_, err := runner.Run("handle-x", nil, actions)
 			Ω(err.Error()).Should(ContainSubstring("19"))
 		})
 	})
@@ -98,7 +83,7 @@ var _ = Describe("RunRunner", func() {
 				stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 			}()
 
-			err := runner.Run("handle-x", nil, actions)
+			_, err := runner.Run("handle-x", nil, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
@@ -119,7 +104,7 @@ var _ = Describe("RunRunner", func() {
 			It("succeeds", func() {
 				stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 
-				err := runner.Run("handle-x", nil, actions)
+				_, err := runner.Run("handle-x", nil, actions)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -131,7 +116,7 @@ var _ = Describe("RunRunner", func() {
 					stream <- &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
 				}()
 
-				err := runner.Run("handle-x", nil, actions)
+				_, err := runner.Run("handle-x", nil, actions)
 				Ω(err).Should(HaveOccurred())
 				Ω(err).Should(Equal(RunActionTimeoutError{models.RunAction{
 					Script:  "sudo reboot",
@@ -162,7 +147,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("emits the output chunks as they come in", func() {
-			err := runner.Run("handle-x", streamer, actions)
+			_, err := runner.Run("handle-x", streamer, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(streamer.StreamedStdout).Should(ContainElement("hi out"))
@@ -170,7 +155,7 @@ var _ = Describe("RunRunner", func() {
 		})
 
 		It("should flush the output when the code exits", func() {
-			err := runner.Run("handle-x", streamer, actions)
+			_, err := runner.Run("handle-x", streamer, actions)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(streamer.Flushed).Should(BeTrue())

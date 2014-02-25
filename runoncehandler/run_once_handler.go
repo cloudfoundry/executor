@@ -114,7 +114,8 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string
 	}
 
 	// perform the actions
-	err = handler.actionRunner.Run(runOnce.ContainerHandle, streamer, runOnce.Actions)
+	result, err := handler.actionRunner.Run(runOnce.ContainerHandle, streamer, runOnce.Actions)
+	runOnce.Result = result
 	if err != nil {
 		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
 		runOnce.Failed = true
