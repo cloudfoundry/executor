@@ -20,9 +20,9 @@ type UploadAction struct {
 }
 
 type RunAction struct {
-	Script  string
-	Env     [][]string
-	Timeout time.Duration
+	Script  string        `json:"script"`
+	Env     [][]string    `json:"env"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 type FetchResultAction struct {
@@ -36,35 +36,6 @@ type executorActionEnvelope struct {
 
 type ExecutorAction struct {
 	Action interface{} `json:"-"`
-}
-
-type runActionSerialized struct {
-	Script           string     `json:"script"`
-	TimeoutInSeconds uint64     `json:"timeout_in_seconds"`
-	Env              [][]string `json:"env"`
-}
-
-func (a RunAction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(runActionSerialized{
-		Script:           a.Script,
-		TimeoutInSeconds: uint64(a.Timeout / time.Second),
-		Env:              a.Env,
-	})
-}
-
-func (a *RunAction) UnmarshalJSON(payload []byte) error {
-	var intermediate runActionSerialized
-
-	err := json.Unmarshal(payload, &intermediate)
-	if err != nil {
-		return err
-	}
-
-	a.Script = intermediate.Script
-	a.Timeout = time.Duration(intermediate.TimeoutInSeconds) * time.Second
-	a.Env = intermediate.Env
-
-	return nil
 }
 
 func (a ExecutorAction) MarshalJSON() ([]byte, error) {
