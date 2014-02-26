@@ -1,6 +1,8 @@
 package models_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -31,7 +33,8 @@ var _ = Describe("RunOnce", func() {
 			"guid": "123",
 			"source_name": "APP",
 			"index": 42
-		}
+		},
+		"created_at": "2014-02-25T23:46:11Z"
 	}`
 
 	BeforeEach(func() {
@@ -62,6 +65,7 @@ var _ = Describe("RunOnce", func() {
 			FailureReason:   "because i said so",
 			MemoryMB:        256,
 			DiskMB:          1024,
+			CreatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 00, time.UTC),
 		}
 	})
 

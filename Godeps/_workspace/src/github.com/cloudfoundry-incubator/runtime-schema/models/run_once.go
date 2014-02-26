@@ -2,15 +2,17 @@ package models
 
 import (
 	"encoding/json"
+	"time"
 )
 
 type RunOnce struct {
-	Guid     string           `json:"guid"`
-	Actions  []ExecutorAction `json:"actions"`
-	Stack    string           `json:"stack"`
-	MemoryMB int              `json:"memory_mb"`
-	DiskMB   int              `json:"disk_mb"`
-	Log      LogConfig        `json:"log"`
+	Guid      string           `json:"guid"`
+	Actions   []ExecutorAction `json:"actions"`
+	Stack     string           `json:"stack"`
+	MemoryMB  int              `json:"memory_mb"`
+	DiskMB    int              `json:"disk_mb"`
+	Log       LogConfig        `json:"log"`
+	CreatedAt time.Time        `json:"created_at"`
 
 	// this is so that any stager can process a complete event,
 	// because the CC <-> Stager interaction is a one-to-one request-response

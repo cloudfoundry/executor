@@ -8,7 +8,13 @@ import (
 )
 
 type executorBBS struct {
-	store storeadapter.StoreAdapter
+	store       storeadapter.StoreAdapter
+	timeToClaim time.Duration
+}
+
+// This is the time limit for the executor pool to claim a pending timeout.
+func (self *executorBBS) SetTimeToClaim(timeToClaim time.Duration) {
+	self.timeToClaim = timeToClaim
 }
 
 func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, chan error, error) {
@@ -97,6 +103,8 @@ func (self *executorBBS) ConvergeRunOnce() {
 	running, _ := runOnceState.Lookup("running")
 	completed, _ := runOnceState.Lookup("completed")
 
+	unclaimedTimeoutBoundary := time.Now().Add(-self.timeToClaim + time.Nanosecond)
+
 	for _, pendingNode := range pending.ChildNodes {
 		guid := pendingNode.KeyComponents()[3]
 
@@ -124,7 +132,20 @@ func (self *executorBBS) ConvergeRunOnce() {
 			continue
 		}
 
+		runOnce, err := models.NewRunOnceFromJSON(pendingNode.Value)
+		if err != nil {
+			pendingNode.Value = nil
+			storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(pendingNode, "corrupt pending node"))
+			continue
+		}
+
+		if runOnce.CreatedAt.Before(unclaimedTimeoutBoundary) {
+			storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(pendingNode, "not claimed within time limit"))
+			continue
+		}
+
 		storeNodesToSet = append(storeNodesToSet, pendingNode)
+
 	}
 
 	for _, node := range []storeadapter.StoreNode{claimed, running, completed} {

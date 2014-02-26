@@ -10,8 +10,11 @@ import (
 //Bulletin Board System/Store
 
 const SchemaRoot = "/v1/"
+const DefaultPendingTimeout = 30 * time.Minute
 
 type ExecutorBBS interface {
+	SetTimeToClaim(timeToClaim time.Duration)
+
 	MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (PresenceInterface, chan error, error)
 	WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) //filter out delete...
 
@@ -38,7 +41,10 @@ type FileServerBBS interface {
 
 func New(store storeadapter.StoreAdapter) *BBS {
 	return &BBS{
-		ExecutorBBS:   &executorBBS{store: store},
+		ExecutorBBS: &executorBBS{
+			store:       store,
+			timeToClaim: DefaultPendingTimeout,
+		},
 		StagerBBS:     &stagerBBS{store: store},
 		FileServerBBS: &fileServerBBS{store: store},
 		store:         store,

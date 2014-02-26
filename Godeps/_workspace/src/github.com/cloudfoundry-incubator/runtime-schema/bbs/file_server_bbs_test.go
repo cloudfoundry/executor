@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Stager BBS", func() {
+var _ = Describe("File Server BBS", func() {
 	var (
 		bbs           *BBS
 		fileServerURL string

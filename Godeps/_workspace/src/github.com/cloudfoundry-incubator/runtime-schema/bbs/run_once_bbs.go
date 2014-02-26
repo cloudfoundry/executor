@@ -2,6 +2,7 @@ package bbs
 
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 	"path"
 	"time"
@@ -80,21 +81,34 @@ func getAllRunOnces(store storeadapter.StoreAdapter, state string) ([]models.Run
 
 	runOnces := []models.RunOnce{}
 	for _, node := range node.ChildNodes {
-		runOnce, _ := models.NewRunOnceFromJSON(node.Value)
-		runOnces = append(runOnces, runOnce)
+		runOnce, err := models.NewRunOnceFromJSON(node.Value)
+		if err != nil {
+			steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
+		} else {
+			runOnces = append(runOnces, runOnce)
+		}
 	}
 
 	return runOnces, nil
 }
 
 func verifyExecutorIsPresent(node storeadapter.StoreNode, executorState storeadapter.StoreNode) bool {
-	runOnce, _ := models.NewRunOnceFromJSON(node.Value)
+	runOnce, err := models.NewRunOnceFromJSON(node.Value)
+	if err != nil {
+		steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
+		return false
+	}
 	_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
 	return executorIsAlive
 }
 
 func failedRunOnceNodeFromNode(node storeadapter.StoreNode, failureMessage string) storeadapter.StoreNode {
-	runOnce, _ := models.NewRunOnceFromJSON(node.Value)
+	runOnce, err := models.NewRunOnceFromJSON(node.Value)
+	if err != nil {
+		steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
+		runOnce.Guid = path.Base(node.Key)
+	}
+
 	runOnce.Failed = true
 	runOnce.FailureReason = failureMessage
 	return storeadapter.StoreNode{
