@@ -14,8 +14,10 @@ import (
 var _ = Describe("Executor BBS", func() {
 	var bbs *BBS
 	var runOnce models.RunOnce
+	var timeToClaim time.Duration
 
 	BeforeEach(func() {
+		timeToClaim = (1 * time.Second)
 		bbs = New(store)
 		runOnce = models.RunOnce{
 			Guid:            "some-guid",
@@ -42,16 +44,13 @@ var _ = Describe("Executor BBS", func() {
 			})
 
 			Context("and it is unclaimed", func() {
-				Context("and it is more than the handling timeout after the createdAt", func() {
+				Context("and it is more than the handling timeToClaim after the createdAt", func() {
 					BeforeEach(func() {
-						timeout := (1 * time.Second)
-
-						runOnce.CreatedAt = runOnce.CreatedAt - int64(timeout)
-						bbs.SetTimeToClaim(timeout)
+						runOnce.CreatedAt = runOnce.CreatedAt - int64(timeToClaim)
 					})
 
 					It("should mark it as failed", func() {
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 						completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(completedRunOnces).Should(HaveLen(1))
@@ -60,15 +59,14 @@ var _ = Describe("Executor BBS", func() {
 					})
 				})
 
-				Context("and it is less than the timeout", func() {
+				Context("and it is less than the timeToClaim", func() {
 					It("should kick the key", func(done Done) {
+						defer close(done)
 						events, _, _ := bbs.WatchForDesiredRunOnce()
 
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 
 						Ω(<-events).Should(Equal(runOnce))
-
-						close(done)
 					})
 				})
 			})
@@ -82,7 +80,7 @@ var _ = Describe("Executor BBS", func() {
 				})
 
 				It("should mark it as failed", func() {
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 					completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(completedRunOnces).Should(HaveLen(1))
@@ -100,7 +98,7 @@ var _ = Describe("Executor BBS", func() {
 				It("should not kick the pending key", func(done Done) {
 					events, _, _ := bbs.WatchForDesiredRunOnce()
 
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					bbs.DesireRunOnce(otherRunOnce)
 
@@ -110,7 +108,7 @@ var _ = Describe("Executor BBS", func() {
 				})
 
 				It("should not delete the claim key", func() {
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					_, err := store.Get("/v1/run_once/claimed/some-guid")
 					Ω(err).ShouldNot(HaveOccurred())
@@ -130,7 +128,7 @@ var _ = Describe("Executor BBS", func() {
 					})
 
 					It("should not mark the task as completed/failed", func() {
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 						completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(completedRunOnces).Should(HaveLen(0))
@@ -139,7 +137,7 @@ var _ = Describe("Executor BBS", func() {
 
 				Context("and the associated executor has gone missing", func() {
 					It("should mark the RunOnce as completed (in the failed state)", func() {
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 						completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(completedRunOnces).Should(HaveLen(1))
@@ -158,7 +156,7 @@ var _ = Describe("Executor BBS", func() {
 				It("should not kick the pending key", func(done Done) {
 					events, _, _ := bbs.WatchForDesiredRunOnce()
 
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					bbs.DesireRunOnce(otherRunOnce)
 
@@ -168,7 +166,7 @@ var _ = Describe("Executor BBS", func() {
 				})
 
 				It("should not delete the running key", func() {
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					_, err := store.Get("/v1/run_once/running/some-guid")
 					Ω(err).ShouldNot(HaveOccurred())
@@ -188,7 +186,7 @@ var _ = Describe("Executor BBS", func() {
 					})
 
 					It("should not mark the task as completed/failed", func() {
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 						completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(completedRunOnces).Should(HaveLen(0))
@@ -197,7 +195,7 @@ var _ = Describe("Executor BBS", func() {
 
 				Context("and the associated executor has gone missing", func() {
 					It("should mark the RunOnce as completed (in the failed state)", func() {
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 						completedRunOnces, err := bbs.GetAllCompletedRunOnces()
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(completedRunOnces).Should(HaveLen(1))
@@ -216,7 +214,7 @@ var _ = Describe("Executor BBS", func() {
 				It("should not kick the pending key", func(done Done) {
 					events, _, _ := bbs.WatchForDesiredRunOnce()
 
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					bbs.DesireRunOnce(otherRunOnce)
 
@@ -228,7 +226,7 @@ var _ = Describe("Executor BBS", func() {
 				It("should kick the completed key", func(done Done) {
 					events, _, _ := bbs.WatchForCompletedRunOnce()
 
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					Ω(<-events).Should(Equal(runOnce))
 
@@ -236,7 +234,7 @@ var _ = Describe("Executor BBS", func() {
 				})
 
 				It("should not delete the completed key", func() {
-					bbs.ConvergeRunOnce()
+					bbs.ConvergeRunOnce(timeToClaim)
 
 					_, err := store.Get("/v1/run_once/completed/some-guid")
 					Ω(err).ShouldNot(HaveOccurred())
@@ -248,7 +246,7 @@ var _ = Describe("Executor BBS", func() {
 					func(done Done) {
 						events, _, _ := bbs.WatchForDesiredRunOnce()
 
-						bbs.ConvergeRunOnce()
+						bbs.ConvergeRunOnce(timeToClaim)
 
 						Ω(<-events).Should(Equal(runOnce))
 
@@ -270,7 +268,7 @@ var _ = Describe("Executor BBS", func() {
 			})
 
 			It("should delete any extra keys", func() {
-				bbs.ConvergeRunOnce()
+				bbs.ConvergeRunOnce(timeToClaim)
 
 				_, err := store.Get("/v1/run_once/claimed/some-guid")
 				Ω(err).Should(HaveOccurred())

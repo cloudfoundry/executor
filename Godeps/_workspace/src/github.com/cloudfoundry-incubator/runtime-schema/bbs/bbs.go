@@ -10,11 +10,8 @@ import (
 //Bulletin Board System/Store
 
 const SchemaRoot = "/v1/"
-const DefaultPendingTimeout = 30 * time.Minute
 
 type ExecutorBBS interface {
-	SetTimeToClaim(timeToClaim time.Duration)
-
 	MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (PresenceInterface, chan error, error)
 	WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) //filter out delete...
 
@@ -22,7 +19,7 @@ type ExecutorBBS interface {
 	StartRunOnce(models.RunOnce) error
 	CompleteRunOnce(models.RunOnce) error
 
-	ConvergeRunOnce() //should be executed periodically
+	ConvergeRunOnce(timeToClaim time.Duration) //should be executed periodically
 	GrabRunOnceLock(time.Duration) (bool, error)
 }
 
@@ -42,8 +39,7 @@ type FileServerBBS interface {
 func New(store storeadapter.StoreAdapter) *BBS {
 	return &BBS{
 		ExecutorBBS: &executorBBS{
-			store:       store,
-			timeToClaim: DefaultPendingTimeout,
+			store: store,
 		},
 		StagerBBS:     &stagerBBS{store: store},
 		FileServerBBS: &fileServerBBS{store: store},

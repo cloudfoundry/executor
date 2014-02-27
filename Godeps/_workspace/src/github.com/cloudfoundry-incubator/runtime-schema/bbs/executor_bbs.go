@@ -8,13 +8,7 @@ import (
 )
 
 type executorBBS struct {
-	store       storeadapter.StoreAdapter
-	timeToClaim time.Duration
-}
-
-// This is the time limit for the executor pool to claim a pending timeout.
-func (self *executorBBS) SetTimeToClaim(timeToClaim time.Duration) {
-	self.timeToClaim = timeToClaim
+	store storeadapter.StoreAdapter
 }
 
 func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, chan error, error) {
@@ -82,7 +76,7 @@ func (self *executorBBS) CompleteRunOnce(runOnce models.RunOnce) error {
 // 1. Kick (by setting) any pending for guids that only have a pending
 // 2. Kick (by setting) any completed for guids that have a pending
 // 3. Remove any claimed/running/completed for guids that have no corresponding pending
-func (self *executorBBS) ConvergeRunOnce() {
+func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 	runOnceState, err := self.store.ListRecursively(RunOnceSchemaRoot)
 	if err != nil {
 		return
@@ -103,7 +97,7 @@ func (self *executorBBS) ConvergeRunOnce() {
 	running, _ := runOnceState.Lookup("running")
 	completed, _ := runOnceState.Lookup("completed")
 
-	unclaimedTimeoutBoundary := time.Now().Add(-self.timeToClaim).UnixNano()
+	unclaimedTimeoutBoundary := time.Now().Add(-timeToClaim).UnixNano()
 
 	for _, pendingNode := range pending.ChildNodes {
 		guid := pendingNode.KeyComponents()[3]

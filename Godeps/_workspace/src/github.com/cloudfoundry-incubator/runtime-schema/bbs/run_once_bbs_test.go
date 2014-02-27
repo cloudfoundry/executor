@@ -43,49 +43,6 @@ var _ = Describe("RunOnce BBS", func() {
 		}, 5)
 	}
 
-	Describe("DesireRunOnce", func() {
-		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-		})
-
-		It("creates /run_once/pending/<guid>", func() {
-			node, err := store.Get("/v1/run_once/pending/some-guid")
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(node.Value).Should(Equal(runOnce.ToJSON()))
-		})
-
-		Context("when the RunOnce is already pending", func() {
-			It("should happily overwrite the existing RunOnce", func() {
-				err := bbs.DesireRunOnce(runOnce)
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-		})
-
-		Context("when the store is out of commission", func() {
-			itRetriesUntilStoreComesBack((*BBS).DesireRunOnce)
-		})
-	})
-
-	Describe("ResolveRunOnce", func() {
-		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-		})
-
-		It("should remove /run_once/pending/<guid>", func() {
-			err := bbs.ResolveRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			_, err = store.Get("/v1/run_once/pending/some-guid")
-			Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
-		})
-
-		Context("when the store is out of commission", func() {
-			itRetriesUntilStoreComesBack((*BBS).ResolveRunOnce)
-		})
-	})
-
 	Describe("MaintainExecutorPresence", func() {
 		var (
 			executorId string
@@ -336,74 +293,6 @@ var _ = Describe("RunOnce BBS", func() {
 			stop <- true
 
 			err := bbs.DesireRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			_, ok := <-events
-
-			Expect(ok).To(BeFalse())
-
-			close(done)
-		})
-	})
-
-	Describe("WatchForCompletedRunOnce", func() {
-		var (
-			events <-chan (models.RunOnce)
-			stop   chan<- bool
-		)
-
-		BeforeEach(func() {
-			events, stop, _ = bbs.WatchForCompletedRunOnce()
-		})
-
-		It("should send an event down the pipe for creates", func(done Done) {
-			err := bbs.CompleteRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Expect(<-events).To(Equal(runOnce))
-
-			close(done)
-		})
-
-		It("should send an event down the pipe for sets", func(done Done) {
-			err := bbs.DesireRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			err = bbs.CompleteRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Expect(<-events).To(Equal(runOnce))
-
-			bbs.ConvergeRunOnce() //should bump the completed key
-
-			Expect(<-events).To(Equal(runOnce))
-
-			close(done)
-		})
-
-		It("should not send an event down the pipe for deletes", func(done Done) {
-			err := bbs.CompleteRunOnce(runOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Expect(<-events).To(Equal(runOnce))
-
-			bbs.ConvergeRunOnce() //should delete the key
-
-			otherRunOnce := runOnce
-			otherRunOnce.Guid = runOnce.Guid + "1"
-
-			err = bbs.CompleteRunOnce(otherRunOnce)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Expect(<-events).To(Equal(otherRunOnce))
-
-			close(done)
-		})
-
-		It("closes the events channel when told to stop", func(done Done) {
-			stop <- true
-
-			err := bbs.CompleteRunOnce(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			_, ok := <-events

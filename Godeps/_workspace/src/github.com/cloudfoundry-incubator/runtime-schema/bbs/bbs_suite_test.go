@@ -1,6 +1,8 @@
 package bbs_test
 
 import (
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/onsi/ginkgo/config"
 	"os"
@@ -32,6 +34,16 @@ func TestBBS(t *testing.T) {
 var _ = BeforeEach(func() {
 	etcdRunner.Stop()
 	etcdRunner.Start()
+})
+
+var _ = It("should have a valid fake", func() {
+	var fakeExecutorBBS bbs.ExecutorBBS
+	fakeExecutorBBS = fakebbs.NewFakeExecutorBBS()
+	Ω(fakeExecutorBBS).ShouldNot(BeNil())
+
+	var fakeStagerBBS bbs.StagerBBS
+	fakeStagerBBS = fakebbs.NewFakeStagerBBS()
+	Ω(fakeStagerBBS).ShouldNot(BeNil())
 })
 
 func registerSignalHandler() {

@@ -218,7 +218,7 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges runOnces on a regular interval", func() {
-			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
 				stopChannel <- true
 			}()
@@ -226,10 +226,12 @@ var _ = Describe("Executor", func() {
 			Eventually(func() int {
 				return fakeExecutorBBS.CallsToConverge
 			}, 1.0, 0.1).Should(BeNumerically(">", 2))
+
+			Ω(fakeExecutorBBS.ConvergeRunOnceTimeToClaim).Should(Equal(30 * time.Second))
 		})
 
 		It("converges immediately without waiting for the iteration", func() {
-			stopChannel := executor.ConvergeRunOnces(1 * time.Minute)
+			stopChannel := executor.ConvergeRunOnces(1*time.Minute, 30*time.Second)
 			defer func() {
 				stopChannel <- true
 			}()
@@ -237,10 +239,11 @@ var _ = Describe("Executor", func() {
 			Eventually(func() int {
 				return fakeExecutorBBS.CallsToConverge
 			}, 1.0, 0.1).Should(BeNumerically("==", 1))
+			Ω(fakeExecutorBBS.ConvergeRunOnceTimeToClaim).Should(Equal(30 * time.Second))
 		})
 
 		It("stops convergence when told", func() {
-			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			count := 1
 			Eventually(func() int {
@@ -257,7 +260,7 @@ var _ = Describe("Executor", func() {
 		It("should only converge if it has the lock", func() {
 			fakeExecutorBBS.LockIsGrabbable = false
 
-			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
 				stopChannel <- true
 			}()
@@ -268,7 +271,7 @@ var _ = Describe("Executor", func() {
 
 		It("logs an error message when GrabLock fails", func() {
 			fakeExecutorBBS.ErrorOnGrabLock = errors.New("Danger! Will Robinson, Danger!")
-			stopChannel := executor.ConvergeRunOnces(10 * time.Millisecond)
+			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
 				stopChannel <- true
 			}()

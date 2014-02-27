@@ -101,6 +101,12 @@ var stack = flag.String(
 	"the executor stack",
 )
 
+var timeToClaimRunOnceInSeconds = flag.Uint64(
+	"timeToClaimRunOnce",
+	1800,
+	"unclaimed run onces are marked as failed, after this time (in seconds)",
+)
+
 func main() {
 	flag.Parse()
 
@@ -233,7 +239,7 @@ func main() {
 
 	logger.Infof("Watching for RunOnces!")
 
-	executor.ConvergeRunOnces(time.Duration(*convergenceInterval) * time.Second)
+	executor.ConvergeRunOnces(time.Duration(*convergenceInterval)*time.Second, time.Duration(*timeToClaimRunOnceInSeconds)*time.Second)
 
 	select {}
 }

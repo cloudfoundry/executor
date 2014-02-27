@@ -3,6 +3,7 @@ package bbs
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
+	"time"
 )
 
 type stagerBBS struct {
@@ -18,6 +19,9 @@ func (self *stagerBBS) WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<-
 // If this fails, the stager should bail and run its "this-failed-to-stage" routine
 func (self *stagerBBS) DesireRunOnce(runOnce models.RunOnce) error {
 	return retryIndefinitelyOnStoreTimeout(func() error {
+		if runOnce.CreatedAt == 0 {
+			runOnce.CreatedAt = time.Now().UnixNano()
+		}
 		return self.store.SetMulti([]storeadapter.StoreNode{
 			{
 				Key:   runOnceSchemaPath("pending", runOnce.Guid),

@@ -134,8 +134,8 @@ func (e *Executor) StopHandling() {
 	e.runOnceGroup.Wait()
 }
 
-func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
-	e.converge(period)
+func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) chan<- bool {
+	e.converge(period, timeToClaim)
 
 	stopChannel := make(chan bool, 1)
 
@@ -145,7 +145,7 @@ func (e *Executor) ConvergeRunOnces(period time.Duration) chan<- bool {
 		for {
 			select {
 			case <-ticker.C:
-				e.converge(period)
+				e.converge(period, timeToClaim)
 
 			case <-stopChannel:
 				ticker.Stop()
@@ -162,7 +162,7 @@ func (e *Executor) sleepForARandomInterval() {
 	time.Sleep(time.Duration(interval) * time.Millisecond)
 }
 
-func (e *Executor) converge(period time.Duration) {
+func (e *Executor) converge(period time.Duration, timeToClaim time.Duration) {
 	success, err := e.bbs.GrabRunOnceLock(period)
 
 	if err != nil {
@@ -170,7 +170,7 @@ func (e *Executor) converge(period time.Duration) {
 			"error": err.Error(),
 		}, "error when grabbing converge lock")
 	} else if success {
-		e.bbs.ConvergeRunOnce()
+		e.bbs.ConvergeRunOnce(timeToClaim)
 		e.logger.Info("Converged RunOnce")
 	}
 }
