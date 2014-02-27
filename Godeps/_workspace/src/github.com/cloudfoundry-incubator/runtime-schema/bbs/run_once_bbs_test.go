@@ -19,7 +19,7 @@ var _ = Describe("RunOnce BBS", func() {
 			Guid:            "some-guid",
 			ExecutorID:      "executor-id",
 			ContainerHandle: "container-handle",
-			CreatedAt:       time.Now(),
+			CreatedAt:       time.Now().UnixNano(),
 		}
 	})
 
@@ -300,7 +300,9 @@ var _ = Describe("RunOnce BBS", func() {
 			err := bbs.DesireRunOnce(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(runOnce))
+			e := <-events
+
+			Expect(e).To(Equal(runOnce))
 
 			err = bbs.DesireRunOnce(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())

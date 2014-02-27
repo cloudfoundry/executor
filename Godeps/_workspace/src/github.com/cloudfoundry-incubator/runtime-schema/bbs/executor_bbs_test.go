@@ -21,7 +21,7 @@ var _ = Describe("Executor BBS", func() {
 			Guid:            "some-guid",
 			ExecutorID:      "executor-id",
 			ContainerHandle: "container-handle",
-			CreatedAt:       time.Now(),
+			CreatedAt:       time.Now().UnixNano(),
 		}
 	})
 
@@ -31,7 +31,7 @@ var _ = Describe("Executor BBS", func() {
 		BeforeEach(func() {
 			otherRunOnce = models.RunOnce{
 				Guid:      "some-other-guid",
-				CreatedAt: time.Now(),
+				CreatedAt: time.Now().UnixNano(),
 			}
 		})
 
@@ -46,7 +46,7 @@ var _ = Describe("Executor BBS", func() {
 					BeforeEach(func() {
 						timeout := (1 * time.Second)
 
-						runOnce.CreatedAt = runOnce.CreatedAt.Add(-timeout)
+						runOnce.CreatedAt = runOnce.CreatedAt - int64(timeout)
 						bbs.SetTimeToClaim(timeout)
 					})
 

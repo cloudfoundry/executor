@@ -103,7 +103,7 @@ func (self *executorBBS) ConvergeRunOnce() {
 	running, _ := runOnceState.Lookup("running")
 	completed, _ := runOnceState.Lookup("completed")
 
-	unclaimedTimeoutBoundary := time.Now().Add(-self.timeToClaim + time.Nanosecond)
+	unclaimedTimeoutBoundary := time.Now().Add(-self.timeToClaim).UnixNano()
 
 	for _, pendingNode := range pending.ChildNodes {
 		guid := pendingNode.KeyComponents()[3]
@@ -139,7 +139,7 @@ func (self *executorBBS) ConvergeRunOnce() {
 			continue
 		}
 
-		if runOnce.CreatedAt.Before(unclaimedTimeoutBoundary) {
+		if runOnce.CreatedAt <= unclaimedTimeoutBoundary {
 			storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(pendingNode, "not claimed within time limit"))
 			continue
 		}

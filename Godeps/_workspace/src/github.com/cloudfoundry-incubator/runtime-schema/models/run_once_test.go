@@ -34,7 +34,7 @@ var _ = Describe("RunOnce", func() {
 			"source_name": "APP",
 			"index": 42
 		},
-		"created_at": "2014-02-25T23:46:11Z"
+		"created_at": 1393371971000000000
 	}`
 
 	BeforeEach(func() {
@@ -65,7 +65,7 @@ var _ = Describe("RunOnce", func() {
 			FailureReason:   "because i said so",
 			MemoryMB:        256,
 			DiskMB:          1024,
-			CreatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 00, time.UTC),
+			CreatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 00, time.UTC).UnixNano(),
 		}
 	})
 

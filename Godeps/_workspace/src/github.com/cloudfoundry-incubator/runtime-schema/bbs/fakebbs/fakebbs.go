@@ -41,6 +41,8 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	return &FakeExecutorBBS{}
 }
 
+func (fakeBBS *FakeExecutorBBS) SetTimeToClaim(time.Duration) {}
+
 func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (bbs.PresenceInterface, chan error, error) {
 	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatIntervalInSeconds
 	fakeBBS.MaintainingPresenceExecutorID = executorID
