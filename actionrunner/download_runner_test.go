@@ -104,11 +104,7 @@ var _ = Describe("DownloadRunner", func() {
 
 		It("should download the zipped file and send the contents to the container", func() {
 			Ω(gordon.ScriptsThatRan)
-			Ω(gordon.ThingsCopiedIn()[0].Dst).To(Equal("/Antarctica"))
-			Ω(gordon.ThingsCopiedIn()[1].Dst).To(Equal("/Antarctica/directory"))
-			Ω(gordon.ThingsCopiedIn()[2].Dst).To(Equal("/Antarctica/directory/second_file"))
-			Ω(gordon.ThingsCopiedIn()[3].Dst).To(Equal("/Antarctica/directory/third_file"))
-			Ω(gordon.ThingsCopiedIn()[4].Dst).To(Equal("/Antarctica/first_file"))
+			Ω(gordon.ThingsCopiedIn()[0].Dst).To(Equal("/Antarctica/"))
 		})
 	})
 })
