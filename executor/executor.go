@@ -166,7 +166,7 @@ func (e *Executor) converge(period time.Duration, timeToClaim time.Duration) {
 	success, err := e.bbs.GrabRunOnceLock(period)
 
 	if err != nil {
-		e.logger.Errord(map[string]interface{}{
+		e.logger.Debugd(map[string]interface{}{
 			"error": err.Error(),
 		}, "error when grabbing converge lock")
 	} else if success {

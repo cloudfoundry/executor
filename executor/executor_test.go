@@ -269,7 +269,7 @@ var _ = Describe("Executor", func() {
 			Ω(fakeExecutorBBS.CallsToConverge).To(Equal(0))
 		})
 
-		It("logs an error message when GrabLock fails", func() {
+		It("logs a debug message when GrabLock fails", func() {
 			fakeExecutorBBS.ErrorOnGrabLock = errors.New("Danger! Will Robinson, Danger!")
 			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
@@ -278,12 +278,16 @@ var _ = Describe("Executor", func() {
 
 			testSink := steno.GetMeTheGlobalTestSink()
 
+			lockMessageIndex := 0
 			Eventually(func() string {
 				if len(testSink.Records) > 0 {
-					return testSink.Records[len(testSink.Records)-1].Message
+					lockMessageIndex := len(testSink.Records) - 1
+					return testSink.Records[lockMessageIndex].Message
 				}
 				return ""
 			}, 1.0, 0.1).Should(Equal("error when grabbing converge lock"))
+
+			Ω(testSink.Records[lockMessageIndex].Level).Should(Equal(steno.LOG_DEBUG))
 		})
 	})
 })
