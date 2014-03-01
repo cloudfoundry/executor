@@ -1,9 +1,9 @@
 package executor_test
 
 import (
-	"errors"
 	"fmt"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/storeadapter"
 	"github.com/onsi/ginkgo/config"
 	"time"
 
@@ -213,7 +213,7 @@ var _ = Describe("Executor", func() {
 	Describe("Converging RunOnces", func() {
 		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
 		BeforeEach(func() {
-			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{LockIsGrabbable: true}
+			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{}
 			bbs.ExecutorBBS = fakeExecutorBBS
 		})
 
@@ -258,7 +258,7 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("should only converge if it has the lock", func() {
-			fakeExecutorBBS.LockIsGrabbable = false
+			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
 
 			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
@@ -270,7 +270,8 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("logs a debug message when GrabLock fails", func() {
-			fakeExecutorBBS.ErrorOnGrabLock = errors.New("Danger! Will Robinson, Danger!")
+			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
+
 			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 			defer func() {
 				stopChannel <- true
@@ -285,7 +286,7 @@ var _ = Describe("Executor", func() {
 					return testSink.Records[lockMessageIndex].Message
 				}
 				return ""
-			}, 1.0, 0.1).Should(Equal("error when grabbing converge lock"))
+			}, 1.0, 0.1).Should(Equal("error when maintaining converge lock"))
 
 			Ω(testSink.Records[lockMessageIndex].Level).Should(Equal(steno.LOG_DEBUG))
 		})

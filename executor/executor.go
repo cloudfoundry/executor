@@ -135,21 +135,39 @@ func (e *Executor) StopHandling() {
 }
 
 func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) chan<- bool {
-	e.converge(period, timeToClaim)
-
 	stopChannel := make(chan bool, 1)
 
 	go func() {
-		ticker := time.NewTicker(period)
-
 		for {
-			select {
-			case <-ticker.C:
-				e.converge(period, timeToClaim)
+			lostLock, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
+			if err != nil {
+				e.logger.Debugd(map[string]interface{}{
+					"error": err.Error(),
+				}, "error when maintaining converge lock")
 
-			case <-stopChannel:
-				ticker.Stop()
-				return
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			e.bbs.ConvergeRunOnce(timeToClaim)
+
+			ticker := time.NewTicker(period)
+
+		dance:
+			for {
+				select {
+				case <-ticker.C:
+					e.bbs.ConvergeRunOnce(timeToClaim)
+
+				case <-lostLock:
+					ticker.Stop()
+					break dance
+
+				case <-stopChannel:
+					ticker.Stop()
+					releaseLock <- make(chan bool)
+					return
+				}
 			}
 		}
 	}()
@@ -160,17 +178,4 @@ func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Durat
 func (e *Executor) sleepForARandomInterval() {
 	interval := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(100)
 	time.Sleep(time.Duration(interval) * time.Millisecond)
-}
-
-func (e *Executor) converge(period time.Duration, timeToClaim time.Duration) {
-	success, err := e.bbs.GrabRunOnceLock(period)
-
-	if err != nil {
-		e.logger.Debugd(map[string]interface{}{
-			"error": err.Error(),
-		}, "error when grabbing converge lock")
-	} else if success {
-		e.bbs.ConvergeRunOnce(timeToClaim)
-		e.logger.Info("Converged RunOnce")
-	}
 }
