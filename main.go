@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +10,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler"
@@ -67,7 +67,7 @@ var registrySnapshotFile = flag.String(
 
 var convergenceInterval = flag.Duration(
 	"convergenceInterval",
-	30*time.Seconds,
+	30*time.Second,
 	"the interval, in seconds, between convergences",
 )
 
