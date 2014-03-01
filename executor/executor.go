@@ -53,7 +53,7 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) MaintainPresence(heartbeatInterval uint64) error {
+func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 	presence, maintainingPresenceErrors, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
 	if err != nil {
 		return err

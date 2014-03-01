@@ -65,15 +65,15 @@ var registrySnapshotFile = flag.String(
 	"the location, on disk, where the task registry snapshot should be stored",
 )
 
-var convergenceInterval = flag.Int(
+var convergenceInterval = flag.Duration(
 	"convergenceInterval",
-	30,
+	30*time.Seconds,
 	"the interval, in seconds, between convergences",
 )
 
-var heartbeatInterval = flag.Uint64(
+var heartbeatInterval = flag.Duration(
 	"heartbeatInterval",
-	60,
+	60*time.Second,
 	"the interval, in seconds, between heartbeats for maintaining presence",
 )
 
@@ -101,9 +101,9 @@ var stack = flag.String(
 	"the executor stack",
 )
 
-var timeToClaimRunOnceInSeconds = flag.Uint64(
+var timeToClaimRunOnce = flag.Duration(
 	"timeToClaimRunOnce",
-	1800,
+	30*time.Minute,
 	"unclaimed run onces are marked as failed, after this time (in seconds)",
 )
 
@@ -239,7 +239,7 @@ func main() {
 
 	logger.Infof("Watching for RunOnces!")
 
-	executor.ConvergeRunOnces(time.Duration(*convergenceInterval)*time.Second, time.Duration(*timeToClaimRunOnceInSeconds)*time.Second)
+	executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
 
 	select {}
 }

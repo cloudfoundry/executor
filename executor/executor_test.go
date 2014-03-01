@@ -157,7 +157,7 @@ var _ = Describe("Executor", func() {
 
 	Describe("Maintaining Presence", func() {
 		It("should maintain presence", func() {
-			err := executor.MaintainPresence(60)
+			err := executor.MaintainPresence(60 * time.Second)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() interface{} {
@@ -180,7 +180,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("should return an error", func() {
-				err := executor.MaintainPresence(60)
+				err := executor.MaintainPresence(60 * time.Second)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -189,7 +189,7 @@ var _ = Describe("Executor", func() {
 			BeforeEach(func() {
 				executor.Handle(fakeRunOnceHandler)
 
-				executor.MaintainPresence(1)
+				executor.MaintainPresence(1 * time.Second)
 			})
 
 			It("stops handling", func() {
