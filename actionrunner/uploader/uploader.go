@@ -49,7 +49,7 @@ func (uploader *URLUploader) Upload(sourceFile *os.File, url *url.URL) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("Download failed: Status code %d", resp.StatusCode)
+		return fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
 	}
 
 	return nil
