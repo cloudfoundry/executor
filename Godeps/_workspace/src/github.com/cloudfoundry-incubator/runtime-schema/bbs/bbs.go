@@ -13,7 +13,7 @@ const SchemaRoot = "/v1/"
 
 type ExecutorBBS interface {
 	MaintainExecutorPresence(
-		heartbeatIntervalInSeconds uint64,
+		heartbeatInterval time.Duration,
 		executorID string,
 	) (presence PresenceInterface, disappeared <-chan bool, err error)
 
@@ -38,7 +38,7 @@ type StagerBBS interface {
 
 type FileServerBBS interface {
 	MaintainFileServerPresence(
-		heartbeatIntervalInSeconds uint64,
+		heartbeatInterval time.Duration,
 		fileServerURL string,
 		fileServerId string,
 	) (presence PresenceInterface, disappeared <-chan bool, err error)

@@ -14,7 +14,7 @@ var _ = Describe("Presence", func() {
 		presence    *Presence
 		key         string
 		value       string
-		interval    uint64
+		interval    time.Duration
 		disappeared <-chan bool
 		err         error
 	)
@@ -24,7 +24,7 @@ var _ = Describe("Presence", func() {
 		value = "some-value"
 
 		presence = NewPresence(store, key, []byte(value))
-		interval = uint64(1)
+		interval = 1 * time.Second
 
 		disappeared, err = presence.Maintain(interval)
 		Ω(err).ShouldNot(HaveOccurred())
@@ -41,7 +41,7 @@ var _ = Describe("Presence", func() {
 			Ω(node).Should(Equal(storeadapter.StoreNode{
 				Key:   key,
 				Value: []byte(value),
-				TTL:   interval, // move to config one day
+				TTL:   uint64(interval.Seconds()), // move to config one day
 			}))
 
 		})

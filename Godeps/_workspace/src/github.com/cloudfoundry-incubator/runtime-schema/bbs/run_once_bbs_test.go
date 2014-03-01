@@ -46,7 +46,7 @@ var _ = Describe("RunOnce BBS", func() {
 	Describe("MaintainExecutorPresence", func() {
 		var (
 			executorId  string
-			interval    uint64
+			interval    time.Duration
 			disappeared <-chan bool
 			err         error
 			presence    PresenceInterface
@@ -54,7 +54,7 @@ var _ = Describe("RunOnce BBS", func() {
 
 		BeforeEach(func() {
 			executorId = "stubExecutor"
-			interval = uint64(1)
+			interval = 1 * time.Second
 
 			presence, disappeared, err = bbs.MaintainExecutorPresence(interval, executorId)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -68,7 +68,7 @@ var _ = Describe("RunOnce BBS", func() {
 			node, err := store.Get("/v1/executor/" + executorId)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node.Key).Should(Equal("/v1/executor/" + executorId))
-			Ω(node.TTL).Should(Equal(interval)) // move to config one day
+			Ω(node.TTL).Should(Equal(uint64(interval.Seconds()))) // move to config one day
 		})
 	})
 
@@ -79,10 +79,10 @@ var _ = Describe("RunOnce BBS", func() {
 
 			Ω(executors).Should(BeEmpty())
 
-			presenceA, _, err := bbs.MaintainExecutorPresence(1, "executor-a")
+			presenceA, _, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-a")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			presenceB, _, err := bbs.MaintainExecutorPresence(1, "executor-b")
+			presenceB, _, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-b")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(func() []string {

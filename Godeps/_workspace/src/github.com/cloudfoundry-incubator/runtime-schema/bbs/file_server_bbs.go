@@ -5,6 +5,7 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 	"math/rand"
 	"path"
+	"time"
 )
 
 const FileServerSchemaRoot = SchemaRoot + "file_server"
@@ -17,10 +18,10 @@ func fileServerSchemaPath(segments ...string) string {
 	return path.Join(append([]string{FileServerSchemaRoot}, segments...)...)
 }
 
-func (self *fileServerBBS) MaintainFileServerPresence(heartbeatIntervalInSeconds uint64, fileServerURL string, fileServerId string) (PresenceInterface, <-chan bool, error) {
+func (self *fileServerBBS) MaintainFileServerPresence(heartbeatInterval time.Duration, fileServerURL string, fileServerId string) (PresenceInterface, <-chan bool, error) {
 	key := fileServerSchemaPath(fileServerId)
 	presence := NewPresence(self.store, key, []byte(fileServerURL))
-	lostPresence, err := presence.Maintain(heartbeatIntervalInSeconds)
+	lostPresence, err := presence.Maintain(heartbeatInterval)
 	return presence, lostPresence, err
 }
 

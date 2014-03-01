@@ -24,7 +24,7 @@ type FakeExecutorBBS struct {
 	MaintainConvergeStopChannel chan<- chan bool
 	MaintainConvergeLockError   error
 
-	MaintainingPresenceHeartbeatInterval uint64
+	MaintainingPresenceHeartbeatInterval time.Duration
 	MaintainingPresenceExecutorID        string
 	MaintainingPresencePresence          *FakePresence
 	MaintainingPresenceErrorChannel      chan bool
@@ -45,8 +45,8 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	return &FakeExecutorBBS{}
 }
 
-func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (bbs.PresenceInterface, <-chan bool, error) {
-	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatIntervalInSeconds
+func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorID string) (bbs.PresenceInterface, <-chan bool, error) {
+	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatInterval
 	fakeBBS.MaintainingPresenceExecutorID = executorID
 	fakeBBS.MaintainingPresencePresence = &FakePresence{}
 	fakeBBS.MaintainingPresenceErrorChannel = make(chan bool)

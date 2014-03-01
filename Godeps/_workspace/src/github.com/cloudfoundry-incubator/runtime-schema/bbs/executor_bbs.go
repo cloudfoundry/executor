@@ -11,9 +11,9 @@ type executorBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, <-chan bool, error) {
+func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorId string) (PresenceInterface, <-chan bool, error) {
 	presence := NewPresence(self.store, executorSchemaPath(executorId), []byte{})
-	lostLock, err := presence.Maintain(heartbeatIntervalInSeconds)
+	lostLock, err := presence.Maintain(heartbeatInterval)
 	return presence, lostLock, err
 }
 
@@ -33,7 +33,7 @@ func (self *executorBBS) ClaimRunOnce(runOnce models.RunOnce) error {
 		return self.store.Create(storeadapter.StoreNode{
 			Key:   runOnceSchemaPath("claimed", runOnce.Guid),
 			Value: runOnce.ToJSON(),
-			TTL:   ClaimTTL,
+			TTL:   uint64(ClaimTTL.Seconds()),
 		})
 	})
 }

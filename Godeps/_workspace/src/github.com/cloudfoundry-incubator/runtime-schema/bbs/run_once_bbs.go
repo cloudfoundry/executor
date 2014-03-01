@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const ClaimTTL uint64 = 10 //seconds
+const ClaimTTL = 10 * time.Second
 const RunOnceSchemaRoot = SchemaRoot + "run_once"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 

@@ -3,6 +3,7 @@ package bbs
 import (
 	"errors"
 	"github.com/cloudfoundry/storeadapter"
+	"time"
 )
 
 type PresenceInterface interface {
@@ -24,7 +25,7 @@ func NewPresence(store storeadapter.StoreAdapter, key string, value []byte) *Pre
 	}
 }
 
-func (p *Presence) Maintain(interval uint64) (<-chan bool, error) {
+func (p *Presence) Maintain(interval time.Duration) (<-chan bool, error) {
 	if p.release != nil {
 		return nil, errors.New("Already maintaining a presence")
 	}
@@ -32,7 +33,7 @@ func (p *Presence) Maintain(interval uint64) (<-chan bool, error) {
 	lost, release, err := p.store.MaintainNode(storeadapter.StoreNode{
 		Key:   p.key,
 		Value: p.value,
-		TTL:   interval,
+		TTL:   uint64(interval.Seconds()),
 	})
 
 	if err != nil {

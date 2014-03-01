@@ -17,7 +17,7 @@ var _ = Describe("Executor BBS", func() {
 	var timeToClaim time.Duration
 
 	BeforeEach(func() {
-		timeToClaim = (1 * time.Second)
+		timeToClaim = 1 * time.Second
 		bbs = New(store)
 		runOnce = models.RunOnce{
 			Guid:            "some-guid",
@@ -119,7 +119,7 @@ var _ = Describe("Executor BBS", func() {
 
 					JustBeforeEach(func() {
 						var err error
-						presence, _, err = bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
+						presence, _, err = bbs.MaintainExecutorPresence(10*time.Second, runOnce.ExecutorID)
 						Ω(err).ShouldNot(HaveOccurred())
 					})
 
@@ -177,7 +177,7 @@ var _ = Describe("Executor BBS", func() {
 
 					JustBeforeEach(func() {
 						var err error
-						presence, _, err = bbs.MaintainExecutorPresence(10, runOnce.ExecutorID)
+						presence, _, err = bbs.MaintainExecutorPresence(10*time.Second, runOnce.ExecutorID)
 						Ω(err).ShouldNot(HaveOccurred())
 					})
 
