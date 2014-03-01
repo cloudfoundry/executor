@@ -42,9 +42,9 @@ type FakeStoreAdapter struct {
 
 	rootNode *containerNode
 
-	MaintainedLockName      string
-	GetAndMaintainLockError error
-	ReleaseLockChannel      chan bool
+	MaintainedNodeName string
+	MaintainNodeError  error
+	ReleaseNodeChannel chan chan bool
 
 	createLock *sync.Mutex
 
@@ -283,9 +283,9 @@ func (adapter *FakeStoreAdapter) keyComponents(key string) (components []string)
 	return components
 }
 
-func (adapter *FakeStoreAdapter) GetAndMaintainLock(lockName string, lockTTL uint64) (lostLockChannel <-chan bool, releaseLock chan<- bool, err error) {
-	adapter.MaintainedLockName = lockName
-	adapter.ReleaseLockChannel = make(chan bool, 1)
+func (adapter *FakeStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (lostNodeChannel <-chan bool, releaseNode chan chan bool, err error) {
+	adapter.MaintainedNodeName = storeNode.Key
+	adapter.ReleaseNodeChannel = make(chan chan bool, 1)
 
-	return nil, adapter.ReleaseLockChannel, adapter.GetAndMaintainLockError
+	return nil, adapter.ReleaseNodeChannel, adapter.MaintainNodeError
 }

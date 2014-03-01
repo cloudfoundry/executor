@@ -11,12 +11,12 @@ import (
 
 var _ = Describe("Presence", func() {
 	var (
-		presence *Presence
-		key      string
-		value    string
-		interval uint64
-		errors   chan error
-		err      error
+		presence    *Presence
+		key         string
+		value       string
+		interval    uint64
+		disappeared <-chan bool
+		err         error
 	)
 
 	BeforeEach(func() {
@@ -26,7 +26,7 @@ var _ = Describe("Presence", func() {
 		presence = NewPresence(store, key, []byte(value))
 		interval = uint64(1)
 
-		errors, err = presence.Maintain(interval)
+		disappeared, err = presence.Maintain(interval)
 		Ω(err).ShouldNot(HaveOccurred())
 	})
 
@@ -57,7 +57,7 @@ var _ = Describe("Presence", func() {
 			err = store.Delete(key)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Eventually(errors, 2).Should(Receive())
+			Eventually(disappeared, 2).Should(Receive())
 		})
 
 		It("should fail if we maintain presence multiple times", func() {
@@ -78,7 +78,7 @@ var _ = Describe("Presence", func() {
 
 		It("should not report an error", func() {
 			presence.Remove()
-			Eventually(errors, 2).ShouldNot(Receive())
+			Eventually(disappeared, 2).ShouldNot(Receive())
 		})
 	})
 })

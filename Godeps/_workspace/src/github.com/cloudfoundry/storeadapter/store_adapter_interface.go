@@ -41,10 +41,10 @@ type StoreAdapter interface {
 	// Close any live persistent connection, and cleans up any running state.
 	Disconnect() error
 
-	// Grab a lock and send a notification when it is lost. Blocks until the lock can be acquired.
+	// Create a node, keep it there, and send a notification when it is lost. Blocks until the node can be created.
 	//
-	// To release the lock, send any value to the releaseLock channel.
+	// To release the node, send a channel value to the releaseNode channel, and read from the channel to ensure it's released.
 	//
 	// If the store times out, returns an error.
-	GetAndMaintainLock(lockName string, lockTTL uint64) (lostLock <-chan bool, releaseLock chan<- bool, err error)
+	MaintainNode(storeNode StoreNode) (lostNode <-chan bool, releaseNode chan chan bool, err error)
 }

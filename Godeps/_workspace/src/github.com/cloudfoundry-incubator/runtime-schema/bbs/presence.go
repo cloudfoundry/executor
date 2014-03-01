@@ -3,18 +3,17 @@ package bbs
 import (
 	"errors"
 	"github.com/cloudfoundry/storeadapter"
-	"time"
 )
 
 type PresenceInterface interface {
-	Remove() error
+	Remove()
 }
 
 type Presence struct {
-	store    storeadapter.StoreAdapter
-	key      string
-	value    []byte
-	stopChan chan chan bool
+	store   storeadapter.StoreAdapter
+	key     string
+	value   []byte
+	release chan chan bool
 }
 
 func NewPresence(store storeadapter.StoreAdapter, key string, value []byte) *Presence {
@@ -25,70 +24,36 @@ func NewPresence(store storeadapter.StoreAdapter, key string, value []byte) *Pre
 	}
 }
 
-func (p *Presence) Maintain(interval uint64) (chan error, error) {
-	if p.stopChan != nil {
+func (p *Presence) Maintain(interval uint64) (<-chan bool, error) {
+	if p.release != nil {
 		return nil, errors.New("Already maintaining a presence")
 	}
 
-	err := p.store.SetMulti([]storeadapter.StoreNode{
-		{
-			Key:   p.key,
-			Value: p.value,
-			TTL:   interval,
-		},
+	lost, release, err := p.store.MaintainNode(storeadapter.StoreNode{
+		Key:   p.key,
+		Value: p.value,
+		TTL:   interval,
 	})
 
 	if err != nil {
 		return nil, err
 	}
 
-	stopChan := make(chan chan bool)
-	p.stopChan = stopChan
-	errors := make(chan error, 1)
+	p.release = release
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(interval) * time.Second / 2)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				err := p.store.Update(storeadapter.StoreNode{
-					Key:   p.key,
-					Value: p.value,
-					TTL:   interval,
-				})
-
-				if err != nil {
-					close(stopChan)
-					p.stopChan = nil
-
-					errors <- err
-					return
-				}
-			case stopFinishedChan := <-stopChan:
-				stopFinishedChan <- true
-				return
-			}
-		}
-	}()
-
-	return errors, nil
+	return lost, nil
 }
 
-func (p *Presence) Remove() error {
-	if p.stopChan == nil {
-		return nil
+func (p *Presence) Remove() {
+	if p.release == nil {
+		return
 	}
 
-	stopChan := p.stopChan
-	p.stopChan = nil
+	release := p.release
+	p.release = nil
 
 	stopFinishedChan := make(chan bool)
-	stopChan <- stopFinishedChan
+	release <- stopFinishedChan
 
 	<-stopFinishedChan
-
-	err := p.store.Delete(p.key)
-	return err
 }

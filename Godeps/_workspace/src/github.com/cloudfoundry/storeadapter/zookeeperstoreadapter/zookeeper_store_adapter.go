@@ -405,8 +405,8 @@ func (adapter *ZookeeperStoreAdapter) isNodeDirectory(key string) bool {
 	return fetchedNode.node.Dir
 }
 
-func (adapter *ZookeeperStoreAdapter) GetAndMaintainLock(lockName string, lockTTL uint64) (lostLock <-chan bool, releaseLock chan<- bool, err error) {
+func (adapter *ZookeeperStoreAdapter) MaintainNode(storeadapter.StoreNode) (lostNode <-chan bool, releaseNode chan chan bool, err error) {
 	fmt.Println("NO NO NO NO NO ZooKeeper's store adapter doesn't know how to do locks well!\n")
-	releaseLockChannel := make(chan bool, 10)
+	releaseLockChannel := make(chan chan bool, 10)
 	return nil, releaseLockChannel, err
 }

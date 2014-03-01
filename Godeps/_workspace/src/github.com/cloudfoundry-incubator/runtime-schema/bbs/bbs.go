@@ -12,19 +12,23 @@ import (
 const SchemaRoot = "/v1/"
 
 type ExecutorBBS interface {
-	MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (PresenceInterface, chan error, error)
-	WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) //filter out delete...
+	MaintainExecutorPresence(
+		heartbeatIntervalInSeconds uint64,
+		executorID string,
+	) (presence PresenceInterface, disappeared <-chan bool, err error)
+
+	WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error)
 
 	ClaimRunOnce(models.RunOnce) error
 	StartRunOnce(models.RunOnce) error
 	CompleteRunOnce(models.RunOnce) error
 
-	ConvergeRunOnce(timeToClaim time.Duration) //should be executed periodically
-	GrabRunOnceLock(time.Duration) (bool, error)
+	ConvergeRunOnce(timeToClaim time.Duration)
+	MaintainConvergeLock(interval time.Duration, executorID string) (disappeared <-chan bool, stop chan<- chan bool, err error)
 }
 
 type StagerBBS interface {
-	WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) //filter out delete...
+	WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error)
 
 	DesireRunOnce(models.RunOnce) error
 	ResolveRunOnce(models.RunOnce) error
@@ -33,7 +37,11 @@ type StagerBBS interface {
 }
 
 type FileServerBBS interface {
-	MaintainFileServerPresence(heartbeatIntervalInSeconds uint64, fileServerURL string, fileServerId string) (PresenceInterface, chan error, error)
+	MaintainFileServerPresence(
+		heartbeatIntervalInSeconds uint64,
+		fileServerURL string,
+		fileServerId string,
+	) (presence PresenceInterface, disappeared <-chan bool, err error)
 }
 
 func New(store storeadapter.StoreAdapter) *BBS {

@@ -11,20 +11,23 @@ type FakePresence struct {
 	Removed bool
 }
 
-func (p *FakePresence) Remove() error {
+func (p *FakePresence) Remove() {
 	p.Removed = true
-	return nil
 }
 
 type FakeExecutorBBS struct {
 	CallsToConverge int
-	LockIsGrabbable bool
-	ErrorOnGrabLock error
+
+	MaintainConvergeInterval    time.Duration
+	MaintainConvergeExecutorID  string
+	MaintainConvergeLostChannel <-chan bool
+	MaintainConvergeStopChannel chan<- chan bool
+	MaintainConvergeLockError   error
 
 	MaintainingPresenceHeartbeatInterval uint64
 	MaintainingPresenceExecutorID        string
 	MaintainingPresencePresence          *FakePresence
-	MaintainingPresenceErrorChannel      chan error
+	MaintainingPresenceErrorChannel      chan bool
 	MaintainingPresenceError             error
 
 	ClaimedRunOnce  models.RunOnce
@@ -42,11 +45,11 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	return &FakeExecutorBBS{}
 }
 
-func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (bbs.PresenceInterface, chan error, error) {
+func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorID string) (bbs.PresenceInterface, <-chan bool, error) {
 	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatIntervalInSeconds
 	fakeBBS.MaintainingPresenceExecutorID = executorID
 	fakeBBS.MaintainingPresencePresence = &FakePresence{}
-	fakeBBS.MaintainingPresenceErrorChannel = make(chan error)
+	fakeBBS.MaintainingPresenceErrorChannel = make(chan bool)
 
 	return fakeBBS.MaintainingPresencePresence, fakeBBS.MaintainingPresenceErrorChannel, fakeBBS.MaintainingPresenceError
 }
@@ -75,8 +78,12 @@ func (fakeBBS *FakeExecutorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 	fakeBBS.CallsToConverge++
 }
 
-func (fakeBBS *FakeExecutorBBS) GrabRunOnceLock(time.Duration) (bool, error) {
-	return fakeBBS.LockIsGrabbable, fakeBBS.ErrorOnGrabLock
+func (fakeBBS *FakeExecutorBBS) MaintainConvergeLock(interval time.Duration, executorID string) (<-chan bool, chan<- chan bool, error) {
+	fakeBBS.MaintainConvergeInterval = interval
+	fakeBBS.MaintainConvergeExecutorID = executorID
+	fakeBBS.MaintainConvergeLostChannel = make(chan bool)
+	fakeBBS.MaintainConvergeStopChannel = make(chan chan bool)
+	return fakeBBS.MaintainConvergeLostChannel, fakeBBS.MaintainConvergeStopChannel, fakeBBS.MaintainConvergeLockError
 }
 
 type FakeStagerBBS struct {

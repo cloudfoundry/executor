@@ -5,7 +5,6 @@ import (
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/nu7hatch/gouuid"
-	"path"
 	"sync"
 	"time"
 )
@@ -321,28 +320,25 @@ func (adapter *ETCDStoreAdapter) makeWatchEvent(event *etcd.Response) storeadapt
 	}
 }
 
-func (adapter *ETCDStoreAdapter) lockKey(lockName string) string {
-	return path.Join("/hm/locks", lockName)
-}
-
-func (adapter *ETCDStoreAdapter) GetAndMaintainLock(lockName string, lockTTL uint64) (lostLock <-chan bool, releaseLock chan<- bool, err error) {
-	if lockTTL == 0 {
+func (adapter *ETCDStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (lostNode <-chan bool, releaseNode chan (chan bool), err error) {
+	if storeNode.TTL == 0 {
 		return nil, nil, storeadapter.ErrorInvalidTTL
 	}
 
-	guid, err := uuid.NewV4()
-	if err != nil {
-		return nil, nil, err
+	if len(storeNode.Value) == 0 {
+		guid, err := uuid.NewV4()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		storeNode.Value = []byte(guid.String())
 	}
-	currentLockValue := guid.String()
 
-	lockKey := adapter.lockKey(lockName)
-
-	releaseLockChannel := make(chan bool, 0)
-	lostLockChannel := make(chan bool, 0)
+	releaseNodeChannel := make(chan chan bool)
+	lostNodeChannel := make(chan bool)
 
 	for {
-		_, err := adapter.client.Create(lockKey, currentLockValue, lockTTL)
+		err := adapter.Create(storeNode)
 		convertedError := adapter.convertError(err)
 		if convertedError == storeadapter.ErrorTimeout {
 			return nil, nil, storeadapter.ErrorTimeout
@@ -355,23 +351,24 @@ func (adapter *ETCDStoreAdapter) GetAndMaintainLock(lockName string, lockTTL uin
 		time.Sleep(1 * time.Second)
 	}
 
-	go adapter.maintainLock(lockKey, currentLockValue, lockTTL, lostLockChannel, releaseLockChannel)
+	go adapter.maintainNode(storeNode, lostNodeChannel, releaseNodeChannel)
 
-	return lostLockChannel, releaseLockChannel, nil
+	return lostNodeChannel, releaseNodeChannel, nil
 }
 
-func (adapter *ETCDStoreAdapter) maintainLock(lockKey string, currentLockValue string, lockTTL uint64, lostLockChannel chan bool, releaseLockChannel chan bool) {
-	maintenanceInterval := time.Duration(lockTTL) * time.Second / time.Duration(2)
+func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, lostNodeChannel chan bool, releaseNodeChannel chan (chan bool)) {
+	maintenanceInterval := time.Duration(storeNode.TTL) * time.Second / time.Duration(2)
 	ticker := time.NewTicker(maintenanceInterval)
 	for {
 		select {
 		case <-ticker.C:
-			_, err := adapter.client.CompareAndSwap(lockKey, currentLockValue, lockTTL, currentLockValue, 0)
+			_, err := adapter.client.CompareAndSwap(storeNode.Key, string(storeNode.Value), storeNode.TTL, string(storeNode.Value), 0)
 			if err != nil {
-				lostLockChannel <- true
+				lostNodeChannel <- true
 			}
-		case <-releaseLockChannel:
-			adapter.client.CompareAndSwap(lockKey, currentLockValue, 1, currentLockValue, 0)
+		case released := <-releaseNodeChannel:
+			adapter.client.CompareAndDelete(storeNode.Key, string(storeNode.Value), 0)
+			close(released)
 			return
 		}
 	}

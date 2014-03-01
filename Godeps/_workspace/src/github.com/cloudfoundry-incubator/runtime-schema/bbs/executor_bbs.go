@@ -11,10 +11,10 @@ type executorBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, chan error, error) {
+func (self *executorBBS) MaintainExecutorPresence(heartbeatIntervalInSeconds uint64, executorId string) (PresenceInterface, <-chan bool, error) {
 	presence := NewPresence(self.store, executorSchemaPath(executorId), []byte{})
-	errors, err := presence.Maintain(heartbeatIntervalInSeconds)
-	return presence, errors, err
+	lostLock, err := presence.Maintain(heartbeatIntervalInSeconds)
+	return presence, lostLock, err
 }
 
 func (self *executorBBS) WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
@@ -157,12 +157,10 @@ func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 	self.store.Delete(keysToDelete...)
 }
 
-func (self *executorBBS) GrabRunOnceLock(duration time.Duration) (bool, error) {
-	err := self.store.Create(storeadapter.StoreNode{
-		Key:   runOnceSchemaPath("lock"),
-		Value: []byte("placeholder data"),
-		TTL:   uint64(duration.Seconds()),
+func (self *executorBBS) MaintainConvergeLock(interval time.Duration, executorID string) (<-chan bool, chan<- chan bool, error) {
+	return self.store.MaintainNode(storeadapter.StoreNode{
+		Key:   runOnceSchemaPath("converge_lock"),
+		Value: []byte(executorID),
+		TTL:   uint64(interval.Seconds()),
 	})
-
-	return (err == nil), err
 }

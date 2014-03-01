@@ -15,7 +15,7 @@ var _ = Describe("File Server BBS", func() {
 		fileServerURL string
 		fileServerId  string
 		interval      uint64
-		errors        chan error
+		disappeared   <-chan bool
 		err           error
 		presence      PresenceInterface
 	)
@@ -30,7 +30,7 @@ var _ = Describe("File Server BBS", func() {
 			fileServerId = factories.GenerateGuid()
 			interval = uint64(1)
 
-			presence, errors, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+			presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -56,7 +56,7 @@ var _ = Describe("File Server BBS", func() {
 				fileServerId = factories.GenerateGuid()
 				interval = uint64(1)
 
-				presence, errors, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -78,10 +78,10 @@ var _ = Describe("File Server BBS", func() {
 
 				interval = uint64(1)
 
-				presence, errors, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				presence, errors, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
+				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 

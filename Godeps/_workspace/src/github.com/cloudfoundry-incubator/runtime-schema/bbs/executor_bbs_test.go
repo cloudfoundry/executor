@@ -281,4 +281,72 @@ var _ = Describe("Executor BBS", func() {
 			})
 		})
 	})
+
+	Context("MaintainConvergeLock", func() {
+		Describe("Maintain the converge lock", func() {
+
+			Context("when the lock is available", func() {
+				It("should return immediately", func() {
+					lostLock, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(lostLock).ShouldNot(BeNil())
+					Ω(releaseLock).ShouldNot(BeNil())
+				})
+
+				It("should maintain the lock in the background", func() {
+					_, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
+					Ω(err).ShouldNot(HaveOccurred())
+					defer func() {
+						releasedLock := make(chan bool)
+						releaseLock <- releasedLock
+						<-releasedLock
+					}()
+
+					secondConvergeDidGrabLock := false
+					go func() {
+						bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
+						secondConvergeDidGrabLock = true
+					}()
+
+					Consistently(secondConvergeDidGrabLock, 3.0).Should(BeFalse())
+				})
+
+				Context("when the lock disappears after it has been acquired (e.g. ETCD store is reset)", func() {
+					It("should send a notification down the lostLockChannel", func() {
+						lostLock, _, err := bbs.MaintainConvergeLock(1*time.Second, "my_id")
+						Ω(err).ShouldNot(HaveOccurred())
+
+						etcdRunner.Stop()
+
+						Eventually(lostLock).Should(Receive())
+					})
+				})
+			})
+
+			Context("when releasing the lock", func() {
+				It("makes it available for others trying to acquire it", func() {
+					_, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					gotLock := make(chan bool)
+					go func() {
+						_, newRelease, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+						Ω(err).ShouldNot(HaveOccurred())
+
+						releaseLock = newRelease
+						close(gotLock)
+					}()
+
+					Consistently(gotLock, 1.0).ShouldNot(Receive())
+
+					releasedLock := make(chan bool)
+					releaseLock <- releasedLock
+
+					Eventually(releasedLock).Should(BeClosed())
+					Eventually(gotLock, 2.0).Should(BeClosed())
+				})
+			})
+		})
+	})
 })

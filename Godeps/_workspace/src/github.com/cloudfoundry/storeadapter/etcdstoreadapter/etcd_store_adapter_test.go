@@ -363,19 +363,25 @@ var _ = Describe("ETCD Store Adapter", func() {
 		})
 	})
 
-	Describe("Locking and Unlocking", func() {
+	Describe("Maintaining a node's presence (and lack thereof)", func() {
 		var (
-			uniqueKeyForThisTest string //avoid collisions between test runs
+			uniqueStoreNodeForThisTest StoreNode //avoid collisions between test runs
 		)
 
 		BeforeEach(func() {
-			uniqueKeyForThisTest = fmt.Sprintf("analyzer-%d", counter)
+			uniqueStoreNodeForThisTest = StoreNode{
+				Key: fmt.Sprintf("analyzer-%d", counter),
+				TTL: 1,
+			}
+
 			counter++
 		})
 
 		Context("when passed a TTL of 0", func() {
 			It("should be like, no way man", func() {
-				lostLock, releaseLock, err := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 0)
+				uniqueStoreNodeForThisTest.TTL = 0
+
+				lostLock, releaseLock, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 				Ω(err).Should(Equal(ErrorInvalidTTL))
 				Ω(lostLock).Should(BeNil())
 				Ω(releaseLock).Should(BeNil())
@@ -392,7 +398,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 			})
 
 			It("returns an error", func() {
-				lastLock, releaseLock, err := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+				lastLock, releaseLock, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 				Ω(err).Should(Equal(ErrorTimeout))
 				Ω(lastLock).Should(BeNil())
 				Ω(releaseLock).Should(BeNil())
@@ -401,7 +407,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 		Context("when the lock is available", func() {
 			It("should return immediately", func(done Done) {
-				lostLock, releaseLock, err := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+				lostLock, releaseLock, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(lostLock).ShouldNot(BeNil())
 				Ω(releaseLock).ShouldNot(BeNil())
@@ -409,11 +415,11 @@ var _ = Describe("ETCD Store Adapter", func() {
 			}, 1.0)
 
 			It("should maintain the lock in the background", func(done Done) {
-				adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+				adapter.MaintainNode(uniqueStoreNodeForThisTest)
 
 				secondLockingCallDidGrabLock := false
 				go func() {
-					adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+					adapter.MaintainNode(uniqueStoreNodeForThisTest)
 					secondLockingCallDidGrabLock = true
 				}()
 
@@ -424,13 +430,52 @@ var _ = Describe("ETCD Store Adapter", func() {
 				close(done)
 			}, 10.0)
 
+			Context("when a value is given", func() {
+				BeforeEach(func() {
+					uniqueStoreNodeForThisTest.Value = []byte("some value")
+				})
+
+				It("creates the lock with the given value", func(done Done) {
+					_, _, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					val, err := adapter.Get(uniqueStoreNodeForThisTest.Key)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(val.Value)).Should(Equal("some value"))
+					close(done)
+				}, 1.0)
+			})
+
+			Context("when a value is NOT given", func() {
+				It("creates the lock with some unique value", func(done Done) {
+					otherUniqueStoreNodeForThisTest := uniqueStoreNodeForThisTest
+					otherUniqueStoreNodeForThisTest.Key = otherUniqueStoreNodeForThisTest.Key + "other"
+
+					_, _, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, _, err = adapter.MaintainNode(otherUniqueStoreNodeForThisTest)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					val, err := adapter.Get(uniqueStoreNodeForThisTest.Key)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					otherval, err := adapter.Get(otherUniqueStoreNodeForThisTest.Key)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(val.Value)).ShouldNot(Equal(string(otherval.Value)))
+					close(done)
+				}, 1.0)
+			})
+
 			Context("when the lock disappears after it has been acquired (e.g. ETCD store is reset)", func() {
 				AfterEach(func() {
 					etcdRunner.Start()
 				})
 
 				It("should send a notification down the lostLockChannel", func(done Done) {
-					lostLock, _, _ := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+					lostLock, _, _ := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 
 					etcdRunner.Stop()
 
@@ -441,27 +486,46 @@ var _ = Describe("ETCD Store Adapter", func() {
 			})
 		})
 
-		Context("when the lock is unavailable", func() {
-			It("should block until the lock becomes available", func(done Done) {
-				_, releaseLock, err := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+		Context("when releasing the lock", func() {
+			It("makes it available for others trying to acquire it", func(done Done) {
+				defer close(done)
+
+				_, releaseLock, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				didRun := make(chan bool)
+				gotLock := make(chan bool)
 				go func() {
-					_, _, err := adapter.GetAndMaintainLock(uniqueKeyForThisTest, 1)
+					_, _, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
 					Ω(err).ShouldNot(HaveOccurred())
-					close(didRun)
+
+					gotLock <- true
 				}()
 
-				runtime.Gosched()
+				Consistently(gotLock).ShouldNot(Receive())
 
-				Ω(didRun).ShouldNot(BeClosed())
-				releaseLock <- true
+				releasedLock := make(chan bool)
+				releaseLock <- releasedLock
+				Eventually(releasedLock).Should(BeClosed())
 
-				Eventually(didRun, 3).Should(BeClosed())
+				Eventually(gotLock, 2.0).Should(Receive())
+			}, 5.0)
 
-				close(done)
-			}, 10.0)
+			It("deletes the lock's key", func(done Done) {
+				defer close(done)
+
+				_, releaseLock, err := adapter.MaintainNode(uniqueStoreNodeForThisTest)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = adapter.Get(uniqueStoreNodeForThisTest.Key)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				releasedLock := make(chan bool)
+				releaseLock <- releasedLock
+				Eventually(releasedLock).Should(BeClosed())
+
+				_, err = adapter.Get(uniqueStoreNodeForThisTest.Key)
+				Ω(err).Should(HaveOccurred())
+			}, 5.0)
 		})
 	})
 
