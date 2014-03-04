@@ -30,7 +30,7 @@ type Executor struct {
 	taskRegistry *taskregistry.TaskRegistry
 }
 
-func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregistry.TaskRegistry, logger *steno.Logger) *Executor {
+func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		panic("Failed to generate a random guid....:" + err.Error())
@@ -40,12 +40,9 @@ func New(bbs Bbs.ExecutorBBS, wardenClient gordon.Client, taskRegistry *taskregi
 		id: uuid.String(),
 
 		bbs:          bbs,
-		wardenClient: wardenClient,
 		runOnceGroup: &sync.WaitGroup{},
 
 		logger: logger,
-
-		taskRegistry: taskRegistry,
 	}
 }
 
@@ -67,7 +64,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 			presence.Remove()
 
 		case <-maintainingPresenceErrors:
-			e.logger.Warn("executor.maintaining-presence.failed")
+			e.logger.Error("executor.maintaining-presence.failed")
 			close(e.stopHandlingRunOnces)
 		}
 	}()

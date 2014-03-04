@@ -176,7 +176,7 @@ func main() {
 		}
 	}
 
-	executor := executor.New(bbs, wardenClient, taskRegistry, logger)
+	executor := executor.New(bbs, logger)
 	err = executor.MaintainPresence(*heartbeatInterval)
 	if err != nil {
 		logger.Errorf("failed to start maintaining presence: %s", err.Error())

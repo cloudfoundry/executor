@@ -51,13 +51,13 @@ var _ = Describe("Executor", func() {
 			DiskMB:   1024,
 		}
 
-		executor = New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
+		executor = New(bbs, steno.NewLogger("test-logger"))
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor1 := New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
-			executor2 := New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
+			executor1 := New(bbs, steno.NewLogger("test-logger"))
+			executor2 := New(bbs, steno.NewLogger("test-logger"))
 
 			Ω(executor1.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())
@@ -114,7 +114,7 @@ var _ = Describe("Executor", func() {
 			BeforeEach(func() {
 				executor.Handle(fakeRunOnceHandler)
 
-				otherExecutor = New(bbs, gordon, taskRegistry, steno.NewLogger("test-logger"))
+				otherExecutor = New(bbs, steno.NewLogger("test-logger"))
 				otherExecutor.Handle(fakeRunOnceHandler)
 			})
 
@@ -192,7 +192,7 @@ var _ = Describe("Executor", func() {
 				executor.MaintainPresence(1 * time.Second)
 			})
 
-			It("stops handling", func() {
+			It("stops handling RunOnces", func() {
 				time.Sleep(1 * time.Second)
 
 				// delete its key (and everything else lol)
