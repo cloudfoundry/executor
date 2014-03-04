@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry/gosteno"
 )
 
-func TestRun_once_handler(t *testing.T) {
+func TestRunOnceHandler(t *testing.T) {
 	RegisterFailHandler(Fail)
 	gosteno.EnterTestMode()
 	RunSpecs(t, "RunOnceHandler Suite")

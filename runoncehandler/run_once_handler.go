@@ -1,16 +1,19 @@
 package runoncehandler
 
 import (
-	"github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"strconv"
-
 	"github.com/vito/gordon"
+
+	"github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/claim_action"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/complete_action"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/create_container_action"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/register_action"
+	"github.com/cloudfoundry-incubator/executor/taskregistry"
 )
 
 type RunOnceHandlerInterface interface {
@@ -54,79 +57,49 @@ func New(
 	}
 }
 
-func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string) {
+func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
 	// check for stack compatibility
+	// move to task registry?
 	if runOnce.Stack != "" && handler.stack != runOnce.Stack {
 		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "desired-stack": runOnce.Stack, "executor-stack": handler.stack}, "runonce.stack.mismatch")
 		return
 	}
 
-	// reserve resources
-	err := handler.taskRegistry.AddRunOnce(runOnce)
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.insufficient.resources")
-		return
-	}
-	defer handler.taskRegistry.RemoveRunOnce(runOnce)
+	runner := action_runner.New([]action_runner.Action{
+		register_action.New(
+			runOnce,
+			handler.logger,
+			handler.taskRegistry,
+		),
+		claim_action.New(
+			&runOnce,
+			handler.logger,
+			executorID,
+			handler.bbs,
+		),
+		create_container_action.New(
+			&runOnce,
+			handler.logger,
+			handler.wardenClient,
+		),
+		execute_action.New(
+			&runOnce,
+			handler.logger,
+			handler.bbs,
+			handler.actionRunner,
+			handler.loggregatorServer,
+			handler.loggregatorSecret,
+		),
+		complete_action.New(
+			&runOnce,
+			handler.logger,
+			handler.bbs,
+		),
+	})
 
-	// claim the RunOnce
-	runOnce.ExecutorID = executorId
-	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.claim")
+	result := make(chan error, 1)
 
-	err = handler.bbs.ClaimRunOnce(runOnce)
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.claim.failed")
-		return
-	}
+	go runner.Perform(result)
 
-	// create the container
-	createResponse, err := handler.wardenClient.Create()
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.container-create.failed")
-		return
-	}
-	runOnce.ContainerHandle = createResponse.GetHandle()
-	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle}, "runonce.container-create.success")
-	defer func() {
-		_, err := handler.wardenClient.Destroy(runOnce.ContainerHandle)
-		if err != nil {
-			handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.container-destroy.failed")
-		}
-	}()
-
-	// mark the RunOnce as started
-	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.start")
-	err = handler.bbs.StartRunOnce(runOnce)
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.start.failed")
-		return
-	}
-
-	var streamer logstreamer.LogStreamer
-
-	if runOnce.Log.SourceName != "" {
-		sourceId := ""
-		if runOnce.Log.Index != nil {
-			sourceId = strconv.Itoa(*runOnce.Log.Index)
-		}
-		logEmitter, _ := emitter.NewEmitter(handler.loggregatorServer, runOnce.Log.SourceName, sourceId, handler.loggregatorSecret, nil)
-		streamer = logstreamer.New(runOnce.Log.Guid, logEmitter)
-	}
-
-	// perform the actions
-	result, err := handler.actionRunner.Run(runOnce.ContainerHandle, streamer, runOnce.Actions)
-	runOnce.Result = result
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "handle": runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
-		runOnce.Failed = true
-		runOnce.FailureReason = err.Error()
-	}
-
-	// mark the task as completed
-	handler.logger.Infod(map[string]interface{}{"runonce-guid": runOnce.Guid}, "runonce.complete")
-	err = handler.bbs.CompleteRunOnce(runOnce)
-	if err != nil {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "error": err.Error()}, "runonce.complete.failed")
-		return
-	}
+	<-result
 }
