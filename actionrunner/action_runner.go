@@ -1,12 +1,11 @@
 package actionrunner
 
 import (
-	"fmt"
-
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -26,13 +25,6 @@ type ActionRunner struct {
 	logger        *steno.Logger
 }
 
-type RunActionTimeoutError struct {
-	Action models.RunAction
-}
-
-func (e RunActionTimeoutError) Error() string {
-	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
-}
 func New(
 	wardenClient gordon.Client,
 	backendPlugin backend_plugin.BackendPlugin,
@@ -57,8 +49,19 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 		var err error
 		switch a := action.Action.(type) {
 		case models.RunAction:
-			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.run-action")
-			err = runner.performRunAction(containerHandle, streamer, a)
+			runAction := run_action.New(
+				a,
+				containerHandle,
+				streamer,
+				runner.backendPlugin,
+				runner.wardenClient,
+				runner.logger,
+			)
+
+			results := make(chan error, 1)
+			runAction.Perform(results)
+
+			err = <-results
 		case models.DownloadAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.download-action")
 			err = runner.performDownloadAction(containerHandle, a)
@@ -75,11 +78,6 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 	}
 
 	return result, nil
-}
-
-func (runner *ActionRunner) performRunAction(containerHandle string, streamer logstreamer.LogStreamer, action models.RunAction) error {
-	runRunner := NewRunRunner(runner.wardenClient, runner.backendPlugin)
-	return runRunner.perform(containerHandle, streamer, action)
 }
 
 func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
