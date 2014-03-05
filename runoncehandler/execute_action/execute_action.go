@@ -49,16 +49,11 @@ func (action ExecuteAction) Perform(result chan<- error) {
 		)
 	} else {
 		var streamer logstreamer.LogStreamer
-
 		if action.runOnce.Log.SourceName != "" {
 			streamer = action.createLogStreamer()
 		}
 
-		action.logger.Errord(map[string]interface{}{"result": action.runOnce.Actions}, "execute-action.RUNNIGN!!!!!!!!!!")
-
 		result, err := action.actionRunner.Run(action.runOnce.ContainerHandle, streamer, action.runOnce.Actions)
-
-		action.logger.Errord(map[string]interface{}{"result": result}, "execute-action.RAN!!!!!!!!!!!!!!")
 
 		action.runOnce.Result = result
 		if err != nil {

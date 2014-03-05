@@ -1,6 +1,7 @@
 package actionrunner
 
 import (
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
@@ -94,18 +95,25 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 
 			err = <-results
 		case models.FetchResultAction:
-			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.fetch-result-action")
-			result, err = runner.performFetchResultAction(containerHandle, a)
+			runOnce := models.RunOnce{}
+			runAction := fetch_result_action.New(
+				&runOnce,
+				a,
+				containerHandle,
+				runner.tempDir,
+				runner.wardenClient,
+				runner.logger,
+			)
+
+			results := make(chan error, 1)
+			runAction.Perform(results)
+
+			err = <-results
+			result = runOnce.Result
 		}
 		if err != nil {
 			return "", err
 		}
 	}
-
 	return result, nil
-}
-
-func (runner *ActionRunner) performFetchResultAction(containerHandle string, action models.FetchResultAction) (string, error) {
-	fetchResultRunner := NewFetchResultRunner(runner.wardenClient, runner.tempDir)
-	return fetchResultRunner.perform(containerHandle, action)
 }
