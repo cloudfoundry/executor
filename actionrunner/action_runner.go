@@ -1,15 +1,16 @@
 package actionrunner
 
 import (
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	"github.com/vito/gordon"
+
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
-
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
 )
 
 type ActionRunnerInterface interface {
@@ -63,8 +64,20 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 
 			err = <-results
 		case models.DownloadAction:
-			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.download-action")
-			err = runner.performDownloadAction(containerHandle, a)
+			runAction := download_action.New(
+				a,
+				containerHandle,
+				runner.downloader,
+				runner.tempDir,
+				runner.backendPlugin,
+				runner.wardenClient,
+				runner.logger,
+			)
+
+			results := make(chan error, 1)
+			runAction.Perform(results)
+
+			err = <-results
 		case models.UploadAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.upload-action")
 			err = runner.performUploadAction(containerHandle, a)
@@ -78,11 +91,6 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 	}
 
 	return result, nil
-}
-
-func (runner *ActionRunner) performDownloadAction(containerHandle string, action models.DownloadAction) error {
-	downloadRunner := NewDownloadRunner(runner.downloader, runner.wardenClient, runner.tempDir, runner.backendPlugin)
-	return downloadRunner.perform(containerHandle, action)
 }
 
 func (runner *ActionRunner) performUploadAction(containerHandle string, action models.UploadAction) error {
