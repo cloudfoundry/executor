@@ -2,6 +2,7 @@ package fetch_result_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -13,7 +14,7 @@ import (
 
 var _ = Describe("FetchResultAction", func() {
 	var (
-		action            *FetchResultAction
+		action            action_runner.Action
 		containerHandle   string
 		fetchResultAction models.FetchResultAction
 		logger            *steno.Logger

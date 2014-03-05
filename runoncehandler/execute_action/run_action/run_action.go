@@ -48,7 +48,7 @@ func New(
 	}
 }
 
-func (action *RunAction) Perform(result chan error) {
+func (action *RunAction) Perform(result chan<- error) {
 	action.logger.Infod(
 		map[string]interface{}{
 			"handle": action.containerHandle,

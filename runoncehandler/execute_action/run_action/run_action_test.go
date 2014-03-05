@@ -2,6 +2,7 @@ package run_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
@@ -20,7 +21,7 @@ import (
 )
 
 var _ = Describe("RunAction", func() {
-	var action *RunAction
+	var action action_runner.Action
 	var result chan error
 
 	var runAction models.RunAction

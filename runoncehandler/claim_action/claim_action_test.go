@@ -2,6 +2,7 @@ package claim_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,7 +15,7 @@ import (
 )
 
 var _ = Describe("ClaimAction", func() {
-	var action *ClaimAction
+	var action action_runner.Action
 	var result chan error
 
 	var runOnce models.RunOnce

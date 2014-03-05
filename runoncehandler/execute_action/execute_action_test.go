@@ -3,6 +3,7 @@ package execute_action_test
 import (
 	"errors"
 	"fmt"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"net"
 
 	. "github.com/onsi/ginkgo"
@@ -18,7 +19,7 @@ import (
 )
 
 var _ = Describe("ExecuteAction", func() {
-	var action *ExecuteAction
+	var action action_runner.Action
 	var result chan error
 
 	var runOnce models.RunOnce

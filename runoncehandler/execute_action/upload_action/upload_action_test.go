@@ -2,6 +2,7 @@ package upload_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"io/ioutil"
 	"os/user"
 
@@ -17,7 +18,7 @@ import (
 )
 
 var _ = Describe("UploadAction", func() {
-	var action *UploadAction
+	var action action_runner.Action
 	var result chan error
 
 	var uploadAction models.UploadAction

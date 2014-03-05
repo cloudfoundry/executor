@@ -2,6 +2,7 @@ package download_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"io/ioutil"
 
 	. "github.com/onsi/ginkgo"
@@ -17,7 +18,7 @@ import (
 )
 
 var _ = Describe("DownloadAction", func() {
-	var action *DownloadAction
+	var action action_runner.Action
 	var result chan error
 
 	var downloadAction models.DownloadAction
