@@ -40,7 +40,7 @@ var _ = Describe("SubActions", func() {
 			logger = &steno.Logger{}
 		})
 
-		FIt("is correct", func() {
+		It("is correct", func() {
 			runOnce := models.RunOnce{Guid: "some-guid"}
 
 			runActionModel := models.RunAction{Script: "do-something"}
