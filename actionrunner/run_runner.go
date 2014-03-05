@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
 	"github.com/vito/gordon/warden"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 )
 
 type RunRunner struct {
 	wardenClient  gordon.Client
-	backendPlugin BackendPlugin
+	backendPlugin backend_plugin.BackendPlugin
 }
 
-func NewRunRunner(wardenClient gordon.Client, backendPlugin BackendPlugin) *RunRunner {
+func NewRunRunner(wardenClient gordon.Client, backendPlugin backend_plugin.BackendPlugin) *RunRunner {
 	return &RunRunner{
 		wardenClient:  wardenClient,
 		backendPlugin: backendPlugin,

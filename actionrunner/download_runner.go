@@ -6,20 +6,22 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/vito/gordon"
+
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 )
 
 type DownloadRunner struct {
 	downloader    downloader.Downloader
 	wardenClient  gordon.Client
 	tempDir       string
-	backendPlugin BackendPlugin
+	backendPlugin backend_plugin.BackendPlugin
 }
 
-func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client, tempDir string, backendPlugin BackendPlugin) *DownloadRunner {
+func NewDownloadRunner(downloader downloader.Downloader, wardenClient gordon.Client, tempDir string, backendPlugin backend_plugin.BackendPlugin) *DownloadRunner {
 	return &DownloadRunner{
 		downloader:    downloader,
 		wardenClient:  wardenClient,

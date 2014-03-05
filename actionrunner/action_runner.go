@@ -6,6 +6,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
@@ -15,14 +17,9 @@ type ActionRunnerInterface interface {
 	Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (result string, err error)
 }
 
-type BackendPlugin interface {
-	BuildRunScript(models.RunAction) string
-	BuildCreateDirectoryRecursivelyCommand(string) string
-}
-
 type ActionRunner struct {
 	wardenClient  gordon.Client
-	backendPlugin BackendPlugin
+	backendPlugin backend_plugin.BackendPlugin
 	downloader    downloader.Downloader
 	uploader      uploader.Uploader
 	tempDir       string
@@ -36,8 +33,14 @@ type RunActionTimeoutError struct {
 func (e RunActionTimeoutError) Error() string {
 	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
 }
-
-func New(wardenClient gordon.Client, backendPlugin BackendPlugin, downloader downloader.Downloader, uploader uploader.Uploader, tempDir string, logger *steno.Logger) *ActionRunner {
+func New(
+	wardenClient gordon.Client,
+	backendPlugin backend_plugin.BackendPlugin,
+	downloader downloader.Downloader,
+	uploader uploader.Uploader,
+	tempDir string,
+	logger *steno.Logger,
+) *ActionRunner {
 	return &ActionRunner{
 		wardenClient:  wardenClient,
 		backendPlugin: backendPlugin,
