@@ -11,6 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
 )
 
 type ActionRunnerInterface interface {
@@ -79,8 +80,19 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 
 			err = <-results
 		case models.UploadAction:
-			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.upload-action")
-			err = runner.performUploadAction(containerHandle, a)
+			runAction := upload_action.New(
+				a,
+				containerHandle,
+				runner.uploader,
+				runner.tempDir,
+				runner.wardenClient,
+				runner.logger,
+			)
+
+			results := make(chan error, 1)
+			runAction.Perform(results)
+
+			err = <-results
 		case models.FetchResultAction:
 			runner.logger.Infod(map[string]interface{}{"handle": containerHandle}, "runonce.handle.fetch-result-action")
 			result, err = runner.performFetchResultAction(containerHandle, a)
@@ -91,11 +103,6 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 	}
 
 	return result, nil
-}
-
-func (runner *ActionRunner) performUploadAction(containerHandle string, action models.UploadAction) error {
-	uploadRunner := NewUploadRunner(runner.uploader, runner.wardenClient, runner.tempDir)
-	return uploadRunner.perform(containerHandle, action)
 }
 
 func (runner *ActionRunner) performFetchResultAction(containerHandle string, action models.FetchResultAction) (string, error) {

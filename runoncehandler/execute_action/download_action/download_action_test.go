@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io/ioutil"
 
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 )
 

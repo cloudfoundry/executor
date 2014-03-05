@@ -46,6 +46,13 @@ func New(
 }
 
 func (action *DownloadAction) Perform(result chan<- error) {
+	action.logger.Infod(
+		map[string]interface{}{
+			"handle": action.containerHandle,
+		},
+		"runonce.handle.download-action",
+	)
+
 	result <- action.perform()
 }
 
