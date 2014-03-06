@@ -5,7 +5,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
@@ -14,7 +13,6 @@ import (
 type ExecuteAction struct {
 	runOnce           *models.RunOnce
 	logger            *steno.Logger
-	bbs               Bbs.ExecutorBBS
 	actionRunner      actionrunner.ActionRunnerInterface
 	loggregatorServer string
 	loggregatorSecret string
@@ -23,7 +21,6 @@ type ExecuteAction struct {
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
-	bbs Bbs.ExecutorBBS,
 	actionRunner actionrunner.ActionRunnerInterface,
 	loggregatorServer string,
 	loggregatorSecret string,
@@ -31,7 +28,6 @@ func New(
 	return &ExecuteAction{
 		runOnce:           runOnce,
 		logger:            logger,
-		bbs:               bbs,
 		actionRunner:      actionRunner,
 		loggregatorServer: loggregatorServer,
 		loggregatorSecret: loggregatorSecret,
@@ -52,7 +48,15 @@ func (action ExecuteAction) Perform(result chan<- error) {
 
 	action.runOnce.Result = executionResult
 	if err != nil {
-		action.logger.Errord(map[string]interface{}{"runonce-guid": action.runOnce.Guid, "handle": action.runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
+		action.logger.Errord(
+			map[string]interface{}{
+				"runonce-guid": action.runOnce.Guid,
+				"handle":       action.runOnce.ContainerHandle,
+				"error":        err.Error(),
+			},
+			"runonce.actions.failed",
+		)
+
 		action.runOnce.Failed = true
 		action.runOnce.FailureReason = err.Error()
 	}

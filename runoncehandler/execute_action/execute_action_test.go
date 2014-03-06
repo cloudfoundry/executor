@@ -9,7 +9,6 @@ import (
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -23,7 +22,6 @@ var _ = Describe("ExecuteAction", func() {
 	var result chan error
 
 	var runOnce models.RunOnce
-	var bbs *fakebbs.FakeExecutorBBS
 	var actionRunner *fakeactionrunner.FakeActionRunner // TODO: this may go away
 	var loggregatorServer string
 	var loggregatorSecret string
@@ -50,8 +48,6 @@ var _ = Describe("ExecuteAction", func() {
 			ContainerHandle: "some-container-handle",
 		}
 
-		bbs = fakebbs.NewFakeExecutorBBS()
-
 		actionRunner = fakeactionrunner.New()
 
 		loggregatorPort := 3456 + config.GinkgoConfig.ParallelNode
@@ -61,7 +57,6 @@ var _ = Describe("ExecuteAction", func() {
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
-			bbs,
 			actionRunner,
 			loggregatorServer,
 			loggregatorSecret,

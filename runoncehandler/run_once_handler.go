@@ -91,7 +91,6 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		execute_action.New(
 			&runOnce,
 			handler.logger,
-			handler.bbs,
 			handler.actionRunner,
 			handler.loggregatorServer,
 			handler.loggregatorSecret,
