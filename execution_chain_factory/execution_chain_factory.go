@@ -45,19 +45,19 @@ func NewExecutionChainFactory(
 	}
 }
 
-func (factory *ExecutionChainFactory) NewChain(
-	actionModels []models.ExecutorAction,
+func (factory *ExecutionChainFactory) NewChain( // ActionsFor(runOnce)
 	runOnce *models.RunOnce,
-	containerHandle string,
 ) []action_runner.Action {
 	subActions := []action_runner.Action{}
+
 	var subAction action_runner.Action
-	for _, a := range actionModels {
+
+	for _, a := range runOnce.Actions {
 		switch actionModel := a.Action.(type) {
 		case models.RunAction:
 			subAction = run_action.New(
 				actionModel,
-				containerHandle,
+				runOnce.ContainerHandle,
 				factory.streamer,
 				factory.backendPlugin,
 				factory.wardenClient,
@@ -66,7 +66,7 @@ func (factory *ExecutionChainFactory) NewChain(
 		case models.DownloadAction:
 			subAction = download_action.New(
 				actionModel,
-				containerHandle,
+				runOnce.ContainerHandle,
 				factory.downloader,
 				factory.tempDir,
 				factory.backendPlugin,
@@ -76,7 +76,7 @@ func (factory *ExecutionChainFactory) NewChain(
 		case models.UploadAction:
 			subAction = upload_action.New(
 				actionModel,
-				containerHandle,
+				runOnce.ContainerHandle,
 				factory.uploader,
 				factory.tempDir,
 				factory.wardenClient,
@@ -86,7 +86,7 @@ func (factory *ExecutionChainFactory) NewChain(
 			subAction = fetch_result_action.New(
 				runOnce,
 				actionModel,
-				containerHandle,
+				runOnce.ContainerHandle,
 				factory.tempDir,
 				factory.wardenClient,
 				factory.logger,

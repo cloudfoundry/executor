@@ -50,25 +50,23 @@ var _ = Describe("ExecutionChainFactory", func() {
 	})
 
 	It("is correct", func() {
-		runOnce := models.RunOnce{Guid: "some-guid"}
-
 		runActionModel := models.RunAction{Script: "do-something"}
 		downloadActionModel := models.DownloadAction{From: "/file/to/download"}
 		uploadActionModel := models.UploadAction{From: "/file/to/upload"}
 		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
 
-		actionModels := []models.ExecutorAction{
-			{runActionModel},
-			{downloadActionModel},
-			{uploadActionModel},
-			{fetchResultActionModel},
+		runOnce := models.RunOnce{
+			Guid: "some-guid",
+			Actions: []models.ExecutorAction{
+				{runActionModel},
+				{downloadActionModel},
+				{uploadActionModel},
+				{fetchResultActionModel},
+			},
+			ContainerHandle: "some-container-handle",
 		}
 
-		Ω(executionChainFactory.NewChain(
-			actionModels,
-			&runOnce,
-			"some-container-handle",
-		)).To(Equal([]action_runner.Action{
+		Ω(executionChainFactory.NewChain(&runOnce)).To(Equal([]action_runner.Action{
 			run_action.New(
 				runActionModel,
 				"some-container-handle",
