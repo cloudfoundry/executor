@@ -1,11 +1,11 @@
-package execution_chain_factory_test
+package run_once_transformer_test
 
 import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
-	. "github.com/cloudfoundry-incubator/executor/execution_chain_factory"
+	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
@@ -22,15 +22,15 @@ import (
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
 )
 
-var _ = Describe("ExecutionChainFactory", func() {
+var _ = Describe("RunOnceTransformer", func() {
 	var (
-		backendPlugin         backend_plugin.BackendPlugin
-		downloader            downloader.Downloader
-		logger                *steno.Logger
-		streamer              *fakelogstreamer.FakeLogStreamer
-		uploader              uploader.Uploader
-		wardenClient          *fake_gordon.FakeGordon
-		executionChainFactory *ExecutionChainFactory
+		backendPlugin      backend_plugin.BackendPlugin
+		downloader         downloader.Downloader
+		logger             *steno.Logger
+		streamer           *fakelogstreamer.FakeLogStreamer
+		uploader           uploader.Uploader
+		wardenClient       *fake_gordon.FakeGordon
+		runOnceTransformer *RunOnceTransformer
 	)
 
 	BeforeEach(func() {
@@ -38,7 +38,7 @@ var _ = Describe("ExecutionChainFactory", func() {
 		downloader = &fakedownloader.FakeDownloader{}
 		uploader = &fakeuploader.FakeUploader{}
 		logger = &steno.Logger{}
-		executionChainFactory = NewExecutionChainFactory(
+		runOnceTransformer = NewRunOnceTransformer(
 			streamer,
 			downloader,
 			uploader,
@@ -66,7 +66,7 @@ var _ = Describe("ExecutionChainFactory", func() {
 			ContainerHandle: "some-container-handle",
 		}
 
-		Ω(executionChainFactory.NewChain(&runOnce)).To(Equal([]action_runner.Action{
+		Ω(runOnceTransformer.ActionsFor(&runOnce)).To(Equal([]action_runner.Action{
 			run_action.New(
 				runActionModel,
 				"some-container-handle",
