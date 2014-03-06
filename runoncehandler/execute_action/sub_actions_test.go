@@ -5,6 +5,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
+	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
@@ -15,92 +16,92 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
 )
 
-var _ = Describe("SubActions", func() {
-	Describe("SubActions", func() {
-		var (
-			backendPlugin backend_plugin.BackendPlugin
-			downloader    downloader.Downloader
-			logger        *steno.Logger
-			streamer      *fakelogstreamer.FakeLogStreamer
-			uploader      uploader.Uploader
-			wardenClient  *fake_gordon.FakeGordon
+var _ = Describe("ExecutionChainFactory", func() {
+	var (
+		backendPlugin         backend_plugin.BackendPlugin
+		downloader            downloader.Downloader
+		logger                *steno.Logger
+		streamer              *fakelogstreamer.FakeLogStreamer
+		uploader              uploader.Uploader
+		wardenClient          *fake_gordon.FakeGordon
+		executionChainFactory *ExecutionChainFactory
+	)
+
+	BeforeEach(func() {
+		backendPlugin = linuxplugin.New()
+		downloader = &fakedownloader.FakeDownloader{}
+		uploader = &fakeuploader.FakeUploader{}
+		logger = &steno.Logger{}
+		executionChainFactory = NewExecutionChainFactory(
+			streamer,
+			downloader,
+			uploader,
+			backendPlugin,
+			wardenClient,
+			logger,
+			"/fake/temp/dir",
 		)
+	})
 
-		BeforeEach(func() {
-			backendPlugin = linuxplugin.New()
-			downloader = &fakedownloader.FakeDownloader{}
-			uploader = &fakeuploader.FakeUploader{}
-			logger = &steno.Logger{}
-		})
+	It("is correct", func() {
+		runOnce := models.RunOnce{Guid: "some-guid"}
 
-		It("is correct", func() {
-			runOnce := models.RunOnce{Guid: "some-guid"}
+		runActionModel := models.RunAction{Script: "do-something"}
+		downloadActionModel := models.DownloadAction{From: "/file/to/download"}
+		uploadActionModel := models.UploadAction{From: "/file/to/upload"}
+		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
 
-			runActionModel := models.RunAction{Script: "do-something"}
-			downloadActionModel := models.DownloadAction{From: "/file/to/download"}
-			uploadActionModel := models.UploadAction{From: "/file/to/upload"}
-			fetchResultActionModel := models.FetchResultAction{File: "some-file"}
+		actionModels := []models.ExecutorAction{
+			{runActionModel},
+			{downloadActionModel},
+			{uploadActionModel},
+			{fetchResultActionModel},
+		}
 
-			actionModels := []models.ExecutorAction{
-				{runActionModel},
-				{downloadActionModel},
-				{uploadActionModel},
-				{fetchResultActionModel},
-			}
-
-			Ω(SubActions(
-				actionModels,
-				&runOnce,
+		Ω(executionChainFactory.NewChain(
+			actionModels,
+			&runOnce,
+			"some-container-handle",
+		)).To(Equal([]action_runner.Action{
+			run_action.New(
+				runActionModel,
 				"some-container-handle",
 				streamer,
-				downloader,
-				uploader,
 				backendPlugin,
 				wardenClient,
 				logger,
+			),
+			download_action.New(
+				downloadActionModel,
+				"some-container-handle",
+				downloader,
 				"/fake/temp/dir",
-			)).To(Equal([]action_runner.Action{
-				run_action.New(
-					runActionModel,
-					"some-container-handle",
-					streamer,
-					backendPlugin,
-					wardenClient,
-					logger,
-				),
-				download_action.New(
-					downloadActionModel,
-					"some-container-handle",
-					downloader,
-					"/fake/temp/dir",
-					backendPlugin,
-					wardenClient,
-					logger,
-				),
-				upload_action.New(
-					uploadActionModel,
-					"some-container-handle",
-					uploader,
-					"/fake/temp/dir",
-					wardenClient,
-					logger,
-				),
-				fetch_result_action.New(
-					&runOnce,
-					fetchResultActionModel,
-					"some-container-handle",
-					"/fake/temp/dir",
-					wardenClient,
-					logger,
-				),
-			}))
-		})
+				backendPlugin,
+				wardenClient,
+				logger,
+			),
+			upload_action.New(
+				uploadActionModel,
+				"some-container-handle",
+				uploader,
+				"/fake/temp/dir",
+				wardenClient,
+				logger,
+			),
+			fetch_result_action.New(
+				&runOnce,
+				fetchResultActionModel,
+				"some-container-handle",
+				"/fake/temp/dir",
+				wardenClient,
+				logger,
+			),
+		}))
 	})
 })

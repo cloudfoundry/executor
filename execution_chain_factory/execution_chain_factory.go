@@ -1,4 +1,4 @@
-package execute_action
+package execution_chain_factory
 
 import (
 	"github.com/cloudfoundry-incubator/executor/action_runner"
@@ -15,10 +15,17 @@ import (
 	"github.com/vito/gordon"
 )
 
-func SubActions(
-	actionModels []models.ExecutorAction,
-	runOnce *models.RunOnce,
-	containerHandle string,
+type ExecutionChainFactory struct {
+	streamer      logstreamer.LogStreamer
+	downloader    downloader.Downloader
+	uploader      uploader.Uploader
+	backendPlugin backend_plugin.BackendPlugin
+	wardenClient  gordon.Client
+	logger        *steno.Logger
+	tempDir       string
+}
+
+func NewExecutionChainFactory(
 	streamer logstreamer.LogStreamer,
 	downloader downloader.Downloader,
 	uploader uploader.Uploader,
@@ -26,6 +33,22 @@ func SubActions(
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 	tempDir string,
+) *ExecutionChainFactory {
+	return &ExecutionChainFactory{
+		streamer:      streamer,
+		downloader:    downloader,
+		uploader:      uploader,
+		backendPlugin: backendPlugin,
+		wardenClient:  wardenClient,
+		logger:        logger,
+		tempDir:       tempDir,
+	}
+}
+
+func (factory *ExecutionChainFactory) NewChain(
+	actionModels []models.ExecutorAction,
+	runOnce *models.RunOnce,
+	containerHandle string,
 ) []action_runner.Action {
 	subActions := []action_runner.Action{}
 	var subAction action_runner.Action
@@ -35,38 +58,38 @@ func SubActions(
 			subAction = run_action.New(
 				actionModel,
 				containerHandle,
-				streamer,
-				backendPlugin,
-				wardenClient,
-				logger,
+				factory.streamer,
+				factory.backendPlugin,
+				factory.wardenClient,
+				factory.logger,
 			)
 		case models.DownloadAction:
 			subAction = download_action.New(
 				actionModel,
 				containerHandle,
-				downloader,
-				tempDir,
-				backendPlugin,
-				wardenClient,
-				logger,
+				factory.downloader,
+				factory.tempDir,
+				factory.backendPlugin,
+				factory.wardenClient,
+				factory.logger,
 			)
 		case models.UploadAction:
 			subAction = upload_action.New(
 				actionModel,
 				containerHandle,
-				uploader,
-				tempDir,
-				wardenClient,
-				logger,
+				factory.uploader,
+				factory.tempDir,
+				factory.wardenClient,
+				factory.logger,
 			)
 		case models.FetchResultAction:
 			subAction = fetch_result_action.New(
 				runOnce,
 				actionModel,
 				containerHandle,
-				tempDir,
-				wardenClient,
-				logger,
+				factory.tempDir,
+				factory.wardenClient,
+				factory.logger,
 			)
 		}
 
