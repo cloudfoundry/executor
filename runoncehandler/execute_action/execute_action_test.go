@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 )
 
@@ -24,7 +25,6 @@ var _ = Describe("ExecuteAction", func() {
 	var runOnce models.RunOnce
 	var actionRunner *fakeactionrunner.FakeActionRunner // TODO: this may go away
 	var loggregatorServer string
-	var loggregatorSecret string
 
 	// so we can initialize an emitter :(
 	var fakeLoggregatorServer *net.UDPConn
@@ -51,15 +51,17 @@ var _ = Describe("ExecuteAction", func() {
 		actionRunner = fakeactionrunner.New()
 
 		loggregatorPort := 3456 + config.GinkgoConfig.ParallelNode
-		loggregatorServer = fmt.Sprintf("127.0.0.1:%d", loggregatorPort)
-		loggregatorSecret = "conspiracy"
+
+		logStreamerFactory := log_streamer_factory.New(
+			fmt.Sprintf("127.0.0.1:%d", loggregatorPort),
+			"conspiracy",
+		)
 
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			actionRunner,
-			loggregatorServer,
-			loggregatorSecret,
+			logStreamerFactory,
 		)
 	})
 

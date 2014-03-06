@@ -10,37 +10,30 @@ import (
 )
 
 type ExecuteAction struct {
-	runOnce           *models.RunOnce
-	logger            *steno.Logger
-	actionRunner      actionrunner.ActionRunnerInterface
-	loggregatorServer string
-	loggregatorSecret string
+	runOnce            *models.RunOnce
+	logger             *steno.Logger
+	actionRunner       actionrunner.ActionRunnerInterface
+	logStreamerFactory *log_streamer_factory.LogStreamerFactory
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	actionRunner actionrunner.ActionRunnerInterface,
-	loggregatorServer string,
-	loggregatorSecret string,
+	logStreamerFactory *log_streamer_factory.LogStreamerFactory,
 ) *ExecuteAction {
 	return &ExecuteAction{
-		runOnce:           runOnce,
-		logger:            logger,
-		actionRunner:      actionRunner,
-		loggregatorServer: loggregatorServer,
-		loggregatorSecret: loggregatorSecret,
+		runOnce:            runOnce,
+		logger:             logger,
+		actionRunner:       actionRunner,
+		logStreamerFactory: logStreamerFactory,
 	}
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
 	var logStreamer logstreamer.LogStreamer
 	if action.runOnce.Log.SourceName != "" {
-		logStreamerFactory := log_streamer_factory.New(
-			action.loggregatorServer,
-			action.loggregatorSecret,
-		)
-		logStreamer = logStreamerFactory.Make(action.runOnce.Log)
+		logStreamer = action.logStreamerFactory.Make(action.runOnce.Log)
 	}
 
 	executionResult, err := action.actionRunner.Run(

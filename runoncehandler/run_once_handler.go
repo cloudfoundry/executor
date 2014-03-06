@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/claim_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/complete_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/create_container_action"
@@ -66,6 +67,11 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		return
 	}
 
+	logStreamerFactory := log_streamer_factory.New(
+		handler.loggregatorServer,
+		handler.loggregatorSecret,
+	)
+
 	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
 			runOnce,
@@ -92,8 +98,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			&runOnce,
 			handler.logger,
 			handler.actionRunner,
-			handler.loggregatorServer,
-			handler.loggregatorSecret,
+			logStreamerFactory,
 		),
 		complete_action.New(
 			&runOnce,
