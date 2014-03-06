@@ -1,13 +1,12 @@
 package execute_action
 
 import (
-	"strconv"
-
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
 )
 
 type ExecuteAction struct {
@@ -35,14 +34,18 @@ func New(
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
-	var streamer logstreamer.LogStreamer
+	var logStreamer logstreamer.LogStreamer
 	if action.runOnce.Log.SourceName != "" {
-		streamer = action.createLogStreamer()
+		logStreamerFactory := log_streamer_factory.New(
+			action.loggregatorServer,
+			action.loggregatorSecret,
+		)
+		logStreamer = logStreamerFactory.Make(action.runOnce.Log)
 	}
 
 	executionResult, err := action.actionRunner.Run(
 		action.runOnce.ContainerHandle,
-		streamer,
+		logStreamer,
 		action.runOnce.Actions,
 	)
 
@@ -67,20 +70,3 @@ func (action ExecuteAction) Perform(result chan<- error) {
 func (action ExecuteAction) Cancel() {}
 
 func (action ExecuteAction) Cleanup() {}
-
-func (action ExecuteAction) createLogStreamer() logstreamer.LogStreamer {
-	sourceId := ""
-	if action.runOnce.Log.Index != nil {
-		sourceId = strconv.Itoa(*action.runOnce.Log.Index)
-	}
-
-	logEmitter, _ := emitter.NewEmitter(
-		action.loggregatorServer,
-		action.runOnce.Log.SourceName,
-		sourceId,
-		action.loggregatorSecret,
-		nil,
-	)
-
-	return logstreamer.New(action.runOnce.Log.Guid, logEmitter)
-}

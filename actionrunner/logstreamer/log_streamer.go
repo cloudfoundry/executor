@@ -1,8 +1,9 @@
 package logstreamer
 
 import (
-	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"unicode/utf8"
+
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 )
 
 const MAX_MESSAGE_SIZE = 4096
