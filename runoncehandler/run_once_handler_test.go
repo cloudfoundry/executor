@@ -1,10 +1,7 @@
 package runoncehandler_test
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
@@ -13,6 +10,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 )
@@ -21,14 +19,12 @@ var _ = Describe("RunOnceHandler", func() {
 	var (
 		handler *RunOnceHandler
 
-		bbs               *fakebbs.FakeExecutorBBS
-		runOnce           models.RunOnce
-		fakeTaskRegistry  *faketaskregistry.FakeTaskRegistry
-		gordon            *fake_gordon.FakeGordon
-		actionRunner      *fakeactionrunner.FakeActionRunner
-		loggregatorServer string
-		loggregatorSecret string
-		stack             string
+		bbs              *fakebbs.FakeExecutorBBS
+		runOnce          models.RunOnce
+		fakeTaskRegistry *faketaskregistry.FakeTaskRegistry
+		gordon           *fake_gordon.FakeGordon
+		actionRunner     *fakeactionrunner.FakeActionRunner
+		stack            string
 	)
 
 	BeforeEach(func() {
@@ -36,9 +32,6 @@ var _ = Describe("RunOnceHandler", func() {
 		gordon = fake_gordon.New()
 		actionRunner = fakeactionrunner.New()
 		fakeTaskRegistry = faketaskregistry.New()
-		loggregatorPort := 3456 + config.GinkgoConfig.ParallelNode
-		loggregatorServer = fmt.Sprintf("127.0.0.1:%d", loggregatorPort)
-		loggregatorSecret = "conspiracy"
 		stack = "penguin"
 
 		runOnce = models.RunOnce{
@@ -53,13 +46,14 @@ var _ = Describe("RunOnceHandler", func() {
 			},
 		}
 
+		logStreamerFactory := &log_streamer_factory.LogStreamerFactory{}
+
 		handler = New(
 			bbs,
 			gordon,
 			fakeTaskRegistry,
 			actionRunner,
-			loggregatorServer,
-			loggregatorSecret,
+			logStreamerFactory,
 			stack,
 			steno.NewLogger("test-logger"),
 		)

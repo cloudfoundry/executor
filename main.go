@@ -9,18 +9,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
-	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler"
-	"github.com/cloudfoundry-incubator/executor/taskregistry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
+
+	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/runoncehandler"
+	"github.com/cloudfoundry-incubator/executor/taskregistry"
 )
 
 var wardenNetwork = flag.String(
@@ -220,13 +222,17 @@ func main() {
 	uploader := uploader.New(10*time.Minute, logger)
 	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, uploader, *tempDir, logger)
 
+	logStreamerFactory := log_streamer_factory.New(
+		*loggregatorServer,
+		*loggregatorSecret,
+	)
+
 	runOnceHandler := runoncehandler.New(
 		bbs,
 		wardenClient,
 		taskRegistry,
 		theFlash,
-		*loggregatorServer,
-		*loggregatorSecret,
+		logStreamerFactory,
 		*stack,
 		logger,
 	)

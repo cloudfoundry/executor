@@ -27,8 +27,7 @@ type RunOnceHandler struct {
 	wardenClient gordon.Client
 	actionRunner actionrunner.ActionRunnerInterface
 
-	loggregatorServer string
-	loggregatorSecret string
+	logStreamerFactory *log_streamer_factory.LogStreamerFactory
 
 	logger *steno.Logger
 
@@ -42,20 +41,18 @@ func New(
 	wardenClient gordon.Client,
 	taskRegistry taskregistry.TaskRegistryInterface,
 	actionRunner actionrunner.ActionRunnerInterface,
-	loggregatorServer string,
-	loggregatorSecret string,
+	logStreamerFactory *log_streamer_factory.LogStreamerFactory,
 	stack string,
 	logger *steno.Logger,
 ) *RunOnceHandler {
 	return &RunOnceHandler{
-		bbs:               bbs,
-		wardenClient:      wardenClient,
-		taskRegistry:      taskRegistry,
-		actionRunner:      actionRunner,
-		loggregatorServer: loggregatorServer,
-		loggregatorSecret: loggregatorSecret,
-		logger:            logger,
-		stack:             stack,
+		bbs:                bbs,
+		wardenClient:       wardenClient,
+		taskRegistry:       taskRegistry,
+		actionRunner:       actionRunner,
+		logStreamerFactory: logStreamerFactory,
+		logger:             logger,
+		stack:              stack,
 	}
 }
 
@@ -66,11 +63,6 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "desired-stack": runOnce.Stack, "executor-stack": handler.stack}, "runonce.stack.mismatch")
 		return
 	}
-
-	logStreamerFactory := log_streamer_factory.New(
-		handler.loggregatorServer,
-		handler.loggregatorSecret,
-	)
 
 	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
@@ -98,7 +90,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			&runOnce,
 			handler.logger,
 			handler.actionRunner,
-			logStreamerFactory,
+			handler.logStreamerFactory,
 		),
 		complete_action.New(
 			&runOnce,
