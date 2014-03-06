@@ -26,7 +26,6 @@ func SubActions(
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 	tempDir string,
-
 ) []action_runner.Action {
 	subActions := []action_runner.Action{}
 	var subAction action_runner.Action

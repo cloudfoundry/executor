@@ -3,7 +3,6 @@ package execute_action_test
 import (
 	"errors"
 	"fmt"
-	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"net"
 
 	. "github.com/onsi/ginkgo"
@@ -14,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 )
@@ -69,13 +69,6 @@ var _ = Describe("ExecuteAction", func() {
 	})
 
 	Describe("Perform", func() {
-		It("starts the RunOnce in the BBS", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
-
-			Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
-		})
-
 		It("starts running the actions", func() {
 			go action.Perform(result)
 			Ω(<-result).Should(BeNil())
@@ -154,19 +147,6 @@ var _ = Describe("ExecuteAction", func() {
 
 				Ω(runOnce.Failed).Should(BeTrue())
 				Ω(runOnce.FailureReason).Should(Equal("oh no!"))
-			})
-		})
-
-		Context("when starting the RunOnce in the BBS fails", func() {
-			disaster := errors.New("oh no!")
-
-			BeforeEach(func() {
-				bbs.StartRunOnceErr = disaster
-			})
-
-			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
 			})
 		})
 	})

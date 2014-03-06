@@ -1,6 +1,7 @@
 package runoncehandler
 
 import (
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/start_action"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -81,6 +82,11 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			&runOnce,
 			handler.logger,
 			handler.wardenClient,
+		),
+		start_action.New(
+			&runOnce,
+			handler.logger,
+			handler.bbs,
 		),
 		execute_action.New(
 			&runOnce,

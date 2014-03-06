@@ -39,31 +39,25 @@ func New(
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
-	err := action.bbs.StartRunOnce(*action.runOnce)
-	if err != nil {
-		action.logger.Warnd(
-			map[string]interface{}{
-				"runonce-guid": action.runOnce.Guid,
-				"error":        err.Error(),
-			}, "runonce.start.failed",
-		)
-	} else {
-		var streamer logstreamer.LogStreamer
-		if action.runOnce.Log.SourceName != "" {
-			streamer = action.createLogStreamer()
-		}
-
-		result, err := action.actionRunner.Run(action.runOnce.ContainerHandle, streamer, action.runOnce.Actions)
-
-		action.runOnce.Result = result
-		if err != nil {
-			action.logger.Errord(map[string]interface{}{"runonce-guid": action.runOnce.Guid, "handle": action.runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
-			action.runOnce.Failed = true
-			action.runOnce.FailureReason = err.Error()
-		}
+	var streamer logstreamer.LogStreamer
+	if action.runOnce.Log.SourceName != "" {
+		streamer = action.createLogStreamer()
 	}
 
-	result <- err
+	executionResult, err := action.actionRunner.Run(
+		action.runOnce.ContainerHandle,
+		streamer,
+		action.runOnce.Actions,
+	)
+
+	action.runOnce.Result = executionResult
+	if err != nil {
+		action.logger.Errord(map[string]interface{}{"runonce-guid": action.runOnce.Guid, "handle": action.runOnce.ContainerHandle, "error": err.Error()}, "runonce.actions.failed")
+		action.runOnce.Failed = true
+		action.runOnce.FailureReason = err.Error()
+	}
+
+	result <- nil
 }
 
 func (action ExecuteAction) Cancel() {}

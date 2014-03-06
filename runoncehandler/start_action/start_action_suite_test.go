@@ -1,4 +1,4 @@
-package action_runner_test
+package start_action_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestActionRunner(t *testing.T) {
+func TestStart_action(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ActionRunner Suite")
+	RunSpecs(t, "Start_action Suite")
 }
