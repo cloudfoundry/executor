@@ -43,12 +43,13 @@ var _ = Describe("Executor", func() {
 
 		startingMemory = 256
 		startingDisk = 1024
-		taskRegistry = taskregistry.NewTaskRegistry(registryFileName, startingMemory, startingDisk)
+		taskRegistry = taskregistry.NewTaskRegistry("some-stack", registryFileName, startingMemory, startingDisk)
 
 		runOnce = models.RunOnce{
 			Guid:     "totally-unique",
 			MemoryMB: 256,
 			DiskMB:   1024,
+			Stack:    "some-stack",
 		}
 
 		executor = New(bbs, steno.NewLogger("test-logger"))

@@ -157,7 +157,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskRegistry, err := taskregistry.LoadTaskRegistryFromDisk(*registrySnapshotFile, *memoryMB, *diskMB)
+	taskRegistry, err := taskregistry.LoadTaskRegistryFromDisk(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
 	if err != nil {
 		switch err {
 		case taskregistry.ErrorRegistrySnapshotHasInvalidJSON:
@@ -171,7 +171,7 @@ func main() {
 			os.Exit(1)
 		case taskregistry.ErrorRegistrySnapshotDoesNotExist:
 			logger.Info("Didn't find snapshot.  Creating new registry.")
-			taskRegistry = taskregistry.NewTaskRegistry(*registrySnapshotFile, *memoryMB, *diskMB)
+			taskRegistry = taskregistry.NewTaskRegistry(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
 		default:
 			logger.Errorf("woah, woah, woah!  what happened with the snapshot?: %s", err.Error())
 			os.Exit(1)
@@ -233,7 +233,6 @@ func main() {
 		taskRegistry,
 		theFlash,
 		logStreamerFactory,
-		*stack,
 		logger,
 	)
 

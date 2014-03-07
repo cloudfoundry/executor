@@ -32,8 +32,6 @@ type RunOnceHandler struct {
 	logger *steno.Logger
 
 	taskRegistry taskregistry.TaskRegistryInterface
-
-	stack string
 }
 
 func New(
@@ -42,7 +40,6 @@ func New(
 	taskRegistry taskregistry.TaskRegistryInterface,
 	actionRunner actionrunner.ActionRunnerInterface,
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
-	stack string,
 	logger *steno.Logger,
 ) *RunOnceHandler {
 	return &RunOnceHandler{
@@ -52,18 +49,10 @@ func New(
 		actionRunner:       actionRunner,
 		logStreamerFactory: logStreamerFactory,
 		logger:             logger,
-		stack:              stack,
 	}
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
-	// check for stack compatibility
-	// move to task registry?
-	if runOnce.Stack != "" && handler.stack != runOnce.Stack {
-		handler.logger.Errord(map[string]interface{}{"runonce-guid": runOnce.Guid, "desired-stack": runOnce.Stack, "executor-stack": handler.stack}, "runonce.stack.mismatch")
-		return
-	}
-
 	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
 			runOnce,

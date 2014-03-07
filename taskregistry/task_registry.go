@@ -27,21 +27,26 @@ type TaskRegistry struct {
 	ExecutorDiskMB   int
 	RunOnces         map[string]models.RunOnce
 	lock             *sync.Mutex
-	fileName         string
+
+	stack    string
+	fileName string
 }
 
-func NewTaskRegistry(fileName string, memoryMB int, diskMB int) *TaskRegistry {
+func NewTaskRegistry(stack string, fileName string, memoryMB int, diskMB int) *TaskRegistry {
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
 		RunOnces:         make(map[string]models.RunOnce),
-		lock:             &sync.Mutex{},
-		fileName:         fileName,
+
+		lock: &sync.Mutex{},
+
+		stack:    stack,
+		fileName: fileName,
 	}
 }
 
-func LoadTaskRegistryFromDisk(filename string, memoryMB int, diskMB int) (*TaskRegistry, error) {
-	taskRegistry := NewTaskRegistry(filename, memoryMB, diskMB)
+func LoadTaskRegistryFromDisk(stack string, filename string, memoryMB int, diskMB int) (*TaskRegistry, error) {
+	taskRegistry := NewTaskRegistry(stack, filename, memoryMB, diskMB)
 	err := taskRegistry.hydrateFromDisk()
 	if err != nil {
 		return nil, err
@@ -56,6 +61,15 @@ func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
 	if !registry.hasCapacityForRunOnce(runOnce) {
 		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
 	}
+
+	if runOnce.Stack != "" && runOnce.Stack != registry.stack {
+		return fmt.Errorf(
+			"run once has incompatible stack: have %s, want %s",
+			runOnce.Stack,
+			registry.stack,
+		)
+	}
+
 	registry.RunOnces[runOnce.Guid] = runOnce
 	return nil
 }

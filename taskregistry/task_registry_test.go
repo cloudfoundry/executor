@@ -20,12 +20,15 @@ var _ = Describe("TaskRegistry", func() {
 
 	BeforeEach(func() {
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
+
 		runOnce = models.RunOnce{
 			MemoryMB: 255,
 			DiskMB:   1023,
-			Guid:     "I be totally yooniq, yo",
+			Guid:     "a guid",
+			Stack:    "some-stack",
 		}
-		taskRegistry = NewTaskRegistry(registryFileName, 256, 1024)
+
+		taskRegistry = NewTaskRegistry("some-stack", registryFileName, 256, 1024)
 	})
 
 	AfterEach(func() {
@@ -39,14 +42,43 @@ var _ = Describe("TaskRegistry", func() {
 			Ω(taskRegistry.RunOnces[runOnce.Guid]).To(Equal(runOnce))
 		})
 
-		Context("When there aren't enough resources", func() {
+		Context("when the RunOnce's stack is incompatible", func() {
+			BeforeEach(func() {
+				runOnceWithInvalidStack := runOnce
+				runOnceWithInvalidStack.Stack = "invalid"
+
+				runOnce = runOnceWithInvalidStack
+			})
+
+			It("rejects the RunOnce", func() {
+				err := taskRegistry.AddRunOnce(runOnce)
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("when not configured with a stack", func() {
+			BeforeEach(func() {
+				runOnceWithNoStack := runOnce
+				runOnceWithNoStack.Stack = ""
+
+				runOnce = runOnceWithNoStack
+			})
+
+			It("accepts RunOnces without discrimination", func() {
+				err := taskRegistry.AddRunOnce(runOnce)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(taskRegistry.RunOnces[runOnce.Guid]).To(Equal(runOnce))
+			})
+		})
+
+		Context("when there aren't enough resources", func() {
 			BeforeEach(func() {
 				err := taskRegistry.AddRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(taskRegistry.RunOnces).To(HaveLen(1))
 			})
 
-			It("Returns an error and adds nothing when the new RunOnce needs more memory than is available", func() {
+			It("returns an error and adds nothing when the new RunOnce needs more memory than is available", func() {
 				err := taskRegistry.AddRunOnce(models.RunOnce{
 					MemoryMB: 2,
 				})
@@ -54,7 +86,7 @@ var _ = Describe("TaskRegistry", func() {
 				Ω(taskRegistry.RunOnces).To(HaveLen(1))
 			})
 
-			It("Returns an error and adds nothing when the new RunOnce needs more disk than is available", func() {
+			It("returns an error and adds nothing when the new RunOnce needs more disk than is available", func() {
 				err := taskRegistry.AddRunOnce(models.RunOnce{
 					DiskMB: 2,
 				})
@@ -70,7 +102,7 @@ var _ = Describe("TaskRegistry", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("should reclaim the disk and memory from the RunOnce", func() {
+		It("reclaims the disk and memory from the RunOnce", func() {
 			taskRegistry.RemoveRunOnce(runOnce)
 
 			err := taskRegistry.AddRunOnce(runOnce)
@@ -79,44 +111,44 @@ var _ = Describe("TaskRegistry", func() {
 	})
 
 	Describe("WriteToDisk", func() {
-		It("Returns an error if the file cannot be written to", func() {
-			taskRegistry = NewTaskRegistry("/tmp", 256, 1024)
+		It("returns an error if the file cannot be written to", func() {
+			taskRegistry = NewTaskRegistry("some-stack", "/tmp", 256, 1024)
 			Ω(taskRegistry.WriteToDisk()).To(HaveOccurred())
 		})
 	})
 
 	Describe("LoadTaskRegistryFromDisk", func() {
-		var runOnce models.RunOnce
 		var diskRegistry *TaskRegistry
 
-		Context("When there is a valid task registry on disk", func() {
+		Context("when there is a valid task registry on disk", func() {
 			BeforeEach(func() {
-				diskRegistry = NewTaskRegistry(registryFileName, 512, 2048)
-				runOnce = models.RunOnce{
-					Guid:     "a guid",
-					MemoryMB: 256,
-					DiskMB:   1024,
-				}
-				diskRegistry.AddRunOnce(runOnce)
-				err := diskRegistry.WriteToDisk()
+				diskRegistry = NewTaskRegistry("some-stack", registryFileName, 512, 2048)
+
+				runOnceWithDifferentUsage := runOnce
+				runOnceWithDifferentUsage.MemoryMB = 256
+				runOnceWithDifferentUsage.DiskMB = 1024
+
+				runOnce = runOnceWithDifferentUsage
+
+				err := diskRegistry.AddRunOnce(runOnce)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = diskRegistry.WriteToDisk()
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should load up the task registry and return it", func() {
-				loadedTaskRegistry, err := LoadTaskRegistryFromDisk(registryFileName, 512, 2048)
+			It("loads up the task registry and returns it", func() {
+				loadedTaskRegistry, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 512, 2048)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(loadedTaskRegistry.RunOnces).To(HaveLen(1))
 				Ω(loadedTaskRegistry.RunOnces["a guid"]).To(Equal(runOnce))
-
-				err = loadedTaskRegistry.AddRunOnce(models.RunOnce{Guid: "another guid", MemoryMB: 1, DiskMB: 1})
-				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			Context("When the memory or disk change", func() {
+			Context("when the memory or disk change", func() {
 				Context("when there is sufficient memory and disk for the registered tasks", func() {
-					It("should update the registry with the new memory and disk values", func() {
-						loadedTaskRegistry, err := LoadTaskRegistryFromDisk(registryFileName, 513, 2049)
+					It("updates the registry with the new memory and disk values", func() {
+						loadedTaskRegistry, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 513, 2049)
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(loadedTaskRegistry.ExecutorMemoryMB).To(Equal(513))
 						Ω(loadedTaskRegistry.ExecutorDiskMB).To(Equal(2049))
@@ -124,15 +156,15 @@ var _ = Describe("TaskRegistry", func() {
 				})
 
 				Context("when there is insufficient memory for the registered tasks", func() {
-					It("should log and return an error", func() {
-						_, err := LoadTaskRegistryFromDisk(registryFileName, 255, 1024)
+					It("logs and returns an error", func() {
+						_, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 255, 1024)
 						Ω(err).Should(Equal(ErrorNotEnoughMemoryWhenLoadingSnapshot))
 					})
 				})
 
 				Context("when there is insufficient disk for the registered tasks", func() {
-					It("should log and return an error", func() {
-						_, err := LoadTaskRegistryFromDisk(registryFileName, 256, 1023)
+					It("logs and returns an error", func() {
+						_, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 256, 1023)
 						Ω(err).Should(Equal(ErrorNotEnoughDiskWhenLoadingSnapshot))
 					})
 				})
@@ -144,15 +176,15 @@ var _ = Describe("TaskRegistry", func() {
 				ioutil.WriteFile(registryFileName, []byte("ß"), os.ModePerm)
 			})
 
-			It("should return an error", func() {
-				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
+			It("returns an error", func() {
+				_, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 4096, 4096)
 				Ω(err).Should(Equal(ErrorRegistrySnapshotHasInvalidJSON))
 			})
 		})
 
 		Context("When there is not a task registry on disk", func() {
-			It("should return an error", func() {
-				_, err := LoadTaskRegistryFromDisk(registryFileName, 4096, 4096)
+			It("returns an error", func() {
+				_, err := LoadTaskRegistryFromDisk("some-stack", registryFileName, 4096, 4096)
 				Ω(err).Should(Equal(ErrorRegistrySnapshotDoesNotExist))
 			})
 		})
