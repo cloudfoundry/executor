@@ -2,7 +2,6 @@ package execute_action
 
 import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -13,14 +12,14 @@ type ExecuteAction struct {
 	runOnce            *models.RunOnce
 	logger             *steno.Logger
 	actionRunner       actionrunner.ActionRunnerInterface
-	logStreamerFactory *log_streamer_factory.LogStreamerFactory
+	logStreamerFactory log_streamer_factory.LogStreamerFactory
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	actionRunner actionrunner.ActionRunnerInterface,
-	logStreamerFactory *log_streamer_factory.LogStreamerFactory,
+	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 ) *ExecuteAction {
 	return &ExecuteAction{
 		runOnce:            runOnce,
@@ -31,14 +30,9 @@ func New(
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
-	var logStreamer logstreamer.LogStreamer
-	if action.runOnce.Log.SourceName != "" {
-		logStreamer = action.logStreamerFactory.Make(action.runOnce.Log)
-	}
-
 	executionResult, err := action.actionRunner.Run(
 		action.runOnce.ContainerHandle,
-		logStreamer,
+		action.logStreamerFactory(action.runOnce.Log),
 		action.runOnce.Actions,
 	)
 

@@ -27,7 +27,7 @@ type RunOnceHandler struct {
 	wardenClient gordon.Client
 	actionRunner actionrunner.ActionRunnerInterface
 
-	logStreamerFactory *log_streamer_factory.LogStreamerFactory
+	logStreamerFactory log_streamer_factory.LogStreamerFactory
 
 	logger *steno.Logger
 
@@ -41,7 +41,7 @@ func New(
 	wardenClient gordon.Client,
 	taskRegistry taskregistry.TaskRegistryInterface,
 	actionRunner actionrunner.ActionRunnerInterface,
-	logStreamerFactory *log_streamer_factory.LogStreamerFactory,
+	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	stack string,
 	logger *steno.Logger,
 ) *RunOnceHandler {

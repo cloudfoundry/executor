@@ -7,34 +7,27 @@ import (
 	"strconv"
 )
 
-type LogStreamerFactory struct {
-	loggregatorServer string
-	loggregatorSecret string
-}
+type LogStreamerFactory func(models.LogConfig) logstreamer.LogStreamer
 
-func New(
-	loggregatorServer string,
-	loggregatorSecret string,
-) *LogStreamerFactory {
-	return &LogStreamerFactory{
-		loggregatorServer: loggregatorServer,
-		loggregatorSecret: loggregatorSecret,
+func New(loggregatorServer string, loggregatorSecret string) LogStreamerFactory {
+	return func(logConfig models.LogConfig) logstreamer.LogStreamer {
+		if logConfig.SourceName == "" {
+			return nil
+		}
+
+		sourceId := ""
+		if logConfig.Index != nil {
+			sourceId = strconv.Itoa(*logConfig.Index)
+		}
+
+		logEmitter, _ := emitter.NewEmitter(
+			loggregatorServer,
+			logConfig.SourceName,
+			sourceId,
+			loggregatorSecret,
+			nil,
+		)
+
+		return logstreamer.New(logConfig.Guid, logEmitter)
 	}
-}
-
-func (factory *LogStreamerFactory) Make(logConfig models.LogConfig) logstreamer.LogStreamer {
-	sourceId := ""
-	if logConfig.Index != nil {
-		sourceId = strconv.Itoa(*logConfig.Index)
-	}
-
-	logEmitter, _ := emitter.NewEmitter(
-		factory.loggregatorServer,
-		logConfig.SourceName,
-		sourceId,
-		factory.loggregatorSecret,
-		nil,
-	)
-
-	return logstreamer.New(logConfig.Guid, logEmitter)
 }

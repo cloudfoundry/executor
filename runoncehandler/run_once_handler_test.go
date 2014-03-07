@@ -10,7 +10,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 )
@@ -46,7 +46,9 @@ var _ = Describe("RunOnceHandler", func() {
 			},
 		}
 
-		logStreamerFactory := &log_streamer_factory.LogStreamerFactory{}
+		logStreamerFactory := func(models.LogConfig) logstreamer.LogStreamer {
+			return nil
+		}
 
 		handler = New(
 			bbs,

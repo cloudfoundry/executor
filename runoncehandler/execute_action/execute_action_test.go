@@ -2,11 +2,8 @@ package execute_action_test
 
 import (
 	"errors"
-	"fmt"
-	"net"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -14,20 +11,19 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 )
 
 var _ = Describe("ExecuteAction", func() {
-	var action action_runner.Action
-	var result chan error
+	var (
+		action action_runner.Action
+		result chan error
 
-	var runOnce models.RunOnce
-	var actionRunner *fakeactionrunner.FakeActionRunner // TODO: this may go away
-	var loggregatorServer string
-
-	// so we can initialize an emitter :(
-	var fakeLoggregatorServer *net.UDPConn
+		runOnce      models.RunOnce
+		actionRunner *fakeactionrunner.FakeActionRunner // TODO: this may go away
+		logStreamer  logstreamer.LogStreamer
+	)
 
 	BeforeEach(func() {
 		result = make(chan error)
@@ -49,19 +45,14 @@ var _ = Describe("ExecuteAction", func() {
 		}
 
 		actionRunner = fakeactionrunner.New()
-
-		loggregatorPort := 3456 + config.GinkgoConfig.ParallelNode
-
-		logStreamerFactory := log_streamer_factory.New(
-			fmt.Sprintf("127.0.0.1:%d", loggregatorPort),
-			"conspiracy",
-		)
-
+		logStreamer = logstreamer.New("fake-log-streamer", nil)
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			actionRunner,
-			logStreamerFactory,
+			func(models.LogConfig) logstreamer.LogStreamer {
+				return logStreamer
+			},
 		)
 	})
 
@@ -78,7 +69,7 @@ var _ = Describe("ExecuteAction", func() {
 			go action.Perform(result)
 			Ω(<-result).Should(BeNil())
 
-			Ω(actionRunner.Streamer).Should(BeNil())
+			Ω(actionRunner.Streamer).Should(Equal(logStreamer))
 		})
 
 		Context("when logs are configured on the RunOnce", func() {
@@ -92,18 +83,6 @@ var _ = Describe("ExecuteAction", func() {
 				}
 
 				runOnce = runOnceWithLog
-
-				var err error
-
-				addr, err := net.ResolveUDPAddr("udp", loggregatorServer)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				fakeLoggregatorServer, err = net.ListenUDP("udp", addr)
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				fakeLoggregatorServer.Close()
 			})
 
 			It("runs the actions with a streamer", func() {
