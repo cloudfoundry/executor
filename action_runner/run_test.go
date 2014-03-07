@@ -26,6 +26,8 @@ var _ = Describe("Run", func() {
 	}
 
 	BeforeEach(func() {
+		performedActions = []string{}
+
 		actions = []Action{
 			spyAction("foo"),
 			spyAction("bar"),
