@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/action_runner/fake_action"
 )
 
 var _ = Describe("ActionRunner", func() {
@@ -16,20 +17,20 @@ var _ = Describe("ActionRunner", func() {
 		seq := make(chan int, 3)
 
 		runner := New([]Action{
-			FakeAction{
-				perform: func(result chan<- error) {
+			fake_action.FakeAction{
+				WhenPerforming: func(result chan<- error) {
 					seq <- 1
 					result <- nil
 				},
 			},
-			FakeAction{
-				perform: func(result chan<- error) {
+			fake_action.FakeAction{
+				WhenPerforming: func(result chan<- error) {
 					seq <- 2
 					result <- nil
 				},
 			},
-			FakeAction{
-				perform: func(result chan<- error) {
+			fake_action.FakeAction{
+				WhenPerforming: func(result chan<- error) {
 					seq <- 3
 					result <- nil
 				},
@@ -52,18 +53,18 @@ var _ = Describe("ActionRunner", func() {
 		cleanup := make(chan int, 3)
 
 		runner := New([]Action{
-			FakeAction{
-				cleanup: func() {
+			fake_action.FakeAction{
+				WhenCleaningUp: func() {
 					cleanup <- 1
 				},
 			},
-			FakeAction{
-				cleanup: func() {
+			fake_action.FakeAction{
+				WhenCleaningUp: func() {
 					cleanup <- 2
 				},
 			},
-			FakeAction{
-				cleanup: func() {
+			fake_action.FakeAction{
+				WhenCleaningUp: func() {
 					cleanup <- 3
 				},
 			},
@@ -89,29 +90,29 @@ var _ = Describe("ActionRunner", func() {
 			cleanup := make(chan int, 3)
 
 			runner := New([]Action{
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						seq <- 1
 						result <- nil
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						cleanup <- 1
 					},
 				},
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						result <- disaster
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						cleanup <- 2
 					},
 				},
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						seq <- 3
 						result <- nil
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						cleanup <- 3
 					},
 				},
@@ -144,18 +145,18 @@ var _ = Describe("ActionRunner", func() {
 			startCleanup := make(chan bool)
 
 			runner := New([]Action{
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						seq <- 1
 						result <- nil
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						<-startCleanup
 						cleanup <- 1
 					},
 				},
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						seq <- 2
 
 						waitingForInterrupt <- true
@@ -164,19 +165,19 @@ var _ = Describe("ActionRunner", func() {
 
 						result <- nil
 					},
-					cancel: func() {
+					WhenCancelling: func() {
 						interrupt <- true
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						cleanup <- 2
 					},
 				},
-				FakeAction{
-					perform: func(result chan<- error) {
+				fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
 						seq <- 3
 						result <- nil
 					},
-					cleanup: func() {
+					WhenCleaningUp: func() {
 						cleanup <- 3
 					},
 				},

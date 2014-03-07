@@ -1,4 +1,4 @@
-package action_runner_test
+package fake_action
 
 type FakeAction struct {
 	WhenPerforming func(result chan<- error)

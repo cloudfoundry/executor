@@ -5,6 +5,7 @@ import (
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/action_runner/fake_action"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -15,9 +16,9 @@ var _ = Describe("Run", func() {
 		performedActions []string
 	)
 
-	spyAction := func(name string) FakeAction {
-		return FakeAction{
-			perform: func(result chan<- error) {
+	spyAction := func(name string) fake_action.FakeAction {
+		return fake_action.FakeAction{
+			WhenPerforming: func(result chan<- error) {
 				performedActions = append(performedActions, name)
 				result <- nil
 			},
