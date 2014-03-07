@@ -191,7 +191,12 @@ var _ = Describe("ActionRunner", func() {
 
 			<-waitingForInterrupt
 
-			cancelled := runner.Cancel()
+			cancelled := make(chan bool)
+
+			go func() {
+				runner.Cancel()
+				cancelled <- true
+			}()
 
 			<-interrupted
 
@@ -199,7 +204,7 @@ var _ = Describe("ActionRunner", func() {
 
 			startCleanup <- true
 
-			<-cancelled
+			Eventually(cancelled).Should(Receive())
 
 			Ω(<-cleanup).Should(Equal(1))
 

@@ -58,10 +58,10 @@ actions:
 	result <- performResult
 }
 
-func (runner *ActionRunner) Cancel() <-chan bool {
+func (runner *ActionRunner) Cancel() {
 	cancelled := make(chan bool)
 	runner.cancel <- cancelled
-	return cancelled
+	<-cancelled
 }
 
 func (runner *ActionRunner) Cleanup() {
