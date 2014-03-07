@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -39,7 +40,7 @@ var _ = Describe("Uploader", func() {
 		BeforeEach(func() {
 			file, _ = ioutil.TempFile("", "foo")
 			file.WriteString("content that we can check later")
-			file.Seek(0, 0)
+			file.Close()
 		})
 
 		AfterEach(func() {
@@ -66,7 +67,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			JustBeforeEach(func() {
-				uploader.Upload(file, url)
+				uploader.Upload(file.Name(), url)
 			})
 
 			It("uploads the file to the url", func() {
@@ -76,6 +77,7 @@ var _ = Describe("Uploader", func() {
 
 				Ω(request.URL.Path).Should(Equal("/somepath"))
 				Ω(request.Header.Get("Content-Type")).Should(Equal("application/octet-stream"))
+				Ω(strconv.Atoi(request.Header.Get("Content-Length"))).Should(BeNumerically("==", 31))
 				Ω(string(data)).Should(Equal("content that we can check later"))
 			})
 		})
@@ -98,14 +100,14 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should retry 3 times", func() {
-				uploader.Upload(file, url)
+				uploader.Upload(file.Name(), url)
 				lock.Lock()
 				Ω(attemptCount).Should(Equal(3))
 				lock.Unlock()
 			})
 
 			It("should return an error", func() {
-				err := uploader.Upload(file, url)
+				err := uploader.Upload(file.Name(), url)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -119,7 +121,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				err := uploader.Upload(file, url)
+				err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -133,7 +135,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				err := uploader.Upload(file, url)
+				err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})

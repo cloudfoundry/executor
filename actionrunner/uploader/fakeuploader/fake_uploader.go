@@ -3,22 +3,21 @@ package fakeuploader
 import (
 	"errors"
 	"net/url"
-	"os"
 )
 
 type FakeUploader struct {
-	UploadedFiles []*os.File
-	UploadUrls    []*url.URL
-	alwaysFail    bool
+	UploadedFileLocations []string
+	UploadUrls            []*url.URL
+	alwaysFail            bool
 }
 
-func (uploader *FakeUploader) Upload(sourceFile *os.File, destinationUrl *url.URL) error {
+func (uploader *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL) error {
 	if uploader.alwaysFail {
 		return errors.New("I accidentally the upload")
 	}
 
 	uploader.UploadUrls = append(uploader.UploadUrls, destinationUrl)
-	uploader.UploadedFiles = append(uploader.UploadedFiles, sourceFile)
+	uploader.UploadedFileLocations = append(uploader.UploadedFileLocations, fileLocation)
 
 	return nil
 }

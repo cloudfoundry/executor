@@ -62,21 +62,16 @@ func (action *UploadAction) perform() error {
 	if err != nil {
 		return err
 	}
-	fileName := tempFile.Name()
+	fileLocation := tempFile.Name()
 	tempFile.Close()
-	defer os.RemoveAll(fileName)
+	defer os.RemoveAll(fileLocation)
 
 	currentUser, err := user.Current()
 	if err != nil {
 		panic("existential failure: " + err.Error())
 	}
 
-	_, err = action.wardenClient.CopyOut(action.containerHandle, action.model.From, fileName, currentUser.Username)
-	if err != nil {
-		return err
-	}
-
-	fileToUpload, err := os.Open(fileName)
+	_, err = action.wardenClient.CopyOut(action.containerHandle, action.model.From, fileLocation, currentUser.Username)
 	if err != nil {
 		return err
 	}
@@ -86,5 +81,5 @@ func (action *UploadAction) perform() error {
 		return err
 	}
 
-	return action.uploader.Upload(fileToUpload, url)
+	return action.uploader.Upload(fileLocation, url)
 }

@@ -31,8 +31,7 @@ var (
 	}
 )
 
-// Unmarshal parses RawResponse and stores the result in Response
-func (rr *RawResponse) Unmarshal() (*Response, error) {
+func (rr *RawResponse) toResponse() (*Response, error) {
 	if rr.StatusCode != http.StatusOK && rr.StatusCode != http.StatusCreated {
 		return nil, handleError(rr.Body)
 	}

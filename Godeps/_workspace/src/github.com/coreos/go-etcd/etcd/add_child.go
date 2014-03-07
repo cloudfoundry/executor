@@ -8,7 +8,7 @@ func (c *Client) AddChildDir(key string, ttl uint64) (*Response, error) {
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 // Add a new file with a random etcd-generated key under the given path.
@@ -19,5 +19,5 @@ func (c *Client) AddChild(key string, value string, ttl uint64) (*Response, erro
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }

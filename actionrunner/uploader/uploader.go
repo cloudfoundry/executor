@@ -11,7 +11,7 @@ import (
 )
 
 type Uploader interface {
-	Upload(sourceFile *os.File, destinationUrl *url.URL) error
+	Upload(fileLocation string, destinationUrl *url.URL) error
 }
 
 type URLUploader struct {
@@ -26,7 +26,7 @@ func New(timeout time.Duration, logger *steno.Logger) Uploader {
 	}
 }
 
-func (uploader *URLUploader) Upload(sourceFile *os.File, url *url.URL) error {
+func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) error {
 	httpTransport := &http.Transport{
 		ResponseHeaderTimeout: uploader.timeout,
 	}
@@ -37,8 +37,27 @@ func (uploader *URLUploader) Upload(sourceFile *os.File, url *url.URL) error {
 	var resp *http.Response
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
+		var request *http.Request
+		var sourceFile *os.File
+		var fileInfo os.FileInfo
+
 		uploader.logger.Infof("uploader.attempt #%d", attempt)
-		resp, err = httpClient.Post(url.String(), "application/octet-stream", sourceFile)
+
+		sourceFile, err = os.Open(fileLocation)
+		if err != nil {
+			return err
+		}
+
+		fileInfo, err = sourceFile.Stat()
+		if err != nil {
+			return err
+		}
+
+		request, err = http.NewRequest("POST", url.String(), sourceFile)
+		request.ContentLength = fileInfo.Size()
+		request.Header.Set("Content-Type", "application/octet-stream")
+
+		resp, err = httpClient.Do(request)
 		if err == nil {
 			break
 		}

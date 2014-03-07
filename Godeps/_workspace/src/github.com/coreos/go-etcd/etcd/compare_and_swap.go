@@ -9,7 +9,7 @@ func (c *Client) CompareAndSwap(key string, value string, ttl uint64,
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 func (c *Client) RawCompareAndSwap(key string, value string, ttl uint64,
@@ -18,7 +18,7 @@ func (c *Client) RawCompareAndSwap(key string, value string, ttl uint64,
 		return nil, fmt.Errorf("You must give either prevValue or prevIndex.")
 	}
 
-	options := Options{}
+	options := options{}
 	if prevValue != "" {
 		options["prevValue"] = prevValue
 	}

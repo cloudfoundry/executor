@@ -16,7 +16,7 @@ func (c *Client) Delete(key string, recursive bool) (*Response, error) {
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 // DeleteDir deletes an empty directory or a key value pair
@@ -27,11 +27,11 @@ func (c *Client) DeleteDir(key string) (*Response, error) {
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 func (c *Client) RawDelete(key string, recursive bool, dir bool) (*RawResponse, error) {
-	ops := Options{
+	ops := options{
 		"recursive": recursive,
 		"dir":       dir,
 	}
