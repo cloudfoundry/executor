@@ -13,7 +13,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
 )
 

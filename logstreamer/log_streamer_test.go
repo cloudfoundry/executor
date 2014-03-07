@@ -1,7 +1,7 @@
 package logstreamer_test
 
 import (
-	. "github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
+	. "github.com/cloudfoundry-incubator/executor/logstreamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"strings"

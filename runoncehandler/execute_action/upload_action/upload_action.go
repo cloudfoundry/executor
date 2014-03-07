@@ -9,7 +9,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )

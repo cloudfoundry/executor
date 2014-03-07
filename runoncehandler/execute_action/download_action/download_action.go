@@ -9,8 +9,8 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
+	"github.com/cloudfoundry-incubator/executor/downloader"
+	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )

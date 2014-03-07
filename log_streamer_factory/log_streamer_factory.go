@@ -1,7 +1,7 @@
 package log_streamer_factory
 
 import (
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"strconv"

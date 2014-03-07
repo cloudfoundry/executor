@@ -1,11 +1,11 @@
 package run_once_transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/downloader"
+	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -14,7 +14,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"

@@ -7,9 +7,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler"

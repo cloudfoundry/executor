@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
+	. "github.com/cloudfoundry-incubator/executor/uploader"
 	steno "github.com/cloudfoundry/gosteno"
 
 	. "github.com/onsi/ginkgo"

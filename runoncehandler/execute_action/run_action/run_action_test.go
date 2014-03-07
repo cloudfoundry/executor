@@ -15,8 +15,8 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
 )
 

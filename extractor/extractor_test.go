@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	. "github.com/cloudfoundry-incubator/executor/actionrunner/extractor"
+	. "github.com/cloudfoundry-incubator/executor/extractor"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
