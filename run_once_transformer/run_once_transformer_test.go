@@ -3,6 +3,7 @@ package run_once_transformer_test
 import (
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer/fakelogstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
@@ -27,19 +28,25 @@ var _ = Describe("RunOnceTransformer", func() {
 		backendPlugin      backend_plugin.BackendPlugin
 		downloader         downloader.Downloader
 		logger             *steno.Logger
-		streamer           *fakelogstreamer.FakeLogStreamer
+		logStreamer        *fakelogstreamer.FakeLogStreamer
 		uploader           uploader.Uploader
 		wardenClient       *fake_gordon.FakeGordon
 		runOnceTransformer *RunOnceTransformer
 	)
 
 	BeforeEach(func() {
+		logStreamer = fakelogstreamer.New()
 		backendPlugin = linuxplugin.New()
 		downloader = &fakedownloader.FakeDownloader{}
 		uploader = &fakeuploader.FakeUploader{}
 		logger = &steno.Logger{}
+
+		logStreamerFactory := func(models.LogConfig) logstreamer.LogStreamer {
+			return logStreamer
+		}
+
 		runOnceTransformer = NewRunOnceTransformer(
-			streamer,
+			logStreamerFactory,
 			downloader,
 			uploader,
 			backendPlugin,
@@ -70,7 +77,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			run_action.New(
 				runActionModel,
 				"some-container-handle",
-				streamer,
+				logStreamer,
 				backendPlugin,
 				wardenClient,
 				logger,

@@ -3,9 +3,9 @@ package run_once_transformer
 import (
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
@@ -16,17 +16,17 @@ import (
 )
 
 type RunOnceTransformer struct {
-	streamer      logstreamer.LogStreamer
-	downloader    downloader.Downloader
-	uploader      uploader.Uploader
-	backendPlugin backend_plugin.BackendPlugin
-	wardenClient  gordon.Client
-	logger        *steno.Logger
-	tempDir       string
+	logStreamerFactory log_streamer_factory.LogStreamerFactory
+	downloader         downloader.Downloader
+	uploader           uploader.Uploader
+	backendPlugin      backend_plugin.BackendPlugin
+	wardenClient       gordon.Client
+	logger             *steno.Logger
+	tempDir            string
 }
 
 func NewRunOnceTransformer(
-	streamer logstreamer.LogStreamer,
+	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	downloader downloader.Downloader,
 	uploader uploader.Uploader,
 	backendPlugin backend_plugin.BackendPlugin,
@@ -35,19 +35,21 @@ func NewRunOnceTransformer(
 	tempDir string,
 ) *RunOnceTransformer {
 	return &RunOnceTransformer{
-		streamer:      streamer,
-		downloader:    downloader,
-		uploader:      uploader,
-		backendPlugin: backendPlugin,
-		wardenClient:  wardenClient,
-		logger:        logger,
-		tempDir:       tempDir,
+		logStreamerFactory: logStreamerFactory,
+		downloader:         downloader,
+		uploader:           uploader,
+		backendPlugin:      backendPlugin,
+		wardenClient:       wardenClient,
+		logger:             logger,
+		tempDir:            tempDir,
 	}
 }
 
 func (transformer *RunOnceTransformer) ActionsFor(
 	runOnce *models.RunOnce,
 ) []action_runner.Action {
+	logStreamer := transformer.logStreamerFactory(runOnce.Log)
+
 	subActions := []action_runner.Action{}
 
 	var subAction action_runner.Action
@@ -58,7 +60,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			subAction = run_action.New(
 				actionModel,
 				runOnce.ContainerHandle,
-				transformer.streamer,
+				logStreamer,
 				transformer.backendPlugin,
 				transformer.wardenClient,
 				transformer.logger,
