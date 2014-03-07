@@ -72,7 +72,7 @@ func (action *UploadAction) perform() error {
 	}
 
 	_, err = action.wardenClient.CopyOut(
-		action.containerHandle,
+		action.runOnce.ContainerHandle,
 		action.model.From,
 		fileLocation,
 		currentUser.Username,
