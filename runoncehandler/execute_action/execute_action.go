@@ -1,42 +1,36 @@
 package execute_action
 
 import (
-	"github.com/cloudfoundry-incubator/executor/actionrunner"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 )
 
 type ExecuteAction struct {
-	runOnce            *models.RunOnce
-	logger             *steno.Logger
-	actionRunner       actionrunner.ActionRunnerInterface
-	logStreamerFactory log_streamer_factory.LogStreamerFactory
+	runOnce      *models.RunOnce
+	logger       *steno.Logger
+	actionRunner *action_runner.ActionRunner
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
-	actionRunner actionrunner.ActionRunnerInterface,
-	logStreamerFactory log_streamer_factory.LogStreamerFactory,
+	actionRunner *action_runner.ActionRunner,
 ) *ExecuteAction {
 	return &ExecuteAction{
-		runOnce:            runOnce,
-		logger:             logger,
-		actionRunner:       actionRunner,
-		logStreamerFactory: logStreamerFactory,
+		runOnce:      runOnce,
+		logger:       logger,
+		actionRunner: actionRunner,
 	}
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
-	executionResult, err := action.actionRunner.Run(
-		action.runOnce,
-		action.logStreamerFactory(action.runOnce.Log),
-		action.runOnce.Actions,
-	)
+	actionResult := make(chan error, 1)
 
-	action.runOnce.Result = executionResult
+	go action.actionRunner.Perform(actionResult)
+
+	err := <-actionResult
+
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{

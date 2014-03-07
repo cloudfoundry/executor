@@ -10,8 +10,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/action_runner/fake_action"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action"
 )
 
@@ -21,8 +20,7 @@ var _ = Describe("ExecuteAction", func() {
 		result chan error
 
 		runOnce      models.RunOnce
-		actionRunner *fakeactionrunner.FakeActionRunner // TODO: this may go away
-		logStreamer  logstreamer.LogStreamer
+		actionRunner *action_runner.ActionRunner
 	)
 
 	BeforeEach(func() {
@@ -43,83 +41,52 @@ var _ = Describe("ExecuteAction", func() {
 
 			ContainerHandle: "some-container-handle",
 		}
+	})
 
-		actionRunner = fakeactionrunner.New()
-		logStreamer = logstreamer.New("fake-log-streamer", nil)
+	JustBeforeEach(func() {
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			actionRunner,
-			func(models.LogConfig) logstreamer.LogStreamer {
-				return logStreamer
-			},
 		)
 	})
 
 	Describe("Perform", func() {
-		It("starts running the actions", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
-
-			Ω(actionRunner.RunOnce).Should(Equal(&runOnce))
-			Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
-		})
-
-		It("does not initialize with the streamer by default", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
-
-			Ω(actionRunner.Streamer).Should(Equal(logStreamer))
-		})
-
-		Context("when logs are configured on the RunOnce", func() {
+		Context("when the sub-actions succeed", func() {
 			BeforeEach(func() {
-				runOnceWithLog := runOnce
-
-				runOnceWithLog.Log = models.LogConfig{
-					Guid:       "totally-unique",
-					SourceName: "XYZ",
-					Index:      nil,
-				}
-
-				runOnce = runOnceWithLog
+				actionRunner = action_runner.New([]action_runner.Action{
+					fake_action.FakeAction{
+						WhenPerforming: func(result chan<- error) {
+							result <- nil
+						},
+					},
+				})
 			})
 
-			It("runs the actions with a streamer", func() {
+			It("sends back no error and has Failed as false", func() {
 				go action.Perform(result)
-				Ω(<-result).Should(BeNil())
+				Ω(<-result).ShouldNot(HaveOccurred())
 
-				Ω(actionRunner.Streamer).ShouldNot(BeNil())
+				Ω(runOnce.Failed).Should(BeFalse())
 			})
 		})
 
-		Context("when the RunOnce actions succeed", func() {
-			BeforeEach(func() {
-				actionRunner.RunResult = "runonce-result"
-			})
-
-			It("sets the Result on the RunOnce", func() {
-				Ω(runOnce.Result).Should(BeZero())
-
-				go action.Perform(result)
-				Ω(<-result).Should(BeNil())
-
-				Ω(runOnce.Result).Should(Equal("runonce-result"))
-			})
-		})
-
-		Context("when the RunOnce actions fail", func() {
+		Context("when the sub-actions fail", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				actionRunner.RunError = disaster
+				actionRunner = action_runner.New([]action_runner.Action{
+					fake_action.FakeAction{
+						WhenPerforming: func(result chan<- error) {
+							result <- disaster
+						},
+					},
+				})
 			})
 
-			It("sets Failed to true on the RunOnce with the error as the reason", func() {
-				Ω(runOnce.Result).Should(BeZero())
-
+			It("sends back no error and has Failed as false", func() {
 				go action.Perform(result)
-				Ω(<-result).Should(BeNil())
+				Ω(<-result).ShouldNot(HaveOccurred())
 
 				Ω(runOnce.Failed).Should(BeTrue())
 				Ω(runOnce.FailureReason).Should(Equal("oh no!"))

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"log"
 	"os"
 	"os/signal"
@@ -16,12 +15,13 @@ import (
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/actionrunner"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
 )
@@ -221,18 +221,27 @@ func main() {
 	linuxPlugin := linuxplugin.New()
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
-	theFlash := actionrunner.New(wardenClient, linuxPlugin, downloader, uploader, *tempDir, logger)
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,
 		*loggregatorSecret,
 	)
 
+	transformer := run_once_transformer.NewRunOnceTransformer(
+		logStreamerFactory,
+		downloader,
+		uploader,
+		linuxPlugin,
+		wardenClient,
+		logger,
+		*tempDir,
+	)
+
 	runOnceHandler := runoncehandler.New(
 		bbs,
 		wardenClient,
 		taskRegistry,
-		theFlash,
+		transformer,
 		action_runner.Run,
 		logStreamerFactory,
 		logger,

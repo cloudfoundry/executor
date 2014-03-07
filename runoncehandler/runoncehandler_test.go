@@ -7,8 +7,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actionrunner/fakeactionrunner"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/actionrunner/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -43,17 +46,30 @@ var _ = Describe("RunOnceHandler", func() {
 			bbs := bbs.BBS{}
 			wardenClient := &fake_gordon.FakeGordon{}
 			taskRegistry := &faketaskregistry.FakeTaskRegistry{}
-			actionRunner := &fakeactionrunner.FakeActionRunner{}
 			logStreamerFactory := func(models.LogConfig) logstreamer.LogStreamer {
 				return nil
 			}
 			logger := &steno.Logger{}
 
+			backendPlugin := linuxplugin.New()
+			downloader := &fakedownloader.FakeDownloader{}
+			uploader := &fakeuploader.FakeUploader{}
+
+			runOnceTransformer := run_once_transformer.NewRunOnceTransformer(
+				logStreamerFactory,
+				downloader,
+				uploader,
+				backendPlugin,
+				wardenClient,
+				logger,
+				"/fake/temp/dir",
+			)
+
 			handler = New(
 				bbs,
 				wardenClient,
 				taskRegistry,
-				actionRunner,
+				runOnceTransformer,
 				spyPerformer,
 				logStreamerFactory,
 				logger,

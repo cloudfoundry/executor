@@ -63,3 +63,7 @@ func (runner *ActionRunner) Cancel() <-chan bool {
 	runner.cancel <- cancelled
 	return cancelled
 }
+
+func (runner *ActionRunner) Cleanup() {
+	// TODO: clean up executed actions...
+}
