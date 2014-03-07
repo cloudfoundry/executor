@@ -53,7 +53,7 @@ func New(
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
-	runner := action_runner.New([]action_runner.Action{
+	<-action_runner.Run([]action_runner.Action{
 		register_action.New(
 			runOnce,
 			handler.logger,
@@ -87,10 +87,4 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			handler.bbs,
 		),
 	})
-
-	result := make(chan error, 1)
-
-	go runner.Perform(result)
-
-	<-result
 }
