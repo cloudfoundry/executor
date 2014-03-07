@@ -7,27 +7,27 @@ import (
 )
 
 type ExecuteAction struct {
-	runOnce      *models.RunOnce
-	logger       *steno.Logger
-	actionRunner *action_runner.ActionRunner
+	runOnce *models.RunOnce
+	logger  *steno.Logger
+	action  action_runner.Action
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
-	actionRunner *action_runner.ActionRunner,
+	action action_runner.Action,
 ) *ExecuteAction {
 	return &ExecuteAction{
-		runOnce:      runOnce,
-		logger:       logger,
-		actionRunner: actionRunner,
+		runOnce: runOnce,
+		logger:  logger,
+		action:  action,
 	}
 }
 
 func (action ExecuteAction) Perform(result chan<- error) {
 	actionResult := make(chan error, 1)
 
-	go action.actionRunner.Perform(actionResult)
+	go action.action.Perform(actionResult)
 
 	err := <-actionResult
 

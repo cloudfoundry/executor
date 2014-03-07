@@ -19,8 +19,8 @@ var _ = Describe("ExecuteAction", func() {
 		action action_runner.Action
 		result chan error
 
-		runOnce      models.RunOnce
-		actionRunner *action_runner.ActionRunner
+		runOnce   models.RunOnce
+		subAction action_runner.Action
 	)
 
 	BeforeEach(func() {
@@ -47,20 +47,18 @@ var _ = Describe("ExecuteAction", func() {
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
-			actionRunner,
+			subAction,
 		)
 	})
 
 	Describe("Perform", func() {
 		Context("when the sub-actions succeed", func() {
 			BeforeEach(func() {
-				actionRunner = action_runner.New([]action_runner.Action{
-					fake_action.FakeAction{
-						WhenPerforming: func(result chan<- error) {
-							result <- nil
-						},
+				subAction = fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
+						result <- nil
 					},
-				})
+				}
 			})
 
 			It("sends back no error and has Failed as false", func() {
@@ -75,13 +73,11 @@ var _ = Describe("ExecuteAction", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				actionRunner = action_runner.New([]action_runner.Action{
-					fake_action.FakeAction{
-						WhenPerforming: func(result chan<- error) {
-							result <- disaster
-						},
+				subAction = fake_action.FakeAction{
+					WhenPerforming: func(result chan<- error) {
+						result <- disaster
 					},
-				})
+				}
 			})
 
 			It("sends back no error and has Failed as false", func() {
