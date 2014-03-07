@@ -24,8 +24,8 @@ var _ = Describe("RunAction", func() {
 	var action action_runner.Action
 	var result chan error
 
+	var runOnce *models.RunOnce
 	var runAction models.RunAction
-	var containerHandle string
 	var fakeStreamer *fakelogstreamer.FakeLogStreamer
 	var streamer logstreamer.LogStreamer
 	var backendPlugin *linuxplugin.LinuxPlugin
@@ -37,14 +37,16 @@ var _ = Describe("RunAction", func() {
 	BeforeEach(func() {
 		result = make(chan error)
 
+		runOnce = &models.RunOnce{
+			ContainerHandle: "some-container-handle",
+		}
+
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: [][]string{
 				{"A", "1"},
 			},
 		}
-
-		containerHandle = "some-container-handle"
 
 		fakeStreamer = fakelogstreamer.New()
 
@@ -64,8 +66,8 @@ var _ = Describe("RunAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
+			runOnce,
 			runAction,
-			containerHandle,
 			streamer,
 			backendPlugin,
 			wardenClient,

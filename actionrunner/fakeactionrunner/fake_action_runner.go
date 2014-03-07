@@ -6,19 +6,19 @@ import (
 )
 
 type FakeActionRunner struct {
-	ContainerHandle string
-	Actions         []models.ExecutorAction
-	Streamer        logstreamer.LogStreamer
-	RunError        error
-	RunResult       string
+	RunOnce   *models.RunOnce
+	Actions   []models.ExecutorAction
+	Streamer  logstreamer.LogStreamer
+	RunError  error
+	RunResult string
 }
 
 func New() *FakeActionRunner {
 	return &FakeActionRunner{}
 }
 
-func (runner *FakeActionRunner) Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (string, error) {
-	runner.ContainerHandle = containerHandle
+func (runner *FakeActionRunner) Run(runOnce *models.RunOnce, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (string, error) {
+	runner.RunOnce = runOnce
 	runner.Streamer = streamer
 	runner.Actions = actions
 	return runner.RunResult, runner.RunError

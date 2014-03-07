@@ -21,8 +21,8 @@ var _ = Describe("UploadAction", func() {
 	var action action_runner.Action
 	var result chan error
 
+	var runOnce *models.RunOnce
 	var uploadAction models.UploadAction
-	var containerHandle string
 	var uploader *fakeuploader.FakeUploader
 	var tempDir string
 	var wardenClient *fake_gordon.FakeGordon
@@ -33,12 +33,14 @@ var _ = Describe("UploadAction", func() {
 
 		result = make(chan error)
 
+		runOnce = &models.RunOnce{
+			ContainerHandle: "some-container-handle",
+		}
+
 		uploadAction = models.UploadAction{
 			To:   "http://mr_jones",
 			From: "/Antarctica",
 		}
-
-		containerHandle = "some-container-handle"
 
 		uploader = &fakeuploader.FakeUploader{}
 
@@ -52,8 +54,8 @@ var _ = Describe("UploadAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
+			runOnce,
 			uploadAction,
-			containerHandle,
 			uploader,
 			tempDir,
 			wardenClient,
@@ -74,7 +76,7 @@ var _ = Describe("UploadAction", func() {
 			Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
 		})
 
-		It("places the file in the container", func() {
+		It("copies the file out of the container", func() {
 			perform()
 
 			currentUser, err := user.Current()
@@ -83,6 +85,7 @@ var _ = Describe("UploadAction", func() {
 			Ω(wardenClient.ThingsCopiedOut()).ShouldNot(BeEmpty())
 
 			copiedFile := wardenClient.ThingsCopiedOut()[0]
+			Ω(copiedFile.Handle).Should(Equal("some-container-handle"))
 			Ω(copiedFile.Src).To(Equal("/Antarctica"))
 			Ω(copiedFile.Owner).To(Equal(currentUser.Username))
 		})

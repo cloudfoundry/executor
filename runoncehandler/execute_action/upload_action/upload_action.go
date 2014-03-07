@@ -15,37 +15,37 @@ import (
 )
 
 type UploadAction struct {
-	model           models.UploadAction
-	containerHandle string
-	uploader        uploader.Uploader
-	tempDir         string
-	backendPlugin   backend_plugin.BackendPlugin
-	wardenClient    gordon.Client
-	logger          *steno.Logger
+	runOnce       *models.RunOnce
+	model         models.UploadAction
+	uploader      uploader.Uploader
+	tempDir       string
+	backendPlugin backend_plugin.BackendPlugin
+	wardenClient  gordon.Client
+	logger        *steno.Logger
 }
 
 func New(
+	runOnce *models.RunOnce,
 	model models.UploadAction,
-	containerHandle string,
 	uploader uploader.Uploader,
 	tempDir string,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 ) *UploadAction {
 	return &UploadAction{
-		model:           model,
-		containerHandle: containerHandle,
-		uploader:        uploader,
-		tempDir:         tempDir,
-		wardenClient:    wardenClient,
-		logger:          logger,
+		runOnce:      runOnce,
+		model:        model,
+		uploader:     uploader,
+		tempDir:      tempDir,
+		wardenClient: wardenClient,
+		logger:       logger,
 	}
 }
 
 func (action *UploadAction) Perform(result chan<- error) {
 	action.logger.Infod(
 		map[string]interface{}{
-			"handle": action.containerHandle,
+			"handle": action.runOnce.ContainerHandle,
 		},
 		"runonce.handle.upload-action",
 	)
@@ -71,7 +71,12 @@ func (action *UploadAction) perform() error {
 		panic("existential failure: " + err.Error())
 	}
 
-	_, err = action.wardenClient.CopyOut(action.containerHandle, action.model.From, fileName, currentUser.Username)
+	_, err = action.wardenClient.CopyOut(
+		action.runOnce.ContainerHandle,
+		action.model.From,
+		fileName,
+		currentUser.Username,
+	)
 	if err != nil {
 		return err
 	}

@@ -15,30 +15,27 @@ import (
 var _ = Describe("FetchResultAction", func() {
 	var (
 		action            action_runner.Action
-		containerHandle   string
 		fetchResultAction models.FetchResultAction
 		logger            *steno.Logger
 		err               error
-		runOnce           models.RunOnce
+		runOnce           *models.RunOnce
 		wardenClient      *fake_gordon.FakeGordon
 	)
 
 	BeforeEach(func() {
 		err = nil
-		containerHandle = "some-container-handle"
+		runOnce = &models.RunOnce{}
 		fetchResultAction = models.FetchResultAction{
 			File: "/tmp/foo",
 		}
 		logger = steno.NewLogger("test-logger")
 		wardenClient = fake_gordon.New()
-		runOnce = models.RunOnce{}
 	})
 
 	JustBeforeEach(func(done Done) {
 		action = New(
-			&runOnce,
+			runOnce,
 			fetchResultAction,
-			containerHandle,
 			"/tmp",
 			wardenClient,
 			logger,

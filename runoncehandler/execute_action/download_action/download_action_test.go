@@ -2,7 +2,6 @@ package download_action_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"io/ioutil"
 
 	. "github.com/onsi/ginkgo"
@@ -12,6 +11,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
 
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/actionrunner/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
@@ -21,8 +21,8 @@ var _ = Describe("DownloadAction", func() {
 	var action action_runner.Action
 	var result chan error
 
+	var runOnce *models.RunOnce
 	var downloadAction models.DownloadAction
-	var containerHandle string
 	var downloader *fakedownloader.FakeDownloader
 	var tempDir string
 	var backendPlugin *linuxplugin.LinuxPlugin
@@ -40,7 +40,9 @@ var _ = Describe("DownloadAction", func() {
 			Extract: false,
 		}
 
-		containerHandle = "some-container-handle"
+		runOnce = &models.RunOnce{
+			ContainerHandle: "some-container-handle",
+		}
 
 		downloader = &fakedownloader.FakeDownloader{}
 
@@ -56,8 +58,8 @@ var _ = Describe("DownloadAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
+			runOnce,
 			downloadAction,
-			containerHandle,
 			downloader,
 			tempDir,
 			backendPlugin,

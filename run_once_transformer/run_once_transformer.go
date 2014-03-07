@@ -58,8 +58,8 @@ func (transformer *RunOnceTransformer) ActionsFor(
 		switch actionModel := a.Action.(type) {
 		case models.RunAction:
 			subAction = run_action.New(
+				runOnce,
 				actionModel,
-				runOnce.ContainerHandle,
 				logStreamer,
 				transformer.backendPlugin,
 				transformer.wardenClient,
@@ -67,8 +67,8 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		case models.DownloadAction:
 			subAction = download_action.New(
+				runOnce,
 				actionModel,
-				runOnce.ContainerHandle,
 				transformer.downloader,
 				transformer.tempDir,
 				transformer.backendPlugin,
@@ -77,8 +77,8 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		case models.UploadAction:
 			subAction = upload_action.New(
+				runOnce,
 				actionModel,
-				runOnce.ContainerHandle,
 				transformer.uploader,
 				transformer.tempDir,
 				transformer.wardenClient,
@@ -88,7 +88,6 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			subAction = fetch_result_action.New(
 				runOnce,
 				actionModel,
-				runOnce.ContainerHandle,
 				transformer.tempDir,
 				transformer.wardenClient,
 				transformer.logger,

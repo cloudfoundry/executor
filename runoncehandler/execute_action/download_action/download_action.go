@@ -16,18 +16,18 @@ import (
 )
 
 type DownloadAction struct {
-	model           models.DownloadAction
-	containerHandle string
-	downloader      downloader.Downloader
-	tempDir         string
-	backendPlugin   backend_plugin.BackendPlugin
-	wardenClient    gordon.Client
-	logger          *steno.Logger
+	runOnce       *models.RunOnce
+	model         models.DownloadAction
+	downloader    downloader.Downloader
+	tempDir       string
+	backendPlugin backend_plugin.BackendPlugin
+	wardenClient  gordon.Client
+	logger        *steno.Logger
 }
 
 func New(
+	runOnce *models.RunOnce,
 	model models.DownloadAction,
-	containerHandle string,
 	downloader downloader.Downloader,
 	tempDir string,
 	backendPlugin backend_plugin.BackendPlugin,
@@ -35,20 +35,20 @@ func New(
 	logger *steno.Logger,
 ) *DownloadAction {
 	return &DownloadAction{
-		model:           model,
-		containerHandle: containerHandle,
-		downloader:      downloader,
-		tempDir:         tempDir,
-		backendPlugin:   backendPlugin,
-		wardenClient:    wardenClient,
-		logger:          logger,
+		runOnce:       runOnce,
+		model:         model,
+		downloader:    downloader,
+		tempDir:       tempDir,
+		backendPlugin: backendPlugin,
+		wardenClient:  wardenClient,
+		logger:        logger,
 	}
 }
 
 func (action *DownloadAction) Perform(result chan<- error) {
 	action.logger.Infod(
 		map[string]interface{}{
-			"handle": action.containerHandle,
+			"handle": action.runOnce.ContainerHandle,
 		},
 		"runonce.handle.download-action",
 	)
@@ -81,7 +81,7 @@ func (action *DownloadAction) perform() error {
 	}
 
 	createParentDirCommand := action.backendPlugin.BuildCreateDirectoryRecursivelyCommand(filepath.Dir(action.model.To))
-	_, _, err = action.wardenClient.Run(action.containerHandle, createParentDirCommand)
+	_, _, err = action.wardenClient.Run(action.runOnce.ContainerHandle, createParentDirCommand)
 	if err != nil {
 		return err
 	}
@@ -100,14 +100,14 @@ func (action *DownloadAction) perform() error {
 
 		return action.copyExtractedFiles(extractionDir, action.model.To)
 	} else {
-		_, err = action.wardenClient.CopyIn(action.containerHandle, downloadedFile.Name(), action.model.To)
+		_, err = action.wardenClient.CopyIn(action.runOnce.ContainerHandle, downloadedFile.Name(), action.model.To)
 		return err
 	}
 }
 
 func (action *DownloadAction) copyExtractedFiles(source string, destination string) error {
 	_, err := action.wardenClient.CopyIn(
-		action.containerHandle,
+		action.runOnce.ContainerHandle,
 		source+string(filepath.Separator),
 		destination+string(filepath.Separator),
 	)

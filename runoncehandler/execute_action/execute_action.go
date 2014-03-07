@@ -31,7 +31,7 @@ func New(
 
 func (action ExecuteAction) Perform(result chan<- error) {
 	executionResult, err := action.actionRunner.Run(
-		action.runOnce.ContainerHandle,
+		action.runOnce,
 		action.logStreamerFactory(action.runOnce.Log),
 		action.runOnce.Actions,
 	)

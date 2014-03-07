@@ -61,7 +61,7 @@ var _ = Describe("ExecuteAction", func() {
 			go action.Perform(result)
 			Ω(<-result).Should(BeNil())
 
-			Ω(actionRunner.ContainerHandle).Should(Equal(runOnce.ContainerHandle))
+			Ω(actionRunner.RunOnce).Should(Equal(&runOnce))
 			Ω(actionRunner.Actions).Should(Equal(runOnce.Actions))
 		})
 

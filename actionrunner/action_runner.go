@@ -16,7 +16,7 @@ import (
 )
 
 type ActionRunnerInterface interface {
-	Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (result string, err error)
+	Run(*models.RunOnce, logstreamer.LogStreamer, []models.ExecutorAction) (string, error)
 }
 
 type ActionRunner struct {
@@ -46,15 +46,15 @@ func New(
 	}
 }
 
-func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (string, error) {
+func (runner *ActionRunner) Run(runOnce *models.RunOnce, streamer logstreamer.LogStreamer, actions []models.ExecutorAction) (string, error) {
 	result := ""
 	for _, action := range actions {
 		var err error
 		switch a := action.Action.(type) {
 		case models.RunAction:
 			runAction := run_action.New(
+				runOnce,
 				a,
-				containerHandle,
 				streamer,
 				runner.backendPlugin,
 				runner.wardenClient,
@@ -67,8 +67,8 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 			err = <-results
 		case models.DownloadAction:
 			runAction := download_action.New(
+				runOnce,
 				a,
-				containerHandle,
 				runner.downloader,
 				runner.tempDir,
 				runner.backendPlugin,
@@ -82,8 +82,8 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 			err = <-results
 		case models.UploadAction:
 			runAction := upload_action.New(
+				runOnce,
 				a,
-				containerHandle,
 				runner.uploader,
 				runner.tempDir,
 				runner.wardenClient,
@@ -95,11 +95,9 @@ func (runner *ActionRunner) Run(containerHandle string, streamer logstreamer.Log
 
 			err = <-results
 		case models.FetchResultAction:
-			runOnce := models.RunOnce{}
 			runAction := fetch_result_action.New(
-				&runOnce,
+				runOnce,
 				a,
-				containerHandle,
 				runner.tempDir,
 				runner.wardenClient,
 				runner.logger,

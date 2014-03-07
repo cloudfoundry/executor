@@ -13,7 +13,6 @@ import (
 type FetchResultAction struct {
 	runOnce           *models.RunOnce
 	fetchResultAction models.FetchResultAction
-	containerHandle   string
 	tempDir           string
 	wardenClient      gordon.Client
 	logger            *steno.Logger
@@ -22,7 +21,6 @@ type FetchResultAction struct {
 func New(
 	runOnce *models.RunOnce,
 	fetchResultAction models.FetchResultAction,
-	containerHandle string,
 	tempDir string,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
@@ -30,7 +28,6 @@ func New(
 	return &FetchResultAction{
 		runOnce:           runOnce,
 		fetchResultAction: fetchResultAction,
-		containerHandle:   containerHandle,
 		tempDir:           tempDir,
 		wardenClient:      wardenClient,
 		logger:            logger,
@@ -40,7 +37,7 @@ func New(
 func (action *FetchResultAction) Perform(result chan<- error) {
 	action.logger.Infod(
 		map[string]interface{}{
-			"handle": action.containerHandle,
+			"handle": action.runOnce.ContainerHandle,
 		},
 		"runonce.handle.fetch-result-action",
 	)
@@ -66,7 +63,7 @@ func (action *FetchResultAction) perform() error {
 	}
 
 	_, err = action.wardenClient.CopyOut(
-		action.containerHandle,
+		action.runOnce.ContainerHandle,
 		action.fetchResultAction.File,
 		fileName,
 		currentUser.Username)
