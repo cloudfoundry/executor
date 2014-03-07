@@ -8,7 +8,7 @@ func (c *Client) CompareAndDelete(key string, prevValue string, prevIndex uint64
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 func (c *Client) RawCompareAndDelete(key string, prevValue string, prevIndex uint64) (*RawResponse, error) {
@@ -16,7 +16,7 @@ func (c *Client) RawCompareAndDelete(key string, prevValue string, prevIndex uin
 		return nil, fmt.Errorf("You must give either prevValue or prevIndex.")
 	}
 
-	options := Options{}
+	options := options{}
 	if prevValue != "" {
 		options["prevValue"] = prevValue
 	}

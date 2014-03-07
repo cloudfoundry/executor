@@ -2,7 +2,6 @@ package etcd
 
 import (
 	"fmt"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -33,8 +32,6 @@ func TestWatch(t *testing.T) {
 		t.Fatalf("Watch 2 failed: %#v", resp)
 	}
 
-	routineNum := runtime.NumGoroutine()
-
 	ch := make(chan *Response, 10)
 	stop := make(chan bool, 1)
 
@@ -45,10 +42,6 @@ func TestWatch(t *testing.T) {
 	_, err = c.Watch("watch_foo", 0, false, ch, stop)
 	if err != ErrWatchStoppedByUser {
 		t.Fatalf("Watch returned a non-user stop error")
-	}
-
-	if newRoutineNum := runtime.NumGoroutine(); newRoutineNum != routineNum {
-		t.Fatalf("Routine numbers differ after watch stop: %v, %v", routineNum, newRoutineNum)
 	}
 }
 
@@ -81,8 +74,6 @@ func TestWatchAll(t *testing.T) {
 	ch := make(chan *Response, 10)
 	stop := make(chan bool, 1)
 
-	routineNum := runtime.NumGoroutine()
-
 	go setLoop("watch_foo/foo", "bar", c)
 
 	go receiver(ch, stop)
@@ -90,10 +81,6 @@ func TestWatchAll(t *testing.T) {
 	_, err = c.Watch("watch_foo", 0, true, ch, stop)
 	if err != ErrWatchStoppedByUser {
 		t.Fatalf("Watch returned a non-user stop error")
-	}
-
-	if newRoutineNum := runtime.NumGoroutine(); newRoutineNum != routineNum {
-		t.Fatalf("Routine numbers differ after watch stop: %v, %v", routineNum, newRoutineNum)
 	}
 }
 

@@ -1,7 +1,6 @@
 package etcd
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -12,31 +11,8 @@ import (
 	"time"
 )
 
-// Errors introduced by handling requests
-var (
-	ErrRequestCancelled = errors.New("sending request is cancelled")
-)
-
-type RawRequest struct {
-	Method       string
-	RelativePath string
-	Values       url.Values
-	Cancel       <-chan bool
-}
-
-// NewRawRequest returns a new RawRequest
-func NewRawRequest(method, relativePath string, values url.Values, cancel <-chan bool) *RawRequest {
-	return &RawRequest{
-		Method:       method,
-		RelativePath: relativePath,
-		Values:       values,
-		Cancel:       cancel,
-	}
-}
-
-// getCancelable issues a cancelable GET request
-func (c *Client) getCancelable(key string, options Options,
-	cancel <-chan bool) (*RawResponse, error) {
+// get issues a GET request
+func (c *Client) get(key string, options options) (*RawResponse, error) {
 	logger.Debugf("get %s [%s]", key, c.cluster.Leader)
 	p := keyToPath(key)
 
@@ -52,8 +28,7 @@ func (c *Client) getCancelable(key string, options Options,
 	}
 	p += str
 
-	req := NewRawRequest("GET", p, nil, cancel)
-	resp, err := c.SendRequest(req)
+	resp, err := c.sendRequest("GET", p, nil)
 
 	if err != nil {
 		return nil, err
@@ -62,14 +37,9 @@ func (c *Client) getCancelable(key string, options Options,
 	return resp, nil
 }
 
-// get issues a GET request
-func (c *Client) get(key string, options Options) (*RawResponse, error) {
-	return c.getCancelable(key, options, nil)
-}
-
 // put issues a PUT request
 func (c *Client) put(key string, value string, ttl uint64,
-	options Options) (*RawResponse, error) {
+	options options) (*RawResponse, error) {
 
 	logger.Debugf("put %s, %s, ttl: %d, [%s]", key, value, ttl, c.cluster.Leader)
 	p := keyToPath(key)
@@ -80,8 +50,7 @@ func (c *Client) put(key string, value string, ttl uint64,
 	}
 	p += str
 
-	req := NewRawRequest("PUT", p, buildValues(value, ttl), nil)
-	resp, err := c.SendRequest(req)
+	resp, err := c.sendRequest("PUT", p, buildValues(value, ttl))
 
 	if err != nil {
 		return nil, err
@@ -95,8 +64,7 @@ func (c *Client) post(key string, value string, ttl uint64) (*RawResponse, error
 	logger.Debugf("post %s, %s, ttl: %d, [%s]", key, value, ttl, c.cluster.Leader)
 	p := keyToPath(key)
 
-	req := NewRawRequest("POST", p, buildValues(value, ttl), nil)
-	resp, err := c.SendRequest(req)
+	resp, err := c.sendRequest("POST", p, buildValues(value, ttl))
 
 	if err != nil {
 		return nil, err
@@ -106,7 +74,7 @@ func (c *Client) post(key string, value string, ttl uint64) (*RawResponse, error
 }
 
 // delete issues a DELETE request
-func (c *Client) delete(key string, options Options) (*RawResponse, error) {
+func (c *Client) delete(key string, options options) (*RawResponse, error) {
 	logger.Debugf("delete %s [%s]", key, c.cluster.Leader)
 	p := keyToPath(key)
 
@@ -116,8 +84,7 @@ func (c *Client) delete(key string, options Options) (*RawResponse, error) {
 	}
 	p += str
 
-	req := NewRawRequest("DELETE", p, nil, nil)
-	resp, err := c.SendRequest(req)
+	resp, err := c.sendRequest("DELETE", p, nil)
 
 	if err != nil {
 		return nil, err
@@ -126,181 +93,129 @@ func (c *Client) delete(key string, options Options) (*RawResponse, error) {
 	return resp, nil
 }
 
-// SendRequest sends a HTTP request and returns a Response as defined by etcd
-func (c *Client) SendRequest(rr *RawRequest) (*RawResponse, error) {
+// sendRequest sends a HTTP request and returns a Response as defined by etcd
+func (c *Client) sendRequest(method string, relativePath string,
+	values url.Values) (*RawResponse, error) {
 
 	var req *http.Request
 	var resp *http.Response
 	var httpPath string
 	var err error
-	var respBody []byte
+	var b []byte
 
-	reqs := make([]http.Request, 0)
-	resps := make([]http.Response, 0)
+	trial := 0
 
-	checkRetry := c.CheckRetry
-	if checkRetry == nil {
-		checkRetry = DefaultCheckRetry
-	}
-
-	cancelled := false
-
-	if rr.Cancel != nil {
-		cancelRoutine := make(chan bool)
-		defer close(cancelRoutine)
-
-		go func() {
-			select {
-			case <-rr.Cancel:
-				cancelled = true
-				logger.Debug("send.request is cancelled")
-				c.httpClient.Transport.(*http.Transport).CancelRequest(req)
-			case <-cancelRoutine:
-				return
-			}
-
-			// Repeat canceling request until this thread is stopped
-			// because we have no idea about whether it succeeds.
-			for {
-				select {
-				case <-time.After(100 * time.Millisecond):
-					c.httpClient.Transport.(*http.Transport).CancelRequest(req)
-				case <-cancelRoutine:
-					return
-				}
-			}
-		}()
-	}
-
-	// if we connect to a follower, we will retry until we find a leader
-	for attempt := 0; ; attempt++ {
-		if cancelled {
-			return nil, ErrRequestCancelled
+	// if we connect to a follower, we will retry until we found a leader
+	for {
+		trial++
+		logger.Debug("begin trail ", trial)
+		if trial > 2*len(c.cluster.Machines) {
+			return nil, newError(ErrCodeEtcdNotReachable,
+				"Tried to connect to each peer twice and failed", 0)
 		}
 
-		logger.Debug("begin attempt", attempt, "for", rr.RelativePath)
-
-		if rr.Method == "GET" && c.config.Consistency == WEAK_CONSISTENCY {
+		if method == "GET" && c.config.Consistency == WEAK_CONSISTENCY {
 			// If it's a GET and consistency level is set to WEAK,
 			// then use a random machine.
-			httpPath = c.getHttpPath(true, rr.RelativePath)
+			httpPath = c.getHttpPath(true, relativePath)
 		} else {
 			// Else use the leader.
-			httpPath = c.getHttpPath(false, rr.RelativePath)
+			httpPath = c.getHttpPath(false, relativePath)
 		}
 
 		// Return a cURL command if curlChan is set
 		if c.cURLch != nil {
-			command := fmt.Sprintf("curl -X %s %s", rr.Method, httpPath)
-			for key, value := range rr.Values {
+			command := fmt.Sprintf("curl -X %s %s", method, httpPath)
+			for key, value := range values {
 				command += fmt.Sprintf(" -d %s=%s", key, value[0])
 			}
 			c.sendCURL(command)
 		}
 
-		logger.Debug("send.request.to ", httpPath, " | method ", rr.Method)
+		logger.Debug("send.request.to ", httpPath, " | method ", method)
 
-		if rr.Values == nil {
-			req, _ = http.NewRequest(rr.Method, httpPath, nil)
+		if values == nil {
+			req, _ = http.NewRequest(method, httpPath, nil)
 		} else {
-			req, _ = http.NewRequest(rr.Method, httpPath,
-				strings.NewReader(rr.Values.Encode()))
+			req, _ = http.NewRequest(method, httpPath,
+				strings.NewReader(values.Encode()))
 
 			req.Header.Set("Content-Type",
 				"application/x-www-form-urlencoded; param=value")
 		}
 
-		resp, err = c.httpClient.Do(req)
-		// If the request was cancelled, return ErrRequestCancelled directly
-		if cancelled {
-			return nil, ErrRequestCancelled
-		}
-
-		reqs = append(reqs, *req)
-
 		// network error, change a machine!
-		if err != nil {
-			logger.Debug("network error:", err.Error())
-			resps = append(resps, http.Response{})
-			if checkErr := checkRetry(c.cluster, reqs, resps, err); checkErr != nil {
-				return nil, checkErr
-			}
-
-			c.cluster.switchLeader(attempt % len(c.cluster.Machines))
+		if resp, err = c.httpClient.Do(req); err != nil {
+			logger.Debug("network error: ", err.Error())
+			c.cluster.switchLeader(trial % len(c.cluster.Machines))
+			time.Sleep(time.Millisecond * 200)
 			continue
 		}
 
-		// if there is no error, it should receive response
-		resps = append(resps, *resp)
-		defer resp.Body.Close()
-		logger.Debug("recv.response.from", httpPath)
+		if resp != nil {
+			logger.Debug("recv.response.from ", httpPath)
 
-		if validHttpStatusCode[resp.StatusCode] {
-			// try to read byte code and break the loop
-			respBody, err = ioutil.ReadAll(resp.Body)
-			if err == nil {
-				logger.Debug("recv.success.", httpPath)
-				break
+			var ok bool
+			ok, b = c.handleResp(resp)
+
+			if !ok {
+				continue
 			}
+
+			logger.Debug("recv.success.", httpPath)
+			break
 		}
 
-		// if resp is TemporaryRedirect, set the new leader and retry
-		if resp.StatusCode == http.StatusTemporaryRedirect {
-			u, err := resp.Location()
-
-			if err != nil {
-				logger.Warning(err)
-			} else {
-				// Update cluster leader based on redirect location
-				// because it should point to the leader address
-				c.cluster.updateLeaderFromURL(u)
-				logger.Debug("recv.response.relocate", u.String())
-			}
-			continue
-		}
-
-		if checkErr := checkRetry(c.cluster, reqs, resps,
-			errors.New("Unexpected HTTP status code")); checkErr != nil {
-			return nil, checkErr
-		}
+		// should not reach here
+		// err and resp should not be nil at the same time
+		logger.Debug("error.from ", httpPath)
+		return nil, err
 	}
 
 	r := &RawResponse{
 		StatusCode: resp.StatusCode,
-		Body:       respBody,
+		Body:       b,
 		Header:     resp.Header,
 	}
 
 	return r, nil
 }
 
-// DefaultCheckRetry checks retry cases
-// If it has retried 2 * machine number, stop to retry it anymore
-// If resp is nil, sleep for 200ms
+// handleResp handles the responses from the etcd server
+// If status code is OK, read the http body and return it as byte array
+// If status code is TemporaryRedirect, update leader.
 // If status code is InternalServerError, sleep for 200ms.
-func DefaultCheckRetry(cluster *Cluster, reqs []http.Request,
-	resps []http.Response, err error) error {
-
-	if len(reqs) >= 2*len(cluster.Machines) {
-		return newError(ErrCodeEtcdNotReachable,
-			"Tried to connect to each peer twice and failed", 0)
-	}
-
-	resp := &resps[len(resps)-1]
-
-	if resp == nil {
-		time.Sleep(time.Millisecond * 200)
-		return nil
-	}
+func (c *Client) handleResp(resp *http.Response) (bool, []byte) {
+	defer resp.Body.Close()
 
 	code := resp.StatusCode
-	if code == http.StatusInternalServerError {
+
+	if code == http.StatusTemporaryRedirect {
+		u, err := resp.Location()
+
+		if err != nil {
+			logger.Warning(err)
+		} else {
+			c.cluster.updateLeaderFromURL(u)
+		}
+
+		return false, nil
+
+	} else if code == http.StatusInternalServerError {
 		time.Sleep(time.Millisecond * 200)
 
+	} else if validHttpStatusCode[code] {
+		b, err := ioutil.ReadAll(resp.Body)
+
+		if err != nil {
+			return false, nil
+		}
+
+		return true, b
 	}
 
-	logger.Warning("bad response status code", code)
-	return nil
+	logger.Warning("bad status code ", resp.StatusCode)
+	return false, nil
 }
 
 func (c *Client) getHttpPath(random bool, s ...string) string {

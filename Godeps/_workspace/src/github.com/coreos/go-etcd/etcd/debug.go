@@ -6,27 +6,32 @@ import (
 	"strings"
 )
 
-var logger *etcdLogger
-
-func SetLogger(l *log.Logger) {
-	logger = &etcdLogger{l}
+type Logger interface {
+	Debug(args ...interface{})
+	Debugf(fmt string, args ...interface{})
+	Warning(args ...interface{})
+	Warningf(fmt string, args ...interface{})
 }
 
-func GetLogger() *log.Logger {
-	return logger.log
+var logger Logger
+
+func SetLogger(log Logger) {
+	logger = log
 }
 
-type etcdLogger struct {
+func GetLogger() Logger {
+	return logger
+}
+
+type defaultLogger struct {
 	log *log.Logger
 }
 
-func (p *etcdLogger) Debug(args ...interface{}) {
-	args[0] = "DEBUG: " + args[0].(string)
+func (p *defaultLogger) Debug(args ...interface{}) {
 	p.log.Println(args)
 }
 
-func (p *etcdLogger) Debugf(fmt string, args ...interface{}) {
-	args[0] = "DEBUG: " + args[0].(string)
+func (p *defaultLogger) Debugf(fmt string, args ...interface{}) {
 	// Append newline if necessary
 	if !strings.HasSuffix(fmt, "\n") {
 		fmt = fmt + "\n"
@@ -34,21 +39,15 @@ func (p *etcdLogger) Debugf(fmt string, args ...interface{}) {
 	p.log.Printf(fmt, args)
 }
 
-func (p *etcdLogger) Warning(args ...interface{}) {
-	args[0] = "WARNING: " + args[0].(string)
-	p.log.Println(args)
+func (p *defaultLogger) Warning(args ...interface{}) {
+	p.Debug(args)
 }
 
-func (p *etcdLogger) Warningf(fmt string, args ...interface{}) {
-	// Append newline if necessary
-	if !strings.HasSuffix(fmt, "\n") {
-		fmt = fmt + "\n"
-	}
-	args[0] = "WARNING: " + args[0].(string)
-	p.log.Printf(fmt, args)
+func (p *defaultLogger) Warningf(fmt string, args ...interface{}) {
+	p.Debugf(fmt, args)
 }
 
 func init() {
 	// Default logger uses the go default log.
-	SetLogger(log.New(ioutil.Discard, "go-etcd", log.LstdFlags))
+	SetLogger(&defaultLogger{log.New(ioutil.Discard, "go-etcd", log.LstdFlags)})
 }

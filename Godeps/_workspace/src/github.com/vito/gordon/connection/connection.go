@@ -109,7 +109,7 @@ func (c *Connection) Destroy(handle string) (*warden.DestroyResponse, error) {
 }
 
 func (c *Connection) Run(handle, script string) (uint32, chan *warden.ProcessPayload, error) {
-	err := c.sendMessage(
+	err := c.SendMessage(
 		&warden.RunRequest{
 			Handle: proto.String(handle),
 			Script: proto.String(script),
@@ -122,7 +122,7 @@ func (c *Connection) Run(handle, script string) (uint32, chan *warden.ProcessPay
 
 	responses := make(chan *warden.ProcessPayload)
 
-	resMsg, err := c.readResponse(&warden.ProcessPayload{})
+	resMsg, err := c.ReadResponse(&warden.ProcessPayload{})
 	if err != nil {
 		return 0, nil, err
 	}
@@ -131,7 +131,7 @@ func (c *Connection) Run(handle, script string) (uint32, chan *warden.ProcessPay
 
 	go func() {
 		for {
-			resMsg, err := c.readResponse(&warden.ProcessPayload{})
+			resMsg, err := c.ReadResponse(&warden.ProcessPayload{})
 			if err != nil {
 				close(responses)
 				break
@@ -152,7 +152,7 @@ func (c *Connection) Run(handle, script string) (uint32, chan *warden.ProcessPay
 }
 
 func (c *Connection) Attach(handle string, processID uint32) (chan *warden.ProcessPayload, error) {
-	err := c.sendMessage(
+	err := c.SendMessage(
 		&warden.AttachRequest{
 			Handle:    proto.String(handle),
 			ProcessId: proto.Uint32(processID),
@@ -167,7 +167,7 @@ func (c *Connection) Attach(handle string, processID uint32) (chan *warden.Proce
 
 	go func() {
 		for {
-			resMsg, err := c.readResponse(&warden.ProcessPayload{})
+			resMsg, err := c.ReadResponse(&warden.ProcessPayload{})
 			if err != nil {
 				close(responses)
 				break
@@ -323,12 +323,12 @@ func (c *Connection) Info(handle string) (*warden.InfoResponse, error) {
 }
 
 func (c *Connection) RoundTrip(request proto.Message, response proto.Message) (proto.Message, error) {
-	err := c.sendMessage(request)
+	err := c.SendMessage(request)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.readResponse(response)
+	resp, err := c.ReadResponse(response)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +336,7 @@ func (c *Connection) RoundTrip(request proto.Message, response proto.Message) (p
 	return resp, nil
 }
 
-func (c *Connection) sendMessage(req proto.Message) error {
+func (c *Connection) SendMessage(req proto.Message) error {
 	c.writeLock.Lock()
 	defer c.writeLock.Unlock()
 
@@ -396,7 +396,7 @@ func (c *Connection) disconnected() {
 	c.Disconnected <- true
 }
 
-func (c *Connection) readResponse(response proto.Message) (proto.Message, error) {
+func (c *Connection) ReadResponse(response proto.Message) (proto.Message, error) {
 	message, ok := <-c.messages
 	if !ok {
 		return nil, DisconnectedError

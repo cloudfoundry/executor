@@ -9,8 +9,8 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -62,9 +62,9 @@ func (action *UploadAction) perform() error {
 	if err != nil {
 		return err
 	}
-	fileName := tempFile.Name()
+	fileLocation := tempFile.Name()
 	tempFile.Close()
-	defer os.RemoveAll(fileName)
+	defer os.RemoveAll(fileLocation)
 
 	currentUser, err := user.Current()
 	if err != nil {
@@ -72,16 +72,11 @@ func (action *UploadAction) perform() error {
 	}
 
 	_, err = action.wardenClient.CopyOut(
-		action.runOnce.ContainerHandle,
+		action.containerHandle,
 		action.model.From,
-		fileName,
+		fileLocation,
 		currentUser.Username,
 	)
-	if err != nil {
-		return err
-	}
-
-	fileToUpload, err := os.Open(fileName)
 	if err != nil {
 		return err
 	}
@@ -91,5 +86,5 @@ func (action *UploadAction) perform() error {
 		return err
 	}
 
-	return action.uploader.Upload(fileToUpload, url)
+	return action.uploader.Upload(fileLocation, url)
 }

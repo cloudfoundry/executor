@@ -14,11 +14,11 @@ func (c *Client) Get(key string, sort, recursive bool) (*Response, error) {
 		return nil, err
 	}
 
-	return raw.Unmarshal()
+	return raw.toResponse()
 }
 
 func (c *Client) RawGet(key string, sort, recursive bool) (*RawResponse, error) {
-	ops := Options{
+	ops := options{
 		"recursive": recursive,
 		"sorted":    sort,
 	}
