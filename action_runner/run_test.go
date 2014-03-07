@@ -32,7 +32,7 @@ var _ = Describe("Run", func() {
 	})
 
 	It("runs the provided actions asynchronously", func() {
-		Eventually(Run(actions)).Should(Receive())
+		Eventually(Run(actions...)).Should(Receive())
 
 		Ω(performedActions).To(Equal([]string{"foo", "bar"}))
 	})
@@ -41,7 +41,7 @@ var _ = Describe("Run", func() {
 		It("does not leak the goroutine that provides it", func() {
 			before := runtime.NumGoroutine()
 
-			Run(actions)
+			Run(actions...)
 
 			time.Sleep(100 * time.Millisecond) // give time for the actions to at least start
 

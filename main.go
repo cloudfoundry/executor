@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"log"
 	"os"
 	"os/signal"
@@ -232,6 +233,7 @@ func main() {
 		wardenClient,
 		taskRegistry,
 		theFlash,
+		action_runner.Run,
 		logStreamerFactory,
 		logger,
 	)
