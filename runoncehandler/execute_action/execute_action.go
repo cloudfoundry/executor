@@ -52,4 +52,6 @@ func (action ExecuteAction) Cancel() {
 	action.action.Cancel()
 }
 
-func (action ExecuteAction) Cleanup() {}
+func (action ExecuteAction) Cleanup() {
+	action.action.Cleanup()
+}

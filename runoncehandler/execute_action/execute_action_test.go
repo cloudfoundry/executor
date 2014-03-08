@@ -65,7 +65,11 @@ var _ = Describe("ExecuteAction", func() {
 
 			It("sends back no error and has Failed as false", func() {
 				go action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+
+				var err error
+				Eventually(result).Should(Receive(&err))
+
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(runOnce.Failed).Should(BeFalse())
 			})
@@ -84,7 +88,11 @@ var _ = Describe("ExecuteAction", func() {
 
 			It("sends back no error and has Failed as false", func() {
 				go action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+
+				var err error
+				Eventually(result).Should(Receive(&err))
+
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(runOnce.Failed).Should(BeTrue())
 				Ω(runOnce.FailureReason).Should(Equal("oh no!"))
@@ -118,7 +126,43 @@ var _ = Describe("ExecuteAction", func() {
 			action.Cancel()
 			Eventually(cancelled).Should(Receive())
 
-			Ω(<-result).ShouldNot(HaveOccurred())
+			var err error
+			Eventually(result).Should(Receive(&err))
+
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Describe("Cleanup", func() {
+		var cleanedUp chan bool
+
+		BeforeEach(func() {
+			cleanUp := make(chan bool)
+
+			cleanedUp = make(chan bool)
+
+			subAction = fake_action.FakeAction{
+				WhenPerforming: func(result chan<- error) {
+					<-cleanUp
+					cleanedUp <- true
+					result <- nil
+				},
+				WhenCleaningUp: func() {
+					cleanUp <- true
+				},
+			}
+		})
+
+		It("cancels its action", func() {
+			go action.Perform(result)
+
+			action.Cleanup()
+			Eventually(cleanedUp).Should(Receive())
+
+			var err error
+			Eventually(result).Should(Receive(&err))
+
+			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
 })
