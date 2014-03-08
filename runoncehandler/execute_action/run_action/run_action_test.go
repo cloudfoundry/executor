@@ -205,4 +205,11 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 	})
+
+	Describe("Cancel", func() {
+		It("stops the container", func() {
+			action.Cancel()
+			Ω(wardenClient.StoppedHandles()).Should(ContainElement("some-container-handle"))
+		})
+	})
 })

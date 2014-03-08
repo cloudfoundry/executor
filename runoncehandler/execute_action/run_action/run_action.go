@@ -8,8 +8,8 @@ import (
 	"github.com/vito/gordon"
 	"github.com/vito/gordon/warden"
 
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -59,7 +59,9 @@ func (action *RunAction) Perform(result chan<- error) {
 	result <- action.perform()
 }
 
-func (action *RunAction) Cancel() {}
+func (action *RunAction) Cancel() {
+	action.wardenClient.Stop(action.runOnce.ContainerHandle, false, false)
+}
 
 func (action *RunAction) Cleanup() {}
 
