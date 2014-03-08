@@ -6,18 +6,19 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
-	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
+
+	"github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
+	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	. "github.com/cloudfoundry-incubator/executor/runoncehandler"
+	"github.com/cloudfoundry-incubator/executor/taskregistry/faketaskregistry"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 )
 
 var _ = Describe("RunOnceHandler", func() {
@@ -28,15 +29,13 @@ var _ = Describe("RunOnceHandler", func() {
 			runOnce          models.RunOnce
 		)
 
-		spyPerformer := func(actions ...action_runner.Action) <-chan error {
+		spyPerformer := func(actions ...action_runner.Action) error {
 			for _, action := range actions {
 				actionType := reflect.TypeOf(action).String()
 				performedActions = append(performedActions, actionType)
 			}
 
-			result := make(chan error, 1)
-			result <- nil
-			return result
+			return nil
 		}
 
 		BeforeEach(func() {

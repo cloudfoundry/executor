@@ -53,7 +53,7 @@ func New(
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
-	<-handler.performer(
+	handler.performer(
 		register_action.New(
 			runOnce,
 			handler.logger,
