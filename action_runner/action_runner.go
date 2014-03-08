@@ -64,6 +64,4 @@ func (runner *ActionRunner) Cancel() {
 	<-cancelled
 }
 
-func (runner *ActionRunner) Cleanup() {
-	// TODO: clean up executed actions...
-}
+func (runner *ActionRunner) Cleanup() {}
