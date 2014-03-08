@@ -22,7 +22,6 @@ import (
 
 var _ = Describe("RunAction", func() {
 	var action action_runner.Action
-	var result chan error
 
 	var runOnce *models.RunOnce
 	var runAction models.RunAction
@@ -35,8 +34,6 @@ var _ = Describe("RunAction", func() {
 	var processPayloadStream chan *warden.ProcessPayload
 
 	BeforeEach(func() {
-		result = make(chan error)
-
 		runOnce = &models.RunOnce{
 			ContainerHandle: "some-container-handle",
 		}
@@ -82,9 +79,8 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("executes the command in the passed-in container", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+				err := action.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
 
 				runningScript := wardenClient.ScriptsThatRan()[0]
 				Ω(runningScript.Handle).Should(Equal("some-container-handle"))
@@ -98,10 +94,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("should return an error with the exit code", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-
-				err := <-result
+				err := action.Perform()
 				if Ω(err).Should(HaveOccurred()) {
 					Ω(err.Error()).Should(ContainSubstring("19"))
 				}
@@ -115,9 +108,8 @@ var _ = Describe("RunAction", func() {
 					processPayloadStream <- successfulExit
 				}()
 
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+				err := action.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
 
@@ -133,9 +125,8 @@ var _ = Describe("RunAction", func() {
 				It("succeeds", func() {
 					processPayloadStream <- successfulExit
 
-					result := make(chan error, 1)
-					action.Perform(result)
-					Ω(<-result).ShouldNot(HaveOccurred())
+					err := action.Perform()
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -146,9 +137,8 @@ var _ = Describe("RunAction", func() {
 						processPayloadStream <- successfulExit
 					}()
 
-					result := make(chan error, 1)
-					action.Perform(result)
-					Ω(<-result).Should(Equal(RunActionTimeoutError{runAction}))
+					err := action.Perform()
+					Ω(err).Should(Equal(RunActionTimeoutError{runAction}))
 				})
 			})
 		})
@@ -174,18 +164,16 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("emits the output chunks as they come in", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+				err := action.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(fakeStreamer.StreamedStdout).Should(ContainElement("hi out"))
 				Ω(fakeStreamer.StreamedStderr).Should(ContainElement("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).ShouldNot(HaveOccurred())
+				err := action.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(fakeStreamer.Flushed).Should(BeTrue())
 			})
@@ -198,10 +186,9 @@ var _ = Describe("RunAction", func() {
 				wardenClient.SetRunReturnValues(0, nil, disaster)
 			})
 
-			It("sends back the error", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+			It("returns the error", func() {
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

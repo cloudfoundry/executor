@@ -16,14 +16,11 @@ import (
 
 var _ = Describe("ClaimAction", func() {
 	var action action_runner.Action
-	var result chan error
 
 	var runOnce models.RunOnce
 	var bbs *fakebbs.FakeExecutorBBS
 
 	BeforeEach(func() {
-		result = make(chan error)
-
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
 			Stack: "penguin",
@@ -48,8 +45,7 @@ var _ = Describe("ClaimAction", func() {
 
 	Describe("Perform", func() {
 		It("claims the RunOnce in the BBS and updates the RunOnce's ExecutorID", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			Ω(action.Perform()).Should(BeNil())
 
 			Ω(bbs.ClaimedRunOnce.Guid).Should(Equal(runOnce.Guid))
 			Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("executor-id"))
@@ -62,9 +58,8 @@ var _ = Describe("ClaimAction", func() {
 				bbs.ClaimRunOnceErr = disaster
 			})
 
-			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+			It("returns the error", func() {
+				Ω(action.Perform()).Should(Equal(disaster))
 			})
 		})
 	})

@@ -24,9 +24,8 @@ func New(
 	}
 }
 
-func (action ContainerAction) Perform(result chan<- error) {
+func (action ContainerAction) Perform() error {
 	createResponse, err := action.wardenClient.Create()
-
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{
@@ -35,11 +34,13 @@ func (action ContainerAction) Perform(result chan<- error) {
 			},
 			"runonce.container-create.failed",
 		)
-	} else {
-		action.runOnce.ContainerHandle = createResponse.GetHandle()
+
+		return err
 	}
 
-	result <- err
+	action.runOnce.ContainerHandle = createResponse.GetHandle()
+
+	return nil
 }
 
 func (action ContainerAction) Cancel() {}

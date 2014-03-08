@@ -42,7 +42,7 @@ func New(
 	}
 }
 
-func (action *UploadAction) Perform(result chan<- error) {
+func (action *UploadAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
 			"handle": action.runOnce.ContainerHandle,
@@ -50,14 +50,6 @@ func (action *UploadAction) Perform(result chan<- error) {
 		"runonce.handle.upload-action",
 	)
 
-	result <- action.perform()
-}
-
-func (action *UploadAction) Cancel() {}
-
-func (action *UploadAction) Cleanup() {}
-
-func (action *UploadAction) perform() error {
 	tempFile, err := ioutil.TempFile(action.tempDir, "upload")
 	if err != nil {
 		return err
@@ -88,3 +80,7 @@ func (action *UploadAction) perform() error {
 
 	return action.uploader.Upload(fileLocation, url)
 }
+
+func (action *UploadAction) Cancel() {}
+
+func (action *UploadAction) Cleanup() {}

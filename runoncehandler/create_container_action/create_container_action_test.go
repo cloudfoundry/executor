@@ -16,15 +16,12 @@ import (
 
 var _ = Describe("CreateContainerAction", func() {
 	var action action_runner.Action
-	var result chan error
 
 	var runOnce models.RunOnce
 	var gordon *fake_gordon.FakeGordon
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
-
-		result = make(chan error)
 
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
@@ -49,8 +46,8 @@ var _ = Describe("CreateContainerAction", func() {
 
 	Describe("Perform", func() {
 		It("creates a container and updates the RunOnce's ContainerHandle", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			err := action.Perform()
+			Ω(err).Should(BeNil())
 
 			Ω(gordon.CreatedHandles()).Should(HaveLen(1))
 		})
@@ -63,16 +60,16 @@ var _ = Describe("CreateContainerAction", func() {
 			})
 
 			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})
 
 	Describe("Cleanup", func() {
 		It("destroys the created container", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			err := action.Perform()
+			Ω(err).Should(BeNil())
 
 			action.Cleanup()
 

@@ -34,21 +34,14 @@ func New(
 	}
 }
 
-func (action *FetchResultAction) Perform(result chan<- error) {
+func (action *FetchResultAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
 			"handle": action.runOnce.ContainerHandle,
 		},
 		"runonce.handle.fetch-result-action",
 	)
-	result <- action.perform()
-}
 
-func (action *FetchResultAction) Cancel() {}
-
-func (action *FetchResultAction) Cleanup() {}
-
-func (action *FetchResultAction) perform() error {
 	tempFile, err := ioutil.TempFile(action.tempDir, "fetch-result")
 	if err != nil {
 		return err
@@ -95,3 +88,7 @@ func (action *FetchResultAction) perform() error {
 
 	return nil
 }
+
+func (action *FetchResultAction) Cancel() {}
+
+func (action *FetchResultAction) Cleanup() {}

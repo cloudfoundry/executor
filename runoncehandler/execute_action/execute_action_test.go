@@ -57,18 +57,14 @@ var _ = Describe("ExecuteAction", func() {
 		Context("when the sub-action succeeds", func() {
 			BeforeEach(func() {
 				subAction = fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
-						result <- nil
+					WhenPerforming: func() error {
+						return nil
 					},
 				}
 			})
 
-			It("sends back no error and has Failed as false", func() {
-				go action.Perform(result)
-
-				var err error
-				Eventually(result).Should(Receive(&err))
-
+			It("returns no error and has Failed as false", func() {
+				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(runOnce.Failed).Should(BeFalse())
@@ -80,18 +76,14 @@ var _ = Describe("ExecuteAction", func() {
 
 			BeforeEach(func() {
 				subAction = fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
-						result <- disaster
+					WhenPerforming: func() error {
+						return disaster
 					},
 				}
 			})
 
-			It("sends back no error and has Failed as false", func() {
-				go action.Perform(result)
-
-				var err error
-				Eventually(result).Should(Receive(&err))
-
+			It("returns no error and has Failed as true with a reason", func() {
+				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(runOnce.Failed).Should(BeTrue())
@@ -109,10 +101,10 @@ var _ = Describe("ExecuteAction", func() {
 			cancelled = make(chan bool)
 
 			subAction = fake_action.FakeAction{
-				WhenPerforming: func(result chan<- error) {
+				WhenPerforming: func() error {
 					<-cancel
 					cancelled <- true
-					result <- nil
+					return nil
 				},
 				WhenCancelling: func() {
 					cancel <- true
@@ -121,15 +113,10 @@ var _ = Describe("ExecuteAction", func() {
 		})
 
 		It("cancels its action", func() {
-			go action.Perform(result)
+			go action.Perform()
 
 			action.Cancel()
 			Eventually(cancelled).Should(Receive())
-
-			var err error
-			Eventually(result).Should(Receive(&err))
-
-			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
 
@@ -142,10 +129,10 @@ var _ = Describe("ExecuteAction", func() {
 			cleanedUp = make(chan bool)
 
 			subAction = fake_action.FakeAction{
-				WhenPerforming: func(result chan<- error) {
+				WhenPerforming: func() error {
 					<-cleanUp
 					cleanedUp <- true
-					result <- nil
+					return nil
 				},
 				WhenCleaningUp: func() {
 					cleanUp <- true
@@ -154,15 +141,10 @@ var _ = Describe("ExecuteAction", func() {
 		})
 
 		It("cancels its action", func() {
-			go action.Perform(result)
+			go action.Perform()
 
 			action.Cleanup()
 			Eventually(cleanedUp).Should(Receive())
-
-			var err error
-			Eventually(result).Should(Receive(&err))
-
-			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
 })

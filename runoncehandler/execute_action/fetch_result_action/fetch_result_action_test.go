@@ -17,13 +17,11 @@ var _ = Describe("FetchResultAction", func() {
 		action            action_runner.Action
 		fetchResultAction models.FetchResultAction
 		logger            *steno.Logger
-		err               error
 		runOnce           *models.RunOnce
 		wardenClient      *fake_gordon.FakeGordon
 	)
 
 	BeforeEach(func() {
-		err = nil
 		runOnce = &models.RunOnce{}
 		fetchResultAction = models.FetchResultAction{
 			File: "/tmp/foo",
@@ -32,7 +30,7 @@ var _ = Describe("FetchResultAction", func() {
 		wardenClient = fake_gordon.New()
 	})
 
-	JustBeforeEach(func(done Done) {
+	JustBeforeEach(func() {
 		action = New(
 			runOnce,
 			fetchResultAction,
@@ -40,12 +38,6 @@ var _ = Describe("FetchResultAction", func() {
 			wardenClient,
 			logger,
 		)
-
-		result := make(chan error, 1)
-		action.Perform(result)
-		err = <-result
-
-		close(done)
 	})
 
 	Context("when the file exists", func() {
@@ -54,8 +46,10 @@ var _ = Describe("FetchResultAction", func() {
 		})
 
 		It("should return the contents of the file", func() {
-			Ω(runOnce.Result).Should(Equal("result content"))
+			err := action.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(runOnce.Result).Should(Equal("result content"))
 		})
 	})
 
@@ -67,19 +61,25 @@ var _ = Describe("FetchResultAction", func() {
 		})
 
 		It("should error", func() {
-			Ω(runOnce.Result).Should(BeZero())
+			err := action.Perform()
 			Ω(err).Should(HaveOccurred())
+
+			Ω(runOnce.Result).Should(BeZero())
 		})
 	})
 
 	Context("when the file does not exist", func() {
+		disaster := errors.New("kaboom")
+
 		BeforeEach(func() {
-			wardenClient.SetCopyOutErr(errors.New("kaboom"))
+			wardenClient.SetCopyOutErr(disaster)
 		})
 
 		It("should return an error and an empty result", func() {
+			err := action.Perform()
+			Ω(err).Should(Equal(disaster))
+
 			Ω(runOnce.Result).Should(BeZero())
-			Ω(err).Should(Equal(errors.New("kaboom")))
 		})
 	})
 })

@@ -24,7 +24,7 @@ func New(
 	}
 }
 
-func (action CompleteAction) Perform(result chan<- error) {
+func (action CompleteAction) Perform() error {
 	err := action.bbs.CompleteRunOnce(*action.runOnce)
 	if err != nil {
 		action.logger.Errord(
@@ -33,9 +33,11 @@ func (action CompleteAction) Perform(result chan<- error) {
 				"error":        err.Error(),
 			}, "runonce.claim.failed",
 		)
+
+		return err
 	}
 
-	result <- err
+	return nil
 }
 
 func (action CompleteAction) Cancel() {}

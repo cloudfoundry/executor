@@ -24,9 +24,8 @@ func New(
 	}
 }
 
-func (action StartAction) Perform(result chan<- error) {
+func (action StartAction) Perform() error {
 	err := action.bbs.StartRunOnce(*action.runOnce)
-
 	if err != nil {
 		action.logger.Warnd(
 			map[string]interface{}{
@@ -34,9 +33,11 @@ func (action StartAction) Perform(result chan<- error) {
 				"error":        err.Error(),
 			}, "runonce.start.failed",
 		)
+
+		return err
 	}
 
-	result <- err
+	return nil
 }
 
 func (action StartAction) Cancel() {}

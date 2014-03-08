@@ -24,13 +24,8 @@ func New(
 	}
 }
 
-func (action ExecuteAction) Perform(result chan<- error) {
-	actionResult := make(chan error, 1)
-
-	go action.action.Perform(actionResult)
-
-	err := <-actionResult
-
+func (action ExecuteAction) Perform() error {
+	err := action.action.Perform()
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{
@@ -45,7 +40,7 @@ func (action ExecuteAction) Perform(result chan<- error) {
 		action.runOnce.FailureReason = err.Error()
 	}
 
-	result <- nil
+	return nil
 }
 
 func (action ExecuteAction) Cancel() {

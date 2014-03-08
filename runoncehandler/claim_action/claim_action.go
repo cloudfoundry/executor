@@ -27,7 +27,7 @@ func New(
 	}
 }
 
-func (action ClaimAction) Perform(result chan<- error) {
+func (action ClaimAction) Perform() error {
 	action.runOnce.ExecutorID = action.executorID
 
 	err := action.bbs.ClaimRunOnce(*action.runOnce)
@@ -38,9 +38,11 @@ func (action ClaimAction) Perform(result chan<- error) {
 				"error":        err.Error(),
 			}, "runonce.claim.failed",
 		)
+
+		return err
 	}
 
-	result <- err
+	return nil
 }
 
 func (action ClaimAction) Cancel() {}

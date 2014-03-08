@@ -18,27 +18,27 @@ var _ = Describe("ActionRunner", func() {
 
 		runner := New([]Action{
 			fake_action.FakeAction{
-				WhenPerforming: func(result chan<- error) {
+				WhenPerforming: func() error {
 					seq <- 1
-					result <- nil
+					return nil
 				},
 			},
 			fake_action.FakeAction{
-				WhenPerforming: func(result chan<- error) {
+				WhenPerforming: func() error {
 					seq <- 2
-					result <- nil
+					return nil
 				},
 			},
 			fake_action.FakeAction{
-				WhenPerforming: func(result chan<- error) {
+				WhenPerforming: func() error {
 					seq <- 3
-					result <- nil
+					return nil
 				},
 			},
 		})
 
 		result := make(chan error)
-		go runner.Perform(result)
+		go func() { result <- runner.Perform() }()
 
 		Ω(<-seq).Should(Equal(1))
 		Ω(<-seq).Should(Equal(2))
@@ -71,7 +71,7 @@ var _ = Describe("ActionRunner", func() {
 		})
 
 		result := make(chan error)
-		go runner.Perform(result)
+		go func() { result <- runner.Perform() }()
 
 		Ω(<-cleanup).Should(Equal(3))
 		Ω(<-cleanup).Should(Equal(2))
@@ -91,26 +91,26 @@ var _ = Describe("ActionRunner", func() {
 
 			runner := New([]Action{
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
+					WhenPerforming: func() error {
 						seq <- 1
-						result <- nil
+						return nil
 					},
 					WhenCleaningUp: func() {
 						cleanup <- 1
 					},
 				},
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
-						result <- disaster
+					WhenPerforming: func() error {
+						return disaster
 					},
 					WhenCleaningUp: func() {
 						cleanup <- 2
 					},
 				},
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
+					WhenPerforming: func() error {
 						seq <- 3
-						result <- nil
+						return nil
 					},
 					WhenCleaningUp: func() {
 						cleanup <- 3
@@ -119,7 +119,7 @@ var _ = Describe("ActionRunner", func() {
 			})
 
 			result := make(chan error)
-			go runner.Perform(result)
+			go func() { result <- runner.Perform() }()
 
 			Ω(<-seq).Should(Equal(1))
 			Ω(<-cleanup).Should(Equal(1))
@@ -146,9 +146,9 @@ var _ = Describe("ActionRunner", func() {
 
 			runner := New([]Action{
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
+					WhenPerforming: func() error {
 						seq <- 1
-						result <- nil
+						return nil
 					},
 					WhenCleaningUp: func() {
 						<-startCleanup
@@ -156,14 +156,14 @@ var _ = Describe("ActionRunner", func() {
 					},
 				},
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
+					WhenPerforming: func() error {
 						seq <- 2
 
 						waitingForInterrupt <- true
 						<-interrupt
 						interrupted <- true
 
-						result <- nil
+						return nil
 					},
 					WhenCancelling: func() {
 						interrupt <- true
@@ -173,9 +173,9 @@ var _ = Describe("ActionRunner", func() {
 					},
 				},
 				fake_action.FakeAction{
-					WhenPerforming: func(result chan<- error) {
+					WhenPerforming: func() error {
 						seq <- 3
-						result <- nil
+						return nil
 					},
 					WhenCleaningUp: func() {
 						cleanup <- 3
@@ -184,7 +184,7 @@ var _ = Describe("ActionRunner", func() {
 			})
 
 			result := make(chan error)
-			go runner.Perform(result)
+			go func() { result <- runner.Perform() }()
 
 			Ω(<-seq).Should(Equal(1))
 			Ω(<-seq).Should(Equal(2))

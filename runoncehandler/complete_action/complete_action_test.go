@@ -58,8 +58,8 @@ var _ = Describe("CompleteAction", func() {
 
 	Describe("Perform", func() {
 		It("completes the RunOnce in the BBS and updates the RunOnce's Failed/FailureReason/Result", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			err := action.Perform()
+			Ω(err).Should(BeNil())
 
 			Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
 			Ω(bbs.CompletedRunOnce.Result).Should(Equal(runOnce.Result))
@@ -75,8 +75,8 @@ var _ = Describe("CompleteAction", func() {
 			})
 
 			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

@@ -25,7 +25,7 @@ func New(
 	}
 }
 
-func (action RegisterAction) Perform(result chan<- error) {
+func (action RegisterAction) Perform() error {
 	err := action.taskRegistry.AddRunOnce(action.runOnce)
 	if err != nil {
 		action.logger.Infod(
@@ -34,9 +34,11 @@ func (action RegisterAction) Perform(result chan<- error) {
 				"error":        err.Error(),
 			}, "runonce.insufficient.resources",
 		)
+
+		return err
 	}
 
-	result <- err
+	return nil
 }
 
 func (action RegisterAction) Cancel() {}

@@ -48,7 +48,7 @@ func New(
 	}
 }
 
-func (action *RunAction) Perform(result chan<- error) {
+func (action *RunAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
 			"handle": action.runOnce.ContainerHandle,
@@ -56,16 +56,6 @@ func (action *RunAction) Perform(result chan<- error) {
 		"runonce.handle.run-action",
 	)
 
-	result <- action.perform()
-}
-
-func (action *RunAction) Cancel() {
-	action.wardenClient.Stop(action.runOnce.ContainerHandle, false, false)
-}
-
-func (action *RunAction) Cleanup() {}
-
-func (action *RunAction) perform() error {
 	exitStatusChan := make(chan uint32, 1)
 	errChan := make(chan error, 1)
 
@@ -124,3 +114,9 @@ func (action *RunAction) perform() error {
 
 	panic("unreachable")
 }
+
+func (action *RunAction) Cancel() {
+	action.wardenClient.Stop(action.runOnce.ContainerHandle, false, false)
+}
+
+func (action *RunAction) Cleanup() {}

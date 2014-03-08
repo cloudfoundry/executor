@@ -13,8 +13,8 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
 
-	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 )
 
 var _ = Describe("UploadAction", func() {
@@ -63,21 +63,18 @@ var _ = Describe("UploadAction", func() {
 		)
 	})
 
-	perform := func() {
-		result := make(chan error, 1)
-		action.Perform(result)
-		Ω(<-result).ShouldNot(HaveOccurred())
-	}
-
 	Describe("Perform", func() {
 		It("uploads the file to the given URL", func() {
-			perform()
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
+
 			Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
 			Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
 		})
 
 		It("copies the file out of the container", func() {
-			perform()
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
 			currentUser, err := user.Current()
 			Ω(err).ShouldNot(HaveOccurred())
@@ -97,10 +94,9 @@ var _ = Describe("UploadAction", func() {
 				wardenClient.SetCopyOutErr(disaster)
 			})
 
-			It("sends back the error", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+			It("returns the error", func() {
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 
@@ -110,9 +106,8 @@ var _ = Describe("UploadAction", func() {
 			})
 
 			It("fails", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).Should(HaveOccurred())
+				err := action.Perform()
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

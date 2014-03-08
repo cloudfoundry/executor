@@ -16,15 +16,12 @@ import (
 
 var _ = Describe("RegisterAction", func() {
 	var action action_runner.Action
-	var result chan error
 
 	var runOnce models.RunOnce
 	var fakeTaskRegistry *faketaskregistry.FakeTaskRegistry
 
 	BeforeEach(func() {
 		fakeTaskRegistry = faketaskregistry.New()
-
-		result = make(chan error)
 
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
@@ -47,8 +44,8 @@ var _ = Describe("RegisterAction", func() {
 
 	Describe("Perform", func() {
 		It("registers the RunOnce", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
 		})
@@ -61,8 +58,8 @@ var _ = Describe("RegisterAction", func() {
 			})
 
 			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

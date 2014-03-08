@@ -1,17 +1,17 @@
 package fake_action
 
 type FakeAction struct {
-	WhenPerforming func(result chan<- error)
+	WhenPerforming func() error
 	WhenCancelling func()
 	WhenCleaningUp func()
 }
 
-func (fakeAction FakeAction) Perform(result chan<- error) {
+func (fakeAction FakeAction) Perform() error {
 	if fakeAction.WhenPerforming != nil {
-		fakeAction.WhenPerforming(result)
-	} else {
-		result <- nil
+		return fakeAction.WhenPerforming()
 	}
+
+	return nil
 }
 
 func (fakeAction FakeAction) Cancel() {

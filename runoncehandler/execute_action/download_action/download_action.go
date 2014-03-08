@@ -9,9 +9,9 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor"
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -45,7 +45,7 @@ func New(
 	}
 }
 
-func (action *DownloadAction) Perform(result chan<- error) {
+func (action *DownloadAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
 			"handle": action.runOnce.ContainerHandle,
@@ -53,14 +53,6 @@ func (action *DownloadAction) Perform(result chan<- error) {
 		"runonce.handle.download-action",
 	)
 
-	result <- action.perform()
-}
-
-func (action *DownloadAction) Cancel() {}
-
-func (action *DownloadAction) Cleanup() {}
-
-func (action *DownloadAction) perform() error {
 	url, err := url.Parse(action.model.From)
 	if err != nil {
 		return err
@@ -104,6 +96,10 @@ func (action *DownloadAction) perform() error {
 		return err
 	}
 }
+
+func (action *DownloadAction) Cancel() {}
+
+func (action *DownloadAction) Cleanup() {}
 
 func (action *DownloadAction) copyExtractedFiles(source string, destination string) error {
 	_, err := action.wardenClient.CopyIn(

@@ -18,9 +18,9 @@ var _ = Describe("Run", func() {
 
 	spyAction := func(name string) fake_action.FakeAction {
 		return fake_action.FakeAction{
-			WhenPerforming: func(result chan<- error) {
+			WhenPerforming: func() error {
 				performedActions = append(performedActions, name)
-				result <- nil
+				return nil
 			},
 		}
 	}

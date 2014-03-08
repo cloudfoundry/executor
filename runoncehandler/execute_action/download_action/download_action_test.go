@@ -68,21 +68,18 @@ var _ = Describe("DownloadAction", func() {
 		)
 	})
 
-	perform := func() {
-		result := make(chan error, 1)
-		action.Perform(result)
-		Ω(<-result).ShouldNot(HaveOccurred())
-	}
-
 	Describe("Perform", func() {
 		It("downloads the file from the given URL", func() {
-			perform()
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
+
 			Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
 			Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
 		})
 
 		It("places the file in the container", func() {
-			perform()
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
 
@@ -92,7 +89,8 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		It("creates the parent of the destination directory", func() {
-			perform()
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(wardenClient.ScriptsThatRan()).ShouldNot(BeEmpty())
 
@@ -102,14 +100,15 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		Context("when there is an error copying the file in", func() {
+			disaster := errors.New("oh no!")
+
 			BeforeEach(func() {
-				wardenClient.SetCopyInErr(errors.New("no room in the copy inn"))
+				wardenClient.SetCopyInErr(disaster)
 			})
 
 			It("sends back the error", func() {
-				result := make(chan error, 1)
-				action.Perform(result)
-				Ω(<-result).Should(Equal(errors.New("no room in the copy inn")))
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

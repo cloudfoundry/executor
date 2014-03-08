@@ -16,14 +16,11 @@ import (
 
 var _ = Describe("StartAction", func() {
 	var action action_runner.Action
-	var result chan error
 
 	var runOnce models.RunOnce
 	var bbs *fakebbs.FakeExecutorBBS
 
 	BeforeEach(func() {
-		result = make(chan error)
-
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
 			Stack: "penguin",
@@ -51,8 +48,8 @@ var _ = Describe("StartAction", func() {
 
 	Describe("Perform", func() {
 		It("starts the RunOnce in the BBS", func() {
-			go action.Perform(result)
-			Ω(<-result).Should(BeNil())
+			err := action.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
 		})
@@ -65,8 +62,8 @@ var _ = Describe("StartAction", func() {
 			})
 
 			It("sends back the error", func() {
-				go action.Perform(result)
-				Ω(<-result).Should(Equal(disaster))
+				err := action.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

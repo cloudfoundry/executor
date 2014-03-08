@@ -19,7 +19,7 @@ func New(actions []Action) *ActionRunner {
 	}
 }
 
-func (runner *ActionRunner) Perform(result chan<- error) {
+func (runner *ActionRunner) Perform() error {
 	var performResult error
 
 	cleanups := []func(){}
@@ -29,7 +29,10 @@ func (runner *ActionRunner) Perform(result chan<- error) {
 actions:
 	for _, action := range runner.actions {
 		subactionResult := make(chan error, 1)
-		go action.Perform(subactionResult)
+
+		go func() {
+			subactionResult <- action.Perform()
+		}()
 
 		select {
 		case err := <-subactionResult:
@@ -55,7 +58,7 @@ actions:
 		cancelled <- true
 	}
 
-	result <- performResult
+	return performResult
 }
 
 func (runner *ActionRunner) Cancel() {
