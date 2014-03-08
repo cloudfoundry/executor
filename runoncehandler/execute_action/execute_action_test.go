@@ -26,6 +26,8 @@ var _ = Describe("ExecuteAction", func() {
 	BeforeEach(func() {
 		result = make(chan error)
 
+		subAction = nil
+
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
 			Stack: "penguin",
@@ -52,7 +54,7 @@ var _ = Describe("ExecuteAction", func() {
 	})
 
 	Describe("Perform", func() {
-		Context("when the sub-actions succeed", func() {
+		Context("when the sub-action succeeds", func() {
 			BeforeEach(func() {
 				subAction = fake_action.FakeAction{
 					WhenPerforming: func(result chan<- error) {
@@ -69,7 +71,7 @@ var _ = Describe("ExecuteAction", func() {
 			})
 		})
 
-		Context("when the sub-actions fail", func() {
+		Context("when the sub-action fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
@@ -87,6 +89,36 @@ var _ = Describe("ExecuteAction", func() {
 				Ω(runOnce.Failed).Should(BeTrue())
 				Ω(runOnce.FailureReason).Should(Equal("oh no!"))
 			})
+		})
+	})
+
+	Describe("Cancel", func() {
+		var cancelled chan bool
+
+		BeforeEach(func() {
+			cancel := make(chan bool)
+
+			cancelled = make(chan bool)
+
+			subAction = fake_action.FakeAction{
+				WhenPerforming: func(result chan<- error) {
+					<-cancel
+					cancelled <- true
+					result <- nil
+				},
+				WhenCancelling: func() {
+					cancel <- true
+				},
+			}
+		})
+
+		It("cancels its action", func() {
+			go action.Perform(result)
+
+			action.Cancel()
+			Eventually(cancelled).Should(Receive())
+
+			Ω(<-result).ShouldNot(HaveOccurred())
 		})
 	})
 })

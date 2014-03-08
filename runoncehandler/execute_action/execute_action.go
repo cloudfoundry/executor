@@ -48,6 +48,8 @@ func (action ExecuteAction) Perform(result chan<- error) {
 	result <- nil
 }
 
-func (action ExecuteAction) Cancel() {}
+func (action ExecuteAction) Cancel() {
+	action.action.Cancel()
+}
 
 func (action ExecuteAction) Cleanup() {}
