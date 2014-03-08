@@ -75,7 +75,7 @@ var _ = Describe("RunOnceTransformer", func() {
 
 		Ω(runOnceTransformer.ActionsFor(&runOnce)).To(Equal([]action_runner.Action{
 			run_action.New(
-				&runOnce,
+				"some-container-handle",
 				runActionModel,
 				logStreamer,
 				backendPlugin,
@@ -83,7 +83,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			download_action.New(
-				&runOnce,
+				"some-container-handle",
 				downloadActionModel,
 				downloader,
 				"/fake/temp/dir",
@@ -92,7 +92,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			upload_action.New(
-				&runOnce,
+				"some-container-handle",
 				uploadActionModel,
 				uploader,
 				"/fake/temp/dir",

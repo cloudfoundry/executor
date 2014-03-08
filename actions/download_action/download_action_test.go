@@ -21,7 +21,6 @@ var _ = Describe("DownloadAction", func() {
 	var action action_runner.Action
 	var result chan error
 
-	var runOnce *models.RunOnce
 	var downloadAction models.DownloadAction
 	var downloader *fakedownloader.FakeDownloader
 	var tempDir string
@@ -40,10 +39,6 @@ var _ = Describe("DownloadAction", func() {
 			Extract: false,
 		}
 
-		runOnce = &models.RunOnce{
-			ContainerHandle: "some-container-handle",
-		}
-
 		downloader = &fakedownloader.FakeDownloader{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
@@ -58,7 +53,7 @@ var _ = Describe("DownloadAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
-			runOnce,
+			"some-container-handle",
 			downloadAction,
 			downloader,
 			tempDir,

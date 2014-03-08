@@ -21,7 +21,6 @@ var _ = Describe("UploadAction", func() {
 	var action action_runner.Action
 	var result chan error
 
-	var runOnce *models.RunOnce
 	var uploadAction models.UploadAction
 	var uploader *fakeuploader.FakeUploader
 	var tempDir string
@@ -32,10 +31,6 @@ var _ = Describe("UploadAction", func() {
 		var err error
 
 		result = make(chan error)
-
-		runOnce = &models.RunOnce{
-			ContainerHandle: "some-container-handle",
-		}
 
 		uploadAction = models.UploadAction{
 			To:   "http://mr_jones",
@@ -54,7 +49,7 @@ var _ = Describe("UploadAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
-			runOnce,
+			"some-container-handle",
 			uploadAction,
 			uploader,
 			tempDir,

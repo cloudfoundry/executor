@@ -15,17 +15,17 @@ import (
 )
 
 type UploadAction struct {
-	runOnce       *models.RunOnce
-	model         models.UploadAction
-	uploader      uploader.Uploader
-	tempDir       string
-	backendPlugin backend_plugin.BackendPlugin
-	wardenClient  gordon.Client
-	logger        *steno.Logger
+	containerHandle string
+	model           models.UploadAction
+	uploader        uploader.Uploader
+	tempDir         string
+	backendPlugin   backend_plugin.BackendPlugin
+	wardenClient    gordon.Client
+	logger          *steno.Logger
 }
 
 func New(
-	runOnce *models.RunOnce,
+	containerHandle string,
 	model models.UploadAction,
 	uploader uploader.Uploader,
 	tempDir string,
@@ -33,19 +33,19 @@ func New(
 	logger *steno.Logger,
 ) *UploadAction {
 	return &UploadAction{
-		runOnce:      runOnce,
-		model:        model,
-		uploader:     uploader,
-		tempDir:      tempDir,
-		wardenClient: wardenClient,
-		logger:       logger,
+		containerHandle: containerHandle,
+		model:           model,
+		uploader:        uploader,
+		tempDir:         tempDir,
+		wardenClient:    wardenClient,
+		logger:          logger,
 	}
 }
 
 func (action *UploadAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
-			"handle": action.runOnce.ContainerHandle,
+			"handle": action.containerHandle,
 		},
 		"runonce.handle.upload-action",
 	)
@@ -64,7 +64,7 @@ func (action *UploadAction) Perform() error {
 	}
 
 	_, err = action.wardenClient.CopyOut(
-		action.runOnce.ContainerHandle,
+		action.containerHandle,
 		action.model.From,
 		fileLocation,
 		currentUser.Username,

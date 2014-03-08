@@ -14,12 +14,12 @@ import (
 )
 
 type RunAction struct {
-	runOnce       *models.RunOnce
-	model         models.RunAction
-	streamer      logstreamer.LogStreamer
-	backendPlugin backend_plugin.BackendPlugin
-	wardenClient  gordon.Client
-	logger        *steno.Logger
+	containerHandle string
+	model           models.RunAction
+	streamer        logstreamer.LogStreamer
+	backendPlugin   backend_plugin.BackendPlugin
+	wardenClient    gordon.Client
+	logger          *steno.Logger
 }
 
 type RunActionTimeoutError struct {
@@ -31,7 +31,7 @@ func (e RunActionTimeoutError) Error() string {
 }
 
 func New(
-	runOnce *models.RunOnce,
+	containerHandle string,
 	model models.RunAction,
 	streamer logstreamer.LogStreamer,
 	backendPlugin backend_plugin.BackendPlugin,
@@ -39,19 +39,19 @@ func New(
 	logger *steno.Logger,
 ) *RunAction {
 	return &RunAction{
-		runOnce:       runOnce,
-		model:         model,
-		streamer:      streamer,
-		backendPlugin: backendPlugin,
-		wardenClient:  wardenClient,
-		logger:        logger,
+		containerHandle: containerHandle,
+		model:           model,
+		streamer:        streamer,
+		backendPlugin:   backendPlugin,
+		wardenClient:    wardenClient,
+		logger:          logger,
 	}
 }
 
 func (action *RunAction) Perform() error {
 	action.logger.Infod(
 		map[string]interface{}{
-			"handle": action.runOnce.ContainerHandle,
+			"handle": action.containerHandle,
 		},
 		"runonce.handle.run-action",
 	)
@@ -67,7 +67,7 @@ func (action *RunAction) Perform() error {
 
 	go func() {
 		_, stream, err := action.wardenClient.Run(
-			action.runOnce.ContainerHandle,
+			action.containerHandle,
 			action.backendPlugin.BuildRunScript(action.model),
 		)
 
@@ -116,7 +116,7 @@ func (action *RunAction) Perform() error {
 }
 
 func (action *RunAction) Cancel() {
-	action.wardenClient.Stop(action.runOnce.ContainerHandle, false, false)
+	action.wardenClient.Stop(action.containerHandle, false, false)
 }
 
 func (action *RunAction) Cleanup() {}

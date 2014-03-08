@@ -23,7 +23,6 @@ import (
 var _ = Describe("RunAction", func() {
 	var action action_runner.Action
 
-	var runOnce *models.RunOnce
 	var runAction models.RunAction
 	var fakeStreamer *fakelogstreamer.FakeLogStreamer
 	var streamer logstreamer.LogStreamer
@@ -34,10 +33,6 @@ var _ = Describe("RunAction", func() {
 	var processPayloadStream chan *warden.ProcessPayload
 
 	BeforeEach(func() {
-		runOnce = &models.RunOnce{
-			ContainerHandle: "some-container-handle",
-		}
-
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: [][]string{
@@ -63,7 +58,7 @@ var _ = Describe("RunAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
-			runOnce,
+			"some-container-handle",
 			runAction,
 			streamer,
 			backendPlugin,
