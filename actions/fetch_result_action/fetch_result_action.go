@@ -2,12 +2,13 @@ package fetch_result_action
 
 import (
 	"fmt"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
 	"io/ioutil"
 	"os"
 	"os/user"
+
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	"github.com/vito/gordon"
 )
 
 type FetchResultAction struct {

@@ -1,18 +1,19 @@
 package run_once_transformer
 
 import (
-	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
+
+	"github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/actions/download_action"
+	"github.com/cloudfoundry-incubator/executor/actions/fetch_result_action"
+	"github.com/cloudfoundry-incubator/executor/actions/run_action"
+	"github.com/cloudfoundry-incubator/executor/actions/upload_action"
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/downloader"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
 type RunOnceTransformer struct {

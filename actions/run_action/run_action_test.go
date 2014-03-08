@@ -15,9 +15,9 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
+	. "github.com/cloudfoundry-incubator/executor/actions/run_action"
 	"github.com/cloudfoundry-incubator/executor/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
 )
 
 var _ = Describe("RunAction", func() {

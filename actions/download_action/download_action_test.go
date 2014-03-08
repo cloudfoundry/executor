@@ -12,9 +12,9 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
+	. "github.com/cloudfoundry-incubator/executor/actions/download_action"
 	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
 )
 
 var _ = Describe("DownloadAction", func() {
