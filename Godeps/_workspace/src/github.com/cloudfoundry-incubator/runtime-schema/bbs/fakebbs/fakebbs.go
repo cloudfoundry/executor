@@ -90,6 +90,13 @@ type FakeStagerBBS struct {
 	ResolvedRunOnce   models.RunOnce
 	ResolveRunOnceErr error
 
+	ResolvingRunOnceInput struct {
+		RunOnceToResolve models.RunOnce
+	}
+	ResolvingRunOnceOutput struct {
+		Err error
+	}
+
 	CalledCompletedRunOnce  chan bool
 	CompletedRunOnceChan    chan models.RunOnce
 	CompletedRunOnceErrChan chan error
@@ -106,6 +113,11 @@ func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan models.RunOnce,
 	fakeBBS.CompletedRunOnceErrChan = make(chan error)
 	fakeBBS.CalledCompletedRunOnce <- true
 	return fakeBBS.CompletedRunOnceChan, nil, fakeBBS.CompletedRunOnceErrChan
+}
+
+func (fakeBBS *FakeStagerBBS) ResolvingRunOnce(runOnce models.RunOnce) error {
+	fakeBBS.ResolvingRunOnceInput.RunOnceToResolve = runOnce
+	return fakeBBS.ResolvingRunOnceOutput.Err
 }
 
 func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce models.RunOnce) error {

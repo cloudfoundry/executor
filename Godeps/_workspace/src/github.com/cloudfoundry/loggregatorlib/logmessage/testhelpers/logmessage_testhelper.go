@@ -65,7 +65,6 @@ func NewMessageFromLogMessage(t *testing.T, logMessage *logmessage.LogMessage) *
 	return logmessage.NewMessage(logMessage, marshalledLogMessage)
 }
 
-
 func NewMessageWithSyslogDrain(t *testing.T, messageString, appId string, syslogDrains ...string) *logmessage.Message {
 	logMessage := generateLogMessage(messageString, appId, logmessage.LogMessage_OUT, "App", "")
 	logMessage.DrainUrls = syslogDrains

@@ -16,7 +16,8 @@ type FakeGordon struct {
 	createdHandles []string
 	CreateError    error
 
-	StopError error
+	stoppedHandles []string
+	StopError      error
 
 	destroyedHandles []string
 	DestroyError     error
@@ -91,6 +92,7 @@ func (f *FakeGordon) Reset() {
 	f.createdHandles = []string{}
 	f.CreateError = nil
 
+	f.stoppedHandles = []string{}
 	f.StopError = nil
 
 	f.destroyedHandles = []string{}
@@ -151,8 +153,22 @@ func (f *FakeGordon) CreatedHandles() []string {
 }
 
 func (f *FakeGordon) Stop(handle string, background, kill bool) (*warden.StopResponse, error) {
-	panic("NOOP!")
-	return nil, f.StopError
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	if f.StopError != nil {
+		return nil, f.StopError
+	}
+
+	f.stoppedHandles = append(f.stoppedHandles, handle)
+
+	return &warden.StopResponse{}, nil
+}
+
+func (f *FakeGordon) StoppedHandles() []string {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return f.stoppedHandles
 }
 
 func (f *FakeGordon) Destroy(handle string) (*warden.DestroyResponse, error) {

@@ -31,6 +31,7 @@ type StagerBBS interface {
 	WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error)
 
 	DesireRunOnce(models.RunOnce) error
+	ResolvingRunOnce(models.RunOnce) error
 	ResolveRunOnce(models.RunOnce) error
 
 	GetAvailableFileServer() (string, error)

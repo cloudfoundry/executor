@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "46df3e5f3adade891be131e6759b3a7bb889d42d"
+			"Rev": "b442bb0380dd8cf6ad3c94d1d109b405ae019068"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "c3a67e202632fd57ce9f262ab8abe4160df38e81"
+			"Rev": "d307b749aaeff6800efd13165b70b89614d6b25f"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "c3a67e202632fd57ce9f262ab8abe4160df38e81"
+			"Rev": "d307b749aaeff6800efd13165b70b89614d6b25f"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -24,27 +24,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "9c1c1b76d619c0c2656c8224782a4511f4c63c0d"
+			"Rev": "70752874d80017c6a727a7fa065e4c07df998baf"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -52,8 +52,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-75-g5c0151c",
-			"Rev": "5c0151c64399ff9a8087c2e29ae96145ede7cfc2"
+			"Comment": "v0.2.0-rc1-96-g1e26d8e",
+			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -69,7 +69,7 @@
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",
-			"Rev": "3dcec28f6d52a5dff40c93e75a93c39b21d42b00"
+			"Rev": "077deaac38e13b3e71a8a1bb973e6a70904390b9"
 		}
 	]
 }

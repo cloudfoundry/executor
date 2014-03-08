@@ -92,6 +92,21 @@ var _ = Describe("Stager BBS", func() {
 		})
 	})
 
+	Describe("ResolvingRunOnce", func() {
+		BeforeEach(func() {
+			err := bbs.ResolvingRunOnce(runOnce)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		It("creates /run_once/resolving/<guid>", func() {
+			node, err := store.Get("/v1/run_once/resolving/some-guid")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(node.Value).Should(Equal(runOnce.ToJSON()))
+			Ω(node.TTL).Should(BeNumerically(">", 0))
+		})
+
+	})
+
 	Describe("ResolveRunOnce", func() {
 		BeforeEach(func() {
 			err := bbs.DesireRunOnce(runOnce)
