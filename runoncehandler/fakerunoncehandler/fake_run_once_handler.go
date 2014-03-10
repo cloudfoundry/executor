@@ -8,19 +8,22 @@ import (
 type FakeRunOnceHandler struct {
 	numberOfCalls   int
 	handledRunOnces map[string]string
-	Lock            *sync.Mutex
+	mutex           *sync.Mutex
+	cancel          <-chan struct{}
 }
 
 func New() *FakeRunOnceHandler {
 	return &FakeRunOnceHandler{
 		handledRunOnces: make(map[string]string),
-		Lock:            &sync.Mutex{},
+		mutex:           &sync.Mutex{},
 	}
 }
 
-func (handler *FakeRunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string) {
-	handler.Lock.Lock()
-	defer handler.Lock.Unlock()
+func (handler *FakeRunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string, cancel <-chan struct{}) {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	handler.cancel = cancel
 
 	_, present := handler.handledRunOnces[runOnce.Guid]
 	if !present {
@@ -30,15 +33,22 @@ func (handler *FakeRunOnceHandler) RunOnce(runOnce models.RunOnce, executorId st
 }
 
 func (handler *FakeRunOnceHandler) NumberOfCalls() int {
-	handler.Lock.Lock()
-	defer handler.Lock.Unlock()
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
 
 	return handler.numberOfCalls
 }
 
 func (handler *FakeRunOnceHandler) HandledRunOnces() map[string]string {
-	handler.Lock.Lock()
-	defer handler.Lock.Unlock()
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
 
 	return handler.handledRunOnces
+}
+
+func (handler *FakeRunOnceHandler) GetCancel() <-chan struct{} {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	return handler.cancel
 }

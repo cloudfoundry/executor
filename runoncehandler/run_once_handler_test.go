@@ -2,6 +2,7 @@ package runoncehandler_test
 
 import (
 	"io/ioutil"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ var _ = Describe("RunOnceHandler", func() {
 		var (
 			handler *RunOnceHandler
 			runOnce models.RunOnce
+			cancel  chan struct{}
 
 			bbs          *fakebbs.FakeExecutorBBS
 			wardenClient *fake_gordon.FakeGordon
@@ -37,6 +39,8 @@ var _ = Describe("RunOnceHandler", func() {
 		)
 
 		BeforeEach(func() {
+			cancel = make(chan struct{})
+
 			runOnce = models.RunOnce{
 				Guid: "run-once-guid",
 				Actions: []models.ExecutorAction{
@@ -112,7 +116,7 @@ var _ = Describe("RunOnceHandler", func() {
 		BeforeEach(setupSuccessfulRuns)
 
 		It("registers, claims, creates container, starts, (executes...), completes", func() {
-			handler.RunOnce(runOnce, "fake-executor-id")
+			handler.RunOnce(runOnce, "fake-executor-id", cancel)
 
 			// register
 			Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
@@ -151,6 +155,41 @@ var _ = Describe("RunOnceHandler", func() {
 			Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
 			Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
 			Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
+		})
+
+		Context("when told to cancel", func() {
+			var running chan struct{}
+
+			BeforeEach(func() {
+				running = make(chan struct{})
+
+				wardenClient.WhenRunning("", "sudo reboot", func() (uint32, <-chan *warden.ProcessPayload, error) {
+					running <- struct{}{}
+					time.Sleep(1 * time.Hour)
+					return 0, nil, nil
+				})
+			})
+
+			It("does not continue performing", func() {
+				done := make(chan struct{})
+
+				go func() {
+					handler.RunOnce(runOnce, "fake-executor-id", cancel)
+					done <- struct{}{}
+				}()
+
+				Eventually(running).Should(Receive())
+
+				close(cancel)
+
+				Eventually(done).Should(Receive())
+
+				Ω(wardenClient.StoppedHandles()).ShouldNot(BeEmpty())
+
+				Ω(uploader.UploadUrls).Should(BeEmpty())
+
+				Ω(bbs.CompletedRunOnce).Should(BeZero())
+			})
 		})
 	})
 })

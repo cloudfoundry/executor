@@ -20,7 +20,7 @@ import (
 )
 
 type RunOnceHandlerInterface interface {
-	RunOnce(runOnce models.RunOnce, executorId string)
+	RunOnce(runOnce models.RunOnce, executorId string, cancel <-chan struct{})
 }
 
 type RunOnceHandler struct {
@@ -50,7 +50,7 @@ func New(
 	}
 }
 
-func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
+func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string, cancel <-chan struct{}) {
 	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
 			runOnce,
@@ -87,5 +87,17 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		),
 	})
 
-	runner.Perform()
+	result := make(chan error, 1)
+
+	go func() {
+		result <- runner.Perform()
+	}()
+
+	select {
+	case <-result:
+		return
+	case <-cancel:
+		runner.Cancel()
+		return
+	}
 }

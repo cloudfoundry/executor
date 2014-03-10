@@ -1,17 +1,16 @@
 package executor
 
 import (
-	"github.com/cloudfoundry-incubator/executor/runoncehandler"
-	"github.com/cloudfoundry-incubator/executor/taskregistry"
+	"errors"
 	"math/rand"
-
-	"github.com/nu7hatch/gouuid"
-	"github.com/vito/gordon"
 	"sync"
 	"time"
 
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/nu7hatch/gouuid"
+
+	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 )
 
 type Executor struct {
@@ -20,12 +19,14 @@ type Executor struct {
 	bbs Bbs.ExecutorBBS
 
 	runOnceGroup         *sync.WaitGroup
-	stopHandlingRunOnces chan bool
+	stopHandlingRunOnces chan error
 
 	stopMaintainingPresence chan bool
 
 	logger *steno.Logger
 }
+
+var MaintainPresenceError = errors.New("failed to maintain presence")
 
 func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
 	uuid, err := uuid.NewV4()
@@ -62,7 +63,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 
 		case <-maintainingPresenceErrors:
 			e.logger.Error("executor.maintaining-presence.failed")
-			close(e.stopHandlingRunOnces)
+			e.stopHandlingRunOnces <- MaintainPresenceError
 		}
 	}()
 
@@ -71,43 +72,44 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 	return nil
 }
 
-func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface) error {
-	ready := make(chan bool)
-	e.stopHandlingRunOnces = make(chan bool)
+func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface, ready chan<- bool) error {
+	e.stopHandlingRunOnces = make(chan error)
+	cancel := make(chan struct{})
 
-	go func() {
-		runOnces, stop, errors := e.bbs.WatchForDesiredRunOnce()
-		ready <- true
+	runOnces, stop, errors := e.bbs.WatchForDesiredRunOnce()
+	ready <- true
 
+	for {
+	INNER:
 		for {
-		INNER:
-			for {
-				select {
-				case runOnce, ok := <-runOnces:
-					if !ok {
-						return
-					}
-
-					e.runOnceGroup.Add(1)
-
-					go func() {
-						e.sleepForARandomInterval()
-						runOnceHandler.RunOnce(runOnce, e.id)
-						e.runOnceGroup.Done()
-					}()
-				case <-e.stopHandlingRunOnces:
-					stop <- true
-					return
-				case <-errors:
-					break INNER
+			select {
+			case runOnce, ok := <-runOnces:
+				if !ok {
+					return nil
 				}
+
+				e.runOnceGroup.Add(1)
+
+				go func() {
+					e.sleepForARandomInterval()
+					runOnceHandler.RunOnce(runOnce, e.id, cancel)
+					e.runOnceGroup.Done()
+				}()
+			case err := <-e.stopHandlingRunOnces:
+				stop <- true
+
+				close(cancel)
+
+				e.runOnceGroup.Wait()
+				return err
+			case <-errors:
+				break INNER
 			}
-
-			runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
 		}
-	}()
 
-	<-ready
+		runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
+	}
+
 	return nil
 }
 

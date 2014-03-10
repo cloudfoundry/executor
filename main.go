@@ -245,15 +245,25 @@ func main() {
 		logger,
 	)
 
-	err = executor.Handle(runOnceHandler)
-	if err != nil {
-		logger.Errorf("failed to start handling run onces: %s", err.Error())
-		os.Exit(1)
-	}
-
-	logger.Infof("Watching for RunOnces!")
-
 	executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
 
-	select {}
+	ready := make(chan bool, 1)
+
+	go func() {
+		<-ready
+		logger.Infof("Watching for RunOnces!")
+	}()
+
+	err = executor.Handle(runOnceHandler, ready)
+
+	if err != nil {
+		logger.Errord(
+			map[string]interface{}{
+				"error": err.Error(),
+			},
+			"executor.run-once-handling.failed",
+		)
+
+		os.Exit(1)
+	}
 }

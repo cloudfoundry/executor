@@ -26,15 +26,16 @@ var _ = Describe("Executor", func() {
 		taskRegistry     *taskregistry.TaskRegistry
 		gordon           *fake_gordon.FakeGordon
 		registryFileName string
-
-		startingMemory int
-		startingDisk   int
+		ready            chan bool
+		startingMemory   int
+		startingDisk     int
 	)
 
 	var fakeRunOnceHandler *fakerunoncehandler.FakeRunOnceHandler
 
 	BeforeEach(func() {
 		fakeRunOnceHandler = fakerunoncehandler.New()
+		ready = make(chan bool, 1)
 
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 
@@ -68,10 +69,13 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Handling", func() {
+		BeforeEach(func() {
+			go executor.Handle(fakeRunOnceHandler, ready)
+			<-ready
+		})
+
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
-				executor.Handle(fakeRunOnceHandler)
-
 				etcdRunner.Stop()
 				time.Sleep(200 * time.Millisecond) //give the etcd driver time to realize we timed out.  the etcd driver is hardcoded to have a 200 ms timeout
 
@@ -95,7 +99,6 @@ var _ = Describe("Executor", func() {
 
 		Context("when told to stop handling", func() {
 			BeforeEach(func() {
-				executor.Handle(fakeRunOnceHandler)
 				executor.StopHandling()
 			})
 
@@ -113,10 +116,10 @@ var _ = Describe("Executor", func() {
 			var otherExecutor *Executor
 
 			BeforeEach(func() {
-				executor.Handle(fakeRunOnceHandler)
-
 				otherExecutor = New(bbs, steno.NewLogger("test-logger"))
-				otherExecutor.Handle(fakeRunOnceHandler)
+
+				go otherExecutor.Handle(fakeRunOnceHandler, ready)
+				<-ready
 			})
 
 			AfterEach(func() {
@@ -187,26 +190,41 @@ var _ = Describe("Executor", func() {
 		})
 
 		Context("when we fail to maintain our presence", func() {
+			var handleErr chan error
+
 			BeforeEach(func() {
-				executor.Handle(fakeRunOnceHandler)
+				handleErr = make(chan error, 1)
+
+				go func() {
+					handleErr <- executor.Handle(fakeRunOnceHandler, ready)
+				}()
+
+				<-ready
 
 				executor.MaintainPresence(1 * time.Second)
 			})
 
-			It("stops handling RunOnces", func() {
+			triggerMaintainPresenceFailure := func() {
 				time.Sleep(1 * time.Second)
-
 				// delete its key (and everything else lol)
 				etcdRunner.Reset()
-
 				time.Sleep(2 * time.Second)
+			}
 
+			It("cancels the running actions and returns an error", func() {
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Consistently(func() int {
-					return fakeRunOnceHandler.NumberOfCalls()
-				}).Should(Equal(0))
+				Eventually(fakeRunOnceHandler.HandledRunOnces).ShouldNot(BeEmpty())
+
+				triggerMaintainPresenceFailure()
+
+				Eventually(fakeRunOnceHandler.GetCancel).ShouldNot(BeNil())
+				Eventually(fakeRunOnceHandler.GetCancel()).Should(BeClosed())
+
+				Eventually(handleErr).Should(Receive(&err))
+
+				Ω(err).Should(Equal(MaintainPresenceError))
 			})
 		})
 	})
