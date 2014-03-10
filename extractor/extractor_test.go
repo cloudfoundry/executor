@@ -13,9 +13,18 @@ import (
 
 var _ = Describe("Extractor", func() {
 	var destination string
+	var fixturetmp string
+	var fixture string
 
 	BeforeEach(func() {
-		err := exec.Command("cp", "../fixtures/fixture.zip", "../fixtures/fixture_test.zip").Run()
+		var err error
+
+		fixturetmp, err = ioutil.TempDir("", "extractor-fixture")
+		Ω(err).ShouldNot(HaveOccurred())
+
+		fixture = filepath.Join(fixturetmp, "fixture.zip")
+
+		err = exec.Command("cp", "../fixtures/fixture.zip", fixture).Run()
 		Ω(err).ShouldNot(HaveOccurred())
 
 		destination, err = ioutil.TempDir(os.TempDir(), "extracted")
@@ -23,11 +32,12 @@ var _ = Describe("Extractor", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(destination) //Tidy up!
+		os.RemoveAll(destination)
+		os.RemoveAll(fixturetmp)
 	})
 
 	It("should extract zip files, generating directories, and honoring file permissions", func() {
-		err := Extract("../fixtures/fixture_test.zip", destination)
+		err := Extract(fixture, destination)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		fileContents, err := ioutil.ReadFile(filepath.Join(destination, "fixture", "file"))
@@ -48,10 +58,10 @@ var _ = Describe("Extractor", func() {
 	})
 
 	It("should delete the zip file when its done", func() {
-		err := Extract("../fixtures/fixture_test.zip", destination)
+		err := Extract(fixture, destination)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		err = Extract("../fixtures/fixture_test.zip", destination)
+		err = Extract(fixture, destination)
 		Ω(err).Should(HaveOccurred())
 	})
 })
