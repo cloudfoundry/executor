@@ -15,15 +15,14 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
+	. "github.com/cloudfoundry-incubator/executor/actions/run_action"
 	"github.com/cloudfoundry-incubator/executor/logstreamer"
 	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
 )
 
 var _ = Describe("RunAction", func() {
 	var action action_runner.Action
 
-	var runOnce *models.RunOnce
 	var runAction models.RunAction
 	var fakeStreamer *fakelogstreamer.FakeLogStreamer
 	var streamer logstreamer.LogStreamer
@@ -34,10 +33,6 @@ var _ = Describe("RunAction", func() {
 	var processPayloadStream chan *warden.ProcessPayload
 
 	BeforeEach(func() {
-		runOnce = &models.RunOnce{
-			ContainerHandle: "some-container-handle",
-		}
-
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: [][]string{
@@ -63,7 +58,7 @@ var _ = Describe("RunAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
-			runOnce,
+			"some-container-handle",
 			runAction,
 			streamer,
 			backendPlugin,

@@ -1,9 +1,6 @@
 package action_runner_test
 
 import (
-	"runtime"
-	"time"
-
 	. "github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/action_runner/fake_action"
 	. "github.com/onsi/ginkgo"
@@ -34,22 +31,10 @@ var _ = Describe("Run", func() {
 		}
 	})
 
-	It("runs the provided actions asynchronously", func() {
-		Eventually(Run(actions...)).Should(Receive())
+	It("runs the provided actions", func() {
+		err := Run(actions...)
+		Ω(err).ShouldNot(HaveOccurred())
 
 		Ω(performedActions).To(Equal([]string{"foo", "bar"}))
-	})
-
-	Context("when no one reads the result", func() {
-		It("does not leak the goroutine that provides it", func() {
-			before := runtime.NumGoroutine()
-
-			Run(actions...)
-
-			time.Sleep(100 * time.Millisecond) // give time for the actions to at least start
-
-			after := runtime.NumGoroutine()
-			Ω(after).Should(Equal(before))
-		})
 	})
 })

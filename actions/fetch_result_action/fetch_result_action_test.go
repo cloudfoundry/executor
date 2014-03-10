@@ -2,14 +2,17 @@ package fetch_result_action_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/action_runner"
-	. "github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon/fake_gordon"
-	"strings"
+
+	"github.com/cloudfoundry-incubator/executor/action_runner"
+	. "github.com/cloudfoundry-incubator/executor/actions/fetch_result_action"
 )
 
 var _ = Describe("FetchResultAction", func() {

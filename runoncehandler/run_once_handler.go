@@ -7,6 +7,7 @@ import (
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
+	"github.com/cloudfoundry-incubator/executor/action_runner/lazy_action_runner"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler/claim_action"
@@ -53,7 +54,7 @@ func New(
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
-	<-handler.performer(
+	handler.performer(
 		register_action.New(
 			runOnce,
 			handler.logger,
@@ -78,7 +79,9 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		execute_action.New(
 			&runOnce,
 			handler.logger,
-			action_runner.New(handler.transformer.ActionsFor(&runOnce)),
+			lazy_action_runner.New(func() []action_runner.Action {
+				return handler.transformer.ActionsFor(&runOnce)
+			}),
 		),
 		complete_action.New(
 			&runOnce,

@@ -1,12 +1,6 @@
 package run_once_transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
-	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
-	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
@@ -14,13 +8,19 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/executor/actions/download_action"
+	"github.com/cloudfoundry-incubator/executor/actions/fetch_result_action"
+	"github.com/cloudfoundry-incubator/executor/actions/run_action"
+	"github.com/cloudfoundry-incubator/executor/actions/upload_action"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/downloader"
+	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/download_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/fetch_result_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/run_action"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/execute_action/upload_action"
+	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
+	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
 )
 
 var _ = Describe("RunOnceTransformer", func() {
@@ -75,7 +75,7 @@ var _ = Describe("RunOnceTransformer", func() {
 
 		Ω(runOnceTransformer.ActionsFor(&runOnce)).To(Equal([]action_runner.Action{
 			run_action.New(
-				&runOnce,
+				"some-container-handle",
 				runActionModel,
 				logStreamer,
 				backendPlugin,
@@ -83,7 +83,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			download_action.New(
-				&runOnce,
+				"some-container-handle",
 				downloadActionModel,
 				downloader,
 				"/fake/temp/dir",
@@ -92,7 +92,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			upload_action.New(
-				&runOnce,
+				"some-container-handle",
 				uploadActionModel,
 				uploader,
 				"/fake/temp/dir",

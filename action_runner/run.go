@@ -1,13 +1,7 @@
 package action_runner
 
-type Performer func(actions ...Action) (result <-chan error)
+type Performer func(actions ...Action) error
 
-func Run(actions ...Action) <-chan error {
-	result := make(chan error, 1)
-
-	go func() {
-		result <- New(actions).Perform()
-	}()
-
-	return result
+func Run(actions ...Action) error {
+	return New(actions).Perform()
 }
