@@ -17,8 +17,7 @@ import (
 type Executor struct {
 	id string
 
-	bbs          Bbs.ExecutorBBS
-	wardenClient gordon.Client
+	bbs Bbs.ExecutorBBS
 
 	runOnceGroup         *sync.WaitGroup
 	stopHandlingRunOnces chan bool
@@ -26,8 +25,6 @@ type Executor struct {
 	stopMaintainingPresence chan bool
 
 	logger *steno.Logger
-
-	taskRegistry *taskregistry.TaskRegistry
 }
 
 func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
