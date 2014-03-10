@@ -327,15 +327,16 @@ func (f *FakeGordon) WhenRunning(handle string, script string, callback RunCallb
 
 func (f *FakeGordon) Run(handle string, script string) (uint32, <-chan *warden.ProcessPayload, error) {
 	f.lock.Lock()
-	defer f.lock.Unlock()
 
 	f.scriptsThatRan = append(f.scriptsThatRan, &RunningScript{
 		Handle: handle,
 		Script: script,
 	})
 
+	f.lock.Unlock()
+
 	for ro, cb := range f.runCallbacks {
-		if ro.Handle == handle && ro.Script == script {
+		if (ro.Handle == "" || ro.Handle == handle) && ro.Script == script {
 			return cb()
 		}
 	}
