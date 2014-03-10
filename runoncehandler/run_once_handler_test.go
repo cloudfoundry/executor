@@ -12,7 +12,6 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
-	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/logstreamer"
@@ -93,7 +92,6 @@ var _ = Describe("RunOnceHandler", func() {
 				wardenClient,
 				taskRegistry,
 				transformer,
-				action_runner.Run,
 				logStreamerFactory,
 				logger,
 			)

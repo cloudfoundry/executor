@@ -27,7 +27,6 @@ type RunOnceHandler struct {
 	bbs                Bbs.ExecutorBBS
 	wardenClient       gordon.Client
 	transformer        *run_once_transformer.RunOnceTransformer
-	performer          action_runner.Performer
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
 	logger             *steno.Logger
 	taskRegistry       taskregistry.TaskRegistryInterface
@@ -38,7 +37,6 @@ func New(
 	wardenClient gordon.Client,
 	taskRegistry taskregistry.TaskRegistryInterface,
 	transformer *run_once_transformer.RunOnceTransformer,
-	performer action_runner.Performer,
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	logger *steno.Logger,
 ) *RunOnceHandler {
@@ -47,14 +45,13 @@ func New(
 		wardenClient:       wardenClient,
 		taskRegistry:       taskRegistry,
 		transformer:        transformer,
-		performer:          performer,
 		logStreamerFactory: logStreamerFactory,
 		logger:             logger,
 	}
 }
 
 func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string) {
-	handler.performer(
+	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
 			runOnce,
 			handler.logger,
@@ -88,5 +85,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			handler.logger,
 			handler.bbs,
 		),
-	)
+	})
+
+	runner.Perform()
 }

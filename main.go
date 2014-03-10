@@ -15,15 +15,14 @@ import (
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/linuxplugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/runoncehandler"
 	"github.com/cloudfoundry-incubator/executor/taskregistry"
+	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
 var wardenNetwork = flag.String(
@@ -242,7 +241,6 @@ func main() {
 		wardenClient,
 		taskRegistry,
 		transformer,
-		action_runner.Run,
 		logStreamerFactory,
 		logger,
 	)
