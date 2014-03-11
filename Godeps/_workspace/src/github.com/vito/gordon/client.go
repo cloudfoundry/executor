@@ -3,9 +3,15 @@ package gordon
 import (
 	"time"
 
+	"code.google.com/p/gogoprotobuf/proto"
+
 	"github.com/vito/gordon/connection"
 	"github.com/vito/gordon/warden"
 )
+
+type ResourceLimits struct {
+	FileDescriptors uint64
+}
 
 type Client interface {
 	Connect() error
@@ -13,7 +19,7 @@ type Client interface {
 	Create() (*warden.CreateResponse, error)
 	Stop(handle string, background, kill bool) (*warden.StopResponse, error)
 	Destroy(handle string) (*warden.DestroyResponse, error)
-	Run(handle, script string) (uint32, <-chan *warden.ProcessPayload, error)
+	Run(handle, script string, resourceLimits ResourceLimits) (uint32, <-chan *warden.ProcessPayload, error)
 	Attach(handle string, processID uint32) (<-chan *warden.ProcessPayload, error)
 	NetIn(handle string) (*warden.NetInResponse, error)
 	LimitMemory(handle string, limit uint64) (*warden.LimitMemoryResponse, error)
@@ -70,10 +76,16 @@ func (c *client) Destroy(handle string) (*warden.DestroyResponse, error) {
 	return conn.Destroy(handle)
 }
 
-func (c *client) Run(handle, script string) (uint32, <-chan *warden.ProcessPayload, error) {
+func (c *client) Run(handle, script string, resourceLimits ResourceLimits) (uint32, <-chan *warden.ProcessPayload, error) {
 	conn := c.acquireConnection()
 
-	processID, stream, err := conn.Run(handle, script)
+	wardenResourceLimits := &warden.ResourceLimits{}
+
+	if resourceLimits.FileDescriptors > 0 {
+		wardenResourceLimits.Nofile = proto.Uint64(resourceLimits.FileDescriptors)
+	}
+
+	processID, stream, err := conn.Run(handle, script, wardenResourceLimits)
 
 	if err != nil {
 		c.release(conn)

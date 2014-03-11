@@ -108,11 +108,12 @@ func (c *Connection) Destroy(handle string) (*warden.DestroyResponse, error) {
 	return res.(*warden.DestroyResponse), nil
 }
 
-func (c *Connection) Run(handle, script string) (uint32, chan *warden.ProcessPayload, error) {
+func (c *Connection) Run(handle, script string, resourceLimits *warden.ResourceLimits) (uint32, chan *warden.ProcessPayload, error) {
 	err := c.SendMessage(
 		&warden.RunRequest{
-			Handle: proto.String(handle),
-			Script: proto.String(script),
+			Handle:  proto.String(handle),
+			Script:  proto.String(script),
+			Rlimits: resourceLimits,
 		},
 	)
 

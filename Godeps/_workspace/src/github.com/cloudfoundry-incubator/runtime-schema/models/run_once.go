@@ -5,13 +5,14 @@ import (
 )
 
 type RunOnce struct {
-	Guid      string           `json:"guid"`
-	Actions   []ExecutorAction `json:"actions"`
-	Stack     string           `json:"stack"`
-	MemoryMB  int              `json:"memory_mb"`
-	DiskMB    int              `json:"disk_mb"`
-	Log       LogConfig        `json:"log"`
-	CreatedAt int64            `json:"created_at"` //  the number of nanoseconds elapsed since January 1, 1970 UTC
+	Guid            string           `json:"guid"`
+	Actions         []ExecutorAction `json:"actions"`
+	Stack           string           `json:"stack"`
+	FileDescriptors int              `json:"file_descriptors"`
+	MemoryMB        int              `json:"memory_mb"`
+	DiskMB          int              `json:"disk_mb"`
+	Log             LogConfig        `json:"log"`
+	CreatedAt       int64            `json:"created_at"` //  the number of nanoseconds elapsed since January 1, 1970 UTC
 
 	// this is so that any stager can process a complete event,
 	// because the CC <-> Stager interaction is a one-to-one request-response

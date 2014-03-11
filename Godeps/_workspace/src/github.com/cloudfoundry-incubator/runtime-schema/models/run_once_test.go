@@ -27,6 +27,7 @@ var _ = Describe("RunOnce", func() {
 		"result": "turboencabulated",
 		"failed":true,
 		"failure_reason":"because i said so",
+		"file_descriptors":9001,
 		"memory_mb":256,
 		"disk_mb":1024,
 		"log": {
@@ -63,6 +64,7 @@ var _ = Describe("RunOnce", func() {
 			Result:          "turboencabulated",
 			Failed:          true,
 			FailureReason:   "because i said so",
+			FileDescriptors: 9001,
 			MemoryMB:        256,
 			DiskMB:          1024,
 			CreatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 00, time.UTC).UnixNano(),

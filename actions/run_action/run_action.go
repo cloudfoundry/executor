@@ -14,12 +14,13 @@ import (
 )
 
 type RunAction struct {
-	containerHandle string
-	model           models.RunAction
-	streamer        logstreamer.LogStreamer
-	backendPlugin   backend_plugin.BackendPlugin
-	wardenClient    gordon.Client
-	logger          *steno.Logger
+	containerHandle     string
+	model               models.RunAction
+	fileDescriptorLimit int
+	streamer            logstreamer.LogStreamer
+	backendPlugin       backend_plugin.BackendPlugin
+	wardenClient        gordon.Client
+	logger              *steno.Logger
 }
 
 type RunActionTimeoutError struct {
@@ -33,18 +34,20 @@ func (e RunActionTimeoutError) Error() string {
 func New(
 	containerHandle string,
 	model models.RunAction,
+	fileDescriptorLimit int,
 	streamer logstreamer.LogStreamer,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 ) *RunAction {
 	return &RunAction{
-		containerHandle: containerHandle,
-		model:           model,
-		streamer:        streamer,
-		backendPlugin:   backendPlugin,
-		wardenClient:    wardenClient,
-		logger:          logger,
+		containerHandle:     containerHandle,
+		model:               model,
+		fileDescriptorLimit: fileDescriptorLimit,
+		streamer:            streamer,
+		backendPlugin:       backendPlugin,
+		wardenClient:        wardenClient,
+		logger:              logger,
 	}
 }
 
@@ -69,6 +72,9 @@ func (action *RunAction) Perform() error {
 		_, stream, err := action.wardenClient.Run(
 			action.containerHandle,
 			action.backendPlugin.BuildRunScript(action.model),
+			gordon.ResourceLimits{
+				FileDescriptors: uint64(action.fileDescriptorLimit),
+			},
 		)
 
 		if err != nil {

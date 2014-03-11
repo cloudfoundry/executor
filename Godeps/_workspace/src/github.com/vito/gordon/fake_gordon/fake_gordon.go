@@ -3,6 +3,7 @@ package fake_gordon
 import (
 	"code.google.com/p/gogoprotobuf/proto"
 	"github.com/nu7hatch/gouuid"
+	"github.com/vito/gordon"
 	"github.com/vito/gordon/warden"
 	"io/ioutil"
 	"os"
@@ -63,8 +64,9 @@ type FakeGordon struct {
 type RunCallback func() (uint32, <-chan *warden.ProcessPayload, error)
 
 type RunningScript struct {
-	Handle string
-	Script string
+	Handle         string
+	Script         string
+	ResourceLimits gordon.ResourceLimits
 }
 
 type CopiedIn struct {
@@ -370,19 +372,20 @@ func (f *FakeGordon) SetRunReturnValues(processID uint32, processPayloadChan <-c
 	f.runReturnError = err
 }
 
-func (f *FakeGordon) WhenRunning(handle string, script string, callback RunCallback) {
+func (f *FakeGordon) WhenRunning(handle string, script string, resourceLimits gordon.ResourceLimits, callback RunCallback) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.runCallbacks[&RunningScript{handle, script}] = callback
+	f.runCallbacks[&RunningScript{handle, script, resourceLimits}] = callback
 }
 
-func (f *FakeGordon) Run(handle string, script string) (uint32, <-chan *warden.ProcessPayload, error) {
+func (f *FakeGordon) Run(handle string, script string, resourceLimits gordon.ResourceLimits) (uint32, <-chan *warden.ProcessPayload, error) {
 	f.lock.Lock()
 
 	f.scriptsThatRan = append(f.scriptsThatRan, &RunningScript{
-		Handle: handle,
-		Script: script,
+		Handle:         handle,
+		Script:         script,
+		ResourceLimits: resourceLimits,
 	})
 
 	f.lock.Unlock()

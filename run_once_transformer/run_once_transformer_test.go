@@ -70,6 +70,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				{uploadActionModel},
 				{fetchResultActionModel},
 			},
+			FileDescriptors: 117,
 			ContainerHandle: "some-container-handle",
 		}
 
@@ -77,6 +78,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			run_action.New(
 				"some-container-handle",
 				runActionModel,
+				117,
 				logStreamer,
 				backendPlugin,
 				wardenClient,

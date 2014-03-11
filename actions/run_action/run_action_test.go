@@ -29,10 +29,12 @@ var _ = Describe("RunAction", func() {
 	var backendPlugin *linuxplugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
+	var fileDescriptorLimit int
 
 	var processPayloadStream chan *warden.ProcessPayload
 
 	BeforeEach(func() {
+		fileDescriptorLimit = 17
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: [][]string{
@@ -60,6 +62,7 @@ var _ = Describe("RunAction", func() {
 		action = New(
 			"some-container-handle",
 			runAction,
+			fileDescriptorLimit,
 			streamer,
 			backendPlugin,
 			wardenClient,
@@ -80,6 +83,7 @@ var _ = Describe("RunAction", func() {
 				runningScript := wardenClient.ScriptsThatRan()[0]
 				Ω(runningScript.Handle).Should(Equal("some-container-handle"))
 				Ω(runningScript.Script).Should(Equal("export A=\"1\"\nsudo reboot"))
+				Ω(runningScript.ResourceLimits.FileDescriptors).Should(BeNumerically("==", fileDescriptorLimit))
 			})
 		})
 

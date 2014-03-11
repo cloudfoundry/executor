@@ -61,6 +61,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			subAction = run_action.New(
 				runOnce.ContainerHandle,
 				actionModel,
+				runOnce.FileDescriptors,
 				logStreamer,
 				transformer.backendPlugin,
 				transformer.wardenClient,

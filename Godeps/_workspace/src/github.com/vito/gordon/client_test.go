@@ -119,14 +119,15 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should spawn and stream succesfully", func(done Done) {
-			processID, responses, err := client.Run("foo", "echo some data for stdout")
+			processID, responses, err := client.Run("foo", "echo some data for stdout", ResourceLimits{FileDescriptors: 72})
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(processID).Should(BeNumerically("==", 1721))
 
 			expectedWriteBufferContents := string(warden.Messages(
 				&warden.RunRequest{
-					Handle: proto.String("foo"),
-					Script: proto.String("echo some data for stdout"),
+					Handle:  proto.String("foo"),
+					Script:  proto.String("echo some data for stdout"),
+					Rlimits: &warden.ResourceLimits{Nofile: proto.Uint64(72)},
 				},
 			).Bytes())
 
@@ -142,6 +143,24 @@ var _ = Describe("Client", func() {
 			Eventually(responses).Should(BeClosed())
 
 			close(done)
+		})
+
+		Context("When resource limits are set to 0", func() {
+			It("should not populate the ResourceLimits in the protocol buffer", func() {
+				processID, _, err := client.Run("foo", "echo some data for stdout", ResourceLimits{FileDescriptors: 0})
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(processID).Should(BeNumerically("==", 1721))
+
+				expectedWriteBufferContents := string(warden.Messages(
+					&warden.RunRequest{
+						Handle:  proto.String("foo"),
+						Script:  proto.String("echo some data for stdout"),
+						Rlimits: &warden.ResourceLimits{},
+					},
+				).Bytes())
+
+				Ω(string(writeBuffer.Bytes())).Should(Equal(expectedWriteBufferContents))
+			})
 		})
 	})
 

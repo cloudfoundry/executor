@@ -73,7 +73,7 @@ func (action *DownloadAction) Perform() error {
 	}
 
 	createParentDirCommand := action.backendPlugin.BuildCreateDirectoryRecursivelyCommand(filepath.Dir(action.model.To))
-	_, _, err = action.wardenClient.Run(action.containerHandle, createParentDirCommand)
+	_, _, err = action.wardenClient.Run(action.containerHandle, createParentDirCommand, gordon.ResourceLimits{})
 	if err != nil {
 		return err
 	}

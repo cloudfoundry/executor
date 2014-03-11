@@ -1,6 +1,7 @@
 package runoncehandler_test
 
 import (
+	"github.com/vito/gordon"
 	"io/ioutil"
 	"time"
 
@@ -172,7 +173,7 @@ var _ = Describe("RunOnceHandler", func() {
 			BeforeEach(func() {
 				running = make(chan struct{})
 
-				wardenClient.WhenRunning("", "sudo reboot", func() (uint32, <-chan *warden.ProcessPayload, error) {
+				wardenClient.WhenRunning("", "sudo reboot", gordon.ResourceLimits{}, func() (uint32, <-chan *warden.ProcessPayload, error) {
 					running <- struct{}{}
 					time.Sleep(1 * time.Hour)
 					return 0, nil, nil
