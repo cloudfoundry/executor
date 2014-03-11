@@ -45,6 +45,8 @@ var _ = Describe("CreateContainerAction", func() {
 	})
 
 	Describe("Perform", func() {
+		disaster := errors.New("oh no!")
+
 		It("creates a container and updates the RunOnce's ContainerHandle", func() {
 			err := action.Perform()
 			Ω(err).Should(BeNil())
@@ -53,8 +55,6 @@ var _ = Describe("CreateContainerAction", func() {
 		})
 
 		Context("when registering fails", func() {
-			disaster := errors.New("oh no!")
-
 			BeforeEach(func() {
 				gordon.CreateError = disaster
 			})

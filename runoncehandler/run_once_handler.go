@@ -1,6 +1,7 @@
 package runoncehandler
 
 import (
+	"github.com/cloudfoundry-incubator/executor/runoncehandler/limit_container_action"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -64,6 +65,11 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			handler.bbs,
 		),
 		create_container_action.New(
+			&runOnce,
+			handler.logger,
+			handler.wardenClient,
+		),
+		limit_container_action.New(
 			&runOnce,
 			handler.logger,
 			handler.wardenClient,

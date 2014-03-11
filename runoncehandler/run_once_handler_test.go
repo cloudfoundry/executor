@@ -42,7 +42,9 @@ var _ = Describe("RunOnceHandler", func() {
 			cancel = make(chan struct{})
 
 			runOnce = models.RunOnce{
-				Guid: "run-once-guid",
+				Guid:     "run-once-guid",
+				MemoryMB: 512,
+				DiskMB:   1024,
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.DownloadAction{
@@ -127,6 +129,13 @@ var _ = Describe("RunOnceHandler", func() {
 
 			// create container
 			Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
+			handle := wardenClient.CreatedHandles()[0]
+
+			//limit memoru & disk
+			Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
+			Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
+			Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
+			Ω(wardenClient.DiskLimits()[0].Limit).Should(BeNumerically("==", 1024*1024*1024))
 
 			// start
 			Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
