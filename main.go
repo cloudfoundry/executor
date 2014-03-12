@@ -193,35 +193,7 @@ func main() {
 
 	logger.Infof("Starting executor: ID=%s, stack=%s", executor.ID(), *stack)
 
-	signals := make(chan os.Signal, 1)
-
-	go func() {
-		<-signals
-
-		err := taskRegistry.WriteToDisk()
-		if err != nil {
-			logger.Errord(
-				map[string]interface{}{
-					"error":            err,
-					"snapshotLocation": *registrySnapshotFile,
-				},
-				"executor.snapshot.write-failed",
-			)
-
-			os.Exit(1)
-		} else {
-			logger.Debugd(
-				map[string]interface{}{
-					"snapshotLocation": *registrySnapshotFile,
-				},
-				"executor.snapshot.saved",
-			)
-		}
-
-		os.Exit(0)
-	}()
-
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	registerSignalHandler(executor)
 
 	linuxPlugin := linuxplugin.New()
 	downloader := downloader.New(10*time.Minute, logger)
@@ -262,6 +234,9 @@ func main() {
 	}()
 
 	err = executor.Handle(runOnceHandler, ready)
+	executor.Stop()
+
+	writeRegistry(taskRegistry, logger)
 
 	if err != nil {
 		logger.Errord(
@@ -273,4 +248,39 @@ func main() {
 
 		os.Exit(1)
 	}
+}
+
+func writeRegistry(taskRegistry taskregistry.TaskRegistryInterface, logger *steno.Logger) {
+	err := taskRegistry.WriteToDisk()
+	if err != nil {
+		logger.Errord(
+			map[string]interface{}{
+				"error":            err,
+				"snapshotLocation": *registrySnapshotFile,
+			},
+			"executor.snapshot.write-failed",
+		)
+
+		os.Exit(1)
+	} else {
+		logger.Debugd(
+			map[string]interface{}{
+				"snapshotLocation": *registrySnapshotFile,
+			},
+			"executor.snapshot.saved",
+		)
+	}
+}
+
+func registerSignalHandler(e *executor.Executor) {
+	signals := make(chan os.Signal, 1)
+
+	go func() {
+		<-signals
+		signal.Stop(signals)
+
+		e.Stop()
+	}()
+
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 }
