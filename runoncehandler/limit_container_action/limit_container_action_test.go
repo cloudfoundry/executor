@@ -20,11 +20,12 @@ var _ = Describe("LimitContainerAction", func() {
 	var runOnce models.RunOnce
 	var gordon *fake_gordon.FakeGordon
 	var handle string
+	var containerInodeLimit int
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
 		handle = "some-container-handle"
-
+		containerInodeLimit = 200000
 		runOnce = models.RunOnce{
 			ContainerHandle: handle,
 			Guid:            "totally-unique",
@@ -46,6 +47,7 @@ var _ = Describe("LimitContainerAction", func() {
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			gordon,
+			containerInodeLimit,
 		)
 	})
 
@@ -80,7 +82,7 @@ var _ = Describe("LimitContainerAction", func() {
 			Ω(gordon.DiskLimits()).Should(HaveLen(1))
 			Ω(gordon.DiskLimits()[0].Handle).Should(Equal(handle))
 			Ω(gordon.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 512*1024*1024))
-			Ω(gordon.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", 200000))
+			Ω(gordon.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 		})
 
 		Context("when limiting disk fails", func() {

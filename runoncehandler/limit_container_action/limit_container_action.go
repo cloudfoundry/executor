@@ -7,20 +7,23 @@ import (
 )
 
 type ContainerAction struct {
-	runOnce      *models.RunOnce
-	logger       *steno.Logger
-	wardenClient gordon.Client
+	runOnce             *models.RunOnce
+	logger              *steno.Logger
+	wardenClient        gordon.Client
+	containerInodeLimit int
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
+	containerInodeLimit int,
 ) *ContainerAction {
 	return &ContainerAction{
-		runOnce:      runOnce,
-		logger:       logger,
-		wardenClient: wardenClient,
+		runOnce:             runOnce,
+		logger:              logger,
+		wardenClient:        wardenClient,
+		containerInodeLimit: containerInodeLimit,
 	}
 }
 
@@ -40,7 +43,7 @@ func (action ContainerAction) Perform() error {
 
 	_, err = action.wardenClient.LimitDisk(action.runOnce.ContainerHandle, gordon.DiskLimits{
 		ByteLimit:  uint64(action.runOnce.DiskMB * 1024 * 1024),
-		InodeLimit: 200000,
+		InodeLimit: uint64(action.containerInodeLimit),
 	})
 
 	if err != nil {

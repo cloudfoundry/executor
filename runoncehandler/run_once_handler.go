@@ -25,12 +25,13 @@ type RunOnceHandlerInterface interface {
 }
 
 type RunOnceHandler struct {
-	bbs                Bbs.ExecutorBBS
-	wardenClient       gordon.Client
-	transformer        *run_once_transformer.RunOnceTransformer
-	logStreamerFactory log_streamer_factory.LogStreamerFactory
-	logger             *steno.Logger
-	taskRegistry       taskregistry.TaskRegistryInterface
+	bbs                 Bbs.ExecutorBBS
+	wardenClient        gordon.Client
+	transformer         *run_once_transformer.RunOnceTransformer
+	logStreamerFactory  log_streamer_factory.LogStreamerFactory
+	logger              *steno.Logger
+	taskRegistry        taskregistry.TaskRegistryInterface
+	containerInodeLimit int
 }
 
 func New(
@@ -40,14 +41,16 @@ func New(
 	transformer *run_once_transformer.RunOnceTransformer,
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	logger *steno.Logger,
+	containerInodeLimit int,
 ) *RunOnceHandler {
 	return &RunOnceHandler{
-		bbs:                bbs,
-		wardenClient:       wardenClient,
-		taskRegistry:       taskRegistry,
-		transformer:        transformer,
-		logStreamerFactory: logStreamerFactory,
-		logger:             logger,
+		bbs:                 bbs,
+		wardenClient:        wardenClient,
+		taskRegistry:        taskRegistry,
+		transformer:         transformer,
+		logStreamerFactory:  logStreamerFactory,
+		logger:              logger,
+		containerInodeLimit: containerInodeLimit,
 	}
 }
 
@@ -73,6 +76,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			&runOnce,
 			handler.logger,
 			handler.wardenClient,
+			handler.containerInodeLimit,
 		),
 		start_action.New(
 			&runOnce,

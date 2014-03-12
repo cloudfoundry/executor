@@ -109,6 +109,12 @@ var timeToClaimRunOnce = flag.Duration(
 	"unclaimed run onces are marked as failed, after this time (in seconds)",
 )
 
+var containerInodeLimit = flag.Int(
+	"containerInodeLimit",
+	200000,
+	"max number of inodes per container",
+)
+
 func main() {
 	flag.Parse()
 
@@ -243,6 +249,7 @@ func main() {
 		transformer,
 		logStreamerFactory,
 		logger,
+		*containerInodeLimit,
 	)
 
 	executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)

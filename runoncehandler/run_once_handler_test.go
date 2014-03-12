@@ -31,12 +31,13 @@ var _ = Describe("RunOnceHandler", func() {
 			runOnce models.RunOnce
 			cancel  chan struct{}
 
-			bbs          *fakebbs.FakeExecutorBBS
-			wardenClient *fake_gordon.FakeGordon
-			downloader   *fakedownloader.FakeDownloader
-			uploader     *fakeuploader.FakeUploader
-			transformer  *run_once_transformer.RunOnceTransformer
-			taskRegistry *faketaskregistry.FakeTaskRegistry
+			bbs                 *fakebbs.FakeExecutorBBS
+			wardenClient        *fake_gordon.FakeGordon
+			downloader          *fakedownloader.FakeDownloader
+			uploader            *fakeuploader.FakeUploader
+			transformer         *run_once_transformer.RunOnceTransformer
+			taskRegistry        *faketaskregistry.FakeTaskRegistry
+			containerInodeLimit int
 		)
 
 		BeforeEach(func() {
@@ -77,6 +78,7 @@ var _ = Describe("RunOnceHandler", func() {
 
 			logger := steno.NewLogger("test-logger")
 
+			containerInodeLimit = 200000
 			backendPlugin := linuxplugin.New()
 			downloader = &fakedownloader.FakeDownloader{}
 			uploader = &fakeuploader.FakeUploader{}
@@ -101,6 +103,7 @@ var _ = Describe("RunOnceHandler", func() {
 				transformer,
 				logStreamerFactory,
 				logger,
+				containerInodeLimit,
 			)
 		})
 
@@ -137,7 +140,7 @@ var _ = Describe("RunOnceHandler", func() {
 			Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
 			Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
 			Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
-			Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", 200000))
+			Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
 			// start
 			Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
