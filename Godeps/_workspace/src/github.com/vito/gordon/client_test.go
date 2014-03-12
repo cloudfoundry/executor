@@ -221,6 +221,77 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("LimitingDisk", func() {
+		BeforeEach(func() {
+			provider = NewFakeConnectionProvider(
+				warden.Messages(
+					&warden.LimitDiskResponse{},
+				),
+				writeBuffer,
+			)
+
+			client = NewClient(provider)
+			err := client.Connect()
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		Context("when both byte limit and inode limit are specified", func() {
+			It("should limit them both", func() {
+				_, err := client.LimitDisk("foo", DiskLimits{
+					ByteLimit:  10,
+					InodeLimit: 3,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedWriteBufferContents := string(warden.Messages(
+					&warden.LimitDiskRequest{
+						Handle:     proto.String("foo"),
+						ByteLimit:  proto.Uint64(10),
+						InodeLimit: proto.Uint64(3),
+					},
+				).Bytes())
+
+				Ω(string(writeBuffer.Bytes())).Should(Equal(expectedWriteBufferContents))
+			})
+		})
+
+		Context("when only the byte limit is specified", func() {
+			It("should limit the bytes only", func() {
+				_, err := client.LimitDisk("foo", DiskLimits{
+					ByteLimit: 10,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedWriteBufferContents := string(warden.Messages(
+					&warden.LimitDiskRequest{
+						Handle:    proto.String("foo"),
+						ByteLimit: proto.Uint64(10),
+					},
+				).Bytes())
+
+				Ω(string(writeBuffer.Bytes())).Should(Equal(expectedWriteBufferContents))
+			})
+		})
+
+		Context("when only the inode limit is specified", func() {
+			It("should limit the inodes only", func() {
+				_, err := client.LimitDisk("foo", DiskLimits{
+					InodeLimit: 2,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedWriteBufferContents := string(warden.Messages(
+					&warden.LimitDiskRequest{
+						Handle:     proto.String("foo"),
+						InodeLimit: proto.Uint64(2),
+					},
+				).Bytes())
+
+				Ω(string(writeBuffer.Bytes())).Should(Equal(expectedWriteBufferContents))
+			})
+		})
+	})
+
 	Describe("Querying containers", func() {
 		Describe("Listing containers", func() {
 			BeforeEach(func() {

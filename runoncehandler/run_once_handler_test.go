@@ -136,7 +136,8 @@ var _ = Describe("RunOnceHandler", func() {
 			Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
 			Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
 			Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
-			Ω(wardenClient.DiskLimits()[0].Limit).Should(BeNumerically("==", 1024*1024*1024))
+			Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
+			Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", 200000))
 
 			// start
 			Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))

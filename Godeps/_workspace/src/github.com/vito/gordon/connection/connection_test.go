@@ -163,7 +163,11 @@ var _ = Describe("Connection", func() {
 			})
 
 			It("should limit disk", func() {
-				res, err := connection.LimitDisk("foo", 42)
+				res, err := connection.LimitDisk(&warden.LimitDiskRequest{
+					Handle:    proto.String("foo"),
+					ByteLimit: proto.Uint64(42),
+				})
+
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(res.GetByteLimit()).Should(BeNumerically("==", 40))
 

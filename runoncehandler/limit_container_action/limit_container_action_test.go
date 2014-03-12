@@ -79,7 +79,8 @@ var _ = Describe("LimitContainerAction", func() {
 
 			Ω(gordon.DiskLimits()).Should(HaveLen(1))
 			Ω(gordon.DiskLimits()[0].Handle).Should(Equal(handle))
-			Ω(gordon.DiskLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
+			Ω(gordon.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 512*1024*1024))
+			Ω(gordon.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", 200000))
 		})
 
 		Context("when limiting disk fails", func() {

@@ -237,12 +237,9 @@ func (c *Connection) GetMemoryLimit(handle string) (uint64, error) {
 	return limit, nil
 }
 
-func (c *Connection) LimitDisk(handle string, limit uint64) (*warden.LimitDiskResponse, error) {
+func (c *Connection) LimitDisk(request *warden.LimitDiskRequest) (*warden.LimitDiskResponse, error) {
 	res, err := c.RoundTrip(
-		&warden.LimitDiskRequest{
-			Handle:    proto.String(handle),
-			ByteLimit: proto.Uint64(limit),
-		},
+		request,
 		&warden.LimitDiskResponse{},
 	)
 

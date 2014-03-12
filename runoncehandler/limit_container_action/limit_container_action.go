@@ -38,7 +38,11 @@ func (action ContainerAction) Perform() error {
 		return err
 	}
 
-	_, err = action.wardenClient.LimitDisk(action.runOnce.ContainerHandle, uint64(action.runOnce.DiskMB*1024*1024))
+	_, err = action.wardenClient.LimitDisk(action.runOnce.ContainerHandle, gordon.DiskLimits{
+		ByteLimit:  uint64(action.runOnce.DiskMB * 1024 * 1024),
+		InodeLimit: 200000,
+	})
+
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{

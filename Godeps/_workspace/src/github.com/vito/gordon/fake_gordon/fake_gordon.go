@@ -34,7 +34,7 @@ type FakeGordon struct {
 
 	GetMemoryLimitError error
 
-	diskLimits     []Limit
+	diskLimits     []DiskLimit
 	limitDiskError error
 
 	GetDiskLimitError error
@@ -87,6 +87,11 @@ type Limit struct {
 	Limit  uint64
 }
 
+type DiskLimit struct {
+	Handle string
+	Limits gordon.DiskLimits
+}
+
 func New() *FakeGordon {
 	f := &FakeGordon{}
 	f.Reset()
@@ -119,7 +124,7 @@ func (f *FakeGordon) Reset() {
 	f.limitMemoryError = nil
 	f.limitDiskError = nil
 	f.memoryLimits = []Limit{}
-	f.diskLimits = []Limit{}
+	f.diskLimits = []DiskLimit{}
 
 	f.scriptsThatRan = make([]*RunningScript, 0)
 	f.runCallbacks = make(map[*RunningScript]RunCallback)
@@ -238,7 +243,7 @@ func (f *FakeGordon) GetMemoryLimit(handle string) (uint64, error) {
 	return 0, f.GetMemoryLimitError
 }
 
-func (f *FakeGordon) DiskLimits() []Limit {
+func (f *FakeGordon) DiskLimits() []DiskLimit {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -252,13 +257,13 @@ func (f *FakeGordon) SetLimitDiskError(err error) {
 	f.limitDiskError = err
 }
 
-func (f *FakeGordon) LimitDisk(handle string, limit uint64) (*warden.LimitDiskResponse, error) {
+func (f *FakeGordon) LimitDisk(handle string, limits gordon.DiskLimits) (*warden.LimitDiskResponse, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.diskLimits = append(f.diskLimits, Limit{
+	f.diskLimits = append(f.diskLimits, DiskLimit{
 		Handle: handle,
-		Limit:  limit,
+		Limits: limits,
 	})
 
 	return nil, f.limitDiskError
