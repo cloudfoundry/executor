@@ -18,10 +18,11 @@ type Executor struct {
 
 	bbs Bbs.ExecutorBBS
 
-	runOnceGroup         *sync.WaitGroup
-	stopHandlingRunOnces chan error
+	outstandingTasks *sync.WaitGroup
 
+	stopHandlingRunOnces    chan error
 	stopMaintainingPresence chan bool
+	stopConvergeRunOnce     chan bool
 
 	logger *steno.Logger
 }
@@ -37,8 +38,8 @@ func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
 	return &Executor{
 		id: uuid.String(),
 
-		bbs:          bbs,
-		runOnceGroup: &sync.WaitGroup{},
+		bbs:              bbs,
+		outstandingTasks: &sync.WaitGroup{},
 
 		logger: logger,
 	}
@@ -54,16 +55,22 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 		return err
 	}
 
+	e.outstandingTasks.Add(1)
+
 	stop := make(chan bool)
 
 	go func() {
+		defer e.outstandingTasks.Done()
+
 		select {
 		case <-stop:
 			presence.Remove()
 
 		case <-maintainingPresenceErrors:
 			e.logger.Error("executor.maintaining-presence.failed")
-			e.stopHandlingRunOnces <- MaintainPresenceError
+			if e.stopHandlingRunOnces != nil {
+				e.stopHandlingRunOnces <- MaintainPresenceError
+			}
 		}
 	}()
 
@@ -88,19 +95,18 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 					return nil
 				}
 
-				e.runOnceGroup.Add(1)
+				e.outstandingTasks.Add(1)
 
 				go func() {
+					defer e.outstandingTasks.Done()
+
 					e.sleepForARandomInterval()
 					runOnceHandler.RunOnce(runOnce, e.id, cancel)
-					e.runOnceGroup.Done()
 				}()
 			case err := <-e.stopHandlingRunOnces:
 				stop <- true
 
 				close(cancel)
-
-				e.runOnceGroup.Wait()
 				return err
 			case <-errors:
 				break INNER
@@ -115,25 +121,35 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 
 //StopHandlingRunOnces is used mainly in test to avoid having multiple executors
 //running concurrently from polluting the tests
-func (e *Executor) StopHandling() {
+func (e *Executor) Stop() {
 	// stop maintaining our presence
 	if e.stopMaintainingPresence != nil {
 		close(e.stopMaintainingPresence)
+		e.stopMaintainingPresence = nil
 	}
 
 	//tell the watcher to stop
 	if e.stopHandlingRunOnces != nil {
 		close(e.stopHandlingRunOnces)
+		e.stopHandlingRunOnces = nil
+	}
+
+	if e.stopConvergeRunOnce != nil {
+		close(e.stopConvergeRunOnce)
+		e.stopConvergeRunOnce = nil
 	}
 
 	//wait for any running runOnce goroutines to end
-	e.runOnceGroup.Wait()
+	e.outstandingTasks.Wait()
 }
 
 func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) chan<- bool {
 	stopChannel := make(chan bool, 1)
+	e.outstandingTasks.Add(1)
 
 	go func() {
+		defer e.outstandingTasks.Done()
+
 		for {
 			lostLock, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
 			if err != nil {
@@ -168,6 +184,7 @@ func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Durat
 		}
 	}()
 
+	e.stopConvergeRunOnce = stopChannel
 	return stopChannel
 }
 

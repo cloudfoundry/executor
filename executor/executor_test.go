@@ -87,7 +87,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			AfterEach(func() {
-				executor.StopHandling()
+				executor.Stop()
 			})
 
 			It("should handle any new desired RunOnces", func() {
@@ -97,9 +97,9 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Context("when told to stop handling", func() {
+		Context("when told to stop", func() {
 			BeforeEach(func() {
-				executor.StopHandling()
+				executor.Stop()
 			})
 
 			It("does not handle any new desired RunOnces", func() {
@@ -123,8 +123,8 @@ var _ = Describe("Executor", func() {
 			})
 
 			AfterEach(func() {
-				executor.StopHandling()
-				otherExecutor.StopHandling()
+				executor.Stop()
+				otherExecutor.Stop()
 			})
 
 			It("the winner should be randomly distributed", func() {
@@ -225,6 +225,24 @@ var _ = Describe("Executor", func() {
 				Eventually(handleErr).Should(Receive(&err))
 
 				Ω(err).Should(Equal(MaintainPresenceError))
+			})
+		})
+
+		Context("when told to stop", func() {
+			It("it removes its presence", func() {
+				err := executor.MaintainPresence(60 * time.Second)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(func() interface{} {
+					arr, _ := bbs.GetAllExecutors()
+					return arr
+				}).Should(HaveLen(1))
+
+				executor.Stop()
+
+				executors, err := bbs.GetAllExecutors()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(executors).Should(HaveLen(0))
 			})
 		})
 	})
