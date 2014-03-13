@@ -108,7 +108,12 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 
 				close(cancel)
 				return err
-			case <-errors:
+			case err := <-errors:
+				if err != nil {
+					e.logger.Errord(map[string]interface{}{
+						"error": err.Error(),
+					}, "executor.watch-desired-runonce.failed")
+				}
 				break INNER
 			}
 		}
