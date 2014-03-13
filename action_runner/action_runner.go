@@ -6,7 +6,7 @@ import (
 
 type ActionRunner struct {
 	actions []Action
-	cancel  chan chan bool
+	cancel  chan struct{}
 }
 
 var CancelledError = errors.New("actions cancelled")
@@ -15,7 +15,7 @@ func New(actions []Action) *ActionRunner {
 	return &ActionRunner{
 		actions: actions,
 
-		cancel: make(chan chan bool),
+		cancel: make(chan struct{}),
 	}
 }
 
@@ -23,8 +23,6 @@ func (runner *ActionRunner) Perform() error {
 	var performResult error
 
 	cleanups := []func(){}
-
-	var cancelled chan bool
 
 actions:
 	for _, action := range runner.actions {
@@ -43,7 +41,7 @@ actions:
 				cleanups = append(cleanups, action.Cleanup)
 			}
 
-		case cancelled = <-runner.cancel:
+		case <-runner.cancel:
 			action.Cancel()
 			performResult = CancelledError
 			break actions
@@ -54,17 +52,11 @@ actions:
 		cleanups[i]()
 	}
 
-	if cancelled != nil {
-		cancelled <- true
-	}
-
 	return performResult
 }
 
 func (runner *ActionRunner) Cancel() {
-	cancelled := make(chan bool)
-	runner.cancel <- cancelled
-	<-cancelled
+	close(runner.cancel)
 }
 
 func (runner *ActionRunner) Cleanup() {}

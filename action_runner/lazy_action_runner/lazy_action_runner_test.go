@@ -79,7 +79,11 @@ var _ = Describe("LazyActionRunner", func() {
 
 		Context("when the action is running", func() {
 			It("cancels it", func() {
-				go runner.Perform()
+				var err error
+
+				go func() {
+					err = runner.Perform()
+				}()
 
 				Eventually(performing).Should(Receive())
 
@@ -87,7 +91,8 @@ var _ = Describe("LazyActionRunner", func() {
 
 				runner.Cancel()
 
-				Ω(cancelled).Should(BeTrue())
+				Eventually(func() bool { return cancelled }).Should(BeTrue())
+				Eventually(func() error { return err }).Should(Equal(action_runner.CancelledError))
 			})
 		})
 

@@ -103,11 +103,13 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 		result <- runner.Perform()
 	}()
 
-	select {
-	case <-result:
-		return
-	case <-cancel:
-		runner.Cancel()
-		return
+	for {
+		select {
+		case <-result:
+			return
+		case <-cancel:
+			runner.Cancel()
+			cancel = nil
+		}
 	}
 }
