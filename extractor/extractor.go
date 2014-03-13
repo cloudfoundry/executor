@@ -32,7 +32,6 @@ func Extract(src, dest string) error {
 		return fmt.Errorf("unsupported archive type: %s", srcType)
 	}
 
-	os.Remove(src)
 	return nil
 }
 

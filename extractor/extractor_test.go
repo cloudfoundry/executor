@@ -28,12 +28,11 @@ var _ = Describe("Extractor", func() {
 		err = exec.Command("cp", "../fixtures/"+archiveFixture, extractionSrc).Run()
 		Ω(err).ShouldNot(HaveOccurred())
 
-		extractionDest, err = ioutil.TempDir(os.TempDir(), "extracted")
+		extractionDest, err = ioutil.TempDir(tempDir, "extracted")
 		Ω(err).ShouldNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(extractionDest)
 		os.RemoveAll(tempDir)
 	})
 
@@ -58,14 +57,6 @@ var _ = Describe("Extractor", func() {
 		Ω(info.Mode()).Should(Equal(os.FileMode(0755)))
 	}
 
-	var cleanupTest = func() {
-		err := Extract(extractionSrc, extractionDest)
-		Ω(err).ShouldNot(HaveOccurred())
-
-		err = Extract(extractionSrc, extractionDest)
-		Ω(err).Should(HaveOccurred())
-	}
-
 	Context("when the file is a zip archive", func() {
 		BeforeEach(func() {
 			archiveFixture = "fixture.zip"
@@ -73,10 +64,6 @@ var _ = Describe("Extractor", func() {
 
 		It("extracts the ZIP's files, generating directories, and honoring file permissions", func() {
 			extractionTest()
-		})
-
-		It("deletes the ZIP file when its done", func() {
-			cleanupTest()
 		})
 	})
 
@@ -87,10 +74,6 @@ var _ = Describe("Extractor", func() {
 
 		It("extracts the TGZ's files, generating directories, and honoring file permissions", func() {
 			extractionTest()
-		})
-
-		It("deletes the TGZ file when its done", func() {
-			cleanupTest()
 		})
 	})
 })
