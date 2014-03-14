@@ -13,11 +13,8 @@ install:
   - popd
   - mkdir -p $HOME/bin
   - pushd $HOME/bin
-  - curl -C - http://apache.osuosl.org/zookeeper/zookeeper-3.4.5/zookeeper-3.4.5.tar.gz | tar -zx
-  - mv $HOME/bin/zookeeper-3.4.5 $HOME/bin/zookeeper
-  - chmod a+x $HOME/bin/zookeeper/bin/zkServer.sh
   - popd
 
 script:
-  - export PATH=$HOME/bin/zookeeper/bin:$HOME/gopath/bin:$PATH 
+  - export PATH=$HOME/gopath/bin:$PATH
   - ginkgo -r -i --randomizeAllSpecs --failOnPending

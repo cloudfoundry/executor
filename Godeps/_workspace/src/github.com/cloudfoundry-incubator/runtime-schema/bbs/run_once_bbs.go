@@ -37,31 +37,37 @@ func retryIndefinitelyOnStoreTimeout(callback func() error) error {
 func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state string) (<-chan models.RunOnce, chan<- bool, <-chan error) {
 	runOnces := make(chan models.RunOnce)
 	stopOuter := make(chan bool)
-	errsOuter := make(chan error, 1)
+	errsOuter := make(chan error)
 
 	events, stopInner, errsInner := store.Watch(runOnceSchemaPath(state))
 
 	go func() {
+		defer close(runOnces)
+		defer close(errsOuter)
+
 		for {
 			select {
 			case <-stopOuter:
 				stopInner <- true
-				close(runOnces)
 				return
 
-			case event := <-events:
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
 				switch event.Type {
 				case storeadapter.CreateEvent, storeadapter.UpdateEvent:
 					runOnce, err := models.NewRunOnceFromJSON(event.Node.Value)
 					if err != nil {
 						continue
 					}
-
 					runOnces <- runOnce
 				}
 
-			case err := <-errsInner:
-				errsOuter <- err
+			case err, ok := <-errsInner:
+				if ok {
+					errsOuter <- err
+				}
 				return
 			}
 		}

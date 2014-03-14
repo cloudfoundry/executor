@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "b442bb0380dd8cf6ad3c94d1d109b405ae019068"
+			"Rev": "46df3e5f3adade891be131e6759b3a7bb889d42d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "868b359a4dca890d8b368f4ac4f09bfdc15cdf40"
+			"Rev": "2f37a37c7b40da7b867bf423d12577e8e7a6ba6d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "868b359a4dca890d8b368f4ac4f09bfdc15cdf40"
+			"Rev": "2f37a37c7b40da7b867bf423d12577e8e7a6ba6d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -24,31 +24,31 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "1ed4de4a4503a13f333ffce0b61cdf8195986ccc"
+			"Rev": "56381e1c33a6c755b9730f7856d159ed723e01af"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "6bb367d8ac1a7d5ac0f3fd9f52d1716669b5ecc8"
+			"Rev": "d1dd2005d9ffb25d53a2c5291f7c1acd2c7188a6"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -61,7 +61,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "d3df15ba539a80f951632fc85b0ff6aee2f993b8"
+			"Rev": "736acf4afbc1fff096f59fb899163b602edec924"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",

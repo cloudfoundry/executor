@@ -235,10 +235,11 @@ var _ = Describe("RunOnce BBS", func() {
 		var (
 			events <-chan (models.RunOnce)
 			stop   chan<- bool
+			errors <-chan error
 		)
 
 		BeforeEach(func() {
-			events, stop, _ = bbs.WatchForDesiredRunOnce()
+			events, stop, errors = bbs.WatchForDesiredRunOnce()
 		})
 
 		It("should send an event down the pipe for creates", func(done Done) {
@@ -286,15 +287,14 @@ var _ = Describe("RunOnce BBS", func() {
 			close(done)
 		})
 
-		It("closes the events channel when told to stop", func(done Done) {
+		It("closes the events and errors channel when told to stop", func(done Done) {
 			stop <- true
 
 			err := bbs.DesireRunOnce(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, ok := <-events
-
-			Expect(ok).To(BeFalse())
+			Ω(events).Should(BeClosed())
+			Ω(errors).Should(BeClosed())
 
 			close(done)
 		})

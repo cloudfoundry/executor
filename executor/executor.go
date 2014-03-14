@@ -83,6 +83,7 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 	e.stopHandlingRunOnces = make(chan error)
 	cancel := make(chan struct{})
 
+	e.logger.Info("executor.watching-for-desired-runonce")
 	runOnces, stop, errors := e.bbs.WatchForDesiredRunOnce()
 	ready <- true
 
@@ -92,7 +93,7 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 			select {
 			case runOnce, ok := <-runOnces:
 				if !ok {
-					return nil
+					break INNER
 				}
 
 				e.outstandingTasks.Add(1)
@@ -108,8 +109,8 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 
 				close(cancel)
 				return err
-			case err := <-errors:
-				if err != nil {
+			case err, ok := <-errors:
+				if ok && err != nil {
 					e.logger.Errord(map[string]interface{}{
 						"error": err.Error(),
 					}, "executor.watch-desired-runonce.failed")
@@ -118,6 +119,7 @@ func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface,
 			}
 		}
 
+		e.logger.Info("executor.watching-for-desired-runonce")
 		runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
 	}
 

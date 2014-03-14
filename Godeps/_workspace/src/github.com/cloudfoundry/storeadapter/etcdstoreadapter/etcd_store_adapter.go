@@ -151,18 +151,6 @@ func (adapter *ETCDStoreAdapter) ListRecursively(key string) (storeadapter.Store
 	return adapter.makeStoreNode(*response.Node), nil
 }
 
-func (adapter *ETCDStoreAdapter) Watch(key string) (<-chan storeadapter.WatchEvent, chan<- bool, <-chan error) {
-	events := make(chan storeadapter.WatchEvent)
-	errors := make(chan error, 1)
-	stop := make(chan bool, 1)
-
-	go adapter.dispatchWatchEvents(key, events, stop, errors)
-
-	time.Sleep(100 * time.Millisecond) //give the watcher a chance to connect
-
-	return events, stop, errors
-}
-
 func (adapter *ETCDStoreAdapter) Create(node storeadapter.StoreNode) error {
 	results := make(chan error, 1)
 
@@ -223,6 +211,18 @@ func (adapter *ETCDStoreAdapter) UpdateDirTTL(key string, ttl uint64) error {
 	})
 
 	return adapter.convertError(<-results)
+}
+
+func (adapter *ETCDStoreAdapter) Watch(key string) (<-chan storeadapter.WatchEvent, chan<- bool, <-chan error) {
+	events := make(chan storeadapter.WatchEvent)
+	errors := make(chan error)
+	stop := make(chan bool, 1)
+
+	go adapter.dispatchWatchEvents(key, events, stop, errors)
+
+	time.Sleep(100 * time.Millisecond) //give the watcher a chance to connect
+
+	return events, stop, errors
 }
 
 func (adapter *ETCDStoreAdapter) dispatchWatchEvents(key string, events chan<- storeadapter.WatchEvent, stop chan bool, errors chan<- error) {
