@@ -40,7 +40,7 @@ var _ = Describe("File Server BBS", func() {
 			presence.Remove()
 		})
 
-		It("should put /file-server/FILE_SERVER_ID in the store with a TTL", func() {
+		It("should put /file_server/FILE_SERVER_ID in the store with a TTL", func() {
 			node, err := store.Get("/v1/file_server/" + fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node).Should(Equal(storeadapter.StoreNode{
