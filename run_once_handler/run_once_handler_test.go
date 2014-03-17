@@ -21,7 +21,7 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 )
 
 var _ = Describe("RunOnceHandler", func() {
@@ -31,7 +31,7 @@ var _ = Describe("RunOnceHandler", func() {
 			runOnce models.RunOnce
 			cancel  chan struct{}
 
-			bbs                 *fakebbs.FakeExecutorBBS
+			bbs                 *fake_bbs.FakeExecutorBBS
 			wardenClient        *fake_gordon.FakeGordon
 			downloader          *fake_downloader.FakeDownloader
 			uploader            *fake_uploader.FakeUploader
@@ -68,7 +68,7 @@ var _ = Describe("RunOnceHandler", func() {
 				},
 			}
 
-			bbs = fakebbs.NewFakeExecutorBBS()
+			bbs = fake_bbs.NewFakeExecutorBBS()
 			wardenClient = fake_gordon.New()
 			taskRegistry = fake_task_registry.New()
 

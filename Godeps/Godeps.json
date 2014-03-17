@@ -11,11 +11,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "966b7294741b34b9d44e7caa3b30be3f8769a296"
+			"Rev": "a6a6d5c598fe6dc59cbec1ab2194434c519028e0"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "966b7294741b34b9d44e7caa3b30be3f8769a296"
+			"Rev": "a6a6d5c598fe6dc59cbec1ab2194434c519028e0"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gofileutils/fileutils",

@@ -11,7 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/fake_run_once_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -248,9 +248,9 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Converging RunOnces", func() {
-		var fakeExecutorBBS *fakebbs.FakeExecutorBBS
+		var fakeExecutorBBS *fake_bbs.FakeExecutorBBS
 		BeforeEach(func() {
-			fakeExecutorBBS = &fakebbs.FakeExecutorBBS{}
+			fakeExecutorBBS = &fake_bbs.FakeExecutorBBS{}
 			bbs.ExecutorBBS = fakeExecutorBBS
 		})
 

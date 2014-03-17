@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -19,7 +19,7 @@ var _ = Describe("CompleteAction", func() {
 	var result chan error
 
 	var runOnce models.RunOnce
-	var bbs *fakebbs.FakeExecutorBBS
+	var bbs *fake_bbs.FakeExecutorBBS
 
 	BeforeEach(func() {
 		result = make(chan error)
@@ -47,7 +47,7 @@ var _ = Describe("CompleteAction", func() {
 			FailureReason: "because i said so",
 		}
 
-		bbs = fakebbs.NewFakeExecutorBBS()
+		bbs = fake_bbs.NewFakeExecutorBBS()
 
 		action = New(
 			&runOnce,

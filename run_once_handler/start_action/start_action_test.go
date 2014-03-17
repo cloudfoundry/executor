@@ -10,7 +10,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler/start_action"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -18,7 +18,7 @@ var _ = Describe("StartAction", func() {
 	var action action_runner.Action
 
 	var runOnce models.RunOnce
-	var bbs *fakebbs.FakeExecutorBBS
+	var bbs *fake_bbs.FakeExecutorBBS
 
 	BeforeEach(func() {
 		runOnce = models.RunOnce{
@@ -37,7 +37,7 @@ var _ = Describe("StartAction", func() {
 			ContainerHandle: "some-container-handle",
 		}
 
-		bbs = fakebbs.NewFakeExecutorBBS()
+		bbs = fake_bbs.NewFakeExecutorBBS()
 
 		action = New(
 			&runOnce,

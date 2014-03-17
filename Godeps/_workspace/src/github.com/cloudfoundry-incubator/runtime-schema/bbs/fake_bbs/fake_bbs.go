@@ -1,4 +1,4 @@
-package fakebbs
+package fake_bbs
 
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
