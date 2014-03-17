@@ -41,7 +41,8 @@ type FakeGordon struct {
 
 	ListError error
 
-	InfoError error
+	infoError    error
+	infoResponse *warden.InfoResponse
 
 	AttachError error
 
@@ -118,8 +119,9 @@ func (f *FakeGordon) Reset() {
 	f.GetMemoryLimitError = nil
 	f.GetDiskLimitError = nil
 	f.ListError = nil
-	f.InfoError = nil
 	f.AttachError = nil
+
+	f.infoError = nil
 
 	f.limitMemoryError = nil
 	f.limitDiskError = nil
@@ -280,8 +282,22 @@ func (f *FakeGordon) List() (*warden.ListResponse, error) {
 }
 
 func (f *FakeGordon) Info(handle string) (*warden.InfoResponse, error) {
-	panic("NOOP!")
-	return nil, f.InfoError
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return f.infoResponse, f.infoError
+}
+
+func (f *FakeGordon) SetInfoError(err error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.infoError = err
+}
+
+func (f *FakeGordon) SetInfoResponse(response *warden.InfoResponse) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.infoResponse = response
 }
 
 func (f *FakeGordon) CopyIn(handle, src, dst string) (*warden.CopyInResponse, error) {
