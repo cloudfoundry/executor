@@ -1,6 +1,7 @@
 package run_action
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,13 +24,15 @@ type RunAction struct {
 	logger              *steno.Logger
 }
 
-type RunActionTimeoutError struct {
+type TimeoutError struct {
 	Action models.RunAction
 }
 
-func (e RunActionTimeoutError) Error() string {
-	return fmt.Sprintf("action timed out after %s", e.Action.Timeout)
+func (e TimeoutError) Error() string {
+	return fmt.Sprintf("timed out after %s", e.Action.Timeout)
 }
+
+var OOMError = errors.New("out of memory")
 
 func New(
 	containerHandle string,
@@ -52,11 +55,11 @@ func New(
 }
 
 func (action *RunAction) Perform() error {
-	action.logger.Infod(
+	action.logger.Debugd(
 		map[string]interface{}{
 			"handle": action.containerHandle,
 		},
-		"runonce.handle.run-action",
+		"run-action.perform",
 	)
 
 	exitStatusChan := make(chan uint32, 1)
@@ -105,6 +108,23 @@ func (action *RunAction) Perform() error {
 
 	select {
 	case exitStatus := <-exitStatusChan:
+		info, err := action.wardenClient.Info(action.containerHandle)
+		if err != nil {
+			action.logger.Errord(
+				map[string]interface{}{
+					"handle": action.containerHandle,
+					"err":    err.Error(),
+				},
+				"run-action.info.failed",
+			)
+		} else {
+			for _, ev := range info.GetEvents() {
+				if ev == "out of memory" {
+					return OOMError
+				}
+			}
+		}
+
 		if exitStatus != 0 {
 			return fmt.Errorf("Process returned with exit value: %d", exitStatus)
 		}
@@ -115,7 +135,7 @@ func (action *RunAction) Perform() error {
 		return err
 
 	case <-timeoutChan:
-		return RunActionTimeoutError{Action: action.model}
+		return TimeoutError{Action: action.model}
 	}
 
 	panic("unreachable")

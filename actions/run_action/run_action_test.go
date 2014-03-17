@@ -130,15 +130,32 @@ var _ = Describe("RunAction", func() {
 			})
 
 			Context("and the script takes longer than the timeout", func() {
-				It("returns a RunActionTimeoutError", func() {
+				It("returns a TimeoutError", func() {
 					go func() {
 						time.Sleep(1 * time.Second)
 						processPayloadStream <- successfulExit
 					}()
 
 					err := action.Perform()
-					Ω(err).Should(Equal(RunActionTimeoutError{runAction}))
+					Ω(err).Should(Equal(TimeoutError{runAction}))
+					Ω(err.Error()).Should(Equal("timed out after 100ms"))
 				})
+			})
+		})
+
+		Context("regardless of status code, when an out of memory event has occured", func() {
+			BeforeEach(func() {
+				wardenClient.SetInfoResponse(&warden.InfoResponse{
+					Events: []string{"happy land", "out of memory", "another event"},
+				})
+
+				processPayloadStream <- successfulExit
+			})
+
+			It("returns a RunActionOOMError", func() {
+				err := action.Perform()
+				Ω(err).Should(Equal(OOMError))
+				Ω(err.Error()).Should(Equal("out of memory"))
 			})
 		})
 
