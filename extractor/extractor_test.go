@@ -3,7 +3,6 @@ package extractor_test
 import (
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	. "github.com/cloudfoundry-incubator/executor/extractor"
