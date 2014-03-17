@@ -10,7 +10,7 @@ import (
 	"github.com/vito/gordon/warden"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -18,7 +18,7 @@ type RunAction struct {
 	containerHandle     string
 	model               models.RunAction
 	fileDescriptorLimit int
-	streamer            logstreamer.LogStreamer
+	streamer            log_streamer.LogStreamer
 	backendPlugin       backend_plugin.BackendPlugin
 	wardenClient        gordon.Client
 	logger              *steno.Logger
@@ -38,7 +38,7 @@ func New(
 	containerHandle string,
 	model models.RunAction,
 	fileDescriptorLimit int,
-	streamer logstreamer.LogStreamer,
+	streamer log_streamer.LogStreamer,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,

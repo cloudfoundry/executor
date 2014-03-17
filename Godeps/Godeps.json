@@ -52,7 +52,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "d1dd2005d9ffb25d53a2c5291f7c1acd2c7188a6"
+			"Rev": "418d1fc3ccde9cc96674ae18ebf885bc592ca10f"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",

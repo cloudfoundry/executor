@@ -1,16 +1,16 @@
 package log_streamer_factory
 
 import (
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"strconv"
 )
 
-type LogStreamerFactory func(models.LogConfig) logstreamer.LogStreamer
+type LogStreamerFactory func(models.LogConfig) log_streamer.LogStreamer
 
 func New(loggregatorServer string, loggregatorSecret string) LogStreamerFactory {
-	return func(logConfig models.LogConfig) logstreamer.LogStreamer {
+	return func(logConfig models.LogConfig) log_streamer.LogStreamer {
 		if logConfig.SourceName == "" {
 			return nil
 		}
@@ -28,6 +28,6 @@ func New(loggregatorServer string, loggregatorSecret string) LogStreamerFactory 
 			nil,
 		)
 
-		return logstreamer.New(logConfig.Guid, logEmitter)
+		return log_streamer.New(logConfig.Guid, logEmitter)
 	}
 }

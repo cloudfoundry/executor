@@ -14,13 +14,13 @@ import (
 	"github.com/cloudfoundry-incubator/executor/actions/upload_action"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
+	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/linux_plugin"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 )
 
 var _ = Describe("RunOnceTransformer", func() {
@@ -28,20 +28,20 @@ var _ = Describe("RunOnceTransformer", func() {
 		backendPlugin      backend_plugin.BackendPlugin
 		downloader         downloader.Downloader
 		logger             *steno.Logger
-		logStreamer        *fakelogstreamer.FakeLogStreamer
+		logStreamer        *fake_log_streamer.FakeLogStreamer
 		uploader           uploader.Uploader
 		wardenClient       *fake_gordon.FakeGordon
 		runOnceTransformer *RunOnceTransformer
 	)
 
 	BeforeEach(func() {
-		logStreamer = fakelogstreamer.New()
-		backendPlugin = linuxplugin.New()
-		downloader = &fakedownloader.FakeDownloader{}
-		uploader = &fakeuploader.FakeUploader{}
+		logStreamer = fake_log_streamer.New()
+		backendPlugin = linux_plugin.New()
+		downloader = &fake_downloader.FakeDownloader{}
+		uploader = &fake_uploader.FakeUploader{}
 		logger = &steno.Logger{}
 
-		logStreamerFactory := func(models.LogConfig) logstreamer.LogStreamer {
+		logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
 			return logStreamer
 		}
 

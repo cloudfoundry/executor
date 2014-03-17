@@ -264,6 +264,10 @@ func (adapter *FakeStoreAdapter) Update(node storeadapter.StoreNode) error {
 	panic("not implemented")
 }
 
+func (adapter *FakeStoreAdapter) CompareAndSwap(oldNode storeadapter.StoreNode, newNode storeadapter.StoreNode) error {
+	panic("not implemented")
+}
+
 func (adapter *FakeStoreAdapter) Watch(key string) (events <-chan storeadapter.WatchEvent, stop chan<- bool, errors <-chan error) {
 	adapter.sendEvents = true
 	adapter.WatchErrChannel = make(chan error, 1)

@@ -14,7 +14,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	. "github.com/cloudfoundry-incubator/executor/actions/upload_action"
-	"github.com/cloudfoundry-incubator/executor/uploader/fakeuploader"
+	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 )
 
 var _ = Describe("UploadAction", func() {
@@ -22,7 +22,7 @@ var _ = Describe("UploadAction", func() {
 	var result chan error
 
 	var uploadAction models.UploadAction
-	var uploader *fakeuploader.FakeUploader
+	var uploader *fake_uploader.FakeUploader
 	var tempDir string
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
@@ -37,7 +37,7 @@ var _ = Describe("UploadAction", func() {
 			From: "/Antarctica",
 		}
 
-		uploader = &fakeuploader.FakeUploader{}
+		uploader = &fake_uploader.FakeUploader{}
 
 		tempDir, err = ioutil.TempDir("", "upload-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())

@@ -65,6 +65,8 @@ func (adapter *ETCDStoreAdapter) convertError(err error) error {
 		return storeadapter.ErrorNodeIsDirectory
 	case 105:
 		return storeadapter.ErrorKeyExists
+	case 101:
+		return storeadapter.ErrorKeyComparisonFailed
 	}
 
 	return err
@@ -167,6 +169,24 @@ func (adapter *ETCDStoreAdapter) Update(node storeadapter.StoreNode) error {
 
 	adapter.workerPool.ScheduleWork(func() {
 		_, err := adapter.client.Update(node.Key, string(node.Value), node.TTL)
+		results <- err
+	})
+
+	return adapter.convertError(<-results)
+}
+
+func (adapter *ETCDStoreAdapter) CompareAndSwap(oldNode storeadapter.StoreNode, newNode storeadapter.StoreNode) error {
+	results := make(chan error, 1)
+
+	adapter.workerPool.ScheduleWork(func() {
+		_, err := adapter.client.CompareAndSwap(
+			newNode.Key,
+			string(newNode.Value),
+			newNode.TTL,
+			string(oldNode.Value),
+			0,
+		)
+
 		results <- err
 	})
 

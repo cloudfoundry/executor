@@ -10,7 +10,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/nu7hatch/gouuid"
 
-	"github.com/cloudfoundry-incubator/executor/runoncehandler"
+	"github.com/cloudfoundry-incubator/executor/run_once_handler"
 )
 
 type Executor struct {
@@ -79,7 +79,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
 	return nil
 }
 
-func (e *Executor) Handle(runOnceHandler runoncehandler.RunOnceHandlerInterface, ready chan<- bool) error {
+func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterface, ready chan<- bool) error {
 	e.stopHandlingRunOnces = make(chan error)
 	cancel := make(chan struct{})
 

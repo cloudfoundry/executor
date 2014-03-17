@@ -13,8 +13,8 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	. "github.com/cloudfoundry-incubator/executor/actions/download_action"
-	"github.com/cloudfoundry-incubator/executor/downloader/fakedownloader"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 )
 
 var _ = Describe("DownloadAction", func() {
@@ -22,9 +22,9 @@ var _ = Describe("DownloadAction", func() {
 	var result chan error
 
 	var downloadAction models.DownloadAction
-	var downloader *fakedownloader.FakeDownloader
+	var downloader *fake_downloader.FakeDownloader
 	var tempDir string
-	var backendPlugin *linuxplugin.LinuxPlugin
+	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 
@@ -39,14 +39,14 @@ var _ = Describe("DownloadAction", func() {
 			Extract: false,
 		}
 
-		downloader = &fakedownloader.FakeDownloader{}
+		downloader = &fake_downloader.FakeDownloader{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
 		wardenClient = fake_gordon.New()
 
-		backendPlugin = linuxplugin.New()
+		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
 	})

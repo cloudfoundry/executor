@@ -5,7 +5,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/action_runner"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -16,17 +16,17 @@ import (
 	"github.com/vito/gordon/warden"
 
 	. "github.com/cloudfoundry-incubator/executor/actions/run_action"
-	"github.com/cloudfoundry-incubator/executor/logstreamer"
-	"github.com/cloudfoundry-incubator/executor/logstreamer/fakelogstreamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 )
 
 var _ = Describe("RunAction", func() {
 	var action action_runner.Action
 
 	var runAction models.RunAction
-	var fakeStreamer *fakelogstreamer.FakeLogStreamer
-	var streamer logstreamer.LogStreamer
-	var backendPlugin *linuxplugin.LinuxPlugin
+	var fakeStreamer *fake_log_streamer.FakeLogStreamer
+	var streamer log_streamer.LogStreamer
+	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 	var fileDescriptorLimit int
@@ -42,11 +42,11 @@ var _ = Describe("RunAction", func() {
 			},
 		}
 
-		fakeStreamer = fakelogstreamer.New()
+		fakeStreamer = fake_log_streamer.New()
 
 		wardenClient = fake_gordon.New()
 
-		backendPlugin = linuxplugin.New()
+		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
 

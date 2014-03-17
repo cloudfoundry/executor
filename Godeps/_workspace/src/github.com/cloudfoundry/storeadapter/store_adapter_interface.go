@@ -11,6 +11,9 @@ type StoreAdapter interface {
 	// Update a node and fail if it does not already exist.
 	Update(StoreNode) error
 
+	// CompareAndSwap a node and don't swap if the compare fails.
+	CompareAndSwap(StoreNode, StoreNode) error
+
 	// Set multiple nodes at once. If any of them fail,
 	// it will return the first error.
 	SetMulti(nodes []StoreNode) error

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler/fakerunoncehandler"
-	"github.com/cloudfoundry-incubator/executor/taskregistry"
+	"github.com/cloudfoundry-incubator/executor/run_once_handler/fake_run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/task_registry"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fakebbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -23,7 +23,7 @@ var _ = Describe("Executor", func() {
 		bbs              *Bbs.BBS
 		runOnce          models.RunOnce
 		executor         *Executor
-		taskRegistry     *taskregistry.TaskRegistry
+		taskRegistry     *task_registry.TaskRegistry
 		gordon           *fake_gordon.FakeGordon
 		registryFileName string
 		ready            chan bool
@@ -31,10 +31,10 @@ var _ = Describe("Executor", func() {
 		startingDisk     int
 	)
 
-	var fakeRunOnceHandler *fakerunoncehandler.FakeRunOnceHandler
+	var fakeRunOnceHandler *fake_run_once_handler.FakeRunOnceHandler
 
 	BeforeEach(func() {
-		fakeRunOnceHandler = fakerunoncehandler.New()
+		fakeRunOnceHandler = fake_run_once_handler.New()
 		ready = make(chan bool, 1)
 
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
@@ -44,7 +44,7 @@ var _ = Describe("Executor", func() {
 
 		startingMemory = 256
 		startingDisk = 1024
-		taskRegistry = taskregistry.NewTaskRegistry("some-stack", registryFileName, startingMemory, startingDisk)
+		taskRegistry = task_registry.NewTaskRegistry("some-stack", registryFileName, startingMemory, startingDisk)
 
 		runOnce = models.RunOnce{
 			Guid:     "totally-unique",

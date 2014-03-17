@@ -600,6 +600,68 @@ var _ = Describe("ETCD Store Adapter", func() {
 		})
 	})
 
+	Describe("Comparing as well as swapping", func() {
+		var node StoreNode
+
+		BeforeEach(func() {
+			node = StoreNode{Key: "/foo", Value: []byte("some value")}
+		})
+
+		It("updates the existing node at the given key", func() {
+			err := adapter.Create(node)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			newNode := node
+			newNode.Value = []byte("some new value")
+
+			err = adapter.CompareAndSwap(node, newNode)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			retrievedNode, err := adapter.Get("/foo")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(retrievedNode).Should(Equal(newNode))
+		})
+
+		Context("when a node exists but the comparison fails", func() {
+			It("returns an error", func() {
+				err := adapter.Create(node)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				wrongNode := node
+				wrongNode.Value = []byte("NOPE")
+
+				newNode := node
+				newNode.Value = []byte("some new value")
+
+				err = adapter.CompareAndSwap(wrongNode, newNode)
+				Ω(err).Should(Equal(ErrorKeyComparisonFailed))
+
+				retrievedNode, err := adapter.Get("/foo")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(retrievedNode).Should(Equal(node))
+			})
+		})
+
+		Context("when a node does not exist at the key", func() {
+			It("returns an error", func() {
+				err := adapter.CompareAndSwap(node, node)
+				Ω(err).Should(Equal(ErrorKeyNotFound))
+			})
+		})
+
+		Context("when a directory exists at the given key", func() {
+			It("returns an error", func() {
+				err := adapter.Create(StoreNode{Key: "/dir/foo", Value: []byte("some value")})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				newNode := StoreNode{Key: "/dir", Value: []byte("some value")}
+
+				err = adapter.CompareAndSwap(newNode, newNode)
+				Ω(err).Should(Equal(ErrorNodeIsDirectory))
+			})
+		})
+	})
+
 	Describe("Watching", func() {
 		Context("when a node under the key is created", func() {
 			It("sends an event with CreateEvent type and the node's value", func(done Done) {

@@ -17,11 +17,11 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/linuxplugin"
+	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
-	"github.com/cloudfoundry-incubator/executor/runoncehandler"
-	"github.com/cloudfoundry-incubator/executor/taskregistry"
+	"github.com/cloudfoundry-incubator/executor/run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
@@ -163,21 +163,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskRegistry, err := taskregistry.LoadTaskRegistryFromDisk(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
+	taskRegistry, err := task_registry.LoadTaskRegistryFromDisk(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
 	if err != nil {
 		switch err {
-		case taskregistry.ErrorRegistrySnapshotHasInvalidJSON:
+		case task_registry.ErrorRegistrySnapshotHasInvalidJSON:
 			logger.Error("corrupt registry snapshot detected.  aborting!")
 			os.Exit(1)
-		case taskregistry.ErrorNotEnoughMemoryWhenLoadingSnapshot:
+		case task_registry.ErrorNotEnoughMemoryWhenLoadingSnapshot:
 			logger.Error("memory requirements in snapshot exceed the configured memory limit.  aborting!")
 			os.Exit(1)
-		case taskregistry.ErrorNotEnoughDiskWhenLoadingSnapshot:
+		case task_registry.ErrorNotEnoughDiskWhenLoadingSnapshot:
 			logger.Error("disk requirements in snapshot exceed the configured memory limit.  aborting!")
 			os.Exit(1)
-		case taskregistry.ErrorRegistrySnapshotDoesNotExist:
+		case task_registry.ErrorRegistrySnapshotDoesNotExist:
 			logger.Info("Didn't find snapshot.  Creating new registry.")
-			taskRegistry = taskregistry.NewTaskRegistry(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
+			taskRegistry = task_registry.NewTaskRegistry(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
 		default:
 			logger.Errorf("woah, woah, woah!  what happened with the snapshot?: %s", err.Error())
 			os.Exit(1)
@@ -195,7 +195,7 @@ func main() {
 
 	registerSignalHandler(executor)
 
-	linuxPlugin := linuxplugin.New()
+	linuxPlugin := linux_plugin.New()
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
 
@@ -214,7 +214,7 @@ func main() {
 		*tempDir,
 	)
 
-	runOnceHandler := runoncehandler.New(
+	runOnceHandler := run_once_handler.New(
 		bbs,
 		wardenClient,
 		taskRegistry,
@@ -250,7 +250,7 @@ func main() {
 	}
 }
 
-func writeRegistry(taskRegistry taskregistry.TaskRegistryInterface, logger *steno.Logger) {
+func writeRegistry(taskRegistry task_registry.TaskRegistryInterface, logger *steno.Logger) {
 	err := taskRegistry.WriteToDisk()
 	if err != nil {
 		logger.Errord(
