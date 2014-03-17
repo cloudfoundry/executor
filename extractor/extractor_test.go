@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	. "github.com/cloudfoundry-incubator/executor/extractor"
+	"github.com/cloudfoundry/gofileutils/fileutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -25,7 +26,7 @@ var _ = Describe("Extractor", func() {
 
 		extractionSrc = filepath.Join(tempDir, archiveFixture)
 
-		err = exec.Command("cp", "../fixtures/"+archiveFixture, extractionSrc).Run()
+		err = fileutils.CopyPathToPath(filepath.Join("..", "fixtures", archiveFixture), extractionSrc)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		extractionDest, err = ioutil.TempDir(tempDir, "extracted")
