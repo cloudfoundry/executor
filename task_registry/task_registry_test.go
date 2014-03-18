@@ -52,7 +52,7 @@ var _ = Describe("TaskRegistry", func() {
 
 			It("rejects the RunOnce", func() {
 				err := taskRegistry.AddRunOnce(runOnce)
-				Ω(err).Should(HaveOccurred())
+				Ω(err).Should(Equal(IncompatibleStackError{"some-stack", "invalid"}))
 			})
 		})
 
@@ -64,10 +64,9 @@ var _ = Describe("TaskRegistry", func() {
 				runOnce = runOnceWithNoStack
 			})
 
-			It("accepts RunOnces without discrimination", func() {
+			It("rejects the RunOnce", func() {
 				err := taskRegistry.AddRunOnce(runOnce)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(taskRegistry.RunOnces[runOnce.Guid]).To(Equal(runOnce))
+				Ω(err).Should(Equal(ErrorNoStackDefined))
 			})
 		})
 

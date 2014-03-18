@@ -11,10 +11,11 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
-var ErrorRegistrySnapshotDoesNotExist = errors.New("Registry snapshot does not exist")
-var ErrorRegistrySnapshotHasInvalidJSON = errors.New("Registry snapshot has invalid JSON")
-var ErrorNotEnoughMemoryWhenLoadingSnapshot = errors.New("Insufficient memory when loading snapshot")
-var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("Insufficient disk when loading snapshot")
+var ErrorRegistrySnapshotDoesNotExist = errors.New("registry snapshot does not exist")
+var ErrorRegistrySnapshotHasInvalidJSON = errors.New("registry snapshot has invalid JSON")
+var ErrorNotEnoughMemoryWhenLoadingSnapshot = errors.New("insufficient memory when loading snapshot")
+var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("insufficient disk when loading snapshot")
+var ErrorNoStackDefined = errors.New("no stack was defined for RunOnce")
 
 type TaskRegistryInterface interface {
 	AddRunOnce(runOnce models.RunOnce) error
@@ -30,6 +31,19 @@ type TaskRegistry struct {
 
 	stack    string
 	fileName string
+}
+
+type IncompatibleStackError struct {
+	Have string
+	Want string
+}
+
+func (e IncompatibleStackError) Error() string {
+	return fmt.Sprintf(
+		"run once has incompatible stack: have %s, want %s",
+		e.Have,
+		e.Want,
+	)
 }
 
 func NewTaskRegistry(stack string, fileName string, memoryMB int, diskMB int) *TaskRegistry {
@@ -62,15 +76,16 @@ func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
 		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
 	}
 
-	if runOnce.Stack != "" && runOnce.Stack != registry.stack {
-		return fmt.Errorf(
-			"run once has incompatible stack: have %s, want %s",
-			runOnce.Stack,
-			registry.stack,
-		)
+	if runOnce.Stack == "" {
+		return ErrorNoStackDefined
+	}
+
+	if runOnce.Stack != registry.stack {
+		return IncompatibleStackError{registry.stack, runOnce.Stack}
 	}
 
 	registry.RunOnces[runOnce.Guid] = runOnce
+
 	return nil
 }
 
