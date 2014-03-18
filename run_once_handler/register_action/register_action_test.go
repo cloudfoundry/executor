@@ -17,13 +17,13 @@ import (
 var _ = Describe("RegisterAction", func() {
 	var action action_runner.Action
 
-	var runOnce models.RunOnce
+	var runOnce *models.RunOnce
 	var fakeTaskRegistry *fake_task_registry.FakeTaskRegistry
 
 	BeforeEach(func() {
 		fakeTaskRegistry = fake_task_registry.New()
 
-		runOnce = models.RunOnce{
+		runOnce = &models.RunOnce{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -44,10 +44,11 @@ var _ = Describe("RegisterAction", func() {
 
 	Describe("Perform", func() {
 		It("registers the RunOnce", func() {
+			originalRunOnce := *runOnce
 			err := action.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
+			Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
 		})
 
 		Context("when registering fails", func() {
@@ -66,8 +67,9 @@ var _ = Describe("RegisterAction", func() {
 
 	Describe("Cleanup", func() {
 		It("unregisters the RunOnce", func() {
+			originalRunOnce := *runOnce
 			action.Cleanup()
-			Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(runOnce))
+			Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(originalRunOnce))
 		})
 	})
 })

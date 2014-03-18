@@ -4,6 +4,17 @@ import (
 	"encoding/json"
 )
 
+type RunOnceState int
+
+const (
+	RunOnceStateInvalid RunOnceState = iota
+	RunOnceStatePending
+	RunOnceStateClaimed
+	RunOnceStateRunning
+	RunOnceStateCompleted
+	RunOnceStateResolving
+)
+
 type RunOnce struct {
 	Guid            string           `json:"guid"`
 	Actions         []ExecutorAction `json:"actions"`
@@ -13,6 +24,9 @@ type RunOnce struct {
 	DiskMB          int              `json:"disk_mb"`
 	Log             LogConfig        `json:"log"`
 	CreatedAt       int64            `json:"created_at"` //  the number of nanoseconds elapsed since January 1, 1970 UTC
+	UpdatedAt       int64            `json:"updated_at"`
+
+	State RunOnceState `json:"state"`
 
 	// this is so that any stager can process a complete event,
 	// because the CC <-> Stager interaction is a one-to-one request-response

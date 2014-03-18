@@ -1,6 +1,8 @@
 package bbs
 
 import (
+	"github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -8,7 +10,8 @@ import (
 )
 
 type executorBBS struct {
-	store storeadapter.StoreAdapter
+	store        storeadapter.StoreAdapter
+	timeProvider timeprovider.TimeProvider
 }
 
 func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorId string) (PresenceInterface, <-chan bool, error) {
@@ -17,23 +20,28 @@ func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duratio
 	return presence, lostLock, err
 }
 
-func (self *executorBBS) WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
-	return watchForRunOnceModificationsOnState(self.store, "pending")
+func (self *executorBBS) WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
+	return watchForRunOnceModificationsOnState(self.store, models.RunOnceStatePending)
 }
 
 // The executor calls this when it wants to claim a runonce
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the executor should assume that someone else is handling the claim and should bail
-func (self *executorBBS) ClaimRunOnce(runOnce models.RunOnce) error {
-	if runOnce.ExecutorID == "" {
-		panic("must set ExecutorID on RunOnce model to claim (finish your tests)")
-	}
+func (self *executorBBS) ClaimRunOnce(runOnce *models.RunOnce, executorID string) error {
+	originalValue := runOnce.ToJSON()
+
+	runOnce.UpdatedAt = self.timeProvider.Time().UnixNano()
+
+	runOnce.State = models.RunOnceStateClaimed
+	runOnce.ExecutorID = executorID
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
-		return self.store.Create(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath("claimed", runOnce.Guid),
+		return self.store.CompareAndSwap(storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
+			Value: originalValue,
+		}, storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
 			Value: runOnce.ToJSON(),
-			TTL:   uint64(ClaimTTL.Seconds()),
 		})
 	})
 }
@@ -41,18 +49,20 @@ func (self *executorBBS) ClaimRunOnce(runOnce models.RunOnce) error {
 // The executor calls this when it is about to run the runonce in the claimed container
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the executor should assume that someone else is running and should clean up and bail
-func (self *executorBBS) StartRunOnce(runOnce models.RunOnce) error {
-	if runOnce.ExecutorID == "" {
-		panic("must set ExecutorID on RunOnce model to start (finish your tests)")
-	}
+func (self *executorBBS) StartRunOnce(runOnce *models.RunOnce, containerHandle string) error {
+	originalValue := runOnce.ToJSON()
 
-	if runOnce.ContainerHandle == "" {
-		panic("must set ContainerHandle on RunOnce model to start (finish your tests)")
-	}
+	runOnce.UpdatedAt = self.timeProvider.Time().UnixNano()
+
+	runOnce.State = models.RunOnceStateRunning
+	runOnce.ContainerHandle = containerHandle
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
-		return self.store.Create(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath("running", runOnce.Guid),
+		return self.store.CompareAndSwap(storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
+			Value: originalValue,
+		}, storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -62,10 +72,22 @@ func (self *executorBBS) StartRunOnce(runOnce models.RunOnce) error {
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // This really really shouldn't fail.  If it does, blog about it and walk away. If it failed in a
 // consistent way (i.e. key already exists), there's probably a flaw in our design.
-func (self *executorBBS) CompleteRunOnce(runOnce models.RunOnce) error {
+func (self *executorBBS) CompleteRunOnce(runOnce *models.RunOnce, failed bool, failureReason string, result string) error {
+	originalValue := runOnce.ToJSON()
+
+	runOnce.UpdatedAt = self.timeProvider.Time().UnixNano()
+
+	runOnce.State = models.RunOnceStateCompleted
+	runOnce.Failed = failed
+	runOnce.FailureReason = failureReason
+	runOnce.Result = result
+
 	return retryIndefinitelyOnStoreTimeout(func() error {
-		return self.store.Create(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath("completed", runOnce.Guid),
+		return self.store.CompareAndSwap(storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
+			Value: originalValue,
+		}, storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -89,67 +111,70 @@ func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 		return
 	}
 
-	storeNodesToSet := []storeadapter.StoreNode{}
+	logger := gosteno.NewLogger("bbs")
+
+	runOncesToSet := []models.RunOnce{}
 	keysToDelete := []string{}
+	unclaimedTimeoutBoundary := self.timeProvider.Time().Add(-timeToClaim).UnixNano()
 
-	pending, _ := runOnceState.Lookup("pending")
-	claimed, _ := runOnceState.Lookup("claimed")
-	running, _ := runOnceState.Lookup("running")
-	completed, _ := runOnceState.Lookup("completed")
-
-	unclaimedTimeoutBoundary := time.Now().Add(-timeToClaim).UnixNano()
-
-	for _, pendingNode := range pending.ChildNodes {
-		guid := pendingNode.KeyComponents()[3]
-
-		completedNode, isCompleted := completed.Lookup(guid)
-		if isCompleted {
-			storeNodesToSet = append(storeNodesToSet, completedNode)
-			continue
-		}
-
-		claimedNode, isClaimed := claimed.Lookup(guid)
-
-		if isClaimed {
-			if !verifyExecutorIsPresent(claimedNode, executorState) {
-				storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(claimedNode, "executor disappeared before completion"))
-			}
-			continue
-		}
-
-		runningNode, isRunning := running.Lookup(guid)
-
-		if isRunning {
-			if !verifyExecutorIsPresent(runningNode, executorState) {
-				storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(runningNode, "executor disappeared before completion"))
-			}
-			continue
-		}
-
-		runOnce, err := models.NewRunOnceFromJSON(pendingNode.Value)
+	for _, node := range runOnceState.ChildNodes {
+		runOnce, err := models.NewRunOnceFromJSON(node.Value)
 		if err != nil {
-			pendingNode.Value = nil
-			storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(pendingNode, "corrupt pending node"))
+			logger.Errord(map[string]interface{}{
+				"key":   node.Key,
+				"value": string(node.Value),
+			}, "runonce.converge.json-parse-failure")
+			keysToDelete = append(keysToDelete, node.Key)
 			continue
 		}
 
-		if runOnce.CreatedAt <= unclaimedTimeoutBoundary {
-			storeNodesToSet = append(storeNodesToSet, failedRunOnceNodeFromNode(pendingNode, "not claimed within time limit"))
+		switch runOnce.State {
+		case models.RunOnceStatePending:
+			if runOnce.CreatedAt <= unclaimedTimeoutBoundary {
+				runOnce.State = models.RunOnceStateCompleted
+				runOnce.Failed = true
+				runOnce.FailureReason = "not claimed within time limit"
+			}
+			runOncesToSet = append(runOncesToSet, runOnce)
+		case models.RunOnceStateClaimed:
+			claimedTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 10*time.Second
+
+			_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
+			if !executorIsAlive {
+				runOnce.State = models.RunOnceStateCompleted
+				runOnce.Failed = true
+				runOnce.FailureReason = "executor disappeared before completion"
+				runOncesToSet = append(runOncesToSet, runOnce)
+			} else if claimedTooLong {
+				runOnce.State = models.RunOnceStatePending
+				runOncesToSet = append(runOncesToSet, runOnce)
+			}
+		case models.RunOnceStateRunning:
+			_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
+			if !executorIsAlive {
+				runOnce.State = models.RunOnceStateCompleted
+				runOnce.Failed = true
+				runOnce.FailureReason = "executor disappeared before completion"
+				runOncesToSet = append(runOncesToSet, runOnce)
+			}
+		case models.RunOnceStateCompleted:
+			runOncesToSet = append(runOncesToSet, runOnce)
+		case models.RunOnceStateResolving:
+			resolvingTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 10*time.Second
+			if resolvingTooLong {
+				runOnce.State = models.RunOnceStateCompleted
+				runOncesToSet = append(runOncesToSet, runOnce)
+			}
 			continue
 		}
-
-		storeNodesToSet = append(storeNodesToSet, pendingNode)
-
 	}
 
-	for _, node := range []storeadapter.StoreNode{claimed, running, completed} {
-		for _, node := range node.ChildNodes {
-			guid := node.KeyComponents()[3]
-
-			_, isPending := pending.Lookup(guid)
-			if !isPending {
-				keysToDelete = append(keysToDelete, node.Key)
-			}
+	storeNodesToSet := make([]storeadapter.StoreNode, len(runOncesToSet))
+	for i, runOnce := range runOncesToSet {
+		runOnce.UpdatedAt = self.timeProvider.Time().UnixNano()
+		storeNodesToSet[i] = storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(runOnce.Guid),
+			Value: runOnce.ToJSON(),
 		}
 	}
 

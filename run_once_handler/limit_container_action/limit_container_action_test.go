@@ -27,11 +27,10 @@ var _ = Describe("LimitContainerAction", func() {
 		handle = "some-container-handle"
 		containerInodeLimit = 200000
 		runOnce = models.RunOnce{
-			ContainerHandle: handle,
-			Guid:            "totally-unique",
-			Stack:           "penguin",
-			MemoryMB:        1024,
-			DiskMB:          512,
+			Guid:     "totally-unique",
+			Stack:    "penguin",
+			MemoryMB: 1024,
+			DiskMB:   512,
 			Actions: []models.ExecutorAction{
 				{
 					models.RunAction{
@@ -48,6 +47,7 @@ var _ = Describe("LimitContainerAction", func() {
 			steno.NewLogger("test-logger"),
 			gordon,
 			containerInodeLimit,
+			&handle,
 		)
 	})
 

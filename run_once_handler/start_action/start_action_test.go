@@ -19,6 +19,7 @@ var _ = Describe("StartAction", func() {
 
 	var runOnce models.RunOnce
 	var bbs *fake_bbs.FakeExecutorBBS
+    var containerHandle string
 
 	BeforeEach(func() {
 		runOnce = models.RunOnce{
@@ -33,16 +34,16 @@ var _ = Describe("StartAction", func() {
 			},
 
 			ExecutorID: "some-executor-id",
-
-			ContainerHandle: "some-container-handle",
 		}
 
 		bbs = fake_bbs.NewFakeExecutorBBS()
+		containerHandle = "some-container-handle"
 
 		action = New(
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			bbs,
+			&containerHandle,
 		)
 	})
 
@@ -52,6 +53,7 @@ var _ = Describe("StartAction", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
+			Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(containerHandle))
 		})
 
 		Context("when starting the RunOnce in the BBS fails", func() {

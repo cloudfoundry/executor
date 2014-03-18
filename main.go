@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"log"
 	"os"
 	"os/signal"
@@ -136,7 +137,7 @@ func main() {
 		workerpool.NewWorkerPool(10),
 	)
 
-	bbs := Bbs.New(etcdAdapter)
+	bbs := Bbs.New(etcdAdapter, timeprovider.NewTimeProvider())
 	err = etcdAdapter.Connect()
 	if err != nil {
 		logger.Errord(map[string]interface{}{

@@ -14,8 +14,8 @@ func GenerateGuid() string {
 	return guid.String()
 }
 
-func BuildRunOnceWithRunAction(memoryMB int, diskMB int, script string) models.RunOnce {
-	return models.RunOnce{
+func BuildRunOnceWithRunAction(memoryMB int, diskMB int, script string) *models.RunOnce {
+	return &models.RunOnce{
 		Guid:     GenerateGuid(),
 		MemoryMB: memoryMB,
 		DiskMB:   diskMB,

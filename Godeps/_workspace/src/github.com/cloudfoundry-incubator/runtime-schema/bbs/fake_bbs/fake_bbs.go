@@ -30,13 +30,13 @@ type FakeExecutorBBS struct {
 	MaintainingPresenceErrorChannel      chan bool
 	MaintainingPresenceError             error
 
-	ClaimedRunOnce  models.RunOnce
+	ClaimedRunOnce  *models.RunOnce
 	ClaimRunOnceErr error
 
-	StartedRunOnce  models.RunOnce
+	StartedRunOnce  *models.RunOnce
 	StartRunOnceErr error
 
-	CompletedRunOnce           models.RunOnce
+	CompletedRunOnce           *models.RunOnce
 	CompleteRunOnceErr         error
 	ConvergeRunOnceTimeToClaim time.Duration
 }
@@ -54,21 +54,26 @@ func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.
 	return fakeBBS.MaintainingPresencePresence, fakeBBS.MaintainingPresenceErrorChannel, fakeBBS.MaintainingPresenceError
 }
 
-func (fakeBBS *FakeExecutorBBS) WatchForDesiredRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
+func (fakeBBS *FakeExecutorBBS) WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
 	return nil, nil, nil
 }
 
-func (fakeBBS *FakeExecutorBBS) ClaimRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeExecutorBBS) ClaimRunOnce(runOnce *models.RunOnce, executorID string) error {
+	runOnce.ExecutorID = executorID
 	fakeBBS.ClaimedRunOnce = runOnce
 	return fakeBBS.ClaimRunOnceErr
 }
 
-func (fakeBBS *FakeExecutorBBS) StartRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeExecutorBBS) StartRunOnce(runOnce *models.RunOnce, containerHandle string) error {
+	runOnce.ContainerHandle = containerHandle
 	fakeBBS.StartedRunOnce = runOnce
 	return fakeBBS.StartRunOnceErr
 }
 
-func (fakeBBS *FakeExecutorBBS) CompleteRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeExecutorBBS) CompleteRunOnce(runOnce *models.RunOnce, failed bool, failureReason string, result string) error {
+	runOnce.Failed = failed
+	runOnce.FailureReason = failureReason
+	runOnce.Result = result
 	fakeBBS.CompletedRunOnce = runOnce
 	return fakeBBS.CompleteRunOnceErr
 }
@@ -87,18 +92,18 @@ func (fakeBBS *FakeExecutorBBS) MaintainConvergeLock(interval time.Duration, exe
 }
 
 type FakeStagerBBS struct {
-	ResolvedRunOnce   models.RunOnce
+	ResolvedRunOnce   *models.RunOnce
 	ResolveRunOnceErr error
 
 	ResolvingRunOnceInput struct {
-		RunOnceToResolve models.RunOnce
+		RunOnceToResolve *models.RunOnce
 	}
 	ResolvingRunOnceOutput struct {
 		Err error
 	}
 
 	CalledCompletedRunOnce  chan bool
-	CompletedRunOnceChan    chan models.RunOnce
+	CompletedRunOnceChan    chan *models.RunOnce
 	CompletedRunOnceErrChan chan error
 }
 
@@ -108,23 +113,23 @@ func NewFakeStagerBBS() *FakeStagerBBS {
 	}
 }
 
-func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan models.RunOnce, chan<- bool, <-chan error) {
-	fakeBBS.CompletedRunOnceChan = make(chan models.RunOnce)
+func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
+	fakeBBS.CompletedRunOnceChan = make(chan *models.RunOnce)
 	fakeBBS.CompletedRunOnceErrChan = make(chan error)
 	fakeBBS.CalledCompletedRunOnce <- true
 	return fakeBBS.CompletedRunOnceChan, nil, fakeBBS.CompletedRunOnceErrChan
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvingRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) ResolvingRunOnce(runOnce *models.RunOnce) error {
 	fakeBBS.ResolvingRunOnceInput.RunOnceToResolve = runOnce
 	return fakeBBS.ResolvingRunOnceOutput.Err
 }
 
-func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce *models.RunOnce) error {
 	panic("implement me!")
 }
 
-func (fakeBBS *FakeStagerBBS) ResolveRunOnce(runOnce models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) ResolveRunOnce(runOnce *models.RunOnce) error {
 	fakeBBS.ResolvedRunOnce = runOnce
 	return fakeBBS.ResolveRunOnceErr
 }

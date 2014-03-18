@@ -7,25 +7,28 @@ import (
 )
 
 type StartAction struct {
-	runOnce *models.RunOnce
-	logger  *steno.Logger
-	bbs     Bbs.ExecutorBBS
+	runOnce         *models.RunOnce
+	logger          *steno.Logger
+	bbs             Bbs.ExecutorBBS
+	containerHandle *string
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	bbs Bbs.ExecutorBBS,
+	containerHandle *string,
 ) *StartAction {
 	return &StartAction{
-		runOnce: runOnce,
-		logger:  logger,
-		bbs:     bbs,
+		runOnce:         runOnce,
+		logger:          logger,
+		bbs:             bbs,
+		containerHandle: containerHandle,
 	}
 }
 
 func (action StartAction) Perform() error {
-	err := action.bbs.StartRunOnce(*action.runOnce)
+	err := action.bbs.StartRunOnce(action.runOnce, *action.containerHandle)
 	if err != nil {
 		action.logger.Warnd(
 			map[string]interface{}{

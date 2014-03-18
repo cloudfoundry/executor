@@ -19,7 +19,7 @@ func New() *FakeRunOnceHandler {
 	}
 }
 
-func (handler *FakeRunOnceHandler) RunOnce(runOnce models.RunOnce, executorId string, cancel <-chan struct{}) {
+func (handler *FakeRunOnceHandler) RunOnce(runOnce *models.RunOnce, executorId string, cancel <-chan struct{}) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 

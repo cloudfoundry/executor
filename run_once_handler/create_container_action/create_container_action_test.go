@@ -19,6 +19,7 @@ var _ = Describe("CreateContainerAction", func() {
 
 	var runOnce models.RunOnce
 	var gordon *fake_gordon.FakeGordon
+	var containerHandle string
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
@@ -41,6 +42,7 @@ var _ = Describe("CreateContainerAction", func() {
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			gordon,
+			&containerHandle,
 		)
 	})
 
@@ -52,6 +54,13 @@ var _ = Describe("CreateContainerAction", func() {
 			Ω(err).Should(BeNil())
 
 			Ω(gordon.CreatedHandles()).Should(HaveLen(1))
+		})
+
+		It("sets the shared containerHandle pointer", func() {
+			err := action.Perform()
+			Ω(err).Should(BeNil())
+
+			Ω(containerHandle).Should(Equal(gordon.CreatedHandles()[0]))
 		})
 
 		Context("when registering fails", func() {

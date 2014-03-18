@@ -739,6 +739,33 @@ var _ = Describe("ETCD Store Adapter", func() {
 			}, 5.0)
 		})
 
+		Context("when a node under the key is compare and swapped", func() {
+			var node StoreNode
+			BeforeEach(func() {
+				node = StoreNode{
+					Key:   "/foo/a",
+					Value: []byte("some value"),
+				}
+				err := adapter.SetMulti([]StoreNode{node})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("sends an event with UpdateEvent type and the node's value", func(done Done) {
+				events, _, _ := adapter.Watch("/foo")
+
+				newNode := node
+				newNode.Value = []byte("new value")
+				err := adapter.CompareAndSwap(node, newNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				event := <-events
+				Expect(event.Type).To(Equal(UpdateEvent))
+				Expect(event.Node).To(Equal(newNode))
+
+				close(done)
+			}, 5.0)
+		})
+
 		Context("when a node under the key is deleted", func() {
 			BeforeEach(func() {
 				err := adapter.SetMulti([]StoreNode{

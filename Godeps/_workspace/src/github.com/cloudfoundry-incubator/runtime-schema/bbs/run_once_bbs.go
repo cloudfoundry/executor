@@ -34,12 +34,12 @@ func retryIndefinitelyOnStoreTimeout(callback func() error) error {
 	}
 }
 
-func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state string) (<-chan models.RunOnce, chan<- bool, <-chan error) {
-	runOnces := make(chan models.RunOnce)
+func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state models.RunOnceState) (<-chan *models.RunOnce, chan<- bool, <-chan error) {
+	runOnces := make(chan *models.RunOnce)
 	stopOuter := make(chan bool)
 	errsOuter := make(chan error)
 
-	events, stopInner, errsInner := store.Watch(runOnceSchemaPath(state))
+	events, stopInner, errsInner := store.Watch(RunOnceSchemaRoot)
 
 	go func() {
 		defer close(runOnces)
@@ -61,7 +61,10 @@ func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state 
 					if err != nil {
 						continue
 					}
-					runOnces <- runOnce
+
+					if runOnce.State == state {
+						runOnces <- &runOnce
+					}
 				}
 
 			case err, ok := <-errsInner:
@@ -76,50 +79,25 @@ func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state 
 	return runOnces, stopOuter, errsOuter
 }
 
-func getAllRunOnces(store storeadapter.StoreAdapter, state string) ([]models.RunOnce, error) {
-	node, err := store.ListRecursively(runOnceSchemaPath(state))
+func getAllRunOnces(store storeadapter.StoreAdapter, state models.RunOnceState) ([]*models.RunOnce, error) {
+	node, err := store.ListRecursively(RunOnceSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
-		return []models.RunOnce{}, nil
+		return []*models.RunOnce{}, nil
 	}
 
 	if err != nil {
-		return []models.RunOnce{}, err
+		return []*models.RunOnce{}, err
 	}
 
-	runOnces := []models.RunOnce{}
+	runOnces := []*models.RunOnce{}
 	for _, node := range node.ChildNodes {
 		runOnce, err := models.NewRunOnceFromJSON(node.Value)
 		if err != nil {
 			steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
-		} else {
-			runOnces = append(runOnces, runOnce)
+		} else if runOnce.State == state {
+			runOnces = append(runOnces, &runOnce)
 		}
 	}
 
 	return runOnces, nil
-}
-
-func verifyExecutorIsPresent(node storeadapter.StoreNode, executorState storeadapter.StoreNode) bool {
-	runOnce, err := models.NewRunOnceFromJSON(node.Value)
-	if err != nil {
-		steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
-		return false
-	}
-	_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
-	return executorIsAlive
-}
-
-func failedRunOnceNodeFromNode(node storeadapter.StoreNode, failureMessage string) storeadapter.StoreNode {
-	runOnce, err := models.NewRunOnceFromJSON(node.Value)
-	if err != nil {
-		steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
-		runOnce.Guid = path.Base(node.Key)
-	}
-
-	runOnce.Failed = true
-	runOnce.FailureReason = failureMessage
-	return storeadapter.StoreNode{
-		Key:   runOnceSchemaPath("completed", runOnce.Guid),
-		Value: runOnce.ToJSON(),
-	}
 }

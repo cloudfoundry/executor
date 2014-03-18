@@ -11,11 +11,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "a6a6d5c598fe6dc59cbec1ab2194434c519028e0"
+			"Rev": "b9407044544eb6b7529081deb8070f25d2b7c90a"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "a6a6d5c598fe6dc59cbec1ab2194434c519028e0"
+			"Rev": "b9407044544eb6b7529081deb8070f25d2b7c90a"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gofileutils/fileutils",
@@ -25,6 +25,10 @@
 			"ImportPath": "github.com/cloudfoundry/gosteno",
 			"Comment": "scotty_09012012-38-g969c2c5",
 			"Rev": "969c2c565f5f1638b45702f3a07f6c39013bf375"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
+			"Rev": "0ab08c4a0d1b32c0db1ecd53b55603662de9e767"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
@@ -52,7 +56,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "418d1fc3ccde9cc96674ae18ebf885bc592ca10f"
+			"Rev": "92c60f30dea8e910648b01d7f7ba411908ea615e"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -65,7 +69,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "736acf4afbc1fff096f59fb899163b602edec924"
+			"Rev": "85eb0318720ffdc1ca7023bfe4ad15a5d22a9612"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",

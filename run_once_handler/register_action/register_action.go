@@ -8,13 +8,13 @@ import (
 )
 
 type RegisterAction struct {
-	runOnce      models.RunOnce
+	runOnce      *models.RunOnce
 	logger       *steno.Logger
 	taskRegistry task_registry.TaskRegistryInterface
 }
 
 func New(
-	runOnce models.RunOnce,
+	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	taskRegistry task_registry.TaskRegistryInterface,
 ) *RegisterAction {
@@ -26,7 +26,7 @@ func New(
 }
 
 func (action RegisterAction) Perform() error {
-	err := action.taskRegistry.AddRunOnce(action.runOnce)
+	err := action.taskRegistry.AddRunOnce(*action.runOnce)
 	if err != nil {
 		action.logger.Infod(
 			map[string]interface{}{
@@ -44,5 +44,5 @@ func (action RegisterAction) Perform() error {
 func (action RegisterAction) Cancel() {}
 
 func (action RegisterAction) Cleanup() {
-	action.taskRegistry.RemoveRunOnce(action.runOnce)
+	action.taskRegistry.RemoveRunOnce(*action.runOnce)
 }

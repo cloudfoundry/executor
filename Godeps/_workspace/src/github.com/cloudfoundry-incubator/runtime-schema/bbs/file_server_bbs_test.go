@@ -8,6 +8,7 @@ import (
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
 )
 
@@ -20,10 +21,12 @@ var _ = Describe("File Server BBS", func() {
 		disappeared   <-chan bool
 		err           error
 		presence      PresenceInterface
+		timeProvider  *faketimeprovider.FakeTimeProvider
 	)
 
 	BeforeEach(func() {
-		bbs = New(store)
+		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
+		bbs = New(store, timeProvider)
 	})
 
 	Describe("MaintainFileServerPresence", func() {

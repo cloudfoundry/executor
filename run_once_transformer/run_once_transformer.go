@@ -24,6 +24,7 @@ type RunOnceTransformer struct {
 	wardenClient       gordon.Client
 	logger             *steno.Logger
 	tempDir            string
+	result             *string
 }
 
 func NewRunOnceTransformer(
@@ -48,6 +49,8 @@ func NewRunOnceTransformer(
 
 func (transformer *RunOnceTransformer) ActionsFor(
 	runOnce *models.RunOnce,
+	containerHandle *string,
+	result *string,
 ) []action_runner.Action {
 	logStreamer := transformer.logStreamerFactory(runOnce.Log)
 
@@ -59,7 +62,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 		switch actionModel := a.Action.(type) {
 		case models.RunAction:
 			subAction = run_action.New(
-				runOnce.ContainerHandle,
+				*containerHandle,
 				actionModel,
 				runOnce.FileDescriptors,
 				logStreamer,
@@ -69,7 +72,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		case models.DownloadAction:
 			subAction = download_action.New(
-				runOnce.ContainerHandle,
+				*containerHandle,
 				actionModel,
 				transformer.downloader,
 				transformer.tempDir,
@@ -79,7 +82,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		case models.UploadAction:
 			subAction = upload_action.New(
-				runOnce.ContainerHandle,
+				*containerHandle,
 				actionModel,
 				transformer.uploader,
 				transformer.tempDir,
@@ -88,11 +91,12 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		case models.FetchResultAction:
 			subAction = fetch_result_action.New(
-				runOnce,
+				*containerHandle,
 				actionModel,
 				transformer.tempDir,
 				transformer.wardenClient,
 				transformer.logger,
+				result,
 			)
 		}
 

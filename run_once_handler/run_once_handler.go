@@ -12,7 +12,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/claim_action"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/complete_action"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/create_container_action"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/execute_action"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/register_action"
@@ -21,7 +20,7 @@ import (
 )
 
 type RunOnceHandlerInterface interface {
-	RunOnce(runOnce models.RunOnce, executorId string, cancel <-chan struct{})
+	RunOnce(runOnce *models.RunOnce, executorId string, cancel <-chan struct{})
 }
 
 type RunOnceHandler struct {
@@ -54,7 +53,9 @@ func New(
 	}
 }
 
-func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string, cancel <-chan struct{}) {
+func (handler *RunOnceHandler) RunOnce(runOnce *models.RunOnce, executorID string, cancel <-chan struct{}) {
+	var containerHandle string
+	var runOnceResult string
 	runner := action_runner.New([]action_runner.Action{
 		register_action.New(
 			runOnce,
@@ -62,38 +63,38 @@ func (handler *RunOnceHandler) RunOnce(runOnce models.RunOnce, executorID string
 			handler.taskRegistry,
 		),
 		claim_action.New(
-			&runOnce,
+			runOnce,
 			handler.logger,
 			executorID,
 			handler.bbs,
 		),
 		create_container_action.New(
-			&runOnce,
+			runOnce,
 			handler.logger,
 			handler.wardenClient,
+			&containerHandle,
 		),
 		limit_container_action.New(
-			&runOnce,
+			runOnce,
 			handler.logger,
 			handler.wardenClient,
 			handler.containerInodeLimit,
+			&containerHandle,
 		),
 		start_action.New(
-			&runOnce,
+			runOnce,
 			handler.logger,
 			handler.bbs,
+			&containerHandle,
 		),
 		execute_action.New(
-			&runOnce,
+			runOnce,
 			handler.logger,
 			lazy_action_runner.New(func() []action_runner.Action {
-				return handler.transformer.ActionsFor(&runOnce)
+				return handler.transformer.ActionsFor(runOnce, &containerHandle, &runOnceResult)
 			}),
-		),
-		complete_action.New(
-			&runOnce,
-			handler.logger,
 			handler.bbs,
+			&runOnceResult,
 		),
 	})
 

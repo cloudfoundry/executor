@@ -35,7 +35,9 @@ var _ = Describe("RunOnce", func() {
 			"source_name": "APP",
 			"index": 42
 		},
-		"created_at": 1393371971000000000
+		"created_at": 1393371971000000000,
+		"updated_at": 1393371971000000010,
+		"state": 1
 	}`
 
 	BeforeEach(func() {
@@ -68,6 +70,8 @@ var _ = Describe("RunOnce", func() {
 			MemoryMB:        256,
 			DiskMB:          1024,
 			CreatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 00, time.UTC).UnixNano(),
+			UpdatedAt:       time.Date(2014, time.February, 25, 23, 46, 11, 10, time.UTC).UnixNano(),
+			State:           RunOnceStatePending,
 		}
 	})
 

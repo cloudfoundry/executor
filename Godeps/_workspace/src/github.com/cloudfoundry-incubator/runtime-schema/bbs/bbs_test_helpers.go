@@ -6,20 +6,20 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-func (self *BBS) GetAllPendingRunOnces() ([]models.RunOnce, error) {
-	return getAllRunOnces(self.store, "pending")
+func (self *BBS) GetAllPendingRunOnces() ([]*models.RunOnce, error) {
+	return getAllRunOnces(self.store, models.RunOnceStatePending)
 }
 
-func (self *BBS) GetAllClaimedRunOnces() ([]models.RunOnce, error) {
-	return getAllRunOnces(self.store, "claimed")
+func (self *BBS) GetAllClaimedRunOnces() ([]*models.RunOnce, error) {
+	return getAllRunOnces(self.store, models.RunOnceStateClaimed)
 }
 
-func (self *BBS) GetAllStartingRunOnces() ([]models.RunOnce, error) {
-	return getAllRunOnces(self.store, "running")
+func (self *BBS) GetAllStartingRunOnces() ([]*models.RunOnce, error) {
+	return getAllRunOnces(self.store, models.RunOnceStateRunning)
 }
 
-func (self *BBS) GetAllCompletedRunOnces() ([]models.RunOnce, error) {
-	return getAllRunOnces(self.store, "completed")
+func (self *BBS) GetAllCompletedRunOnces() ([]*models.RunOnce, error) {
+	return getAllRunOnces(self.store, models.RunOnceStateCompleted)
 }
 
 func (self *BBS) GetAllExecutors() ([]string, error) {

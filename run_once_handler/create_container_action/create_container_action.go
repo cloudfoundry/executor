@@ -7,20 +7,23 @@ import (
 )
 
 type ContainerAction struct {
-	runOnce      *models.RunOnce
-	logger       *steno.Logger
-	wardenClient gordon.Client
+	runOnce         *models.RunOnce
+	logger          *steno.Logger
+	wardenClient    gordon.Client
+	containerHandle *string
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
+	containerHandle *string,
 ) *ContainerAction {
 	return &ContainerAction{
-		runOnce:      runOnce,
-		logger:       logger,
-		wardenClient: wardenClient,
+		runOnce:         runOnce,
+		logger:          logger,
+		wardenClient:    wardenClient,
+		containerHandle: containerHandle,
 	}
 }
 
@@ -38,7 +41,7 @@ func (action ContainerAction) Perform() error {
 		return err
 	}
 
-	action.runOnce.ContainerHandle = createResponse.GetHandle()
+	*action.containerHandle = createResponse.GetHandle()
 
 	return nil
 }
@@ -46,7 +49,7 @@ func (action ContainerAction) Perform() error {
 func (action ContainerAction) Cancel() {}
 
 func (action ContainerAction) Cleanup() {
-	_, err := action.wardenClient.Destroy(action.runOnce.ContainerHandle)
+	_, err := action.wardenClient.Destroy(*action.containerHandle)
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{

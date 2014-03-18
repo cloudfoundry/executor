@@ -28,7 +28,7 @@ var _ = Describe("RunOnceHandler", func() {
 	Describe("RunOnce", func() {
 		var (
 			handler *RunOnceHandler
-			runOnce models.RunOnce
+			runOnce *models.RunOnce
 			cancel  chan struct{}
 
 			bbs                 *fake_bbs.FakeExecutorBBS
@@ -43,7 +43,7 @@ var _ = Describe("RunOnceHandler", func() {
 		BeforeEach(func() {
 			cancel = make(chan struct{})
 
-			runOnce = models.RunOnce{
+			runOnce = &models.RunOnce{
 				Guid:     "run-once-guid",
 				MemoryMB: 512,
 				DiskMB:   1024,
@@ -107,7 +107,7 @@ var _ = Describe("RunOnceHandler", func() {
 			)
 		})
 
-		setupSuccessfulRuns := func() {
+		setUpSuccessfulRuns := func() {
 			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
 
 			wardenClient.SetRunReturnValues(0, processPayloadStream, nil)
@@ -119,62 +119,136 @@ var _ = Describe("RunOnceHandler", func() {
 			}()
 		}
 
-		BeforeEach(setupSuccessfulRuns)
+		setUpFailedRuns := func() {
+			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
 
-		It("registers, claims, creates container, starts, (executes...), completes", func() {
-			handler.RunOnce(runOnce, "fake-executor-id", cancel)
+			wardenClient.SetRunReturnValues(0, processPayloadStream, nil)
 
-			// register
-			Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(runOnce))
+			failedExit := &warden.ProcessPayload{ExitStatus: proto.Uint32(3)}
 
-			// claim
-			Ω(bbs.ClaimedRunOnce.Guid).Should(Equal("run-once-guid"))
-			Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+			go func() {
+				processPayloadStream <- failedExit
+			}()
+		}
 
-			// create container
-			Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
-			handle := wardenClient.CreatedHandles()[0]
+		Context("when the run once succeeds", func() {
+			BeforeEach(setUpSuccessfulRuns)
 
-			//limit memoru & disk
-			Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
-			Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
-			Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
-			Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
-			Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+			It("registers, claims, creates container, starts, (executes...), completes", func() {
+				originalRunOnce := *runOnce
+				handler.RunOnce(runOnce, "fake-executor-id", cancel)
 
-			// start
-			Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
-			Ω(bbs.StartedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-			Ω(bbs.StartedRunOnce.ContainerHandle).ShouldNot(BeZero())
+				// register
+				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
 
-			// execute download action
-			Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-			Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
+				// claim
+				Ω(bbs.ClaimedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
 
-			// execute run action
-			ranScripts := []string{}
-			for _, script := range wardenClient.ScriptsThatRan() {
-				Ω(script.Handle).Should(Equal(bbs.StartedRunOnce.ContainerHandle))
+				// create container
+				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
+				handle := wardenClient.CreatedHandles()[0]
 
-				ranScripts = append(ranScripts, script.Script)
-			}
+				//limit memoru & disk
+				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
+				Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
+				Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
+				Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
+				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
-			Ω(ranScripts).Should(ContainElement("sudo reboot"))
+				// start
+				Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.StartedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(handle))
 
-			// execute upload action
-			Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
-			Ω(uploader.UploadUrls[0].String()).Should(Equal("http://upload-dst.com"))
+				// execute download action
+				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
+				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
 
-			// complete
-			Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
-			Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-			Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
+				// execute run action
+				ranScripts := []string{}
+				for _, script := range wardenClient.ScriptsThatRan() {
+					Ω(script.Handle).Should(Equal(bbs.StartedRunOnce.ContainerHandle))
+
+					ranScripts = append(ranScripts, script.Script)
+				}
+
+				Ω(ranScripts).Should(ContainElement("sudo reboot"))
+
+				// execute upload action
+				Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
+				Ω(uploader.UploadUrls[0].String()).Should(Equal("http://upload-dst.com"))
+
+				// complete
+				Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
+				Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(BeZero())
+			})
+		})
+
+		Context("when the run once fails", func() {
+			BeforeEach(setUpFailedRuns)
+
+			It("registers, claims, creates container, starts, (executes...), completes (failure)", func() {
+				originalRunOnce := *runOnce
+				handler.RunOnce(runOnce, "fake-executor-id", cancel)
+
+				// register
+				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
+
+				// claim
+				Ω(bbs.ClaimedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+
+				// create container
+				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
+				handle := wardenClient.CreatedHandles()[0]
+
+				//limit memoru & disk
+				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
+				Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
+				Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
+				Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
+				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+
+				// start
+				Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.StartedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(handle))
+
+				// execute download action
+				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
+				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
+
+				// execute run action
+				ranScripts := []string{}
+				for _, script := range wardenClient.ScriptsThatRan() {
+					Ω(script.Handle).Should(Equal(bbs.StartedRunOnce.ContainerHandle))
+
+					ranScripts = append(ranScripts, script.Script)
+				}
+
+				Ω(ranScripts).Should(ContainElement("sudo reboot"))
+
+				// no upload action, as the execute action fails
+				Ω(uploader.UploadUrls).Should(BeEmpty())
+
+				// complete
+				Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
+				Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
+				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("exit value: 3"))
+			})
 		})
 
 		Context("when told to cancel", func() {
 			var running chan struct{}
 
 			BeforeEach(func() {
+				setUpSuccessfulRuns()
 				running = make(chan struct{})
 
 				wardenClient.WhenRunning("", "sudo reboot", gordon.ResourceLimits{}, func() (uint32, <-chan *warden.ProcessPayload, error) {
@@ -202,7 +276,8 @@ var _ = Describe("RunOnceHandler", func() {
 
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
-				Ω(bbs.CompletedRunOnce).Should(BeZero())
+				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("cancelled"))
 			})
 		})
 	})

@@ -32,6 +32,8 @@ var _ = Describe("RunOnceTransformer", func() {
 		uploader           uploader.Uploader
 		wardenClient       *fake_gordon.FakeGordon
 		runOnceTransformer *RunOnceTransformer
+		handle             string
+		result             string
 	)
 
 	BeforeEach(func() {
@@ -40,6 +42,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		logger = &steno.Logger{}
+		handle = "some-handle"
 
 		logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
 			return logStreamer
@@ -71,12 +74,11 @@ var _ = Describe("RunOnceTransformer", func() {
 				{fetchResultActionModel},
 			},
 			FileDescriptors: 117,
-			ContainerHandle: "some-container-handle",
 		}
 
-		Ω(runOnceTransformer.ActionsFor(&runOnce)).To(Equal([]action_runner.Action{
+		Ω(runOnceTransformer.ActionsFor(&runOnce, &handle, &result)).To(Equal([]action_runner.Action{
 			run_action.New(
-				"some-container-handle",
+				handle,
 				runActionModel,
 				117,
 				logStreamer,
@@ -85,7 +87,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			download_action.New(
-				"some-container-handle",
+				handle,
 				downloadActionModel,
 				downloader,
 				"/fake/temp/dir",
@@ -94,7 +96,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			upload_action.New(
-				"some-container-handle",
+				handle,
 				uploadActionModel,
 				uploader,
 				"/fake/temp/dir",
@@ -102,11 +104,12 @@ var _ = Describe("RunOnceTransformer", func() {
 				logger,
 			),
 			fetch_result_action.New(
-				&runOnce,
+				handle,
 				fetchResultActionModel,
 				"/fake/temp/dir",
 				wardenClient,
 				logger,
+				&result,
 			),
 		}))
 	})

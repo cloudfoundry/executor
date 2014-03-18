@@ -2,6 +2,7 @@ package execute_action_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -19,14 +20,18 @@ var _ = Describe("ExecuteAction", func() {
 		action action_runner.Action
 		result chan error
 
-		runOnce   models.RunOnce
-		subAction action_runner.Action
+		runOnce       models.RunOnce
+		subAction     action_runner.Action
+		bbs           *fake_bbs.FakeExecutorBBS
+		runOnceResult string
 	)
 
 	BeforeEach(func() {
 		result = make(chan error)
 
 		subAction = nil
+
+		bbs = fake_bbs.NewFakeExecutorBBS()
 
 		runOnce = models.RunOnce{
 			Guid:  "totally-unique",
@@ -43,6 +48,8 @@ var _ = Describe("ExecuteAction", func() {
 
 			ContainerHandle: "some-container-handle",
 		}
+
+		runOnceResult = "the result of the running"
 	})
 
 	JustBeforeEach(func() {
@@ -50,6 +57,8 @@ var _ = Describe("ExecuteAction", func() {
 			&runOnce,
 			steno.NewLogger("test-logger"),
 			subAction,
+			bbs,
+			&runOnceResult,
 		)
 	})
 
@@ -63,11 +72,27 @@ var _ = Describe("ExecuteAction", func() {
 				}
 			})
 
-			It("returns no error and has Failed as false", func() {
+			It("completes the RunOnce in the BBS with Failed false and an empty reason", func() {
 				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(runOnce.Failed).Should(BeFalse())
+				Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
+				Ω(bbs.CompletedRunOnce.Result).Should(Equal(runOnceResult))
+				Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(BeZero())
+			})
+
+			Context("when completing fails", func() {
+				disaster := errors.New("oh no!")
+
+				BeforeEach(func() {
+					bbs.CompleteRunOnceErr = disaster
+				})
+
+				It("returns the error", func() {
+					err := action.Perform()
+					Ω(err).Should(Equal(disaster))
+				})
 			})
 		})
 
@@ -82,12 +107,27 @@ var _ = Describe("ExecuteAction", func() {
 				}
 			})
 
-			It("returns no error and has Failed as true with a reason", func() {
+			It("completes the RunOnce in the BBS with Failed true and a FailureReason", func() {
 				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(runOnce.Failed).Should(BeTrue())
-				Ω(runOnce.FailureReason).Should(Equal("oh no!"))
+				Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
+				Ω(bbs.CompletedRunOnce.Result).Should(Equal(runOnceResult))
+				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(Equal("oh no!"))
+			})
+
+			Context("when completing fails", func() {
+				disaster := errors.New("oh no!")
+
+				BeforeEach(func() {
+					bbs.CompleteRunOnceErr = disaster
+				})
+
+				It("returns the error", func() {
+					err := action.Perform()
+					Ω(err).Should(Equal(disaster))
+				})
 			})
 		})
 	})
@@ -104,7 +144,7 @@ var _ = Describe("ExecuteAction", func() {
 				WhenPerforming: func() error {
 					<-cancel
 					cancelled <- true
-					return nil
+					return action_runner.CancelledError
 				},
 				WhenCancelling: func() {
 					cancel <- true
@@ -117,6 +157,22 @@ var _ = Describe("ExecuteAction", func() {
 
 			action.Cancel()
 			Eventually(cancelled).Should(Receive())
+		})
+
+		It("completes the RunOnce with Failed true and a FailureReason", func() {
+			go action.Perform()
+
+			action.Cancel()
+			Eventually(cancelled).Should(Receive())
+
+			Eventually(func() interface{} {
+				if bbs.CompletedRunOnce == nil {
+					return false
+				}
+				return bbs.CompletedRunOnce.Failed
+			}).Should(BeTrue())
+
+			Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("cancelled"))
 		})
 	})
 
@@ -140,7 +196,7 @@ var _ = Describe("ExecuteAction", func() {
 			}
 		})
 
-		It("cancels its action", func() {
+		It("cleans up its action", func() {
 			go action.Perform()
 
 			action.Cleanup()

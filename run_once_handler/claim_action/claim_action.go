@@ -28,9 +28,7 @@ func New(
 }
 
 func (action ClaimAction) Perform() error {
-	action.runOnce.ExecutorID = action.executorID
-
-	err := action.bbs.ClaimRunOnce(*action.runOnce)
+	err := action.bbs.ClaimRunOnce(action.runOnce, action.executorID)
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{

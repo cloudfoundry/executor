@@ -3,6 +3,7 @@ package executor_test
 import (
 	"fmt"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/onsi/ginkgo/config"
 	"time"
@@ -21,7 +22,7 @@ import (
 var _ = Describe("Executor", func() {
 	var (
 		bbs              *Bbs.BBS
-		runOnce          models.RunOnce
+		runOnce          *models.RunOnce
 		executor         *Executor
 		taskRegistry     *task_registry.TaskRegistry
 		gordon           *fake_gordon.FakeGordon
@@ -39,14 +40,14 @@ var _ = Describe("Executor", func() {
 
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 
-		bbs = Bbs.New(etcdRunner.Adapter())
+		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
 		gordon = fake_gordon.New()
 
 		startingMemory = 256
 		startingDisk = 1024
 		taskRegistry = task_registry.NewTaskRegistry("some-stack", registryFileName, startingMemory, startingDisk)
 
-		runOnce = models.RunOnce{
+		runOnce = &models.RunOnce{
 			Guid:     "totally-unique",
 			MemoryMB: 256,
 			DiskMB:   1024,
@@ -132,7 +133,7 @@ var _ = Describe("Executor", func() {
 
 				//generate N desired run onces
 				for i := 0; i < samples; i++ {
-					runOnce := models.RunOnce{
+					runOnce := &models.RunOnce{
 						Guid: fmt.Sprintf("totally-unique-%d", i),
 					}
 					err := bbs.DesireRunOnce(runOnce)

@@ -20,12 +20,12 @@ var _ = Describe("FetchResultAction", func() {
 		action            action_runner.Action
 		fetchResultAction models.FetchResultAction
 		logger            *steno.Logger
-		runOnce           *models.RunOnce
 		wardenClient      *fake_gordon.FakeGordon
+		result            string
 	)
 
 	BeforeEach(func() {
-		runOnce = &models.RunOnce{}
+		result = ""
 		fetchResultAction = models.FetchResultAction{
 			File: "/tmp/foo",
 		}
@@ -35,11 +35,12 @@ var _ = Describe("FetchResultAction", func() {
 
 	JustBeforeEach(func() {
 		action = New(
-			runOnce,
+			"handle",
 			fetchResultAction,
 			"/tmp",
 			wardenClient,
 			logger,
+			&result,
 		)
 	})
 
@@ -52,7 +53,7 @@ var _ = Describe("FetchResultAction", func() {
 			err := action.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(runOnce.Result).Should(Equal("result content"))
+			Ω(result).Should(Equal("result content"))
 		})
 	})
 
@@ -67,7 +68,7 @@ var _ = Describe("FetchResultAction", func() {
 			err := action.Perform()
 			Ω(err).Should(HaveOccurred())
 
-			Ω(runOnce.Result).Should(BeZero())
+			Ω(result).Should(BeZero())
 		})
 	})
 
@@ -82,7 +83,7 @@ var _ = Describe("FetchResultAction", func() {
 			err := action.Perform()
 			Ω(err).Should(Equal(disaster))
 
-			Ω(runOnce.Result).Should(BeZero())
+			Ω(result).Should(BeZero())
 		})
 	})
 })

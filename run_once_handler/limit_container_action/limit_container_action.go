@@ -11,6 +11,7 @@ type ContainerAction struct {
 	logger              *steno.Logger
 	wardenClient        gordon.Client
 	containerInodeLimit int
+	containerHandle     *string
 }
 
 func New(
@@ -18,17 +19,19 @@ func New(
 	logger *steno.Logger,
 	wardenClient gordon.Client,
 	containerInodeLimit int,
+	containerHandle *string,
 ) *ContainerAction {
 	return &ContainerAction{
 		runOnce:             runOnce,
 		logger:              logger,
 		wardenClient:        wardenClient,
 		containerInodeLimit: containerInodeLimit,
+		containerHandle:     containerHandle,
 	}
 }
 
 func (action ContainerAction) Perform() error {
-	_, err := action.wardenClient.LimitMemory(action.runOnce.ContainerHandle, uint64(action.runOnce.MemoryMB*1024*1024))
+	_, err := action.wardenClient.LimitMemory(*action.containerHandle, uint64(action.runOnce.MemoryMB*1024*1024))
 	if err != nil {
 		action.logger.Errord(
 			map[string]interface{}{
@@ -41,7 +44,7 @@ func (action ContainerAction) Perform() error {
 		return err
 	}
 
-	_, err = action.wardenClient.LimitDisk(action.runOnce.ContainerHandle, gordon.DiskLimits{
+	_, err = action.wardenClient.LimitDisk(*action.containerHandle, gordon.DiskLimits{
 		ByteLimit:  uint64(action.runOnce.DiskMB * 1024 * 1024),
 		InodeLimit: uint64(action.containerInodeLimit),
 	})

@@ -327,13 +327,17 @@ func (adapter *ETCDStoreAdapter) makeWatchEvent(event *etcd.Response) storeadapt
 	case "create":
 		eventType = storeadapter.CreateEvent
 		node = event.Node
-	case "set", "update":
+	case "set", "update", "compareAndSwap":
 		eventType = storeadapter.UpdateEvent
 		node = event.Node
 	case "expire":
 		eventType = storeadapter.ExpireEvent
 		node = event.PrevNode
+	default:
+		println("unhandled event type", event.Action)
+		return storeadapter.WatchEvent{}
 	}
+
 	return storeadapter.WatchEvent{
 		Type: eventType,
 		Node: adapter.makeStoreNode(*node),
