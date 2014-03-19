@@ -20,9 +20,9 @@ type Executor struct {
 
 	outstandingTasks *sync.WaitGroup
 
-	stopHandlingRunOnces    chan error
-	stopMaintainingPresence chan bool
-	stopConvergeRunOnce     chan bool
+	stopHandlingRunOnces chan error
+	stopConvergeRunOnce  chan bool
+	presence             Bbs.Presence
 
 	logger *steno.Logger
 }
@@ -49,32 +49,41 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) MaintainPresence(heartbeatInterval time.Duration) error {
-	presence, maintainingPresenceErrors, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
+func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- bool) error {
+	p, statusChannel, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
 	if err != nil {
+		ready <- false
 		return err
 	}
+	e.presence = p
 
 	e.outstandingTasks.Add(1)
 
-	stop := make(chan bool)
-
 	go func() {
-		defer e.outstandingTasks.Done()
+		for {
+			select {
+			case locked, ok := <-statusChannel:
+				if locked && ready != nil {
+					ready <- true
+					ready = nil
+				}
 
-		select {
-		case <-stop:
-			presence.Remove()
+				if !locked && ok {
 
-		case <-maintainingPresenceErrors:
-			e.logger.Error("executor.maintaining-presence.failed")
-			if e.stopHandlingRunOnces != nil {
-				e.stopHandlingRunOnces <- MaintainPresenceError
+					e.logger.Error("executor.maintaining-presence.failed")
+					if e.stopHandlingRunOnces != nil {
+						e.stopHandlingRunOnces <- MaintainPresenceError
+						e.stopHandlingRunOnces = nil
+					}
+				}
+
+				if !ok {
+					e.outstandingTasks.Done()
+					return
+				}
 			}
 		}
 	}()
-
-	e.stopMaintainingPresence = stop
 
 	return nil
 }
@@ -126,18 +135,15 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 	return nil
 }
 
-//StopHandlingRunOnces is used mainly in test to avoid having multiple executors
-//running concurrently from polluting the tests
 func (e *Executor) Stop() {
 	// stop maintaining our presence
-	if e.stopMaintainingPresence != nil {
-		close(e.stopMaintainingPresence)
-		e.stopMaintainingPresence = nil
+	if e.presence != nil {
+		e.presence.Remove()
+		e.presence = nil
 	}
 
-	//tell the watcher to stop
 	if e.stopHandlingRunOnces != nil {
-		close(e.stopHandlingRunOnces)
+		e.stopHandlingRunOnces <- nil
 		e.stopHandlingRunOnces = nil
 	}
 
@@ -152,41 +158,31 @@ func (e *Executor) Stop() {
 
 func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) chan<- bool {
 	stopChannel := make(chan bool, 1)
+
+	statusChannel, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
+	if err != nil {
+		e.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "error when creating converge lock")
+		return nil
+	}
+
 	e.outstandingTasks.Add(1)
-
 	go func() {
-		defer e.outstandingTasks.Done()
-
 		for {
-			lostLock, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
-			if err != nil {
-				e.logger.Debugd(map[string]interface{}{
-					"error": err.Error(),
-				}, "error when maintaining converge lock")
-
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			e.bbs.ConvergeRunOnce(timeToClaim)
-
-			ticker := time.NewTicker(period)
-
-		dance:
-			for {
-				select {
-				case <-ticker.C:
-					e.bbs.ConvergeRunOnce(timeToClaim)
-
-				case <-lostLock:
-					ticker.Stop()
-					break dance
-
-				case <-stopChannel:
-					ticker.Stop()
-					releaseLock <- make(chan bool)
+			select {
+			case locked, ok := <-statusChannel:
+				if !ok {
+					e.outstandingTasks.Done()
 					return
 				}
+
+				if locked {
+					e.bbs.ConvergeRunOnce(timeToClaim)
+				}
+			case <-stopChannel:
+				stopChannel = nil
+				releaseLock <- nil
 			}
 		}
 	}()

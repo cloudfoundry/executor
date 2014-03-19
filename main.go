@@ -20,8 +20,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 )
@@ -185,13 +185,16 @@ func main() {
 		}
 	}
 
+	ready := make(chan bool, 1)
+
 	executor := executor.New(bbs, logger)
-	err = executor.MaintainPresence(*heartbeatInterval)
+	err = executor.MaintainPresence(*heartbeatInterval, ready)
 	if err != nil {
 		logger.Errorf("failed to start maintaining presence: %s", err.Error())
 		os.Exit(1)
 	}
 
+	<-ready
 	logger.Infof("Starting executor: ID=%s, stack=%s", executor.ID(), *stack)
 
 	registerSignalHandler(executor)
@@ -226,8 +229,6 @@ func main() {
 	)
 
 	executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
-
-	ready := make(chan bool, 1)
 
 	go func() {
 		<-ready

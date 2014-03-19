@@ -30,6 +30,7 @@ var _ = Describe("Executor", func() {
 		ready            chan bool
 		startingMemory   int
 		startingDisk     int
+		storeAdapter     storeadapter.StoreAdapter
 	)
 
 	var fakeRunOnceHandler *fake_run_once_handler.FakeRunOnceHandler
@@ -40,7 +41,8 @@ var _ = Describe("Executor", func() {
 
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 
-		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
+		storeAdapter = etcdRunner.Adapter()
+		bbs = Bbs.New(storeAdapter, timeprovider.NewTimeProvider())
 		gordon = fake_gordon.New()
 
 		startingMemory = 256
@@ -55,6 +57,11 @@ var _ = Describe("Executor", func() {
 		}
 
 		executor = New(bbs, steno.NewLogger("test-logger"))
+	})
+
+	AfterEach(func() {
+		executor.Stop()
+		storeAdapter.Disconnect()
 	})
 
 	Describe("Executor IDs", func() {
@@ -85,10 +92,6 @@ var _ = Describe("Executor", func() {
 
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				executor.Stop()
 			})
 
 			It("should handle any new desired RunOnces", func() {
@@ -124,7 +127,6 @@ var _ = Describe("Executor", func() {
 			})
 
 			AfterEach(func() {
-				executor.Stop()
 				otherExecutor.Stop()
 			})
 
@@ -161,9 +163,12 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Maintaining Presence", func() {
+		var presence = make(chan bool, 1)
+
 		It("should maintain presence", func() {
-			err := executor.MaintainPresence(60 * time.Second)
+			err := executor.MaintainPresence(60*time.Second, presence)
 			Ω(err).ShouldNot(HaveOccurred())
+			Eventually(presence).Should(Receive())
 
 			Eventually(func() interface{} {
 				arr, _ := bbs.GetAllExecutors()
@@ -173,21 +178,6 @@ var _ = Describe("Executor", func() {
 			executors, err := bbs.GetAllExecutors()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(executors[0]).Should(Equal(executor.ID()))
-		})
-
-		Context("when maintaining presence fails to start", func() {
-			BeforeEach(func() {
-				etcdRunner.Stop()
-			})
-
-			AfterEach(func() {
-				etcdRunner.Start()
-			})
-
-			It("should return an error", func() {
-				err := executor.MaintainPresence(60 * time.Second)
-				Ω(err).Should(HaveOccurred())
-			})
 		})
 
 		Context("when we fail to maintain our presence", func() {
@@ -202,7 +192,8 @@ var _ = Describe("Executor", func() {
 
 				<-ready
 
-				executor.MaintainPresence(1 * time.Second)
+				executor.MaintainPresence(1*time.Second, presence)
+				Eventually(presence).Should(Receive())
 			})
 
 			triggerMaintainPresenceFailure := func() {
@@ -231,8 +222,9 @@ var _ = Describe("Executor", func() {
 
 		Context("when told to stop", func() {
 			It("it removes its presence", func() {
-				err := executor.MaintainPresence(60 * time.Second)
+				err := executor.MaintainPresence(60*time.Second, presence)
 				Ω(err).ShouldNot(HaveOccurred())
+				Eventually(presence).Should(Receive())
 
 				Eventually(func() interface{} {
 					arr, _ := bbs.GetAllExecutors()
@@ -256,10 +248,7 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges runOnces on a regular interval", func() {
-			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
-			defer func() {
-				stopChannel <- true
-			}()
+			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			Eventually(func() int {
 				return fakeExecutorBBS.CallsToConverge
@@ -269,10 +258,7 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges immediately without waiting for the iteration", func() {
-			stopChannel := executor.ConvergeRunOnces(1*time.Minute, 30*time.Second)
-			defer func() {
-				stopChannel <- true
-			}()
+			executor.ConvergeRunOnces(1*time.Minute, 30*time.Second)
 
 			Eventually(func() int {
 				return fakeExecutorBBS.CallsToConverge
@@ -298,22 +284,16 @@ var _ = Describe("Executor", func() {
 		It("should only converge if it has the lock", func() {
 			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
 
-			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
-			defer func() {
-				stopChannel <- true
-			}()
+			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			time.Sleep(20 * time.Millisecond)
 			Ω(fakeExecutorBBS.CallsToConverge).To(Equal(0))
 		})
 
-		It("logs a debug message when GrabLock fails", func() {
+		It("logs an error message when GrabLock fails", func() {
 			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
 
-			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
-			defer func() {
-				stopChannel <- true
-			}()
+			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			testSink := steno.GetMeTheGlobalTestSink()
 
@@ -324,9 +304,9 @@ var _ = Describe("Executor", func() {
 					return testSink.Records[lockMessageIndex].Message
 				}
 				return ""
-			}, 1.0, 0.1).Should(Equal("error when maintaining converge lock"))
+			}, 1.0, 0.1).Should(Equal("error when creating converge lock"))
 
-			Ω(testSink.Records[lockMessageIndex].Level).Should(Equal(steno.LOG_DEBUG))
+			Ω(testSink.Records[lockMessageIndex].Level).Should(Equal(steno.LOG_ERROR))
 		})
 	})
 })
