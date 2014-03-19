@@ -37,10 +37,10 @@ func (self *executorBBS) ClaimRunOnce(runOnce *models.RunOnce, executorID string
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: originalValue,
 		}, storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -59,10 +59,10 @@ func (self *executorBBS) StartRunOnce(runOnce *models.RunOnce, containerHandle s
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: originalValue,
 		}, storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -84,10 +84,10 @@ func (self *executorBBS) CompleteRunOnce(runOnce *models.RunOnce, failed bool, f
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: originalValue,
 		}, storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -95,9 +95,12 @@ func (self *executorBBS) CompleteRunOnce(runOnce *models.RunOnce, failed bool, f
 
 // ConvergeRunOnce is run by *one* executor every X seconds (doesn't really matter what X is.. pick something performant)
 // Converge will:
-// 1. Kick (by setting) any pending for guids that only have a pending
-// 2. Kick (by setting) any completed for guids that have a pending
-// 3. Remove any claimed/running/completed for guids that have no corresponding pending
+// 1. Kick (by setting) any run-onces that are still pending
+// 2. Kick (by setting) any run-onces that are completed
+// 3. Demote to pending any claimed run-onces that have been claimed for > 30s
+// 4. Demote to completed any resolving run-onces that have been resolving for > 30s
+// 5. Mark as failed any run-onces that have been in the pending state for > timeToClaim
+// 6. Mark as failed any claimed or running run-onces whose executor has stopped maintaining presence
 func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 	runOnceState, err := self.store.ListRecursively(RunOnceSchemaRoot)
 	if err != nil {
@@ -112,10 +115,22 @@ func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 	}
 
 	logger := gosteno.NewLogger("bbs")
+	logError := func(runOnce models.RunOnce, message string) {
+		logger.Errord(map[string]interface{}{
+			"runonce": runOnce,
+		}, message)
+	}
 
-	runOncesToSet := []models.RunOnce{}
 	keysToDelete := []string{}
 	unclaimedTimeoutBoundary := self.timeProvider.Time().Add(-timeToClaim).UnixNano()
+
+	runOncesToCAS := [][]models.RunOnce{}
+	scheduleForCAS := func(oldRunOnce, newRunOnce models.RunOnce) {
+		runOncesToCAS = append(runOncesToCAS, []models.RunOnce{
+			oldRunOnce,
+			newRunOnce,
+		})
+	}
 
 	for _, node := range runOnceState.ChildNodes {
 		runOnce, err := models.NewRunOnceFromJSON(node.Value)
@@ -131,60 +146,98 @@ func (self *executorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 		switch runOnce.State {
 		case models.RunOnceStatePending:
 			if runOnce.CreatedAt <= unclaimedTimeoutBoundary {
-				runOnce.State = models.RunOnceStateCompleted
-				runOnce.Failed = true
-				runOnce.FailureReason = "not claimed within time limit"
+				logError(runOnce, "runonce.converge.failed-to-claim")
+				scheduleForCAS(runOnce, markRunOnceFailed(runOnce, "not claimed within time limit"))
+			} else {
+				scheduleForCAS(runOnce, runOnce)
 			}
-			runOncesToSet = append(runOncesToSet, runOnce)
 		case models.RunOnceStateClaimed:
-			claimedTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 10*time.Second
-
+			claimedTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 30*time.Second
 			_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
+
 			if !executorIsAlive {
-				runOnce.State = models.RunOnceStateCompleted
-				runOnce.Failed = true
-				runOnce.FailureReason = "executor disappeared before completion"
-				runOncesToSet = append(runOncesToSet, runOnce)
+				logError(runOnce, "runonce.converge.executor-disappeared")
+				scheduleForCAS(runOnce, markRunOnceFailed(runOnce, "executor disappeared before completion"))
 			} else if claimedTooLong {
-				runOnce.State = models.RunOnceStatePending
-				runOncesToSet = append(runOncesToSet, runOnce)
+				logError(runOnce, "runonce.converge.failed-to-start")
+				scheduleForCAS(runOnce, demoteToPending(runOnce))
 			}
 		case models.RunOnceStateRunning:
 			_, executorIsAlive := executorState.Lookup(runOnce.ExecutorID)
+
 			if !executorIsAlive {
-				runOnce.State = models.RunOnceStateCompleted
-				runOnce.Failed = true
-				runOnce.FailureReason = "executor disappeared before completion"
-				runOncesToSet = append(runOncesToSet, runOnce)
+				logError(runOnce, "runonce.converge.executor-disappeared")
+				scheduleForCAS(runOnce, markRunOnceFailed(runOnce, "executor disappeared before completion"))
 			}
 		case models.RunOnceStateCompleted:
-			runOncesToSet = append(runOncesToSet, runOnce)
+			scheduleForCAS(runOnce, runOnce)
 		case models.RunOnceStateResolving:
-			resolvingTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 10*time.Second
+			resolvingTooLong := self.timeProvider.Time().Sub(time.Unix(0, runOnce.UpdatedAt)) >= 30*time.Second
+
 			if resolvingTooLong {
-				runOnce.State = models.RunOnceStateCompleted
-				runOncesToSet = append(runOncesToSet, runOnce)
+				logError(runOnce, "runonce.converge.failed-to-resolve")
+				scheduleForCAS(runOnce, demoteToCompleted(runOnce))
 			}
-			continue
 		}
 	}
 
-	storeNodesToSet := make([]storeadapter.StoreNode, len(runOncesToSet))
-	for i, runOnce := range runOncesToSet {
-		runOnce.UpdatedAt = self.timeProvider.Time().UnixNano()
-		storeNodesToSet[i] = storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
-			Value: runOnce.ToJSON(),
-		}
-	}
-
-	self.store.SetMulti(storeNodesToSet)
+	self.batchCompareAndSwapRunOnces(runOncesToCAS, logger)
 	self.store.Delete(keysToDelete...)
+}
+
+func (self *executorBBS) batchCompareAndSwapRunOnces(runOncesToCAS [][]models.RunOnce, logger *gosteno.Logger) {
+	done := make(chan struct{}, len(runOncesToCAS))
+
+	for _, runOncePair := range runOncesToCAS {
+		originalStoreNode := storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(&runOncePair[0]),
+			Value: runOncePair[0].ToJSON(),
+		}
+
+		runOncePair[1].UpdatedAt = self.timeProvider.Time().UnixNano()
+		newStoreNode := storeadapter.StoreNode{
+			Key:   runOnceSchemaPath(&runOncePair[1]),
+			Value: runOncePair[1].ToJSON(),
+		}
+
+		go func() {
+			err := self.store.CompareAndSwap(originalStoreNode, newStoreNode)
+			if err != nil {
+				logger.Errord(map[string]interface{}{
+					"error": err.Error(),
+				}, "runonce.converge.failed-to-compare-and-swap")
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	for _ = range runOncesToCAS {
+		<-done
+	}
+}
+
+func markRunOnceFailed(runOnce models.RunOnce, reason string) models.RunOnce {
+	runOnce.State = models.RunOnceStateCompleted
+	runOnce.Failed = true
+	runOnce.FailureReason = reason
+	return runOnce
+}
+
+func demoteToPending(runOnce models.RunOnce) models.RunOnce {
+	runOnce.State = models.RunOnceStatePending
+	runOnce.ExecutorID = ""
+	runOnce.ContainerHandle = ""
+	return runOnce
+}
+
+func demoteToCompleted(runOnce models.RunOnce) models.RunOnce {
+	runOnce.State = models.RunOnceStateCompleted
+	return runOnce
 }
 
 func (self *executorBBS) MaintainConvergeLock(interval time.Duration, executorID string) (<-chan bool, chan<- chan bool, error) {
 	return self.store.MaintainNode(storeadapter.StoreNode{
-		Key:   runOnceSchemaPath("converge_lock"),
+		Key:   lockSchemaPath("converge_lock"),
 		Value: []byte(executorID),
 		TTL:   uint64(interval.Seconds()),
 	})

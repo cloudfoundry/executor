@@ -12,13 +12,18 @@ const ClaimTTL = 10 * time.Second
 const ResolvingTTL = 5 * time.Second
 const RunOnceSchemaRoot = SchemaRoot + "run_once"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
+const LockSchemaRoot = SchemaRoot + "locks"
 
-func runOnceSchemaPath(segments ...string) string {
-	return path.Join(append([]string{RunOnceSchemaRoot}, segments...)...)
+func runOnceSchemaPath(runOnce *models.RunOnce) string {
+	return path.Join(RunOnceSchemaRoot, runOnce.Guid)
 }
 
-func executorSchemaPath(segments ...string) string {
-	return path.Join(append([]string{ExecutorSchemaRoot}, segments...)...)
+func executorSchemaPath(executorID string) string {
+	return path.Join(ExecutorSchemaRoot, executorID)
+}
+
+func lockSchemaPath(lockName string) string {
+	return path.Join(LockSchemaRoot, lockName)
 }
 
 func retryIndefinitelyOnStoreTimeout(callback func() error) error {

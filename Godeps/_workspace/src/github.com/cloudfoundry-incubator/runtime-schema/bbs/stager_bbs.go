@@ -27,7 +27,7 @@ func (s *stagerBBS) DesireRunOnce(runOnce *models.RunOnce) error {
 		runOnce.State = models.RunOnceStatePending
 		return s.store.SetMulti([]storeadapter.StoreNode{
 			{
-				Key:   runOnceSchemaPath(runOnce.Guid),
+				Key:   runOnceSchemaPath(runOnce),
 				Value: runOnce.ToJSON(),
 			},
 		})
@@ -42,10 +42,10 @@ func (s *stagerBBS) ResolvingRunOnce(runOnce *models.RunOnce) error {
 
 	return retryIndefinitelyOnStoreTimeout(func() error {
 		return s.store.CompareAndSwap(storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: originalValue,
 		}, storeadapter.StoreNode{
-			Key:   runOnceSchemaPath(runOnce.Guid),
+			Key:   runOnceSchemaPath(runOnce),
 			Value: runOnce.ToJSON(),
 		})
 	})
@@ -56,6 +56,6 @@ func (s *stagerBBS) ResolvingRunOnce(runOnce *models.RunOnce) error {
 // If this fails, the stager should assume that someone else is handling the completion and should bail
 func (s *stagerBBS) ResolveRunOnce(runOnce *models.RunOnce) error {
 	return retryIndefinitelyOnStoreTimeout(func() error {
-		return s.store.Delete(runOnceSchemaPath(runOnce.Guid))
+		return s.store.Delete(runOnceSchemaPath(runOnce))
 	})
 }

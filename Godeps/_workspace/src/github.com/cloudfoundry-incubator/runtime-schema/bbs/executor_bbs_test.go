@@ -407,9 +407,9 @@ var _ = Describe("Executor BBS", func() {
 				Consistently(completedEvents).ShouldNot(Receive())
 			})
 
-			Context("when the run once has been claimed for > 10 seconds", func() {
+			Context("when the run once has been claimed for > 30 seconds", func() {
 				It("should mark the RunOnce as pending", func() {
-					timeProvider.IncrementBySeconds(10)
+					timeProvider.IncrementBySeconds(30)
 					commenceWatching()
 
 					bbs.ConvergeRunOnce(timeToClaim)
@@ -421,6 +421,7 @@ var _ = Describe("Executor BBS", func() {
 
 					runOnce.State = models.RunOnceStatePending
 					runOnce.UpdatedAt = timeProvider.Time().UnixNano()
+					runOnce.ExecutorID = ""
 					Ω(noticedOnce).Should(Equal(runOnce))
 				})
 			})
@@ -555,9 +556,9 @@ var _ = Describe("Executor BBS", func() {
 				Consistently(completedEvents).ShouldNot(Receive())
 			})
 
-			Context("when the run once has been resolving for > 10 seconds", func() {
+			Context("when the run once has been resolving for > 30 seconds", func() {
 				It("should put the RunOnce back into the completed state", func() {
-					timeProvider.IncrementBySeconds(10)
+					timeProvider.IncrementBySeconds(30)
 					commenceWatching()
 
 					bbs.ConvergeRunOnce(timeToClaim)
@@ -575,7 +576,6 @@ var _ = Describe("Executor BBS", func() {
 
 	Context("MaintainConvergeLock", func() {
 		Describe("Maintain the converge lock", func() {
-
 			Context("when the lock is available", func() {
 				It("should return immediately", func() {
 					lostLock, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
