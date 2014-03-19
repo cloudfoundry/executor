@@ -72,12 +72,6 @@ func (action *DownloadAction) Perform() error {
 		return err
 	}
 
-	createParentDirCommand := action.backendPlugin.BuildCreateDirectoryRecursivelyCommand(filepath.Dir(action.model.To))
-	_, _, err = action.wardenClient.Run(action.containerHandle, createParentDirCommand, gordon.ResourceLimits{})
-	if err != nil {
-		return err
-	}
-
 	if action.model.Extract {
 		extractionDir, err := ioutil.TempDir(action.tempDir, "extracted")
 		if err != nil {

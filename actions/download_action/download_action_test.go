@@ -83,17 +83,6 @@ var _ = Describe("DownloadAction", func() {
 			Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
 		})
 
-		It("creates the parent of the destination directory", func() {
-			err := action.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(wardenClient.ScriptsThatRan()).ShouldNot(BeEmpty())
-
-			scriptThatRun := wardenClient.ScriptsThatRan()[0]
-			Ω(scriptThatRun.Handle).To(Equal("some-container-handle"))
-			Ω(scriptThatRun.Script).To(Equal("mkdir -p /tmp"))
-		})
-
 		Context("when there is an error copying the file in", func() {
 			disaster := errors.New("oh no!")
 

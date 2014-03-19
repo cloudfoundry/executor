@@ -6,5 +6,4 @@ import (
 
 type BackendPlugin interface {
 	BuildRunScript(models.RunAction) string
-	BuildCreateDirectoryRecursivelyCommand(string) string
 }

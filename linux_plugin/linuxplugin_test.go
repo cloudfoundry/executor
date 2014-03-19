@@ -44,10 +44,4 @@ sudo reboot`))
 			})
 		})
 	})
-
-	Describe("BuildCreateDirectoryRecursivelyCommand", func() {
-		It("creates the directory and its parents", func() {
-			Ω(plugin.BuildCreateDirectoryRecursivelyCommand("/some/path")).Should(Equal("mkdir -p /some/path"))
-		})
-	})
 })
