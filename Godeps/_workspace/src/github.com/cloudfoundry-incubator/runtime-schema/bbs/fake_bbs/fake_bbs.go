@@ -1,6 +1,7 @@
 package fake_bbs
 
 import (
+	"errors"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
@@ -8,26 +9,57 @@ import (
 )
 
 type FakePresence struct {
-	Removed bool
+	MaintainStatus bool
+	Maintained     bool
+	Removed        bool
+	ticker         *time.Ticker
+	done           chan struct{}
+}
+
+func (p *FakePresence) Maintain(interval time.Duration) (<-chan bool, error) {
+	if p.ticker != nil {
+		return nil, errors.New("Already being maintained")
+	}
+
+	status := make(chan bool)
+	p.done = make(chan struct{})
+	p.ticker = time.NewTicker(interval)
+	go func() {
+		status <- p.MaintainStatus
+		for {
+			select {
+			case <-p.ticker.C:
+				status <- p.MaintainStatus
+			case <-p.done:
+				close(status)
+				return
+			}
+		}
+	}()
+	p.Maintained = true
+	return status, nil
 }
 
 func (p *FakePresence) Remove() {
+	p.ticker.Stop()
+	p.ticker = nil
+	close(p.done)
+
 	p.Removed = true
 }
 
 type FakeExecutorBBS struct {
 	CallsToConverge int
 
-	MaintainConvergeInterval    time.Duration
-	MaintainConvergeExecutorID  string
-	MaintainConvergeLostChannel <-chan bool
-	MaintainConvergeStopChannel chan<- chan bool
-	MaintainConvergeLockError   error
+	MaintainConvergeInterval      time.Duration
+	MaintainConvergeExecutorID    string
+	MaintainConvergeStatusChannel <-chan bool
+	MaintainConvergeStopChannel   chan<- chan bool
+	MaintainConvergeLockError     error
 
 	MaintainingPresenceHeartbeatInterval time.Duration
 	MaintainingPresenceExecutorID        string
 	MaintainingPresencePresence          *FakePresence
-	MaintainingPresenceErrorChannel      chan bool
 	MaintainingPresenceError             error
 
 	ClaimedRunOnce  *models.RunOnce
@@ -45,13 +77,13 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	return &FakeExecutorBBS{}
 }
 
-func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorID string) (bbs.PresenceInterface, <-chan bool, error) {
+func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorID string) (bbs.Presence, <-chan bool, error) {
 	fakeBBS.MaintainingPresenceHeartbeatInterval = heartbeatInterval
 	fakeBBS.MaintainingPresenceExecutorID = executorID
 	fakeBBS.MaintainingPresencePresence = &FakePresence{}
-	fakeBBS.MaintainingPresenceErrorChannel = make(chan bool)
+	status, _ := fakeBBS.MaintainingPresencePresence.Maintain(heartbeatInterval)
 
-	return fakeBBS.MaintainingPresencePresence, fakeBBS.MaintainingPresenceErrorChannel, fakeBBS.MaintainingPresenceError
+	return fakeBBS.MaintainingPresencePresence, status, fakeBBS.MaintainingPresenceError
 }
 
 func (fakeBBS *FakeExecutorBBS) WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
@@ -86,9 +118,41 @@ func (fakeBBS *FakeExecutorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
 func (fakeBBS *FakeExecutorBBS) MaintainConvergeLock(interval time.Duration, executorID string) (<-chan bool, chan<- chan bool, error) {
 	fakeBBS.MaintainConvergeInterval = interval
 	fakeBBS.MaintainConvergeExecutorID = executorID
-	fakeBBS.MaintainConvergeLostChannel = make(chan bool)
-	fakeBBS.MaintainConvergeStopChannel = make(chan chan bool)
-	return fakeBBS.MaintainConvergeLostChannel, fakeBBS.MaintainConvergeStopChannel, fakeBBS.MaintainConvergeLockError
+	status := make(chan bool)
+	fakeBBS.MaintainConvergeStatusChannel = status
+	stop := make(chan chan bool)
+	fakeBBS.MaintainConvergeStopChannel = stop
+
+	ticker := time.NewTicker(interval)
+	go func() {
+		status <- true
+		for {
+			select {
+			case <-ticker.C:
+				status <- true
+			case release := <-stop:
+				ticker.Stop()
+				close(status)
+				if release != nil {
+					close(release)
+				}
+
+				return
+			}
+		}
+	}()
+
+	return fakeBBS.MaintainConvergeStatusChannel, fakeBBS.MaintainConvergeStopChannel, fakeBBS.MaintainConvergeLockError
+}
+
+func (fakeBBS *FakeExecutorBBS) Stop() {
+	if fakeBBS.MaintainingPresencePresence != nil {
+		fakeBBS.MaintainingPresencePresence.Remove()
+	}
+
+	if fakeBBS.MaintainConvergeStopChannel != nil {
+		fakeBBS.MaintainConvergeStopChannel <- nil
+	}
 }
 
 type FakeStagerBBS struct {

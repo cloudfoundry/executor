@@ -18,7 +18,7 @@ var _ = Describe("Executor BBS", func() {
 	var bbs *BBS
 	var runOnce *models.RunOnce
 	var timeToClaim time.Duration
-	var presence PresenceInterface
+	var presence Presence
 	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	BeforeEach(func() {
@@ -198,19 +198,21 @@ var _ = Describe("Executor BBS", func() {
 
 	Describe("MaintainExecutorPresence", func() {
 		var (
-			executorId  string
-			interval    time.Duration
-			disappeared <-chan bool
-			err         error
-			presence    PresenceInterface
+			executorId string
+			interval   time.Duration
+			status     <-chan bool
+			locked     *bool
+			err        error
+			presence   Presence
 		)
 
 		BeforeEach(func() {
 			executorId = "stubExecutor"
 			interval = 1 * time.Second
 
-			presence, disappeared, err = bbs.MaintainExecutorPresence(interval, executorId)
+			presence, status, err = bbs.MaintainExecutorPresence(interval, executorId)
 			Ω(err).ShouldNot(HaveOccurred())
+			locked = maintainStatus(status)
 		})
 
 		AfterEach(func() {
@@ -218,6 +220,8 @@ var _ = Describe("Executor BBS", func() {
 		})
 
 		It("should put /executor/EXECUTOR_ID in the store with a TTL", func() {
+			Eventually(func() bool { return *locked }).Should(BeTrue())
+
 			node, err := store.Get("/v1/executor/" + executorId)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node.Key).Should(Equal("/v1/executor/" + executorId))
@@ -232,11 +236,13 @@ var _ = Describe("Executor BBS", func() {
 
 			Ω(executors).Should(BeEmpty())
 
-			presenceA, _, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-a")
+			presenceA, statusA, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-a")
 			Ω(err).ShouldNot(HaveOccurred())
+			maintainStatus(statusA)
 
-			presenceB, _, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-b")
+			presenceB, statusB, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-b")
 			Ω(err).ShouldNot(HaveOccurred())
+			maintainStatus(statusB)
 
 			Eventually(func() []string {
 				executors, _ := bbs.GetAllExecutors()
@@ -394,8 +400,14 @@ var _ = Describe("Executor BBS", func() {
 				err = bbs.ClaimRunOnce(runOnce, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				presence, _, err = bbs.MaintainExecutorPresence(time.Minute, "executor-id")
+				var status <-chan bool
+				presence, status, err = bbs.MaintainExecutorPresence(time.Minute, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
+				maintainStatus(status)
+			})
+
+			AfterEach(func() {
+				presence.Remove()
 			})
 
 			It("should do nothing", func() {
@@ -460,8 +472,14 @@ var _ = Describe("Executor BBS", func() {
 				err = bbs.StartRunOnce(runOnce, "container-handle")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				presence, _, err = bbs.MaintainExecutorPresence(time.Minute, "executor-id")
+				var status <-chan bool
+				presence, status, err = bbs.MaintainExecutorPresence(time.Minute, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
+				maintainStatus(status)
+			})
+
+			AfterEach(func() {
+				presence.Remove()
 			})
 
 			It("should do nothing", func() {
@@ -578,66 +596,122 @@ var _ = Describe("Executor BBS", func() {
 		Describe("Maintain the converge lock", func() {
 			Context("when the lock is available", func() {
 				It("should return immediately", func() {
-					lostLock, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+					status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
 
 					Ω(err).ShouldNot(HaveOccurred())
-					Ω(lostLock).ShouldNot(BeNil())
+					Ω(status).ShouldNot(BeNil())
 					Ω(releaseLock).ShouldNot(BeNil())
+
+					maintainStatus(status)
+					releaseLock <- nil
 				})
 
 				It("should maintain the lock in the background", func() {
-					_, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
+					status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
 					Ω(err).ShouldNot(HaveOccurred())
-					defer func() {
-						releasedLock := make(chan bool)
-						releaseLock <- releasedLock
-						<-releasedLock
-					}()
+					maintainStatus(status)
 
-					secondConvergeDidGrabLock := false
+					status2, releaseLock2, err2 := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
+					Ω(err2).ShouldNot(HaveOccurred())
+
+					secondDidGrabLock := false
 					go func() {
-						bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
-						secondConvergeDidGrabLock = true
+						ok := true
+						for {
+							select {
+							case secondDidGrabLock, ok = <-status2:
+								if !ok {
+									return
+								}
+							}
+						}
 					}()
 
-					Consistently(secondConvergeDidGrabLock, 3.0).Should(BeFalse())
+					Consistently(secondDidGrabLock, 3.0).Should(BeFalse())
+
+					releaseLock <- nil
+					releaseLock2 <- nil
 				})
 
 				Context("when the lock disappears after it has been acquired (e.g. ETCD store is reset)", func() {
 					It("should send a notification down the lostLockChannel", func() {
-						lostLock, _, err := bbs.MaintainConvergeLock(1*time.Second, "my_id")
+						status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Second, "my_id")
 						Ω(err).ShouldNot(HaveOccurred())
+
+						locked := false
+						ok := true
+						go func() {
+							for {
+								select {
+								case locked, ok = <-status:
+									if !ok {
+										return
+									}
+								}
+							}
+						}()
 
 						etcdRunner.Stop()
 
-						Eventually(lostLock).Should(Receive())
+						Eventually(func() bool { return locked }).Should(BeFalse())
+
+						releaseLock <- nil
 					})
 				})
 			})
 
 			Context("when releasing the lock", func() {
 				It("makes it available for others trying to acquire it", func() {
-					_, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+					status, release, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
 					Ω(err).ShouldNot(HaveOccurred())
+					firstLock := maintainStatus(status)
 
-					gotLock := make(chan bool)
+					Eventually(func() bool { return *firstLock }).Should(BeTrue())
+
+					status2, release2, err2 := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+					Ω(err2).ShouldNot(HaveOccurred())
+
+					secondLock := false
+					ok := true
 					go func() {
-						_, newRelease, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
-						Ω(err).ShouldNot(HaveOccurred())
-
-						releaseLock = newRelease
-						close(gotLock)
+						for {
+							select {
+							case secondLock, ok = <-status2:
+								if !ok {
+									return
+								}
+							}
+						}
 					}()
 
-					Consistently(gotLock, 1.0).ShouldNot(Receive())
+					Consistently(func() bool { return secondLock }).Should(BeFalse())
 
-					releasedLock := make(chan bool)
-					releaseLock <- releasedLock
+					release <- nil
 
-					Eventually(releasedLock).Should(BeClosed())
-					Eventually(gotLock, 2.0).Should(BeClosed())
+					Eventually(status).Should(BeClosed())
+					Eventually(func() bool { return secondLock }).Should(BeFalse())
+
+					release2 <- nil
+					Eventually(status2).Should(BeClosed())
 				})
 			})
 		})
 	})
 })
+
+func maintainStatus(status <-chan bool) *bool {
+	var locked bool
+	go func() {
+		var ok bool
+		for {
+			select {
+			case locked, ok = <-status:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	return &locked
+}

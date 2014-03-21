@@ -18,9 +18,9 @@ var _ = Describe("File Server BBS", func() {
 		fileServerURL string
 		fileServerId  string
 		interval      time.Duration
-		disappeared   <-chan bool
+		status        <-chan bool
 		err           error
-		presence      PresenceInterface
+		presence      Presence
 		timeProvider  *faketimeprovider.FakeTimeProvider
 	)
 
@@ -35,8 +35,11 @@ var _ = Describe("File Server BBS", func() {
 			fileServerId = factories.GenerateGuid()
 			interval = 1 * time.Second
 
-			presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+			presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
+
+			locked := maintainStatus(status)
+			Eventually(func() bool { return *locked }).Should(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -61,8 +64,15 @@ var _ = Describe("File Server BBS", func() {
 				fileServerId = factories.GenerateGuid()
 				interval = 1 * time.Second
 
-				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+				presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
+
+				locked := maintainStatus(status)
+				Eventually(func() bool { return *locked }).Should(BeTrue())
+			})
+
+			AfterEach(func() {
+				presence.Remove()
 			})
 
 			It("should get from /v1/file_server/", func() {
@@ -73,7 +83,10 @@ var _ = Describe("File Server BBS", func() {
 		})
 
 		Context("when there are several available file servers", func() {
-			var otherFileServerURL string
+			var (
+				otherFileServerURL string
+				otherPresence      Presence
+			)
 			BeforeEach(func() {
 				fileServerURL = "http://guy"
 				otherFileServerURL = "http://other.guy"
@@ -83,11 +96,18 @@ var _ = Describe("File Server BBS", func() {
 
 				interval = 1 * time.Second
 
-				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
+				presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
+				maintainStatus(status)
 
-				presence, disappeared, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
+				otherPresence, status, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
+				maintainStatus(status)
+			})
+
+			AfterEach(func() {
+				presence.Remove()
+				otherPresence.Remove()
 			})
 
 			It("should pick one at random", func() {

@@ -16,7 +16,7 @@ type ExecutorBBS interface {
 	MaintainExecutorPresence(
 		heartbeatInterval time.Duration,
 		executorID string,
-	) (presence PresenceInterface, disappeared <-chan bool, err error)
+	) (presence Presence, disappeared <-chan bool, err error)
 
 	WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error)
 
@@ -43,7 +43,7 @@ type FileServerBBS interface {
 		heartbeatInterval time.Duration,
 		fileServerURL string,
 		fileServerId string,
-	) (presence PresenceInterface, disappeared <-chan bool, err error)
+	) (presence Presence, disappeared <-chan bool, err error)
 }
 
 func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) *BBS {

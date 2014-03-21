@@ -11,12 +11,10 @@ import (
 
 var _ = Describe("Presence", func() {
 	var (
-		presence    *Presence
-		key         string
-		value       string
-		interval    time.Duration
-		disappeared <-chan bool
-		err         error
+		presence Presence
+		key      string
+		value    string
+		interval time.Duration
 	)
 
 	BeforeEach(func() {
@@ -25,17 +23,40 @@ var _ = Describe("Presence", func() {
 
 		presence = NewPresence(store, key, []byte(value))
 		interval = 1 * time.Second
-
-		disappeared, err = presence.Maintain(interval)
-		Ω(err).ShouldNot(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		presence.Remove()
 	})
 
 	Describe("Maintain", func() {
+		var (
+			locked bool
+			err    error
+		)
+
+		BeforeEach(func() {
+			var status <-chan bool
+			status, err = presence.Maintain(interval)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			locked = false
+			var ok bool
+			go func() {
+				for {
+					select {
+					case locked, ok = <-status:
+						if !ok {
+							return
+						}
+					}
+				}
+			}()
+		})
+
+		AfterEach(func() {
+			presence.Remove()
+		})
+
 		It("should put /key/value in the store with a TTL", func() {
+			Eventually(func() bool { return locked }).Should(BeTrue())
+
 			node, err := store.Get(key)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node).Should(Equal(storeadapter.StoreNode{
@@ -46,18 +67,12 @@ var _ = Describe("Presence", func() {
 
 		})
 
-		It("should periodically maintain the TTL", func() {
-			time.Sleep(2 * time.Second)
+		It("should reacquire the presence", func() {
+			Eventually(func() bool { return locked }).Should(BeTrue())
 
-			_, err = store.Get(key)
-			Ω(err).ShouldNot(HaveOccurred())
-		})
-
-		It("should report an error and stop trying if it fails to update the TTL", func() {
 			err = store.Delete(key)
 			Ω(err).ShouldNot(HaveOccurred())
-
-			Eventually(disappeared, 2).Should(Receive())
+			Consistently(func() bool { return locked }, 2).Should(BeTrue())
 		})
 
 		It("should fail if we maintain presence multiple times", func() {
@@ -68,6 +83,8 @@ var _ = Describe("Presence", func() {
 
 	Describe("Remove", func() {
 		It("should remove the presence", func() {
+			status, err := presence.Maintain(interval)
+			Eventually(status).Should(Receive())
 			presence.Remove()
 
 			Eventually(func() error {
@@ -76,9 +93,13 @@ var _ = Describe("Presence", func() {
 			}, 2).Should(Equal(storeadapter.ErrorKeyNotFound))
 		})
 
-		It("should not report an error", func() {
+		It("should close the status channel", func() {
+			status, err := presence.Maintain(interval)
+			Ω(err).ShouldNot(HaveOccurred())
+			Eventually(status).Should(Receive())
+
 			presence.Remove()
-			Eventually(disappeared, 2).ShouldNot(Receive())
+			Eventually(status).Should(BeClosed())
 		})
 	})
 })

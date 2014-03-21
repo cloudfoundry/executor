@@ -6,31 +6,32 @@ import (
 	"time"
 )
 
-type PresenceInterface interface {
+type Presence interface {
+	Maintain(interval time.Duration) (status <-chan bool, err error)
 	Remove()
 }
 
-type Presence struct {
+type presence struct {
 	store   storeadapter.StoreAdapter
 	key     string
 	value   []byte
 	release chan chan bool
 }
 
-func NewPresence(store storeadapter.StoreAdapter, key string, value []byte) *Presence {
-	return &Presence{
+func NewPresence(store storeadapter.StoreAdapter, key string, value []byte) Presence {
+	return &presence{
 		store: store,
 		key:   key,
 		value: value,
 	}
 }
 
-func (p *Presence) Maintain(interval time.Duration) (<-chan bool, error) {
+func (p *presence) Maintain(interval time.Duration) (<-chan bool, error) {
 	if p.release != nil {
 		return nil, errors.New("Already maintaining a presence")
 	}
 
-	lost, release, err := p.store.MaintainNode(storeadapter.StoreNode{
+	status, release, err := p.store.MaintainNode(storeadapter.StoreNode{
 		Key:   p.key,
 		Value: p.value,
 		TTL:   uint64(interval.Seconds()),
@@ -42,10 +43,10 @@ func (p *Presence) Maintain(interval time.Duration) (<-chan bool, error) {
 
 	p.release = release
 
-	return lost, nil
+	return status, nil
 }
 
-func (p *Presence) Remove() {
+func (p *presence) Remove() {
 	if p.release == nil {
 		return
 	}

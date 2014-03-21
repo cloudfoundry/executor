@@ -14,10 +14,10 @@ type executorBBS struct {
 	timeProvider timeprovider.TimeProvider
 }
 
-func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorId string) (PresenceInterface, <-chan bool, error) {
+func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorId string) (Presence, <-chan bool, error) {
 	presence := NewPresence(self.store, executorSchemaPath(executorId), []byte{})
-	lostLock, err := presence.Maintain(heartbeatInterval)
-	return presence, lostLock, err
+	status, err := presence.Maintain(heartbeatInterval)
+	return presence, status, err
 }
 
 func (self *executorBBS) WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {

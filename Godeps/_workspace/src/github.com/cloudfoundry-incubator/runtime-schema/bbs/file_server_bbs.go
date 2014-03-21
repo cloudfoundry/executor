@@ -18,11 +18,11 @@ func fileServerSchemaPath(segments ...string) string {
 	return path.Join(append([]string{FileServerSchemaRoot}, segments...)...)
 }
 
-func (self *fileServerBBS) MaintainFileServerPresence(heartbeatInterval time.Duration, fileServerURL string, fileServerId string) (PresenceInterface, <-chan bool, error) {
+func (self *fileServerBBS) MaintainFileServerPresence(heartbeatInterval time.Duration, fileServerURL string, fileServerId string) (Presence, <-chan bool, error) {
 	key := fileServerSchemaPath(fileServerId)
 	presence := NewPresence(self.store, key, []byte(fileServerURL))
-	lostPresence, err := presence.Maintain(heartbeatInterval)
-	return presence, lostPresence, err
+	status, err := presence.Maintain(heartbeatInterval)
+	return presence, status, err
 }
 
 func (self *stagerBBS) GetAvailableFileServer() (string, error) {

@@ -344,7 +344,7 @@ func (adapter *ETCDStoreAdapter) makeWatchEvent(event *etcd.Response) storeadapt
 	}
 }
 
-func (adapter *ETCDStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (lostNode <-chan bool, releaseNode chan (chan bool), err error) {
+func (adapter *ETCDStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (<-chan bool, chan (chan bool), error) {
 	if storeNode.TTL == 0 {
 		return nil, nil, storeadapter.ErrorInvalidTTL
 	}
@@ -358,42 +358,102 @@ func (adapter *ETCDStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) 
 		storeNode.Value = []byte(guid.String())
 	}
 
-	releaseNodeChannel := make(chan chan bool)
-	lostNodeChannel := make(chan bool)
+	releaseNode := make(chan chan bool)
+	nodeStatus := make(chan bool)
 
-	for {
-		err := adapter.Create(storeNode)
-		convertedError := adapter.convertError(err)
-		if convertedError == storeadapter.ErrorTimeout {
-			return nil, nil, storeadapter.ErrorTimeout
-		}
+	go adapter.maintainNode(storeNode, nodeStatus, releaseNode)
 
-		if err == nil {
-			break
-		}
-
-		time.Sleep(1 * time.Second)
-	}
-
-	go adapter.maintainNode(storeNode, lostNodeChannel, releaseNodeChannel)
-
-	return lostNodeChannel, releaseNodeChannel, nil
+	return nodeStatus, releaseNode, nil
 }
 
-func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, lostNodeChannel chan bool, releaseNodeChannel chan (chan bool)) {
-	maintenanceInterval := time.Duration(storeNode.TTL) * time.Second / time.Duration(2)
-	ticker := time.NewTicker(maintenanceInterval)
+func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, nodeStatus chan bool, releaseNode chan (chan bool)) {
+	frequency := 2
+	maintenanceInterval := time.Duration(storeNode.TTL) * time.Second / time.Duration(frequency)
+	timer := time.NewTimer(0)
+
+	created := false
+	owned := false
+	frequencyCycle := 0
 	for {
+		retryInterval := 2 * time.Second
 		select {
-		case <-ticker.C:
-			_, err := adapter.client.CompareAndSwap(storeNode.Key, string(storeNode.Value), storeNode.TTL, string(storeNode.Value), 0)
-			if err != nil {
-				lostNodeChannel <- true
+		case <-timer.C:
+			for {
+				if created {
+					_, err := adapter.client.CompareAndSwap(storeNode.Key, string(storeNode.Value), storeNode.TTL, string(storeNode.Value), 0)
+					if err == nil {
+						frequencyCycle++
+						owned = true
+						elapsed := time.Duration(0)
+						if frequencyCycle == frequency {
+							elapsed = elapsedChannelSend(nodeStatus, true)
+							frequencyCycle = 0
+						}
+						timer.Reset(maintenanceInterval - elapsed)
+						break
+					}
+
+					frequencyCycle = 0
+
+					if owned {
+						owned = false
+						nodeStatus <- false
+					}
+
+					err = adapter.convertError(err)
+					if err == storeadapter.ErrorKeyNotFound {
+						created = false
+						continue
+					}
+
+					retryInterval = retryBackOff(retryInterval, maintenanceInterval)
+					timer.Reset(retryInterval)
+					break
+				} else {
+					frequencyCycle = 0
+
+					_, err := adapter.client.Create(storeNode.Key, string(storeNode.Value), storeNode.TTL)
+					if err == nil {
+						created = true
+						owned = true
+						elapsed := elapsedChannelSend(nodeStatus, true)
+						timer.Reset(maintenanceInterval - elapsed)
+						break
+					}
+
+					err = adapter.convertError(err)
+					if err == storeadapter.ErrorKeyExists {
+						created = true
+						continue
+					}
+
+					retryInterval = retryBackOff(retryInterval, maintenanceInterval)
+					timer.Reset(retryInterval)
+					break
+				}
 			}
-		case released := <-releaseNodeChannel:
+		case released := <-releaseNode:
 			adapter.client.CompareAndDelete(storeNode.Key, string(storeNode.Value), 0)
-			close(released)
+			timer.Stop()
+			close(nodeStatus)
+			if released != nil {
+				close(released)
+			}
 			return
 		}
 	}
+}
+
+func elapsedChannelSend(channel chan bool, val bool) time.Duration {
+	start := time.Now()
+	channel <- val
+	return time.Now().Sub(start)
+}
+
+func retryBackOff(current, max time.Duration) time.Duration {
+	current = current * 2
+	if current > max {
+		current = max
+	}
+	return current
 }
