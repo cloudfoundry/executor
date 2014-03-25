@@ -18,12 +18,15 @@ var _ = Suite(&StenoSuite{})
 func (s *StenoSuite) SetUpTest(c *C) {
 	cfg := Config{}
 	cfg.Sinks = []Sink{NewIOSink(os.Stdout)}
-	Init(&cfg)
+
 	loggers = make(map[string]*BaseLogger)
+
+	Init(&cfg)
 }
 
 func (s *StenoSuite) TearDownTest(c *C) {
-	config = Config{}
+	Init(&Config{})
+
 	loggers = nil
 	loggerRegexp = nil
 	loggerRegexpLevel = nil

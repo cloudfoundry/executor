@@ -48,7 +48,7 @@ func clearLoggerRegexp() {
 
 	for name, logger := range loggers {
 		if loggerRegexp.MatchString(name) {
-			logger.level = config.Level
+			logger.level = getConfig().Level
 		}
 	}
 
@@ -61,5 +61,5 @@ func computeLevel(name string) LogLevel {
 		return *loggerRegexpLevel
 	}
 
-	return config.Level
+	return getConfig().Level
 }

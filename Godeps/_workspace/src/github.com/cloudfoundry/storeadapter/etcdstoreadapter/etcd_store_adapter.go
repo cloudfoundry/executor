@@ -287,8 +287,16 @@ func (adapter *ETCDStoreAdapter) unregisterInflightWatch(stop chan bool) {
 func (adapter *ETCDStoreAdapter) cancelInflightWatches() {
 	adapter.inflightWatchLock.Lock()
 	defer adapter.inflightWatchLock.Unlock()
+
 	for stop := range adapter.inflightWatches {
-		close(stop)
+		select {
+		case _, ok := <-stop:
+			if ok {
+				close(stop)
+			}
+		default:
+			close(stop)
+		}
 	}
 }
 

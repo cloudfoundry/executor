@@ -42,7 +42,7 @@ func NewRecord(s string, l LogLevel, m string, d map[string]interface{}) *Record
 		Data:      d,
 	}
 
-	if config.EnableLOC {
+	if getConfig().EnableLOC {
 		var function *runtime.Func
 		var file string
 		var line int

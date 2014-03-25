@@ -98,11 +98,14 @@ var _ = Describe("File Server BBS", func() {
 
 				presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
-				maintainStatus(status)
+				serverLocked := maintainStatus(status)
 
 				otherPresence, status, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
-				maintainStatus(status)
+				otherServerLocked := maintainStatus(status)
+
+				Eventually(func() bool { return *serverLocked }).Should(BeTrue())
+				Eventually(func() bool { return *otherServerLocked }).Should(BeTrue())
 			})
 
 			AfterEach(func() {

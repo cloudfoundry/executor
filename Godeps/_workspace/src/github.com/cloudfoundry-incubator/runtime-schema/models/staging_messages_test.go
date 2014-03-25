@@ -18,10 +18,8 @@ var _ = Describe("StagingMessages", func() {
            "file_descriptors" : 3,
            "environment" : [["FOO", "BAR"]],
            "stack" : "fake-stack",
-           "download_uri" : "fake-download_uri",
-           "buildpack_cache_download_uri" : "fake-buildpack_cache_download_uri",
-           "buildpack_cache_upload_uri" : "fake-buildpack_cache_upload_uri",
-           "admin_buildpacks" : [{"key":"fake-buildpack-key" ,"url":"fake-buildpack-url"}]
+           "app_bits_download_uri" : "fake-download_uri",
+           "buildpacks" : [{"key":"fake-buildpack-key" ,"url":"fake-buildpack-url"}]
         }`
 
 		It("should be mapped to the CC's staging request JSON", func() {
@@ -30,14 +28,14 @@ var _ = Describe("StagingMessages", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(stagingRequest).Should(Equal(StagingRequestFromCC{
-				AppId:           "fake-app_id",
-				TaskId:          "fake-task_id",
-				Stack:           "fake-stack",
-				DownloadUri:     "fake-download_uri",
-				MemoryMB:        1024,
-				FileDescriptors: 3,
-				DiskMB:          10000,
-				AdminBuildpacks: []AdminBuildpack{
+				AppId:              "fake-app_id",
+				TaskId:             "fake-task_id",
+				Stack:              "fake-stack",
+				AppBitsDownloadUri: "fake-download_uri",
+				MemoryMB:           1024,
+				FileDescriptors:    3,
+				DiskMB:             10000,
+				Buildpacks: []Buildpack{
 					{
 						Key: "fake-buildpack-key",
 						Url: "fake-buildpack-url",
@@ -50,19 +48,19 @@ var _ = Describe("StagingMessages", func() {
 		})
 	})
 
-	Describe("AdminBuildpack", func() {
+	Describe("Buildpack", func() {
 		ccJSONFragment := `{
             "key": "ocaml-buildpack",
             "url": "http://ocaml.org/buildpack.zip"
           }`
 
 		It("extracts key and url", func() {
-			var adminBuildpack AdminBuildpack
+			var buildpack Buildpack
 
-			err := json.Unmarshal([]byte(ccJSONFragment), &adminBuildpack)
+			err := json.Unmarshal([]byte(ccJSONFragment), &buildpack)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(adminBuildpack).To(Equal(AdminBuildpack{
+			Ω(buildpack).To(Equal(Buildpack{
 				Key: "ocaml-buildpack",
 				Url: "http://ocaml.org/buildpack.zip",
 			}))

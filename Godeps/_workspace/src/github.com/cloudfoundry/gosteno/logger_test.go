@@ -19,11 +19,13 @@ func (s *LoggerSuite) SetUpTest(c *C) {
 	s.nSink = newNullSink()
 	cfg.Sinks = []Sink{s.nSink}
 	loggers = make(map[string]*BaseLogger)
+
 	Init(&cfg)
 }
 
 func (s *LoggerSuite) TearDownTest(c *C) {
-	config = Config{}
+	Init(&Config{})
+
 	loggers = nil
 	loggerRegexp = nil
 	loggerRegexpLevel = nil

@@ -1,18 +1,18 @@
 package models
 
 type StagingRequestFromCC struct {
-	AppId           string           `json:"app_id"`
-	TaskId          string           `json:"task_id"`
-	Stack           string           `json:"stack"`
-	DownloadUri     string           `json:"download_uri"`
-	FileDescriptors int              `json:"file_descriptors"`
-	MemoryMB        int              `json:"memory_mb"`
-	DiskMB          int              `json:"disk_mb"`
-	AdminBuildpacks []AdminBuildpack `json:"admin_buildpacks"`
-	Environment     [][]string       `json:"environment"`
+	AppId              string      `json:"app_id"`
+	TaskId             string      `json:"task_id"`
+	Stack              string      `json:"stack"`
+	AppBitsDownloadUri string      `json:"app_bits_download_uri"`
+	FileDescriptors    int         `json:"file_descriptors"`
+	MemoryMB           int         `json:"memory_mb"`
+	DiskMB             int         `json:"disk_mb"`
+	Buildpacks         []Buildpack `json:"buildpacks"`
+	Environment        [][]string  `json:"environment"`
 }
 
-type AdminBuildpack struct {
+type Buildpack struct {
 	Key string `json:"key"`
 	Url string `json:"url"`
 }

@@ -53,7 +53,7 @@ func watchForRunOnceModificationsOnState(store storeadapter.StoreAdapter, state 
 		for {
 			select {
 			case <-stopOuter:
-				stopInner <- true
+				close(stopInner)
 				return
 
 			case event, ok := <-events:
