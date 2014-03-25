@@ -53,14 +53,13 @@ var _ = Describe("LazyActionRunner", func() {
 
 	Describe("Cancel", func() {
 		var performing chan bool
-
-		var cancelled bool
+		var cancelled chan bool
 
 		BeforeEach(func() {
-			cancelled = false
-
 			canceling := make(chan bool)
+
 			performing = make(chan bool)
+			cancelled = make(chan bool)
 
 			generatedActions = []action_runner.Action{
 				fake_action.FakeAction{
@@ -71,7 +70,7 @@ var _ = Describe("LazyActionRunner", func() {
 					},
 					WhenCancelling: func() {
 						canceling <- true
-						cancelled = true
+						cancelled <- true
 					},
 				},
 			}
@@ -79,20 +78,21 @@ var _ = Describe("LazyActionRunner", func() {
 
 		Context("when the action is running", func() {
 			It("cancels it", func() {
-				var err error
+				errs := make(chan error)
 
 				go func() {
-					err = runner.Perform()
+					errs <- runner.Perform()
 				}()
 
 				Eventually(performing).Should(Receive())
 
-				Ω(cancelled).Should(BeFalse())
-
 				runner.Cancel()
 
-				Eventually(func() bool { return cancelled }).Should(BeTrue())
-				Eventually(func() error { return err }).Should(Equal(action_runner.CancelledError))
+				Eventually(cancelled).Should(Receive())
+
+				var err error
+				Eventually(errs).Should(Receive(&err))
+				Ω(err).Should(Equal(action_runner.CancelledError))
 			})
 		})
 
