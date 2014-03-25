@@ -17,8 +17,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
@@ -240,7 +240,7 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
 				Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
 				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("exit value: 3"))
+				Ω(bbs.CompletedRunOnce.FailureReason).Should(MatchRegexp(`\b3\b`))
 			})
 		})
 
