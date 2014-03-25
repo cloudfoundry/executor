@@ -126,7 +126,7 @@ func (action *RunAction) Perform() error {
 		}
 
 		if exitStatus != 0 {
-			return fmt.Errorf("process returned with exit value: %d", exitStatus)
+			return fmt.Errorf("process exited with status %d", exitStatus)
 		}
 
 		return nil
