@@ -8,14 +8,14 @@ import (
 type FakeRunOnceHandler struct {
 	numberOfCalls   int
 	handledRunOnces map[string]string
-	mutex           *sync.Mutex
+	mutex           *sync.RWMutex
 	cancel          <-chan struct{}
 }
 
 func New() *FakeRunOnceHandler {
 	return &FakeRunOnceHandler{
 		handledRunOnces: make(map[string]string),
-		mutex:           &sync.Mutex{},
+		mutex:           &sync.RWMutex{},
 	}
 }
 
@@ -40,10 +40,16 @@ func (handler *FakeRunOnceHandler) NumberOfCalls() int {
 }
 
 func (handler *FakeRunOnceHandler) HandledRunOnces() map[string]string {
-	handler.mutex.Lock()
-	defer handler.mutex.Unlock()
+	handler.mutex.RLock()
+	defer handler.mutex.RUnlock()
 
-	return handler.handledRunOnces
+	handled := map[string]string{}
+
+	for k, v := range handler.handledRunOnces {
+		handled[k] = v
+	}
+
+	return handled
 }
 
 func (handler *FakeRunOnceHandler) GetCancel() <-chan struct{} {

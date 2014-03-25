@@ -44,7 +44,8 @@ var _ = Describe("RegisterAction", func() {
 
 	Describe("Perform", func() {
 		It("registers the RunOnce", func() {
-			originalRunOnce := *runOnce
+			originalRunOnce := runOnce
+
 			err := action.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -67,8 +68,10 @@ var _ = Describe("RegisterAction", func() {
 
 	Describe("Cleanup", func() {
 		It("unregisters the RunOnce", func() {
-			originalRunOnce := *runOnce
+			originalRunOnce := runOnce
+
 			action.Cleanup()
+
 			Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(originalRunOnce))
 		})
 	})

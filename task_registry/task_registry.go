@@ -18,15 +18,15 @@ var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("insufficient disk when l
 var ErrorNoStackDefined = errors.New("no stack was defined for RunOnce")
 
 type TaskRegistryInterface interface {
-	AddRunOnce(runOnce models.RunOnce) error
-	RemoveRunOnce(runOnce models.RunOnce)
+	AddRunOnce(runOnce *models.RunOnce) error
+	RemoveRunOnce(runOnce *models.RunOnce)
 	WriteToDisk() error
 }
 
 type TaskRegistry struct {
 	ExecutorMemoryMB int
 	ExecutorDiskMB   int
-	RunOnces         map[string]models.RunOnce
+	RunOnces         map[string]*models.RunOnce
 	lock             *sync.Mutex
 
 	stack    string
@@ -50,7 +50,7 @@ func NewTaskRegistry(stack string, fileName string, memoryMB int, diskMB int) *T
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
-		RunOnces:         make(map[string]models.RunOnce),
+		RunOnces:         make(map[string]*models.RunOnce),
 
 		lock: &sync.Mutex{},
 
@@ -68,7 +68,7 @@ func LoadTaskRegistryFromDisk(stack string, filename string, memoryMB int, diskM
 	return taskRegistry, nil
 }
 
-func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
+func (registry *TaskRegistry) AddRunOnce(runOnce *models.RunOnce) error {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
@@ -89,7 +89,7 @@ func (registry *TaskRegistry) AddRunOnce(runOnce models.RunOnce) error {
 	return nil
 }
 
-func (registry *TaskRegistry) RemoveRunOnce(runOnce models.RunOnce) {
+func (registry *TaskRegistry) RemoveRunOnce(runOnce *models.RunOnce) {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
@@ -134,7 +134,7 @@ func (registry *TaskRegistry) hydrateFromDisk() error {
 	return nil
 }
 
-func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce models.RunOnce) bool {
+func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce *models.RunOnce) bool {
 	if runOnce.MemoryMB > registry.availableMemoryMB() {
 		return false
 	}

@@ -250,20 +250,16 @@ var _ = Describe("Executor", func() {
 		It("converges runOnces on a regular interval", func() {
 			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
-			Eventually(func() int {
-				return fakeExecutorBBS.CallsToConverge
-			}, 1.0, 0.1).Should(BeNumerically(">", 2))
+			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically(">", 2))
 
-			Ω(fakeExecutorBBS.ConvergeRunOnceTimeToClaim).Should(Equal(30 * time.Second))
+			Ω(fakeExecutorBBS.ConvergeTimeToClaimRunOnces()).Should(Equal(30 * time.Second))
 		})
 
 		It("converges immediately without waiting for the iteration", func() {
 			executor.ConvergeRunOnces(1*time.Minute, 30*time.Second)
 
-			Eventually(func() int {
-				return fakeExecutorBBS.CallsToConverge
-			}, 1.0, 0.1).Should(BeNumerically("==", 1))
-			Ω(fakeExecutorBBS.ConvergeRunOnceTimeToClaim).Should(Equal(30 * time.Second))
+			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically("==", 1))
+			Ω(fakeExecutorBBS.ConvergeTimeToClaimRunOnces()).Should(Equal(30 * time.Second))
 		})
 
 		It("stops convergence when told", func() {
@@ -271,42 +267,56 @@ var _ = Describe("Executor", func() {
 
 			count := 1
 			Eventually(func() int {
-				if fakeExecutorBBS.CallsToConverge > 0 && stopChannel != nil {
+				calls := fakeExecutorBBS.CallsToConverge()
+
+				if calls > 0 && stopChannel != nil {
 					stopChannel <- true
 					stopChannel = nil
 				}
-				diff := fakeExecutorBBS.CallsToConverge - count
-				count = fakeExecutorBBS.CallsToConverge
+
+				diff := calls - count
+				count = calls
+
 				return diff
 			}, 1.0, 0.1).Should(Equal(0))
 		})
 
-		It("should only converge if it has the lock", func() {
-			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
+		Context("when the converge lock cannot be acquired", func() {
+			BeforeEach(func() {
+				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
+			})
 
-			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			It("should only converge if it has the lock", func() {
+				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-			time.Sleep(20 * time.Millisecond)
-			Ω(fakeExecutorBBS.CallsToConverge).To(Equal(0))
-		})
+				executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
-		It("logs an error message when GrabLock fails", func() {
-			fakeExecutorBBS.MaintainConvergeLockError = storeadapter.ErrorKeyExists
+				Consistently(fakeExecutorBBS.CallsToConverge).Should(Equal(0))
+			})
 
-			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			It("logs an error message when GrabLock fails", func() {
+				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-			testSink := steno.GetMeTheGlobalTestSink()
+				executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
-			lockMessageIndex := 0
-			Eventually(func() string {
-				if len(testSink.Records) > 0 {
-					lockMessageIndex := len(testSink.Records) - 1
-					return testSink.Records[lockMessageIndex].Message
-				}
-				return ""
-			}, 1.0, 0.1).Should(Equal("error when creating converge lock"))
+				testSink := steno.GetMeTheGlobalTestSink()
 
-			Ω(testSink.Records[lockMessageIndex].Level).Should(Equal(steno.LOG_ERROR))
+				records := []*steno.Record{}
+
+				lockMessageIndex := 0
+				Eventually(func() string {
+					records = testSink.Records()
+
+					if len(records) > 0 {
+						lockMessageIndex := len(records) - 1
+						return records[lockMessageIndex].Message
+					}
+
+					return ""
+				}, 1.0, 0.1).Should(Equal("error when creating converge lock"))
+
+				Ω(records[lockMessageIndex].Level).Should(Equal(steno.LOG_ERROR))
+			})
 		})
 	})
 })

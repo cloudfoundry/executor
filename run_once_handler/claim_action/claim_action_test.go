@@ -47,15 +47,17 @@ var _ = Describe("ClaimAction", func() {
 		It("claims the RunOnce in the BBS and updates the RunOnce's ExecutorID", func() {
 			Ω(action.Perform()).Should(BeNil())
 
-			Ω(bbs.ClaimedRunOnce.Guid).Should(Equal(runOnce.Guid))
-			Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("executor-id"))
+			claimed := bbs.ClaimedRunOnces()
+			Ω(claimed).ShouldNot(BeEmpty())
+			Ω(claimed[0].Guid).Should(Equal(runOnce.Guid))
+			Ω(claimed[0].ExecutorID).Should(Equal("executor-id"))
 		})
 
 		Context("when registering fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				bbs.ClaimRunOnceErr = disaster
+				bbs.SetClaimRunOnceErr(disaster)
 			})
 
 			It("returns the error", func() {

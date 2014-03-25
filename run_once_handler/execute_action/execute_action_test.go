@@ -20,10 +20,10 @@ var _ = Describe("ExecuteAction", func() {
 		action action_runner.Action
 		result chan error
 
-		runOnce       models.RunOnce
+		runOnce       *models.RunOnce
 		subAction     action_runner.Action
 		bbs           *fake_bbs.FakeExecutorBBS
-		runOnceResult string
+		runOnceResult *string
 	)
 
 	BeforeEach(func() {
@@ -33,7 +33,7 @@ var _ = Describe("ExecuteAction", func() {
 
 		bbs = fake_bbs.NewFakeExecutorBBS()
 
-		runOnce = models.RunOnce{
+		runOnce = &models.RunOnce{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -49,16 +49,17 @@ var _ = Describe("ExecuteAction", func() {
 			ContainerHandle: "some-container-handle",
 		}
 
-		runOnceResult = "the result of the running"
+		result := "the result of the running"
+		runOnceResult = &result
 	})
 
 	JustBeforeEach(func() {
 		action = New(
-			&runOnce,
+			runOnce,
 			steno.NewLogger("test-logger"),
 			subAction,
 			bbs,
-			&runOnceResult,
+			runOnceResult,
 		)
 	})
 
@@ -76,17 +77,19 @@ var _ = Describe("ExecuteAction", func() {
 				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
-				Ω(bbs.CompletedRunOnce.Result).Should(Equal(runOnceResult))
-				Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(BeZero())
+				completed := bbs.CompletedRunOnces()
+				Ω(completed).ShouldNot(BeEmpty())
+				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
+				Ω(completed[0].Result).Should(Equal(*runOnceResult))
+				Ω(completed[0].Failed).Should(BeFalse())
+				Ω(completed[0].FailureReason).Should(BeZero())
 			})
 
 			Context("when completing fails", func() {
 				disaster := errors.New("oh no!")
 
 				BeforeEach(func() {
-					bbs.CompleteRunOnceErr = disaster
+					bbs.SetCompleteRunOnceErr(disaster)
 				})
 
 				It("returns the error", func() {
@@ -111,17 +114,19 @@ var _ = Describe("ExecuteAction", func() {
 				err := action.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(bbs.CompletedRunOnce.Guid).Should(Equal(runOnce.Guid))
-				Ω(bbs.CompletedRunOnce.Result).Should(Equal(runOnceResult))
-				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(Equal("oh no!"))
+				completed := bbs.CompletedRunOnces()
+				Ω(completed).ShouldNot(BeEmpty())
+				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
+				Ω(completed[0].Result).Should(Equal(*runOnceResult))
+				Ω(completed[0].Failed).Should(BeTrue())
+				Ω(completed[0].FailureReason).Should(Equal("oh no!"))
 			})
 
 			Context("when completing fails", func() {
 				disaster := errors.New("oh no!")
 
 				BeforeEach(func() {
-					bbs.CompleteRunOnceErr = disaster
+					bbs.SetCompleteRunOnceErr(disaster)
 				})
 
 				It("returns the error", func() {
@@ -165,14 +170,11 @@ var _ = Describe("ExecuteAction", func() {
 			action.Cancel()
 			Eventually(cancelled).Should(Receive())
 
-			Eventually(func() interface{} {
-				if bbs.CompletedRunOnce == nil {
-					return false
-				}
-				return bbs.CompletedRunOnce.Failed
-			}).Should(BeTrue())
+			Eventually(bbs.CompletedRunOnces).ShouldNot(BeEmpty())
 
-			Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("cancelled"))
+			completed := bbs.CompletedRunOnces()[0]
+			Ω(completed.Failed).Should(BeTrue())
+			Ω(completed.FailureReason).Should(ContainSubstring("cancelled"))
 		})
 	})
 

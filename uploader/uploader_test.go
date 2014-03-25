@@ -71,7 +71,8 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("uploads the file to the url", func() {
-				Ω(serverRequests).Should(HaveLen(1))
+				Ω(len(serverRequests)).Should(Equal(1))
+
 				request := serverRequests[0]
 				data := serverRequestBody[0]
 

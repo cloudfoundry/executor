@@ -9,5 +9,5 @@ import (
 
 func TestClaim_action(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Claim_action Suite")
+	RunSpecs(t, "ClaimAction Suite")
 }

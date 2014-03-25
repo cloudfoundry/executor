@@ -135,15 +135,17 @@ var _ = Describe("RunOnceHandler", func() {
 			BeforeEach(setUpSuccessfulRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes", func() {
-				originalRunOnce := *runOnce
+				originalRunOnce := runOnce
 				handler.RunOnce(runOnce, "fake-executor-id", cancel)
 
 				// register
 				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
 
 				// claim
-				Ω(bbs.ClaimedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				claimed := bbs.ClaimedRunOnces()
+				Ω(claimed).ShouldNot(BeEmpty())
+				Ω(claimed[0].Guid).Should(Equal("run-once-guid"))
+				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
 
 				// create container
 				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
@@ -157,9 +159,11 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
 				// start
-				Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.StartedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-				Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(handle))
+				started := bbs.StartedRunOnces()
+				Ω(started).ShouldNot(BeEmpty())
+				Ω(started[0].Guid).Should(Equal("run-once-guid"))
+				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
 				// execute download action
 				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
@@ -168,7 +172,7 @@ var _ = Describe("RunOnceHandler", func() {
 				// execute run action
 				ranScripts := []string{}
 				for _, script := range wardenClient.ScriptsThatRan() {
-					Ω(script.Handle).Should(Equal(bbs.StartedRunOnce.ContainerHandle))
+					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
 
 					ranScripts = append(ranScripts, script.Script)
 				}
@@ -180,11 +184,13 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(uploader.UploadUrls[0].String()).Should(Equal("http://upload-dst.com"))
 
 				// complete
-				Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-				Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
-				Ω(bbs.CompletedRunOnce.Failed).Should(BeFalse())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(BeZero())
+				completed := bbs.CompletedRunOnces()
+				Ω(completed).ShouldNot(BeEmpty())
+				Ω(completed[0].Guid).Should(Equal("run-once-guid"))
+				Ω(completed[0].ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(completed[0].ContainerHandle).ShouldNot(BeZero())
+				Ω(completed[0].Failed).Should(BeFalse())
+				Ω(completed[0].FailureReason).Should(BeZero())
 			})
 		})
 
@@ -192,15 +198,17 @@ var _ = Describe("RunOnceHandler", func() {
 			BeforeEach(setUpFailedRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes (failure)", func() {
-				originalRunOnce := *runOnce
+				originalRunOnce := runOnce
 				handler.RunOnce(runOnce, "fake-executor-id", cancel)
 
 				// register
 				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
 
 				// claim
-				Ω(bbs.ClaimedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.ClaimedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
+				claimed := bbs.ClaimedRunOnces()
+				Ω(claimed).ShouldNot(BeEmpty())
+				Ω(claimed[0].Guid).Should(Equal("run-once-guid"))
+				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
 
 				// create container
 				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
@@ -214,9 +222,11 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
 				// start
-				Ω(bbs.StartedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.StartedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-				Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(handle))
+				started := bbs.StartedRunOnces()
+				Ω(started).ShouldNot(BeEmpty())
+				Ω(started[0].Guid).Should(Equal("run-once-guid"))
+				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
 				// execute download action
 				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
@@ -225,7 +235,7 @@ var _ = Describe("RunOnceHandler", func() {
 				// execute run action
 				ranScripts := []string{}
 				for _, script := range wardenClient.ScriptsThatRan() {
-					Ω(script.Handle).Should(Equal(bbs.StartedRunOnce.ContainerHandle))
+					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
 
 					ranScripts = append(ranScripts, script.Script)
 				}
@@ -236,11 +246,13 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
 				// complete
-				Ω(bbs.CompletedRunOnce.Guid).Should(Equal("run-once-guid"))
-				Ω(bbs.CompletedRunOnce.ExecutorID).Should(Equal("fake-executor-id"))
-				Ω(bbs.CompletedRunOnce.ContainerHandle).ShouldNot(BeZero())
-				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(MatchRegexp(`\b3\b`))
+				completed := bbs.CompletedRunOnces()
+				Ω(completed).ShouldNot(BeEmpty())
+				Ω(completed[0].Guid).Should(Equal("run-once-guid"))
+				Ω(completed[0].ExecutorID).Should(Equal("fake-executor-id"))
+				Ω(completed[0].ContainerHandle).ShouldNot(BeZero())
+				Ω(completed[0].Failed).Should(BeTrue())
+				Ω(completed[0].FailureReason).Should(MatchRegexp(`\b3\b`))
 			})
 		})
 
@@ -276,8 +288,10 @@ var _ = Describe("RunOnceHandler", func() {
 
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
-				Ω(bbs.CompletedRunOnce.Failed).Should(BeTrue())
-				Ω(bbs.CompletedRunOnce.FailureReason).Should(ContainSubstring("cancelled"))
+				completed := bbs.CompletedRunOnces()
+				Ω(completed).ShouldNot(BeEmpty())
+				Ω(completed[0].Failed).Should(BeTrue())
+				Ω(completed[0].FailureReason).Should(ContainSubstring("cancelled"))
 			})
 		})
 	})

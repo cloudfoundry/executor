@@ -19,7 +19,7 @@ var _ = Describe("StartAction", func() {
 
 	var runOnce models.RunOnce
 	var bbs *fake_bbs.FakeExecutorBBS
-    var containerHandle string
+	var containerHandle string
 
 	BeforeEach(func() {
 		runOnce = models.RunOnce{
@@ -52,15 +52,17 @@ var _ = Describe("StartAction", func() {
 			err := action.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(bbs.StartedRunOnce.Guid).Should(Equal(runOnce.Guid))
-			Ω(bbs.StartedRunOnce.ContainerHandle).Should(Equal(containerHandle))
+			started := bbs.StartedRunOnces()
+			Ω(started).ShouldNot(BeEmpty())
+			Ω(started[0].Guid).Should(Equal(runOnce.Guid))
+			Ω(started[0].ContainerHandle).Should(Equal(containerHandle))
 		})
 
 		Context("when starting the RunOnce in the BBS fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				bbs.StartRunOnceErr = disaster
+				bbs.SetStartRunOnceErr(disaster)
 			})
 
 			It("sends back the error", func() {

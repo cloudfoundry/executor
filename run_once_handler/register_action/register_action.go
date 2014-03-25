@@ -26,7 +26,7 @@ func New(
 }
 
 func (action RegisterAction) Perform() error {
-	err := action.taskRegistry.AddRunOnce(*action.runOnce)
+	err := action.taskRegistry.AddRunOnce(action.runOnce)
 	if err != nil {
 		action.logger.Infod(
 			map[string]interface{}{
@@ -44,5 +44,5 @@ func (action RegisterAction) Perform() error {
 func (action RegisterAction) Cancel() {}
 
 func (action RegisterAction) Cleanup() {
-	action.taskRegistry.RemoveRunOnce(*action.runOnce)
+	action.taskRegistry.RemoveRunOnce(action.runOnce)
 }

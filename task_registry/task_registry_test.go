@@ -15,13 +15,13 @@ import (
 
 var _ = Describe("TaskRegistry", func() {
 	var taskRegistry *TaskRegistry
-	var runOnce models.RunOnce
+	var runOnce *models.RunOnce
 	var registryFileName string
 
 	BeforeEach(func() {
 		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
 
-		runOnce = models.RunOnce{
+		runOnce = &models.RunOnce{
 			MemoryMB: 255,
 			DiskMB:   1023,
 			Guid:     "a guid",
@@ -78,7 +78,7 @@ var _ = Describe("TaskRegistry", func() {
 			})
 
 			It("returns an error and adds nothing when the new RunOnce needs more memory than is available", func() {
-				err := taskRegistry.AddRunOnce(models.RunOnce{
+				err := taskRegistry.AddRunOnce(&models.RunOnce{
 					MemoryMB: 2,
 				})
 				Ω(err).Should(HaveOccurred())
@@ -86,7 +86,7 @@ var _ = Describe("TaskRegistry", func() {
 			})
 
 			It("returns an error and adds nothing when the new RunOnce needs more disk than is available", func() {
-				err := taskRegistry.AddRunOnce(models.RunOnce{
+				err := taskRegistry.AddRunOnce(&models.RunOnce{
 					DiskMB: 2,
 				})
 				Ω(err).Should(HaveOccurred())
