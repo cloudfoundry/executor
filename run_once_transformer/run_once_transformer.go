@@ -5,14 +5,14 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
 
-	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actions/download_action"
-	"github.com/cloudfoundry-incubator/executor/actions/fetch_result_action"
-	"github.com/cloudfoundry-incubator/executor/actions/run_action"
-	"github.com/cloudfoundry-incubator/executor/actions/upload_action"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
+	"github.com/cloudfoundry-incubator/executor/steps/run_step"
+	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
@@ -47,21 +47,21 @@ func NewRunOnceTransformer(
 	}
 }
 
-func (transformer *RunOnceTransformer) ActionsFor(
+func (transformer *RunOnceTransformer) StepsFor(
 	runOnce *models.RunOnce,
 	containerHandle *string,
 	result *string,
-) []action_runner.Action {
+) []sequence.Step {
 	logStreamer := transformer.logStreamerFactory(runOnce.Log)
 
-	subActions := []action_runner.Action{}
+	subSteps := []sequence.Step{}
 
-	var subAction action_runner.Action
+	var subStep sequence.Step
 
 	for _, a := range runOnce.Actions {
 		switch actionModel := a.Action.(type) {
 		case models.RunAction:
-			subAction = run_action.New(
+			subStep = run_step.New(
 				*containerHandle,
 				actionModel,
 				runOnce.FileDescriptors,
@@ -71,7 +71,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 				transformer.logger,
 			)
 		case models.DownloadAction:
-			subAction = download_action.New(
+			subStep = download_step.New(
 				*containerHandle,
 				actionModel,
 				transformer.downloader,
@@ -81,7 +81,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 				transformer.logger,
 			)
 		case models.UploadAction:
-			subAction = upload_action.New(
+			subStep = upload_step.New(
 				*containerHandle,
 				actionModel,
 				transformer.uploader,
@@ -90,7 +90,7 @@ func (transformer *RunOnceTransformer) ActionsFor(
 				transformer.logger,
 			)
 		case models.FetchResultAction:
-			subAction = fetch_result_action.New(
+			subStep = fetch_result_step.New(
 				*containerHandle,
 				actionModel,
 				transformer.tempDir,
@@ -100,8 +100,8 @@ func (transformer *RunOnceTransformer) ActionsFor(
 			)
 		}
 
-		subActions = append(subActions, subAction)
+		subSteps = append(subSteps, subStep)
 	}
 
-	return subActions
+	return subSteps
 }

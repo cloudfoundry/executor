@@ -203,7 +203,7 @@ var _ = Describe("Executor", func() {
 				time.Sleep(2 * time.Second)
 			}
 
-			It("cancels the running actions and returns an error", func() {
+			It("cancels the running steps and returns an error", func() {
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 

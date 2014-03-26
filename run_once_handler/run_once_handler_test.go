@@ -165,11 +165,11 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
 				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
-				// execute download action
+				// execute download step
 				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
 				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
 
-				// execute run action
+				// execute run step
 				ranScripts := []string{}
 				for _, script := range wardenClient.ScriptsThatRan() {
 					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
@@ -179,7 +179,7 @@ var _ = Describe("RunOnceHandler", func() {
 
 				Ω(ranScripts).Should(ContainElement("sudo reboot"))
 
-				// execute upload action
+				// execute upload step
 				Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
 				Ω(uploader.UploadUrls[0].String()).Should(Equal("http://upload-dst.com"))
 
@@ -228,11 +228,11 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
 				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
-				// execute download action
+				// execute download step
 				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
 				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
 
-				// execute run action
+				// execute run step
 				ranScripts := []string{}
 				for _, script := range wardenClient.ScriptsThatRan() {
 					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
@@ -242,7 +242,7 @@ var _ = Describe("RunOnceHandler", func() {
 
 				Ω(ranScripts).Should(ContainElement("sudo reboot"))
 
-				// no upload action, as the execute action fails
+				// no upload step, as the execute step fails
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
 				// complete

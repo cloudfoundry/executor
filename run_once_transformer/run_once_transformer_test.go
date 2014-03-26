@@ -7,11 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vito/gordon/fake_gordon"
 
-	"github.com/cloudfoundry-incubator/executor/action_runner"
-	"github.com/cloudfoundry-incubator/executor/actions/download_action"
-	"github.com/cloudfoundry-incubator/executor/actions/fetch_result_action"
-	"github.com/cloudfoundry-incubator/executor/actions/run_action"
-	"github.com/cloudfoundry-incubator/executor/actions/upload_action"
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
@@ -19,6 +14,11 @@ import (
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
+	"github.com/cloudfoundry-incubator/executor/steps/run_step"
+	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 )
@@ -76,8 +76,8 @@ var _ = Describe("RunOnceTransformer", func() {
 			FileDescriptors: 117,
 		}
 
-		Ω(runOnceTransformer.ActionsFor(&runOnce, &handle, &result)).To(Equal([]action_runner.Action{
-			run_action.New(
+		Ω(runOnceTransformer.StepsFor(&runOnce, &handle, &result)).To(Equal([]sequence.Step{
+			run_step.New(
 				handle,
 				runActionModel,
 				117,
@@ -86,7 +86,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				wardenClient,
 				logger,
 			),
-			download_action.New(
+			download_step.New(
 				handle,
 				downloadActionModel,
 				downloader,
@@ -95,7 +95,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				wardenClient,
 				logger,
 			),
-			upload_action.New(
+			upload_step.New(
 				handle,
 				uploadActionModel,
 				uploader,
@@ -103,7 +103,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				wardenClient,
 				logger,
 			),
-			fetch_result_action.New(
+			fetch_result_step.New(
 				handle,
 				fetchResultActionModel,
 				"/fake/temp/dir",
