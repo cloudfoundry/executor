@@ -12,6 +12,7 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -23,6 +24,7 @@ var _ = Describe("DownloadAction", func() {
 
 	var downloadAction models.DownloadAction
 	var downloader *fake_downloader.FakeDownloader
+	var extractor *fake_extractor.FakeExtractor
 	var tempDir string
 	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
@@ -40,6 +42,7 @@ var _ = Describe("DownloadAction", func() {
 		}
 
 		downloader = &fake_downloader.FakeDownloader{}
+		extractor = &fake_extractor.FakeExtractor{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
@@ -56,6 +59,7 @@ var _ = Describe("DownloadAction", func() {
 			"some-container-handle",
 			downloadAction,
 			downloader,
+			extractor,
 			tempDir,
 			backendPlugin,
 			wardenClient,
@@ -93,6 +97,32 @@ var _ = Describe("DownloadAction", func() {
 			It("sends back the error", func() {
 				err := step.Perform()
 				Ω(err).Should(Equal(disaster))
+			})
+		})
+
+		Context("when extract is true", func() {
+			BeforeEach(func() {
+				downloadAction = models.DownloadAction{
+					From:    "http://mr_jones.zip",
+					To:      "/tmp/Antarctica",
+					Extract: true,
+				}
+			})
+
+			It("uses the specified extractor", func() {
+				step.Perform()
+				Ω(extractor.ExtractedFilePaths).ShouldNot(BeEmpty())
+				Ω(extractor.ExtractedFilePaths[0]).To(ContainSubstring(tempDir))
+			})
+
+			It("places the file in the container under the destination", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
+				copiedFile := wardenClient.ThingsCopiedIn()[0]
+				Ω(copiedFile.Handle).To(Equal("some-container-handle"))
+				Ω(copiedFile.Src).To(ContainSubstring(tempDir))
+				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica/"))
 			})
 		})
 	})

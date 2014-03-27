@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	. "github.com/cloudfoundry-incubator/executor/extractor"
+	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry/gofileutils/fileutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,10 +16,11 @@ var _ = Describe("Extractor", func() {
 	var extractionSrc string
 	var tempDir string
 	var archiveFixture string
+	var subject extractor.Extractor
 
 	JustBeforeEach(func() {
 		var err error
-
+		subject = extractor.New()
 		tempDir, err = ioutil.TempDir("", "extractor-fixture")
 		Ω(err).ShouldNot(HaveOccurred())
 
@@ -37,7 +38,7 @@ var _ = Describe("Extractor", func() {
 	})
 
 	var extractionTest = func() {
-		err := Extract(extractionSrc, extractionDest)
+		err := subject.Extract(extractionSrc, extractionDest)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		fileContents, err := ioutil.ReadFile(filepath.Join(extractionDest, "fixture", "file"))

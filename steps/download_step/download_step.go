@@ -19,6 +19,7 @@ type DownloadStep struct {
 	containerHandle string
 	model           models.DownloadAction
 	downloader      downloader.Downloader
+	extractor       extractor.Extractor
 	tempDir         string
 	backendPlugin   backend_plugin.BackendPlugin
 	wardenClient    gordon.Client
@@ -29,6 +30,7 @@ func New(
 	containerHandle string,
 	model models.DownloadAction,
 	downloader downloader.Downloader,
+	extractor extractor.Extractor,
 	tempDir string,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
@@ -38,6 +40,7 @@ func New(
 		containerHandle: containerHandle,
 		model:           model,
 		downloader:      downloader,
+		extractor:       extractor,
 		tempDir:         tempDir,
 		backendPlugin:   backendPlugin,
 		wardenClient:    wardenClient,
@@ -78,12 +81,11 @@ func (step *DownloadStep) Perform() error {
 			return err
 		}
 
-		err = extractor.Extract(downloadedFile.Name(), extractionDir)
+		err = step.extractor.Extract(downloadedFile.Name(), extractionDir)
 		defer os.RemoveAll(extractionDir)
 		if err != nil {
 			return err
 		}
-
 		return step.copyExtractedFiles(extractionDir, step.model.To)
 	} else {
 		_, err = step.wardenClient.CopyIn(step.containerHandle, downloadedFile.Name(), step.model.To)

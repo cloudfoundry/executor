@@ -11,7 +11,17 @@ import (
 	"path/filepath"
 )
 
-func Extract(src, dest string) error {
+type Extractor interface {
+	Extract(src, dest string) error
+}
+
+type realExtractor struct{}
+
+func New() Extractor {
+	return &realExtractor{}
+}
+
+func (e *realExtractor) Extract(src, dest string) error {
 	srcType, err := mimeType(src)
 	if err != nil {
 		return err

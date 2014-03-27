@@ -10,6 +10,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/extractor"
+	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
@@ -30,6 +32,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		logger             *steno.Logger
 		logStreamer        *fake_log_streamer.FakeLogStreamer
 		uploader           uploader.Uploader
+		extractor          extractor.Extractor
 		wardenClient       *fake_gordon.FakeGordon
 		runOnceTransformer *RunOnceTransformer
 		handle             string
@@ -41,6 +44,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		backendPlugin = linux_plugin.New()
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
+		extractor = &fake_extractor.FakeExtractor{}
 		logger = &steno.Logger{}
 		handle = "some-handle"
 
@@ -52,6 +56,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			logStreamerFactory,
 			downloader,
 			uploader,
+			extractor,
 			backendPlugin,
 			wardenClient,
 			logger,
@@ -90,6 +95,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				handle,
 				downloadActionModel,
 				downloader,
+				extractor,
 				"/fake/temp/dir",
 				backendPlugin,
 				wardenClient,

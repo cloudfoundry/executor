@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"log"
 	"os"
@@ -204,6 +205,7 @@ func main() {
 	linuxPlugin := linux_plugin.New()
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
+	extractor := extractor.New()
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,
@@ -214,6 +216,7 @@ func main() {
 		logStreamerFactory,
 		downloader,
 		uploader,
+		extractor,
 		linuxPlugin,
 		wardenClient,
 		logger,

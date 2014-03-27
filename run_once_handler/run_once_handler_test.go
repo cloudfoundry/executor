@@ -15,6 +15,7 @@ import (
 	"github.com/vito/gordon/warden"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
@@ -35,6 +36,7 @@ var _ = Describe("RunOnceHandler", func() {
 			wardenClient        *fake_gordon.FakeGordon
 			downloader          *fake_downloader.FakeDownloader
 			uploader            *fake_uploader.FakeUploader
+			extractor           *fake_extractor.FakeExtractor
 			transformer         *run_once_transformer.RunOnceTransformer
 			taskRegistry        *fake_task_registry.FakeTaskRegistry
 			containerInodeLimit int
@@ -82,6 +84,7 @@ var _ = Describe("RunOnceHandler", func() {
 			backendPlugin := linux_plugin.New()
 			downloader = &fake_downloader.FakeDownloader{}
 			uploader = &fake_uploader.FakeUploader{}
+			extractor = &fake_extractor.FakeExtractor{}
 
 			tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
 			Ω(err).ShouldNot(HaveOccurred())
@@ -90,6 +93,7 @@ var _ = Describe("RunOnceHandler", func() {
 				logStreamerFactory,
 				downloader,
 				uploader,
+				extractor,
 				backendPlugin,
 				wardenClient,
 				logger,

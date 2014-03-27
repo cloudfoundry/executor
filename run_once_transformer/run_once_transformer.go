@@ -7,6 +7,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
+	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -20,6 +21,7 @@ type RunOnceTransformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
 	downloader         downloader.Downloader
 	uploader           uploader.Uploader
+	extractor          extractor.Extractor
 	backendPlugin      backend_plugin.BackendPlugin
 	wardenClient       gordon.Client
 	logger             *steno.Logger
@@ -31,6 +33,7 @@ func NewRunOnceTransformer(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	downloader downloader.Downloader,
 	uploader uploader.Uploader,
+	extractor extractor.Extractor,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
@@ -40,6 +43,7 @@ func NewRunOnceTransformer(
 		logStreamerFactory: logStreamerFactory,
 		downloader:         downloader,
 		uploader:           uploader,
+		extractor:          extractor,
 		backendPlugin:      backendPlugin,
 		wardenClient:       wardenClient,
 		logger:             logger,
@@ -75,6 +79,7 @@ func (transformer *RunOnceTransformer) StepsFor(
 				*containerHandle,
 				actionModel,
 				transformer.downloader,
+				transformer.extractor,
 				transformer.tempDir,
 				transformer.backendPlugin,
 				transformer.wardenClient,
