@@ -47,7 +47,7 @@ func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
 
 		closeOnce: new(sync.Once),
 
-		stopHandlingRunOnces:    make(chan error),
+		stopHandlingRunOnces:    make(chan error, 2),
 		stopConvergeRunOnce:     make(chan struct{}),
 		stopMaintainingPresence: make(chan struct{}),
 	}
@@ -143,8 +143,8 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 
 func (e *Executor) Stop() {
 	e.closeOnce.Do(func() {
+		e.stopHandlingRunOnces <- nil
 		close(e.stopMaintainingPresence)
-		close(e.stopHandlingRunOnces)
 		close(e.stopConvergeRunOnce)
 	})
 
