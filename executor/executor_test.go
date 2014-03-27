@@ -163,17 +163,16 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Maintaining Presence", func() {
-		var presence = make(chan bool, 1)
+		var presence = make(chan error, 1)
 
 		It("should maintain presence", func() {
-			err := executor.MaintainPresence(60*time.Second, presence)
-			Ω(err).ShouldNot(HaveOccurred())
-			Eventually(presence).Should(Receive())
+			go executor.MaintainPresence(60*time.Second, presence)
 
-			Eventually(func() interface{} {
-				arr, _ := bbs.GetAllExecutors()
-				return arr
-			}).Should(HaveLen(1))
+			var err error
+			Eventually(presence).Should(Receive(&err))
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Eventually(bbs.GetAllExecutors).Should(HaveLen(1))
 
 			executors, err := bbs.GetAllExecutors()
 			Ω(err).ShouldNot(HaveOccurred())
@@ -184,6 +183,12 @@ var _ = Describe("Executor", func() {
 			var handleErr chan error
 
 			BeforeEach(func() {
+				go executor.MaintainPresence(1*time.Second, presence)
+
+				var err error
+				Eventually(presence).Should(Receive(&err))
+				Ω(err).ShouldNot(HaveOccurred())
+
 				handleErr = make(chan error, 1)
 
 				go func() {
@@ -191,9 +196,6 @@ var _ = Describe("Executor", func() {
 				}()
 
 				<-ready
-
-				executor.MaintainPresence(1*time.Second, presence)
-				Eventually(presence).Should(Receive())
 			})
 
 			triggerMaintainPresenceFailure := func() {
@@ -222,14 +224,13 @@ var _ = Describe("Executor", func() {
 
 		Context("when told to stop", func() {
 			It("it removes its presence", func() {
-				err := executor.MaintainPresence(60*time.Second, presence)
-				Ω(err).ShouldNot(HaveOccurred())
-				Eventually(presence).Should(Receive())
+				go executor.MaintainPresence(60*time.Second, presence)
 
-				Eventually(func() interface{} {
-					arr, _ := bbs.GetAllExecutors()
-					return arr
-				}).Should(HaveLen(1))
+				var err error
+				Eventually(presence).Should(Receive(&err))
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(bbs.GetAllExecutors).Should(HaveLen(1))
 
 				executor.Stop()
 
@@ -248,7 +249,7 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges runOnces on a regular interval", func() {
-			executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically(">", 2))
 
@@ -256,22 +257,21 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges immediately without waiting for the iteration", func() {
-			executor.ConvergeRunOnces(1*time.Minute, 30*time.Second)
+			go executor.ConvergeRunOnces(24*time.Hour, 30*time.Second)
 
 			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically("==", 1))
 			Ω(fakeExecutorBBS.ConvergeTimeToClaimRunOnces()).Should(Equal(30 * time.Second))
 		})
 
 		It("stops convergence when told", func() {
-			stopChannel := executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 			count := 1
 			Eventually(func() int {
 				calls := fakeExecutorBBS.CallsToConverge()
 
-				if calls > 0 && stopChannel != nil {
-					stopChannel <- true
-					stopChannel = nil
+				if calls > 0 {
+					executor.Stop()
 				}
 
 				diff := calls - count
@@ -289,7 +289,7 @@ var _ = Describe("Executor", func() {
 			It("should only converge if it has the lock", func() {
 				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-				executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+				go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 				Consistently(fakeExecutorBBS.CallsToConverge).Should(Equal(0))
 			})
@@ -297,7 +297,7 @@ var _ = Describe("Executor", func() {
 			It("logs an error message when GrabLock fails", func() {
 				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-				executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+				go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
 
 				testSink := steno.GetMeTheGlobalTestSink()
 

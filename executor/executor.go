@@ -20,11 +20,13 @@ type Executor struct {
 
 	outstandingTasks *sync.WaitGroup
 
-	stopHandlingRunOnces chan error
-	stopConvergeRunOnce  chan bool
-	presence             Bbs.Presence
+	stopHandlingRunOnces    chan error
+	stopConvergeRunOnce     chan struct{}
+	stopMaintainingPresence chan struct{}
 
 	logger *steno.Logger
+
+	closeOnce *sync.Once
 }
 
 var MaintainPresenceError = errors.New("failed to maintain presence")
@@ -42,6 +44,12 @@ func New(bbs Bbs.ExecutorBBS, logger *steno.Logger) *Executor {
 		outstandingTasks: &sync.WaitGroup{},
 
 		logger: logger,
+
+		closeOnce: new(sync.Once),
+
+		stopHandlingRunOnces:    make(chan error),
+		stopConvergeRunOnce:     make(chan struct{}),
+		stopMaintainingPresence: make(chan struct{}),
 	}
 }
 
@@ -49,47 +57,44 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- bool) error {
-	p, statusChannel, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
-	if err != nil {
-		ready <- false
-		return err
-	}
-	e.presence = p
-
+func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- error) {
 	e.outstandingTasks.Add(1)
+	defer e.outstandingTasks.Done()
+
+	presence, statusChannel, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
+
+	if err != nil {
+		ready <- err
+		return
+	}
 
 	go func() {
-		for {
-			select {
-			case locked, ok := <-statusChannel:
-				if locked && ready != nil {
-					ready <- true
-					ready = nil
-				}
-
-				if !locked && ok {
-
-					e.logger.Error("executor.maintaining-presence.failed")
-					if e.stopHandlingRunOnces != nil {
-						e.stopHandlingRunOnces <- MaintainPresenceError
-						e.stopHandlingRunOnces = nil
-					}
-				}
-
-				if !ok {
-					e.outstandingTasks.Done()
-					return
-				}
-			}
-		}
+		<-e.stopMaintainingPresence
+		presence.Remove()
 	}()
 
-	return nil
+	sentReady := false
+
+	for {
+		locked, ok := <-statusChannel
+
+		if locked && !sentReady {
+			ready <- nil
+			sentReady = true
+		}
+
+		if !locked && ok {
+			e.logger.Error("executor.maintaining-presence.failed")
+			e.stopHandlingRunOnces <- MaintainPresenceError
+		}
+
+		if !ok {
+			break
+		}
+	}
 }
 
 func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterface, ready chan<- bool) error {
-	e.stopHandlingRunOnces = make(chan error)
 	cancel := make(chan struct{})
 
 	e.logger.Info("executor.watching-for-desired-runonce")
@@ -113,11 +118,12 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 					e.sleepForARandomInterval()
 					runOnceHandler.RunOnce(runOnce, e.id, cancel)
 				}()
+
 			case err := <-e.stopHandlingRunOnces:
 				stop <- true
-
 				close(cancel)
 				return err
+
 			case err, ok := <-errors:
 				if ok && err != nil {
 					e.logger.Errord(map[string]interface{}{
@@ -136,59 +142,44 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 }
 
 func (e *Executor) Stop() {
-	// stop maintaining our presence
-	if e.presence != nil {
-		e.presence.Remove()
-		e.presence = nil
-	}
-
-	if e.stopHandlingRunOnces != nil {
-		e.stopHandlingRunOnces <- nil
-		e.stopHandlingRunOnces = nil
-	}
-
-	if e.stopConvergeRunOnce != nil {
+	e.closeOnce.Do(func() {
+		close(e.stopMaintainingPresence)
+		close(e.stopHandlingRunOnces)
 		close(e.stopConvergeRunOnce)
-		e.stopConvergeRunOnce = nil
-	}
+	})
 
 	//wait for any running runOnce goroutines to end
 	e.outstandingTasks.Wait()
 }
 
-func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) chan<- bool {
-	stopChannel := make(chan bool, 1)
+func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) {
+	e.outstandingTasks.Add(1)
+	defer e.outstandingTasks.Done()
 
 	statusChannel, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
+
 	if err != nil {
 		e.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
 		}, "error when creating converge lock")
-		return nil
+		return
 	}
 
-	e.outstandingTasks.Add(1)
 	go func() {
-		for {
-			select {
-			case locked, ok := <-statusChannel:
-				if !ok {
-					e.outstandingTasks.Done()
-					return
-				}
-
-				if locked {
-					e.bbs.ConvergeRunOnce(timeToClaim)
-				}
-			case <-stopChannel:
-				stopChannel = nil
-				releaseLock <- nil
-			}
-		}
+		<-e.stopConvergeRunOnce
+		close(releaseLock)
 	}()
 
-	e.stopConvergeRunOnce = stopChannel
-	return stopChannel
+	for {
+		locked, ok := <-statusChannel
+		if !ok {
+			return
+		}
+
+		if locked {
+			e.bbs.ConvergeRunOnce(timeToClaim)
+		}
+	}
 }
 
 func (e *Executor) sleepForARandomInterval() {

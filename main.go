@@ -185,16 +185,18 @@ func main() {
 		}
 	}
 
-	ready := make(chan bool, 1)
-
 	executor := executor.New(bbs, logger)
-	err = executor.MaintainPresence(*heartbeatInterval, ready)
+
+	maintaining := make(chan error, 1)
+
+	go executor.MaintainPresence(*heartbeatInterval, maintaining)
+
+	err = <-maintaining
 	if err != nil {
 		logger.Errorf("failed to start maintaining presence: %s", err.Error())
 		os.Exit(1)
 	}
 
-	<-ready
 	logger.Infof("Starting executor: ID=%s, stack=%s", executor.ID(), *stack)
 
 	registerSignalHandler(executor)
@@ -228,15 +230,19 @@ func main() {
 		*containerInodeLimit,
 	)
 
-	executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
+	go executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
+
+	handling := make(chan bool)
 
 	go func() {
-		<-ready
+		<-handling
 		logger.Infof("Watching for RunOnces!")
 	}()
 
-	err = executor.Handle(runOnceHandler, ready)
-	executor.Stop()
+	err = executor.Handle(runOnceHandler, handling)
+	if err != nil {
+		executor.Stop()
+	}
 
 	writeRegistry(taskRegistry, logger)
 
