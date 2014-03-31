@@ -81,6 +81,9 @@ var _ = Describe("UploadStep", func() {
 			It("uploads the file to the given URL", func() {
 				Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
 				Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
+			})
+
+			It("uploads the correct file location", func() {
 				Ω(uploader.UploadedFileLocations).ShouldNot(BeEmpty())
 				Ω(uploader.UploadedFileLocations[0]).To(ContainSubstring(tempDir))
 			})
