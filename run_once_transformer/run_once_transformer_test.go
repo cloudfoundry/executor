@@ -22,6 +22,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
+	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
@@ -74,6 +75,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		downloadActionModel := models.DownloadAction{From: "/file/to/download"}
 		uploadActionModel := models.UploadAction{From: "/file/to/upload"}
 		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
+		tryActionModel := models.TryAction{Action: models.ExecutorAction{runActionModel}}
 
 		runOnce := models.RunOnce{
 			Guid: "some-guid",
@@ -82,11 +84,12 @@ var _ = Describe("RunOnceTransformer", func() {
 				{downloadActionModel},
 				{uploadActionModel},
 				{fetchResultActionModel},
+				{tryActionModel},
 			},
 			FileDescriptors: 117,
 		}
 
-		Ω(runOnceTransformer.StepsFor(&runOnce, &handle, &result)).To(Equal([]sequence.Step{
+		Ω(runOnceTransformer.StepsFor(&runOnce, handle, &result)).To(Equal([]sequence.Step{
 			run_step.New(
 				handle,
 				runActionModel,
@@ -124,6 +127,18 @@ var _ = Describe("RunOnceTransformer", func() {
 				wardenClient,
 				logger,
 				&result,
+			),
+			try_step.New(
+				run_step.New(
+					handle,
+					runActionModel,
+					117,
+					logStreamer,
+					backendPlugin,
+					wardenClient,
+					logger,
+				),
+				logger,
 			),
 		}))
 	})

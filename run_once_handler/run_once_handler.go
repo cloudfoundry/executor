@@ -92,7 +92,7 @@ func (handler *RunOnceHandler) RunOnce(runOnce *models.RunOnce, executorID strin
 			runOnce,
 			handler.logger,
 			lazy_sequence.New(func() []sequence.Step {
-				return handler.transformer.StepsFor(runOnce, &containerHandle, &runOnceResult)
+				return handler.transformer.StepsFor(runOnce, containerHandle, &runOnceResult)
 			}),
 			handler.bbs,
 			&runOnceResult,

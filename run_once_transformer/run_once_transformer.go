@@ -1,6 +1,8 @@
 package run_once_transformer
 
 import (
+	"fmt"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/vito/gordon"
@@ -14,6 +16,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
+	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 )
@@ -57,63 +60,81 @@ func NewRunOnceTransformer(
 
 func (transformer *RunOnceTransformer) StepsFor(
 	runOnce *models.RunOnce,
-	containerHandle *string,
+	containerHandle string,
 	result *string,
 ) []sequence.Step {
-	logStreamer := transformer.logStreamerFactory(runOnce.Log)
-
 	subSteps := []sequence.Step{}
 
-	var subStep sequence.Step
-
 	for _, a := range runOnce.Actions {
-		switch actionModel := a.Action.(type) {
-		case models.RunAction:
-			subStep = run_step.New(
-				*containerHandle,
-				actionModel,
-				runOnce.FileDescriptors,
-				logStreamer,
-				transformer.backendPlugin,
-				transformer.wardenClient,
-				transformer.logger,
-			)
-		case models.DownloadAction:
-			subStep = download_step.New(
-				*containerHandle,
-				actionModel,
-				transformer.downloader,
-				transformer.extractor,
-				transformer.tempDir,
-				transformer.backendPlugin,
-				transformer.wardenClient,
-				logStreamer,
-				transformer.logger,
-			)
-		case models.UploadAction:
-			subStep = upload_step.New(
-				*containerHandle,
-				actionModel,
-				transformer.uploader,
-				transformer.compressor,
-				transformer.tempDir,
-				transformer.wardenClient,
-				logStreamer,
-				transformer.logger,
-			)
-		case models.FetchResultAction:
-			subStep = fetch_result_step.New(
-				*containerHandle,
-				actionModel,
-				transformer.tempDir,
-				transformer.wardenClient,
-				transformer.logger,
-				result,
-			)
-		}
-
-		subSteps = append(subSteps, subStep)
+		step := transformer.convertAction(runOnce, a, containerHandle, result)
+		subSteps = append(subSteps, step)
 	}
 
 	return subSteps
+}
+
+func (transformer *RunOnceTransformer) convertAction(
+	runOnce *models.RunOnce,
+	action models.ExecutorAction,
+	containerHandle string,
+	result *string,
+) sequence.Step {
+	logStreamer := transformer.logStreamerFactory(runOnce.Log)
+
+	switch actionModel := action.Action.(type) {
+	case models.RunAction:
+		return run_step.New(
+			containerHandle,
+			actionModel,
+			runOnce.FileDescriptors,
+			logStreamer,
+			transformer.backendPlugin,
+			transformer.wardenClient,
+			transformer.logger,
+		)
+	case models.DownloadAction:
+		return download_step.New(
+			containerHandle,
+			actionModel,
+			transformer.downloader,
+			transformer.extractor,
+			transformer.tempDir,
+			transformer.backendPlugin,
+			transformer.wardenClient,
+			logStreamer,
+			transformer.logger,
+		)
+	case models.UploadAction:
+		return upload_step.New(
+			containerHandle,
+			actionModel,
+			transformer.uploader,
+			transformer.compressor,
+			transformer.tempDir,
+			transformer.wardenClient,
+			logStreamer,
+			transformer.logger,
+		)
+	case models.FetchResultAction:
+		return fetch_result_step.New(
+			containerHandle,
+			actionModel,
+			transformer.tempDir,
+			transformer.wardenClient,
+			transformer.logger,
+			result,
+		)
+	case models.TryAction:
+		return try_step.New(
+			transformer.convertAction(
+				runOnce,
+				actionModel.Action,
+				containerHandle,
+				result,
+			),
+			transformer.logger,
+		)
+	}
+
+	panic(fmt.Sprintf("unknown action: %T", action))
 }
