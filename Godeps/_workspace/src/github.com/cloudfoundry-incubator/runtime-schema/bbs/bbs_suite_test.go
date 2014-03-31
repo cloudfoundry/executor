@@ -18,10 +18,12 @@ var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var store storeadapter.StoreAdapter
 
 func TestBBS(t *testing.T) {
-	registerSignalHandler()
 	RegisterFailHandler(Fail)
 
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(5001+config.GinkgoConfig.ParallelNode, 1)
+
+	registerSignalHandler()
+
 	etcdRunner.Start()
 
 	store = etcdRunner.Adapter()

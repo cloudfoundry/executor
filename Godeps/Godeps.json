@@ -7,19 +7,19 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "2395ecf872ff63554aca750519f302cba92261d8"
+			"Rev": "a2ef5d43dfdf43dd270ffb017532a00a8c9d2f2b"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "77fb401fc3c1a14e669a8e71a8a6f9f2c56922da"
+			"Rev": "f3da835120b2f93973e6d10e7d743a0736dfaf19"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "77fb401fc3c1a14e669a8e71a8a6f9f2c56922da"
+			"Rev": "f3da835120b2f93973e6d10e7d743a0736dfaf19"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gofileutils/fileutils",
-			"Rev": "125daa2348fb781468850e29db7f28109ed09370"
+			"Rev": "a141d15d255568a910ba2716c915ffc3b298a741"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -56,7 +56,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "f703ee22978a8636060009f596d97f04dbe3af07"
+			"Rev": "93681214aa36bc47abcdd378aa532de78a687350"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",

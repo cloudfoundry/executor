@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
 var _ = Describe("File Server BBS", func() {
@@ -38,8 +39,8 @@ var _ = Describe("File Server BBS", func() {
 			presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			locked := maintainStatus(status)
-			Eventually(func() bool { return *locked }).Should(BeTrue())
+			reporter := test_helpers.NewStatusReporter(status)
+			Eventually(reporter.Locked).Should(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -67,8 +68,8 @@ var _ = Describe("File Server BBS", func() {
 				presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				locked := maintainStatus(status)
-				Eventually(func() bool { return *locked }).Should(BeTrue())
+				reporter := test_helpers.NewStatusReporter(status)
+				Eventually(reporter.Locked).Should(BeTrue())
 			})
 
 			AfterEach(func() {
@@ -87,6 +88,7 @@ var _ = Describe("File Server BBS", func() {
 				otherFileServerURL string
 				otherPresence      Presence
 			)
+
 			BeforeEach(func() {
 				fileServerURL = "http://guy"
 				otherFileServerURL = "http://other.guy"
@@ -98,14 +100,16 @@ var _ = Describe("File Server BBS", func() {
 
 				presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
 				Ω(err).ShouldNot(HaveOccurred())
-				serverLocked := maintainStatus(status)
+
+				reporter := test_helpers.NewStatusReporter(status)
 
 				otherPresence, status, err = bbs.MaintainFileServerPresence(interval, otherFileServerURL, otherFileServerId)
-				Ω(err).ShouldNot(HaveOccurred())
-				otherServerLocked := maintainStatus(status)
 
-				Eventually(func() bool { return *serverLocked }).Should(BeTrue())
-				Eventually(func() bool { return *otherServerLocked }).Should(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+				otherReporter := test_helpers.NewStatusReporter(status)
+
+				Eventually(reporter.Locked).Should(BeTrue())
+				Eventually(otherReporter.Locked).Should(BeTrue())
 			})
 
 			AfterEach(func() {

@@ -1,12 +1,14 @@
 package bbs_test
 
 import (
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry/storeadapter"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry/storeadapter"
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
 var _ = Describe("Presence", func() {
@@ -26,28 +28,13 @@ var _ = Describe("Presence", func() {
 	})
 
 	Describe("Maintain", func() {
-		var (
-			locked bool
-			err    error
-		)
+		var reporter *test_helpers.StatusReporter
 
 		BeforeEach(func() {
-			var status <-chan bool
-			status, err = presence.Maintain(interval)
+			status, err := presence.Maintain(interval)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			locked = false
-			var ok bool
-			go func() {
-				for {
-					select {
-					case locked, ok = <-status:
-						if !ok {
-							return
-						}
-					}
-				}
-			}()
+			reporter = test_helpers.NewStatusReporter(status)
 		})
 
 		AfterEach(func() {
@@ -55,7 +42,7 @@ var _ = Describe("Presence", func() {
 		})
 
 		It("should put /key/value in the store with a TTL", func() {
-			Eventually(func() bool { return locked }).Should(BeTrue())
+			Eventually(reporter.Locked).Should(BeTrue())
 
 			node, err := store.Get(key)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -68,15 +55,16 @@ var _ = Describe("Presence", func() {
 		})
 
 		It("should reacquire the presence", func() {
-			Eventually(func() bool { return locked }).Should(BeTrue())
+			Eventually(reporter.Locked).Should(BeTrue())
 
-			err = store.Delete(key)
+			err := store.Delete(key)
 			Ω(err).ShouldNot(HaveOccurred())
-			Consistently(func() bool { return locked }, 2).Should(BeTrue())
+
+			Consistently(reporter.Locked, (interval * 2).Seconds()).Should(BeTrue())
 		})
 
 		It("should fail if we maintain presence multiple times", func() {
-			_, err = presence.Maintain(interval)
+			_, err := presence.Maintain(interval)
 			Ω(err).Should(HaveOccurred())
 		})
 	})

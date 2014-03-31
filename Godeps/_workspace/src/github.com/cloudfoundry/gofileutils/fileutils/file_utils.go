@@ -30,15 +30,24 @@ func CopyPathToPath(fromPath, toPath string) (err error) {
 		return
 	}
 
-	dst, err := Create(toPath)
-	if err != nil {
-		return
+	if srcFileInfo.IsDir() {
+		err = os.MkdirAll(toPath, srcFileInfo.Mode())
+		if err != nil {
+			return
+		}
+	} else {
+		var dst *os.File
+		dst, err = Create(toPath)
+		if err != nil {
+			return
+		}
+		defer dst.Close()
+
+		dst.Chmod(srcFileInfo.Mode())
+
+		err = CopyPathToWriter(fromPath, dst)
 	}
-	defer dst.Close()
-
-	dst.Chmod(srcFileInfo.Mode())
-
-	return CopyPathToWriter(fromPath, dst)
+	return err
 }
 
 func CopyPathToWriter(originalFilePath string, targetWriter io.Writer) (err error) {

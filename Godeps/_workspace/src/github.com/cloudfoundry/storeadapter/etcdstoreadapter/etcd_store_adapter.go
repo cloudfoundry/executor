@@ -382,13 +382,21 @@ func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, 
 	created := false
 	owned := false
 	frequencyCycle := 0
+
 	for {
 		retryInterval := 2 * time.Second
 		select {
 		case <-timer.C:
 			for {
 				if created {
-					_, err := adapter.client.CompareAndSwap(storeNode.Key, string(storeNode.Value), storeNode.TTL, string(storeNode.Value), 0)
+					_, err := adapter.client.CompareAndSwap(
+						storeNode.Key,
+						string(storeNode.Value),
+						storeNode.TTL,
+						string(storeNode.Value),
+						0,
+					)
+
 					if err == nil {
 						frequencyCycle++
 						owned = true
@@ -424,8 +432,10 @@ func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, 
 					if err == nil {
 						created = true
 						owned = true
+
 						elapsed := elapsedChannelSend(nodeStatus, true)
 						timer.Reset(maintenanceInterval - elapsed)
+
 						break
 					}
 
@@ -440,6 +450,7 @@ func (adapter *ETCDStoreAdapter) maintainNode(storeNode storeadapter.StoreNode, 
 					break
 				}
 			}
+
 		case released := <-releaseNode:
 			adapter.client.CompareAndDelete(storeNode.Key, string(storeNode.Value), 0)
 			timer.Stop()

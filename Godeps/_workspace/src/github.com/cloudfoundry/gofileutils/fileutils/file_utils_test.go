@@ -82,30 +82,62 @@ var _ = Describe("Fileutils File", func() {
 	})
 
 	Describe("CopyPathToPath", func() {
-		var destPath = fileutils.TempPath("copy_test")
+		var destPath string
 
 		BeforeEach(func() {
-			err := fileutils.CopyPathToPath(fixturePath, destPath)
-			Expect(err).NotTo(HaveOccurred())
+			destPath = fileutils.TempPath("copy_test")
 		})
 
-		It("copies the file contents", func() {
-			fileBytes, err := ioutil.ReadFile(destPath)
-			Expect(err).NotTo(HaveOccurred())
+		Describe("when the source is a file", func() {
+			BeforeEach(func() {
+				err := fileutils.CopyPathToPath(fixturePath, destPath)
+				Expect(err).NotTo(HaveOccurred())
+			})
 
-			fixtureBytes, err := ioutil.ReadFile(fixturePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(fileBytes).To(Equal(fixtureBytes))
+			It("copies the file contents", func() {
+				fileBytes, err := ioutil.ReadFile(destPath)
+				Expect(err).NotTo(HaveOccurred())
+
+				fixtureBytes, err := ioutil.ReadFile(fixturePath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fileBytes).To(Equal(fixtureBytes))
+			})
+
+			It("preserves the file mode", func() {
+				fileInfo, err := os.Stat(destPath)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedFileInfo, err := os.Stat(fixturePath)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(fileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+			})
 		})
 
-		It("preserves the file mode", func() {
-			fileInfo, err := os.Stat(destPath)
-			Expect(err).NotTo(HaveOccurred())
+		Describe("when the source is a directory", func() {
+			dirPath := filepath.Join(filepath.Dir(fixturePath), "some-dir")
 
-			expectedFileInfo, err := os.Stat(fixturePath)
-			Expect(err).NotTo(HaveOccurred())
+			BeforeEach(func() {
+				destPath = filepath.Join(destPath, "some-other-dir")
+				err := fileutils.CopyPathToPath(dirPath, destPath)
+				Expect(err).NotTo(HaveOccurred())
+			})
 
-			Expect(fileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+			It("creates a directory at the destination path", func() {
+				fileInfo, err := os.Stat(destPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fileInfo.IsDir()).To(BeTrue())
+			})
+
+			It("preserves the directory's mode", func() {
+				fileInfo, err := os.Stat(destPath)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedFileInfo, err := os.Stat(dirPath)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(fileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+			})
 		})
 	})
 

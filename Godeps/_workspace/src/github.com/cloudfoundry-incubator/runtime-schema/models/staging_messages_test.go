@@ -18,7 +18,9 @@ var _ = Describe("StagingMessages", func() {
            "file_descriptors" : 3,
            "environment" : [["FOO", "BAR"]],
            "stack" : "fake-stack",
-           "app_bits_download_uri" : "fake-download_uri",
+           "app_bits_download_uri" : "http://fake-download_uri",
+           "build_artifacts_cache_download_uri" : "http://a-fine-place-to-get-things",
+           "build_artifacts_cache_upload_uri" : "http://a-fine-place-to-place-things",
            "buildpacks" : [{"key":"fake-buildpack-key" ,"url":"fake-buildpack-url"}]
         }`
 
@@ -28,13 +30,15 @@ var _ = Describe("StagingMessages", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(stagingRequest).Should(Equal(StagingRequestFromCC{
-				AppId:              "fake-app_id",
-				TaskId:             "fake-task_id",
-				Stack:              "fake-stack",
-				AppBitsDownloadUri: "fake-download_uri",
-				MemoryMB:           1024,
-				FileDescriptors:    3,
-				DiskMB:             10000,
+				AppId:                          "fake-app_id",
+				TaskId:                         "fake-task_id",
+				Stack:                          "fake-stack",
+				AppBitsDownloadUri:             "http://fake-download_uri",
+				BuildArtifactsCacheDownloadUri: "http://a-fine-place-to-get-things",
+				BuildArtifactsCacheUploadUri:   "http://a-fine-place-to-place-things",
+				MemoryMB:                       1024,
+				FileDescriptors:                3,
+				DiskMB:                         10000,
 				Buildpacks: []Buildpack{
 					{
 						Key: "fake-buildpack-key",

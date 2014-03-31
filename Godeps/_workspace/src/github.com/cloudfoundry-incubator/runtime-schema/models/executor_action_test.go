@@ -74,13 +74,15 @@ var _ = Describe("ExecutorAction", func() {
 				"action": "upload",
 				"args": {
 					"from": "local_location",
-					"to": "web_location"
+					"to": "web_location",
+					"compress": true
 				}
 			}`,
 			ExecutorAction{
 				Action: UploadAction{
-					From: "local_location",
-					To:   "web_location",
+					From:     "local_location",
+					To:       "web_location",
+					Compress: true,
 				},
 			},
 		)

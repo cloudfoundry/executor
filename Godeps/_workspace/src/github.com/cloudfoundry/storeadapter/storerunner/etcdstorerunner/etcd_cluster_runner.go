@@ -2,17 +2,18 @@ package etcdstorerunner
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"sync"
+	"syscall"
+
+	etcdclient "github.com/coreos/go-etcd/etcd"
+	. "github.com/onsi/gomega"
+
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
-	. "github.com/onsi/gomega"
-	"log"
-
-	etcdclient "github.com/coreos/go-etcd/etcd"
-
-	"os"
-	"os/exec"
-	"syscall"
 )
 
 type ETCDClusterRunner struct {
@@ -21,12 +22,16 @@ type ETCDClusterRunner struct {
 	etcdCommands []*exec.Cmd
 	running      bool
 	client       *etcdclient.Client
+
+	mutex *sync.RWMutex
 }
 
 func NewETCDClusterRunner(startingPort int, numNodes int) *ETCDClusterRunner {
 	return &ETCDClusterRunner{
 		startingPort: startingPort,
 		numNodes:     numNodes,
+
+		mutex: &sync.RWMutex{},
 	}
 }
 
@@ -63,7 +68,11 @@ func (etcd *ETCDClusterRunner) DiskUsage() (bytes int64, err error) {
 }
 
 func (etcd *ETCDClusterRunner) Reset() {
-	if etcd.running {
+	etcd.mutex.RLock()
+	running := etcd.running
+	etcd.mutex.RUnlock()
+
+	if running {
 		response, err := etcd.client.Get("/", false, false)
 		Ω(err).ShouldNot(HaveOccurred())
 		for _, doomed := range response.Node.Nodes {
@@ -73,7 +82,11 @@ func (etcd *ETCDClusterRunner) Reset() {
 }
 
 func (etcd *ETCDClusterRunner) FastForwardTime(seconds int) {
-	if etcd.running {
+	etcd.mutex.RLock()
+	running := etcd.running
+	etcd.mutex.RUnlock()
+
+	if running {
 		response, err := etcd.client.Get("/", false, true)
 		Ω(err).ShouldNot(HaveOccurred())
 		etcd.fastForwardTime(*response.Node, seconds)
@@ -88,9 +101,15 @@ func (etcd *ETCDClusterRunner) Adapter() storeadapter.StoreAdapter {
 }
 
 func (etcd *ETCDClusterRunner) start(nuke bool) {
-	if etcd.running {
+	etcd.mutex.RLock()
+	running := etcd.running
+	etcd.mutex.RUnlock()
+
+	if running {
 		return
 	}
+
+	etcd.mutex.Lock()
 
 	etcd.etcdCommands = make([]*exec.Cmd, etcd.numNodes)
 
@@ -121,9 +140,13 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 
 	etcd.client = etcdclient.NewClient(etcd.NodeURLS())
 	etcd.running = true
+
+	etcd.mutex.Unlock()
 }
 
 func (etcd *ETCDClusterRunner) stop(nuke bool) {
+	etcd.mutex.Lock()
+
 	if etcd.running {
 		for i := 0; i < etcd.numNodes; i++ {
 			etcd.etcdCommands[i].Process.Signal(syscall.SIGINT)
@@ -136,6 +159,8 @@ func (etcd *ETCDClusterRunner) stop(nuke bool) {
 		etcd.running = false
 		etcd.client = nil
 	}
+
+	etcd.mutex.Unlock()
 }
 
 func (etcd *ETCDClusterRunner) detectRunningEtcd(index int) bool {

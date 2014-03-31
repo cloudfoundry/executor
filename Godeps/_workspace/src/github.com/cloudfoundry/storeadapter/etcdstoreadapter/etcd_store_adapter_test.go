@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/etcdstoreadapter"
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -367,35 +368,20 @@ var _ = Describe("ETCD Store Adapter", func() {
 			uniqueStoreNodeForThisTest StoreNode //avoid collisions between test runs
 		)
 
-		releaseMaintainedNode := func(release chan chan bool, waiting chan bool) {
-			if waiting == nil {
-				waiting = make(chan bool)
-			}
-
+		releaseMaintainedNode := func(release chan chan bool) {
+			waiting := make(chan bool)
 			release <- waiting
 			Eventually(waiting).Should(BeClosed())
 		}
 
 		waitTilLocked := func(storeNode StoreNode) chan chan bool {
 			nodeStatus, releaseLock, _ := adapter.MaintainNode(storeNode)
-			locked := false
-			done := make(chan chan bool)
-			go func() {
-				for {
-					select {
-					case status, ok := <-nodeStatus:
-						if ok {
-							Ω(status).Should(BeTrue())
-						}
-						locked = status
-					case waiting := <-done:
-						releaseMaintainedNode(releaseLock, waiting)
-						return
-					}
-				}
-			}()
-			Eventually(func() bool { return locked }).Should(BeTrue())
-			return done
+
+			reporter := test_helpers.NewStatusReporter(nodeStatus)
+			Eventually(reporter.Reporting).Should(BeTrue())
+			Eventually(reporter.Locked).Should(BeTrue())
+
+			return releaseLock
 		}
 
 		BeforeEach(func() {
@@ -433,7 +419,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Ω(releaseLock).ShouldNot(BeNil())
 				Consistently(nodeStatus, 2).ShouldNot(Receive())
 
-				releaseMaintainedNode(releaseLock, nil)
+				releaseMaintainedNode(releaseLock)
 			})
 		})
 
@@ -445,27 +431,31 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Ω(releaseLock).ShouldNot(BeNil())
 
 				var status bool
-				Eventually(nodeStatus).Should(Receive(&status))
+				Eventually(nodeStatus, 2.0).Should(Receive(&status))
 				Ω(status).Should(BeTrue())
 
 				start := time.Now()
-				Eventually(nodeStatus).Should(Receive(&status))
+				Eventually(nodeStatus, 2.0).Should(Receive(&status))
 				Ω(status).Should(BeTrue())
-				Ω(time.Now().Sub(start)).Should(BeNumerically("==", 1*time.Second, 50*time.Millisecond))
+				Ω(time.Now().Sub(start)).Should(BeNumerically("==", 1*time.Second, 400*time.Millisecond))
 
-				releaseMaintainedNode(releaseLock, nil)
+				releaseMaintainedNode(releaseLock)
 			})
 
 			It("should maintain the lock in the background", func() {
-				done := waitTilLocked(uniqueStoreNodeForThisTest)
+				releaseLock1 := waitTilLocked(uniqueStoreNodeForThisTest)
 
 				otherUniqueStoreNodeForThisTest := uniqueStoreNodeForThisTest
 				otherUniqueStoreNodeForThisTest.Value = []byte("other")
-				nodeStatus2, releaseLock2, _ := adapter.MaintainNode(otherUniqueStoreNodeForThisTest)
-				Consistently(nodeStatus2, 2).ShouldNot(Receive())
 
-				close(done)
-				releaseMaintainedNode(releaseLock2, nil)
+				nodeStatus2, releaseLock2, _ := adapter.MaintainNode(otherUniqueStoreNodeForThisTest)
+
+				reporter := test_helpers.NewStatusReporter(nodeStatus2)
+				Consistently(reporter.Reporting, 2).Should(BeFalse())
+
+				releaseMaintainedNode(releaseLock1)
+
+				releaseMaintainedNode(releaseLock2)
 			})
 
 			Context("when a value is given", func() {
@@ -483,7 +473,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 					Ω(string(val.Value)).Should(Equal("some value"))
 
-					releaseMaintainedNode(release, nil)
+					releaseMaintainedNode(release)
 				})
 			})
 
@@ -492,19 +482,19 @@ var _ = Describe("ETCD Store Adapter", func() {
 					otherUniqueStoreNodeForThisTest := uniqueStoreNodeForThisTest
 					otherUniqueStoreNodeForThisTest.Key = otherUniqueStoreNodeForThisTest.Key + "other"
 
-					done1 := waitTilLocked(uniqueStoreNodeForThisTest)
+					releaseLock1 := waitTilLocked(uniqueStoreNodeForThisTest)
+					defer releaseMaintainedNode(releaseLock1)
+
 					val, err := adapter.Get(uniqueStoreNodeForThisTest.Key)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					done2 := waitTilLocked(otherUniqueStoreNodeForThisTest)
+					releaseLock2 := waitTilLocked(otherUniqueStoreNodeForThisTest)
+					defer releaseMaintainedNode(releaseLock2)
 
 					otherval, err := adapter.Get(otherUniqueStoreNodeForThisTest.Key)
 					Ω(err).ShouldNot(HaveOccurred())
 
 					Ω(string(val.Value)).ShouldNot(Equal(string(otherval.Value)))
-
-					close(done1)
-					close(done2)
 				})
 			})
 
@@ -523,28 +513,30 @@ var _ = Describe("ETCD Store Adapter", func() {
 					Eventually(nodeStatus).Should(Receive(&status))
 					Ω(status).Should(BeFalse())
 
-					releaseMaintainedNode(release, nil)
+					releaseMaintainedNode(release)
 				})
 			})
 		})
 
 		Context("when releasing the lock", func() {
 			It("makes it available for others trying to acquire it", func() {
-				done1 := waitTilLocked(uniqueStoreNodeForThisTest)
+				releaseLock1 := waitTilLocked(uniqueStoreNodeForThisTest)
 
 				otherStoreNodeForThisTest := uniqueStoreNodeForThisTest
 				otherStoreNodeForThisTest.Value = []byte("other")
+
 				nodeStatus2, releaseLock2, err2 := adapter.MaintainNode(otherStoreNodeForThisTest)
 				Ω(err2).ShouldNot(HaveOccurred())
 
 				Consistently(nodeStatus2).ShouldNot(Receive())
-				close(done1)
+
+				releaseMaintainedNode(releaseLock1)
 
 				var status bool
 				Eventually(nodeStatus2, 2.0).Should(Receive(&status))
 				Ω(status).Should(BeTrue())
 
-				releaseMaintainedNode(releaseLock2, nil)
+				releaseMaintainedNode(releaseLock2)
 			})
 
 			It("deletes the lock's key", func() {
@@ -563,22 +555,14 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 			It("the status channel is closed", func() {
 				nodeStatus, releaseLock, _ := adapter.MaintainNode(uniqueStoreNodeForThisTest)
-				open := true
-				locked := false
-				go func() {
-					for {
-						select {
-						case locked, open = <-nodeStatus:
-							if !open {
-								return
-							}
-						}
-					}
-				}()
-				Eventually(func() bool { return locked }).Should(BeTrue())
+
+				reporter := test_helpers.NewStatusReporter(nodeStatus)
+
+				Eventually(reporter.Locked).Should(BeTrue())
 
 				releaseLock <- nil
-				Eventually(func() bool { return open }).Should(BeFalse())
+
+				Eventually(reporter.Reporting).Should(BeFalse())
 			})
 
 		})
@@ -890,17 +874,8 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(string(event.Node.Value)).To(Equal("new value"))
 
 				stop <- true
-
-				err = adapter.SetMulti([]StoreNode{
-					{
-						Key:   "/foo/b",
-						Value: []byte("new value"),
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(events).To(BeClosed())
-				Expect(errors).To(BeClosed())
+				Eventually(events).Should(BeClosed())
+				Eventually(errors).Should(BeClosed())
 
 				close(done)
 			}, 5.0)

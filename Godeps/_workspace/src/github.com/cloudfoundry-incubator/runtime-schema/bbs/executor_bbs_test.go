@@ -1,6 +1,7 @@
 package bbs_test
 
 import (
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 	"path"
 	"time"
 
@@ -201,7 +202,7 @@ var _ = Describe("Executor BBS", func() {
 			executorId string
 			interval   time.Duration
 			status     <-chan bool
-			locked     *bool
+			reporter   *test_helpers.StatusReporter
 			err        error
 			presence   Presence
 		)
@@ -212,7 +213,8 @@ var _ = Describe("Executor BBS", func() {
 
 			presence, status, err = bbs.MaintainExecutorPresence(interval, executorId)
 			Ω(err).ShouldNot(HaveOccurred())
-			locked = maintainStatus(status)
+
+			reporter = maintainStatus(status)
 		})
 
 		AfterEach(func() {
@@ -220,7 +222,7 @@ var _ = Describe("Executor BBS", func() {
 		})
 
 		It("should put /executor/EXECUTOR_ID in the store with a TTL", func() {
-			Eventually(func() bool { return *locked }).Should(BeTrue())
+			Eventually(reporter.Locked).Should(BeTrue())
 
 			node, err := store.Get("/v1/executor/" + executorId)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -593,125 +595,90 @@ var _ = Describe("Executor BBS", func() {
 	})
 
 	Context("MaintainConvergeLock", func() {
-		Describe("Maintain the converge lock", func() {
-			Context("when the lock is available", func() {
-				It("should return immediately", func() {
-					status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+		Context("when the lock is available", func() {
+			It("should return immediately", func() {
+				status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "id")
+				Ω(err).ShouldNot(HaveOccurred())
 
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(status).ShouldNot(BeNil())
-					Ω(releaseLock).ShouldNot(BeNil())
+				defer close(releaseLock)
 
-					maintainStatus(status)
-					releaseLock <- nil
-				})
+				Ω(status).ShouldNot(BeNil())
+				Ω(releaseLock).ShouldNot(BeNil())
 
-				It("should maintain the lock in the background", func() {
-					status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
-					Ω(err).ShouldNot(HaveOccurred())
-					maintainStatus(status)
-
-					status2, releaseLock2, err2 := bbs.MaintainConvergeLock(1*time.Minute, "my_id2")
-					Ω(err2).ShouldNot(HaveOccurred())
-
-					secondDidGrabLock := false
-					go func() {
-						ok := true
-						for {
-							select {
-							case secondDidGrabLock, ok = <-status2:
-								if !ok {
-									return
-								}
-							}
-						}
-					}()
-
-					Consistently(secondDidGrabLock, 3.0).Should(BeFalse())
-
-					releaseLock <- nil
-					releaseLock2 <- nil
-				})
-
-				Context("when the lock disappears after it has been acquired (e.g. ETCD store is reset)", func() {
-					It("should send a notification down the lostLockChannel", func() {
-						status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Second, "my_id")
-						Ω(err).ShouldNot(HaveOccurred())
-
-						locked := false
-						ok := true
-						go func() {
-							for {
-								select {
-								case locked, ok = <-status:
-									if !ok {
-										return
-									}
-								}
-							}
-						}()
-
-						etcdRunner.Stop()
-
-						Eventually(func() bool { return locked }).Should(BeFalse())
-
-						releaseLock <- nil
-					})
-				})
+				reporter := maintainStatus(status)
+				Eventually(reporter.Locked).Should(Equal(true))
 			})
 
-			Context("when releasing the lock", func() {
-				It("makes it available for others trying to acquire it", func() {
-					status, release, err := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
+			It("should maintain the lock in the background", func() {
+				interval := 1 * time.Second
+
+				status, releaseLock, err := bbs.MaintainConvergeLock(interval, "id_1")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				defer close(releaseLock)
+
+				reporter1 := test_helpers.NewStatusReporter(status)
+				Eventually(reporter1.Locked).Should(BeTrue())
+
+				status2, releaseLock2, err2 := bbs.MaintainConvergeLock(interval, "id_2")
+				Ω(err2).ShouldNot(HaveOccurred())
+
+				defer close(releaseLock2)
+
+				reporter2 := test_helpers.NewStatusReporter(status2)
+				Consistently(reporter2.Locked, (interval * 2).Seconds()).Should(BeFalse())
+			})
+
+			Context("when the lock disappears after it has been acquired (e.g. ETCD store is reset)", func() {
+				It("should send a notification down the lostLockChannel", func() {
+					status, releaseLock, err := bbs.MaintainConvergeLock(1*time.Second, "id")
 					Ω(err).ShouldNot(HaveOccurred())
-					firstLock := maintainStatus(status)
 
-					Eventually(func() bool { return *firstLock }).Should(BeTrue())
+					reporter := test_helpers.NewStatusReporter(status)
 
-					status2, release2, err2 := bbs.MaintainConvergeLock(1*time.Minute, "my_id")
-					Ω(err2).ShouldNot(HaveOccurred())
+					Eventually(reporter.Locked).Should(BeTrue())
 
-					secondLock := false
-					ok := true
-					go func() {
-						for {
-							select {
-							case secondLock, ok = <-status2:
-								if !ok {
-									return
-								}
-							}
-						}
-					}()
+					etcdRunner.Stop()
 
-					Consistently(func() bool { return secondLock }).Should(BeFalse())
+					Eventually(reporter.Locked).Should(BeFalse())
 
-					release <- nil
-
-					Eventually(status).Should(BeClosed())
-					Eventually(func() bool { return secondLock }).Should(BeFalse())
-
-					release2 <- nil
-					Eventually(status2).Should(BeClosed())
+					releaseLock <- nil
 				})
+			})
+		})
+
+		Context("when releasing the lock", func() {
+			It("makes it available for others trying to acquire it", func() {
+				interval := 1 * time.Second
+
+				status, release, err := bbs.MaintainConvergeLock(interval, "my_id")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				reporter1 := test_helpers.NewStatusReporter(status)
+				Eventually(reporter1.Locked, (interval * 2).Seconds()).Should(BeTrue())
+
+				status2, release2, err2 := bbs.MaintainConvergeLock(interval, "other_id")
+				Ω(err2).ShouldNot(HaveOccurred())
+
+				reporter2 := test_helpers.NewStatusReporter(status2)
+				Consistently(reporter2.Locked, (interval * 2).Seconds()).Should(BeFalse())
+
+				Ω(reporter1.Reporting()).Should(BeTrue())
+
+				release <- nil
+
+				Eventually(reporter1.Reporting).Should(BeFalse())
+
+				Eventually(reporter2.Locked, (interval * 2).Seconds()).Should(BeTrue())
+
+				release2 <- nil
+
+				Eventually(reporter2.Reporting).Should(BeFalse())
 			})
 		})
 	})
 })
 
-func maintainStatus(status <-chan bool) *bool {
-	var locked bool
-	go func() {
-		var ok bool
-		for {
-			select {
-			case locked, ok = <-status:
-				if !ok {
-					return
-				}
-			}
-		}
-	}()
-
-	return &locked
+func maintainStatus(status <-chan bool) *test_helpers.StatusReporter {
+	return test_helpers.NewStatusReporter(status)
 }
