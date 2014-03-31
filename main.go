@@ -207,6 +207,7 @@ func main() {
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.New()
+	compressor := compressor.New()
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,
