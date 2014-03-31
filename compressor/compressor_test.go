@@ -42,7 +42,7 @@ var _ = Describe("Compressor", func() {
 	})
 
 	AfterEach(func() {
-		// os.RemoveAll(tmpDir)
+		os.RemoveAll(tmpDir)
 	})
 
 	It("compresses the src file to dest file", func() {
