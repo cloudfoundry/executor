@@ -86,12 +86,16 @@ func extractTgz(src, dest string) error {
 			return err
 		}
 
-		err = extractArchiveFile(filepath.Join(dest, hdr.Name), tarReader, hdr.FileInfo())
+		if hdr.Name == "." {
+			continue
+		}
+
+		err = extractTarArchiveFile(hdr, dest, tarReader)
 		if err != nil {
 			return err
 		}
-
 	}
+
 	return nil
 }
 
@@ -110,7 +114,7 @@ func extractZip(src, dest string) error {
 			}
 			defer readCloser.Close()
 
-			return extractArchiveFile(filepath.Join(dest, file.Name), readCloser, file.FileInfo())
+			return extractZipArchiveFile(file, dest, readCloser)
 		}()
 
 		if err != nil {
@@ -121,13 +125,45 @@ func extractZip(src, dest string) error {
 	return nil
 }
 
-func extractArchiveFile(filePath string, input io.Reader, fileInfo os.FileInfo) error {
+func extractZipArchiveFile(file *zip.File, dest string, input io.Reader) error {
+	filePath := filepath.Join(dest, file.Name)
+	fileInfo := file.FileInfo()
+
 	err := os.MkdirAll(filepath.Dir(filePath), os.ModeDir|os.ModePerm)
 	if err != nil {
 		return err
 	}
 
 	if !fileInfo.IsDir() {
+		fileCopy, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileInfo.Mode())
+		if err != nil {
+			return err
+		}
+		defer fileCopy.Close()
+
+		_, err = io.Copy(fileCopy, input)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func extractTarArchiveFile(header *tar.Header, dest string, input io.Reader) error {
+	filePath := filepath.Join(dest, header.Name)
+	fileInfo := header.FileInfo()
+
+	err := os.MkdirAll(filepath.Dir(filePath), os.ModeDir|os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	if !fileInfo.IsDir() {
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			return os.Symlink(header.Linkname, filePath)
+		}
+
 		fileCopy, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileInfo.Mode())
 		if err != nil {
 			return err

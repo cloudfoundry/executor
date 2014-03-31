@@ -76,5 +76,12 @@ var _ = Describe("Extractor", func() {
 		It("extracts the TGZ's files, generating directories, and honoring file permissions", func() {
 			extractionTest()
 		})
+
+		It("preserves symlinks", func() {
+			extractionTest()
+
+			_, err := os.Readlink(filepath.Join(extractionDest, "fixture", "a_symlink"))
+			Ω(err).ShouldNot(HaveOccurred())
+		})
 	})
 })
