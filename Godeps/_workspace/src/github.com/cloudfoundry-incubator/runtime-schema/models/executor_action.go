@@ -29,6 +29,10 @@ type RunAction struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+type TryAction struct {
+	Action ExecutorAction `json:"action"`
+}
+
 type FetchResultAction struct {
 	Name string `json:"name"`
 	File string `json:"file"`
@@ -61,6 +65,8 @@ func (a ExecutorAction) MarshalJSON() ([]byte, error) {
 		envelope.Name = "upload"
 	case FetchResultAction:
 		envelope.Name = "fetch_result"
+	case TryAction:
+		envelope.Name = "try"
 	default:
 		return nil, InvalidActionConversion
 	}
@@ -95,6 +101,10 @@ func (a *ExecutorAction) UnmarshalJSON(bytes []byte) error {
 		fetchResultAction := FetchResultAction{}
 		err = json.Unmarshal(*envelope.ActionPayload, &fetchResultAction)
 		a.Action = fetchResultAction
+	case "try":
+		tryAction := TryAction{}
+		err = json.Unmarshal(*envelope.ActionPayload, &tryAction)
+		a.Action = tryAction
 	default:
 		err = InvalidActionConversion
 	}

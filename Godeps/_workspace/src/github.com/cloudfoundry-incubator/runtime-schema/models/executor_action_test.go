@@ -137,4 +137,39 @@ var _ = Describe("ExecutorAction", func() {
 			},
 		)
 	})
+
+	Describe("Try", func() {
+		itSerializesAndDeserializes(
+			`{
+				"action": "try",
+				"args": {
+					"action": {
+						"action": "run",
+						"args": {
+							"script": "rm -rf /",
+							"timeout": 10000000,
+							"env": [
+								["FOO", "1"],
+								["BAR", "2"]
+							]
+						}
+					}
+				}
+			}`,
+			ExecutorAction{
+				Action: TryAction{
+					Action: ExecutorAction{
+						Action: RunAction{
+							Script:  "rm -rf /",
+							Timeout: 10 * time.Millisecond,
+							Env: [][]string{
+								{"FOO", "1"},
+								{"BAR", "2"},
+							},
+						},
+					},
+				},
+			},
+		)
+	})
 })
