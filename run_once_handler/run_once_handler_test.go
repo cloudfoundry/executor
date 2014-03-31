@@ -19,6 +19,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
@@ -77,7 +78,7 @@ var _ = Describe("RunOnceHandler", func() {
 			taskRegistry = fake_task_registry.New()
 
 			logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
-				return nil
+				return fake_log_streamer.New()
 			}
 
 			logger := steno.NewLogger("test-logger")

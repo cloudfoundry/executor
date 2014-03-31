@@ -1,8 +1,8 @@
 package fake_log_streamer
 
 type FakeLogStreamer struct {
-	StreamedStdout []string
-	StreamedStderr []string
+	StreamedStdout string
+	StreamedStderr string
 	Flushed        bool
 }
 
@@ -11,11 +11,11 @@ func New() *FakeLogStreamer {
 }
 
 func (e *FakeLogStreamer) StreamStdout(message string) {
-	e.StreamedStdout = append(e.StreamedStdout, message)
+	e.StreamedStdout += message
 }
 
 func (e *FakeLogStreamer) StreamStderr(message string) {
-	e.StreamedStderr = append(e.StreamedStderr, message)
+	e.StreamedStderr += message
 }
 
 func (e *FakeLogStreamer) Flush() {

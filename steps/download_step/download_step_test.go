@@ -2,6 +2,7 @@ package download_step_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"io/ioutil"
 
 	. "github.com/onsi/ginkgo"
@@ -29,17 +30,12 @@ var _ = Describe("DownloadAction", func() {
 	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
+	var streamer *fake_log_streamer.FakeLogStreamer
 
 	BeforeEach(func() {
 		var err error
 
 		result = make(chan error)
-
-		downloadAction = models.DownloadAction{
-			From:    "http://mr_jones",
-			To:      "/tmp/Antarctica",
-			Extract: false,
-		}
 
 		downloader = &fake_downloader.FakeDownloader{}
 		extractor = &fake_extractor.FakeExtractor{}
@@ -52,8 +48,10 @@ var _ = Describe("DownloadAction", func() {
 		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
+		streamer = fake_log_streamer.New()
 	})
 
+	var stepErr error
 	JustBeforeEach(func() {
 		step = New(
 			"some-container-handle",
@@ -63,40 +61,42 @@ var _ = Describe("DownloadAction", func() {
 			tempDir,
 			backendPlugin,
 			wardenClient,
+			streamer,
 			logger,
 		)
+		stepErr = step.Perform()
 	})
 
 	Describe("Perform", func() {
-		It("downloads the file from the given URL", func() {
-			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-			Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
-		})
-
-		It("places the file in the container", func() {
-			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
-
-			copiedFile := wardenClient.ThingsCopiedIn()[0]
-			Ω(copiedFile.Handle).To(Equal("some-container-handle"))
-			Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
-		})
-
-		Context("when there is an error copying the file in", func() {
-			disaster := errors.New("oh no!")
-
+		Context("when extract is false", func() {
 			BeforeEach(func() {
-				wardenClient.SetCopyInErr(disaster)
+				downloadAction = models.DownloadAction{
+					Name:    "Mr. Jones",
+					From:    "http://mr_jones",
+					To:      "/tmp/Antarctica",
+					Extract: false,
+				}
 			})
 
-			It("sends back the error", func() {
-				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+			It("should not return an error", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
+			})
+
+			It("downloads the file from the given URL", func() {
+				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
+				Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
+			})
+
+			It("places the file in the container", func() {
+				Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
+
+				copiedFile := wardenClient.ThingsCopiedIn()[0]
+				Ω(copiedFile.Handle).To(Equal("some-container-handle"))
+				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
+			})
+
+			It("loggregates a download message", func() {
+				Ω(streamer.StreamedStdout).Should(ContainSubstring("Downloaded Mr. Jones"))
 			})
 		})
 
@@ -109,20 +109,38 @@ var _ = Describe("DownloadAction", func() {
 				}
 			})
 
+			It("should not return an error", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
+			})
+
 			It("uses the specified extractor", func() {
-				step.Perform()
 				Ω(extractor.ExtractedFilePaths).ShouldNot(BeEmpty())
 				Ω(extractor.ExtractedFilePaths[0]).To(ContainSubstring(tempDir))
 			})
 
 			It("places the file in the container under the destination", func() {
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
 				Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
 				copiedFile := wardenClient.ThingsCopiedIn()[0]
 				Ω(copiedFile.Handle).To(Equal("some-container-handle"))
 				Ω(copiedFile.Src).To(ContainSubstring(tempDir))
 				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica/"))
+			})
+		})
+
+		Context("when there is an error copying the file in", func() {
+			disaster := errors.New("oh no!")
+
+			BeforeEach(func() {
+				downloadAction = models.DownloadAction{
+					From:    "http://mr_jones",
+					To:      "/tmp/Antarctica",
+					Extract: false,
+				}
+				wardenClient.SetCopyInErr(disaster)
+			})
+
+			It("should return an error", func() {
+				Ω(stepErr).Should(Equal(disaster))
 			})
 		})
 	})

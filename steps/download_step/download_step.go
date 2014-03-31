@@ -1,6 +1,7 @@
 package download_step
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -23,6 +25,7 @@ type DownloadStep struct {
 	tempDir         string
 	backendPlugin   backend_plugin.BackendPlugin
 	wardenClient    gordon.Client
+	streamer        log_streamer.LogStreamer
 	logger          *steno.Logger
 }
 
@@ -34,6 +37,7 @@ func New(
 	tempDir string,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
+	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *DownloadStep {
 	return &DownloadStep{
@@ -44,6 +48,7 @@ func New(
 		tempDir:         tempDir,
 		backendPlugin:   backendPlugin,
 		wardenClient:    wardenClient,
+		streamer:        streamer,
 		logger:          logger,
 	}
 }
@@ -74,6 +79,7 @@ func (step *DownloadStep) Perform() error {
 	if err != nil {
 		return err
 	}
+	step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s", step.model.Name))
 
 	if step.model.Extract {
 		extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")

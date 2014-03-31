@@ -104,6 +104,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				"/fake/temp/dir",
 				backendPlugin,
 				wardenClient,
+				logStreamer,
 				logger,
 			),
 			upload_step.New(
@@ -113,6 +114,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				compressor,
 				"/fake/temp/dir",
 				wardenClient,
+				logStreamer,
 				logger,
 			),
 			fetch_result_step.New(

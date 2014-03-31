@@ -183,8 +183,8 @@ var _ = Describe("RunAction", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStdout).Should(ContainElement("hi out"))
-				Ω(fakeStreamer.StreamedStderr).Should(ContainElement("hi err"))
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("hi out"))
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {

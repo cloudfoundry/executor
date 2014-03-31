@@ -87,6 +87,7 @@ func (transformer *RunOnceTransformer) StepsFor(
 				transformer.tempDir,
 				transformer.backendPlugin,
 				transformer.wardenClient,
+				logStreamer,
 				transformer.logger,
 			)
 		case models.UploadAction:
@@ -97,6 +98,7 @@ func (transformer *RunOnceTransformer) StepsFor(
 				transformer.compressor,
 				transformer.tempDir,
 				transformer.wardenClient,
+				logStreamer,
 				transformer.logger,
 			)
 		case models.FetchResultAction:

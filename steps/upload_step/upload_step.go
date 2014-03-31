@@ -1,6 +1,7 @@
 package upload_step
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/compressor"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -23,6 +25,7 @@ type UploadStep struct {
 	tempDir         string
 	backendPlugin   backend_plugin.BackendPlugin
 	wardenClient    gordon.Client
+	streamer        log_streamer.LogStreamer
 	logger          *steno.Logger
 }
 
@@ -33,6 +36,7 @@ func New(
 	compressor compressor.Compressor,
 	tempDir string,
 	wardenClient gordon.Client,
+	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *UploadStep {
 	return &UploadStep{
@@ -42,6 +46,7 @@ func New(
 		compressor:      compressor,
 		tempDir:         tempDir,
 		wardenClient:    wardenClient,
+		streamer:        streamer,
 		logger:          logger,
 	}
 }
@@ -103,6 +108,7 @@ func (step *UploadStep) Perform() error {
 		finalFileLocation = fileLocation
 	}
 
+	step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
 	return step.uploader.Upload(finalFileLocation, url)
 }
 

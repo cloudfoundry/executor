@@ -2,7 +2,6 @@ package upload_step_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/sequence"
 	"io/ioutil"
 	"os/user"
 
@@ -10,11 +9,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
-	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+	"github.com/vito/gordon/fake_gordon"
+
+	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon/fake_gordon"
+
+	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
 )
 
 var _ = Describe("UploadStep", func() {
@@ -27,6 +30,7 @@ var _ = Describe("UploadStep", func() {
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 	var compressor *fake_compressor.FakeCompressor
+	var streamer *fake_log_streamer.FakeLogStreamer
 
 	BeforeEach(func() {
 		var err error
@@ -34,6 +38,7 @@ var _ = Describe("UploadStep", func() {
 		result = make(chan error)
 
 		uploadAction = models.UploadAction{
+			Name:     "Mr. Jones",
 			To:       "http://mr_jones",
 			From:     "/Antarctica",
 			Compress: false,
@@ -48,8 +53,10 @@ var _ = Describe("UploadStep", func() {
 
 		logger = steno.NewLogger("test-logger")
 		compressor = &fake_compressor.FakeCompressor{}
+		streamer = fake_log_streamer.New()
 	})
 
+	var stepErr error
 	JustBeforeEach(func() {
 		step = New(
 			"some-container-handle",
@@ -58,35 +65,41 @@ var _ = Describe("UploadStep", func() {
 			compressor,
 			tempDir,
 			wardenClient,
+			streamer,
 			logger,
 		)
+
+		stepErr = step.Perform()
 	})
 
 	Describe("Perform", func() {
-		It("uploads the file to the given URL", func() {
-			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
+		Context("when successful", func() {
+			It("does not return an error", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
+			})
 
-			Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
-			Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
+			It("uploads the file to the given URL", func() {
+				Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
+				Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
+				Ω(uploader.UploadedFileLocations).ShouldNot(BeEmpty())
+				Ω(uploader.UploadedFileLocations[0]).To(ContainSubstring(tempDir))
+			})
 
-			Ω(uploader.UploadedFileLocations).ShouldNot(BeEmpty())
-			Ω(uploader.UploadedFileLocations[0]).To(ContainSubstring(tempDir))
-		})
+			It("copies the file out of the container", func() {
+				currentUser, err := user.Current()
+				Ω(err).ShouldNot(HaveOccurred())
 
-		It("copies the file out of the container", func() {
-			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
+				Ω(wardenClient.ThingsCopiedOut()).ShouldNot(BeEmpty())
 
-			currentUser, err := user.Current()
-			Ω(err).ShouldNot(HaveOccurred())
+				copiedFile := wardenClient.ThingsCopiedOut()[0]
+				Ω(copiedFile.Handle).Should(Equal("some-container-handle"))
+				Ω(copiedFile.Src).To(Equal("/Antarctica"))
+				Ω(copiedFile.Owner).To(Equal(currentUser.Username))
+			})
 
-			Ω(wardenClient.ThingsCopiedOut()).ShouldNot(BeEmpty())
-
-			copiedFile := wardenClient.ThingsCopiedOut()[0]
-			Ω(copiedFile.Handle).Should(Equal("some-container-handle"))
-			Ω(copiedFile.Src).To(Equal("/Antarctica"))
-			Ω(copiedFile.Owner).To(Equal(currentUser.Username))
+			It("loggregates an upload message", func() {
+				Ω(streamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+			})
 		})
 
 		Context("when there is an error copying the file out", func() {
@@ -97,8 +110,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("returns the error", func() {
-				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+				Ω(stepErr).Should(Equal(disaster))
 			})
 		})
 
@@ -108,8 +120,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("fails", func() {
-				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
+				Ω(stepErr).Should(HaveOccurred())
 			})
 		})
 
