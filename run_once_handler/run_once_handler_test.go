@@ -1,7 +1,6 @@
 package run_once_handler_test
 
 import (
-	"github.com/vito/gordon"
 	"io/ioutil"
 	"time"
 
@@ -11,9 +10,11 @@ import (
 	"code.google.com/p/gogoprotobuf/proto"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/vito/gordon"
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
+	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
@@ -37,6 +38,7 @@ var _ = Describe("RunOnceHandler", func() {
 			downloader          *fake_downloader.FakeDownloader
 			uploader            *fake_uploader.FakeUploader
 			extractor           *fake_extractor.FakeExtractor
+			compressor          *fake_compressor.FakeCompressor
 			transformer         *run_once_transformer.RunOnceTransformer
 			taskRegistry        *fake_task_registry.FakeTaskRegistry
 			containerInodeLimit int
@@ -85,6 +87,7 @@ var _ = Describe("RunOnceHandler", func() {
 			downloader = &fake_downloader.FakeDownloader{}
 			uploader = &fake_uploader.FakeUploader{}
 			extractor = &fake_extractor.FakeExtractor{}
+			compressor = &fake_compressor.FakeCompressor{}
 
 			tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
 			Ω(err).ShouldNot(HaveOccurred())
@@ -94,6 +97,7 @@ var _ = Describe("RunOnceHandler", func() {
 				downloader,
 				uploader,
 				extractor,
+				compressor,
 				backendPlugin,
 				wardenClient,
 				logger,

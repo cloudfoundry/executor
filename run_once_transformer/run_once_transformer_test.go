@@ -8,6 +8,8 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/compressor"
+	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor"
@@ -33,6 +35,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		logStreamer        *fake_log_streamer.FakeLogStreamer
 		uploader           uploader.Uploader
 		extractor          extractor.Extractor
+		compressor         compressor.Compressor
 		wardenClient       *fake_gordon.FakeGordon
 		runOnceTransformer *RunOnceTransformer
 		handle             string
@@ -45,6 +48,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
+		compressor = &fake_compressor.FakeCompressor{}
 		logger = &steno.Logger{}
 		handle = "some-handle"
 
@@ -57,6 +61,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			downloader,
 			uploader,
 			extractor,
+			compressor,
 			backendPlugin,
 			wardenClient,
 			logger,
@@ -105,6 +110,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				handle,
 				uploadActionModel,
 				uploader,
+				compressor,
 				"/fake/temp/dir",
 				wardenClient,
 				logger,

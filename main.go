@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/cloudfoundry-incubator/executor/extractor"
-	"github.com/cloudfoundry/gunk/timeprovider"
 	"log"
 	"os"
 	"os/signal"
@@ -13,12 +11,15 @@ import (
 
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/vito/gordon"
 
+	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler"
@@ -217,6 +218,7 @@ func main() {
 		downloader,
 		uploader,
 		extractor,
+		compressor,
 		linuxPlugin,
 		wardenClient,
 		logger,

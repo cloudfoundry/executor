@@ -6,6 +6,7 @@ import (
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
+	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
@@ -22,6 +23,7 @@ type RunOnceTransformer struct {
 	downloader         downloader.Downloader
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
+	compressor         compressor.Compressor
 	backendPlugin      backend_plugin.BackendPlugin
 	wardenClient       gordon.Client
 	logger             *steno.Logger
@@ -34,6 +36,7 @@ func NewRunOnceTransformer(
 	downloader downloader.Downloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
+	compressor compressor.Compressor,
 	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
@@ -44,6 +47,7 @@ func NewRunOnceTransformer(
 		downloader:         downloader,
 		uploader:           uploader,
 		extractor:          extractor,
+		compressor:         compressor,
 		backendPlugin:      backendPlugin,
 		wardenClient:       wardenClient,
 		logger:             logger,
@@ -90,6 +94,7 @@ func (transformer *RunOnceTransformer) StepsFor(
 				*containerHandle,
 				actionModel,
 				transformer.uploader,
+				transformer.compressor,
 				transformer.tempDir,
 				transformer.wardenClient,
 				transformer.logger,
