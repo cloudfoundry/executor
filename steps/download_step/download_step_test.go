@@ -52,24 +52,9 @@ var _ = Describe("DownloadAction", func() {
 		fakeStreamer = fake_log_streamer.New()
 	})
 
-	var stepErr error
-	JustBeforeEach(func() {
-		step = New(
-			"some-container-handle",
-			downloadAction,
-			downloader,
-			extractor,
-			tempDir,
-			backendPlugin,
-			wardenClient,
-			fakeStreamer,
-			logger,
-		)
-
-		stepErr = step.Perform()
-	})
-
 	Describe("Perform", func() {
+		var stepErr error
+
 		BeforeEach(func() {
 			downloadAction = models.DownloadAction{
 				Name:    "Mr. Jones",
@@ -77,6 +62,22 @@ var _ = Describe("DownloadAction", func() {
 				To:      "/tmp/Antarctica",
 				Extract: false,
 			}
+		})
+
+		JustBeforeEach(func() {
+			step = New(
+				"some-container-handle",
+				downloadAction,
+				downloader,
+				extractor,
+				tempDir,
+				backendPlugin,
+				wardenClient,
+				fakeStreamer,
+				logger,
+			)
+
+			stepErr = step.Perform()
 		})
 
 		Context("when extract is false", func() {
@@ -97,10 +98,12 @@ var _ = Describe("DownloadAction", func() {
 				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
 			})
 
-			Context("when a streamer is configured", func() {
-				It("streams a download message", func() {
-					Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Downloading Mr. Jones"))
-				})
+			It("streams a download message", func() {
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Downloading Mr. Jones"))
+			})
+
+			It("does not stream an error", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(Equal(""))
 			})
 		})
 

@@ -51,13 +51,20 @@ func New(
 	}
 }
 
-func (step *UploadStep) Perform() error {
+func (step *UploadStep) Perform() (err error) {
 	step.logger.Infod(
 		map[string]interface{}{
 			"handle": step.containerHandle,
 		},
 		"runonce.handle.upload-step",
 	)
+
+	step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	defer func() {
+		if err != nil {
+			step.streamer.StreamStderr(fmt.Sprintf("Uploading %s failed", step.model.Name))
+		}
+	}()
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "upload")
 	if err != nil {
@@ -82,7 +89,7 @@ func (step *UploadStep) Perform() error {
 		return err
 	}
 
-	url, err := url.Parse(step.model.To)
+	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
 		return err
 	}
@@ -106,10 +113,6 @@ func (step *UploadStep) Perform() error {
 		}
 	} else {
 		finalFileLocation = fileLocation
-	}
-
-	if step.streamer != nil {
-		step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
 	}
 
 	return step.uploader.Upload(finalFileLocation, url)

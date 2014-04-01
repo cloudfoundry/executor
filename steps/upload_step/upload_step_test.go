@@ -2,7 +2,6 @@ package upload_step_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"io/ioutil"
 	"os/user"
 
@@ -32,19 +31,11 @@ var _ = Describe("UploadStep", func() {
 	var logger *steno.Logger
 	var compressor *fake_compressor.FakeCompressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var streamer log_streamer.LogStreamer
 
 	BeforeEach(func() {
 		var err error
 
 		result = make(chan error)
-
-		uploadAction = models.UploadAction{
-			Name:     "Mr. Jones",
-			To:       "http://mr_jones",
-			From:     "/Antarctica",
-			Compress: false,
-		}
 
 		uploader = &fake_uploader.FakeUploader{}
 
@@ -59,23 +50,33 @@ var _ = Describe("UploadStep", func() {
 		fakeStreamer = fake_log_streamer.New()
 	})
 
-	var stepErr error
-	JustBeforeEach(func() {
-		step = New(
-			"some-container-handle",
-			uploadAction,
-			uploader,
-			compressor,
-			tempDir,
-			wardenClient,
-			streamer,
-			logger,
-		)
-
-		stepErr = step.Perform()
-	})
-
 	Describe("Perform", func() {
+		var stepErr error
+
+		BeforeEach(func() {
+			uploadAction = models.UploadAction{
+				Name:     "Mr. Jones",
+				To:       "http://mr_jones",
+				From:     "/Antarctica",
+				Compress: false,
+			}
+		})
+
+		JustBeforeEach(func() {
+			step = New(
+				"some-container-handle",
+				uploadAction,
+				uploader,
+				compressor,
+				tempDir,
+				wardenClient,
+				fakeStreamer,
+				logger,
+			)
+
+			stepErr = step.Perform()
+		})
+
 		Context("when successful", func() {
 			It("does not return an error", func() {
 				Ω(stepErr).ShouldNot(HaveOccurred())
@@ -103,14 +104,26 @@ var _ = Describe("UploadStep", func() {
 				Ω(copiedFile.Owner).To(Equal(currentUser.Username))
 			})
 
-			Context("when a streamer is configured", func() {
-				BeforeEach(func() {
-					streamer = fakeStreamer
-				})
+			It("streams an upload message", func() {
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+			})
 
-				It("streams an upload message", func() {
-					Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
-				})
+			It("does not stream an error", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(Equal(""))
+			})
+		})
+
+		Context("when there is an error parsing the upload url", func() {
+			BeforeEach(func() {
+				uploadAction.To = "foo/bar"
+			})
+
+			It("returns an error", func() {
+				Ω(stepErr).Should(HaveOccurred())
+			})
+
+			It("loggregates a message to STDERR", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 			})
 		})
 
@@ -124,6 +137,10 @@ var _ = Describe("UploadStep", func() {
 			It("returns the error", func() {
 				Ω(stepErr).Should(Equal(disaster))
 			})
+
+			It("loggregates a message to STDERR stream", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+			})
 		})
 
 		Context("when there is an error uploading", func() {
@@ -134,15 +151,15 @@ var _ = Describe("UploadStep", func() {
 			It("fails", func() {
 				Ω(stepErr).Should(HaveOccurred())
 			})
+
+			It("loggregates a message to STDERR stream", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+			})
 		})
 
 		Context("when compress is set to true", func() {
 			BeforeEach(func() {
-				uploadAction = models.UploadAction{
-					To:       "http://mr_jones",
-					From:     "/Antarctica",
-					Compress: true,
-				}
+				uploadAction.Compress = true
 			})
 
 			It("compresses the src to a tgz file", func() {
@@ -163,6 +180,10 @@ var _ = Describe("UploadStep", func() {
 				It("returns the error", func() {
 					err := step.Perform()
 					Ω(err).Should(Equal(disaster))
+				})
+
+				It("loggregates a message to STDERR stream", func() {
+					Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 				})
 			})
 		})
