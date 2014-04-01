@@ -2,6 +2,7 @@ package download_step_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"io/ioutil"
 
@@ -30,7 +31,8 @@ var _ = Describe("DownloadAction", func() {
 	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
-	var streamer *fake_log_streamer.FakeLogStreamer
+	var fakeStreamer *fake_log_streamer.FakeLogStreamer
+	var streamer log_streamer.LogStreamer
 
 	BeforeEach(func() {
 		var err error
@@ -48,7 +50,8 @@ var _ = Describe("DownloadAction", func() {
 		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
-		streamer = fake_log_streamer.New()
+
+		fakeStreamer = fake_log_streamer.New()
 	})
 
 	var stepErr error
@@ -64,6 +67,7 @@ var _ = Describe("DownloadAction", func() {
 			streamer,
 			logger,
 		)
+
 		stepErr = step.Perform()
 	})
 
@@ -95,8 +99,14 @@ var _ = Describe("DownloadAction", func() {
 				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
 			})
 
-			It("loggregates a download message", func() {
-				Ω(streamer.StreamedStdout).Should(ContainSubstring("Downloaded Mr. Jones"))
+			Context("when a streamer is configured", func() {
+				BeforeEach(func() {
+					streamer = fakeStreamer
+				})
+
+				It("streams a download message", func() {
+					Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Downloaded Mr. Jones"))
+				})
 			})
 		})
 

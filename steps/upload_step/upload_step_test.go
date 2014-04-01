@@ -2,6 +2,7 @@ package upload_step_test
 
 import (
 	"errors"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"io/ioutil"
 	"os/user"
 
@@ -30,7 +31,8 @@ var _ = Describe("UploadStep", func() {
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 	var compressor *fake_compressor.FakeCompressor
-	var streamer *fake_log_streamer.FakeLogStreamer
+	var fakeStreamer *fake_log_streamer.FakeLogStreamer
+	var streamer log_streamer.LogStreamer
 
 	BeforeEach(func() {
 		var err error
@@ -53,7 +55,8 @@ var _ = Describe("UploadStep", func() {
 
 		logger = steno.NewLogger("test-logger")
 		compressor = &fake_compressor.FakeCompressor{}
-		streamer = fake_log_streamer.New()
+
+		fakeStreamer = fake_log_streamer.New()
 	})
 
 	var stepErr error
@@ -100,8 +103,14 @@ var _ = Describe("UploadStep", func() {
 				Ω(copiedFile.Owner).To(Equal(currentUser.Username))
 			})
 
-			It("loggregates an upload message", func() {
-				Ω(streamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+			Context("when a streamer is configured", func() {
+				BeforeEach(func() {
+					streamer = fakeStreamer
+				})
+
+				It("streams an upload message", func() {
+					Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+				})
 			})
 		})
 

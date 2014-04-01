@@ -108,7 +108,10 @@ func (step *UploadStep) Perform() error {
 		finalFileLocation = fileLocation
 	}
 
-	step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	if step.streamer != nil {
+		step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	}
+
 	return step.uploader.Upload(finalFileLocation, url)
 }
 

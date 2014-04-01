@@ -79,7 +79,10 @@ func (step *DownloadStep) Perform() error {
 	if err != nil {
 		return err
 	}
-	step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s", step.model.Name))
+
+	if step.streamer != nil {
+		step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s", step.model.Name))
+	}
 
 	if step.model.Extract {
 		extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")
