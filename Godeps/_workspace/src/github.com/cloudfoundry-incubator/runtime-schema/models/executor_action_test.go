@@ -54,14 +54,14 @@ var _ = Describe("ExecutorAction", func() {
 				"action": "download",
 				"args": {
 					"from": "web_location",
-					"name": "ruby buildback",
+					"name": "some asset",
 					"to": "local_location",
 					"extract": true
 				}
 			}`,
 			ExecutorAction{
 				Action: DownloadAction{
-					Name:    "ruby buildback",
+					Name:    "some asset",
 					From:    "web_location",
 					To:      "local_location",
 					Extract: true,
@@ -75,7 +75,7 @@ var _ = Describe("ExecutorAction", func() {
 			`{
 				"action": "upload",
 				"args": {
-					"name": "app bits",
+					"name": "some output",
 					"from": "local_location",
 					"to": "web_location",
 					"compress": true
@@ -83,7 +83,7 @@ var _ = Describe("ExecutorAction", func() {
 			}`,
 			ExecutorAction{
 				Action: UploadAction{
-					Name:     "app bits",
+					Name:     "some output",
 					From:     "local_location",
 					To:       "web_location",
 					Compress: true,
@@ -97,7 +97,7 @@ var _ = Describe("ExecutorAction", func() {
 			`{
 				"action": "run",
 				"args": {
-					"name": "staging",
+					"name": "nuke",
 					"script": "rm -rf /",
 					"timeout": 10000000,
 					"env": [
@@ -108,7 +108,7 @@ var _ = Describe("ExecutorAction", func() {
 			}`,
 			ExecutorAction{
 				Action: RunAction{
-					Name:    "staging",
+					Name:    "nuke",
 					Script:  "rm -rf /",
 					Timeout: 10 * time.Millisecond,
 					Env: [][]string{
@@ -146,6 +146,7 @@ var _ = Describe("ExecutorAction", func() {
 					"action": {
 						"action": "run",
 						"args": {
+							"name": "nuke",
 							"script": "rm -rf /",
 							"timeout": 10000000,
 							"env": [
@@ -160,6 +161,7 @@ var _ = Describe("ExecutorAction", func() {
 				Action: TryAction{
 					Action: ExecutorAction{
 						Action: RunAction{
+							Name:    "nuke",
 							Script:  "rm -rf /",
 							Timeout: 10 * time.Millisecond,
 							Env: [][]string{
