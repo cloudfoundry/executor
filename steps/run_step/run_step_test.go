@@ -15,7 +15,6 @@ import (
 	"github.com/vito/gordon/fake_gordon"
 	"github.com/vito/gordon/warden"
 
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/steps/run_step"
 )
@@ -25,7 +24,6 @@ var _ = Describe("RunAction", func() {
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var streamer log_streamer.LogStreamer
 	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
@@ -36,6 +34,7 @@ var _ = Describe("RunAction", func() {
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
 		runAction = models.RunAction{
+			Name:   "Staging",
 			Script: "sudo reboot",
 			Env: [][]string{
 				{"A", "1"},
@@ -63,7 +62,7 @@ var _ = Describe("RunAction", func() {
 			"some-container-handle",
 			runAction,
 			fileDescriptorLimit,
-			streamer,
+			fakeStreamer,
 			backendPlugin,
 			wardenClient,
 			logger,
@@ -71,15 +70,22 @@ var _ = Describe("RunAction", func() {
 	})
 
 	Describe("Perform", func() {
+		var stepErr error
+
+		JustBeforeEach(func() {
+			stepErr = step.Perform()
+		})
+
 		Context("when the script succeeds", func() {
 			BeforeEach(func() {
 				processPayloadStream <- successfulExit
 			})
 
-			It("executes the command in the passed-in container", func() {
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+			It("does not return an error", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
+			})
 
+			It("executes the command in the passed-in container", func() {
 				runningScript := wardenClient.ScriptsThatRan()[0]
 				Ω(runningScript.Handle).Should(Equal("some-container-handle"))
 				Ω(runningScript.Script).Should(Equal("export A=\"1\"\nsudo reboot"))
@@ -93,22 +99,21 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("should return an error with the exit code", func() {
-				err := step.Perform()
-				if Ω(err).Should(HaveOccurred()) {
-					Ω(err.Error()).Should(ContainSubstring("19"))
-				}
+				Ω(stepErr).Should(HaveOccurred())
+				Ω(stepErr.Error()).Should(ContainSubstring("19"))
 			})
 		})
 
 		Context("when the step does not have a timeout", func() {
-			It("does not enforce one (i.e. zero-value time.Duration)", func() {
+			BeforeEach(func() {
 				go func() {
 					time.Sleep(100 * time.Millisecond)
 					processPayloadStream <- successfulExit
 				}()
+			})
 
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+			It("does not enforce one (i.e. zero-value time.Duration)", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
 			})
 		})
 
@@ -116,29 +121,29 @@ var _ = Describe("RunAction", func() {
 			BeforeEach(func() {
 				runActionWithTimeout := runAction
 				runActionWithTimeout.Timeout = 100 * time.Millisecond
-
 				runAction = runActionWithTimeout
 			})
 
 			Context("and the script completes in time", func() {
-				It("succeeds", func() {
+				BeforeEach(func() {
 					processPayloadStream <- successfulExit
+				})
 
-					err := step.Perform()
-					Ω(err).ShouldNot(HaveOccurred())
+				It("succeeds", func() {
+					Ω(stepErr).ShouldNot(HaveOccurred())
 				})
 			})
 
 			Context("and the script takes longer than the timeout", func() {
-				It("returns a TimeoutError", func() {
+				BeforeEach(func() {
 					go func() {
 						time.Sleep(1 * time.Second)
 						processPayloadStream <- successfulExit
 					}()
-
-					err := step.Perform()
-					Ω(err).Should(Equal(TimeoutError{runAction}))
-					Ω(err.Error()).Should(Equal("timed out after 100ms"))
+				})
+				It("returns a TimeoutError", func() {
+					Ω(stepErr).Should(Equal(TimeoutError{runAction}))
+					Ω(stepErr.Error()).Should(Equal("timed out after 100ms"))
 				})
 			})
 		})
@@ -149,13 +154,16 @@ var _ = Describe("RunAction", func() {
 					Events: []string{"happy land", "out of memory", "another event"},
 				})
 
-				processPayloadStream <- successfulExit
+				processPayloadStream <- failedExit
 			})
 
 			It("returns a RunActionOOMError", func() {
-				err := step.Perform()
-				Ω(err).Should(Equal(OOMError))
-				Ω(err.Error()).Should(Equal("out of memory"))
+				Ω(stepErr).Should(Equal(OOMError))
+				Ω(stepErr.Error()).Should(Equal("out of memory"))
+			})
+
+			It("loggregates a message with status code to STDERR", func() {
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Staging exited with status 19 (out of memory)"))
 			})
 		})
 
@@ -164,8 +172,6 @@ var _ = Describe("RunAction", func() {
 			stderr := warden.ProcessPayload_stderr
 
 			BeforeEach(func() {
-				streamer = fakeStreamer
-
 				processPayloadStream <- &warden.ProcessPayload{
 					Source: &stdout,
 					Data:   proto.String("hi out"),
@@ -179,18 +185,16 @@ var _ = Describe("RunAction", func() {
 				processPayloadStream <- successfulExit
 			})
 
-			It("emits the output chunks as they come in", func() {
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+			It("does not return an error", func() {
+				Ω(stepErr).ShouldNot(HaveOccurred())
+			})
 
+			It("emits the output chunks as they come in", func() {
 				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("hi out"))
 				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-
 				Ω(fakeStreamer.Flushed).Should(BeTrue())
 			})
 		})
@@ -203,13 +207,16 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns the error", func() {
-				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+				Ω(stepErr).Should(Equal(disaster))
 			})
 		})
 	})
 
 	Describe("Cancel", func() {
+		JustBeforeEach(func() {
+			step.Cancel()
+		})
+
 		It("stops the container", func() {
 			step.Cancel()
 			Ω(wardenClient.StoppedHandles()).Should(ContainElement("some-container-handle"))
