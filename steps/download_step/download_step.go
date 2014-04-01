@@ -53,7 +53,7 @@ func New(
 	}
 }
 
-func (step *DownloadStep) Perform() error {
+func (step *DownloadStep) Perform() (err error) {
 	step.logger.Infod(
 		map[string]interface{}{
 			"handle": step.containerHandle,
@@ -61,7 +61,14 @@ func (step *DownloadStep) Perform() error {
 		"runonce.handle.download-action",
 	)
 
-	url, err := url.Parse(step.model.From)
+	step.streamer.StreamStdout(fmt.Sprintf("Downloading %s", step.model.Name))
+	defer func() {
+		if err != nil {
+			step.streamer.StreamStderr(fmt.Sprintf("Downloading %s failed", step.model.Name))
+		}
+	}()
+
+	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		return err
 	}
@@ -78,10 +85,6 @@ func (step *DownloadStep) Perform() error {
 	err = step.downloader.Download(url, downloadedFile)
 	if err != nil {
 		return err
-	}
-
-	if step.streamer != nil {
-		step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s", step.model.Name))
 	}
 
 	if step.model.Extract {

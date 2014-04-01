@@ -59,13 +59,14 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) error {
 
 		resp, err = httpClient.Do(request)
 		if err == nil {
+			defer resp.Body.Close()
 			break
 		}
 	}
+
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
