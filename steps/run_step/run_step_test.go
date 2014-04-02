@@ -2,8 +2,9 @@ package run_step_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/sequence"
 	"time"
+
+	"github.com/cloudfoundry-incubator/executor/sequence"
 
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	. "github.com/onsi/ginkgo"
@@ -104,6 +105,18 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
+		Context("when Warden errors", func() {
+			disaster := errors.New("I, like, tried but failed")
+
+			BeforeEach(func() {
+				wardenClient.SetRunReturnValues(0, nil, disaster)
+			})
+
+			It("returns the error", func() {
+				Ω(stepErr).Should(Equal(disaster))
+			})
+		})
+
 		Context("when the step does not have a timeout", func() {
 			BeforeEach(func() {
 				go func() {
@@ -167,7 +180,7 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when given an emitter", func() {
+		Describe("emitting logs", func() {
 			stdout := warden.ProcessPayload_stdout
 			stderr := warden.ProcessPayload_stderr
 
@@ -185,10 +198,6 @@ var _ = Describe("RunAction", func() {
 				processPayloadStream <- successfulExit
 			})
 
-			It("does not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
-			})
-
 			It("emits the output chunks as they come in", func() {
 				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("hi out"))
 				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("hi err"))
@@ -196,18 +205,6 @@ var _ = Describe("RunAction", func() {
 
 			It("should flush the output when the code exits", func() {
 				Ω(fakeStreamer.Flushed).Should(BeTrue())
-			})
-		})
-
-		Context("when Warden errors", func() {
-			disaster := errors.New("I, like, tried but failed")
-
-			BeforeEach(func() {
-				wardenClient.SetRunReturnValues(0, nil, disaster)
-			})
-
-			It("returns the error", func() {
-				Ω(stepErr).Should(Equal(disaster))
 			})
 		})
 	})

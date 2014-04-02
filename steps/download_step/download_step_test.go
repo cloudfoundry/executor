@@ -2,8 +2,9 @@ package download_step_test
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"io/ioutil"
+
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

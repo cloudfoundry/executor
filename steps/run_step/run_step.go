@@ -87,21 +87,17 @@ func (step *RunStep) Perform() error {
 
 		for payload := range stream {
 			if payload.ExitStatus != nil {
-				if step.streamer != nil {
-					step.streamer.Flush()
-				}
+				step.streamer.Flush()
 
 				exitStatusChan <- payload.GetExitStatus()
 				break
 			}
 
-			if step.streamer != nil {
-				switch *payload.Source {
-				case warden.ProcessPayload_stdout:
-					step.streamer.StreamStdout(payload.GetData())
-				case warden.ProcessPayload_stderr:
-					step.streamer.StreamStderr(payload.GetData())
-				}
+			switch *payload.Source {
+			case warden.ProcessPayload_stdout:
+				step.streamer.StreamStdout(payload.GetData())
+			case warden.ProcessPayload_stderr:
+				step.streamer.StreamStderr(payload.GetData())
 			}
 		}
 	}()

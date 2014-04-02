@@ -8,6 +8,7 @@ import (
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -58,8 +59,8 @@ var _ = Describe("LogStreamerFactory", func() {
 			logConfig.SourceName = ""
 		})
 
-		It("does not make a log streamer", func() {
-			Ω(factory(logConfig)).To(BeNil())
+		It("returns a noop streamer", func() {
+			Ω(factory(logConfig)).To(Equal(log_streamer.NoopStreamer{}))
 		})
 	})
 })

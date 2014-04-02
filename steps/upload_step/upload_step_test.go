@@ -22,7 +22,6 @@ import (
 
 	Compressor "github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
@@ -41,7 +40,6 @@ var _ = Describe("UploadStep", func() {
 	var logger *steno.Logger
 	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var streamer log_streamer.LogStreamer
 	var currentUser *user.User
 	var uploadTarget *httptest.Server
 	var uploadedPayload []byte
@@ -94,7 +92,7 @@ var _ = Describe("UploadStep", func() {
 			compressor,
 			tempDir,
 			wardenClient,
-			streamer,
+			fakeStreamer,
 			logger,
 		)
 	})
@@ -155,13 +153,12 @@ var _ = Describe("UploadStep", func() {
 			Ω(string(tarContents["another-file"])).Should(Equal("another-file-contents"))
 		})
 
-		Context("when a streamer is configured", func() {
+		Describe("streaming logs for uploads", func() {
 			BeforeEach(func() {
 				fakeUploader := &fake_uploader.FakeUploader{}
 				fakeUploader.UploadSize = 1024
 
 				uploader = fakeUploader
-				streamer = fakeStreamer
 			})
 
 			It("streams an upload message", func() {
@@ -189,8 +186,6 @@ var _ = Describe("UploadStep", func() {
 		Context("when there is an error parsing the upload url", func() {
 			BeforeEach(func() {
 				uploadAction.To = "foo/bar"
-
-				streamer = fakeStreamer
 			})
 
 			It("returns the error and loggregates a message to STDERR", func() {
@@ -211,8 +206,6 @@ var _ = Describe("UploadStep", func() {
 				}, func(fake_gordon.CopiedOut) error {
 					return disaster
 				})
-
-				streamer = fakeStreamer
 			})
 
 			It("returns the error loggregates a message to STDERR stream", func() {
@@ -228,7 +221,6 @@ var _ = Describe("UploadStep", func() {
 				fakeUploader := &fake_uploader.FakeUploader{}
 				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
 
-				streamer = fakeStreamer
 				uploader = fakeUploader
 			})
 
@@ -247,7 +239,6 @@ var _ = Describe("UploadStep", func() {
 				fakeCompressor := &fake_compressor.FakeCompressor{}
 				fakeCompressor.CompressError = disaster
 
-				streamer = fakeStreamer
 				compressor = fakeCompressor
 			})
 
