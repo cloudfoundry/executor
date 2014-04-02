@@ -58,6 +58,19 @@ func compressRecursively(file *os.File, relativeFrom string, tw *tar.Writer) err
 			return err
 		}
 
+		// Add subfolders as entries.  This even works for empty dirs.
+		if relativeFrom != file.Name() {
+			hdr, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+
+			err = tw.WriteHeader(hdr)
+			if err != nil {
+				return err
+			}
+		}
+
 		for _, info := range files {
 			subName := filepath.Join(file.Name(), info.Name())
 

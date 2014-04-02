@@ -90,9 +90,24 @@ func (step *DownloadStep) Perform() error {
 			return err
 		}
 
-		err = step.extractor.Extract(downloadedFile.Name(), extractionDir)
 		defer os.RemoveAll(extractionDir)
+
+		err = step.extractor.Extract(downloadedFile.Name(), extractionDir)
 		if err != nil {
+			info, _ := downloadedFile.Stat()
+
+			body, _ := ioutil.ReadAll(downloadedFile)
+
+			step.logger.Warnd(
+				map[string]interface{}{
+					"error": err.Error(),
+					"url":   step.model.From,
+					"info":  info.Size(),
+					"body":  string(body),
+				},
+				"downloader.extract-failed",
+			)
+
 			return err
 		}
 		return step.copyExtractedFiles(extractionDir, step.model.To)

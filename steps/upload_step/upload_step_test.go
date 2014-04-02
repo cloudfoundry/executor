@@ -1,52 +1,70 @@
 package upload_step_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os/user"
+	"path/filepath"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
-	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
-	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
-	"github.com/vito/gordon/fake_gordon"
-
-	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/vito/gordon/fake_gordon"
 
+	Compressor "github.com/cloudfoundry-incubator/executor/compressor"
+	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
+	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
+	Uploader "github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 )
 
 var _ = Describe("UploadStep", func() {
 	var step sequence.Step
 	var result chan error
 
-	var uploadAction models.UploadAction
-	var uploader *fake_uploader.FakeUploader
+	var uploadAction *models.UploadAction
+	var uploader Uploader.Uploader
 	var tempDir string
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
-	var compressor *fake_compressor.FakeCompressor
+	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var streamer log_streamer.LogStreamer
+	var currentUser *user.User
+	var uploadTarget *httptest.Server
+	var uploadedPayload []byte
 
 	BeforeEach(func() {
 		var err error
 
 		result = make(chan error)
 
-		uploadAction = models.UploadAction{
-			Name:     "Mr. Jones",
-			To:       "http://mr_jones",
-			From:     "/Antarctica",
-			Compress: false,
-		}
+		uploadTarget = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			var err error
 
-		uploader = &fake_uploader.FakeUploader{}
+			uploadedPayload, err = ioutil.ReadAll(req.Body)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		uploadAction = &models.UploadAction{
+			Name: "Mr. Jones",
+			To:   uploadTarget.URL,
+			From: "/Antarctica",
+		}
 
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
@@ -54,16 +72,24 @@ var _ = Describe("UploadStep", func() {
 		wardenClient = fake_gordon.New()
 
 		logger = steno.NewLogger("test-logger")
-		compressor = &fake_compressor.FakeCompressor{}
+
+		compressor = Compressor.New()
+		uploader = Uploader.New(5*time.Second, logger)
 
 		fakeStreamer = fake_log_streamer.New()
+
+		currentUser, err = user.Current()
+		Ω(err).ShouldNot(HaveOccurred())
 	})
 
-	var stepErr error
+	AfterEach(func() {
+		uploadTarget.Close()
+	})
+
 	JustBeforeEach(func() {
 		step = New(
 			"some-container-handle",
-			uploadAction,
+			*uploadAction,
 			uploader,
 			compressor,
 			tempDir,
@@ -71,46 +97,74 @@ var _ = Describe("UploadStep", func() {
 			streamer,
 			logger,
 		)
-
-		stepErr = step.Perform()
 	})
 
 	Describe("Perform", func() {
-		Context("when successful", func() {
-			It("does not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
-			})
-
-			It("uploads the file to the given URL", func() {
-				Ω(uploader.UploadUrls).ShouldNot(BeEmpty())
-				Ω(uploader.UploadUrls[0].Host).To(ContainSubstring("mr_jones"))
-			})
-
-			It("uploads the correct file location", func() {
-				Ω(uploader.UploadedFileLocations).ShouldNot(BeEmpty())
-				Ω(uploader.UploadedFileLocations[0]).To(ContainSubstring(tempDir))
-			})
-
-			It("copies the file out of the container", func() {
-				currentUser, err := user.Current()
+		It("uploads a .tgz to the destination", func() {
+			wardenClient.WhenCopyingOut(fake_gordon.CopiedOut{
+				Handle: "some-container-handle",
+				Src:    "/Antarctica",
+			}, func(out fake_gordon.CopiedOut) error {
+				err := ioutil.WriteFile(
+					filepath.Join(out.Dst, "some-file"),
+					[]byte("some-file-contents"),
+					0644,
+				)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(wardenClient.ThingsCopiedOut()).ShouldNot(BeEmpty())
+				err = ioutil.WriteFile(
+					filepath.Join(out.Dst, "another-file"),
+					[]byte("another-file-contents"),
+					0644,
+				)
+				Ω(err).ShouldNot(HaveOccurred())
 
-				copiedFile := wardenClient.ThingsCopiedOut()[0]
-				Ω(copiedFile.Handle).Should(Equal("some-container-handle"))
-				Ω(copiedFile.Src).To(Equal("/Antarctica"))
-				Ω(copiedFile.Owner).To(Equal(currentUser.Username))
+				Ω(out.Owner).To(Equal(currentUser.Username))
+
+				return nil
 			})
 
-			Context("when a streamer is configured", func() {
-				BeforeEach(func() {
-					streamer = fakeStreamer
-				})
+			err := step.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
-				It("streams an upload message", func() {
-					Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
-				})
+			Ω(uploadedPayload).ShouldNot(BeZero())
+
+			ungzip, err := gzip.NewReader(bytes.NewReader(uploadedPayload))
+			Ω(err).ShouldNot(HaveOccurred())
+
+			untar := tar.NewReader(ungzip)
+
+			tarContents := map[string][]byte{}
+			for {
+				hdr, err := untar.Next()
+				if err == io.EOF {
+					break
+				}
+
+				Ω(err).ShouldNot(HaveOccurred())
+
+				content, err := ioutil.ReadAll(untar)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				tarContents[hdr.Name] = content
+			}
+
+			Ω(tarContents).Should(HaveKey("some-file"))
+			Ω(tarContents).Should(HaveKey("another-file"))
+			Ω(string(tarContents["some-file"])).Should(Equal("some-file-contents"))
+			Ω(string(tarContents["another-file"])).Should(Equal("another-file-contents"))
+		})
+
+		Context("when a streamer is configured", func() {
+			BeforeEach(func() {
+				streamer = fakeStreamer
+			})
+
+			It("streams an upload message", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
 			})
 		})
 
@@ -118,52 +172,47 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.SetCopyOutErr(disaster)
+				wardenClient.WhenCopyingOut(fake_gordon.CopiedOut{
+					Handle: "some-container-handle",
+					Src:    "/Antarctica",
+				}, func(fake_gordon.CopiedOut) error {
+					return disaster
+				})
 			})
 
 			It("returns the error", func() {
-				Ω(stepErr).Should(Equal(disaster))
+				err := step.Perform()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 
 		Context("when there is an error uploading", func() {
 			BeforeEach(func() {
-				uploader.AlwaysFail() //and bring shame and dishonor to your house
+				fakeUploader := &fake_uploader.FakeUploader{}
+				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
+
+				uploader = fakeUploader
 			})
 
 			It("fails", func() {
-				Ω(stepErr).Should(HaveOccurred())
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 
-		Context("when compress is set to true", func() {
+		Context("and compressing fails", func() {
+			disaster := errors.New("oh no!")
+
 			BeforeEach(func() {
-				uploadAction = models.UploadAction{
-					To:       "http://mr_jones",
-					From:     "/Antarctica",
-					Compress: true,
-				}
+				fakeCompressor := &fake_compressor.FakeCompressor{}
+				fakeCompressor.CompressError = disaster
+
+				compressor = fakeCompressor
 			})
 
-			It("compresses the src to a tgz file", func() {
+			It("returns the error", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(compressor.Src).Should(ContainSubstring(tempDir))
-				Ω(compressor.Dest).Should(ContainSubstring(tempDir))
-			})
-
-			Context("and compressing fails", func() {
-				disaster := errors.New("oh no!")
-
-				BeforeEach(func() {
-					compressor.CompressError = disaster
-				})
-
-				It("returns the error", func() {
-					err := step.Perform()
-					Ω(err).Should(Equal(disaster))
-				})
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

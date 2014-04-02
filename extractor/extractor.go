@@ -129,12 +129,17 @@ func extractZipArchiveFile(file *zip.File, dest string, input io.Reader) error {
 	filePath := filepath.Join(dest, file.Name)
 	fileInfo := file.FileInfo()
 
-	err := os.MkdirAll(filepath.Dir(filePath), os.ModeDir|os.ModePerm)
+	err := os.MkdirAll(filepath.Dir(filePath), 0755)
 	if err != nil {
 		return err
 	}
 
-	if !fileInfo.IsDir() {
+	if fileInfo.IsDir() {
+		err := os.Mkdir(filePath, fileInfo.Mode())
+		if err != nil {
+			return err
+		}
+	} else {
 		fileCopy, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileInfo.Mode())
 		if err != nil {
 			return err
@@ -154,12 +159,17 @@ func extractTarArchiveFile(header *tar.Header, dest string, input io.Reader) err
 	filePath := filepath.Join(dest, header.Name)
 	fileInfo := header.FileInfo()
 
-	err := os.MkdirAll(filepath.Dir(filePath), os.ModeDir|os.ModePerm)
+	err := os.MkdirAll(filepath.Dir(filePath), 0755)
 	if err != nil {
 		return err
 	}
 
-	if !fileInfo.IsDir() {
+	if fileInfo.IsDir() {
+		err := os.Mkdir(filePath, fileInfo.Mode())
+		if err != nil {
+			return err
+		}
+	} else {
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			return os.Symlink(header.Linkname, filePath)
 		}

@@ -59,13 +59,12 @@ func (step *UploadStep) Perform() error {
 		"runonce.handle.upload-step",
 	)
 
-	tempFile, err := ioutil.TempFile(step.tempDir, "upload")
+	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
 	if err != nil {
 		return err
 	}
-	fileLocation := tempFile.Name()
-	tempFile.Close()
-	defer os.RemoveAll(fileLocation)
+
+	defer os.RemoveAll(tempDir)
 
 	currentUser, err := user.Current()
 	if err != nil {
@@ -75,7 +74,7 @@ func (step *UploadStep) Perform() error {
 	_, err = step.wardenClient.CopyOut(
 		step.containerHandle,
 		step.model.From,
-		fileLocation,
+		tempDir,
 		currentUser.Username,
 	)
 	if err != nil {
@@ -87,25 +86,20 @@ func (step *UploadStep) Perform() error {
 		return err
 	}
 
-	var finalFileLocation string
-	if step.model.Compress {
-		tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
-		if err != nil {
-			return err
-		}
+	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
+	if err != nil {
+		return err
+	}
 
-		tempFile.Close()
+	tempFile.Close()
 
-		finalFileLocation = tempFile.Name()
+	finalFileLocation := tempFile.Name()
 
-		defer os.RemoveAll(finalFileLocation)
+	defer os.RemoveAll(finalFileLocation)
 
-		err = step.compressor.Compress(fileLocation, finalFileLocation)
-		if err != nil {
-			return err
-		}
-	} else {
-		finalFileLocation = fileLocation
+	err = step.compressor.Compress(tempDir, finalFileLocation)
+	if err != nil {
+		return err
 	}
 
 	if step.streamer != nil {
