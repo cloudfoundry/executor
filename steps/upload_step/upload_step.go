@@ -8,6 +8,7 @@ import (
 	"os/user"
 
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/bytefmt"
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
@@ -115,7 +116,13 @@ func (step *UploadStep) Perform() (err error) {
 		finalFileLocation = fileLocation
 	}
 
-	return step.uploader.Upload(finalFileLocation, url)
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
+	if err != nil {
+		return err
+	}
+
+	step.streamer.StreamStdout(fmt.Sprintf("Uploaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(uploadedBytes))))
+	return nil
 }
 
 func (step *UploadStep) Cancel() {}

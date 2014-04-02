@@ -76,6 +76,10 @@
 			"Rev": "bad854a45453ec22d99c8bd982e2302f64d3fc37"
 		},
 		{
+			"ImportPath": "github.com/pivotal-golang/bytefmt",
+			"Rev": "fc677a812926ed965154270deb25e96cbbdc02d5"
+		},
+		{
 			"ImportPath": "github.com/vito/gordon",
 			"Rev": "abe24aba708d3b78e5a85b7d6da037a53ecebdcc"
 		}

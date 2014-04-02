@@ -38,6 +38,7 @@ var _ = Describe("DownloadAction", func() {
 		result = make(chan error)
 
 		downloader = &fake_downloader.FakeDownloader{}
+		downloader.DownloadSize = 1024
 		extractor = &fake_extractor.FakeExtractor{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
@@ -100,6 +101,10 @@ var _ = Describe("DownloadAction", func() {
 
 			It("streams a download message", func() {
 				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Downloading Mr. Jones"))
+			})
+
+			It("streams the download filesize", func() {
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("(1K)"))
 			})
 
 			It("does not stream an error", func() {

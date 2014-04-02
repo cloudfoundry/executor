@@ -38,7 +38,7 @@ var _ = Describe("UploadStep", func() {
 		result = make(chan error)
 
 		uploader = &fake_uploader.FakeUploader{}
-
+		uploader.UploadSize = 1024
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
@@ -106,6 +106,10 @@ var _ = Describe("UploadStep", func() {
 
 			It("streams an upload message", func() {
 				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+			})
+
+			It("streams the upload filesize", func() {
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("(1K)"))
 			})
 
 			It("does not stream an error", func() {

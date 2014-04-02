@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/bytefmt"
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
@@ -82,10 +83,12 @@ func (step *DownloadStep) Perform() (err error) {
 		os.RemoveAll(downloadedFile.Name())
 	}()
 
-	err = step.downloader.Download(url, downloadedFile)
+	downloadSize, err := step.downloader.Download(url, downloadedFile)
 	if err != nil {
 		return err
 	}
+
+	step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(downloadSize))))
 
 	if step.model.Extract {
 		extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")
