@@ -7,15 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "a2ef5d43dfdf43dd270ffb017532a00a8c9d2f2b"
+			"Rev": "2395ecf872ff63554aca750519f302cba92261d8"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "ffa38c62e39f09a81e7e496c77b52997a561f321"
+			"Rev": "8011ae7022668069086a4ea1b786e9909e6d4d03"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "ffa38c62e39f09a81e7e496c77b52997a561f321"
+			"Rev": "8011ae7022668069086a4ea1b786e9909e6d4d03"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gofileutils/fileutils",
@@ -32,27 +32,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "feb1e919de2e2a2b3855400e667655e4a39ca804"
+			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -74,6 +74,10 @@
 		{
 			"ImportPath": "github.com/onsi/gomega",
 			"Rev": "bad854a45453ec22d99c8bd982e2302f64d3fc37"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/bytefmt",
+			"Rev": "fc677a812926ed965154270deb25e96cbbdc02d5"
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",

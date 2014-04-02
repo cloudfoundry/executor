@@ -120,6 +120,7 @@ func (step *RunStep) Perform() error {
 		} else {
 			for _, ev := range info.GetEvents() {
 				if ev == "out of memory" {
+					step.streamer.StreamStderr(fmt.Sprintf("%s exited with status %d (out of memory)", step.model.Name, exitStatus))
 					return OOMError
 				}
 			}

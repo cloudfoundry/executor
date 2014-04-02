@@ -54,18 +54,22 @@ var _ = Describe("Presence", func() {
 
 		})
 
-		It("should reacquire the presence", func() {
-			Eventually(reporter.Locked).Should(BeTrue())
-
-			err := store.Delete(key)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Consistently(reporter.Locked, (interval * 2).Seconds()).Should(BeTrue())
-		})
-
 		It("should fail if we maintain presence multiple times", func() {
 			_, err := presence.Maintain(interval)
 			Ω(err).Should(HaveOccurred())
+		})
+
+		Context("when presence is lost", func() {
+			It("eventually reacquires it", func() {
+				Eventually(reporter.Locked).Should(BeTrue())
+
+				err := store.Delete(key)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				time.Sleep(interval * 2)
+
+				Ω(reporter.Locked()).Should(BeTrue())
+			})
 		})
 	})
 

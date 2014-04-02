@@ -8,6 +8,7 @@ import (
 	"os/user"
 
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/bytefmt"
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
@@ -51,7 +52,7 @@ func New(
 	}
 }
 
-func (step *UploadStep) Perform() error {
+func (step *UploadStep) Perform() (err error) {
 	step.logger.Infod(
 		map[string]interface{}{
 			"handle": step.containerHandle,
@@ -59,7 +60,18 @@ func (step *UploadStep) Perform() error {
 		"runonce.handle.upload-step",
 	)
 
+	if step.streamer != nil {
+		step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	}
+
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
+
+	defer func() {
+		if err != nil {
+			step.streamer.StreamStderr(fmt.Sprintf("Uploading %s failed", step.model.Name))
+		}
+	}()
+
 	if err != nil {
 		return err
 	}
@@ -81,7 +93,7 @@ func (step *UploadStep) Perform() error {
 		return err
 	}
 
-	url, err := url.Parse(step.model.To)
+	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
 		return err
 	}
@@ -102,11 +114,16 @@ func (step *UploadStep) Perform() error {
 		return err
 	}
 
-	if step.streamer != nil {
-		step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
+	if err != nil {
+		return err
 	}
 
-	return step.uploader.Upload(finalFileLocation, url)
+	if step.streamer != nil {
+		step.streamer.StreamStdout(fmt.Sprintf("Uploaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(uploadedBytes))))
+	}
+
+	return nil
 }
 
 func (step *UploadStep) Cancel() {}

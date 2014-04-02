@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/bytefmt"
 	"github.com/vito/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
@@ -53,7 +54,7 @@ func New(
 	}
 }
 
-func (step *DownloadStep) Perform() error {
+func (step *DownloadStep) Perform() (err error) {
 	step.logger.Infod(
 		map[string]interface{}{
 			"handle": step.containerHandle,
@@ -61,7 +62,14 @@ func (step *DownloadStep) Perform() error {
 		"runonce.handle.download-action",
 	)
 
-	url, err := url.Parse(step.model.From)
+	step.streamer.StreamStdout(fmt.Sprintf("Downloading %s", step.model.Name))
+	defer func() {
+		if err != nil {
+			step.streamer.StreamStderr(fmt.Sprintf("Downloading %s failed", step.model.Name))
+		}
+	}()
+
+	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		return err
 	}
@@ -75,14 +83,12 @@ func (step *DownloadStep) Perform() error {
 		os.RemoveAll(downloadedFile.Name())
 	}()
 
-	err = step.downloader.Download(url, downloadedFile)
+	downloadSize, err := step.downloader.Download(url, downloadedFile)
 	if err != nil {
 		return err
 	}
 
-	if step.streamer != nil {
-		step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s", step.model.Name))
-	}
+	step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(downloadSize))))
 
 	if step.model.Extract {
 		extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")

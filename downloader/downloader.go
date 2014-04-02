@@ -12,7 +12,7 @@ import (
 )
 
 type Downloader interface {
-	Download(url *url.URL, destinationFile *os.File) error
+	Download(url *url.URL, destinationFile *os.File) (int64, error)
 }
 
 type URLDownloader struct {
@@ -27,7 +27,7 @@ func New(timeout time.Duration, logger *steno.Logger) Downloader {
 	}
 }
 
-func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File) error {
+func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File) (int64, error) {
 	httpTransport := &http.Transport{
 		ResponseHeaderTimeout: downloader.timeout,
 	}
@@ -45,14 +45,13 @@ func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File
 		}
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("Download failed: Status code %d", resp.StatusCode)
+		return 0, fmt.Errorf("Download failed: Status code %d", resp.StatusCode)
 	}
 
-	_, err = io.Copy(destinationFile, resp.Body)
-	return err
+	return io.Copy(destinationFile, resp.Body)
 }

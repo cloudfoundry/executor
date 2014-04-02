@@ -157,6 +157,10 @@ var _ = Describe("UploadStep", func() {
 
 		Context("when a streamer is configured", func() {
 			BeforeEach(func() {
+				fakeUploader := &fake_uploader.FakeUploader{}
+				fakeUploader.UploadSize = 1024
+
+				uploader = fakeUploader
 				streamer = fakeStreamer
 			})
 
@@ -165,6 +169,35 @@ var _ = Describe("UploadStep", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+			})
+
+			It("streams the upload filesize", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("(1K)"))
+			})
+
+			It("does not stream an error", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStderr).Should(Equal(""))
+			})
+		})
+
+		Context("when there is an error parsing the upload url", func() {
+			BeforeEach(func() {
+				uploadAction.To = "foo/bar"
+
+				streamer = fakeStreamer
+			})
+
+			It("returns the error and loggregates a message to STDERR", func() {
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 			})
 		})
 
@@ -178,11 +211,15 @@ var _ = Describe("UploadStep", func() {
 				}, func(fake_gordon.CopiedOut) error {
 					return disaster
 				})
+
+				streamer = fakeStreamer
 			})
 
-			It("returns the error", func() {
+			It("returns the error loggregates a message to STDERR stream", func() {
 				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+				Ω(err).Should(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 			})
 		})
 
@@ -191,12 +228,15 @@ var _ = Describe("UploadStep", func() {
 				fakeUploader := &fake_uploader.FakeUploader{}
 				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
 
+				streamer = fakeStreamer
 				uploader = fakeUploader
 			})
 
-			It("fails", func() {
+			It("returns the error and loggregates a message to STDERR stream", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
+
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 			})
 		})
 
@@ -207,12 +247,15 @@ var _ = Describe("UploadStep", func() {
 				fakeCompressor := &fake_compressor.FakeCompressor{}
 				fakeCompressor.CompressError = disaster
 
+				streamer = fakeStreamer
 				compressor = fakeCompressor
 			})
 
-			It("returns the error", func() {
+			It("returns the error and loggregates a message to STDERR stream", func() {
 				err := step.Perform()
 				Ω(err).Should(Equal(disaster))
+
+				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
 			})
 		})
 	})

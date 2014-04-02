@@ -36,10 +36,10 @@ var _ = Describe("Uploader", func() {
 	Describe("upload", func() {
 		var url *url.URL
 		var file *os.File
-
+		var expectedBytes int
 		BeforeEach(func() {
 			file, _ = ioutil.TempFile("", "foo")
-			file.WriteString("content that we can check later")
+			expectedBytes, _ = file.WriteString("content that we can check later")
 			file.Close()
 		})
 
@@ -66,8 +66,10 @@ var _ = Describe("Uploader", func() {
 				url, _ = url.Parse(serverUrl)
 			})
 
+			var err error
+			var numBytes int64
 			JustBeforeEach(func() {
-				uploader.Upload(file.Name(), url)
+				numBytes, err = uploader.Upload(file.Name(), url)
 			})
 
 			It("uploads the file to the url", func() {
@@ -80,6 +82,14 @@ var _ = Describe("Uploader", func() {
 				Ω(request.Header.Get("Content-Type")).Should(Equal("application/octet-stream"))
 				Ω(strconv.Atoi(request.Header.Get("Content-Length"))).Should(BeNumerically("==", 31))
 				Ω(string(data)).Should(Equal("content that we can check later"))
+			})
+
+			It("returns the number of bytes written", func() {
+				Ω(numBytes).Should(Equal(int64(expectedBytes)))
+			})
+
+			It("does not return an error", func() {
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
 
@@ -108,7 +118,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return an error", func() {
-				err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -122,7 +132,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -136,7 +146,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})

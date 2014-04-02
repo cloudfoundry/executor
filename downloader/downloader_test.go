@@ -46,12 +46,18 @@ var _ = Describe("Downloader", func() {
 		})
 
 		Context("when the download is successful", func() {
+			var uploadedBytes int64
+			var expectedBytes int64
+			var downloadErr error
+
 			BeforeEach(func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					lock.Lock()
 					serverRequestUrls = append(serverRequestUrls, r.RequestURI)
 					lock.Unlock()
-					fmt.Fprintln(w, "Hello, client")
+
+					bytesWritten, _ := fmt.Fprintln(w, "Hello, client")
+					expectedBytes = int64(bytesWritten)
 				}))
 
 				serverUrl := testServer.URL + "/somepath"
@@ -59,8 +65,8 @@ var _ = Describe("Downloader", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := downloader.Download(url, file)
-				Ω(err).ShouldNot(HaveOccurred())
+				uploadedBytes, downloadErr = downloader.Download(url, file)
+				Ω(downloadErr).ShouldNot(HaveOccurred())
 			})
 
 			It("gets a file from a url", func() {
@@ -73,6 +79,10 @@ var _ = Describe("Downloader", func() {
 			It("should use the provided file as the download location", func() {
 				fileContents, _ := ioutil.ReadFile(file.Name())
 				Ω(fileContents).Should(ContainSubstring("Hello, client"))
+			})
+
+			It("return number of bytes it downloaded", func() {
+				Ω(uploadedBytes).Should(Equal(expectedBytes))
 			})
 		})
 
@@ -102,7 +112,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return an error", func() {
-				err := downloader.Download(url, file)
+				_, err := downloader.Download(url, file)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -116,7 +126,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				err := downloader.Download(url, file)
+				_, err := downloader.Download(url, file)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -130,7 +140,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				err := downloader.Download(url, file)
+				_, err := downloader.Download(url, file)
 				Ω(err).NotTo(BeNil())
 			})
 		})

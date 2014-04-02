@@ -11,7 +11,7 @@ import (
 )
 
 type Uploader interface {
-	Upload(fileLocation string, destinationUrl *url.URL) error
+	Upload(fileLocation string, destinationUrl *url.URL) (int64, error)
 }
 
 type URLUploader struct {
@@ -26,7 +26,7 @@ func New(timeout time.Duration, logger *steno.Logger) Uploader {
 	}
 }
 
-func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) error {
+func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, error) {
 	httpTransport := &http.Transport{
 		ResponseHeaderTimeout: uploader.timeout,
 	}
@@ -36,6 +36,8 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) error {
 
 	var resp *http.Response
 	var err error
+	var uploadedBytes int64
+
 	for attempt := 0; attempt < 3; attempt++ {
 		var request *http.Request
 		var sourceFile *os.File
@@ -45,31 +47,33 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) error {
 
 		sourceFile, err = os.Open(fileLocation)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		fileInfo, err = sourceFile.Stat()
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		request, err = http.NewRequest("POST", url.String(), sourceFile)
-		request.ContentLength = fileInfo.Size()
+		uploadedBytes = fileInfo.Size()
+		request.ContentLength = uploadedBytes
 		request.Header.Set("Content-Type", "application/octet-stream")
 
 		resp, err = httpClient.Do(request)
 		if err == nil {
+			defer resp.Body.Close()
 			break
 		}
 	}
+
 	if err != nil {
-		return err
+		return 0, err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
+		return 0, fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
 	}
 
-	return nil
+	return int64(uploadedBytes), nil
 }
