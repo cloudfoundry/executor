@@ -7,19 +7,15 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "2395ecf872ff63554aca750519f302cba92261d8"
+			"Rev": "0e301d071c68f427f50988c544009278edece86e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "8011ae7022668069086a4ea1b786e9909e6d4d03"
+			"Rev": "1ffc9d3d90d7cb662bd70b209397bed2511adba5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "8011ae7022668069086a4ea1b786e9909e6d4d03"
-		},
-		{
-			"ImportPath": "github.com/cloudfoundry/gofileutils/fileutils",
-			"Rev": "a141d15d255568a910ba2716c915ffc3b298a741"
+			"Rev": "1ffc9d3d90d7cb662bd70b209397bed2511adba5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -32,27 +28,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "08f7e66ba7b35ce738966c7d87597fd5175c66e3"
+			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -77,11 +73,11 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",
-			"Rev": "fc677a812926ed965154270deb25e96cbbdc02d5"
+			"Rev": "c0f14ae54cbbf4eb66a36bfd3c5436c243f7423c"
 		},
 		{
 			"ImportPath": "github.com/vito/gordon",
-			"Rev": "abe24aba708d3b78e5a85b7d6da037a53ecebdcc"
+			"Rev": "c2c5f384bd1bc3c081e62f1401e688a1fe6ddac5"
 		}
 	]
 }
