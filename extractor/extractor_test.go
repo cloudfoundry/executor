@@ -38,24 +38,32 @@ var _ = Describe("Extractor", func() {
 
 	archiveFiles := []archiver.ArchiveFile{
 		{
-			Name: "some-file",
-			Body: "some-file-contents",
-		},
-		{
-			Name: "empty-dir/",
+			Name: "./",
 			Dir:  true,
 		},
 		{
-			Name: "nonempty-dir/file-in-dir",
+			Name: "./some-file",
+			Body: "some-file-contents",
+		},
+		{
+			Name: "./empty-dir/",
+			Dir:  true,
+		},
+		{
+			Name: "./nonempty-dir/",
+			Dir:  true,
+		},
+		{
+			Name: "./nonempty-dir/file-in-dir",
 			Body: "file-in-dir-contents",
 		},
 		{
-			Name: "legit-exe-not-a-virus.bat",
+			Name: "./legit-exe-not-a-virus.bat",
 			Mode: 0755,
 			Body: "rm -rf /",
 		},
 		{
-			Name: "some-symlink",
+			Name: "./some-symlink",
 			Link: "some-file",
 		},
 	}

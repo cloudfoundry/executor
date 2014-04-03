@@ -116,6 +116,7 @@ func (step *DownloadStep) Perform() (err error) {
 
 			return err
 		}
+
 		return step.copyExtractedFiles(extractionDir, step.model.To)
 	} else {
 		_, err = step.wardenClient.CopyIn(step.containerHandle, downloadedFile.Name(), step.model.To)
