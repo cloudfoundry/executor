@@ -165,21 +165,21 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Uploading Mr. Jones"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones\n"))
 			})
 
 			It("streams the upload filesize", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("(1K)"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("(1K)"))
 			})
 
 			It("does not stream an error", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStderr).Should(Equal(""))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(Equal(""))
 			})
 		})
 
@@ -192,7 +192,7 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
 			})
 		})
 
@@ -212,7 +212,7 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
 			})
 		})
 
@@ -228,7 +228,7 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
 			})
 		})
 
@@ -246,7 +246,7 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(Equal(disaster))
 
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Uploading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
 			})
 		})
 	})

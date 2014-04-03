@@ -95,9 +95,9 @@ func (step *RunStep) Perform() error {
 
 			switch *payload.Source {
 			case warden.ProcessPayload_stdout:
-				step.streamer.StreamStdout(payload.GetData())
+				fmt.Fprint(step.streamer.Stdout(), payload.GetData())
 			case warden.ProcessPayload_stderr:
-				step.streamer.StreamStderr(payload.GetData())
+				fmt.Fprint(step.streamer.Stderr(), payload.GetData())
 			}
 		}
 	}()
@@ -116,7 +116,7 @@ func (step *RunStep) Perform() error {
 		} else {
 			for _, ev := range info.GetEvents() {
 				if ev == "out of memory" {
-					step.streamer.StreamStderr(fmt.Sprintf("%s exited with status %d (out of memory)", step.model.Name, exitStatus))
+					fmt.Fprintf(step.streamer.Stderr(), "%s exited with status %d (out of memory)\n", step.model.Name, exitStatus)
 					return OOMError
 				}
 			}

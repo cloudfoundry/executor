@@ -1,21 +1,30 @@
 package fake_log_streamer
 
+import (
+	"bytes"
+	"io"
+)
+
 type FakeLogStreamer struct {
-	StreamedStdout string
-	StreamedStderr string
-	Flushed        bool
+	StdoutBuffer *bytes.Buffer
+	StderrBuffer *bytes.Buffer
+
+	Flushed bool
 }
 
 func New() *FakeLogStreamer {
-	return &FakeLogStreamer{}
+	return &FakeLogStreamer{
+		StdoutBuffer: new(bytes.Buffer),
+		StderrBuffer: new(bytes.Buffer),
+	}
 }
 
-func (e *FakeLogStreamer) StreamStdout(message string) {
-	e.StreamedStdout += message
+func (e *FakeLogStreamer) Stdout() io.Writer {
+	return e.StdoutBuffer
 }
 
-func (e *FakeLogStreamer) StreamStderr(message string) {
-	e.StreamedStderr += message
+func (e *FakeLogStreamer) Stderr() io.Writer {
+	return e.StderrBuffer
 }
 
 func (e *FakeLogStreamer) Flush() {

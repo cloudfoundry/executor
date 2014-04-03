@@ -60,13 +60,13 @@ func (step *UploadStep) Perform() (err error) {
 		"runonce.handle.upload-step",
 	)
 
-	step.streamer.StreamStdout(fmt.Sprintf("Uploading %s", step.model.Name))
+	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploading %s\n", step.model.Name))
 
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
 
 	defer func() {
 		if err != nil {
-			step.streamer.StreamStderr(fmt.Sprintf("Uploading %s failed", step.model.Name))
+			fmt.Fprintf(step.streamer.Stderr(), fmt.Sprintf("Uploading %s failed\n", step.model.Name))
 		}
 	}()
 
@@ -117,7 +117,7 @@ func (step *UploadStep) Perform() (err error) {
 		return err
 	}
 
-	step.streamer.StreamStdout(fmt.Sprintf("Uploaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(uploadedBytes))))
+	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploaded %s (%s)\n", step.model.Name, bytefmt.ByteSize(uint64(uploadedBytes))))
 
 	return nil
 }

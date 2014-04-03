@@ -176,7 +176,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("loggregates a message with status code to STDERR", func() {
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Staging exited with status 19 (out of memory)"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Staging exited with status 19 (out of memory)\n"))
 			})
 		})
 
@@ -199,8 +199,8 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("emits the output chunks as they come in", func() {
-				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("hi out"))
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("hi err"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("hi out"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {

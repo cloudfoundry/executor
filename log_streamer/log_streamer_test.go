@@ -1,10 +1,12 @@
 package log_streamer_test
 
 import (
+	"fmt"
+	"strings"
+
 	. "github.com/cloudfoundry-incubator/executor/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"strings"
 
 	"github.com/cloudfoundry/loggregatorlib/logmessage"
 )
@@ -22,8 +24,8 @@ var _ = Describe("LogStreamer", func() {
 	Context("when told to emit", func() {
 		Context("when given a message that corresponds to one line", func() {
 			BeforeEach(func() {
-				streamer.StreamStdout("this is a log\n")
-				streamer.StreamStdout("this is another log\n")
+				fmt.Fprintln(streamer.Stdout(), "this is a log")
+				fmt.Fprintln(streamer.Stdout(), "this is another log")
 			})
 
 			It("should emit that message", func() {
@@ -41,7 +43,7 @@ var _ = Describe("LogStreamer", func() {
 
 		Context("when given a message with all sorts of fun newline characters", func() {
 			BeforeEach(func() {
-				streamer.StreamStdout("A\nB\rC\n\rD\r\nE\n\n\nF\r\r\rG\n\r\r\n\n\n\r")
+				fmt.Fprintf(streamer.Stdout(), "A\nB\rC\n\rD\r\nE\n\n\nF\r\r\rG\n\r\r\n\n\n\r")
 			})
 
 			It("should do the right thing", func() {
@@ -54,10 +56,10 @@ var _ = Describe("LogStreamer", func() {
 
 		Context("when given a series of short messages", func() {
 			BeforeEach(func() {
-				streamer.StreamStdout("this is a log")
-				streamer.StreamStdout(" it is made of wood")
-				streamer.StreamStdout(" - and it is longer")
-				streamer.StreamStdout("than it seems\n")
+				fmt.Fprintf(streamer.Stdout(), "this is a log")
+				fmt.Fprintf(streamer.Stdout(), " it is made of wood")
+				fmt.Fprintf(streamer.Stdout(), " - and it is longer")
+				fmt.Fprintf(streamer.Stdout(), "than it seems\n")
 			})
 
 			It("concatenates them, until a new-line is received, and then emits that", func() {
@@ -70,7 +72,7 @@ var _ = Describe("LogStreamer", func() {
 
 		Context("when given a message with multiple new lines", func() {
 			BeforeEach(func() {
-				streamer.StreamStdout("this is a log\nand this is another\nand this one isn't done yet...")
+				fmt.Fprintf(streamer.Stdout(), "this is a log\nand this is another\nand this one isn't done yet...")
 			})
 
 			It("should break the message up into multiple loggings", func() {
@@ -91,7 +93,7 @@ var _ = Describe("LogStreamer", func() {
 					message = strings.Repeat("7", MAX_MESSAGE_SIZE)
 					Ω([]byte(message)).Should(HaveLen(MAX_MESSAGE_SIZE), "Ensure that the byte representation of our message is under the limit")
 
-					streamer.StreamStdout(message)
+					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
@@ -107,7 +109,7 @@ var _ = Describe("LogStreamer", func() {
 					message += strings.Repeat("8", MAX_MESSAGE_SIZE)
 					message += strings.Repeat("9", MAX_MESSAGE_SIZE)
 					message += "hello\n"
-					streamer.StreamStdout(message)
+					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
@@ -123,7 +125,7 @@ var _ = Describe("LogStreamer", func() {
 				BeforeEach(func() {
 					message = strings.Repeat("7", MAX_MESSAGE_SIZE-1)
 					message += "\u0623\n"
-					streamer.StreamStdout(message)
+					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
@@ -136,8 +138,8 @@ var _ = Describe("LogStreamer", func() {
 			Context("while concatenating, if the message exceeds the emittable length", func() {
 				BeforeEach(func() {
 					message = strings.Repeat("7", MAX_MESSAGE_SIZE-2)
-					streamer.StreamStdout(message)
-					streamer.StreamStdout("778888\n")
+					fmt.Fprintf(streamer.Stdout(), message)
+					fmt.Fprintf(streamer.Stdout(), "778888\n")
 				})
 
 				It("should break the message up and send multiple messages", func() {
@@ -151,7 +153,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when told to emit stderr", func() {
 		It("should handle short messages", func() {
-			streamer.StreamStderr("this is a log\nand this is another\nand this one isn't done yet...")
+			fmt.Fprintf(streamer.Stderr(), "this is a log\nand this is another\nand this one isn't done yet...")
 			Ω(loggregatorEmitter.ErrEmissions).Should(HaveLen(2))
 
 			emission := loggregatorEmitter.ErrEmissions[0]
@@ -162,7 +164,7 @@ var _ = Describe("LogStreamer", func() {
 		})
 
 		It("should handle long messages", func() {
-			streamer.StreamStderr(strings.Repeat("e", MAX_MESSAGE_SIZE+1) + "\n")
+			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", MAX_MESSAGE_SIZE+1)+"\n")
 			Ω(loggregatorEmitter.ErrEmissions).Should(HaveLen(2))
 
 			emission := loggregatorEmitter.ErrEmissions[0]
@@ -176,8 +178,8 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when told to flush", func() {
 		It("should send whatever log is left in its buffer", func() {
-			streamer.StreamStdout("this is a stdout")
-			streamer.StreamStderr("this is a stderr")
+			fmt.Fprintf(streamer.Stdout(), "this is a stdout")
+			fmt.Fprintf(streamer.Stderr(), "this is a stderr")
 
 			Ω(loggregatorEmitter.OutEmissions).Should(HaveLen(0))
 			Ω(loggregatorEmitter.ErrEmissions).Should(HaveLen(0))

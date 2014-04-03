@@ -62,10 +62,10 @@ func (step *DownloadStep) Perform() (err error) {
 		"runonce.handle.download-action",
 	)
 
-	step.streamer.StreamStdout(fmt.Sprintf("Downloading %s", step.model.Name))
+	fmt.Fprintf(step.streamer.Stdout(), "Downloading %s\n", step.model.Name)
 	defer func() {
 		if err != nil {
-			step.streamer.StreamStderr(fmt.Sprintf("Downloading %s failed", step.model.Name))
+			fmt.Fprintf(step.streamer.Stderr(), "Downloading %s failed\n", step.model.Name)
 		}
 	}()
 
@@ -88,7 +88,7 @@ func (step *DownloadStep) Perform() (err error) {
 		return err
 	}
 
-	step.streamer.StreamStdout(fmt.Sprintf("Downloaded %s (%s)", step.model.Name, bytefmt.ByteSize(uint64(downloadSize))))
+	fmt.Fprintf(step.streamer.Stdout(), "Downloaded %s (%s)\n", step.model.Name, bytefmt.ByteSize(uint64(downloadSize)))
 
 	if step.model.Extract {
 		extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")

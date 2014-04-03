@@ -101,15 +101,15 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("streams a download message", func() {
-				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("Downloading Mr. Jones"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones\n"))
 			})
 
 			It("streams the download filesize", func() {
-				Ω(fakeStreamer.StreamedStdout).Should(ContainSubstring("(1K)"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded Mr. Jones (1K)\n"))
 			})
 
 			It("does not stream an error", func() {
-				Ω(fakeStreamer.StreamedStderr).Should(Equal(""))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(BeEmpty())
 			})
 		})
 
@@ -147,7 +147,7 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("loggregates a message to STDERR", func() {
-					Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Downloading Mr. Jones failed"))
+					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed\n"))
 				})
 			})
 		})
@@ -162,7 +162,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Downloading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
 			})
 		})
 
@@ -176,7 +176,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Downloading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
 			})
 		})
 
@@ -192,7 +192,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StreamedStderr).Should(ContainSubstring("Downloading Mr. Jones failed"))
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
 			})
 		})
 	})
