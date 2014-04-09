@@ -9,7 +9,7 @@ import (
 
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/bytefmt"
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry-incubator/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/compressor"

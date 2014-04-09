@@ -5,7 +5,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry-incubator/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/claim_step"

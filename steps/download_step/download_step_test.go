@@ -11,7 +11,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"

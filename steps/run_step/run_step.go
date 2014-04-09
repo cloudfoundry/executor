@@ -6,8 +6,8 @@ import (
 	"time"
 
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
-	"github.com/vito/gordon/warden"
+	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/gordon/warden"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"

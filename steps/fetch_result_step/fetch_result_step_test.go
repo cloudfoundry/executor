@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"

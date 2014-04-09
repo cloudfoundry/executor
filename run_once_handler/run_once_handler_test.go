@@ -10,9 +10,9 @@ import (
 	"code.google.com/p/gogoprotobuf/proto"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
-	"github.com/vito/gordon/fake_gordon"
-	"github.com/vito/gordon/warden"
+	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/gordon/warden"
 
 	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"

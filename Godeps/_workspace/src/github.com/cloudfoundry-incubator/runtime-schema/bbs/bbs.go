@@ -46,6 +46,11 @@ type FileServerBBS interface {
 	) (presence Presence, disappeared <-chan bool, err error)
 }
 
+type ServistryBBS interface {
+	RegisterCC(registration models.CCRegistrationMessage, ttl time.Duration) error
+	UnregisterCC(registration models.CCRegistrationMessage) error
+}
+
 func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) *BBS {
 	return &BBS{
 		ExecutorBBS: &executorBBS{
@@ -62,6 +67,10 @@ func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider
 			store: store,
 		},
 
+		ServistryBBS: &servistryBBS{
+			store: store,
+		},
+
 		store: store,
 	}
 }
@@ -70,5 +79,6 @@ type BBS struct {
 	ExecutorBBS
 	StagerBBS
 	FileServerBBS
+	ServistryBBS
 	store storeadapter.StoreAdapter
 }

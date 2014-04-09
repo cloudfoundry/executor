@@ -5,7 +5,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vito/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/compressor"

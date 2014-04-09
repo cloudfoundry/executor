@@ -18,7 +18,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	Compressor "github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"

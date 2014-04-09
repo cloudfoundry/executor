@@ -3,7 +3,7 @@ package limit_container_step
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/vito/gordon"
+	"github.com/cloudfoundry-incubator/gordon"
 )
 
 type ContainerStep struct {
