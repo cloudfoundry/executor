@@ -16,6 +16,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry-incubator/gordon"
 
+	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
@@ -26,6 +27,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/executor/windows_plugin"
 )
 
 var wardenNetwork = flag.String(
@@ -118,6 +120,12 @@ var containerInodeLimit = flag.Int(
 	"max number of inodes per container",
 )
 
+var backendPluginName = flag.String(
+	"backendPlugin",
+	"linux",
+	"backend to use (linux or windows)",
+)
+
 func main() {
 	flag.Parse()
 
@@ -203,7 +211,22 @@ func main() {
 
 	registerSignalHandler(executor)
 
-	linuxPlugin := linux_plugin.New()
+	var backendPlugin backend_plugin.BackendPlugin
+
+	switch *backendPluginName {
+	case "linux":
+		backendPlugin = linux_plugin.New()
+	case "windows":
+		backendPlugin = windows_plugin.New()
+	default:
+		logger.Errord(
+			map[string]interface{}{
+				"plugin": *backendPluginName,
+			},
+			"executor.backend-plugin.unknown",
+		)
+	}
+
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.New()
@@ -220,7 +243,7 @@ func main() {
 		uploader,
 		extractor,
 		compressor,
-		linuxPlugin,
+		backendPlugin,
 		wardenClient,
 		logger,
 		*tempDir,
