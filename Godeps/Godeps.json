@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "0e301d071c68f427f50988c544009278edece86e"
+			"Rev": "dc9b8350fb4568b6562900df872672f378242552"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/gordon",
@@ -15,11 +15,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "1254f3ba5b64033bb18da0971dde78d8c77491ef"
+			"Rev": "8cbf6fa3462b6d89798a4ad96aa47865feb4d797"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "1254f3ba5b64033bb18da0971dde78d8c77491ef"
+			"Rev": "8cbf6fa3462b6d89798a4ad96aa47865feb4d797"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -28,31 +28,31 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "0dfce73f2060a23c01134f5880295b70cc325e14"
+			"Rev": "02c643e319e71ac034d3d96b0c1147e2a037a8f2"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "cbfe02db0270e435eaae0239a9c2eb4bffde94e5"
+			"Rev": "0c6324449270826d694150d493be126901554a89"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -74,6 +74,14 @@
 		{
 			"ImportPath": "github.com/onsi/gomega",
 			"Rev": "b017f5b84e91054313ed33ba2422e992c3b08626"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
+			"Rev": "338bf2b31d42f9ff6f57e0944cf5628bdfee546c"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/archiver/extractor",
+			"Rev": "338bf2b31d42f9ff6f57e0944cf5628bdfee546c"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",

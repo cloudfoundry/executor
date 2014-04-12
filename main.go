@@ -9,18 +9,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cloudfoundry-incubator/gordon"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
-	"github.com/cloudfoundry-incubator/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler"
@@ -28,6 +26,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/windows_plugin"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/extractor"
 )
 
 var wardenNetwork = flag.String(
@@ -229,8 +229,8 @@ func main() {
 
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
-	extractor := extractor.New()
-	compressor := compressor.New()
+	extractor := extractor.NewDetectable()
+	compressor := compressor.NewTgz()
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,

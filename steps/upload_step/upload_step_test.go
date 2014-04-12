@@ -16,17 +16,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
-	Compressor "github.com/cloudfoundry-incubator/executor/compressor"
-	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	Uploader "github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+	Compressor "github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 )
 
 var _ = Describe("UploadStep", func() {
@@ -71,7 +71,7 @@ var _ = Describe("UploadStep", func() {
 
 		logger = steno.NewLogger("test-logger")
 
-		compressor = Compressor.New()
+		compressor = Compressor.NewTgz()
 		uploader = Uploader.New(5*time.Second, logger)
 
 		fakeStreamer = fake_log_streamer.New()

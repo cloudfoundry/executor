@@ -12,13 +12,13 @@ type Compressor interface {
 	Compress(src string, dest string) error
 }
 
-func New() Compressor {
-	return &realCompressor{}
+func NewTgz() Compressor {
+	return &tgzCompressor{}
 }
 
-type realCompressor struct{}
+type tgzCompressor struct{}
 
-func (compressor *realCompressor) Compress(src string, dest string) error {
+func (compressor *tgzCompressor) Compress(src string, dest string) error {
 	absPath, err := filepath.Abs(src)
 	if err != nil {
 		return err
@@ -43,10 +43,10 @@ func (compressor *realCompressor) Compress(src string, dest string) error {
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
 
-	return compressRecursively(file, absPath, tw)
+	return compressor.compressRecursively(file, absPath, tw)
 }
 
-func compressRecursively(file *os.File, relativeFrom string, tw *tar.Writer) error {
+func (compressor *tgzCompressor) compressRecursively(file *os.File, relativeFrom string, tw *tar.Writer) error {
 	info, err := os.Lstat(file.Name())
 	if err != nil {
 		return err
@@ -79,13 +79,13 @@ func compressRecursively(file *os.File, relativeFrom string, tw *tar.Writer) err
 				return err
 			}
 
-			err = compressRecursively(subFile, relativeFrom, tw)
+			err = compressor.compressRecursively(subFile, relativeFrom, tw)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
-		err = addFileToTar(file, info, relativeFrom, tw)
+		err = compressor.addFileToTar(file, info, relativeFrom, tw)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func compressRecursively(file *os.File, relativeFrom string, tw *tar.Writer) err
 	return nil
 }
 
-func addFileToTar(file *os.File, info os.FileInfo, relativeFrom string, tw *tar.Writer) error {
+func (compressor *tgzCompressor) addFileToTar(file *os.File, info os.FileInfo, relativeFrom string, tw *tar.Writer) error {
 	link, err := os.Readlink(file.Name())
 	if err != nil {
 		link = ""

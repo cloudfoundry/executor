@@ -5,10 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	. "github.com/cloudfoundry-incubator/executor/extractor"
-	"github.com/cloudfoundry-incubator/executor/extractor/archiver"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/archiver/extractor/test_helper"
 )
 
 var _ = Describe("Extractor", func() {
@@ -28,7 +29,7 @@ var _ = Describe("Extractor", func() {
 
 		extractionSrc = archive.Name()
 
-		extractor = New()
+		extractor = NewDetectable()
 	})
 
 	AfterEach(func() {
@@ -36,7 +37,7 @@ var _ = Describe("Extractor", func() {
 		os.RemoveAll(extractionDest)
 	})
 
-	archiveFiles := []archiver.ArchiveFile{
+	archiveFiles := []test_helper.ArchiveFile{
 		{
 			Name: "./",
 			Dir:  true,
@@ -99,7 +100,7 @@ var _ = Describe("Extractor", func() {
 
 	Context("when the file is a zip archive", func() {
 		BeforeEach(func() {
-			archiver.CreateZipArchive(extractionSrc, archiveFiles)
+			test_helper.CreateZipArchive(extractionSrc, archiveFiles)
 		})
 
 		It("extracts the ZIP's files, generating directories, and honoring file permissions", func() {
@@ -109,7 +110,7 @@ var _ = Describe("Extractor", func() {
 
 	Context("when the file is a tgz archive", func() {
 		BeforeEach(func() {
-			archiver.CreateTarGZArchive(extractionSrc, archiveFiles)
+			test_helper.CreateTarGZArchive(extractionSrc, archiveFiles)
 		})
 
 		It("extracts the TGZ's files, generating directories, and honoring file permissions", func() {

@@ -1,19 +1,15 @@
 package run_once_transformer_test
 
 import (
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/compressor"
-	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/extractor"
-	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
@@ -26,6 +22,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("RunOnceTransformer", func() {

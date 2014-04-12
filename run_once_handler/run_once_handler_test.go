@@ -8,15 +8,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	"code.google.com/p/gogoprotobuf/proto"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/gordon/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 
-	"github.com/cloudfoundry-incubator/executor/compressor/fake_compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
@@ -25,6 +23,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("RunOnceHandler", func() {

@@ -3,14 +3,12 @@ package run_once_transformer
 import (
 	"fmt"
 
+	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/extractor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -19,6 +17,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/extractor"
 )
 
 type RunOnceTransformer struct {

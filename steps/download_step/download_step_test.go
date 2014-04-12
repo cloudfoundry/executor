@@ -9,15 +9,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/extractor/fake_extractor"
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("DownloadAction", func() {

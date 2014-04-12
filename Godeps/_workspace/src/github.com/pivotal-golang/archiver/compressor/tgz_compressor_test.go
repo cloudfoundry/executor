@@ -4,13 +4,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	// "time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/cloudfoundry-incubator/executor/compressor"
-	"github.com/cloudfoundry-incubator/executor/extractor"
+	. "github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/extractor"
 )
 
 func retrieveFilePaths(dir string) (results []string) {
@@ -27,7 +26,7 @@ func retrieveFilePaths(dir string) (results []string) {
 	return results
 }
 
-var _ = Describe("Compressor", func() {
+var _ = Describe("Tgz Compressor", func() {
 	var compressor Compressor
 	var destDir string
 	var extracticator extractor.Extractor
@@ -37,8 +36,8 @@ var _ = Describe("Compressor", func() {
 	BeforeEach(func() {
 		var err error
 
-		compressor = New()
-		extracticator = extractor.New()
+		compressor = NewTgz()
+		extracticator = extractor.NewDetectable()
 
 		destDir, err = ioutil.TempDir("", "")
 		Ω(err).ShouldNot(HaveOccurred())

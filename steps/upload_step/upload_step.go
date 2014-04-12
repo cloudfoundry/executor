@@ -7,15 +7,15 @@ import (
 	"os"
 	"os/user"
 
+	"github.com/cloudfoundry-incubator/gordon"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/bytefmt"
-	"github.com/cloudfoundry-incubator/gordon"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
-	"github.com/cloudfoundry-incubator/executor/compressor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/archiver/compressor"
 )
 
 type UploadStep struct {

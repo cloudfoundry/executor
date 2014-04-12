@@ -163,6 +163,10 @@ func (s LinuxSmeltingConfig) compilerCommand() string {
 	return path.Join(s.CompilerPath(), "run")
 }
 
+func (s LinuxSmeltingConfig) DropletArchivePath() string {
+	return path.Join(s.OutputDir(), "droplet.tgz")
+}
+
 func (s LinuxSmeltingConfig) OutputDir() string {
 	return *s.outputDir
 }
