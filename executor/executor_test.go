@@ -2,21 +2,22 @@ package executor_test
 
 import (
 	"fmt"
+	"time"
+
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/onsi/ginkgo/config"
-	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/fake_run_once_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 )
 
 var _ = Describe("Executor", func() {
@@ -56,7 +57,7 @@ var _ = Describe("Executor", func() {
 			Stack:    "some-stack",
 		}
 
-		executor = New(bbs, steno.NewLogger("test-logger"))
+		executor = New(bbs, 0, steno.NewLogger("test-logger"))
 	})
 
 	AfterEach(func() {
@@ -66,8 +67,8 @@ var _ = Describe("Executor", func() {
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor1 := New(bbs, steno.NewLogger("test-logger"))
-			executor2 := New(bbs, steno.NewLogger("test-logger"))
+			executor1 := New(bbs, 0, steno.NewLogger("test-logger"))
+			executor2 := New(bbs, 0, steno.NewLogger("test-logger"))
 
 			Ω(executor1.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())
@@ -120,7 +121,7 @@ var _ = Describe("Executor", func() {
 			var otherExecutor *Executor
 
 			BeforeEach(func() {
-				otherExecutor = New(bbs, steno.NewLogger("test-logger"))
+				otherExecutor = New(bbs, 0, steno.NewLogger("test-logger"))
 
 				go otherExecutor.Handle(fakeRunOnceHandler, ready)
 				<-ready
@@ -218,7 +219,7 @@ var _ = Describe("Executor", func() {
 
 				Eventually(handleErr).Should(Receive(&err))
 
-				Ω(err).Should(Equal(MaintainPresenceError))
+				Ω(err).Should(Equal(ErrLostPresence))
 			})
 		})
 

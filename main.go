@@ -114,6 +114,12 @@ var timeToClaimRunOnce = flag.Duration(
 	"unclaimed run onces are marked as failed, after this time (in seconds)",
 )
 
+var drainTimeout = flag.Duration(
+	"drainTimeout",
+	15*time.Minute,
+	"time to give running tasks to drain before exiting",
+)
+
 var containerInodeLimit = flag.Int(
 	"containerInodeLimit",
 	200000,
@@ -195,7 +201,7 @@ func main() {
 		}
 	}
 
-	executor := executor.New(bbs, logger)
+	executor := executor.New(bbs, *drainTimeout, logger)
 
 	maintaining := make(chan error, 1)
 
@@ -313,11 +319,14 @@ func registerSignalHandler(e *executor.Executor) {
 	signals := make(chan os.Signal, 1)
 
 	go func() {
-		<-signals
-		signal.Stop(signals)
-
-		e.Stop()
+		switch <-signals {
+		case syscall.SIGUSR1:
+			e.Drain()
+		default:
+			signal.Stop(signals)
+			e.Stop()
+		}
 	}()
 
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 }
