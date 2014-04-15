@@ -44,7 +44,11 @@ var _ = Describe("Executor", func() {
 
 		startingMemory = 256
 		startingDisk = 1024
-		taskRegistry = task_registry.NewTaskRegistry("some-stack", startingMemory, startingDisk)
+		taskRegistry = task_registry.NewTaskRegistry(
+			"some-stack",
+			startingMemory,
+			startingDisk,
+		)
 
 		runOnce = &models.RunOnce{
 			Guid:     "totally-unique",
@@ -82,10 +86,15 @@ var _ = Describe("Executor", func() {
 		Context("when ETCD disappears then reappers", func() {
 			BeforeEach(func() {
 				etcdRunner.Stop()
-				time.Sleep(200 * time.Millisecond) //give the etcd driver time to realize we timed out.  the etcd driver is hardcoded to have a 200 ms timeout
+
+				// give the etcd driver time to realize we timed out.  the etcd driver
+				// is hardcoded to have a 200 ms timeout
+				time.Sleep(200 * time.Millisecond)
 
 				etcdRunner.Start()
-				time.Sleep(200 * time.Millisecond) //give the etcd driver a chance to connect
+
+				// give the etcd driver a chance to connect
+				time.Sleep(200 * time.Millisecond)
 
 				err := bbs.DesireRunOnce(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())

@@ -37,6 +37,9 @@ var _ = Describe("Main", func() {
 		fakeBackend     *fake_backend.FakeBackend
 	)
 
+	drainTimeout := 5 * time.Second
+	aBit := drainTimeout / 5
+
 	BeforeEach(func() {
 		var err error
 
@@ -48,7 +51,7 @@ var _ = Describe("Main", func() {
 
 		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
 
-		executorPath, err := cmdtest.Build("github.com/cloudfoundry-incubator/executor")
+		executorPath, err := cmdtest.Build("github.com/cloudfoundry-incubator/executor", "-race")
 		Ω(err).ShouldNot(HaveOccurred())
 
 		wardenAddr := fmt.Sprintf("127.0.0.1:%d", wardenPort)
@@ -131,7 +134,7 @@ var _ = Describe("Main", func() {
 
 					sendDrainSignal()
 
-					Ω(executorSession).Should(ExitWithTimeout(0, 2*time.Second))
+					Ω(executorSession).Should(ExitWithTimeout(0, drainTimeout-aBit))
 				})
 			})
 
@@ -144,12 +147,12 @@ var _ = Describe("Main", func() {
 				It("cancels all running tasks", func() {
 					Ω(fakeBackend.Containers()).Should(HaveLen(1))
 					sendDrainSignal()
-					Eventually(fakeBackend.Containers, 6).Should(BeEmpty())
+					Eventually(fakeBackend.Containers, (drainTimeout + aBit).Seconds()).Should(BeEmpty())
 				})
 
 				It("exits successfully", func() {
 					sendDrainSignal()
-					Ω(executorSession).Should(ExitWithTimeout(0, 6*time.Second))
+					Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
 				})
 			})
 		})
