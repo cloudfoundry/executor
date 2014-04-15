@@ -40,6 +40,7 @@ var _ = Describe("Downloader", func() {
 
 		AfterEach(func() {
 			file.Close()
+
 			if testServer != nil {
 				testServer.Close()
 			}
@@ -87,14 +88,13 @@ var _ = Describe("Downloader", func() {
 		})
 
 		Context("when the download times out", func() {
-			var attemptCount int
+			var requestInitiated chan struct{}
+
 			BeforeEach(func() {
-				attemptCount = 0
+				requestInitiated = make(chan struct{})
+
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					lock.Lock()
-					attemptCount++
-					serverRequestUrls = append(serverRequestUrls, r.RequestURI)
-					lock.Unlock()
+					requestInitiated <- struct{}{}
 
 					time.Sleep(300 * time.Millisecond)
 					fmt.Fprintln(w, "Hello, client")
@@ -104,16 +104,19 @@ var _ = Describe("Downloader", func() {
 				url, _ = url.Parse(serverUrl)
 			})
 
-			It("should retry 3 times", func() {
-				downloader.Download(url, file)
-				lock.Lock()
-				Ω(attemptCount).Should(Equal(3))
-				lock.Unlock()
-			})
+			It("should retry 3 times and return an error", func() {
+				errs := make(chan error)
 
-			It("should return an error", func() {
-				_, err := downloader.Download(url, file)
-				Ω(err).Should(HaveOccurred())
+				go func() {
+					_, err := downloader.Download(url, file)
+					errs <- err
+				}()
+
+				Eventually(requestInitiated).Should(Receive())
+				Eventually(requestInitiated).Should(Receive())
+				Eventually(requestInitiated).Should(Receive())
+
+				Ω(<-errs).Should(HaveOccurred())
 			})
 		})
 
