@@ -1,7 +1,5 @@
-bytefmt
-=======
-
-Human readable byte formatter
+# BYTEFMT
+Human readable byte formatter for Go.
 
 Example:
 

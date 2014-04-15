@@ -46,3 +46,16 @@ func (bbs *servistryBBS) UnregisterCC(registration models.CCRegistrationMessage)
 	}
 	return err
 }
+
+func (bbs *servistryBBS) GetAvailableCC() ([]string, error) {
+	parentNode, err := bbs.store.ListRecursively(CCSchemaRoot)
+	if err != nil {
+		return []string{}, err
+	}
+
+	urls := []string{}
+	for _, ccNode := range parentNode.ChildNodes {
+		urls = append(urls, string(ccNode.Value))
+	}
+	return urls, nil
+}

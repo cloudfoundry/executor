@@ -15,10 +15,12 @@ import (
 var _ = Context("Servistry BBS", func() {
 	var bbs *BBS
 	var timeProvider *faketimeprovider.FakeTimeProvider
-	var expectedRegistration = models.CCRegistrationMessage{
+	var regMessage = models.CCRegistrationMessage{
 		Host: "1.2.3.4",
 		Port: 8080,
 	}
+	var etcdKey = "/v1/cloud_controller/1.2.3.4:8080"
+	var etcdValue = "http://1.2.3.4:8080"
 	var ttl = 120 * time.Second
 
 	BeforeEach(func() {
@@ -30,7 +32,7 @@ var _ = Context("Servistry BBS", func() {
 		var registerErr error
 
 		JustBeforeEach(func() {
-			registerErr = bbs.RegisterCC(expectedRegistration, ttl)
+			registerErr = bbs.RegisterCC(regMessage, ttl)
 		})
 
 		Context("when the registration does not exist", func() {
@@ -39,15 +41,15 @@ var _ = Context("Servistry BBS", func() {
 			})
 
 			It("creates /cloud_controller/<host:ip>", func() {
-				node, err := store.Get("/v1/cloud_controller/1.2.3.4:8080")
+				node, err := store.Get(etcdKey)
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(node.Value).Should(Equal([]byte("http://1.2.3.4:8080")))
+				Ω(node.Value).Should(Equal([]byte(etcdValue)))
 			})
 		})
 
 		Context("when the registration does exist", func() {
 			BeforeEach(func() {
-				err := bbs.RegisterCC(expectedRegistration, 20*time.Second)
+				err := bbs.RegisterCC(regMessage, 20*time.Second)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -55,7 +57,7 @@ var _ = Context("Servistry BBS", func() {
 				Ω(registerErr).ShouldNot(HaveOccurred())
 			})
 			It("updates the ttl", func() {
-				node, err := store.Get("/v1/cloud_controller/1.2.3.4:8080")
+				node, err := store.Get(etcdKey)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node.TTL).Should(BeNumerically("~", 120, 3))
 			})
@@ -76,12 +78,12 @@ var _ = Context("Servistry BBS", func() {
 		var unregisterErr error
 
 		JustBeforeEach(func() {
-			unregisterErr = bbs.UnregisterCC(expectedRegistration)
+			unregisterErr = bbs.UnregisterCC(regMessage)
 		})
 
 		Context("when the registration exists", func() {
 			BeforeEach(func() {
-				err := bbs.RegisterCC(expectedRegistration, ttl)
+				err := bbs.RegisterCC(regMessage, ttl)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -90,7 +92,7 @@ var _ = Context("Servistry BBS", func() {
 			})
 
 			It("deletes /cloud_controller/<host:ip>", func() {
-				_, err := store.Get("/v1/cloud_controller/1.2.3.4:8080")
+				_, err := store.Get(etcdKey)
 				Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
 			})
 		})
@@ -109,6 +111,20 @@ var _ = Context("Servistry BBS", func() {
 			It("returns an error", func() {
 				Ω(unregisterErr).Should(HaveOccurred())
 			})
+		})
+	})
+
+	Describe("GetAvailableCC", func() {
+		BeforeEach(func() {
+			err := bbs.RegisterCC(regMessage, ttl)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		It("returns the urls of registered cloud controllers", func() {
+			urls, err := bbs.GetAvailableCC()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(urls).Should(HaveLen(1))
+			Ω(urls[0]).Should(Equal(etcdValue))
 		})
 	})
 })

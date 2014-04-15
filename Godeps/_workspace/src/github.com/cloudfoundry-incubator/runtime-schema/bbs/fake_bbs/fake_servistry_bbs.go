@@ -6,37 +6,50 @@ import (
 )
 
 type RegisterCCInputs struct {
-	Registration models.CCRegistrationMessage
-	Ttl          time.Duration
+	Message models.CCRegistrationMessage
+	Ttl     time.Duration
+}
+
+type UnregisterCCInputs struct {
+	Message models.CCRegistrationMessage
 }
 
 type FakeServistryBBS struct {
-	RegisterCCInputs  chan RegisterCCInputs
-	RegisterCCOutputs chan error
+	RegisterCCInputs  []RegisterCCInputs
+	RegisterCCOutputs struct {
+		Err error
+	}
 
-	UnregisterCCInputs  chan models.CCRegistrationMessage
-	UnregisterCCOutputs chan error
+	UnregisterCCInputs  []UnregisterCCInputs
+	UnregisterCCOutputs struct {
+		Err error
+	}
+
+	GetAvailableCCOutputs struct {
+		Urls []string
+		Err  error
+	}
 }
 
 func NewFakeServistryBBS() *FakeServistryBBS {
-	return &FakeServistryBBS{
-		RegisterCCInputs:    make(chan RegisterCCInputs),
-		RegisterCCOutputs:   make(chan error),
-		UnregisterCCInputs:  make(chan models.CCRegistrationMessage),
-		UnregisterCCOutputs: make(chan error),
-	}
+	return &FakeServistryBBS{}
 }
 
-func (bbs *FakeServistryBBS) RegisterCC(registration models.CCRegistrationMessage, ttl time.Duration) error {
-	bbs.RegisterCCInputs <- RegisterCCInputs{
-		Registration: registration,
-		Ttl:          ttl,
-	}
-
-	return <-bbs.RegisterCCOutputs
+func (bbs *FakeServistryBBS) RegisterCC(msg models.CCRegistrationMessage, ttl time.Duration) error {
+	bbs.RegisterCCInputs = append(bbs.RegisterCCInputs, RegisterCCInputs{
+		Message: msg,
+		Ttl:     ttl,
+	})
+	return bbs.RegisterCCOutputs.Err
 }
 
-func (bbs *FakeServistryBBS) UnregisterCC(registration models.CCRegistrationMessage) error {
-	bbs.UnregisterCCInputs <- registration
-	return <-bbs.UnregisterCCOutputs
+func (bbs *FakeServistryBBS) UnregisterCC(msg models.CCRegistrationMessage) error {
+	bbs.UnregisterCCInputs = append(bbs.UnregisterCCInputs, UnregisterCCInputs{
+		Message: msg,
+	})
+	return bbs.UnregisterCCOutputs.Err
+}
+
+func (bbs *FakeServistryBBS) GetAvailableCC() ([]string, error) {
+	return bbs.GetAvailableCCOutputs.Urls, bbs.GetAvailableCCOutputs.Err
 }
