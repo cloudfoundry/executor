@@ -40,6 +40,7 @@ type StagerBBS interface {
 
 type MetricsBBS interface {
 	GetAllRunOnces() ([]*models.RunOnce, error)
+	GetServiceRegistrations() (models.ServiceRegistrations, error)
 }
 
 type FileServerBBS interface {

@@ -1,12 +1,13 @@
 package etcdstoreadapter
 
 import (
+	"sync"
+	"time"
+
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/nu7hatch/gouuid"
-	"sync"
-	"time"
 )
 
 type ETCDStoreAdapter struct {

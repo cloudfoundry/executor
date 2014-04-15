@@ -7,10 +7,13 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	etcdclient "github.com/coreos/go-etcd/etcd"
 	. "github.com/onsi/gomega"
+	"github.com/vito/cmdtest"
 
+	"github.com/cloudfoundry/gunk/runner_support"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
@@ -19,7 +22,7 @@ import (
 type ETCDClusterRunner struct {
 	startingPort int
 	numNodes     int
-	etcdCommands []*exec.Cmd
+	etcdSessions []*cmdtest.Session
 	running      bool
 	client       *etcdclient.Client
 
@@ -111,7 +114,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 
 	etcd.mutex.Lock()
 
-	etcd.etcdCommands = make([]*exec.Cmd, etcd.numNodes)
+	etcd.etcdSessions = make([]*cmdtest.Session, etcd.numNodes)
 
 	for i := 0; i < etcd.numNodes; i++ {
 		if nuke {
@@ -128,10 +131,10 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 			args = append(args, "-peers", etcd.serverUrl(0))
 		}
 
-		etcd.etcdCommands[i] = exec.Command("etcd", args...)
-
-		err := etcd.etcdCommands[i].Start()
+		session, err := cmdtest.StartWrapped(exec.Command("etcd", args...), runner_support.TeeToGinkgoWriter, runner_support.TeeToGinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred(), "Make sure etcd is compiled and on your $PATH.")
+
+		etcd.etcdSessions[i] = session
 
 		Eventually(func() bool {
 			return etcd.detectRunningEtcd(i)
@@ -149,13 +152,13 @@ func (etcd *ETCDClusterRunner) stop(nuke bool) {
 
 	if etcd.running {
 		for i := 0; i < etcd.numNodes; i++ {
-			etcd.etcdCommands[i].Process.Signal(syscall.SIGINT)
-			etcd.etcdCommands[i].Process.Wait()
+			etcd.etcdSessions[i].Cmd.Process.Signal(syscall.SIGINT)
+			etcd.etcdSessions[i].Wait(5 * time.Second)
 			if nuke {
 				etcd.nukeArtifacts(i)
 			}
 		}
-		etcd.etcdCommands = nil
+		etcd.etcdSessions = nil
 		etcd.running = false
 		etcd.client = nil
 	}

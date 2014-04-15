@@ -9,6 +9,11 @@ type FakeMetricsBBS struct {
 		Models []*models.RunOnce
 		Err    error
 	}
+
+	GetServiceRegistrationsReturns struct {
+		Registrations models.ServiceRegistrations
+		Err           error
+	}
 }
 
 func NewFakeMetricsBBS() *FakeMetricsBBS {
@@ -17,4 +22,8 @@ func NewFakeMetricsBBS() *FakeMetricsBBS {
 
 func (bbs *FakeMetricsBBS) GetAllRunOnces() ([]*models.RunOnce, error) {
 	return bbs.GetAllRunOncesReturns.Models, bbs.GetAllRunOncesReturns.Err
+}
+
+func (bbs *FakeMetricsBBS) GetServiceRegistrations() (models.ServiceRegistrations, error) {
+	return bbs.GetServiceRegistrationsReturns.Registrations, bbs.GetServiceRegistrationsReturns.Err
 }
