@@ -1,26 +1,18 @@
 package task_registry
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
-var ErrorRegistrySnapshotDoesNotExist = errors.New("registry snapshot does not exist")
-var ErrorRegistrySnapshotHasInvalidJSON = errors.New("registry snapshot has invalid JSON")
-var ErrorNotEnoughMemoryWhenLoadingSnapshot = errors.New("insufficient memory when loading snapshot")
-var ErrorNotEnoughDiskWhenLoadingSnapshot = errors.New("insufficient disk when loading snapshot")
 var ErrorNoStackDefined = errors.New("no stack was defined for RunOnce")
 
 type TaskRegistryInterface interface {
 	AddRunOnce(runOnce *models.RunOnce) error
 	RemoveRunOnce(runOnce *models.RunOnce)
-	WriteToDisk() error
 }
 
 type TaskRegistry struct {
@@ -29,8 +21,7 @@ type TaskRegistry struct {
 	RunOnces         map[string]*models.RunOnce
 	lock             *sync.Mutex
 
-	stack    string
-	fileName string
+	stack string
 }
 
 type IncompatibleStackError struct {
@@ -46,7 +37,7 @@ func (e IncompatibleStackError) Error() string {
 	)
 }
 
-func NewTaskRegistry(stack string, fileName string, memoryMB int, diskMB int) *TaskRegistry {
+func NewTaskRegistry(stack string, memoryMB int, diskMB int) *TaskRegistry {
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
@@ -54,18 +45,8 @@ func NewTaskRegistry(stack string, fileName string, memoryMB int, diskMB int) *T
 
 		lock: &sync.Mutex{},
 
-		stack:    stack,
-		fileName: fileName,
+		stack: stack,
 	}
-}
-
-func LoadTaskRegistryFromDisk(stack string, filename string, memoryMB int, diskMB int) (*TaskRegistry, error) {
-	taskRegistry := NewTaskRegistry(stack, filename, memoryMB, diskMB)
-	err := taskRegistry.hydrateFromDisk()
-	if err != nil {
-		return nil, err
-	}
-	return taskRegistry, nil
 }
 
 func (registry *TaskRegistry) AddRunOnce(runOnce *models.RunOnce) error {
@@ -94,44 +75,6 @@ func (registry *TaskRegistry) RemoveRunOnce(runOnce *models.RunOnce) {
 	defer registry.lock.Unlock()
 
 	delete(registry.RunOnces, runOnce.Guid)
-}
-
-func (registry *TaskRegistry) WriteToDisk() error {
-	registry.lock.Lock()
-	defer registry.lock.Unlock()
-
-	data, err := json.Marshal(registry)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(registry.fileName, data, os.ModePerm)
-}
-
-func (registry *TaskRegistry) hydrateFromDisk() error {
-	registry.lock.Lock()
-	defer registry.lock.Unlock()
-
-	var loadedTaskRegistry *TaskRegistry
-	bytes, err := ioutil.ReadFile(registry.fileName)
-	if err != nil {
-		return ErrorRegistrySnapshotDoesNotExist
-	}
-	err = json.Unmarshal(bytes, &loadedTaskRegistry)
-	if err != nil {
-		return ErrorRegistrySnapshotHasInvalidJSON
-	}
-
-	registry.RunOnces = loadedTaskRegistry.RunOnces
-
-	if registry.availableMemoryMB() < 0 {
-		return ErrorNotEnoughMemoryWhenLoadingSnapshot
-	}
-
-	if registry.availableDiskMB() < 0 {
-		return ErrorNotEnoughDiskWhenLoadingSnapshot
-	}
-
-	return nil
 }
 
 func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce *models.RunOnce) bool {

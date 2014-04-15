@@ -59,7 +59,7 @@ func New(bbs Bbs.ExecutorBBS, drainTimeout time.Duration, logger *steno.Logger) 
 		closeOnce: new(sync.Once),
 
 		stopHandlingRunOnces:    make(chan struct{}, 2),
-		cancelRunningTasks:      make(chan error, 2),
+		cancelRunningTasks:      make(chan error, 1),
 		stopConvergeRunOnce:     make(chan struct{}),
 		stopMaintainingPresence: make(chan struct{}),
 	}
@@ -69,7 +69,7 @@ func (e *Executor) ID() string {
 	return e.id
 }
 
-func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- error) {
+func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- error, errs chan<- error) {
 	e.outstandingPresence.Add(1)
 	defer e.outstandingPresence.Done()
 
@@ -97,8 +97,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 
 		if !locked && ok {
 			e.logger.Error("executor.maintaining-presence.failed")
-			e.stopHandlingRunOnces <- struct{}{}
-			e.cancelRunningTasks <- ErrLostPresence
+			errs <- ErrLostPresence
 		}
 
 		if !ok {
@@ -107,7 +106,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 	}
 }
 
-func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterface, ready chan<- bool) error {
+func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterface, ready chan<- bool) {
 	cancel := make(chan struct{})
 
 	e.logger.Info("executor.watching-for-desired-runonce")
@@ -129,15 +128,24 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 					defer e.outstandingTasks.Done()
 
 					e.sleepForARandomInterval()
+
+					e.logger.Infod(
+						map[string]interface{}{
+							"task": runOnce,
+						},
+						"executor.task.start",
+					)
+
 					runOnceHandler.RunOnce(runOnce, e.id, cancel)
 				}()
 
 			case <-e.stopHandlingRunOnces:
-				stop <- true
+				close(stop)
 
-				err := <-e.cancelRunningTasks
+				<-e.cancelRunningTasks
 				close(cancel)
-				return err
+
+				return
 
 			case err, ok := <-errors:
 				if ok && err != nil {
@@ -152,8 +160,6 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 		e.logger.Info("executor.watching-for-desired-runonce")
 		runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
 	}
-
-	return nil
 }
 
 func (e *Executor) Drain() {
@@ -174,15 +180,8 @@ func (e *Executor) Drain() {
 
 	select {
 	case <-doneWaiting:
-		e.cancelRunningTasks <- nil
-
-		close(e.stopMaintainingPresence)
-		close(e.stopConvergeRunOnce)
-
-		e.outstandingPresence.Wait()
-		e.outstandingConverge.Wait()
 	case <-time.After(e.drainTimeout):
-		e.cancelRunningTasks <- ErrDrainTimeout
+		e.logger.Warn("executor.drain.timed-out")
 	}
 }
 
@@ -190,6 +189,7 @@ func (e *Executor) Stop() {
 	e.closeOnce.Do(func() {
 		e.stopHandlingRunOnces <- struct{}{}
 		e.cancelRunningTasks <- nil
+
 		close(e.stopMaintainingPresence)
 		close(e.stopConvergeRunOnce)
 	})

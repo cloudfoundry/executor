@@ -66,12 +66,6 @@ var diskMB = flag.Int(
 	"the amount of disk the executor has available in megabytes",
 )
 
-var registrySnapshotFile = flag.String(
-	"registrySnapshotFile",
-	"registry_snapshot",
-	"the location, on disk, where the task registry snapshot should be stored",
-)
-
 var convergenceInterval = flag.Duration(
 	"convergenceInterval",
 	30*time.Second,
@@ -180,42 +174,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskRegistry, err := task_registry.LoadTaskRegistryFromDisk(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
-	if err != nil {
-		switch err {
-		case task_registry.ErrorRegistrySnapshotHasInvalidJSON:
-			logger.Error("corrupt registry snapshot detected.  aborting!")
-			os.Exit(1)
-		case task_registry.ErrorNotEnoughMemoryWhenLoadingSnapshot:
-			logger.Error("memory requirements in snapshot exceed the configured memory limit.  aborting!")
-			os.Exit(1)
-		case task_registry.ErrorNotEnoughDiskWhenLoadingSnapshot:
-			logger.Error("disk requirements in snapshot exceed the configured memory limit.  aborting!")
-			os.Exit(1)
-		case task_registry.ErrorRegistrySnapshotDoesNotExist:
-			logger.Info("Didn't find snapshot.  Creating new registry.")
-			taskRegistry = task_registry.NewTaskRegistry(*stack, *registrySnapshotFile, *memoryMB, *diskMB)
-		default:
-			logger.Errorf("woah, woah, woah!  what happened with the snapshot?: %s", err.Error())
-			os.Exit(1)
-		}
-	}
-
 	executor := executor.New(bbs, *drainTimeout, logger)
-
-	maintaining := make(chan error, 1)
-
-	go executor.MaintainPresence(*heartbeatInterval, maintaining)
-
-	err = <-maintaining
-	if err != nil {
-		logger.Errorf("failed to start maintaining presence: %s", err.Error())
-		os.Exit(1)
-	}
-
-	logger.Infof("Starting executor: ID=%s, stack=%s", executor.ID(), *stack)
-
-	registerSignalHandler(executor)
 
 	var backendPlugin backend_plugin.BackendPlugin
 
@@ -237,6 +196,7 @@ func main() {
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
+	taskRegistry := task_registry.NewTaskRegistry(*stack, *memoryMB, *diskMB)
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,
@@ -265,23 +225,41 @@ func main() {
 		*containerInodeLimit,
 	)
 
+	maintaining := make(chan error, 1)
+	maintainPresenceErrors := make(chan error, 1)
+
+	logger.Infod(
+		map[string]interface{}{
+			"id":    executor.ID(),
+			"stack": *stack,
+		},
+		"executor.starting",
+	)
+
+	go executor.MaintainPresence(*heartbeatInterval, maintaining, maintainPresenceErrors)
+
+	err = <-maintaining
+	if err != nil {
+		logger.Errorf("failed to start maintaining presence: %s", err.Error())
+		os.Exit(1)
+	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+
 	go executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
 
 	handling := make(chan bool)
 
-	go func() {
-		<-handling
-		logger.Infof("Watching for RunOnces!")
-	}()
+	go executor.Handle(runOnceHandler, handling)
 
-	err = executor.Handle(runOnceHandler, handling)
-	if err != nil {
+	<-handling
+	logger.Infof("executor.started")
+
+	select {
+	case err := <-maintainPresenceErrors:
 		executor.Stop()
-	}
 
-	writeRegistry(taskRegistry, logger)
-
-	if err != nil {
 		logger.Errord(
 			map[string]interface{}{
 				"error": err.Error(),
@@ -290,43 +268,14 @@ func main() {
 		)
 
 		os.Exit(1)
-	}
-}
 
-func writeRegistry(taskRegistry task_registry.TaskRegistryInterface, logger *steno.Logger) {
-	err := taskRegistry.WriteToDisk()
-	if err != nil {
-		logger.Errord(
-			map[string]interface{}{
-				"error":            err,
-				"snapshotLocation": *registrySnapshotFile,
-			},
-			"executor.snapshot.write-failed",
-		)
+	case sig := <-signals:
+		signal.Stop(signals)
 
-		os.Exit(1)
-	} else {
-		logger.Debugd(
-			map[string]interface{}{
-				"snapshotLocation": *registrySnapshotFile,
-			},
-			"executor.snapshot.saved",
-		)
-	}
-}
-
-func registerSignalHandler(e *executor.Executor) {
-	signals := make(chan os.Signal, 1)
-
-	go func() {
-		switch <-signals {
-		case syscall.SIGUSR1:
-			e.Drain()
-		default:
-			signal.Stop(signals)
-			e.Stop()
+		if sig == syscall.SIGUSR1 {
+			executor.Drain()
 		}
-	}()
 
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+		executor.Stop()
+	}
 }

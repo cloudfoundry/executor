@@ -7,7 +7,6 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
-	"github.com/onsi/ginkgo/config"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler/fake_run_once_handler"
@@ -22,16 +21,15 @@ import (
 
 var _ = Describe("Executor", func() {
 	var (
-		bbs              *Bbs.BBS
-		runOnce          *models.RunOnce
-		executor         *Executor
-		taskRegistry     *task_registry.TaskRegistry
-		gordon           *fake_gordon.FakeGordon
-		registryFileName string
-		ready            chan bool
-		startingMemory   int
-		startingDisk     int
-		storeAdapter     storeadapter.StoreAdapter
+		bbs            *Bbs.BBS
+		runOnce        *models.RunOnce
+		executor       *Executor
+		taskRegistry   *task_registry.TaskRegistry
+		gordon         *fake_gordon.FakeGordon
+		ready          chan bool
+		startingMemory int
+		startingDisk   int
+		storeAdapter   storeadapter.StoreAdapter
 	)
 
 	var fakeRunOnceHandler *fake_run_once_handler.FakeRunOnceHandler
@@ -40,15 +38,13 @@ var _ = Describe("Executor", func() {
 		fakeRunOnceHandler = fake_run_once_handler.New()
 		ready = make(chan bool, 1)
 
-		registryFileName = fmt.Sprintf("/tmp/executor_registry_%d", config.GinkgoConfig.ParallelNode)
-
 		storeAdapter = etcdRunner.Adapter()
 		bbs = Bbs.New(storeAdapter, timeprovider.NewTimeProvider())
 		gordon = fake_gordon.New()
 
 		startingMemory = 256
 		startingDisk = 1024
-		taskRegistry = task_registry.NewTaskRegistry("some-stack", registryFileName, startingMemory, startingDisk)
+		taskRegistry = task_registry.NewTaskRegistry("some-stack", startingMemory, startingDisk)
 
 		runOnce = &models.RunOnce{
 			Guid:     "totally-unique",
@@ -164,15 +160,27 @@ var _ = Describe("Executor", func() {
 	})
 
 	Describe("Maintaining Presence", func() {
-		var presence = make(chan error, 1)
+		var gainedPresence chan error
+		var lostPresence chan error
 
-		It("should maintain presence", func() {
-			go executor.MaintainPresence(60*time.Second, presence)
+		var heartbeatInterval time.Duration
+
+		BeforeEach(func() {
+			heartbeatInterval = 60 * time.Second
+		})
+
+		JustBeforeEach(func() {
+			gainedPresence = make(chan error, 1)
+			lostPresence = make(chan error, 1)
+
+			go executor.MaintainPresence(heartbeatInterval, gainedPresence, lostPresence)
 
 			var err error
-			Eventually(presence).Should(Receive(&err))
+			Eventually(gainedPresence).Should(Receive(&err))
 			Ω(err).ShouldNot(HaveOccurred())
+		})
 
+		It("should maintain presence", func() {
 			Eventually(bbs.GetAllExecutors).Should(HaveLen(1))
 
 			executors, err := bbs.GetAllExecutors()
@@ -181,56 +189,30 @@ var _ = Describe("Executor", func() {
 		})
 
 		Context("when we fail to maintain our presence", func() {
-			var handleErr chan error
-
 			BeforeEach(func() {
-				go executor.MaintainPresence(1*time.Second, presence)
-
-				var err error
-				Eventually(presence).Should(Receive(&err))
-				Ω(err).ShouldNot(HaveOccurred())
-
-				handleErr = make(chan error, 1)
-
-				go func() {
-					handleErr <- executor.Handle(fakeRunOnceHandler, ready)
-				}()
-
-				<-ready
+				heartbeatInterval = 1 * time.Second
 			})
 
 			triggerMaintainPresenceFailure := func() {
 				time.Sleep(1 * time.Second)
-				// delete its key (and everything else lol)
+
+				// delete the executor's key (and everything else lol)
 				etcdRunner.Reset()
+
 				time.Sleep(2 * time.Second)
 			}
 
-			It("cancels the running steps and returns an error", func() {
-				err := bbs.DesireRunOnce(runOnce)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Eventually(fakeRunOnceHandler.HandledRunOnces).ShouldNot(BeEmpty())
-
+			It("sends an error to the given error channel", func() {
 				triggerMaintainPresenceFailure()
 
-				Eventually(fakeRunOnceHandler.GetCancel).ShouldNot(BeNil())
-				Eventually(fakeRunOnceHandler.GetCancel()).Should(BeClosed())
-
-				Eventually(handleErr).Should(Receive(&err))
-
+				var err error
+				Eventually(lostPresence).Should(Receive(&err))
 				Ω(err).Should(Equal(ErrLostPresence))
 			})
 		})
 
 		Context("when told to stop", func() {
 			It("it removes its presence", func() {
-				go executor.MaintainPresence(60*time.Second, presence)
-
-				var err error
-				Eventually(presence).Should(Receive(&err))
-				Ω(err).ShouldNot(HaveOccurred())
-
 				Eventually(bbs.GetAllExecutors).Should(HaveLen(1))
 
 				executor.Stop()
