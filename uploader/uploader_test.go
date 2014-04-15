@@ -94,13 +94,13 @@ var _ = Describe("Uploader", func() {
 		})
 
 		Context("when the upload times out", func() {
-			var attemptCount int
+			var requestInitiated chan struct{}
+
 			BeforeEach(func() {
-				attemptCount = 0
+				requestInitiated = make(chan struct{})
+
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					lock.Lock()
-					attemptCount++
-					lock.Unlock()
+					requestInitiated <- struct{}{}
 
 					time.Sleep(300 * time.Millisecond)
 					fmt.Fprintln(w, "Hello, client")
@@ -110,16 +110,19 @@ var _ = Describe("Uploader", func() {
 				url, _ = url.Parse(serverUrl)
 			})
 
-			It("should retry 3 times", func() {
-				uploader.Upload(file.Name(), url)
-				lock.Lock()
-				Ω(attemptCount).Should(Equal(3))
-				lock.Unlock()
-			})
+			It("should retry 3 times and return an error", func() {
+				errs := make(chan error)
 
-			It("should return an error", func() {
-				_, err := uploader.Upload(file.Name(), url)
-				Ω(err).Should(HaveOccurred())
+				go func() {
+					_, err := uploader.Upload(file.Name(), url)
+					errs <- err
+				}()
+
+				Eventually(requestInitiated).Should(Receive())
+				Eventually(requestInitiated).Should(Receive())
+				Eventually(requestInitiated).Should(Receive())
+
+				Ω(<-errs).Should(HaveOccurred())
 			})
 		})
 
