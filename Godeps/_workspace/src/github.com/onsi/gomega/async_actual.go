@@ -41,12 +41,12 @@ func newAsyncActual(asyncType asyncActualType, actualInput interface{}, fail Ome
 	}
 }
 
-func (actual *asyncActual) Should(matcher OmegaMatcher, optionalDescription ...interface{}) bool {
-	return actual.match(matcher, true, optionalDescription...)
+func (actual *asyncActual) Should(matcher interface{}, optionalDescription ...interface{}) bool {
+	return actual.match(shimIfNecessary(matcher), true, optionalDescription...)
 }
 
-func (actual *asyncActual) ShouldNot(matcher OmegaMatcher, optionalDescription ...interface{}) bool {
-	return actual.match(matcher, false, optionalDescription...)
+func (actual *asyncActual) ShouldNot(matcher interface{}, optionalDescription ...interface{}) bool {
+	return actual.match(shimIfNecessary(matcher), false, optionalDescription...)
 }
 
 func (actual *asyncActual) buildDescription(optionalDescription ...interface{}) string {
@@ -101,9 +101,9 @@ func (actual *asyncActual) match(matcher OmegaMatcher, desiredMatch bool, option
 
 		var message string
 		if desiredMatch {
-			message = matcher.FailureMessage(actual)
+			message = matcher.FailureMessage(value)
 		} else {
-			message = matcher.NegatedFailureMessage(actual)
+			message = matcher.NegatedFailureMessage(value)
 		}
 		actual.fail(fmt.Sprintf("%s after %.3fs.\n%s%s%s", preamble, time.Since(timer).Seconds(), description, message, errMsg), 3+actual.offset)
 	}
