@@ -113,6 +113,38 @@ var _ = Describe("Main", func() {
 		})
 	})
 
+	Describe("when the executor receives the TERM signal", func() {
+		It("stops all running tasks", func() {
+			desireRunOnce(time.Hour)
+			Eventually(fakeBackend.Containers).Should(HaveLen(1))
+
+			executorSession.Cmd.Process.Signal(syscall.SIGTERM)
+
+			Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
+		})
+
+		It("exits successfully", func() {
+			executorSession.Cmd.Process.Signal(syscall.SIGTERM)
+			Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
+		})
+	})
+
+	Describe("when the executor receives the INT signal", func() {
+		It("stops all running tasks", func() {
+			desireRunOnce(time.Hour)
+			Eventually(fakeBackend.Containers).Should(HaveLen(1))
+
+			executorSession.Cmd.Process.Signal(syscall.SIGINT)
+
+			Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
+		})
+
+		It("exits successfully", func() {
+			executorSession.Cmd.Process.Signal(syscall.SIGINT)
+			Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
+		})
+	})
+
 	Describe("when the executor receives the USR1 signal", func() {
 		sendDrainSignal := func() {
 			executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
