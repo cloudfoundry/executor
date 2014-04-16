@@ -53,8 +53,8 @@ type FileServerBBS interface {
 
 type ServistryBBS interface {
 	GetAvailableCC() (urls []string, err error)
-	RegisterCC(msg models.CCRegistrationMessage, ttl time.Duration) error
-	UnregisterCC(msg models.CCRegistrationMessage) error
+	RegisterCC(host string, port int, ttl time.Duration) error
+	UnregisterCC(host string, port int) error
 }
 
 func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) *BBS {
