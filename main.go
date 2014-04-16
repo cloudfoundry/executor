@@ -273,9 +273,27 @@ func main() {
 		signal.Stop(signals)
 
 		if sig == syscall.SIGUSR1 {
+			logger.Infod(
+				map[string]interface{}{
+					"timeout": (*drainTimeout).String(),
+				},
+				"executor.draining",
+			)
+
 			executor.Drain()
 		}
 
+		stoppingAt := time.Now()
+
+		logger.Info("executor.stopping")
+
 		executor.Stop()
+
+		logger.Infod(
+			map[string]interface{}{
+				"took": time.Since(stoppingAt).String(),
+			},
+			"executor.stopped",
+		)
 	}
 }

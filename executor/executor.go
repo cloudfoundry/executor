@@ -165,13 +165,6 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 func (e *Executor) Drain() {
 	e.stopHandlingRunOnces <- struct{}{}
 
-	e.logger.Infod(
-		map[string]interface{}{
-			"timeout": e.drainTimeout.String(),
-		},
-		"executor.draining",
-	)
-
 	doneWaiting := make(chan struct{})
 	go func() {
 		e.outstandingTasks.Wait()
