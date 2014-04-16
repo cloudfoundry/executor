@@ -127,6 +127,19 @@ var _ = Describe("Main", func() {
 				Consistently(bbs.GetAllPendingRunOnces, 2).Should(HaveLen(1))
 			})
 
+			Context("and USR1 is received again", func() {
+				It("does not die", func() {
+					desireRunOnce(time.Hour)
+					Eventually(bbs.GetAllStartingRunOnces).Should(HaveLen(1))
+
+					executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
+					Ω(executorSession).Should(SayWithTimeout("executor.draining", time.Second))
+
+					executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
+					Ω(executorSession).Should(SayWithTimeout("executor.signal.ignored", 5*time.Second))
+				})
+			})
+
 			Context("when the tasks complete before the drain timeout", func() {
 				It("exits successfully", func() {
 					desireRunOnce(1 * time.Second)

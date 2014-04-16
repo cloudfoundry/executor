@@ -270,7 +270,16 @@ func main() {
 		os.Exit(1)
 
 	case sig := <-signals:
-		signal.Stop(signals)
+		go func() {
+			for sig := range signals {
+				logger.Infod(
+					map[string]interface{}{
+						"signal": sig.String(),
+					},
+					"executor.signal.ignored",
+				)
+			}
+		}()
 
 		if sig == syscall.SIGUSR1 {
 			logger.Infod(
@@ -295,5 +304,7 @@ func main() {
 			},
 			"executor.stopped",
 		)
+
+		os.Exit(0)
 	}
 }
