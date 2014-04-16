@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/gordon/warden"
+	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
@@ -68,7 +68,9 @@ func (step *RunStep) Perform() error {
 	var timeoutChan <-chan time.Time
 
 	if step.model.Timeout != 0 {
-		timeoutChan = time.After(step.model.Timeout)
+		timer := time.NewTimer(step.model.Timeout)
+		timeoutChan = timer.C
+		defer timer.Stop()
 	}
 
 	go func() {
