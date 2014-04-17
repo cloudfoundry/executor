@@ -5,29 +5,28 @@ import (
 	"path"
 	"time"
 
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
 )
 
 const CCSchemaRoot = SchemaRoot + "cloud_controller"
 
-func ccRegistrationKey(registration models.CCRegistrationMessage) string {
-	key := fmt.Sprintf("%s:%d", registration.Host, registration.Port)
+func ccRegistrationKey(host string, port int) string {
+	key := fmt.Sprintf("%s:%d", host, port)
 	return path.Join(CCSchemaRoot, key)
 }
 
-func ccRegistrationValue(registration models.CCRegistrationMessage) []byte {
-	return []byte(fmt.Sprintf("http://%s:%d", registration.Host, registration.Port))
+func ccRegistrationValue(host string, port int) []byte {
+	return []byte(fmt.Sprintf("http://%s:%d", host, port))
 }
 
 type servistryBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func (bbs *servistryBBS) RegisterCC(registration models.CCRegistrationMessage, ttl time.Duration) error {
+func (bbs *servistryBBS) RegisterCC(host string, port int, ttl time.Duration) error {
 	ccNode := storeadapter.StoreNode{
-		Key:   ccRegistrationKey(registration),
-		Value: ccRegistrationValue(registration),
+		Key:   ccRegistrationKey(host, port),
+		Value: ccRegistrationValue(host, port),
 		TTL:   uint64(ttl.Seconds()),
 	}
 
@@ -39,8 +38,8 @@ func (bbs *servistryBBS) RegisterCC(registration models.CCRegistrationMessage, t
 	return err
 }
 
-func (bbs *servistryBBS) UnregisterCC(registration models.CCRegistrationMessage) error {
-	err := bbs.store.Delete(ccRegistrationKey(registration))
+func (bbs *servistryBBS) UnregisterCC(host string, port int) error {
+	err := bbs.store.Delete(ccRegistrationKey(host, port))
 	if err == storeadapter.ErrorKeyNotFound {
 		return nil
 	}

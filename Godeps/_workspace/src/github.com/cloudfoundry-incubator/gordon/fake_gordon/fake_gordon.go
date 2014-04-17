@@ -16,7 +16,7 @@ type FakeGordon struct {
 	ConnectError error
 
 	createdHandles    []string
-	createdProperties []map[string]string
+	createdProperties map[string]map[string]string
 	CreateError       error
 
 	stoppedHandles []string
@@ -41,7 +41,7 @@ type FakeGordon struct {
 
 	GetDiskLimitError error
 
-	ListError error
+	listCallback ListCallback
 
 	infoError    error
 	infoResponse *warden.InfoResponse
@@ -65,6 +65,8 @@ type FakeGordon struct {
 
 	lock *sync.RWMutex
 }
+
+type ListCallback func(filterProperties map[string]string) (*warden.ListResponse, error)
 
 type RunCallback func() (uint32, <-chan *warden.ProcessPayload, error)
 
@@ -112,7 +114,7 @@ func (f *FakeGordon) Reset() {
 	f.ConnectError = nil
 
 	f.createdHandles = []string{}
-	f.createdProperties = []map[string]string{}
+	f.createdProperties = map[string]map[string]string{}
 	f.CreateError = nil
 
 	f.stoppedHandles = []string{}
@@ -126,7 +128,6 @@ func (f *FakeGordon) Reset() {
 	f.NetInError = nil
 	f.GetMemoryLimitError = nil
 	f.GetDiskLimitError = nil
-	f.ListError = nil
 	f.AttachError = nil
 
 	f.infoError = nil
@@ -168,7 +169,8 @@ func (f *FakeGordon) Create(properties map[string]string) (*warden.CreateRespons
 	handle := handleUuid.String()[:11]
 
 	f.createdHandles = append(f.createdHandles, handle)
-	f.createdProperties = append(f.createdProperties, properties)
+
+	f.createdProperties[handle] = properties
 
 	return &warden.CreateResponse{
 		Handle: proto.String(handle),
@@ -182,11 +184,11 @@ func (f *FakeGordon) CreatedHandles() []string {
 	return f.createdHandles
 }
 
-func (f *FakeGordon) CreatedProperties() []map[string]string {
+func (f *FakeGordon) CreatedProperties(handle string) map[string]string {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	return f.createdProperties
+	return f.createdProperties[handle]
 }
 
 func (f *FakeGordon) Stop(handle string, background, kill bool) (*warden.StopResponse, error) {
@@ -295,8 +297,15 @@ func (f *FakeGordon) GetDiskLimit(handle string) (uint64, error) {
 }
 
 func (f *FakeGordon) List(filterProperties map[string]string) (*warden.ListResponse, error) {
-	panic("NOOP!")
-	return nil, f.ListError
+	f.lock.RLock()
+	callback := f.listCallback
+	f.lock.RUnlock()
+
+	if callback != nil {
+		return callback(filterProperties)
+	}
+
+	return &warden.ListResponse{}, nil
 }
 
 func (f *FakeGordon) Info(handle string) (*warden.InfoResponse, error) {
@@ -451,6 +460,13 @@ func (f *FakeGordon) WhenRunning(handle string, script string, resourceLimits go
 	defer f.lock.Unlock()
 
 	f.runCallbacks[&RunningScript{handle, script, resourceLimits}] = callback
+}
+
+func (f *FakeGordon) WhenListing(callback ListCallback) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	f.listCallback = callback
 }
 
 func (f *FakeGordon) WhenCopyingOut(copiedOut CopiedOut, callback CopyOutCallback) {
