@@ -7,28 +7,34 @@ import (
 )
 
 type ContainerStep struct {
-	runOnce         *models.RunOnce
-	logger          *steno.Logger
-	wardenClient    gordon.Client
-	containerHandle *string
+	runOnce            *models.RunOnce
+	logger             *steno.Logger
+	wardenClient       gordon.Client
+	containerOwnerName string
+	containerHandle    *string
 }
 
 func New(
 	runOnce *models.RunOnce,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
+	containerOwnerName string,
 	containerHandle *string,
 ) *ContainerStep {
 	return &ContainerStep{
-		runOnce:         runOnce,
-		logger:          logger,
-		wardenClient:    wardenClient,
-		containerHandle: containerHandle,
+		runOnce:            runOnce,
+		logger:             logger,
+		wardenClient:       wardenClient,
+		containerOwnerName: containerOwnerName,
+		containerHandle:    containerHandle,
 	}
 }
 
 func (step ContainerStep) Perform() error {
-	createResponse, err := step.wardenClient.Create(nil)
+	createResponse, err := step.wardenClient.Create(map[string]string{
+		"owner": step.containerOwnerName,
+	})
+
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{

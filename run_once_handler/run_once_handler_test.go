@@ -1,6 +1,7 @@
 package run_once_handler_test
 
 import (
+	"errors"
 	"io/ioutil"
 	"time"
 
@@ -28,94 +29,95 @@ import (
 )
 
 var _ = Describe("RunOnceHandler", func() {
-	Describe("RunOnce", func() {
-		var (
-			handler *RunOnceHandler
-			runOnce *models.RunOnce
-			cancel  chan struct{}
+	var (
+		handler *RunOnceHandler
+		runOnce *models.RunOnce
+		cancel  chan struct{}
 
-			bbs                 *fake_bbs.FakeExecutorBBS
-			wardenClient        *fake_gordon.FakeGordon
-			downloader          *fake_downloader.FakeDownloader
-			uploader            *fake_uploader.FakeUploader
-			extractor           *fake_extractor.FakeExtractor
-			compressor          *fake_compressor.FakeCompressor
-			transformer         *run_once_transformer.RunOnceTransformer
-			taskRegistry        *fake_task_registry.FakeTaskRegistry
-			containerInodeLimit int
-		)
+		bbs                 *fake_bbs.FakeExecutorBBS
+		wardenClient        *fake_gordon.FakeGordon
+		downloader          *fake_downloader.FakeDownloader
+		uploader            *fake_uploader.FakeUploader
+		extractor           *fake_extractor.FakeExtractor
+		compressor          *fake_compressor.FakeCompressor
+		transformer         *run_once_transformer.RunOnceTransformer
+		taskRegistry        *fake_task_registry.FakeTaskRegistry
+		containerInodeLimit int
+	)
 
-		BeforeEach(func() {
-			cancel = make(chan struct{})
+	BeforeEach(func() {
+		cancel = make(chan struct{})
 
-			runOnce = &models.RunOnce{
-				Guid:     "run-once-guid",
-				MemoryMB: 512,
-				DiskMB:   1024,
-				Actions: []models.ExecutorAction{
-					{
-						Action: models.DownloadAction{
-							From: "http://download-src.com",
-							To:   "/download-dst",
-						},
-					},
-					{
-						Action: models.RunAction{
-							Script: "sudo reboot",
-						},
-					},
-					{
-						Action: models.UploadAction{
-							From: "/upload-src",
-							To:   "http://upload-dst.com",
-						},
+		runOnce = &models.RunOnce{
+			Guid:     "run-once-guid",
+			MemoryMB: 512,
+			DiskMB:   1024,
+			Actions: []models.ExecutorAction{
+				{
+					Action: models.DownloadAction{
+						From: "http://download-src.com",
+						To:   "/download-dst",
 					},
 				},
-			}
+				{
+					Action: models.RunAction{
+						Script: "sudo reboot",
+					},
+				},
+				{
+					Action: models.UploadAction{
+						From: "/upload-src",
+						To:   "http://upload-dst.com",
+					},
+				},
+			},
+		}
 
-			bbs = fake_bbs.NewFakeExecutorBBS()
-			wardenClient = fake_gordon.New()
-			taskRegistry = fake_task_registry.New()
+		bbs = fake_bbs.NewFakeExecutorBBS()
+		wardenClient = fake_gordon.New()
+		taskRegistry = fake_task_registry.New()
 
-			logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
-				return fake_log_streamer.New()
-			}
+		logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
+			return fake_log_streamer.New()
+		}
 
-			logger := steno.NewLogger("test-logger")
+		logger := steno.NewLogger("test-logger")
 
-			containerInodeLimit = 200000
-			backendPlugin := linux_plugin.New()
-			downloader = &fake_downloader.FakeDownloader{}
-			uploader = &fake_uploader.FakeUploader{}
-			extractor = &fake_extractor.FakeExtractor{}
-			compressor = &fake_compressor.FakeCompressor{}
+		containerInodeLimit = 200000
+		backendPlugin := linux_plugin.New()
+		downloader = &fake_downloader.FakeDownloader{}
+		uploader = &fake_uploader.FakeUploader{}
+		extractor = &fake_extractor.FakeExtractor{}
+		compressor = &fake_compressor.FakeCompressor{}
 
-			tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
-			Ω(err).ShouldNot(HaveOccurred())
+		tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
+		Ω(err).ShouldNot(HaveOccurred())
 
-			transformer = run_once_transformer.NewRunOnceTransformer(
-				logStreamerFactory,
-				downloader,
-				uploader,
-				extractor,
-				compressor,
-				backendPlugin,
-				wardenClient,
-				logger,
-				tmpDir,
-			)
+		transformer = run_once_transformer.NewRunOnceTransformer(
+			logStreamerFactory,
+			downloader,
+			uploader,
+			extractor,
+			compressor,
+			backendPlugin,
+			wardenClient,
+			logger,
+			tmpDir,
+		)
 
-			handler = New(
-				bbs,
-				wardenClient,
-				taskRegistry,
-				transformer,
-				logStreamerFactory,
-				logger,
-				containerInodeLimit,
-			)
-		})
+		handler = New(
+			bbs,
+			wardenClient,
+			"container-owner-name",
+			taskRegistry,
+			transformer,
+			logStreamerFactory,
+			logger,
+			containerInodeLimit,
+		)
+	})
 
+	Describe("RunOnce", func() {
 		setUpSuccessfulRuns := func() {
 			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
 
@@ -157,8 +159,14 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
 
 				// create container
-				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
-				handle := wardenClient.CreatedHandles()[0]
+				handles := wardenClient.CreatedHandles()
+				Ω(handles).Should(HaveLen(1))
+
+				handle := handles[0]
+
+				// container must have owner
+				properties := wardenClient.CreatedProperties(handle)
+				Ω(properties["owner"]).Should(Equal("container-owner-name"))
 
 				//limit memoru & disk
 				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
@@ -301,6 +309,62 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Failed).Should(BeTrue())
 				Ω(completed[0].FailureReason).Should(ContainSubstring("cancelled"))
+			})
+		})
+	})
+
+	Describe("Cleanup", func() {
+		Context("when there are containers matching the owner name", func() {
+			BeforeEach(func() {
+				wardenClient.WhenListing(
+					func(properties map[string]string) (*warden.ListResponse, error) {
+						Ω(properties["owner"]).Should(Equal("container-owner-name"))
+
+						return &warden.ListResponse{
+							Handles: []string{"doomed-handle-1", "doomed-handle-2"},
+						}, nil
+					},
+				)
+			})
+
+			It("destroys them", func() {
+				err := handler.Cleanup()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(wardenClient.DestroyedHandles()).Should(Equal([]string{
+					"doomed-handle-1",
+					"doomed-handle-2",
+				}))
+			})
+
+			Context("when destroying a container fails", func() {
+				disaster := errors.New("oh no!")
+
+				BeforeEach(func() {
+					wardenClient.DestroyError = disaster
+				})
+
+				It("returns the error", func() {
+					err := handler.Cleanup()
+					Ω(err).Should(Equal(disaster))
+				})
+			})
+		})
+
+		Context("when listing containers fails", func() {
+			disaster := errors.New("oh no!")
+
+			BeforeEach(func() {
+				wardenClient.WhenListing(
+					func(properties map[string]string) (*warden.ListResponse, error) {
+						return nil, disaster
+					},
+				)
+			})
+
+			It("returns the error", func() {
+				err := handler.Cleanup()
+				Ω(err).Should(Equal(disaster))
 			})
 		})
 	})

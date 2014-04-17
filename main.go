@@ -30,6 +30,12 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 )
 
+var containerOwnerName = flag.String(
+	"containerOwnerName",
+	"executor",
+	"name to track containers created by this executor; they will be reaped on start",
+)
+
 var wardenNetwork = flag.String(
 	"wardenNetwork",
 	"unix",
@@ -228,6 +234,7 @@ func main() {
 	runOnceHandler := run_once_handler.New(
 		bbs,
 		wardenClient,
+		*containerOwnerName,
 		taskRegistry,
 		transformer,
 		logStreamerFactory,
@@ -237,6 +244,16 @@ func main() {
 
 	maintaining := make(chan error, 1)
 	maintainPresenceErrors := make(chan error, 1)
+
+	err = runOnceHandler.Cleanup()
+	if err != nil {
+		logger.Errord(
+			map[string]interface{}{
+				"error": err.Error(),
+			},
+			"executor.cleanup.failed",
+		)
+	}
 
 	logger.Infod(
 		map[string]interface{}{
