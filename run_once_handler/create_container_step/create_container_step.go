@@ -1,9 +1,9 @@
 package create_container_step
 
 import (
+	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon"
 )
 
 type ContainerStep struct {
@@ -28,7 +28,7 @@ func New(
 }
 
 func (step ContainerStep) Perform() error {
-	createResponse, err := step.wardenClient.Create()
+	createResponse, err := step.wardenClient.Create(nil)
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
