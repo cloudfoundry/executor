@@ -82,34 +82,109 @@ var _ = Describe("DownloadAction", func() {
 			stepErr = step.Perform()
 		})
 
-		Context("when extract is false", func() {
-			It("should not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
+		It("downloads the file from the given URL", func() {
+			Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
+			Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
+		})
+
+		It("places the file in the container", func() {
+			Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
+
+			copiedFile := wardenClient.ThingsCopiedIn()[0]
+			Ω(copiedFile.Handle).To(Equal("some-container-handle"))
+			Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
+		})
+
+		It("loggregates a download message", func() {
+			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones\n"))
+		})
+
+		It("loggregates the download filesize", func() {
+			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded Mr. Jones (1K)\n"))
+		})
+
+		It("does not return an error", func() {
+			Ω(stepErr).ShouldNot(HaveOccurred())
+		})
+
+		It("does not loggregate an error", func() {
+			Ω(fakeStreamer.StderrBuffer.String()).Should(BeEmpty())
+		})
+
+		Context("when there is an error parsing the download url", func() {
+			BeforeEach(func() {
+				downloadAction.From = "foo/bar"
 			})
 
-			It("downloads the file from the given URL", func() {
-				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-				Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
+			It("returns an error", func() {
+				Ω(stepErr).Should(HaveOccurred())
 			})
 
-			It("places the file in the container", func() {
-				Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
-
-				copiedFile := wardenClient.ThingsCopiedIn()[0]
-				Ω(copiedFile.Handle).To(Equal("some-container-handle"))
-				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
+			It("loggregates the default error message to STDERR", func() {
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
 			})
 
-			It("streams a download message", func() {
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones\n"))
+			Context("when there is a custom download error message", func() {
+				var customErrorMessage = "The thing kaboomed"
+
+				BeforeEach(func() {
+					downloadAction.DownloadFailureMessage = customErrorMessage
+				})
+
+				It("should loggregrate the custom error message to STDERR", func() {
+					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(customErrorMessage + "\n"))
+				})
+
+				It("should NOT loggregate the default error message to STDERR", func() {
+					Ω(fakeStreamer.StderrBuffer.String()).ShouldNot(ContainSubstring("Downloading Mr. Jones failed\n"))
+				})
+			})
+		})
+
+		Context("when there is an error downloading the file", func() {
+			var defaultErrorMessage = "Downloading Mr. Jones failed"
+			BeforeEach(func() {
+				downloader.AlwaysFail()
 			})
 
-			It("streams the download filesize", func() {
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded Mr. Jones (1K)\n"))
+			It("returns an error", func() {
+				Ω(stepErr).Should(HaveOccurred())
 			})
 
-			It("does not stream an error", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(BeEmpty())
+			It("should loggregrate the default error message to STDERR", func() {
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(defaultErrorMessage + "\n"))
+			})
+
+			Context("when there is a custom download error message", func() {
+				var customErrorMessage = "The thing kaboomed"
+
+				BeforeEach(func() {
+					downloadAction.DownloadFailureMessage = customErrorMessage
+				})
+
+				It("should loggregrate the custom error message to STDERR", func() {
+					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(customErrorMessage + "\n"))
+				})
+
+				It("should NOT loggregate the default error message to STDERR", func() {
+					Ω(fakeStreamer.StderrBuffer.String()).ShouldNot(ContainSubstring(defaultErrorMessage + "\n"))
+				})
+			})
+		})
+
+		Context("when there is an error copying the file into the container", func() {
+			var expectedErr = errors.New("oh no!")
+
+			BeforeEach(func() {
+				wardenClient.SetCopyInErr(expectedErr)
+			})
+
+			It("returns an error", func() {
+				Ω(stepErr).Should(Equal(expectedErr))
+			})
+
+			It("loggregates a message to STDERR", func() {
+				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Copying Mr. Jones into the container failed"))
 			})
 		})
 
@@ -118,7 +193,7 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction.Extract = true
 			})
 
-			It("should not return an error", func() {
+			It("does not return an error", func() {
 				Ω(stepErr).ShouldNot(HaveOccurred())
 			})
 
@@ -147,52 +222,24 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("loggregates a message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed\n"))
+					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Extracting Mr. Jones failed\n"))
 				})
 			})
-		})
 
-		Context("when there is an error parsing the download url", func() {
-			BeforeEach(func() {
-				downloadAction.From = "foo/bar"
-			})
+			Context("when there is an error copying the extracted files into the container", func() {
+				var expectedErr = errors.New("oh no!")
 
-			It("returns an error", func() {
-				Ω(stepErr).Should(HaveOccurred())
-			})
+				BeforeEach(func() {
+					wardenClient.SetCopyInErr(expectedErr)
+				})
 
-			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
-			})
-		})
+				It("returns an error", func() {
+					Ω(stepErr).Should(Equal(expectedErr))
+				})
 
-		Context("when there is an error downloading the file", func() {
-			BeforeEach(func() {
-				downloader.AlwaysFail()
-			})
-
-			It("returns an error", func() {
-				Ω(stepErr).Should(HaveOccurred())
-			})
-
-			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
-			})
-		})
-
-		Context("when there is an error copying the file into the container", func() {
-			var expectedErr = errors.New("oh no!")
-
-			BeforeEach(func() {
-				wardenClient.SetCopyInErr(expectedErr)
-			})
-
-			It("returns an error", func() {
-				Ω(stepErr).Should(Equal(expectedErr))
-			})
-
-			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
+				It("loggregates a message to STDERR", func() {
+					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Copying Mr. Jones into the container failed"))
+				})
 			})
 		})
 	})
