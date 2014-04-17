@@ -9,10 +9,11 @@ import (
 var InvalidActionConversion = errors.New("Invalid Action Conversion")
 
 type DownloadAction struct {
-	Name    string `json:"name"`
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Extract bool   `json:"extract"`
+	Name                   string `json:"name"`
+	From                   string `json:"from"`
+	To                     string `json:"to"`
+	Extract                bool   `json:"extract"`
+	DownloadFailureMessage string `json:"download_failure_message,omitempty"`
 }
 
 type UploadAction struct {

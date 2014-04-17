@@ -68,6 +68,28 @@ var _ = Describe("ExecutorAction", func() {
 				},
 			},
 		)
+
+		itSerializesAndDeserializes(
+			`{
+				"action": "download",
+				"args": {
+					"from": "web_location",
+					"name": "some asset",
+					"to": "local_location",
+					"extract": true,
+					"download_failure_message": "fail message"
+				}
+			}`,
+			ExecutorAction{
+				Action: DownloadAction{
+					Name:                   "some asset",
+					From:                   "web_location",
+					To:                     "local_location",
+					Extract:                true,
+					DownloadFailureMessage: "fail message",
+				},
+			},
+		)
 	})
 
 	Describe("Upload", func() {
