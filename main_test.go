@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"syscall"
@@ -89,7 +90,7 @@ var _ = Describe("Main", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 	}
 
-	startExecutor := func(args ...string) *cmdtest.Session {
+	buildAndStartExecutorSession := func(args ...string) *cmdtest.Session {
 		executorCmd := exec.Command(
 			executorPath,
 			append(
@@ -109,6 +110,12 @@ var _ = Describe("Main", func() {
 
 		executorSession, err := cmdtest.StartWrapped(executorCmd, runner_support.TeeToGinkgoWriter, runner_support.TeeToGinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred())
+
+		return executorSession
+	}
+
+	startExecutor := func(args ...string) *cmdtest.Session {
+		executorSession := buildAndStartExecutorSession(args...)
 
 		Ω(executorSession).Should(SayWithTimeout("executor.started", 5*time.Second))
 
@@ -143,6 +150,18 @@ var _ = Describe("Main", func() {
 				defer stopExecutor(sess)
 
 				Ω(fakeBackend.DestroyedContainers).Should(Equal([]string{handleThatShouldDie}))
+			})
+
+			Context("when deleting the container fails", func() {
+				BeforeEach(func() {
+					fakeBackend.DestroyError = errors.New("i tried to delete the thing but i failed. sorry.")
+				})
+
+				It("should exit sadly", func() {
+					sess := buildAndStartExecutorSession("-containerOwnerName", "executor-name")
+
+					Ω(sess).Should(ExitWithTimeout(1, 1*time.Second))
+				})
 			})
 		})
 	})

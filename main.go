@@ -253,6 +253,7 @@ func main() {
 			},
 			"executor.cleanup.failed",
 		)
+		os.Exit(1)
 	}
 
 	logger.Infod(
