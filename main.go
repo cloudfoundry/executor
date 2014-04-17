@@ -54,6 +54,12 @@ var logLevel = flag.String(
 	"the logging level (none, fatal, error, warn, info, debug, debug1, debug2, all)",
 )
 
+var syslogName = flag.String(
+	"syslogName",
+	"",
+	"syslog name",
+)
+
 var memoryMB = flag.Int(
 	"memoryMB",
 	0,
@@ -137,6 +143,10 @@ func main() {
 	stenoConfig := steno.Config{
 		Level: l,
 		Sinks: []steno.Sink{steno.NewIOSink(os.Stdout)},
+	}
+
+	if *syslogName != "" {
+		stenoConfig.Sinks = append(stenoConfig.Sinks, steno.NewSyslogSink(*syslogName))
 	}
 
 	steno.Init(&stenoConfig)
