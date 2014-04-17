@@ -3,6 +3,7 @@ package bbs_test
 import (
 	"time"
 
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	. "github.com/onsi/ginkgo"
@@ -14,8 +15,10 @@ import (
 var _ = Context("Servistry BBS", func() {
 	var bbs *BBS
 	var timeProvider *faketimeprovider.FakeTimeProvider
-	var host = "1.2.3.4"
-	var port = 8080
+	var regMessage = models.CCRegistrationMessage{
+		Host: "1.2.3.4",
+		Port: 8080,
+	}
 	var etcdKey = "/v1/cloud_controller/1.2.3.4:8080"
 	var etcdValue = "http://1.2.3.4:8080"
 	var ttl = 120 * time.Second
@@ -29,7 +32,7 @@ var _ = Context("Servistry BBS", func() {
 		var registerErr error
 
 		JustBeforeEach(func() {
-			registerErr = bbs.RegisterCC(host, port, ttl)
+			registerErr = bbs.RegisterCC(regMessage, ttl)
 		})
 
 		Context("when the registration does not exist", func() {
@@ -46,7 +49,7 @@ var _ = Context("Servistry BBS", func() {
 
 		Context("when the registration does exist", func() {
 			BeforeEach(func() {
-				err := bbs.RegisterCC(host, port, 20*time.Second)
+				err := bbs.RegisterCC(regMessage, 20*time.Second)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -75,12 +78,12 @@ var _ = Context("Servistry BBS", func() {
 		var unregisterErr error
 
 		JustBeforeEach(func() {
-			unregisterErr = bbs.UnregisterCC(host, port)
+			unregisterErr = bbs.UnregisterCC(regMessage)
 		})
 
 		Context("when the registration exists", func() {
 			BeforeEach(func() {
-				err := bbs.RegisterCC(host, port, ttl)
+				err := bbs.RegisterCC(regMessage, ttl)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -113,7 +116,7 @@ var _ = Context("Servistry BBS", func() {
 
 	Describe("GetAvailableCC", func() {
 		BeforeEach(func() {
-			err := bbs.RegisterCC(host, port, ttl)
+			err := bbs.RegisterCC(regMessage, ttl)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 

@@ -1,18 +1,17 @@
 package fake_bbs
 
 import (
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"time"
 )
 
 type RegisterCCInputs struct {
-	Host string
-	Port int
-	Ttl  time.Duration
+	Message models.CCRegistrationMessage
+	Ttl     time.Duration
 }
 
 type UnregisterCCInputs struct {
-	Host string
-	Port int
+	Message models.CCRegistrationMessage
 }
 
 type FakeServistryBBS struct {
@@ -36,19 +35,17 @@ func NewFakeServistryBBS() *FakeServistryBBS {
 	return &FakeServistryBBS{}
 }
 
-func (bbs *FakeServistryBBS) RegisterCC(host string, port int, ttl time.Duration) error {
+func (bbs *FakeServistryBBS) RegisterCC(msg models.CCRegistrationMessage, ttl time.Duration) error {
 	bbs.RegisterCCInputs = append(bbs.RegisterCCInputs, RegisterCCInputs{
-		Host: host,
-		Port: port,
-		Ttl:  ttl,
+		Message: msg,
+		Ttl:     ttl,
 	})
 	return bbs.RegisterCCOutputs.Err
 }
 
-func (bbs *FakeServistryBBS) UnregisterCC(host string, port int) error {
+func (bbs *FakeServistryBBS) UnregisterCC(msg models.CCRegistrationMessage) error {
 	bbs.UnregisterCCInputs = append(bbs.UnregisterCCInputs, UnregisterCCInputs{
-		Host: host,
-		Port: port,
+		Message: msg,
 	})
 	return bbs.UnregisterCCOutputs.Err
 }
