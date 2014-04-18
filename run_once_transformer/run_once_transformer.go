@@ -3,6 +3,8 @@ package run_once_transformer
 import (
 	"fmt"
 
+	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
+
 	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -124,6 +126,19 @@ func (transformer *RunOnceTransformer) convertAction(
 			transformer.logger,
 			result,
 		)
+	case models.EmitProgressAction:
+		return emit_progress_step.New(
+			transformer.convertAction(
+				runOnce,
+				actionModel.Action,
+				containerHandle,
+				result,
+			),
+			actionModel.StartMessage,
+			actionModel.SuccessMessage,
+			actionModel.FailureMessage,
+			logStreamer,
+			transformer.logger)
 	case models.TryAction:
 		return try_step.New(
 			transformer.convertAction(

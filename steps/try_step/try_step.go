@@ -31,6 +31,10 @@ func (step *TryStep) Perform() error {
 	return nil //We never return an error.  That's the point.
 }
 
-func (step *TryStep) Cancel() {}
+func (step *TryStep) Cancel() {
+	step.substep.Cancel()
+}
 
-func (step *TryStep) Cleanup() {}
+func (step *TryStep) Cleanup() {
+	step.substep.Cleanup()
+}

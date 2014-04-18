@@ -22,6 +22,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	. "github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	Uploader "github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
@@ -59,7 +60,6 @@ var _ = Describe("UploadStep", func() {
 		}))
 
 		uploadAction = &models.UploadAction{
-			Name: "Mr. Jones",
 			To:   uploadTarget.URL,
 			From: "/Antarctica",
 		}
@@ -161,18 +161,11 @@ var _ = Describe("UploadStep", func() {
 				uploader = fakeUploader
 			})
 
-			It("streams an upload message", func() {
-				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones\n"))
-			})
-
 			It("streams the upload filesize", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("(1K)"))
+				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
 			})
 
 			It("does not stream an error", func() {
@@ -191,8 +184,6 @@ var _ = Describe("UploadStep", func() {
 			It("returns the error and loggregates a message to STDERR", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
-
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
 			})
 		})
 
@@ -208,27 +199,9 @@ var _ = Describe("UploadStep", func() {
 				})
 			})
 
-			It("returns the error loggregates a message to STDERR stream", func() {
+			It("returns the error ", func() {
 				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
-
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
-			})
-		})
-
-		Context("when there is an error uploading", func() {
-			BeforeEach(func() {
-				fakeUploader := &fake_uploader.FakeUploader{}
-				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
-
-				uploader = fakeUploader
-			})
-
-			It("returns the error and loggregates a message to STDERR stream", func() {
-				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
-
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
+				Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
 			})
 		})
 
@@ -244,9 +217,21 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the error and loggregates a message to STDERR stream", func() {
 				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+				Ω(err).Should(MatchError(emittable_error.New(disaster, "Compression failed")))
+			})
+		})
 
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Uploading Mr. Jones failed\n"))
+		Context("when there is an error uploading", func() {
+			BeforeEach(func() {
+				fakeUploader := &fake_uploader.FakeUploader{}
+				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
+
+				uploader = fakeUploader
+			})
+
+			It("returns the error", func() {
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

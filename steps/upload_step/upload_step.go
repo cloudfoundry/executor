@@ -13,6 +13,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -60,15 +61,7 @@ func (step *UploadStep) Perform() (err error) {
 		"runonce.handle.upload-step",
 	)
 
-	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploading %s\n", step.model.Name))
-
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
-
-	defer func() {
-		if err != nil {
-			fmt.Fprintf(step.streamer.Stderr(), fmt.Sprintf("Uploading %s failed\n", step.model.Name))
-		}
-	}()
 
 	if err != nil {
 		return err
@@ -78,7 +71,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	currentUser, err := user.Current()
 	if err != nil {
-		panic("existential failure: " + err.Error())
+		return err
 	}
 
 	_, err = step.wardenClient.CopyOut(
@@ -88,7 +81,7 @@ func (step *UploadStep) Perform() (err error) {
 		currentUser.Username,
 	)
 	if err != nil {
-		return err
+		return emittable_error.New(err, "Copying out of the container failed")
 	}
 
 	url, err := url.ParseRequestURI(step.model.To)
@@ -98,7 +91,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
 	if err != nil {
-		return err
+		return emittable_error.New(err, "Compression failed")
 	}
 
 	tempFile.Close()
@@ -109,7 +102,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	err = step.compressor.Compress(tempDir, finalFileLocation)
 	if err != nil {
-		return err
+		return emittable_error.New(err, "Compression failed")
 	}
 
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
@@ -117,7 +110,7 @@ func (step *UploadStep) Perform() (err error) {
 		return err
 	}
 
-	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploaded %s (%s)\n", step.model.Name, bytefmt.ByteSize(uint64(uploadedBytes))))
+	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploaded (%s)\n", bytefmt.ByteSize(uint64(uploadedBytes))))
 
 	return nil
 }

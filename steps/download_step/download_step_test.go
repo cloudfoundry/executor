@@ -17,6 +17,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
@@ -59,7 +60,6 @@ var _ = Describe("DownloadAction", func() {
 
 		BeforeEach(func() {
 			downloadAction = models.DownloadAction{
-				Name:    "Mr. Jones",
 				From:    "http://mr_jones",
 				To:      "/tmp/Antarctica",
 				Extract: false,
@@ -95,20 +95,12 @@ var _ = Describe("DownloadAction", func() {
 			Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
 		})
 
-		It("loggregates a download message", func() {
-			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones\n"))
-		})
-
 		It("loggregates the download filesize", func() {
-			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded Mr. Jones (1K)\n"))
+			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded (1K)\n"))
 		})
 
 		It("does not return an error", func() {
 			Ω(stepErr).ShouldNot(HaveOccurred())
-		})
-
-		It("does not loggregate an error", func() {
-			Ω(fakeStreamer.StderrBuffer.String()).Should(BeEmpty())
 		})
 
 		Context("when there is an error parsing the download url", func() {
@@ -119,56 +111,15 @@ var _ = Describe("DownloadAction", func() {
 			It("returns an error", func() {
 				Ω(stepErr).Should(HaveOccurred())
 			})
-
-			It("loggregates the default error message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Downloading Mr. Jones failed"))
-			})
-
-			Context("when there is a custom download error message", func() {
-				var customErrorMessage = "The thing kaboomed"
-
-				BeforeEach(func() {
-					downloadAction.DownloadFailureMessage = customErrorMessage
-				})
-
-				It("should loggregrate the custom error message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(customErrorMessage + "\n"))
-				})
-
-				It("should NOT loggregate the default error message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).ShouldNot(ContainSubstring("Downloading Mr. Jones failed\n"))
-				})
-			})
 		})
 
 		Context("when there is an error downloading the file", func() {
-			var defaultErrorMessage = "Downloading Mr. Jones failed"
 			BeforeEach(func() {
 				downloader.AlwaysFail()
 			})
 
 			It("returns an error", func() {
 				Ω(stepErr).Should(HaveOccurred())
-			})
-
-			It("should loggregrate the default error message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(defaultErrorMessage + "\n"))
-			})
-
-			Context("when there is a custom download error message", func() {
-				var customErrorMessage = "The thing kaboomed"
-
-				BeforeEach(func() {
-					downloadAction.DownloadFailureMessage = customErrorMessage
-				})
-
-				It("should loggregrate the custom error message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring(customErrorMessage + "\n"))
-				})
-
-				It("should NOT loggregate the default error message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).ShouldNot(ContainSubstring(defaultErrorMessage + "\n"))
-				})
 			})
 		})
 
@@ -180,11 +131,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(stepErr).Should(Equal(expectedErr))
-			})
-
-			It("loggregates a message to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Copying Mr. Jones into the container failed"))
+				Ω(stepErr).Should(MatchError(emittable_error.New(expectedErr, "Copying into the container failed")))
 			})
 		})
 
@@ -218,11 +165,7 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("returns an error", func() {
-					Ω(stepErr).Should(Equal(expectedErr))
-				})
-
-				It("loggregates a message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Extracting Mr. Jones failed\n"))
+					Ω(stepErr).Should(MatchError(emittable_error.New(expectedErr, "Extraction failed")))
 				})
 			})
 
@@ -234,11 +177,7 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("returns an error", func() {
-					Ω(stepErr).Should(Equal(expectedErr))
-				})
-
-				It("loggregates a message to STDERR", func() {
-					Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Copying Mr. Jones into the container failed"))
+					Ω(stepErr).Should(MatchError(emittable_error.New(expectedErr, "Copying into the container failed")))
 				})
 			})
 		})

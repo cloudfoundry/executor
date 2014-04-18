@@ -16,15 +16,25 @@ var _ = Describe("TryStep", func() {
 	var step sequence.Step
 	var subStep sequence.Step
 	var thingHappened bool
+	var cleanedUp bool
+	var cancelled bool
 	var fakeLogger *steno.Logger
 
 	BeforeEach(func() {
+		thingHappened, cleanedUp, cancelled = false, false, false
+
 		steno.EnterTestMode(steno.LOG_DEBUG)
 
 		subStep = fake_step.FakeStep{
 			WhenPerforming: func() error {
 				thingHappened = true
 				return nil
+			},
+			WhenCleaningUp: func() {
+				cleanedUp = true
+			},
+			WhenCancelling: func() {
+				cancelled = true
 			},
 		}
 
@@ -72,6 +82,22 @@ var _ = Describe("TryStep", func() {
 			Ω(lastRecord.Message).Should(Equal("try.failed"))
 			Ω(lastRecord.Data["error"]).Should(Equal("oh no!"))
 			Ω(lastRecord.Level).Should(Equal(steno.LOG_WARN))
+		})
+	})
+
+	Context("when told to clean up", func() {
+		It("passes the message along", func() {
+			Ω(cleanedUp).Should(BeFalse())
+			step.Cleanup()
+			Ω(cleanedUp).Should(BeTrue())
+		})
+	})
+
+	Context("when told to cancel", func() {
+		It("passes the message along", func() {
+			Ω(cancelled).Should(BeFalse())
+			step.Cancel()
+			Ω(cancelled).Should(BeTrue())
 		})
 	})
 })

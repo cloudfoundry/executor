@@ -9,13 +9,14 @@ import (
 
 	"github.com/cloudfoundry-incubator/gordon"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/pivotal-golang/bytefmt"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/bytefmt"
 )
 
 type DownloadStep struct {
@@ -62,15 +63,8 @@ func (step *DownloadStep) Perform() (err error) {
 		"runonce.handle.download-action",
 	)
 
-	fmt.Fprintf(step.streamer.Stdout(), "Downloading %s\n", step.model.Name)
-
 	downloadedFile, err := step.download()
 	if err != nil {
-		if step.model.DownloadFailureMessage != "" {
-			fmt.Fprintf(step.streamer.Stderr(), "%s\n", step.model.DownloadFailureMessage)
-		} else {
-			fmt.Fprintf(step.streamer.Stderr(), "Downloading %s failed\n", step.model.Name)
-		}
 		return err
 	}
 
@@ -82,21 +76,20 @@ func (step *DownloadStep) Perform() (err error) {
 	if step.model.Extract {
 		extractionDir, err := step.extract(downloadedFile)
 		if err != nil {
-			fmt.Fprintf(step.streamer.Stderr(), "Extracting %s failed\n", step.model.Name)
-			return err
+			return emittable_error.New(err, "Extraction failed")
 		}
 
 		defer os.RemoveAll(extractionDir)
 
 		err = step.copyExtractedFiles(extractionDir, step.model.To)
 		if err != nil {
-			fmt.Fprintf(step.streamer.Stderr(), "Copying %s into the container failed\n", step.model.Name)
+			return emittable_error.New(err, "Copying into the container failed")
 		}
 		return err
 	} else {
 		_, err = step.wardenClient.CopyIn(step.containerHandle, downloadedFile.Name(), step.model.To)
 		if err != nil {
-			fmt.Fprintf(step.streamer.Stderr(), "Copying %s into the container failed\n", step.model.Name)
+			return emittable_error.New(err, "Copying into the container failed")
 		}
 		return err
 	}
@@ -118,7 +111,7 @@ func (step *DownloadStep) download() (downloadedFile *os.File, err error) {
 		return
 	}
 
-	fmt.Fprintf(step.streamer.Stdout(), "Downloaded %s (%s)\n", step.model.Name, bytefmt.ByteSize(uint64(downloadSize)))
+	fmt.Fprintf(step.streamer.Stdout(), "Downloaded (%s)\n", bytefmt.ByteSize(uint64(downloadSize)))
 	return
 }
 

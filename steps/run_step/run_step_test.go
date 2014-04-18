@@ -11,12 +11,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	"code.google.com/p/gogoprotobuf/proto"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/gordon/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	. "github.com/cloudfoundry-incubator/executor/steps/run_step"
 )
 
@@ -35,7 +36,6 @@ var _ = Describe("RunAction", func() {
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
 		runAction = models.RunAction{
-			Name:   "Staging",
 			Script: "sudo reboot",
 			Env: [][]string{
 				{"A", "1"},
@@ -99,9 +99,8 @@ var _ = Describe("RunAction", func() {
 				processPayloadStream <- failedExit
 			})
 
-			It("should return an error with the exit code", func() {
-				Ω(stepErr).Should(HaveOccurred())
-				Ω(stepErr.Error()).Should(ContainSubstring("19"))
+			It("should return an emittable error with the exit code", func() {
+				Ω(stepErr).Should(MatchError(emittable_error.New(nil, "Exited with status 19")))
 			})
 		})
 
@@ -154,9 +153,8 @@ var _ = Describe("RunAction", func() {
 						processPayloadStream <- successfulExit
 					}()
 				})
-				It("returns a TimeoutError", func() {
-					Ω(stepErr).Should(Equal(TimeoutError{runAction}))
-					Ω(stepErr.Error()).Should(Equal("timed out after 100ms"))
+				It("returns an emittable error", func() {
+					Ω(stepErr).Should(MatchError(emittable_error.New(nil, "Timed out after 100ms")))
 				})
 			})
 		})
@@ -170,13 +168,8 @@ var _ = Describe("RunAction", func() {
 				processPayloadStream <- failedExit
 			})
 
-			It("returns a RunActionOOMError", func() {
-				Ω(stepErr).Should(Equal(OOMError))
-				Ω(stepErr.Error()).Should(Equal("out of memory"))
-			})
-
-			It("loggregates a message with status code to STDERR", func() {
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("Staging exited with status 19 (out of memory)\n"))
+			It("returns an emittable error", func() {
+				Ω(stepErr).Should(MatchError(emittable_error.New(nil, "Exited with status 19 (out of memory)")))
 			})
 		})
 

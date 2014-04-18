@@ -6,6 +6,10 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
@@ -16,16 +20,13 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
-	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("RunOnceTransformer", func() {
@@ -76,6 +77,12 @@ var _ = Describe("RunOnceTransformer", func() {
 		uploadActionModel := models.UploadAction{From: "/file/to/upload"}
 		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
 		tryActionModel := models.TryAction{Action: models.ExecutorAction{runActionModel}}
+		emitProgressActionModel := models.EmitProgressAction{
+			Action:         models.ExecutorAction{runActionModel},
+			StartMessage:   "starting",
+			SuccessMessage: "successing",
+			FailureMessage: "failuring",
+		}
 
 		runOnce := models.RunOnce{
 			Guid: "some-guid",
@@ -85,6 +92,7 @@ var _ = Describe("RunOnceTransformer", func() {
 				{uploadActionModel},
 				{fetchResultActionModel},
 				{tryActionModel},
+				{emitProgressActionModel},
 			},
 			FileDescriptors: 117,
 		}
@@ -138,6 +146,22 @@ var _ = Describe("RunOnceTransformer", func() {
 					wardenClient,
 					logger,
 				),
+				logger,
+			),
+			emit_progress_step.New(
+				run_step.New(
+					handle,
+					runActionModel,
+					117,
+					logStreamer,
+					backendPlugin,
+					wardenClient,
+					logger,
+				),
+				"starting",
+				"successing",
+				"failuring",
+				logStreamer,
 				logger,
 			),
 		}))

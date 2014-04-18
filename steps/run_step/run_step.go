@@ -1,7 +1,6 @@
 package run_step
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -23,16 +23,6 @@ type RunStep struct {
 	wardenClient        gordon.Client
 	logger              *steno.Logger
 }
-
-type TimeoutError struct {
-	Action models.RunAction
-}
-
-func (e TimeoutError) Error() string {
-	return fmt.Sprintf("timed out after %s", e.Action.Timeout)
-}
-
-var OOMError = errors.New("out of memory")
 
 func New(
 	containerHandle string,
@@ -118,14 +108,13 @@ func (step *RunStep) Perform() error {
 		} else {
 			for _, ev := range info.GetEvents() {
 				if ev == "out of memory" {
-					fmt.Fprintf(step.streamer.Stderr(), "%s exited with status %d (out of memory)\n", step.model.Name, exitStatus)
-					return OOMError
+					return emittable_error.New(nil, "Exited with status %d (out of memory)", exitStatus)
 				}
 			}
 		}
 
 		if exitStatus != 0 {
-			return fmt.Errorf("process exited with status %d", exitStatus)
+			return emittable_error.New(nil, "Exited with status %d", exitStatus)
 		}
 
 		return nil
@@ -134,7 +123,7 @@ func (step *RunStep) Perform() error {
 		return err
 
 	case <-timeoutChan:
-		return TimeoutError{Action: step.model}
+		return emittable_error.New(nil, "Timed out after %s", step.model.Timeout)
 	}
 
 	panic("unreachable")

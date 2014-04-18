@@ -6,9 +6,10 @@ import (
 	"os"
 	"os/user"
 
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
+	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon"
 )
 
 type FetchResultStep struct {
@@ -46,9 +47,20 @@ func (step *FetchResultStep) Perform() error {
 		"runonce.handle.fetch-result-step",
 	)
 
+	data, err := step.copyAndReadResult()
+	if err != nil {
+		return emittable_error.New(err, "Copying out of the container failed")
+	}
+
+	*step.result = string(data)
+
+	return nil
+}
+
+func (step *FetchResultStep) copyAndReadResult() ([]byte, error) {
 	tempFile, err := ioutil.TempFile(step.tempDir, "fetch-result")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fileName := tempFile.Name()
 	tempFile.Close()
@@ -56,41 +68,33 @@ func (step *FetchResultStep) Perform() error {
 
 	currentUser, err := user.Current()
 	if err != nil {
-		panic("existential failure: " + err.Error())
+		return nil, err
 	}
-
 	_, err = step.wardenClient.CopyOut(
 		step.handle,
 		step.fetchResultAction.File,
 		fileName,
 		currentUser.Username)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	resultFile, err := os.Open(fileName)
 	defer resultFile.Close()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fileStat, err := resultFile.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if fileStat.Size() > 1024*10 {
-		return fmt.Errorf("result file size exceeds allowed limit (got %d bytes > 10 kilo-bytes)", fileStat.Size())
+		return nil, fmt.Errorf("result file size exceeds allowed limit (got %d bytes > 10 kilo-bytes)", fileStat.Size())
 	}
 
-	data, err := ioutil.ReadAll(resultFile)
-	if err != nil {
-		return err
-	}
-
-	*step.result = string(data)
-
-	return nil
+	return ioutil.ReadAll(resultFile)
 }
 
 func (step *FetchResultStep) Cancel() {}

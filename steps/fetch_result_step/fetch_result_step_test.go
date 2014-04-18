@@ -7,11 +7,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	. "github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 )
 
@@ -66,7 +67,8 @@ var _ = Describe("FetchResultStep", func() {
 
 		It("should error", func() {
 			err := step.Perform()
-			Ω(err).Should(HaveOccurred())
+			Ω(err.Error()).Should(ContainSubstring("Copying out of the container failed"))
+			Ω(err.Error()).Should(ContainSubstring("result file size exceeds allowed limit"))
 
 			Ω(result).Should(BeZero())
 		})
@@ -81,7 +83,7 @@ var _ = Describe("FetchResultStep", func() {
 
 		It("should return an error and an empty result", func() {
 			err := step.Perform()
-			Ω(err).Should(Equal(disaster))
+			Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
 
 			Ω(result).Should(BeZero())
 		})
