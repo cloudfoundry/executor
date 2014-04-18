@@ -8,7 +8,6 @@ import (
 	"github.com/cloudfoundry-incubator/gordon/warden"
 	steno "github.com/cloudfoundry/gosteno"
 
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -19,7 +18,6 @@ type RunStep struct {
 	model               models.RunAction
 	fileDescriptorLimit int
 	streamer            log_streamer.LogStreamer
-	backendPlugin       backend_plugin.BackendPlugin
 	wardenClient        gordon.Client
 	logger              *steno.Logger
 }
@@ -29,7 +27,6 @@ func New(
 	model models.RunAction,
 	fileDescriptorLimit int,
 	streamer log_streamer.LogStreamer,
-	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 ) *RunStep {
@@ -38,10 +35,25 @@ func New(
 		model:               model,
 		fileDescriptorLimit: fileDescriptorLimit,
 		streamer:            streamer,
-		backendPlugin:       backendPlugin,
 		wardenClient:        wardenClient,
 		logger:              logger,
 	}
+}
+
+func convertEnvironmentVariables(environmentVariables [][]string) []gordon.EnvironmentVariable {
+	convertedEnvironmentVariables := []gordon.EnvironmentVariable{}
+
+	for _, env := range environmentVariables {
+		if len(env) == 2 {
+			convertedEnvironmentVariable := gordon.EnvironmentVariable{
+				Key:   env[0],
+				Value: env[1],
+			}
+			convertedEnvironmentVariables = append(convertedEnvironmentVariables, convertedEnvironmentVariable)
+		}
+	}
+
+	return convertedEnvironmentVariables
 }
 
 func (step *RunStep) Perform() error {
@@ -66,10 +78,11 @@ func (step *RunStep) Perform() error {
 	go func() {
 		_, stream, err := step.wardenClient.Run(
 			step.containerHandle,
-			step.backendPlugin.BuildRunScript(step.model),
+			step.model.Script,
 			gordon.ResourceLimits{
 				FileDescriptors: uint64(step.fileDescriptorLimit),
 			},
+			convertEnvironmentVariables(step.model.Env),
 		)
 
 		if err != nil {

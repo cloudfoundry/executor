@@ -16,7 +16,6 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
@@ -84,7 +83,6 @@ var _ = Describe("RunOnceHandler", func() {
 		logger := steno.NewLogger("test-logger")
 
 		containerInodeLimit = 200000
-		backendPlugin := linux_plugin.New()
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
@@ -99,7 +97,6 @@ var _ = Describe("RunOnceHandler", func() {
 			uploader,
 			extractor,
 			compressor,
-			backendPlugin,
 			wardenClient,
 			logger,
 			tmpDir,
@@ -280,7 +277,7 @@ var _ = Describe("RunOnceHandler", func() {
 				setUpSuccessfulRuns()
 				running = make(chan struct{})
 
-				wardenClient.WhenRunning("", "sudo reboot", gordon.ResourceLimits{}, func() (uint32, <-chan *warden.ProcessPayload, error) {
+				wardenClient.WhenRunning("", "sudo reboot", gordon.ResourceLimits{}, []gordon.EnvironmentVariable{}, func() (uint32, <-chan *warden.ProcessPayload, error) {
 					running <- struct{}{}
 					time.Sleep(1 * time.Hour)
 					return 0, nil, nil

@@ -4,9 +4,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/cloudfoundry-incubator/gordon"
+
 	"github.com/cloudfoundry-incubator/executor/sequence"
 
-	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -26,7 +27,6 @@ var _ = Describe("RunAction", func() {
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 	var fileDescriptorLimit int
@@ -39,14 +39,14 @@ var _ = Describe("RunAction", func() {
 			Script: "sudo reboot",
 			Env: [][]string{
 				{"A", "1"},
+				{"B", "2", "WOAH!"},
+				{"C"},
 			},
 		}
 
 		fakeStreamer = fake_log_streamer.New()
 
 		wardenClient = fake_gordon.New()
-
-		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
 
@@ -64,7 +64,6 @@ var _ = Describe("RunAction", func() {
 			runAction,
 			fileDescriptorLimit,
 			fakeStreamer,
-			backendPlugin,
 			wardenClient,
 			logger,
 		)
@@ -89,8 +88,11 @@ var _ = Describe("RunAction", func() {
 			It("executes the command in the passed-in container", func() {
 				runningScript := wardenClient.ScriptsThatRan()[0]
 				Ω(runningScript.Handle).Should(Equal("some-container-handle"))
-				Ω(runningScript.Script).Should(Equal("export A=\"1\"\nsudo reboot"))
+				Ω(runningScript.Script).Should(Equal("sudo reboot"))
 				Ω(runningScript.ResourceLimits.FileDescriptors).Should(BeNumerically("==", fileDescriptorLimit))
+				Ω(runningScript.EnvironmentVariables).Should(Equal([]gordon.EnvironmentVariable{
+					gordon.EnvironmentVariable{Key: "A", Value: "1"},
+				}))
 			})
 		})
 

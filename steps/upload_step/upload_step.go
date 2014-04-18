@@ -11,7 +11,6 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/bytefmt"
 
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/executor/uploader"
@@ -25,7 +24,6 @@ type UploadStep struct {
 	uploader        uploader.Uploader
 	compressor      compressor.Compressor
 	tempDir         string
-	backendPlugin   backend_plugin.BackendPlugin
 	wardenClient    gordon.Client
 	streamer        log_streamer.LogStreamer
 	logger          *steno.Logger

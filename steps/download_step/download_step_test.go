@@ -14,7 +14,6 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -29,7 +28,6 @@ var _ = Describe("DownloadAction", func() {
 	var downloader *fake_downloader.FakeDownloader
 	var extractor *fake_extractor.FakeExtractor
 	var tempDir string
-	var backendPlugin *linux_plugin.LinuxPlugin
 	var wardenClient *fake_gordon.FakeGordon
 	var logger *steno.Logger
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -47,8 +45,6 @@ var _ = Describe("DownloadAction", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 
 		wardenClient = fake_gordon.New()
-
-		backendPlugin = linux_plugin.New()
 
 		logger = steno.NewLogger("test-logger")
 
@@ -73,7 +69,6 @@ var _ = Describe("DownloadAction", func() {
 				downloader,
 				extractor,
 				tempDir,
-				backendPlugin,
 				wardenClient,
 				fakeStreamer,
 				logger,

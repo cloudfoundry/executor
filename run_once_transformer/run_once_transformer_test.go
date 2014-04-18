@@ -1,20 +1,8 @@
 package run_once_transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
-	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
-
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
-	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
@@ -27,11 +15,19 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("RunOnceTransformer", func() {
 	var (
-		backendPlugin      backend_plugin.BackendPlugin
 		downloader         downloader.Downloader
 		logger             *steno.Logger
 		logStreamer        *fake_log_streamer.FakeLogStreamer
@@ -46,7 +42,6 @@ var _ = Describe("RunOnceTransformer", func() {
 
 	BeforeEach(func() {
 		logStreamer = fake_log_streamer.New()
-		backendPlugin = linux_plugin.New()
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
@@ -64,7 +59,6 @@ var _ = Describe("RunOnceTransformer", func() {
 			uploader,
 			extractor,
 			compressor,
-			backendPlugin,
 			wardenClient,
 			logger,
 			"/fake/temp/dir",
@@ -103,7 +97,6 @@ var _ = Describe("RunOnceTransformer", func() {
 				runActionModel,
 				117,
 				logStreamer,
-				backendPlugin,
 				wardenClient,
 				logger,
 			),
@@ -113,7 +106,6 @@ var _ = Describe("RunOnceTransformer", func() {
 				downloader,
 				extractor,
 				"/fake/temp/dir",
-				backendPlugin,
 				wardenClient,
 				logStreamer,
 				logger,
@@ -142,7 +134,6 @@ var _ = Describe("RunOnceTransformer", func() {
 					runActionModel,
 					117,
 					logStreamer,
-					backendPlugin,
 					wardenClient,
 					logger,
 				),
@@ -154,7 +145,6 @@ var _ = Describe("RunOnceTransformer", func() {
 					runActionModel,
 					117,
 					logStreamer,
-					backendPlugin,
 					wardenClient,
 					logger,
 				),

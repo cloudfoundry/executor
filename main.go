@@ -16,16 +16,13 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/linux_plugin"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/run_once_handler"
 	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/cloudfoundry-incubator/executor/windows_plugin"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 )
@@ -132,12 +129,6 @@ var containerInodeLimit = flag.Int(
 	"max number of inodes per container",
 )
 
-var backendPluginName = flag.String(
-	"backendPlugin",
-	"linux",
-	"backend to use (linux or windows)",
-)
-
 func main() {
 	flag.Parse()
 
@@ -192,22 +183,6 @@ func main() {
 
 	executor := executor.New(bbs, *drainTimeout, logger)
 
-	var backendPlugin backend_plugin.BackendPlugin
-
-	switch *backendPluginName {
-	case "linux":
-		backendPlugin = linux_plugin.New()
-	case "windows":
-		backendPlugin = windows_plugin.New()
-	default:
-		logger.Errord(
-			map[string]interface{}{
-				"plugin": *backendPluginName,
-			},
-			"executor.backend-plugin.unknown",
-		)
-	}
-
 	downloader := downloader.New(10*time.Minute, logger)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
@@ -225,7 +200,6 @@ func main() {
 		uploader,
 		extractor,
 		compressor,
-		backendPlugin,
 		wardenClient,
 		logger,
 		*tempDir,

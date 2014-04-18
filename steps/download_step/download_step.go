@@ -10,7 +10,6 @@ import (
 	"github.com/cloudfoundry-incubator/gordon"
 	steno "github.com/cloudfoundry/gosteno"
 
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -25,7 +24,6 @@ type DownloadStep struct {
 	downloader      downloader.Downloader
 	extractor       extractor.Extractor
 	tempDir         string
-	backendPlugin   backend_plugin.BackendPlugin
 	wardenClient    gordon.Client
 	streamer        log_streamer.LogStreamer
 	logger          *steno.Logger
@@ -37,7 +35,6 @@ func New(
 	downloader downloader.Downloader,
 	extractor extractor.Extractor,
 	tempDir string,
-	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
@@ -48,7 +45,6 @@ func New(
 		downloader:      downloader,
 		extractor:       extractor,
 		tempDir:         tempDir,
-		backendPlugin:   backendPlugin,
 		wardenClient:    wardenClient,
 		streamer:        streamer,
 		logger:          logger,

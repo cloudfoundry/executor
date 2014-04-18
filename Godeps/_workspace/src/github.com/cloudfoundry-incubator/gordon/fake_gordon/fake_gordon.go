@@ -74,9 +74,10 @@ type CopyInCallback func(CopiedIn) error
 type CopyOutCallback func(CopiedOut) error
 
 type RunningScript struct {
-	Handle         string
-	Script         string
-	ResourceLimits gordon.ResourceLimits
+	Handle               string
+	Script               string
+	ResourceLimits       gordon.ResourceLimits
+	EnvironmentVariables []gordon.EnvironmentVariable
 }
 
 type CopiedIn struct {
@@ -455,11 +456,11 @@ func (f *FakeGordon) SetRunReturnValues(processID uint32, processPayloadChan <-c
 	f.runReturnError = err
 }
 
-func (f *FakeGordon) WhenRunning(handle string, script string, resourceLimits gordon.ResourceLimits, callback RunCallback) {
+func (f *FakeGordon) WhenRunning(handle string, script string, resourceLimits gordon.ResourceLimits, environmentVariables []gordon.EnvironmentVariable, callback RunCallback) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	f.runCallbacks[&RunningScript{handle, script, resourceLimits}] = callback
+	f.runCallbacks[&RunningScript{handle, script, resourceLimits, environmentVariables}] = callback
 }
 
 func (f *FakeGordon) WhenListing(callback ListCallback) {
@@ -483,13 +484,14 @@ func (f *FakeGordon) WhenCopyingIn(copiedIn CopiedIn, callback CopyInCallback) {
 	f.copyInCallbacks[&copiedIn] = callback
 }
 
-func (f *FakeGordon) Run(handle string, script string, resourceLimits gordon.ResourceLimits) (uint32, <-chan *warden.ProcessPayload, error) {
+func (f *FakeGordon) Run(handle string, script string, resourceLimits gordon.ResourceLimits, environmentVariables []gordon.EnvironmentVariable) (uint32, <-chan *warden.ProcessPayload, error) {
 	f.lock.Lock()
 
 	f.scriptsThatRan = append(f.scriptsThatRan, &RunningScript{
-		Handle:         handle,
-		Script:         script,
-		ResourceLimits: resourceLimits,
+		Handle:               handle,
+		Script:               script,
+		ResourceLimits:       resourceLimits,
+		EnvironmentVariables: environmentVariables,
 	})
 
 	f.lock.Unlock()

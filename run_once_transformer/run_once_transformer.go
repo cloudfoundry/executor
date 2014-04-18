@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
-	"github.com/cloudfoundry-incubator/executor/backend_plugin"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -29,7 +28,6 @@ type RunOnceTransformer struct {
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
 	compressor         compressor.Compressor
-	backendPlugin      backend_plugin.BackendPlugin
 	wardenClient       gordon.Client
 	logger             *steno.Logger
 	tempDir            string
@@ -42,7 +40,6 @@ func NewRunOnceTransformer(
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
-	backendPlugin backend_plugin.BackendPlugin,
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 	tempDir string,
@@ -53,7 +50,6 @@ func NewRunOnceTransformer(
 		uploader:           uploader,
 		extractor:          extractor,
 		compressor:         compressor,
-		backendPlugin:      backendPlugin,
 		wardenClient:       wardenClient,
 		logger:             logger,
 		tempDir:            tempDir,
@@ -90,7 +86,6 @@ func (transformer *RunOnceTransformer) convertAction(
 			actionModel,
 			runOnce.FileDescriptors,
 			logStreamer,
-			transformer.backendPlugin,
 			transformer.wardenClient,
 			transformer.logger,
 		)
@@ -101,7 +96,6 @@ func (transformer *RunOnceTransformer) convertAction(
 			transformer.downloader,
 			transformer.extractor,
 			transformer.tempDir,
-			transformer.backendPlugin,
 			transformer.wardenClient,
 			logStreamer,
 			transformer.logger,
