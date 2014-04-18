@@ -96,8 +96,8 @@ var _ = Describe("ExecutorAction", func() {
 					"script": "rm -rf /",
 					"timeout": 10000000,
 					"env": [
-						["FOO", "1"],
-						["BAR", "2"]
+						{"key":"FOO", "value":"1"},
+						{"key":"BAR", "value":"2"}
 					]
 				}
 			}`,
@@ -105,7 +105,7 @@ var _ = Describe("ExecutorAction", func() {
 				Action: RunAction{
 					Script:  "rm -rf /",
 					Timeout: 10 * time.Millisecond,
-					Env: [][]string{
+					Env: []EnvironmentVariable{
 						{"FOO", "1"},
 						{"BAR", "2"},
 					},

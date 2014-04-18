@@ -40,17 +40,11 @@ func New(
 	}
 }
 
-func convertEnvironmentVariables(environmentVariables [][]string) []gordon.EnvironmentVariable {
+func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []gordon.EnvironmentVariable {
 	convertedEnvironmentVariables := []gordon.EnvironmentVariable{}
 
 	for _, env := range environmentVariables {
-		if len(env) == 2 {
-			convertedEnvironmentVariable := gordon.EnvironmentVariable{
-				Key:   env[0],
-				Value: env[1],
-			}
-			convertedEnvironmentVariables = append(convertedEnvironmentVariables, convertedEnvironmentVariable)
-		}
+		convertedEnvironmentVariables = append(convertedEnvironmentVariables, gordon.EnvironmentVariable{env.Key, env.Value})
 	}
 
 	return convertedEnvironmentVariables

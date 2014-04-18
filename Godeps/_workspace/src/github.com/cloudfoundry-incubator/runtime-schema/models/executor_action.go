@@ -21,9 +21,9 @@ type UploadAction struct {
 }
 
 type RunAction struct {
-	Script  string        `json:"script"`
-	Env     [][]string    `json:"env"`
-	Timeout time.Duration `json:"timeout"`
+	Script  string                `json:"script"`
+	Env     []EnvironmentVariable `json:"env"`
+	Timeout time.Duration         `json:"timeout"`
 }
 
 type FetchResultAction struct {
