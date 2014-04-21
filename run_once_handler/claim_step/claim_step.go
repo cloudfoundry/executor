@@ -7,20 +7,20 @@ import (
 )
 
 type ClaimStep struct {
-	runOnce    *models.Task
+	task    *models.Task
 	logger     *steno.Logger
 	executorID string
 	bbs        Bbs.ExecutorBBS
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	executorID string,
 	bbs Bbs.ExecutorBBS,
 ) *ClaimStep {
 	return &ClaimStep{
-		runOnce:    runOnce,
+		task:    task,
 		logger:     logger,
 		executorID: executorID,
 		bbs:        bbs,
@@ -28,11 +28,11 @@ func New(
 }
 
 func (step ClaimStep) Perform() error {
-	err := step.bbs.ClaimTask(step.runOnce, step.executorID)
+	err := step.bbs.ClaimTask(step.task, step.executorID)
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			}, "runonce.claim.failed",
 		)

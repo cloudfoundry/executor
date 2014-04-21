@@ -17,11 +17,11 @@ import (
 var _ = Describe("ClaimStep", func() {
 	var step sequence.Step
 
-	var runOnce models.Task
+	var task models.Task
 	var bbs *fake_bbs.FakeExecutorBBS
 
 	BeforeEach(func() {
-		runOnce = models.Task{
+		task = models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -36,7 +36,7 @@ var _ = Describe("ClaimStep", func() {
 		bbs = fake_bbs.NewFakeExecutorBBS()
 
 		step = New(
-			&runOnce,
+			&task,
 			steno.NewLogger("test-logger"),
 			"executor-id",
 			bbs,
@@ -49,7 +49,7 @@ var _ = Describe("ClaimStep", func() {
 
 			claimed := bbs.ClaimedTasks()
 			Ω(claimed).ShouldNot(BeEmpty())
-			Ω(claimed[0].Guid).Should(Equal(runOnce.Guid))
+			Ω(claimed[0].Guid).Should(Equal(task.Guid))
 			Ω(claimed[0].ExecutorID).Should(Equal("executor-id"))
 		})
 

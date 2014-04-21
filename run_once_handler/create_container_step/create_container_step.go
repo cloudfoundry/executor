@@ -7,7 +7,7 @@ import (
 )
 
 type ContainerStep struct {
-	runOnce            *models.Task
+	task            *models.Task
 	logger             *steno.Logger
 	wardenClient       gordon.Client
 	containerOwnerName string
@@ -15,14 +15,14 @@ type ContainerStep struct {
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
 	containerOwnerName string,
 	containerHandle *string,
 ) *ContainerStep {
 	return &ContainerStep{
-		runOnce:            runOnce,
+		task:            task,
 		logger:             logger,
 		wardenClient:       wardenClient,
 		containerOwnerName: containerOwnerName,
@@ -38,7 +38,7 @@ func (step ContainerStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
 			"runonce.container-create.failed",
@@ -59,8 +59,8 @@ func (step ContainerStep) Cleanup() {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
-				"handle":       step.runOnce.ContainerHandle,
+				"runonce-guid": step.task.Guid,
+				"handle":       step.task.ContainerHandle,
 				"error":        err.Error(),
 			},
 			"runonce.container-destroy.failed",

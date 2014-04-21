@@ -30,7 +30,7 @@ import (
 var _ = Describe("TaskHandler", func() {
 	var (
 		handler *TaskHandler
-		runOnce *models.Task
+		task *models.Task
 		cancel  chan struct{}
 
 		bbs                 *fake_bbs.FakeExecutorBBS
@@ -47,7 +47,7 @@ var _ = Describe("TaskHandler", func() {
 	BeforeEach(func() {
 		cancel = make(chan struct{})
 
-		runOnce = &models.Task{
+		task = &models.Task{
 			Guid:     "run-once-guid",
 			MemoryMB: 512,
 			DiskMB:   1024,
@@ -143,8 +143,8 @@ var _ = Describe("TaskHandler", func() {
 			BeforeEach(setUpSuccessfulRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes", func() {
-				originalTask := runOnce
-				handler.Task(runOnce, "fake-executor-id", cancel)
+				originalTask := task
+				handler.Task(task, "fake-executor-id", cancel)
 
 				// register
 				Ω(taskRegistry.RegisteredTasks).Should(ContainElement(originalTask))
@@ -212,8 +212,8 @@ var _ = Describe("TaskHandler", func() {
 			BeforeEach(setUpFailedRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes (failure)", func() {
-				originalTask := runOnce
-				handler.Task(runOnce, "fake-executor-id", cancel)
+				originalTask := task
+				handler.Task(task, "fake-executor-id", cancel)
 
 				// register
 				Ω(taskRegistry.RegisteredTasks).Should(ContainElement(originalTask))
@@ -288,7 +288,7 @@ var _ = Describe("TaskHandler", func() {
 				done := make(chan struct{})
 
 				go func() {
-					handler.Task(runOnce, "fake-executor-id", cancel)
+					handler.Task(task, "fake-executor-id", cancel)
 					done <- struct{}{}
 				}()
 

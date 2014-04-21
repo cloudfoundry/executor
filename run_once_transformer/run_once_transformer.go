@@ -57,14 +57,14 @@ func NewTaskTransformer(
 }
 
 func (transformer *TaskTransformer) StepsFor(
-	runOnce *models.Task,
+	task *models.Task,
 	containerHandle string,
 	result *string,
 ) []sequence.Step {
 	subSteps := []sequence.Step{}
 
-	for _, a := range runOnce.Actions {
-		step := transformer.convertAction(runOnce, a, containerHandle, result)
+	for _, a := range task.Actions {
+		step := transformer.convertAction(task, a, containerHandle, result)
 		subSteps = append(subSteps, step)
 	}
 
@@ -72,19 +72,19 @@ func (transformer *TaskTransformer) StepsFor(
 }
 
 func (transformer *TaskTransformer) convertAction(
-	runOnce *models.Task,
+	task *models.Task,
 	action models.ExecutorAction,
 	containerHandle string,
 	result *string,
 ) sequence.Step {
-	logStreamer := transformer.logStreamerFactory(runOnce.Log)
+	logStreamer := transformer.logStreamerFactory(task.Log)
 
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:
 		return run_step.New(
 			containerHandle,
 			actionModel,
-			runOnce.FileDescriptors,
+			task.FileDescriptors,
 			logStreamer,
 			transformer.wardenClient,
 			transformer.logger,
@@ -123,7 +123,7 @@ func (transformer *TaskTransformer) convertAction(
 	case models.EmitProgressAction:
 		return emit_progress_step.New(
 			transformer.convertAction(
-				runOnce,
+				task,
 				actionModel.Action,
 				containerHandle,
 				result,
@@ -136,7 +136,7 @@ func (transformer *TaskTransformer) convertAction(
 	case models.TryAction:
 		return try_step.New(
 			transformer.convertAction(
-				runOnce,
+				task,
 				actionModel.Action,
 				containerHandle,
 				result,

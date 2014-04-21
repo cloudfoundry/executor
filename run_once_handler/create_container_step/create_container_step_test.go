@@ -18,14 +18,14 @@ import (
 var _ = Describe("CreateContainerStep", func() {
 	var step sequence.Step
 
-	var runOnce models.Task
+	var task models.Task
 	var gordon *fake_gordon.FakeGordon
 	var containerHandle string
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
 
-		runOnce = models.Task{
+		task = models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -40,7 +40,7 @@ var _ = Describe("CreateContainerStep", func() {
 		}
 
 		step = New(
-			&runOnce,
+			&task,
 			steno.NewLogger("test-logger"),
 			gordon,
 			"container-owner-name",

@@ -7,20 +7,20 @@ import (
 )
 
 type StartStep struct {
-	runOnce         *models.Task
+	task         *models.Task
 	logger          *steno.Logger
 	bbs             Bbs.ExecutorBBS
 	containerHandle *string
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	bbs Bbs.ExecutorBBS,
 	containerHandle *string,
 ) *StartStep {
 	return &StartStep{
-		runOnce:         runOnce,
+		task:         task,
 		logger:          logger,
 		bbs:             bbs,
 		containerHandle: containerHandle,
@@ -28,11 +28,11 @@ func New(
 }
 
 func (step StartStep) Perform() error {
-	err := step.bbs.StartTask(step.runOnce, *step.containerHandle)
+	err := step.bbs.StartTask(step.task, *step.containerHandle)
 	if err != nil {
 		step.logger.Warnd(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			}, "runonce.start.failed",
 		)

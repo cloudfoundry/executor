@@ -22,7 +22,7 @@ import (
 var _ = Describe("Executor", func() {
 	var (
 		bbs            *Bbs.BBS
-		runOnce        *models.Task
+		task        *models.Task
 		executor       *Executor
 		taskRegistry   *task_registry.TaskRegistry
 		gordon         *fake_gordon.FakeGordon
@@ -50,7 +50,7 @@ var _ = Describe("Executor", func() {
 			startingDisk,
 		)
 
-		runOnce = &models.Task{
+		task = &models.Task{
 			Guid:     "totally-unique",
 			MemoryMB: 256,
 			DiskMB:   1024,
@@ -96,7 +96,7 @@ var _ = Describe("Executor", func() {
 				// give the etcd driver a chance to connect
 				time.Sleep(200 * time.Millisecond)
 
-				err := bbs.DesireTask(runOnce)
+				err := bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -113,7 +113,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("does not handle any new desired Tasks", func() {
-				err := bbs.DesireTask(runOnce)
+				err := bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Consistently(func() int {
@@ -141,10 +141,10 @@ var _ = Describe("Executor", func() {
 
 				//generate N desired run onces
 				for i := 0; i < samples; i++ {
-					runOnce := &models.Task{
+					task := &models.Task{
 						Guid: fmt.Sprintf("totally-unique-%d", i),
 					}
-					err := bbs.DesireTask(runOnce)
+					err := bbs.DesireTask(task)
 					Ω(err).ShouldNot(HaveOccurred())
 				}
 
@@ -240,7 +240,7 @@ var _ = Describe("Executor", func() {
 			bbs.ExecutorBBS = fakeExecutorBBS
 		})
 
-		It("converges runOnces on a regular interval", func() {
+		It("converges tasks on a regular interval", func() {
 			go executor.ConvergeTasks(10*time.Millisecond, 30*time.Second)
 
 			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically(">", 2))

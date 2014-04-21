@@ -19,16 +19,16 @@ func New() *FakeTaskHandler {
 	}
 }
 
-func (handler *FakeTaskHandler) Task(runOnce *models.Task, executorId string, cancel <-chan struct{}) {
+func (handler *FakeTaskHandler) Task(task *models.Task, executorId string, cancel <-chan struct{}) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
 	handler.cancel = cancel
 
-	_, present := handler.handledTasks[runOnce.Guid]
+	_, present := handler.handledTasks[task.Guid]
 	if !present {
 		handler.numberOfCalls++
-		handler.handledTasks[runOnce.Guid] = executorId
+		handler.handledTasks[task.Guid] = executorId
 	}
 }
 

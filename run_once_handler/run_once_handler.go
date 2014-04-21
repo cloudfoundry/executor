@@ -21,7 +21,7 @@ import (
 )
 
 type TaskHandlerInterface interface {
-	Task(runOnce *models.Task, executorId string, cancel <-chan struct{})
+	Task(task *models.Task, executorId string, cancel <-chan struct{})
 }
 
 type TaskHandler struct {
@@ -82,49 +82,49 @@ func (handler *TaskHandler) Cleanup() error {
 	return nil
 }
 
-func (handler *TaskHandler) Task(runOnce *models.Task, executorID string, cancel <-chan struct{}) {
+func (handler *TaskHandler) Task(task *models.Task, executorID string, cancel <-chan struct{}) {
 	var containerHandle string
-	var runOnceResult string
+	var taskResult string
 	runner := sequence.New([]sequence.Step{
 		register_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			handler.taskRegistry,
 		),
 		claim_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			executorID,
 			handler.bbs,
 		),
 		create_container_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			handler.wardenClient,
 			handler.containerOwnerName,
 			&containerHandle,
 		),
 		limit_container_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			handler.wardenClient,
 			handler.containerInodeLimit,
 			&containerHandle,
 		),
 		start_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			handler.bbs,
 			&containerHandle,
 		),
 		execute_step.New(
-			runOnce,
+			task,
 			handler.logger,
 			lazy_sequence.New(func() []sequence.Step {
-				return handler.transformer.StepsFor(runOnce, containerHandle, &runOnceResult)
+				return handler.transformer.StepsFor(task, containerHandle, &taskResult)
 			}),
 			handler.bbs,
-			&runOnceResult,
+			&taskResult,
 		),
 	})
 

@@ -7,7 +7,7 @@ import (
 )
 
 type ContainerStep struct {
-	runOnce             *models.Task
+	task             *models.Task
 	logger              *steno.Logger
 	wardenClient        gordon.Client
 	containerInodeLimit int
@@ -15,14 +15,14 @@ type ContainerStep struct {
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
 	containerInodeLimit int,
 	containerHandle *string,
 ) *ContainerStep {
 	return &ContainerStep{
-		runOnce:             runOnce,
+		task:             task,
 		logger:              logger,
 		wardenClient:        wardenClient,
 		containerInodeLimit: containerInodeLimit,
@@ -31,11 +31,11 @@ func New(
 }
 
 func (step ContainerStep) Perform() error {
-	_, err := step.wardenClient.LimitMemory(*step.containerHandle, uint64(step.runOnce.MemoryMB*1024*1024))
+	_, err := step.wardenClient.LimitMemory(*step.containerHandle, uint64(step.task.MemoryMB*1024*1024))
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
 			"runonce.container-limit-memory.failed",
@@ -45,14 +45,14 @@ func (step ContainerStep) Perform() error {
 	}
 
 	_, err = step.wardenClient.LimitDisk(*step.containerHandle, gordon.DiskLimits{
-		ByteLimit:  uint64(step.runOnce.DiskMB * 1024 * 1024),
+		ByteLimit:  uint64(step.task.DiskMB * 1024 * 1024),
 		InodeLimit: uint64(step.containerInodeLimit),
 	})
 
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
 			"runonce.container-limit-disk.failed",

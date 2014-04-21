@@ -205,7 +205,7 @@ func main() {
 		*tempDir,
 	)
 
-	runOnceHandler := run_once_handler.New(
+	taskHandler := run_once_handler.New(
 		bbs,
 		wardenClient,
 		*containerOwnerName,
@@ -219,7 +219,7 @@ func main() {
 	maintaining := make(chan error, 1)
 	maintainPresenceErrors := make(chan error, 1)
 
-	err = runOnceHandler.Cleanup()
+	err = taskHandler.Cleanup()
 	if err != nil {
 		logger.Errord(
 			map[string]interface{}{
@@ -253,7 +253,7 @@ func main() {
 
 	handling := make(chan bool)
 
-	go executor.Handle(runOnceHandler, handling)
+	go executor.Handle(taskHandler, handling)
 
 	<-handling
 	logger.Infof("executor.started")

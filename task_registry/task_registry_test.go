@@ -10,10 +10,10 @@ import (
 
 var _ = Describe("TaskRegistry", func() {
 	var taskRegistry *TaskRegistry
-	var runOnce *models.Task
+	var task *models.Task
 
 	BeforeEach(func() {
-		runOnce = &models.Task{
+		task = &models.Task{
 			MemoryMB: 255,
 			DiskMB:   1023,
 			Guid:     "a guid",
@@ -25,42 +25,42 @@ var _ = Describe("TaskRegistry", func() {
 
 	Describe("AddTask", func() {
 		It("adds something to the registry when there are enough resources", func() {
-			err := taskRegistry.AddTask(runOnce)
+			err := taskRegistry.AddTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(taskRegistry.Tasks[runOnce.Guid]).To(Equal(runOnce))
+			Ω(taskRegistry.Tasks[task.Guid]).To(Equal(task))
 		})
 
 		Context("when the Task's stack is incompatible", func() {
 			BeforeEach(func() {
-				runOnceWithInvalidStack := runOnce
-				runOnceWithInvalidStack.Stack = "invalid"
+				taskWithInvalidStack := task
+				taskWithInvalidStack.Stack = "invalid"
 
-				runOnce = runOnceWithInvalidStack
+				task = taskWithInvalidStack
 			})
 
 			It("rejects the Task", func() {
-				err := taskRegistry.AddTask(runOnce)
+				err := taskRegistry.AddTask(task)
 				Ω(err).Should(Equal(IncompatibleStackError{"some-stack", "invalid"}))
 			})
 		})
 
 		Context("when not configured with a stack", func() {
 			BeforeEach(func() {
-				runOnceWithNoStack := runOnce
-				runOnceWithNoStack.Stack = ""
+				taskWithNoStack := task
+				taskWithNoStack.Stack = ""
 
-				runOnce = runOnceWithNoStack
+				task = taskWithNoStack
 			})
 
 			It("rejects the Task", func() {
-				err := taskRegistry.AddTask(runOnce)
+				err := taskRegistry.AddTask(task)
 				Ω(err).Should(Equal(ErrorNoStackDefined))
 			})
 		})
 
 		Context("when there aren't enough resources", func() {
 			BeforeEach(func() {
-				err := taskRegistry.AddTask(runOnce)
+				err := taskRegistry.AddTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(taskRegistry.Tasks).To(HaveLen(1))
 			})
@@ -89,14 +89,14 @@ var _ = Describe("TaskRegistry", func() {
 
 	Describe("RemoveTask", func() {
 		BeforeEach(func() {
-			err := taskRegistry.AddTask(runOnce)
+			err := taskRegistry.AddTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("reclaims the disk and memory from the Task", func() {
-			taskRegistry.RemoveTask(runOnce)
+			taskRegistry.RemoveTask(task)
 
-			err := taskRegistry.AddTask(runOnce)
+			err := taskRegistry.AddTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})

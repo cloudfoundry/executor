@@ -8,7 +8,7 @@ import (
 )
 
 type ExecuteStep struct {
-	runOnce *models.Task
+	task *models.Task
 	logger  *steno.Logger
 	subStep sequence.Step
 	bbs     Bbs.ExecutorBBS
@@ -16,14 +16,14 @@ type ExecuteStep struct {
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	subStep sequence.Step,
 	bbs Bbs.ExecutorBBS,
 	result *string,
 ) *ExecuteStep {
 	return &ExecuteStep{
-		runOnce: runOnce,
+		task: task,
 		logger:  logger,
 		subStep: subStep,
 		bbs:     bbs,
@@ -36,8 +36,8 @@ func (step ExecuteStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
-				"handle":       step.runOnce.ContainerHandle,
+				"runonce-guid": step.task.Guid,
+				"handle":       step.task.ContainerHandle,
 				"error":        err.Error(),
 			},
 			"runonce.steps.failed",
@@ -50,11 +50,11 @@ func (step ExecuteStep) Perform() error {
 }
 
 func (step ExecuteStep) complete(failed bool, failureReason string) error {
-	err := step.bbs.CompleteTask(step.runOnce, failed, failureReason, *step.result)
+	err := step.bbs.CompleteTask(step.task, failed, failureReason, *step.result)
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			}, "runonce.completed.failed",
 		)

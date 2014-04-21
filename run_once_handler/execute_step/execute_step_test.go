@@ -20,10 +20,10 @@ var _ = Describe("ExecuteStep", func() {
 		step   sequence.Step
 		result chan error
 
-		runOnce       *models.Task
+		task       *models.Task
 		subStep       sequence.Step
 		bbs           *fake_bbs.FakeExecutorBBS
-		runOnceResult *string
+		taskResult *string
 	)
 
 	BeforeEach(func() {
@@ -33,7 +33,7 @@ var _ = Describe("ExecuteStep", func() {
 
 		bbs = fake_bbs.NewFakeExecutorBBS()
 
-		runOnce = &models.Task{
+		task = &models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -50,16 +50,16 @@ var _ = Describe("ExecuteStep", func() {
 		}
 
 		result := "the result of the running"
-		runOnceResult = &result
+		taskResult = &result
 	})
 
 	JustBeforeEach(func() {
 		step = New(
-			runOnce,
+			task,
 			steno.NewLogger("test-logger"),
 			subStep,
 			bbs,
-			runOnceResult,
+			taskResult,
 		)
 	})
 
@@ -79,8 +79,8 @@ var _ = Describe("ExecuteStep", func() {
 
 				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
-				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
-				Ω(completed[0].Result).Should(Equal(*runOnceResult))
+				Ω(completed[0].Guid).Should(Equal(task.Guid))
+				Ω(completed[0].Result).Should(Equal(*taskResult))
 				Ω(completed[0].Failed).Should(BeFalse())
 				Ω(completed[0].FailureReason).Should(BeZero())
 			})
@@ -116,8 +116,8 @@ var _ = Describe("ExecuteStep", func() {
 
 				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
-				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
-				Ω(completed[0].Result).Should(Equal(*runOnceResult))
+				Ω(completed[0].Guid).Should(Equal(task.Guid))
+				Ω(completed[0].Result).Should(Equal(*taskResult))
 				Ω(completed[0].Failed).Should(BeTrue())
 				Ω(completed[0].FailureReason).Should(Equal("oh no!"))
 			})

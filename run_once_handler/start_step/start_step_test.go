@@ -17,12 +17,12 @@ import (
 var _ = Describe("StartStep", func() {
 	var step sequence.Step
 
-	var runOnce models.Task
+	var task models.Task
 	var bbs *fake_bbs.FakeExecutorBBS
 	var containerHandle string
 
 	BeforeEach(func() {
-		runOnce = models.Task{
+		task = models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -40,7 +40,7 @@ var _ = Describe("StartStep", func() {
 		containerHandle = "some-container-handle"
 
 		step = New(
-			&runOnce,
+			&task,
 			steno.NewLogger("test-logger"),
 			bbs,
 			&containerHandle,
@@ -54,7 +54,7 @@ var _ = Describe("StartStep", func() {
 
 			started := bbs.StartedTasks()
 			Ω(started).ShouldNot(BeEmpty())
-			Ω(started[0].Guid).Should(Equal(runOnce.Guid))
+			Ω(started[0].Guid).Should(Equal(task.Guid))
 			Ω(started[0].ContainerHandle).Should(Equal(containerHandle))
 		})
 

@@ -17,13 +17,13 @@ import (
 var _ = Describe("RegisterStep", func() {
 	var step sequence.Step
 
-	var runOnce *models.Task
+	var task *models.Task
 	var fakeTaskRegistry *fake_task_registry.FakeTaskRegistry
 
 	BeforeEach(func() {
 		fakeTaskRegistry = fake_task_registry.New()
 
-		runOnce = &models.Task{
+		task = &models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -36,7 +36,7 @@ var _ = Describe("RegisterStep", func() {
 		}
 
 		step = New(
-			runOnce,
+			task,
 			steno.NewLogger("test-logger"),
 			fakeTaskRegistry,
 		)
@@ -44,7 +44,7 @@ var _ = Describe("RegisterStep", func() {
 
 	Describe("Perform", func() {
 		It("registers the Task", func() {
-			originalTask := runOnce
+			originalTask := task
 
 			err := step.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
@@ -68,7 +68,7 @@ var _ = Describe("RegisterStep", func() {
 
 	Describe("Cleanup", func() {
 		It("unregisters the Task", func() {
-			originalTask := runOnce
+			originalTask := task
 
 			step.Cleanup()
 

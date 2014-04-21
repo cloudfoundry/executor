@@ -35,7 +35,7 @@ var _ = Describe("TaskTransformer", func() {
 		extractor          extractor.Extractor
 		compressor         compressor.Compressor
 		wardenClient       *fake_gordon.FakeGordon
-		runOnceTransformer *TaskTransformer
+		taskTransformer *TaskTransformer
 		handle             string
 		result             string
 	)
@@ -53,7 +53,7 @@ var _ = Describe("TaskTransformer", func() {
 			return logStreamer
 		}
 
-		runOnceTransformer = NewTaskTransformer(
+		taskTransformer = NewTaskTransformer(
 			logStreamerFactory,
 			downloader,
 			uploader,
@@ -78,7 +78,7 @@ var _ = Describe("TaskTransformer", func() {
 			FailureMessage: "failuring",
 		}
 
-		runOnce := models.Task{
+		task := models.Task{
 			Guid: "some-guid",
 			Actions: []models.ExecutorAction{
 				{runActionModel},
@@ -91,7 +91,7 @@ var _ = Describe("TaskTransformer", func() {
 			FileDescriptors: 117,
 		}
 
-		Ω(runOnceTransformer.StepsFor(&runOnce, handle, &result)).To(Equal([]sequence.Step{
+		Ω(taskTransformer.StepsFor(&task, handle, &result)).To(Equal([]sequence.Step{
 			run_step.New(
 				handle,
 				runActionModel,

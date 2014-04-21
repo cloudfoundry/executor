@@ -106,18 +106,18 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 	}
 }
 
-func (e *Executor) Handle(runOnceHandler run_once_handler.TaskHandlerInterface, ready chan<- bool) {
+func (e *Executor) Handle(taskHandler run_once_handler.TaskHandlerInterface, ready chan<- bool) {
 	cancel := make(chan struct{})
 
 	e.logger.Info("executor.watching-for-desired-runonce")
-	runOnces, stop, errors := e.bbs.WatchForDesiredTask()
+	tasks, stop, errors := e.bbs.WatchForDesiredTask()
 	ready <- true
 
 	for {
 	INNER:
 		for {
 			select {
-			case runOnce, ok := <-runOnces:
+			case task, ok := <-tasks:
 				if !ok {
 					break INNER
 				}
@@ -131,12 +131,12 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.TaskHandlerInterface, 
 
 					e.logger.Infod(
 						map[string]interface{}{
-							"task": runOnce,
+							"task": task,
 						},
 						"executor.task.start",
 					)
 
-					runOnceHandler.Task(runOnce, e.id, cancel)
+					taskHandler.Task(task, e.id, cancel)
 				}()
 
 			case <-e.stopHandlingTasks:
@@ -158,7 +158,7 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.TaskHandlerInterface, 
 		}
 
 		e.logger.Info("executor.watching-for-desired-runonce")
-		runOnces, stop, errors = e.bbs.WatchForDesiredTask()
+		tasks, stop, errors = e.bbs.WatchForDesiredTask()
 	}
 }
 
@@ -187,7 +187,7 @@ func (e *Executor) Stop() {
 		close(e.stopConvergeTask)
 	})
 
-	//wait for any running runOnce goroutines to end
+	//wait for any running task goroutines to end
 	e.outstandingTasks.Wait()
 	e.outstandingPresence.Wait()
 	e.outstandingConverge.Wait()

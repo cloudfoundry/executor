@@ -8,29 +8,29 @@ import (
 )
 
 type RegisterStep struct {
-	runOnce      *models.Task
+	task      *models.Task
 	logger       *steno.Logger
 	taskRegistry task_registry.TaskRegistryInterface
 }
 
 func New(
-	runOnce *models.Task,
+	task *models.Task,
 	logger *steno.Logger,
 	taskRegistry task_registry.TaskRegistryInterface,
 ) *RegisterStep {
 	return &RegisterStep{
-		runOnce:      runOnce,
+		task:      task,
 		logger:       logger,
 		taskRegistry: taskRegistry,
 	}
 }
 
 func (step RegisterStep) Perform() error {
-	err := step.taskRegistry.AddTask(step.runOnce)
+	err := step.taskRegistry.AddTask(step.task)
 	if err != nil {
 		step.logger.Infod(
 			map[string]interface{}{
-				"runonce-guid": step.runOnce.Guid,
+				"runonce-guid": step.task.Guid,
 				"error":        err.Error(),
 			}, "runonce.insufficient.resources",
 		)
@@ -44,5 +44,5 @@ func (step RegisterStep) Perform() error {
 func (step RegisterStep) Cancel() {}
 
 func (step RegisterStep) Cleanup() {
-	step.taskRegistry.RemoveTask(step.runOnce)
+	step.taskRegistry.RemoveTask(step.task)
 }

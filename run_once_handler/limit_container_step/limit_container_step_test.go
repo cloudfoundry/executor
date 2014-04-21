@@ -17,7 +17,7 @@ import (
 var _ = Describe("LimitContainerStep", func() {
 	var step sequence.Step
 
-	var runOnce models.Task
+	var task models.Task
 	var gordon *fake_gordon.FakeGordon
 	var handle string
 	var containerInodeLimit int
@@ -26,7 +26,7 @@ var _ = Describe("LimitContainerStep", func() {
 		gordon = fake_gordon.New()
 		handle = "some-container-handle"
 		containerInodeLimit = 200000
-		runOnce = models.Task{
+		task = models.Task{
 			Guid:     "totally-unique",
 			Stack:    "penguin",
 			MemoryMB: 1024,
@@ -43,7 +43,7 @@ var _ = Describe("LimitContainerStep", func() {
 		}
 
 		step = New(
-			&runOnce,
+			&task,
 			steno.NewLogger("test-logger"),
 			gordon,
 			containerInodeLimit,

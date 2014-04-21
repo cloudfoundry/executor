@@ -11,8 +11,8 @@ import (
 var ErrorNoStackDefined = errors.New("no stack was defined for Task")
 
 type TaskRegistryInterface interface {
-	AddTask(runOnce *models.Task) error
-	RemoveTask(runOnce *models.Task)
+	AddTask(task *models.Task) error
+	RemoveTask(task *models.Task)
 }
 
 type TaskRegistry struct {
@@ -49,40 +49,40 @@ func NewTaskRegistry(stack string, memoryMB int, diskMB int) *TaskRegistry {
 	}
 }
 
-func (registry *TaskRegistry) AddTask(runOnce *models.Task) error {
+func (registry *TaskRegistry) AddTask(task *models.Task) error {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	if !registry.hasCapacityForTask(runOnce) {
-		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
+	if !registry.hasCapacityForTask(task) {
+		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", task.MemoryMB, task.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
 	}
 
-	if runOnce.Stack == "" {
+	if task.Stack == "" {
 		return ErrorNoStackDefined
 	}
 
-	if runOnce.Stack != registry.stack {
-		return IncompatibleStackError{registry.stack, runOnce.Stack}
+	if task.Stack != registry.stack {
+		return IncompatibleStackError{registry.stack, task.Stack}
 	}
 
-	registry.Tasks[runOnce.Guid] = runOnce
+	registry.Tasks[task.Guid] = task
 
 	return nil
 }
 
-func (registry *TaskRegistry) RemoveTask(runOnce *models.Task) {
+func (registry *TaskRegistry) RemoveTask(task *models.Task) {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	delete(registry.Tasks, runOnce.Guid)
+	delete(registry.Tasks, task.Guid)
 }
 
-func (registry *TaskRegistry) hasCapacityForTask(runOnce *models.Task) bool {
-	if runOnce.MemoryMB > registry.availableMemoryMB() {
+func (registry *TaskRegistry) hasCapacityForTask(task *models.Task) bool {
+	if task.MemoryMB > registry.availableMemoryMB() {
 		return false
 	}
 
-	if runOnce.DiskMB > registry.availableDiskMB() {
+	if task.DiskMB > registry.availableDiskMB() {
 		return false
 	}
 
