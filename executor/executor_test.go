@@ -148,7 +148,7 @@ var _ = Describe("Executor", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 				}
 
-				//eventually the runoncehandlers should have been called N times
+				//eventually the taskhandlers should have been called N times
 				Eventually(func() int {
 					return fakeTaskHandler.NumberOfCalls()
 				}, 5).Should(Equal(samples))

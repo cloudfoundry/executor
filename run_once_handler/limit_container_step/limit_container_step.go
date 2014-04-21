@@ -35,10 +35,10 @@ func (step ContainerStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
-			"runonce.container-limit-memory.failed",
+			"task.container-limit-memory.failed",
 		)
 
 		return err
@@ -52,10 +52,10 @@ func (step ContainerStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
-			"runonce.container-limit-disk.failed",
+			"task.container-limit-disk.failed",
 		)
 
 		return err

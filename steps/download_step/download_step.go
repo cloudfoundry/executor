@@ -56,7 +56,7 @@ func (step *DownloadStep) Perform() (err error) {
 		map[string]interface{}{
 			"handle": step.containerHandle,
 		},
-		"runonce.handle.download-action",
+		"task.handle.download-action",
 	)
 
 	downloadedFile, err := step.download()

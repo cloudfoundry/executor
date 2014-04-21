@@ -32,9 +32,9 @@ func (step StartStep) Perform() error {
 	if err != nil {
 		step.logger.Warnd(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
-			}, "runonce.start.failed",
+			}, "task.start.failed",
 		)
 
 		return err

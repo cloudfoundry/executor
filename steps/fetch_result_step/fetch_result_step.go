@@ -44,7 +44,7 @@ func (step *FetchResultStep) Perform() error {
 		map[string]interface{}{
 			"handle": step.handle,
 		},
-		"runonce.handle.fetch-result-step",
+		"task.handle.fetch-result-step",
 	)
 
 	data, err := step.copyAndReadResult()

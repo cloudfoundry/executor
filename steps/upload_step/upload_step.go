@@ -56,7 +56,7 @@ func (step *UploadStep) Perform() (err error) {
 		map[string]interface{}{
 			"handle": step.containerHandle,
 		},
-		"runonce.handle.upload-step",
+		"task.handle.upload-step",
 	)
 
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")

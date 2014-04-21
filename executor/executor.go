@@ -109,7 +109,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 func (e *Executor) Handle(taskHandler run_once_handler.TaskHandlerInterface, ready chan<- bool) {
 	cancel := make(chan struct{})
 
-	e.logger.Info("executor.watching-for-desired-runonce")
+	e.logger.Info("executor.watching-for-desired-task")
 	tasks, stop, errors := e.bbs.WatchForDesiredTask()
 	ready <- true
 
@@ -151,13 +151,13 @@ func (e *Executor) Handle(taskHandler run_once_handler.TaskHandlerInterface, rea
 				if ok && err != nil {
 					e.logger.Errord(map[string]interface{}{
 						"error": err.Error(),
-					}, "executor.watch-desired-runonce.failed")
+					}, "executor.watch-desired-task.failed")
 				}
 				break INNER
 			}
 		}
 
-		e.logger.Info("executor.watching-for-desired-runonce")
+		e.logger.Info("executor.watching-for-desired-task")
 		tasks, stop, errors = e.bbs.WatchForDesiredTask()
 	}
 }

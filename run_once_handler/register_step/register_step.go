@@ -30,9 +30,9 @@ func (step RegisterStep) Perform() error {
 	if err != nil {
 		step.logger.Infod(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
-			}, "runonce.insufficient.resources",
+			}, "task.insufficient.resources",
 		)
 
 		return err

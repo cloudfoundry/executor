@@ -32,9 +32,9 @@ func (step ClaimStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
-			}, "runonce.claim.failed",
+			}, "task.claim.failed",
 		)
 
 		return err

@@ -36,11 +36,11 @@ func (step ExecuteStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"handle":       step.task.ContainerHandle,
 				"error":        err.Error(),
 			},
-			"runonce.steps.failed",
+			"task.steps.failed",
 		)
 
 		return step.complete(true, err.Error())
@@ -54,9 +54,9 @@ func (step ExecuteStep) complete(failed bool, failureReason string) error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
-			}, "runonce.completed.failed",
+			}, "task.completed.failed",
 		)
 
 		return err

@@ -38,10 +38,10 @@ func (step ContainerStep) Perform() error {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"error":        err.Error(),
 			},
-			"runonce.container-create.failed",
+			"task.container-create.failed",
 		)
 
 		return err
@@ -59,11 +59,11 @@ func (step ContainerStep) Cleanup() {
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{
-				"runonce-guid": step.task.Guid,
+				"task-guid": step.task.Guid,
 				"handle":       step.task.ContainerHandle,
 				"error":        err.Error(),
 			},
-			"runonce.container-destroy.failed",
+			"task.container-destroy.failed",
 		)
 	}
 }
