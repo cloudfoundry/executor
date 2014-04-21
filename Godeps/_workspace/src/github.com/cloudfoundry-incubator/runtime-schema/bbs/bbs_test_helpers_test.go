@@ -11,91 +11,91 @@ import (
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 )
 
-var _ = Describe("RunOnce BBS", func() {
+var _ = Describe("Task BBS", func() {
 	var bbs *BBS
-	var runOnce *models.RunOnce
+	var task *models.Task
 	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	BeforeEach(func() {
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
 		bbs = New(store, timeProvider)
-		runOnce = &models.RunOnce{
+		task = &models.Task{
 			Guid:      "some-guid",
 			CreatedAt: time.Now().UnixNano(),
 		}
 	})
 
-	Describe("GetAllPendingRunOnces", func() {
+	Describe("GetAllPendingTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
+			err := bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("returns all RunOnces in 'pending' state", func() {
-			runOnces, err := bbs.GetAllPendingRunOnces()
+		It("returns all Tasks in 'pending' state", func() {
+			tasks, err := bbs.GetAllPendingTasks()
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(runOnces).Should(HaveLen(1))
-			Ω(runOnces).Should(ContainElement(runOnce))
+			Ω(tasks).Should(HaveLen(1))
+			Ω(tasks).Should(ContainElement(task))
 		})
 	})
 
-	Describe("GetAllClaimedRunOnces", func() {
+	Describe("GetAllClaimedTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
+			err := bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimRunOnce(runOnce, "executor-ID")
+			err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("returns all RunOnces in 'claimed' state", func() {
-			runOnces, err := bbs.GetAllClaimedRunOnces()
+		It("returns all Tasks in 'claimed' state", func() {
+			tasks, err := bbs.GetAllClaimedTasks()
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(runOnces).Should(HaveLen(1))
-			Ω(runOnces).Should(ContainElement(runOnce))
+			Ω(tasks).Should(HaveLen(1))
+			Ω(tasks).Should(ContainElement(task))
 		})
 	})
 
-	Describe("GetAllStartingRunOnces", func() {
+	Describe("GetAllStartingTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
+			err := bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimRunOnce(runOnce, "executor-ID")
+			err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartRunOnce(runOnce, "container-handle")
+			err = bbs.StartTask(task, "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("returns all RunOnces in 'running' state", func() {
-			runOnces, err := bbs.GetAllStartingRunOnces()
+		It("returns all Tasks in 'running' state", func() {
+			tasks, err := bbs.GetAllStartingTasks()
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(runOnces).Should(HaveLen(1))
-			Ω(runOnces).Should(ContainElement(runOnce))
+			Ω(tasks).Should(HaveLen(1))
+			Ω(tasks).Should(ContainElement(task))
 		})
 	})
 
-	Describe("GetAllCompletedRunOnces", func() {
+	Describe("GetAllCompletedTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireRunOnce(runOnce)
+			err := bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimRunOnce(runOnce, "executor-ID")
+			err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartRunOnce(runOnce, "container-handle")
+			err = bbs.StartTask(task, "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.CompleteRunOnce(runOnce, true, "a reason", "a result")
+			err = bbs.CompleteTask(task, true, "a reason", "a result")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("returns all RunOnces in 'completed' state", func() {
-			runOnces, err := bbs.GetAllCompletedRunOnces()
+		It("returns all Tasks in 'completed' state", func() {
+			tasks, err := bbs.GetAllCompletedTasks()
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(runOnces).Should(HaveLen(1))
-			Ω(runOnces).Should(ContainElement(runOnce))
+			Ω(tasks).Should(HaveLen(1))
+			Ω(tasks).Should(ContainElement(task))
 		})
 	})
 })

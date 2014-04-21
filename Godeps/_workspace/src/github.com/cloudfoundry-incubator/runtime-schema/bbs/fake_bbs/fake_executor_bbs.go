@@ -22,15 +22,15 @@ type FakeExecutorBBS struct {
 	maintainingPresencePresence          *FakePresence
 	maintainingPresenceError             error
 
-	claimedRunOnces []*models.RunOnce
-	claimRunOnceErr error
+	claimedTasks []*models.Task
+	claimTaskErr error
 
-	startedRunOnces []*models.RunOnce
-	startRunOnceErr error
+	startedTasks []*models.Task
+	startTaskErr error
 
-	completedRunOnces           []*models.RunOnce
-	completeRunOnceErr          error
-	convergeTimeToClaimRunOnces time.Duration
+	completedTasks           []*models.Task
+	completeTaskErr          error
+	convergeTimeToClaimTasks time.Duration
 
 	sync.RWMutex
 }
@@ -48,15 +48,15 @@ func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.
 	return fakeBBS.maintainingPresencePresence, status, fakeBBS.maintainingPresenceError
 }
 
-func (fakeBBS *FakeExecutorBBS) WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
+func (fakeBBS *FakeExecutorBBS) WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error) {
 	return nil, nil, nil
 }
 
-func (fakeBBS *FakeExecutorBBS) ClaimRunOnce(runOnce *models.RunOnce, executorID string) error {
-	runOnce.ExecutorID = executorID
+func (fakeBBS *FakeExecutorBBS) ClaimTask(task *models.Task, executorID string) error {
+	task.ExecutorID = executorID
 
 	fakeBBS.RLock()
-	err := fakeBBS.claimRunOnceErr
+	err := fakeBBS.claimTaskErr
 	fakeBBS.RUnlock()
 
 	if err != nil {
@@ -64,106 +64,106 @@ func (fakeBBS *FakeExecutorBBS) ClaimRunOnce(runOnce *models.RunOnce, executorID
 	}
 
 	fakeBBS.Lock()
-	fakeBBS.claimedRunOnces = append(fakeBBS.claimedRunOnces, runOnce)
+	fakeBBS.claimedTasks = append(fakeBBS.claimedTasks, task)
 	fakeBBS.Unlock()
 
 	return nil
 }
 
-func (fakeBBS *FakeExecutorBBS) ClaimedRunOnces() []*models.RunOnce {
+func (fakeBBS *FakeExecutorBBS) ClaimedTasks() []*models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	claimed := make([]*models.RunOnce, len(fakeBBS.claimedRunOnces))
-	copy(claimed, fakeBBS.claimedRunOnces)
+	claimed := make([]*models.Task, len(fakeBBS.claimedTasks))
+	copy(claimed, fakeBBS.claimedTasks)
 
 	return claimed
 }
 
-func (fakeBBS *FakeExecutorBBS) SetClaimRunOnceErr(err error) {
+func (fakeBBS *FakeExecutorBBS) SetClaimTaskErr(err error) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	fakeBBS.claimRunOnceErr = err
+	fakeBBS.claimTaskErr = err
 }
 
-func (fakeBBS *FakeExecutorBBS) StartRunOnce(runOnce *models.RunOnce, containerHandle string) error {
+func (fakeBBS *FakeExecutorBBS) StartTask(task *models.Task, containerHandle string) error {
 	fakeBBS.RLock()
-	err := fakeBBS.startRunOnceErr
+	err := fakeBBS.startTaskErr
 	fakeBBS.RUnlock()
 
 	if err != nil {
 		return err
 	}
 
-	runOnce.ContainerHandle = containerHandle
+	task.ContainerHandle = containerHandle
 
 	fakeBBS.Lock()
-	fakeBBS.startedRunOnces = append(fakeBBS.startedRunOnces, runOnce)
+	fakeBBS.startedTasks = append(fakeBBS.startedTasks, task)
 	fakeBBS.Unlock()
 
 	return nil
 }
 
-func (fakeBBS *FakeExecutorBBS) StartedRunOnces() []*models.RunOnce {
+func (fakeBBS *FakeExecutorBBS) StartedTasks() []*models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	started := make([]*models.RunOnce, len(fakeBBS.startedRunOnces))
-	copy(started, fakeBBS.startedRunOnces)
+	started := make([]*models.Task, len(fakeBBS.startedTasks))
+	copy(started, fakeBBS.startedTasks)
 
 	return started
 }
 
-func (fakeBBS *FakeExecutorBBS) SetStartRunOnceErr(err error) {
+func (fakeBBS *FakeExecutorBBS) SetStartTaskErr(err error) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	fakeBBS.startRunOnceErr = err
+	fakeBBS.startTaskErr = err
 }
 
-func (fakeBBS *FakeExecutorBBS) CompleteRunOnce(runOnce *models.RunOnce, failed bool, failureReason string, result string) error {
+func (fakeBBS *FakeExecutorBBS) CompleteTask(task *models.Task, failed bool, failureReason string, result string) error {
 	fakeBBS.RLock()
-	err := fakeBBS.completeRunOnceErr
+	err := fakeBBS.completeTaskErr
 	fakeBBS.RUnlock()
 
 	if err != nil {
 		return err
 	}
 
-	runOnce.Failed = failed
-	runOnce.FailureReason = failureReason
-	runOnce.Result = result
+	task.Failed = failed
+	task.FailureReason = failureReason
+	task.Result = result
 
 	fakeBBS.Lock()
-	fakeBBS.completedRunOnces = append(fakeBBS.completedRunOnces, runOnce)
+	fakeBBS.completedTasks = append(fakeBBS.completedTasks, task)
 	fakeBBS.Unlock()
 
 	return nil
 }
 
-func (fakeBBS *FakeExecutorBBS) CompletedRunOnces() []*models.RunOnce {
+func (fakeBBS *FakeExecutorBBS) CompletedTasks() []*models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	completed := make([]*models.RunOnce, len(fakeBBS.completedRunOnces))
-	copy(completed, fakeBBS.completedRunOnces)
+	completed := make([]*models.Task, len(fakeBBS.completedTasks))
+	copy(completed, fakeBBS.completedTasks)
 
 	return completed
 }
 
-func (fakeBBS *FakeExecutorBBS) SetCompleteRunOnceErr(err error) {
+func (fakeBBS *FakeExecutorBBS) SetCompleteTaskErr(err error) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	fakeBBS.completeRunOnceErr = err
+	fakeBBS.completeTaskErr = err
 }
 
-func (fakeBBS *FakeExecutorBBS) ConvergeRunOnce(timeToClaim time.Duration) {
+func (fakeBBS *FakeExecutorBBS) ConvergeTask(timeToClaim time.Duration) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	fakeBBS.convergeTimeToClaimRunOnces = timeToClaim
+	fakeBBS.convergeTimeToClaimTasks = timeToClaim
 	fakeBBS.callsToConverge++
 }
 
@@ -230,11 +230,11 @@ func (fakeBBS *FakeExecutorBBS) Stop() {
 	}
 }
 
-func (fakeBBS *FakeExecutorBBS) ConvergeTimeToClaimRunOnces() time.Duration {
+func (fakeBBS *FakeExecutorBBS) ConvergeTimeToClaimTasks() time.Duration {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	return fakeBBS.convergeTimeToClaimRunOnces
+	return fakeBBS.convergeTimeToClaimTasks
 }
 
 func (fakeBBS *FakeExecutorBBS) CallsToConverge() int {

@@ -6,24 +6,24 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-func (self *BBS) GetAllPendingRunOnces() ([]*models.RunOnce, error) {
-	all, err := self.GetAllRunOnces()
-	return filterRunOnces(all, models.RunOnceStatePending), err
+func (self *BBS) GetAllPendingTasks() ([]*models.Task, error) {
+	all, err := self.GetAllTasks()
+	return filterTasks(all, models.TaskStatePending), err
 }
 
-func (self *BBS) GetAllClaimedRunOnces() ([]*models.RunOnce, error) {
-	all, err := self.GetAllRunOnces()
-	return filterRunOnces(all, models.RunOnceStateClaimed), err
+func (self *BBS) GetAllClaimedTasks() ([]*models.Task, error) {
+	all, err := self.GetAllTasks()
+	return filterTasks(all, models.TaskStateClaimed), err
 }
 
-func (self *BBS) GetAllStartingRunOnces() ([]*models.RunOnce, error) {
-	all, err := self.GetAllRunOnces()
-	return filterRunOnces(all, models.RunOnceStateRunning), err
+func (self *BBS) GetAllStartingTasks() ([]*models.Task, error) {
+	all, err := self.GetAllTasks()
+	return filterTasks(all, models.TaskStateRunning), err
 }
 
-func (self *BBS) GetAllCompletedRunOnces() ([]*models.RunOnce, error) {
-	all, err := self.GetAllRunOnces()
-	return filterRunOnces(all, models.RunOnceStateCompleted), err
+func (self *BBS) GetAllCompletedTasks() ([]*models.Task, error) {
+	all, err := self.GetAllTasks()
+	return filterTasks(all, models.TaskStateCompleted), err
 }
 
 func (self *BBS) GetAllExecutors() ([]string, error) {
@@ -50,9 +50,9 @@ func (self *BBS) printNodes(message string, nodes []storeadapter.StoreNode) {
 	}
 }
 
-func filterRunOnces(runOnces []*models.RunOnce, state models.RunOnceState) []*models.RunOnce {
-	result := make([]*models.RunOnce, 0)
-	for _, model := range runOnces {
+func filterTasks(tasks []*models.Task, state models.TaskState) []*models.Task {
+	result := make([]*models.Task, 0)
+	for _, model := range tasks {
 		if model.State == state {
 			result = append(result, model)
 		}

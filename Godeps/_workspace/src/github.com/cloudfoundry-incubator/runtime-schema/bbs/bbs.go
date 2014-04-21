@@ -18,28 +18,28 @@ type ExecutorBBS interface {
 		executorID string,
 	) (presence Presence, disappeared <-chan bool, err error)
 
-	WatchForDesiredRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error)
+	WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error)
 
-	ClaimRunOnce(runOnce *models.RunOnce, executorID string) error
-	StartRunOnce(runOnce *models.RunOnce, containerHandle string) error
-	CompleteRunOnce(runOnce *models.RunOnce, failed bool, failureReason string, result string) error
+	ClaimTask(task *models.Task, executorID string) error
+	StartTask(task *models.Task, containerHandle string) error
+	CompleteTask(task *models.Task, failed bool, failureReason string, result string) error
 
-	ConvergeRunOnce(timeToClaim time.Duration)
+	ConvergeTask(timeToClaim time.Duration)
 	MaintainConvergeLock(interval time.Duration, executorID string) (disappeared <-chan bool, stop chan<- chan bool, err error)
 }
 
 type StagerBBS interface {
-	WatchForCompletedRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error)
+	WatchForCompletedTask() (<-chan *models.Task, chan<- bool, <-chan error)
 
-	DesireRunOnce(*models.RunOnce) error
-	ResolvingRunOnce(*models.RunOnce) error
-	ResolveRunOnce(*models.RunOnce) error
+	DesireTask(*models.Task) error
+	ResolvingTask(*models.Task) error
+	ResolveTask(*models.Task) error
 
 	GetAvailableFileServer() (string, error)
 }
 
 type MetricsBBS interface {
-	GetAllRunOnces() ([]*models.RunOnce, error)
+	GetAllTasks() ([]*models.Task, error)
 	GetServiceRegistrations() (models.ServiceRegistrations, error)
 }
 

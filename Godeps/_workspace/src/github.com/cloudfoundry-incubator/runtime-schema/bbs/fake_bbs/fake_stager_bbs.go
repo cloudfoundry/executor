@@ -9,16 +9,16 @@ import (
 
 type FakeStagerBBS struct {
 	watchingForCompleted    chan bool
-	completedRunOnceChan    chan *models.RunOnce
-	completedRunOnceErrChan chan error
+	completedTaskChan    chan *models.Task
+	completedTaskErrChan chan error
 
 	whenSettingResolving  func() error
-	resolvingRunOnceInput struct {
-		RunOnceToResolve *models.RunOnce
+	resolvingTaskInput struct {
+		TaskToResolve *models.Task
 	}
 
-	resolvedRunOnce   *models.RunOnce
-	resolveRunOnceErr error
+	resolvedTask   *models.Task
+	resolveTaskErr error
 
 	sync.RWMutex
 }
@@ -29,13 +29,13 @@ func NewFakeStagerBBS() *FakeStagerBBS {
 	}
 }
 
-func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan *models.RunOnce, chan<- bool, <-chan error) {
-	completedChan := make(chan *models.RunOnce)
+func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan *models.Task, chan<- bool, <-chan error) {
+	completedChan := make(chan *models.Task)
 	completedErrChan := make(chan error)
 
 	fakeBBS.Lock()
-	fakeBBS.completedRunOnceChan = completedChan
-	fakeBBS.completedRunOnceErrChan = completedErrChan
+	fakeBBS.completedTaskChan = completedChan
+	fakeBBS.completedTaskErrChan = completedErrChan
 	fakeBBS.Unlock()
 
 	fakeBBS.watchingForCompleted <- true
@@ -43,7 +43,7 @@ func (fakeBBS *FakeStagerBBS) WatchForCompletedRunOnce() (<-chan *models.RunOnce
 	return completedChan, nil, completedErrChan
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvingRunOnce(runOnce *models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) ResolvingTask(task *models.Task) error {
 	fakeBBS.RLock()
 	callback := fakeBBS.whenSettingResolving
 	fakeBBS.RUnlock()
@@ -58,24 +58,24 @@ func (fakeBBS *FakeStagerBBS) ResolvingRunOnce(runOnce *models.RunOnce) error {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	fakeBBS.resolvingRunOnceInput.RunOnceToResolve = runOnce
+	fakeBBS.resolvingTaskInput.TaskToResolve = task
 
 	return nil
 }
 
-func (fakeBBS *FakeStagerBBS) DesireRunOnce(runOnce *models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) DesireTask(task *models.Task) error {
 	panic("implement me!")
 }
 
-func (fakeBBS *FakeStagerBBS) ResolveRunOnce(runOnce *models.RunOnce) error {
+func (fakeBBS *FakeStagerBBS) ResolveTask(task *models.Task) error {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
-	if fakeBBS.resolveRunOnceErr != nil {
-		return fakeBBS.resolveRunOnceErr
+	if fakeBBS.resolveTaskErr != nil {
+		return fakeBBS.resolveTaskErr
 	}
 
-	fakeBBS.resolvedRunOnce = runOnce
+	fakeBBS.resolvedTask = task
 
 	return nil
 }
@@ -84,12 +84,12 @@ func (fakeBBS *FakeStagerBBS) GetAvailableFileServer() (string, error) {
 	panic("implement me!")
 }
 
-func (fakeBBS *FakeStagerBBS) SendCompletedRunOnce(runOnce *models.RunOnce) {
-	fakeBBS.completedRunOnceChan <- runOnce
+func (fakeBBS *FakeStagerBBS) SendCompletedTask(task *models.Task) {
+	fakeBBS.completedTaskChan <- task
 }
 
-func (fakeBBS *FakeStagerBBS) SendCompletedRunOnceWatchError(err error) {
-	fakeBBS.completedRunOnceErrChan <- errors.New("hell")
+func (fakeBBS *FakeStagerBBS) SendCompletedTaskWatchError(err error) {
+	fakeBBS.completedTaskErrChan <- errors.New("hell")
 }
 
 func (fakeBBS *FakeStagerBBS) WatchingForCompleted() <-chan bool {
@@ -106,16 +106,16 @@ func (fakeBBS *FakeStagerBBS) WhenSettingResolving(callback func() error) {
 	fakeBBS.whenSettingResolving = callback
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvingRunOnceInput() *models.RunOnce {
+func (fakeBBS *FakeStagerBBS) ResolvingTaskInput() *models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	return fakeBBS.resolvingRunOnceInput.RunOnceToResolve
+	return fakeBBS.resolvingTaskInput.TaskToResolve
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvedRunOnce() *models.RunOnce {
+func (fakeBBS *FakeStagerBBS) ResolvedTask() *models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	return fakeBBS.resolvedRunOnce
+	return fakeBBS.resolvedTask
 }

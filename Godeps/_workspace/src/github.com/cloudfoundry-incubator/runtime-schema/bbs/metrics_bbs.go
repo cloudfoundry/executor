@@ -16,27 +16,27 @@ type metricsBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func (bbs *metricsBBS) GetAllRunOnces() ([]*models.RunOnce, error) {
-	node, err := bbs.store.ListRecursively(RunOnceSchemaRoot)
+func (bbs *metricsBBS) GetAllTasks() ([]*models.Task, error) {
+	node, err := bbs.store.ListRecursively(TaskSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
-		return []*models.RunOnce{}, nil
+		return []*models.Task{}, nil
 	}
 
 	if err != nil {
-		return []*models.RunOnce{}, err
+		return []*models.Task{}, err
 	}
 
-	runOnces := []*models.RunOnce{}
+	tasks := []*models.Task{}
 	for _, node := range node.ChildNodes {
-		runOnce, err := models.NewRunOnceFromJSON(node.Value)
+		task, err := models.NewTaskFromJSON(node.Value)
 		if err != nil {
-			steno.NewLogger("bbs").Errorf("cannot parse runOnce JSON for key %s: %s", node.Key, err.Error())
+			steno.NewLogger("bbs").Errorf("cannot parse task JSON for key %s: %s", node.Key, err.Error())
 		} else {
-			runOnces = append(runOnces, &runOnce)
+			tasks = append(tasks, &task)
 		}
 	}
 
-	return runOnces, nil
+	return tasks, nil
 }
 
 func (bbs *metricsBBS) GetServiceRegistrations() (models.ServiceRegistrations, error) {

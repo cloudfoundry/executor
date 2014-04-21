@@ -5,8 +5,8 @@ import (
 )
 
 type FakeMetricsBBS struct {
-	GetAllRunOncesReturns struct {
-		Models []*models.RunOnce
+	GetAllTasksReturns struct {
+		Models []*models.Task
 		Err    error
 	}
 
@@ -20,8 +20,8 @@ func NewFakeMetricsBBS() *FakeMetricsBBS {
 	return &FakeMetricsBBS{}
 }
 
-func (bbs *FakeMetricsBBS) GetAllRunOnces() ([]*models.RunOnce, error) {
-	return bbs.GetAllRunOncesReturns.Models, bbs.GetAllRunOncesReturns.Err
+func (bbs *FakeMetricsBBS) GetAllTasks() ([]*models.Task, error) {
+	return bbs.GetAllTasksReturns.Models, bbs.GetAllTasksReturns.Err
 }
 
 func (bbs *FakeMetricsBBS) GetServiceRegistrations() (models.ServiceRegistrations, error) {
