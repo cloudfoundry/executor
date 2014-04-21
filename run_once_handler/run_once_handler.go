@@ -20,15 +20,15 @@ import (
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 )
 
-type RunOnceHandlerInterface interface {
-	RunOnce(runOnce *models.RunOnce, executorId string, cancel <-chan struct{})
+type TaskHandlerInterface interface {
+	Task(runOnce *models.Task, executorId string, cancel <-chan struct{})
 }
 
-type RunOnceHandler struct {
+type TaskHandler struct {
 	bbs                 Bbs.ExecutorBBS
 	wardenClient        gordon.Client
 	containerOwnerName  string
-	transformer         *run_once_transformer.RunOnceTransformer
+	transformer         *run_once_transformer.TaskTransformer
 	logStreamerFactory  log_streamer_factory.LogStreamerFactory
 	logger              *steno.Logger
 	taskRegistry        task_registry.TaskRegistryInterface
@@ -40,12 +40,12 @@ func New(
 	wardenClient gordon.Client,
 	containerOwnerName string,
 	taskRegistry task_registry.TaskRegistryInterface,
-	transformer *run_once_transformer.RunOnceTransformer,
+	transformer *run_once_transformer.TaskTransformer,
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	logger *steno.Logger,
 	containerInodeLimit int,
-) *RunOnceHandler {
-	return &RunOnceHandler{
+) *TaskHandler {
+	return &TaskHandler{
 		bbs:                 bbs,
 		wardenClient:        wardenClient,
 		containerOwnerName:  containerOwnerName,
@@ -57,7 +57,7 @@ func New(
 	}
 }
 
-func (handler *RunOnceHandler) Cleanup() error {
+func (handler *TaskHandler) Cleanup() error {
 	res, err := handler.wardenClient.List(map[string]string{
 		"owner": handler.containerOwnerName,
 	})
@@ -82,7 +82,7 @@ func (handler *RunOnceHandler) Cleanup() error {
 	return nil
 }
 
-func (handler *RunOnceHandler) RunOnce(runOnce *models.RunOnce, executorID string, cancel <-chan struct{}) {
+func (handler *TaskHandler) Task(runOnce *models.Task, executorID string, cancel <-chan struct{}) {
 	var containerHandle string
 	var runOnceResult string
 	runner := sequence.New([]sequence.Step{

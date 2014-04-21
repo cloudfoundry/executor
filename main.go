@@ -111,8 +111,8 @@ var stack = flag.String(
 	"the executor stack",
 )
 
-var timeToClaimRunOnce = flag.Duration(
-	"timeToClaimRunOnce",
+var timeToClaimTask = flag.Duration(
+	"timeToClaimTask",
 	30*time.Minute,
 	"unclaimed run onces are marked as failed, after this time (in seconds)",
 )
@@ -194,7 +194,7 @@ func main() {
 		*loggregatorSecret,
 	)
 
-	transformer := run_once_transformer.NewRunOnceTransformer(
+	transformer := run_once_transformer.NewTaskTransformer(
 		logStreamerFactory,
 		downloader,
 		uploader,
@@ -249,7 +249,7 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
-	go executor.ConvergeRunOnces(*convergenceInterval, *timeToClaimRunOnce)
+	go executor.ConvergeTasks(*convergenceInterval, *timeToClaimTask)
 
 	handling := make(chan bool)
 

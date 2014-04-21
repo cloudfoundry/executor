@@ -22,9 +22,9 @@ type Executor struct {
 	outstandingPresence *sync.WaitGroup
 	outstandingConverge *sync.WaitGroup
 
-	stopHandlingRunOnces    chan struct{}
+	stopHandlingTasks    chan struct{}
 	cancelRunningTasks      chan error
-	stopConvergeRunOnce     chan struct{}
+	stopConvergeTask     chan struct{}
 	stopMaintainingPresence chan struct{}
 
 	drainTimeout time.Duration
@@ -58,9 +58,9 @@ func New(bbs Bbs.ExecutorBBS, drainTimeout time.Duration, logger *steno.Logger) 
 
 		closeOnce: new(sync.Once),
 
-		stopHandlingRunOnces:    make(chan struct{}, 2),
+		stopHandlingTasks:    make(chan struct{}, 2),
 		cancelRunningTasks:      make(chan error, 1),
-		stopConvergeRunOnce:     make(chan struct{}),
+		stopConvergeTask:     make(chan struct{}),
 		stopMaintainingPresence: make(chan struct{}),
 	}
 }
@@ -106,11 +106,11 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 	}
 }
 
-func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterface, ready chan<- bool) {
+func (e *Executor) Handle(runOnceHandler run_once_handler.TaskHandlerInterface, ready chan<- bool) {
 	cancel := make(chan struct{})
 
 	e.logger.Info("executor.watching-for-desired-runonce")
-	runOnces, stop, errors := e.bbs.WatchForDesiredRunOnce()
+	runOnces, stop, errors := e.bbs.WatchForDesiredTask()
 	ready <- true
 
 	for {
@@ -136,10 +136,10 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 						"executor.task.start",
 					)
 
-					runOnceHandler.RunOnce(runOnce, e.id, cancel)
+					runOnceHandler.Task(runOnce, e.id, cancel)
 				}()
 
-			case <-e.stopHandlingRunOnces:
+			case <-e.stopHandlingTasks:
 				close(stop)
 
 				<-e.cancelRunningTasks
@@ -158,12 +158,12 @@ func (e *Executor) Handle(runOnceHandler run_once_handler.RunOnceHandlerInterfac
 		}
 
 		e.logger.Info("executor.watching-for-desired-runonce")
-		runOnces, stop, errors = e.bbs.WatchForDesiredRunOnce()
+		runOnces, stop, errors = e.bbs.WatchForDesiredTask()
 	}
 }
 
 func (e *Executor) Drain() {
-	e.stopHandlingRunOnces <- struct{}{}
+	e.stopHandlingTasks <- struct{}{}
 
 	doneWaiting := make(chan struct{})
 	go func() {
@@ -180,11 +180,11 @@ func (e *Executor) Drain() {
 
 func (e *Executor) Stop() {
 	e.closeOnce.Do(func() {
-		e.stopHandlingRunOnces <- struct{}{}
+		e.stopHandlingTasks <- struct{}{}
 		e.cancelRunningTasks <- nil
 
 		close(e.stopMaintainingPresence)
-		close(e.stopConvergeRunOnce)
+		close(e.stopConvergeTask)
 	})
 
 	//wait for any running runOnce goroutines to end
@@ -193,7 +193,7 @@ func (e *Executor) Stop() {
 	e.outstandingConverge.Wait()
 }
 
-func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Duration) {
+func (e *Executor) ConvergeTasks(period time.Duration, timeToClaim time.Duration) {
 	e.outstandingConverge.Add(1)
 	defer e.outstandingConverge.Done()
 
@@ -207,7 +207,7 @@ func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Durat
 	}
 
 	go func() {
-		<-e.stopConvergeRunOnce
+		<-e.stopConvergeTask
 		close(releaseLock)
 	}()
 
@@ -218,7 +218,7 @@ func (e *Executor) ConvergeRunOnces(period time.Duration, timeToClaim time.Durat
 		}
 
 		if locked {
-			e.bbs.ConvergeRunOnce(timeToClaim)
+			e.bbs.ConvergeTask(timeToClaim)
 		}
 	}
 }

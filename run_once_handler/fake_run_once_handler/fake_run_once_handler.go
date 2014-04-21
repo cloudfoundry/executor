@@ -5,54 +5,54 @@ import (
 	"sync"
 )
 
-type FakeRunOnceHandler struct {
+type FakeTaskHandler struct {
 	numberOfCalls   int
-	handledRunOnces map[string]string
+	handledTasks map[string]string
 	mutex           *sync.RWMutex
 	cancel          <-chan struct{}
 }
 
-func New() *FakeRunOnceHandler {
-	return &FakeRunOnceHandler{
-		handledRunOnces: make(map[string]string),
+func New() *FakeTaskHandler {
+	return &FakeTaskHandler{
+		handledTasks: make(map[string]string),
 		mutex:           &sync.RWMutex{},
 	}
 }
 
-func (handler *FakeRunOnceHandler) RunOnce(runOnce *models.RunOnce, executorId string, cancel <-chan struct{}) {
+func (handler *FakeTaskHandler) Task(runOnce *models.Task, executorId string, cancel <-chan struct{}) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
 	handler.cancel = cancel
 
-	_, present := handler.handledRunOnces[runOnce.Guid]
+	_, present := handler.handledTasks[runOnce.Guid]
 	if !present {
 		handler.numberOfCalls++
-		handler.handledRunOnces[runOnce.Guid] = executorId
+		handler.handledTasks[runOnce.Guid] = executorId
 	}
 }
 
-func (handler *FakeRunOnceHandler) NumberOfCalls() int {
+func (handler *FakeTaskHandler) NumberOfCalls() int {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
 	return handler.numberOfCalls
 }
 
-func (handler *FakeRunOnceHandler) HandledRunOnces() map[string]string {
+func (handler *FakeTaskHandler) HandledTasks() map[string]string {
 	handler.mutex.RLock()
 	defer handler.mutex.RUnlock()
 
 	handled := map[string]string{}
 
-	for k, v := range handler.handledRunOnces {
+	for k, v := range handler.handledTasks {
 		handled[k] = v
 	}
 
 	return handled
 }
 
-func (handler *FakeRunOnceHandler) GetCancel() <-chan struct{} {
+func (handler *FakeTaskHandler) GetCancel() <-chan struct{} {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 

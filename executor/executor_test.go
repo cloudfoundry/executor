@@ -22,7 +22,7 @@ import (
 var _ = Describe("Executor", func() {
 	var (
 		bbs            *Bbs.BBS
-		runOnce        *models.RunOnce
+		runOnce        *models.Task
 		executor       *Executor
 		taskRegistry   *task_registry.TaskRegistry
 		gordon         *fake_gordon.FakeGordon
@@ -32,10 +32,10 @@ var _ = Describe("Executor", func() {
 		storeAdapter   storeadapter.StoreAdapter
 	)
 
-	var fakeRunOnceHandler *fake_run_once_handler.FakeRunOnceHandler
+	var fakeTaskHandler *fake_run_once_handler.FakeTaskHandler
 
 	BeforeEach(func() {
-		fakeRunOnceHandler = fake_run_once_handler.New()
+		fakeTaskHandler = fake_run_once_handler.New()
 		ready = make(chan bool, 1)
 
 		storeAdapter = etcdRunner.Adapter()
@@ -50,7 +50,7 @@ var _ = Describe("Executor", func() {
 			startingDisk,
 		)
 
-		runOnce = &models.RunOnce{
+		runOnce = &models.Task{
 			Guid:     "totally-unique",
 			MemoryMB: 256,
 			DiskMB:   1024,
@@ -79,7 +79,7 @@ var _ = Describe("Executor", func() {
 
 	Describe("Handling", func() {
 		BeforeEach(func() {
-			go executor.Handle(fakeRunOnceHandler, ready)
+			go executor.Handle(fakeTaskHandler, ready)
 			<-ready
 		})
 
@@ -96,13 +96,13 @@ var _ = Describe("Executor", func() {
 				// give the etcd driver a chance to connect
 				time.Sleep(200 * time.Millisecond)
 
-				err := bbs.DesireRunOnce(runOnce)
+				err := bbs.DesireTask(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should handle any new desired RunOnces", func() {
+			It("should handle any new desired Tasks", func() {
 				Eventually(func() int {
-					return fakeRunOnceHandler.NumberOfCalls()
+					return fakeTaskHandler.NumberOfCalls()
 				}).Should(Equal(1))
 			})
 		})
@@ -112,23 +112,23 @@ var _ = Describe("Executor", func() {
 				executor.Stop()
 			})
 
-			It("does not handle any new desired RunOnces", func() {
-				err := bbs.DesireRunOnce(runOnce)
+			It("does not handle any new desired Tasks", func() {
+				err := bbs.DesireTask(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Consistently(func() int {
-					return fakeRunOnceHandler.NumberOfCalls()
+					return fakeTaskHandler.NumberOfCalls()
 				}).Should(Equal(0))
 			})
 		})
 
-		Context("when two executors are fighting for a RunOnce", func() {
+		Context("when two executors are fighting for a Task", func() {
 			var otherExecutor *Executor
 
 			BeforeEach(func() {
 				otherExecutor = New(bbs, 0, steno.NewLogger("test-logger"))
 
-				go otherExecutor.Handle(fakeRunOnceHandler, ready)
+				go otherExecutor.Handle(fakeTaskHandler, ready)
 				<-ready
 			})
 
@@ -141,21 +141,21 @@ var _ = Describe("Executor", func() {
 
 				//generate N desired run onces
 				for i := 0; i < samples; i++ {
-					runOnce := &models.RunOnce{
+					runOnce := &models.Task{
 						Guid: fmt.Sprintf("totally-unique-%d", i),
 					}
-					err := bbs.DesireRunOnce(runOnce)
+					err := bbs.DesireTask(runOnce)
 					Ω(err).ShouldNot(HaveOccurred())
 				}
 
 				//eventually the runoncehandlers should have been called N times
 				Eventually(func() int {
-					return fakeRunOnceHandler.NumberOfCalls()
+					return fakeTaskHandler.NumberOfCalls()
 				}, 5).Should(Equal(samples))
 
 				var numberHandledByFirst int
 				var numberHandledByOther int
-				for _, executorId := range fakeRunOnceHandler.HandledRunOnces() {
+				for _, executorId := range fakeTaskHandler.HandledTasks() {
 					if executor.ID() == executorId {
 						numberHandledByFirst++
 					} else if otherExecutor.ID() == executorId {
@@ -233,7 +233,7 @@ var _ = Describe("Executor", func() {
 		})
 	})
 
-	Describe("Converging RunOnces", func() {
+	Describe("Converging Tasks", func() {
 		var fakeExecutorBBS *fake_bbs.FakeExecutorBBS
 		BeforeEach(func() {
 			fakeExecutorBBS = &fake_bbs.FakeExecutorBBS{}
@@ -241,22 +241,22 @@ var _ = Describe("Executor", func() {
 		})
 
 		It("converges runOnces on a regular interval", func() {
-			go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			go executor.ConvergeTasks(10*time.Millisecond, 30*time.Second)
 
 			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically(">", 2))
 
-			Ω(fakeExecutorBBS.ConvergeTimeToClaimRunOnces()).Should(Equal(30 * time.Second))
+			Ω(fakeExecutorBBS.ConvergeTimeToClaimTasks()).Should(Equal(30 * time.Second))
 		})
 
 		It("converges immediately without waiting for the iteration", func() {
-			go executor.ConvergeRunOnces(24*time.Hour, 30*time.Second)
+			go executor.ConvergeTasks(24*time.Hour, 30*time.Second)
 
 			Eventually(fakeExecutorBBS.CallsToConverge, 1.0, 0.1).Should(BeNumerically("==", 1))
-			Ω(fakeExecutorBBS.ConvergeTimeToClaimRunOnces()).Should(Equal(30 * time.Second))
+			Ω(fakeExecutorBBS.ConvergeTimeToClaimTasks()).Should(Equal(30 * time.Second))
 		})
 
 		It("stops convergence when told", func() {
-			go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+			go executor.ConvergeTasks(10*time.Millisecond, 30*time.Second)
 
 			count := 1
 			Eventually(func() int {
@@ -281,7 +281,7 @@ var _ = Describe("Executor", func() {
 			It("should only converge if it has the lock", func() {
 				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-				go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+				go executor.ConvergeTasks(10*time.Millisecond, 30*time.Second)
 
 				Consistently(fakeExecutorBBS.CallsToConverge).Should(Equal(0))
 			})
@@ -289,7 +289,7 @@ var _ = Describe("Executor", func() {
 			It("logs an error message when GrabLock fails", func() {
 				fakeExecutorBBS.SetMaintainConvergeLockError(storeadapter.ErrorKeyExists)
 
-				go executor.ConvergeRunOnces(10*time.Millisecond, 30*time.Second)
+				go executor.ConvergeTasks(10*time.Millisecond, 30*time.Second)
 
 				testSink := steno.GetMeTheGlobalTestSink()
 

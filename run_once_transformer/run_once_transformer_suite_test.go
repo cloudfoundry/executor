@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestRunOnceTransformer(t *testing.T) {
+func TestTaskTransformer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "RunOnceTransformer Suite")
+	RunSpecs(t, "TaskTransformer Suite")
 }

@@ -75,7 +75,7 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	desireRunOnce := func(duration time.Duration) {
+	desireTask := func(duration time.Duration) {
 		exitStatus := uint32(0)
 
 		fakeContainer := fake_backend.NewFakeContainer(backend.ContainerSpec{})
@@ -86,7 +86,7 @@ var _ = Describe("Main", func() {
 
 		fakeBackend.CreateResult = fakeContainer
 
-		err := bbs.DesireRunOnce(factories.BuildRunOnceWithRunAction("the-stack", 1024, 1024, "ls"))
+		err := bbs.DesireTask(factories.BuildTaskWithRunAction("the-stack", 1024, 1024, "ls"))
 		Ω(err).ShouldNot(HaveOccurred())
 	}
 
@@ -179,7 +179,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor fails to maintain its presence", func() {
 			It("stops all running tasks", func() {
-				desireRunOnce(time.Hour)
+				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
 				// delete the executor's key (and everything else lol)
@@ -191,7 +191,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the TERM signal", func() {
 			It("stops all running tasks", func() {
-				desireRunOnce(time.Hour)
+				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
 				executorSession.Cmd.Process.Signal(syscall.SIGTERM)
@@ -207,7 +207,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the INT signal", func() {
 			It("stops all running tasks", func() {
-				desireRunOnce(time.Hour)
+				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
 				executorSession.Cmd.Process.Signal(syscall.SIGINT)
@@ -231,14 +231,14 @@ var _ = Describe("Main", func() {
 				It("stops accepting new tasks", func() {
 					sendDrainSignal()
 
-					desireRunOnce(time.Hour)
-					Consistently(bbs.GetAllPendingRunOnces, 2).Should(HaveLen(1))
+					desireTask(time.Hour)
+					Consistently(bbs.GetAllPendingTasks, 2).Should(HaveLen(1))
 				})
 
 				Context("and USR1 is received again", func() {
 					It("does not die", func() {
-						desireRunOnce(time.Hour)
-						Eventually(bbs.GetAllStartingRunOnces).Should(HaveLen(1))
+						desireTask(time.Hour)
+						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
 
 						executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
 						Ω(executorSession).Should(SayWithTimeout("executor.draining", time.Second))
@@ -250,8 +250,8 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks complete before the drain timeout", func() {
 					It("exits successfully", func() {
-						desireRunOnce(1 * time.Second)
-						Eventually(bbs.GetAllStartingRunOnces).Should(HaveLen(1))
+						desireTask(1 * time.Second)
+						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
 
 						sendDrainSignal()
 
@@ -261,8 +261,8 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks do not complete before the drain timeout", func() {
 					BeforeEach(func() {
-						desireRunOnce(time.Hour)
-						Eventually(bbs.GetAllStartingRunOnces).Should(HaveLen(1))
+						desireTask(time.Hour)
+						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
 					})
 
 					It("cancels all running tasks", func() {

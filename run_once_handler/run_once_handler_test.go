@@ -27,10 +27,10 @@ import (
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
-var _ = Describe("RunOnceHandler", func() {
+var _ = Describe("TaskHandler", func() {
 	var (
-		handler *RunOnceHandler
-		runOnce *models.RunOnce
+		handler *TaskHandler
+		runOnce *models.Task
 		cancel  chan struct{}
 
 		bbs                 *fake_bbs.FakeExecutorBBS
@@ -39,7 +39,7 @@ var _ = Describe("RunOnceHandler", func() {
 		uploader            *fake_uploader.FakeUploader
 		extractor           *fake_extractor.FakeExtractor
 		compressor          *fake_compressor.FakeCompressor
-		transformer         *run_once_transformer.RunOnceTransformer
+		transformer         *run_once_transformer.TaskTransformer
 		taskRegistry        *fake_task_registry.FakeTaskRegistry
 		containerInodeLimit int
 	)
@@ -47,7 +47,7 @@ var _ = Describe("RunOnceHandler", func() {
 	BeforeEach(func() {
 		cancel = make(chan struct{})
 
-		runOnce = &models.RunOnce{
+		runOnce = &models.Task{
 			Guid:     "run-once-guid",
 			MemoryMB: 512,
 			DiskMB:   1024,
@@ -91,7 +91,7 @@ var _ = Describe("RunOnceHandler", func() {
 		tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		transformer = run_once_transformer.NewRunOnceTransformer(
+		transformer = run_once_transformer.NewTaskTransformer(
 			logStreamerFactory,
 			downloader,
 			uploader,
@@ -114,7 +114,7 @@ var _ = Describe("RunOnceHandler", func() {
 		)
 	})
 
-	Describe("RunOnce", func() {
+	Describe("Task", func() {
 		setUpSuccessfulRuns := func() {
 			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
 
@@ -143,14 +143,14 @@ var _ = Describe("RunOnceHandler", func() {
 			BeforeEach(setUpSuccessfulRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes", func() {
-				originalRunOnce := runOnce
-				handler.RunOnce(runOnce, "fake-executor-id", cancel)
+				originalTask := runOnce
+				handler.Task(runOnce, "fake-executor-id", cancel)
 
 				// register
-				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
+				Ω(taskRegistry.RegisteredTasks).Should(ContainElement(originalTask))
 
 				// claim
-				claimed := bbs.ClaimedRunOnces()
+				claimed := bbs.ClaimedTasks()
 				Ω(claimed).ShouldNot(BeEmpty())
 				Ω(claimed[0].Guid).Should(Equal("run-once-guid"))
 				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -173,7 +173,7 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
 				// start
-				started := bbs.StartedRunOnces()
+				started := bbs.StartedTasks()
 				Ω(started).ShouldNot(BeEmpty())
 				Ω(started[0].Guid).Should(Equal("run-once-guid"))
 				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -198,7 +198,7 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(uploader.UploadUrls[0].String()).Should(Equal("http://upload-dst.com"))
 
 				// complete
-				completed := bbs.CompletedRunOnces()
+				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Guid).Should(Equal("run-once-guid"))
 				Ω(completed[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -212,14 +212,14 @@ var _ = Describe("RunOnceHandler", func() {
 			BeforeEach(setUpFailedRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes (failure)", func() {
-				originalRunOnce := runOnce
-				handler.RunOnce(runOnce, "fake-executor-id", cancel)
+				originalTask := runOnce
+				handler.Task(runOnce, "fake-executor-id", cancel)
 
 				// register
-				Ω(taskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
+				Ω(taskRegistry.RegisteredTasks).Should(ContainElement(originalTask))
 
 				// claim
-				claimed := bbs.ClaimedRunOnces()
+				claimed := bbs.ClaimedTasks()
 				Ω(claimed).ShouldNot(BeEmpty())
 				Ω(claimed[0].Guid).Should(Equal("run-once-guid"))
 				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -236,7 +236,7 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 
 				// start
-				started := bbs.StartedRunOnces()
+				started := bbs.StartedTasks()
 				Ω(started).ShouldNot(BeEmpty())
 				Ω(started[0].Guid).Should(Equal("run-once-guid"))
 				Ω(started[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -260,7 +260,7 @@ var _ = Describe("RunOnceHandler", func() {
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
 				// complete
-				completed := bbs.CompletedRunOnces()
+				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Guid).Should(Equal("run-once-guid"))
 				Ω(completed[0].ExecutorID).Should(Equal("fake-executor-id"))
@@ -288,7 +288,7 @@ var _ = Describe("RunOnceHandler", func() {
 				done := make(chan struct{})
 
 				go func() {
-					handler.RunOnce(runOnce, "fake-executor-id", cancel)
+					handler.Task(runOnce, "fake-executor-id", cancel)
 					done <- struct{}{}
 				}()
 
@@ -302,7 +302,7 @@ var _ = Describe("RunOnceHandler", func() {
 
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
-				completed := bbs.CompletedRunOnces()
+				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Failed).Should(BeTrue())
 				Ω(completed[0].FailureReason).Should(ContainSubstring("cancelled"))

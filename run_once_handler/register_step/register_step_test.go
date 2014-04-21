@@ -17,13 +17,13 @@ import (
 var _ = Describe("RegisterStep", func() {
 	var step sequence.Step
 
-	var runOnce *models.RunOnce
+	var runOnce *models.Task
 	var fakeTaskRegistry *fake_task_registry.FakeTaskRegistry
 
 	BeforeEach(func() {
 		fakeTaskRegistry = fake_task_registry.New()
 
-		runOnce = &models.RunOnce{
+		runOnce = &models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -43,20 +43,20 @@ var _ = Describe("RegisterStep", func() {
 	})
 
 	Describe("Perform", func() {
-		It("registers the RunOnce", func() {
-			originalRunOnce := runOnce
+		It("registers the Task", func() {
+			originalTask := runOnce
 
 			err := step.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(fakeTaskRegistry.RegisteredRunOnces).Should(ContainElement(originalRunOnce))
+			Ω(fakeTaskRegistry.RegisteredTasks).Should(ContainElement(originalTask))
 		})
 
 		Context("when registering fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				fakeTaskRegistry.AddRunOnceErr = disaster
+				fakeTaskRegistry.AddTaskErr = disaster
 			})
 
 			It("sends back the error", func() {
@@ -67,12 +67,12 @@ var _ = Describe("RegisterStep", func() {
 	})
 
 	Describe("Cleanup", func() {
-		It("unregisters the RunOnce", func() {
-			originalRunOnce := runOnce
+		It("unregisters the Task", func() {
+			originalTask := runOnce
 
 			step.Cleanup()
 
-			Ω(fakeTaskRegistry.UnregisteredRunOnces).Should(ContainElement(originalRunOnce))
+			Ω(fakeTaskRegistry.UnregisteredTasks).Should(ContainElement(originalTask))
 		})
 	})
 })

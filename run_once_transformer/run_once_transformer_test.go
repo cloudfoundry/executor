@@ -26,7 +26,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
-var _ = Describe("RunOnceTransformer", func() {
+var _ = Describe("TaskTransformer", func() {
 	var (
 		downloader         downloader.Downloader
 		logger             *steno.Logger
@@ -35,7 +35,7 @@ var _ = Describe("RunOnceTransformer", func() {
 		extractor          extractor.Extractor
 		compressor         compressor.Compressor
 		wardenClient       *fake_gordon.FakeGordon
-		runOnceTransformer *RunOnceTransformer
+		runOnceTransformer *TaskTransformer
 		handle             string
 		result             string
 	)
@@ -53,7 +53,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			return logStreamer
 		}
 
-		runOnceTransformer = NewRunOnceTransformer(
+		runOnceTransformer = NewTaskTransformer(
 			logStreamerFactory,
 			downloader,
 			uploader,
@@ -78,7 +78,7 @@ var _ = Describe("RunOnceTransformer", func() {
 			FailureMessage: "failuring",
 		}
 
-		runOnce := models.RunOnce{
+		runOnce := models.Task{
 			Guid: "some-guid",
 			Actions: []models.ExecutorAction{
 				{runActionModel},

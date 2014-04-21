@@ -18,14 +18,14 @@ import (
 var _ = Describe("CreateContainerStep", func() {
 	var step sequence.Step
 
-	var runOnce models.RunOnce
+	var runOnce models.Task
 	var gordon *fake_gordon.FakeGordon
 	var containerHandle string
 
 	BeforeEach(func() {
 		gordon = fake_gordon.New()
 
-		runOnce = models.RunOnce{
+		runOnce = models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -51,7 +51,7 @@ var _ = Describe("CreateContainerStep", func() {
 	Describe("Perform", func() {
 		disaster := errors.New("oh no!")
 
-		It("creates a container and updates the RunOnce's ContainerHandle", func() {
+		It("creates a container and updates the Task's ContainerHandle", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 

@@ -8,7 +8,7 @@ import (
 )
 
 type ExecuteStep struct {
-	runOnce *models.RunOnce
+	runOnce *models.Task
 	logger  *steno.Logger
 	subStep sequence.Step
 	bbs     Bbs.ExecutorBBS
@@ -16,7 +16,7 @@ type ExecuteStep struct {
 }
 
 func New(
-	runOnce *models.RunOnce,
+	runOnce *models.Task,
 	logger *steno.Logger,
 	subStep sequence.Step,
 	bbs Bbs.ExecutorBBS,
@@ -50,7 +50,7 @@ func (step ExecuteStep) Perform() error {
 }
 
 func (step ExecuteStep) complete(failed bool, failureReason string) error {
-	err := step.bbs.CompleteRunOnce(step.runOnce, failed, failureReason, *step.result)
+	err := step.bbs.CompleteTask(step.runOnce, failed, failureReason, *step.result)
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{

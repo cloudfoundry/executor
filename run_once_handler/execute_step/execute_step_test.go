@@ -20,7 +20,7 @@ var _ = Describe("ExecuteStep", func() {
 		step   sequence.Step
 		result chan error
 
-		runOnce       *models.RunOnce
+		runOnce       *models.Task
 		subStep       sequence.Step
 		bbs           *fake_bbs.FakeExecutorBBS
 		runOnceResult *string
@@ -33,7 +33,7 @@ var _ = Describe("ExecuteStep", func() {
 
 		bbs = fake_bbs.NewFakeExecutorBBS()
 
-		runOnce = &models.RunOnce{
+		runOnce = &models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -73,11 +73,11 @@ var _ = Describe("ExecuteStep", func() {
 				}
 			})
 
-			It("completes the RunOnce in the BBS with Failed false and an empty reason", func() {
+			It("completes the Task in the BBS with Failed false and an empty reason", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				completed := bbs.CompletedRunOnces()
+				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
 				Ω(completed[0].Result).Should(Equal(*runOnceResult))
@@ -89,7 +89,7 @@ var _ = Describe("ExecuteStep", func() {
 				disaster := errors.New("oh no!")
 
 				BeforeEach(func() {
-					bbs.SetCompleteRunOnceErr(disaster)
+					bbs.SetCompleteTaskErr(disaster)
 				})
 
 				It("returns the error", func() {
@@ -110,11 +110,11 @@ var _ = Describe("ExecuteStep", func() {
 				}
 			})
 
-			It("completes the RunOnce in the BBS with Failed true and a FailureReason", func() {
+			It("completes the Task in the BBS with Failed true and a FailureReason", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				completed := bbs.CompletedRunOnces()
+				completed := bbs.CompletedTasks()
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Guid).Should(Equal(runOnce.Guid))
 				Ω(completed[0].Result).Should(Equal(*runOnceResult))
@@ -126,7 +126,7 @@ var _ = Describe("ExecuteStep", func() {
 				disaster := errors.New("oh no!")
 
 				BeforeEach(func() {
-					bbs.SetCompleteRunOnceErr(disaster)
+					bbs.SetCompleteTaskErr(disaster)
 				})
 
 				It("returns the error", func() {
@@ -164,15 +164,15 @@ var _ = Describe("ExecuteStep", func() {
 			Eventually(cancelled).Should(Receive())
 		})
 
-		It("completes the RunOnce with Failed true and a FailureReason", func() {
+		It("completes the Task with Failed true and a FailureReason", func() {
 			go step.Perform()
 
 			step.Cancel()
 			Eventually(cancelled).Should(Receive())
 
-			Eventually(bbs.CompletedRunOnces).ShouldNot(BeEmpty())
+			Eventually(bbs.CompletedTasks).ShouldNot(BeEmpty())
 
-			completed := bbs.CompletedRunOnces()[0]
+			completed := bbs.CompletedTasks()[0]
 			Ω(completed.Failed).Should(BeTrue())
 			Ω(completed.FailureReason).Should(ContainSubstring("cancelled"))
 		})

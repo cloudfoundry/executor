@@ -22,7 +22,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 )
 
-type RunOnceTransformer struct {
+type TaskTransformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
 	downloader         downloader.Downloader
 	uploader           uploader.Uploader
@@ -34,7 +34,7 @@ type RunOnceTransformer struct {
 	result             *string
 }
 
-func NewRunOnceTransformer(
+func NewTaskTransformer(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	downloader downloader.Downloader,
 	uploader uploader.Uploader,
@@ -43,8 +43,8 @@ func NewRunOnceTransformer(
 	wardenClient gordon.Client,
 	logger *steno.Logger,
 	tempDir string,
-) *RunOnceTransformer {
-	return &RunOnceTransformer{
+) *TaskTransformer {
+	return &TaskTransformer{
 		logStreamerFactory: logStreamerFactory,
 		downloader:         downloader,
 		uploader:           uploader,
@@ -56,8 +56,8 @@ func NewRunOnceTransformer(
 	}
 }
 
-func (transformer *RunOnceTransformer) StepsFor(
-	runOnce *models.RunOnce,
+func (transformer *TaskTransformer) StepsFor(
+	runOnce *models.Task,
 	containerHandle string,
 	result *string,
 ) []sequence.Step {
@@ -71,8 +71,8 @@ func (transformer *RunOnceTransformer) StepsFor(
 	return subSteps
 }
 
-func (transformer *RunOnceTransformer) convertAction(
-	runOnce *models.RunOnce,
+func (transformer *TaskTransformer) convertAction(
+	runOnce *models.Task,
 	action models.ExecutorAction,
 	containerHandle string,
 	result *string,

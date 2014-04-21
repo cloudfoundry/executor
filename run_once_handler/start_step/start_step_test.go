@@ -17,12 +17,12 @@ import (
 var _ = Describe("StartStep", func() {
 	var step sequence.Step
 
-	var runOnce models.RunOnce
+	var runOnce models.Task
 	var bbs *fake_bbs.FakeExecutorBBS
 	var containerHandle string
 
 	BeforeEach(func() {
-		runOnce = models.RunOnce{
+		runOnce = models.Task{
 			Guid:  "totally-unique",
 			Stack: "penguin",
 			Actions: []models.ExecutorAction{
@@ -48,21 +48,21 @@ var _ = Describe("StartStep", func() {
 	})
 
 	Describe("Perform", func() {
-		It("starts the RunOnce in the BBS", func() {
+		It("starts the Task in the BBS", func() {
 			err := step.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			started := bbs.StartedRunOnces()
+			started := bbs.StartedTasks()
 			Ω(started).ShouldNot(BeEmpty())
 			Ω(started[0].Guid).Should(Equal(runOnce.Guid))
 			Ω(started[0].ContainerHandle).Should(Equal(containerHandle))
 		})
 
-		Context("when starting the RunOnce in the BBS fails", func() {
+		Context("when starting the Task in the BBS fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				bbs.SetStartRunOnceErr(disaster)
+				bbs.SetStartTaskErr(disaster)
 			})
 
 			It("sends back the error", func() {

@@ -10,10 +10,10 @@ import (
 
 var _ = Describe("TaskRegistry", func() {
 	var taskRegistry *TaskRegistry
-	var runOnce *models.RunOnce
+	var runOnce *models.Task
 
 	BeforeEach(func() {
-		runOnce = &models.RunOnce{
+		runOnce = &models.Task{
 			MemoryMB: 255,
 			DiskMB:   1023,
 			Guid:     "a guid",
@@ -23,14 +23,14 @@ var _ = Describe("TaskRegistry", func() {
 		taskRegistry = NewTaskRegistry("some-stack", 256, 1024)
 	})
 
-	Describe("AddRunOnce", func() {
+	Describe("AddTask", func() {
 		It("adds something to the registry when there are enough resources", func() {
-			err := taskRegistry.AddRunOnce(runOnce)
+			err := taskRegistry.AddTask(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(taskRegistry.RunOnces[runOnce.Guid]).To(Equal(runOnce))
+			Ω(taskRegistry.Tasks[runOnce.Guid]).To(Equal(runOnce))
 		})
 
-		Context("when the RunOnce's stack is incompatible", func() {
+		Context("when the Task's stack is incompatible", func() {
 			BeforeEach(func() {
 				runOnceWithInvalidStack := runOnce
 				runOnceWithInvalidStack.Stack = "invalid"
@@ -38,8 +38,8 @@ var _ = Describe("TaskRegistry", func() {
 				runOnce = runOnceWithInvalidStack
 			})
 
-			It("rejects the RunOnce", func() {
-				err := taskRegistry.AddRunOnce(runOnce)
+			It("rejects the Task", func() {
+				err := taskRegistry.AddTask(runOnce)
 				Ω(err).Should(Equal(IncompatibleStackError{"some-stack", "invalid"}))
 			})
 		})
@@ -52,51 +52,51 @@ var _ = Describe("TaskRegistry", func() {
 				runOnce = runOnceWithNoStack
 			})
 
-			It("rejects the RunOnce", func() {
-				err := taskRegistry.AddRunOnce(runOnce)
+			It("rejects the Task", func() {
+				err := taskRegistry.AddTask(runOnce)
 				Ω(err).Should(Equal(ErrorNoStackDefined))
 			})
 		})
 
 		Context("when there aren't enough resources", func() {
 			BeforeEach(func() {
-				err := taskRegistry.AddRunOnce(runOnce)
+				err := taskRegistry.AddTask(runOnce)
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(taskRegistry.RunOnces).To(HaveLen(1))
+				Ω(taskRegistry.Tasks).To(HaveLen(1))
 			})
 
 			Context("for the task's memory", func() {
 				It("returns an error", func() {
-					err := taskRegistry.AddRunOnce(&models.RunOnce{
+					err := taskRegistry.AddTask(&models.Task{
 						MemoryMB: 2,
 					})
 					Ω(err).Should(HaveOccurred())
-					Ω(taskRegistry.RunOnces).To(HaveLen(1))
+					Ω(taskRegistry.Tasks).To(HaveLen(1))
 				})
 			})
 
 			Context("for the task's disk", func() {
 				It("returns an error", func() {
-					err := taskRegistry.AddRunOnce(&models.RunOnce{
+					err := taskRegistry.AddTask(&models.Task{
 						DiskMB: 2,
 					})
 					Ω(err).Should(HaveOccurred())
-					Ω(taskRegistry.RunOnces).To(HaveLen(1))
+					Ω(taskRegistry.Tasks).To(HaveLen(1))
 				})
 			})
 		})
 	})
 
-	Describe("RemoveRunOnce", func() {
+	Describe("RemoveTask", func() {
 		BeforeEach(func() {
-			err := taskRegistry.AddRunOnce(runOnce)
+			err := taskRegistry.AddTask(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("reclaims the disk and memory from the RunOnce", func() {
-			taskRegistry.RemoveRunOnce(runOnce)
+		It("reclaims the disk and memory from the Task", func() {
+			taskRegistry.RemoveTask(runOnce)
 
-			err := taskRegistry.AddRunOnce(runOnce)
+			err := taskRegistry.AddTask(runOnce)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})

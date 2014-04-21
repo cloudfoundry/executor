@@ -7,7 +7,7 @@ import (
 )
 
 type ContainerStep struct {
-	runOnce             *models.RunOnce
+	runOnce             *models.Task
 	logger              *steno.Logger
 	wardenClient        gordon.Client
 	containerInodeLimit int
@@ -15,7 +15,7 @@ type ContainerStep struct {
 }
 
 func New(
-	runOnce *models.RunOnce,
+	runOnce *models.Task,
 	logger *steno.Logger,
 	wardenClient gordon.Client,
 	containerInodeLimit int,

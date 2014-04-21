@@ -8,13 +8,13 @@ import (
 )
 
 type RegisterStep struct {
-	runOnce      *models.RunOnce
+	runOnce      *models.Task
 	logger       *steno.Logger
 	taskRegistry task_registry.TaskRegistryInterface
 }
 
 func New(
-	runOnce *models.RunOnce,
+	runOnce *models.Task,
 	logger *steno.Logger,
 	taskRegistry task_registry.TaskRegistryInterface,
 ) *RegisterStep {
@@ -26,7 +26,7 @@ func New(
 }
 
 func (step RegisterStep) Perform() error {
-	err := step.taskRegistry.AddRunOnce(step.runOnce)
+	err := step.taskRegistry.AddTask(step.runOnce)
 	if err != nil {
 		step.logger.Infod(
 			map[string]interface{}{
@@ -44,5 +44,5 @@ func (step RegisterStep) Perform() error {
 func (step RegisterStep) Cancel() {}
 
 func (step RegisterStep) Cleanup() {
-	step.taskRegistry.RemoveRunOnce(step.runOnce)
+	step.taskRegistry.RemoveTask(step.runOnce)
 }

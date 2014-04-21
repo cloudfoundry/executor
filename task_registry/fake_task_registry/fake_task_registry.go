@@ -5,25 +5,25 @@ import (
 )
 
 type FakeTaskRegistry struct {
-	RegisteredRunOnces   []*models.RunOnce
-	UnregisteredRunOnces []*models.RunOnce
-	AddRunOnceErr        error
+	RegisteredTasks   []*models.Task
+	UnregisteredTasks []*models.Task
+	AddTaskErr        error
 }
 
 func New() *FakeTaskRegistry {
 	return &FakeTaskRegistry{}
 }
 
-func (fakeRegistry *FakeTaskRegistry) AddRunOnce(runOnce *models.RunOnce) error {
-	if fakeRegistry.AddRunOnceErr == nil {
-		fakeRegistry.RegisteredRunOnces = append(fakeRegistry.RegisteredRunOnces, runOnce)
+func (fakeRegistry *FakeTaskRegistry) AddTask(runOnce *models.Task) error {
+	if fakeRegistry.AddTaskErr == nil {
+		fakeRegistry.RegisteredTasks = append(fakeRegistry.RegisteredTasks, runOnce)
 	}
 
-	return fakeRegistry.AddRunOnceErr
+	return fakeRegistry.AddTaskErr
 }
 
-func (fakeRegistry *FakeTaskRegistry) RemoveRunOnce(runOnce *models.RunOnce) {
-	fakeRegistry.UnregisteredRunOnces = append(fakeRegistry.UnregisteredRunOnces, runOnce)
+func (fakeRegistry *FakeTaskRegistry) RemoveTask(runOnce *models.Task) {
+	fakeRegistry.UnregisteredTasks = append(fakeRegistry.UnregisteredTasks, runOnce)
 }
 
 func (fakeRegistry *FakeTaskRegistry) WriteToDisk() error { return nil }

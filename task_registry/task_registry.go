@@ -8,17 +8,17 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
-var ErrorNoStackDefined = errors.New("no stack was defined for RunOnce")
+var ErrorNoStackDefined = errors.New("no stack was defined for Task")
 
 type TaskRegistryInterface interface {
-	AddRunOnce(runOnce *models.RunOnce) error
-	RemoveRunOnce(runOnce *models.RunOnce)
+	AddTask(runOnce *models.Task) error
+	RemoveTask(runOnce *models.Task)
 }
 
 type TaskRegistry struct {
 	ExecutorMemoryMB int
 	ExecutorDiskMB   int
-	RunOnces         map[string]*models.RunOnce
+	Tasks         map[string]*models.Task
 	lock             *sync.Mutex
 
 	stack string
@@ -41,7 +41,7 @@ func NewTaskRegistry(stack string, memoryMB int, diskMB int) *TaskRegistry {
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
-		RunOnces:         make(map[string]*models.RunOnce),
+		Tasks:         make(map[string]*models.Task),
 
 		lock: &sync.Mutex{},
 
@@ -49,11 +49,11 @@ func NewTaskRegistry(stack string, memoryMB int, diskMB int) *TaskRegistry {
 	}
 }
 
-func (registry *TaskRegistry) AddRunOnce(runOnce *models.RunOnce) error {
+func (registry *TaskRegistry) AddTask(runOnce *models.Task) error {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	if !registry.hasCapacityForRunOnce(runOnce) {
+	if !registry.hasCapacityForTask(runOnce) {
 		return fmt.Errorf("insufficient resources to claim run once: Desired %d (memory) %d (disk).  Have %d (memory) %d (disk).", runOnce.MemoryMB, runOnce.DiskMB, registry.availableMemoryMB(), registry.availableDiskMB())
 	}
 
@@ -65,19 +65,19 @@ func (registry *TaskRegistry) AddRunOnce(runOnce *models.RunOnce) error {
 		return IncompatibleStackError{registry.stack, runOnce.Stack}
 	}
 
-	registry.RunOnces[runOnce.Guid] = runOnce
+	registry.Tasks[runOnce.Guid] = runOnce
 
 	return nil
 }
 
-func (registry *TaskRegistry) RemoveRunOnce(runOnce *models.RunOnce) {
+func (registry *TaskRegistry) RemoveTask(runOnce *models.Task) {
 	registry.lock.Lock()
 	defer registry.lock.Unlock()
 
-	delete(registry.RunOnces, runOnce.Guid)
+	delete(registry.Tasks, runOnce.Guid)
 }
 
-func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce *models.RunOnce) bool {
+func (registry *TaskRegistry) hasCapacityForTask(runOnce *models.Task) bool {
 	if runOnce.MemoryMB > registry.availableMemoryMB() {
 		return false
 	}
@@ -91,7 +91,7 @@ func (registry *TaskRegistry) hasCapacityForRunOnce(runOnce *models.RunOnce) boo
 
 func (registry *TaskRegistry) availableMemoryMB() int {
 	usedMemory := 0
-	for _, r := range registry.RunOnces {
+	for _, r := range registry.Tasks {
 		usedMemory = usedMemory + r.MemoryMB
 	}
 	return registry.ExecutorMemoryMB - usedMemory
@@ -99,7 +99,7 @@ func (registry *TaskRegistry) availableMemoryMB() int {
 
 func (registry *TaskRegistry) availableDiskMB() int {
 	usedDisk := 0
-	for _, r := range registry.RunOnces {
+	for _, r := range registry.Tasks {
 		usedDisk = usedDisk + r.DiskMB
 	}
 	return registry.ExecutorDiskMB - usedDisk
