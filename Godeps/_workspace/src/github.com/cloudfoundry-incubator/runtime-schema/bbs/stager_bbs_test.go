@@ -57,8 +57,8 @@ var _ = Describe("Stager BBS", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("creates /run_once/<guid>", func() {
-				node, err := store.Get("/v1/run_once/some-guid")
+			It("creates /task/<guid>", func() {
+				node, err := store.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node.Value).Should(Equal(task.ToJSON()))
 			})
@@ -70,7 +70,7 @@ var _ = Describe("Stager BBS", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("creates /run_once/<guid> and sets set the CreatedAt time to now", func() {
+			It("creates /task/<guid> and sets set the CreatedAt time to now", func() {
 				tasks, err := bbs.GetAllPendingTasks()
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -131,13 +131,13 @@ var _ = Describe("Stager BBS", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("swaps /run_once/<guid>'s state to resolving", func() {
+		It("swaps /task/<guid>'s state to resolving", func() {
 			err := bbs.ResolvingTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(task.State).Should(Equal(models.TaskStateResolving))
 
-			node, err := store.Get("/v1/run_once/some-guid")
+			node, err := store.Get("/v1/task/some-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node.Value).Should(Equal(task.ToJSON()))
 		})
@@ -163,7 +163,7 @@ var _ = Describe("Stager BBS", func() {
 
 				Ω(task.State).Should(Equal(models.TaskStateResolving))
 
-				node, err := store.Get("/v1/run_once/some-guid")
+				node, err := store.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node.Value).Should(Equal(task.ToJSON()))
 			})
@@ -188,11 +188,11 @@ var _ = Describe("Stager BBS", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("should remove /run_once/<guid>", func() {
+		It("should remove /task/<guid>", func() {
 			err := bbs.ResolveTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, err = store.Get("/v1/run_once/some-guid")
+			_, err = store.Get("/v1/task/some-guid")
 			Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
 		})
 

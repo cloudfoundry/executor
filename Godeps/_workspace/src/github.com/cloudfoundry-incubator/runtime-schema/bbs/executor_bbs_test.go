@@ -65,11 +65,11 @@ var _ = Describe("Executor BBS", func() {
 				Ω(task.State).Should(Equal(models.TaskStateClaimed))
 				Ω(task.ExecutorID).Should(Equal("executor-ID"))
 
-				node, err := store.Get("/v1/run_once/some-guid")
+				node, err := store.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(node).Should(Equal(storeadapter.StoreNode{
-					Key:   "/v1/run_once/some-guid",
+					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
 			})
@@ -113,10 +113,10 @@ var _ = Describe("Executor BBS", func() {
 				Ω(task.State).Should(Equal(models.TaskStateRunning))
 				Ω(task.ContainerHandle).Should(Equal("container-handle"))
 
-				node, err := store.Get("/v1/run_once/some-guid")
+				node, err := store.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node).Should(Equal(storeadapter.StoreNode{
-					Key:   "/v1/run_once/some-guid",
+					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
 			})
@@ -165,10 +165,10 @@ var _ = Describe("Executor BBS", func() {
 				Ω(task.Failed).Should(BeTrue())
 				Ω(task.FailureReason).Should(Equal("because i said so"))
 
-				node, err := store.Get("/v1/run_once/some-guid")
+				node, err := store.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node).Should(Equal(storeadapter.StoreNode{
-					Key:   "/v1/run_once/some-guid",
+					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
 			})

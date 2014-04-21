@@ -9,7 +9,7 @@ import (
 
 const ClaimTTL = 10 * time.Second
 const ResolvingTTL = 5 * time.Second
-const TaskSchemaRoot = SchemaRoot + "run_once"
+const TaskSchemaRoot = SchemaRoot + "task"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 const LockSchemaRoot = SchemaRoot + "locks"
 
