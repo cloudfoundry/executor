@@ -19,8 +19,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	"github.com/cloudfoundry-incubator/executor/task_handler"
+	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -194,7 +194,7 @@ func main() {
 		*loggregatorSecret,
 	)
 
-	transformer := run_once_transformer.NewTaskTransformer(
+	transformer := task_transformer.NewTaskTransformer(
 		logStreamerFactory,
 		downloader,
 		uploader,
@@ -205,7 +205,7 @@ func main() {
 		*tempDir,
 	)
 
-	taskHandler := run_once_handler.New(
+	taskHandler := task_handler.New(
 		bbs,
 		wardenClient,
 		*containerOwnerName,

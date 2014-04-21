@@ -11,7 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
-	. "github.com/cloudfoundry-incubator/executor/run_once_handler/claim_step"
+	. "github.com/cloudfoundry-incubator/executor/task_handler/claim_step"
 )
 
 var _ = Describe("ClaimStep", func() {

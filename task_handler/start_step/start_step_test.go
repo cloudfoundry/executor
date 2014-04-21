@@ -8,7 +8,7 @@ import (
 
 	steno "github.com/cloudfoundry/gosteno"
 
-	. "github.com/cloudfoundry-incubator/executor/run_once_handler/start_step"
+	. "github.com/cloudfoundry-incubator/executor/task_handler/start_step"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"

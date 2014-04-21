@@ -1,4 +1,4 @@
-package run_once_handler
+package task_handler
 
 import (
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -8,13 +8,13 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/claim_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/create_container_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/execute_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/limit_container_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/register_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/start_step"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	"github.com/cloudfoundry-incubator/executor/task_handler/claim_step"
+	"github.com/cloudfoundry-incubator/executor/task_handler/create_container_step"
+	"github.com/cloudfoundry-incubator/executor/task_handler/execute_step"
+	"github.com/cloudfoundry-incubator/executor/task_handler/limit_container_step"
+	"github.com/cloudfoundry-incubator/executor/task_handler/register_step"
+	"github.com/cloudfoundry-incubator/executor/task_handler/start_step"
+	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/lazy_sequence"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
@@ -28,7 +28,7 @@ type TaskHandler struct {
 	bbs                 Bbs.ExecutorBBS
 	wardenClient        gordon.Client
 	containerOwnerName  string
-	transformer         *run_once_transformer.TaskTransformer
+	transformer         *task_transformer.TaskTransformer
 	logStreamerFactory  log_streamer_factory.LogStreamerFactory
 	logger              *steno.Logger
 	taskRegistry        task_registry.TaskRegistryInterface
@@ -40,7 +40,7 @@ func New(
 	wardenClient gordon.Client,
 	containerOwnerName string,
 	taskRegistry task_registry.TaskRegistryInterface,
-	transformer *run_once_transformer.TaskTransformer,
+	transformer *task_transformer.TaskTransformer,
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	logger *steno.Logger,
 	containerInodeLimit int,

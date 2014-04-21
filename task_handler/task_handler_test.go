@@ -1,4 +1,4 @@
-package run_once_handler_test
+package task_handler_test
 
 import (
 	"errors"
@@ -18,8 +18,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/run_once_handler"
-	"github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	. "github.com/cloudfoundry-incubator/executor/task_handler"
+	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
@@ -39,7 +39,7 @@ var _ = Describe("TaskHandler", func() {
 		uploader            *fake_uploader.FakeUploader
 		extractor           *fake_extractor.FakeExtractor
 		compressor          *fake_compressor.FakeCompressor
-		transformer         *run_once_transformer.TaskTransformer
+		transformer         *task_transformer.TaskTransformer
 		taskRegistry        *fake_task_registry.FakeTaskRegistry
 		containerInodeLimit int
 	)
@@ -91,7 +91,7 @@ var _ = Describe("TaskHandler", func() {
 		tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		transformer = run_once_transformer.NewTaskTransformer(
+		transformer = task_transformer.NewTaskTransformer(
 			logStreamerFactory,
 			downloader,
 			uploader,

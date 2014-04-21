@@ -11,7 +11,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 
-	. "github.com/cloudfoundry-incubator/executor/run_once_handler/limit_container_step"
+	. "github.com/cloudfoundry-incubator/executor/task_handler/limit_container_step"
 )
 
 var _ = Describe("LimitContainerStep", func() {

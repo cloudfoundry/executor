@@ -1,11 +1,11 @@
-package run_once_transformer_test
+package task_transformer_test
 
 import (
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/run_once_transformer"
+	. "github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"

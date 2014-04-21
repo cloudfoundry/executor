@@ -10,7 +10,7 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/nu7hatch/gouuid"
 
-	"github.com/cloudfoundry-incubator/executor/run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/task_handler"
 )
 
 type Executor struct {
@@ -106,7 +106,7 @@ func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<
 	}
 }
 
-func (e *Executor) Handle(taskHandler run_once_handler.TaskHandlerInterface, ready chan<- bool) {
+func (e *Executor) Handle(taskHandler task_handler.TaskHandlerInterface, ready chan<- bool) {
 	cancel := make(chan struct{})
 
 	e.logger.Info("executor.watching-for-desired-task")

@@ -1,4 +1,4 @@
-package run_once_handler_test
+package task_transformer_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestRunoncehandler(t *testing.T) {
+func TestTaskTransformer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Runoncehandler Suite")
+	RunSpecs(t, "TaskTransformer Suite")
 }

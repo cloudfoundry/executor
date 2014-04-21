@@ -1,4 +1,4 @@
-package fake_run_once_handler
+package fake_task_handler
 
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"

@@ -10,7 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
-	. "github.com/cloudfoundry-incubator/executor/run_once_handler/register_step"
+	. "github.com/cloudfoundry-incubator/executor/task_handler/register_step"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 )
 

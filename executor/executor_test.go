@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/run_once_handler/fake_run_once_handler"
+	"github.com/cloudfoundry-incubator/executor/task_handler/fake_task_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -32,10 +32,10 @@ var _ = Describe("Executor", func() {
 		storeAdapter   storeadapter.StoreAdapter
 	)
 
-	var fakeTaskHandler *fake_run_once_handler.FakeTaskHandler
+	var fakeTaskHandler *fake_task_handler.FakeTaskHandler
 
 	BeforeEach(func() {
-		fakeTaskHandler = fake_run_once_handler.New()
+		fakeTaskHandler = fake_task_handler.New()
 		ready = make(chan bool, 1)
 
 		storeAdapter = etcdRunner.Adapter()
