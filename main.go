@@ -107,8 +107,8 @@ var loggregatorSecret = flag.String(
 
 var stack = flag.String(
 	"stack",
-	"default",
-	"the executor stack",
+	"",
+	"the executor stack - must be specified",
 )
 
 var timeToClaimTask = flag.Duration(
@@ -137,6 +137,10 @@ var containerMaxCpuShares = flag.Int(
 
 func main() {
 	flag.Parse()
+
+	if *stack == "" {
+		log.Fatalf("A stack must be specified")
+	}
 
 	l, err := steno.GetLogLevel(*logLevel)
 	if err != nil {

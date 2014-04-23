@@ -45,7 +45,7 @@ var defaultConfig = Config{
 	DiskMB:                1024,
 	ConvergenceInterval:   30 * time.Second,
 	HeartbeatInterval:     60 * time.Second,
-	Stack:                 "default",
+	Stack:                 "lucid64",
 	TempDir:               "/tmp",
 	TimeToClaim:           30 * 60 * time.Second,
 	ContainerOwnerName:    "",
