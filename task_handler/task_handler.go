@@ -25,14 +25,15 @@ type TaskHandlerInterface interface {
 }
 
 type TaskHandler struct {
-	bbs                 Bbs.ExecutorBBS
-	wardenClient        gordon.Client
-	containerOwnerName  string
-	transformer         *task_transformer.TaskTransformer
-	logStreamerFactory  log_streamer_factory.LogStreamerFactory
-	logger              *steno.Logger
-	taskRegistry        task_registry.TaskRegistryInterface
-	containerInodeLimit int
+	bbs                   Bbs.ExecutorBBS
+	wardenClient          gordon.Client
+	containerOwnerName    string
+	transformer           *task_transformer.TaskTransformer
+	logStreamerFactory    log_streamer_factory.LogStreamerFactory
+	logger                *steno.Logger
+	taskRegistry          task_registry.TaskRegistryInterface
+	containerInodeLimit   int
+	containerMaxCpuShares int
 }
 
 func New(
@@ -44,16 +45,18 @@ func New(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
 	logger *steno.Logger,
 	containerInodeLimit int,
+	containerMaxCpuShares int,
 ) *TaskHandler {
 	return &TaskHandler{
-		bbs:                 bbs,
-		wardenClient:        wardenClient,
-		containerOwnerName:  containerOwnerName,
-		taskRegistry:        taskRegistry,
-		transformer:         transformer,
-		logStreamerFactory:  logStreamerFactory,
-		logger:              logger,
-		containerInodeLimit: containerInodeLimit,
+		bbs:                   bbs,
+		wardenClient:          wardenClient,
+		containerOwnerName:    containerOwnerName,
+		taskRegistry:          taskRegistry,
+		transformer:           transformer,
+		logStreamerFactory:    logStreamerFactory,
+		logger:                logger,
+		containerInodeLimit:   containerInodeLimit,
+		containerMaxCpuShares: containerMaxCpuShares,
 	}
 }
 
@@ -109,6 +112,7 @@ func (handler *TaskHandler) Task(task *models.Task, executorID string, cancel <-
 			handler.logger,
 			handler.wardenClient,
 			handler.containerInodeLimit,
+			handler.containerMaxCpuShares,
 			&containerHandle,
 		),
 		start_step.New(

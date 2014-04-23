@@ -129,6 +129,12 @@ var containerInodeLimit = flag.Int(
 	"max number of inodes per container",
 )
 
+var containerMaxCpuShares = flag.Int(
+	"containerMaxCpuShares",
+	0,
+	"cpu shares allocatable to a container",
+)
+
 func main() {
 	flag.Parse()
 
@@ -181,6 +187,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *containerMaxCpuShares <= 0 {
+		logger.Error("valid maximum container cpu shares must be specified on startup!")
+		os.Exit(1)
+	}
+
 	executor := executor.New(bbs, *drainTimeout, logger)
 
 	downloader := downloader.New(10*time.Minute, logger)
@@ -214,6 +225,7 @@ func main() {
 		logStreamerFactory,
 		logger,
 		*containerInodeLimit,
+		*containerMaxCpuShares,
 	)
 
 	maintaining := make(chan error, 1)

@@ -102,6 +102,7 @@ var _ = Describe("Main", func() {
 					"-stack", "the-stack",
 					"-memoryMB", "10240",
 					"-diskMB", "10240",
+					"-containerMaxCpuShares", "1024",
 					"-heartbeatInterval", "3s",
 				},
 				args...,

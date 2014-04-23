@@ -42,15 +42,17 @@ var _ = Describe("TaskHandler", func() {
 		transformer         *task_transformer.TaskTransformer
 		taskRegistry        *fake_task_registry.FakeTaskRegistry
 		containerInodeLimit int
+		maxCpuShares        int
 	)
 
 	BeforeEach(func() {
 		cancel = make(chan struct{})
 
 		task = &models.Task{
-			Guid:     "run-once-guid",
-			MemoryMB: 512,
-			DiskMB:   1024,
+			Guid:       "run-once-guid",
+			MemoryMB:   512,
+			DiskMB:     1024,
+			CpuPercent: 25,
 			Actions: []models.ExecutorAction{
 				{
 					Action: models.DownloadAction{
@@ -83,6 +85,7 @@ var _ = Describe("TaskHandler", func() {
 		logger := steno.NewLogger("test-logger")
 
 		containerInodeLimit = 200000
+		maxCpuShares = 1024
 		downloader = &fake_downloader.FakeDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
@@ -111,6 +114,7 @@ var _ = Describe("TaskHandler", func() {
 			logStreamerFactory,
 			logger,
 			containerInodeLimit,
+			maxCpuShares,
 		)
 	})
 
@@ -165,12 +169,14 @@ var _ = Describe("TaskHandler", func() {
 				properties := wardenClient.CreatedProperties(handle)
 				Ω(properties["owner"]).Should(Equal("container-owner-name"))
 
-				//limit memoru & disk
+				//limit memory, disk, and cpu
 				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
 				Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
 				Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
 				Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
 				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+				Ω(wardenClient.CPULimits()[0].Handle).Should(Equal(handle))
+				Ω(wardenClient.CPULimits()[0].Limit).Should(BeNumerically("==", float64(maxCpuShares)*0.25))
 
 				// start
 				started := bbs.StartedTasks()

@@ -2,6 +2,7 @@ package limit_container_step_test
 
 import (
 	"errors"
+
 	"github.com/cloudfoundry-incubator/executor/sequence"
 
 	. "github.com/onsi/ginkgo"
@@ -27,10 +28,11 @@ var _ = Describe("LimitContainerStep", func() {
 		handle = "some-container-handle"
 		containerInodeLimit = 200000
 		task = models.Task{
-			Guid:     "totally-unique",
-			Stack:    "penguin",
-			MemoryMB: 1024,
-			DiskMB:   512,
+			Guid:       "totally-unique",
+			Stack:      "penguin",
+			MemoryMB:   1024,
+			DiskMB:     512,
+			CpuPercent: 25,
 			Actions: []models.ExecutorAction{
 				{
 					models.RunAction{
@@ -42,11 +44,14 @@ var _ = Describe("LimitContainerStep", func() {
 			ExecutorID: "some-executor-id",
 		}
 
+		maxCpuShares := 400
+
 		step = New(
 			&task,
 			steno.NewLogger("test-logger"),
 			gordon,
 			containerInodeLimit,
+			maxCpuShares,
 			&handle,
 		)
 	})
@@ -88,6 +93,56 @@ var _ = Describe("LimitContainerStep", func() {
 		Context("when limiting disk fails", func() {
 			BeforeEach(func() {
 				gordon.SetLimitDiskError(disaster)
+				err = step.Perform()
+			})
+
+			It("sends back the error", func() {
+				Ω(err).Should(Equal(disaster))
+			})
+		})
+
+		It("limits the cpu shares for the container", func() {
+			err := step.Perform()
+			Ω(err).Should(BeNil())
+
+			Ω(gordon.CPULimits()).Should(HaveLen(1))
+			Ω(gordon.CPULimits()[0].Handle).Should(Equal(handle))
+			Ω(gordon.CPULimits()[0].Limit).Should(BeNumerically("==", 100))
+		})
+
+		It("returns an error unless the cpu percentage is between 0 and 100", func() {
+			task.CpuPercent = 101.0
+			err := step.Perform()
+			Ω(err).Should(Equal(ErrPercentOutOfBounds))
+
+			task.CpuPercent = 100.0
+			err = step.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			task.CpuPercent = 1.0
+			err = step.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			task.CpuPercent = -1.0
+			err = step.Perform()
+			Ω(err).Should(Equal(ErrPercentOutOfBounds))
+		})
+
+		Context("when no cpu percentage is specified", func() {
+			BeforeEach(func() {
+				task.CpuPercent = 0.0
+			})
+
+			It("does not limit the cpu", func() {
+				err := step.Perform()
+				Ω(err).Should(BeNil())
+				Ω(gordon.CPULimits()).Should(BeEmpty())
+			})
+		})
+
+		Context("when limiting cpu shares fails", func() {
+			BeforeEach(func() {
+				gordon.SetLimitCPUError(disaster)
 				err = step.Perform()
 			})
 
