@@ -1,27 +1,26 @@
-package main_test
+package integration_test
 
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/cloudfoundry-incubator/garden/backend"
 	"github.com/cloudfoundry-incubator/garden/backend/fake_backend"
-	"github.com/cloudfoundry/gunk/runner_support"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
-
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
+	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/vito/cmdtest"
 	. "github.com/vito/cmdtest/matchers"
+
+	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
 
 func TestExecutorMain(t *testing.T) {
@@ -33,10 +32,12 @@ var _ = Describe("Main", func() {
 	var (
 		etcdRunner *etcdstorerunner.ETCDClusterRunner
 
-		etcdCluster string
+		etcdCluster []string
 		wardenAddr  string
 
 		executorPath string
+		runner       *executor_runner.ExecutorRunner
+
 		gardenServer *GardenServer.WardenServer
 		bbs          *Bbs.BBS
 		fakeBackend  *fake_backend.FakeBackend
@@ -54,7 +55,7 @@ var _ = Describe("Main", func() {
 		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
 		etcdRunner.Start()
 
-		etcdCluster = fmt.Sprintf("http://127.0.0.1:%d", etcdPort)
+		etcdCluster = []string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)}
 
 		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
 
@@ -68,9 +69,19 @@ var _ = Describe("Main", func() {
 
 		err = gardenServer.Start()
 		Ω(err).ShouldNot(HaveOccurred())
+
+		runner = executor_runner.New(
+			executorPath,
+			"tcp",
+			wardenAddr,
+			etcdCluster,
+			"",
+			"",
+		)
 	})
 
 	AfterEach(func() {
+		runner.KillWithFire()
 		etcdRunner.Stop()
 		gardenServer.Stop()
 	})
@@ -90,65 +101,31 @@ var _ = Describe("Main", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 	}
 
-	buildAndStartExecutorSession := func(args ...string) *cmdtest.Session {
-		executorCmd := exec.Command(
-			executorPath,
-			append(
-				[]string{
-					"-wardenNetwork", "tcp",
-					"-wardenAddr", wardenAddr,
-					"-drainTimeout", "5s",
-					"-etcdCluster", etcdCluster,
-					"-stack", "the-stack",
-					"-memoryMB", "10240",
-					"-diskMB", "10240",
-					"-containerMaxCpuShares", "1024",
-					"-heartbeatInterval", "3s",
-				},
-				args...,
-			)...,
-		)
-
-		executorSession, err := cmdtest.StartWrapped(executorCmd, runner_support.TeeToGinkgoWriter, runner_support.TeeToGinkgoWriter)
-		Ω(err).ShouldNot(HaveOccurred())
-
-		return executorSession
-	}
-
-	startExecutor := func(args ...string) *cmdtest.Session {
-		executorSession := buildAndStartExecutorSession(args...)
-
-		Ω(executorSession).Should(SayWithTimeout("executor.started", 5*time.Second))
-
-		return executorSession
-	}
-
-	stopExecutor := func(executorSession *cmdtest.Session) {
-		executorSession.Cmd.Process.Kill()
-
-		_, err := executorSession.Wait(time.Second)
-		Ω(err).ShouldNot(HaveOccurred())
-	}
-
 	Describe("starting up", func() {
 		Context("when there are containers that are owned by the executor", func() {
 			var handleThatShouldDie string
 
 			BeforeEach(func() {
-				container, err := fakeBackend.Create(backend.ContainerSpec{Properties: backend.Properties{
-					"owner": "executor-name",
-				}})
+				container, err := fakeBackend.Create(backend.ContainerSpec{
+					Handle: "container-that-should-die",
+					Properties: backend.Properties{
+						"owner": "executor-name",
+					},
+				})
 				Ω(err).ShouldNot(HaveOccurred())
 
 				handleThatShouldDie = container.Handle()
 
-				_, err = fakeBackend.Create(backend.ContainerSpec{})
+				_, err = fakeBackend.Create(backend.ContainerSpec{
+					Handle: "container-that-should-live",
+				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should delete those containers (and only those containers)", func() {
-				sess := startExecutor("-containerOwnerName", "executor-name")
-				defer stopExecutor(sess)
+				runner.Start(executor_runner.Config{
+					ContainerOwnerName: "executor-name",
+				})
 
 				Ω(fakeBackend.DestroyedContainers).Should(Equal([]string{handleThatShouldDie}))
 			})
@@ -159,23 +136,23 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
-					sess := buildAndStartExecutorSession("-containerOwnerName", "executor-name")
+					runner.StartWithoutCheck(executor_runner.Config{
+						ContainerOwnerName: "executor-name",
+					})
 
-					Ω(sess).Should(ExitWithTimeout(1, 1*time.Second))
+					Ω(runner.Session).Should(ExitWithTimeout(1, 1*time.Second))
 				})
 			})
 		})
 	})
 
 	Context("when started", func() {
-		var executorSession *cmdtest.Session
-
 		BeforeEach(func() {
-			executorSession = startExecutor()
-		})
-
-		AfterEach(func() {
-			stopExecutor(executorSession)
+			runner.Start(executor_runner.Config{
+				HeartbeatInterval: 3 * time.Second,
+				Stack:             "the-stack",
+				DrainTimeout:      1 * time.Second,
+			})
 		})
 
 		Describe("when the executor fails to maintain its presence", func() {
@@ -195,14 +172,14 @@ var _ = Describe("Main", func() {
 				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
-				executorSession.Cmd.Process.Signal(syscall.SIGTERM)
+				runner.Session.Cmd.Process.Signal(syscall.SIGTERM)
 
 				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
-				executorSession.Cmd.Process.Signal(syscall.SIGTERM)
-				Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
+				runner.Session.Cmd.Process.Signal(syscall.SIGTERM)
+				Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
 			})
 		})
 
@@ -211,21 +188,21 @@ var _ = Describe("Main", func() {
 				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
-				executorSession.Cmd.Process.Signal(syscall.SIGINT)
+				runner.Session.Cmd.Process.Signal(syscall.SIGINT)
 
 				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
-				executorSession.Cmd.Process.Signal(syscall.SIGINT)
-				Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
+				runner.Session.Cmd.Process.Signal(syscall.SIGINT)
+				Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
 			})
 		})
 
 		Describe("when the executor receives the USR1 signal", func() {
 			sendDrainSignal := func() {
-				executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
-				Ω(executorSession).Should(SayWithTimeout("executor.draining", time.Second))
+				runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
+				Ω(runner.Session).Should(SayWithTimeout("executor.draining", time.Second))
 			}
 
 			Context("when there are tasks running", func() {
@@ -241,11 +218,11 @@ var _ = Describe("Main", func() {
 						desireTask(time.Hour)
 						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
 
-						executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
-						Ω(executorSession).Should(SayWithTimeout("executor.draining", time.Second))
+						runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
+						Ω(runner.Session).Should(SayWithTimeout("executor.draining", time.Second))
 
-						executorSession.Cmd.Process.Signal(syscall.SIGUSR1)
-						Ω(executorSession).Should(SayWithTimeout("executor.signal.ignored", 5*time.Second))
+						runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
+						Ω(runner.Session).Should(SayWithTimeout("executor.signal.ignored", 5*time.Second))
 					})
 				})
 
@@ -256,7 +233,7 @@ var _ = Describe("Main", func() {
 
 						sendDrainSignal()
 
-						Ω(executorSession).Should(ExitWithTimeout(0, drainTimeout-aBit))
+						Ω(runner.Session).Should(ExitWithTimeout(0, drainTimeout-aBit))
 					})
 				})
 
@@ -274,7 +251,7 @@ var _ = Describe("Main", func() {
 
 					It("exits successfully", func() {
 						sendDrainSignal()
-						Ω(executorSession).Should(ExitWithTimeout(0, 2*drainTimeout))
+						Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
 					})
 				})
 			})
@@ -282,7 +259,7 @@ var _ = Describe("Main", func() {
 			Context("when there are no tasks running", func() {
 				It("exits successfully", func() {
 					sendDrainSignal()
-					Ω(executorSession).Should(ExitWithTimeout(0, 1*time.Second))
+					Ω(runner.Session).Should(ExitWithTimeout(0, 1*time.Second))
 				})
 			})
 		})
