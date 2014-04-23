@@ -22,7 +22,7 @@ import (
 var _ = Describe("Executor", func() {
 	var (
 		bbs            *Bbs.BBS
-		task        *models.Task
+		task           *models.Task
 		executor       *Executor
 		taskRegistry   *task_registry.TaskRegistry
 		gordon         *fake_gordon.FakeGordon

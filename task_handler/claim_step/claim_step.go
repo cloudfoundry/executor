@@ -7,7 +7,7 @@ import (
 )
 
 type ClaimStep struct {
-	task    *models.Task
+	task       *models.Task
 	logger     *steno.Logger
 	executorID string
 	bbs        Bbs.ExecutorBBS
@@ -20,7 +20,7 @@ func New(
 	bbs Bbs.ExecutorBBS,
 ) *ClaimStep {
 	return &ClaimStep{
-		task:    task,
+		task:       task,
 		logger:     logger,
 		executorID: executorID,
 		bbs:        bbs,
@@ -33,7 +33,7 @@ func (step ClaimStep) Perform() error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			}, "task.claim.failed",
 		)
 

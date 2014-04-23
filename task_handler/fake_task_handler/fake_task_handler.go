@@ -6,16 +6,16 @@ import (
 )
 
 type FakeTaskHandler struct {
-	numberOfCalls   int
-	handledTasks map[string]string
-	mutex           *sync.RWMutex
-	cancel          <-chan struct{}
+	numberOfCalls int
+	handledTasks  map[string]string
+	mutex         *sync.RWMutex
+	cancel        <-chan struct{}
 }
 
 func New() *FakeTaskHandler {
 	return &FakeTaskHandler{
 		handledTasks: make(map[string]string),
-		mutex:           &sync.RWMutex{},
+		mutex:        &sync.RWMutex{},
 	}
 }
 

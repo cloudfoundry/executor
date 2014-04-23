@@ -1,13 +1,13 @@
 package limit_container_step
 
 import (
+	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry-incubator/gordon"
 )
 
 type ContainerStep struct {
-	task             *models.Task
+	task                *models.Task
 	logger              *steno.Logger
 	wardenClient        gordon.Client
 	containerInodeLimit int
@@ -22,7 +22,7 @@ func New(
 	containerHandle *string,
 ) *ContainerStep {
 	return &ContainerStep{
-		task:             task,
+		task:                task,
 		logger:              logger,
 		wardenClient:        wardenClient,
 		containerInodeLimit: containerInodeLimit,
@@ -36,7 +36,7 @@ func (step ContainerStep) Perform() error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			},
 			"task.container-limit-memory.failed",
 		)
@@ -53,7 +53,7 @@ func (step ContainerStep) Perform() error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			},
 			"task.container-limit-disk.failed",
 		)

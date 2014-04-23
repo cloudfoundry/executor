@@ -7,7 +7,7 @@ import (
 )
 
 type ContainerStep struct {
-	task            *models.Task
+	task               *models.Task
 	logger             *steno.Logger
 	wardenClient       gordon.Client
 	containerOwnerName string
@@ -22,7 +22,7 @@ func New(
 	containerHandle *string,
 ) *ContainerStep {
 	return &ContainerStep{
-		task:            task,
+		task:               task,
 		logger:             logger,
 		wardenClient:       wardenClient,
 		containerOwnerName: containerOwnerName,
@@ -39,7 +39,7 @@ func (step ContainerStep) Perform() error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			},
 			"task.container-create.failed",
 		)
@@ -60,8 +60,8 @@ func (step ContainerStep) Cleanup() {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"handle":       step.task.ContainerHandle,
-				"error":        err.Error(),
+				"handle":    step.task.ContainerHandle,
+				"error":     err.Error(),
 			},
 			"task.container-destroy.failed",
 		)

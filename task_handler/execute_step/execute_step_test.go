@@ -10,9 +10,9 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
-	. "github.com/cloudfoundry-incubator/executor/task_handler/execute_step"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/fake_step"
+	. "github.com/cloudfoundry-incubator/executor/task_handler/execute_step"
 )
 
 var _ = Describe("ExecuteStep", func() {
@@ -21,8 +21,8 @@ var _ = Describe("ExecuteStep", func() {
 		result chan error
 
 		task       *models.Task
-		subStep       sequence.Step
-		bbs           *fake_bbs.FakeExecutorBBS
+		subStep    sequence.Step
+		bbs        *fake_bbs.FakeExecutorBBS
 		taskResult *string
 	)
 

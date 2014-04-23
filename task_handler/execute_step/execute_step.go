@@ -8,7 +8,7 @@ import (
 )
 
 type ExecuteStep struct {
-	task *models.Task
+	task    *models.Task
 	logger  *steno.Logger
 	subStep sequence.Step
 	bbs     Bbs.ExecutorBBS
@@ -23,7 +23,7 @@ func New(
 	result *string,
 ) *ExecuteStep {
 	return &ExecuteStep{
-		task: task,
+		task:    task,
 		logger:  logger,
 		subStep: subStep,
 		bbs:     bbs,
@@ -37,8 +37,8 @@ func (step ExecuteStep) Perform() error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"handle":       step.task.ContainerHandle,
-				"error":        err.Error(),
+				"handle":    step.task.ContainerHandle,
+				"error":     err.Error(),
 			},
 			"task.steps.failed",
 		)
@@ -55,7 +55,7 @@ func (step ExecuteStep) complete(failed bool, failureReason string) error {
 		step.logger.Errord(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			}, "task.completed.failed",
 		)
 

@@ -8,16 +8,16 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor/sequence/lazy_sequence"
 	"github.com/cloudfoundry-incubator/executor/task_handler/claim_step"
 	"github.com/cloudfoundry-incubator/executor/task_handler/create_container_step"
 	"github.com/cloudfoundry-incubator/executor/task_handler/execute_step"
 	"github.com/cloudfoundry-incubator/executor/task_handler/limit_container_step"
 	"github.com/cloudfoundry-incubator/executor/task_handler/register_step"
 	"github.com/cloudfoundry-incubator/executor/task_handler/start_step"
-	"github.com/cloudfoundry-incubator/executor/task_transformer"
-	"github.com/cloudfoundry-incubator/executor/sequence"
-	"github.com/cloudfoundry-incubator/executor/sequence/lazy_sequence"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
+	"github.com/cloudfoundry-incubator/executor/task_transformer"
 )
 
 type TaskHandlerInterface interface {

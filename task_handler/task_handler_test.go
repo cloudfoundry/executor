@@ -19,8 +19,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/task_handler"
-	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
+	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
@@ -30,7 +30,7 @@ import (
 var _ = Describe("TaskHandler", func() {
 	var (
 		handler *TaskHandler
-		task *models.Task
+		task    *models.Task
 		cancel  chan struct{}
 
 		bbs                 *fake_bbs.FakeExecutorBBS

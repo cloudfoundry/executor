@@ -22,9 +22,9 @@ type Executor struct {
 	outstandingPresence *sync.WaitGroup
 	outstandingConverge *sync.WaitGroup
 
-	stopHandlingTasks    chan struct{}
+	stopHandlingTasks       chan struct{}
 	cancelRunningTasks      chan error
-	stopConvergeTask     chan struct{}
+	stopConvergeTask        chan struct{}
 	stopMaintainingPresence chan struct{}
 
 	drainTimeout time.Duration
@@ -58,9 +58,9 @@ func New(bbs Bbs.ExecutorBBS, drainTimeout time.Duration, logger *steno.Logger) 
 
 		closeOnce: new(sync.Once),
 
-		stopHandlingTasks:    make(chan struct{}, 2),
+		stopHandlingTasks:       make(chan struct{}, 2),
 		cancelRunningTasks:      make(chan error, 1),
-		stopConvergeTask:     make(chan struct{}),
+		stopConvergeTask:        make(chan struct{}),
 		stopMaintainingPresence: make(chan struct{}),
 	}
 }

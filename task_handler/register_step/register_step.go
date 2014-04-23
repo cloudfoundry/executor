@@ -8,7 +8,7 @@ import (
 )
 
 type RegisterStep struct {
-	task      *models.Task
+	task         *models.Task
 	logger       *steno.Logger
 	taskRegistry task_registry.TaskRegistryInterface
 }
@@ -19,7 +19,7 @@ func New(
 	taskRegistry task_registry.TaskRegistryInterface,
 ) *RegisterStep {
 	return &RegisterStep{
-		task:      task,
+		task:         task,
 		logger:       logger,
 		taskRegistry: taskRegistry,
 	}
@@ -31,7 +31,7 @@ func (step RegisterStep) Perform() error {
 		step.logger.Infod(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			}, "task.insufficient.resources",
 		)
 

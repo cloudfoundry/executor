@@ -5,7 +5,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
@@ -13,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
+	. "github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
@@ -28,16 +28,16 @@ import (
 
 var _ = Describe("TaskTransformer", func() {
 	var (
-		downloader         downloader.Downloader
-		logger             *steno.Logger
-		logStreamer        *fake_log_streamer.FakeLogStreamer
-		uploader           uploader.Uploader
-		extractor          extractor.Extractor
-		compressor         compressor.Compressor
-		wardenClient       *fake_gordon.FakeGordon
+		downloader      downloader.Downloader
+		logger          *steno.Logger
+		logStreamer     *fake_log_streamer.FakeLogStreamer
+		uploader        uploader.Uploader
+		extractor       extractor.Extractor
+		compressor      compressor.Compressor
+		wardenClient    *fake_gordon.FakeGordon
 		taskTransformer *TaskTransformer
-		handle             string
-		result             string
+		handle          string
+		result          string
 	)
 
 	BeforeEach(func() {

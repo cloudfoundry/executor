@@ -7,7 +7,7 @@ import (
 )
 
 type StartStep struct {
-	task         *models.Task
+	task            *models.Task
 	logger          *steno.Logger
 	bbs             Bbs.ExecutorBBS
 	containerHandle *string
@@ -20,7 +20,7 @@ func New(
 	containerHandle *string,
 ) *StartStep {
 	return &StartStep{
-		task:         task,
+		task:            task,
 		logger:          logger,
 		bbs:             bbs,
 		containerHandle: containerHandle,
@@ -33,7 +33,7 @@ func (step StartStep) Perform() error {
 		step.logger.Warnd(
 			map[string]interface{}{
 				"task-guid": step.task.Guid,
-				"error":        err.Error(),
+				"error":     err.Error(),
 			}, "task.start.failed",
 		)
 

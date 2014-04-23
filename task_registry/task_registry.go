@@ -18,7 +18,7 @@ type TaskRegistryInterface interface {
 type TaskRegistry struct {
 	ExecutorMemoryMB int
 	ExecutorDiskMB   int
-	Tasks         map[string]*models.Task
+	Tasks            map[string]*models.Task
 	lock             *sync.Mutex
 
 	stack string
@@ -41,7 +41,7 @@ func NewTaskRegistry(stack string, memoryMB int, diskMB int) *TaskRegistry {
 	return &TaskRegistry{
 		ExecutorMemoryMB: memoryMB,
 		ExecutorDiskMB:   diskMB,
-		Tasks:         make(map[string]*models.Task),
+		Tasks:            make(map[string]*models.Task),
 
 		lock: &sync.Mutex{},
 
