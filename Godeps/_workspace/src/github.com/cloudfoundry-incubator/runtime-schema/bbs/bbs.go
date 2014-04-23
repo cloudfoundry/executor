@@ -51,12 +51,6 @@ type FileServerBBS interface {
 	) (presence Presence, disappeared <-chan bool, err error)
 }
 
-type ServistryBBS interface {
-	GetAvailableCC() (urls []string, err error)
-	RegisterCC(host string, port int, ttl time.Duration) error
-	UnregisterCC(host string, port int) error
-}
-
 func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) *BBS {
 	return &BBS{
 		ExecutorBBS: &executorBBS{
@@ -77,10 +71,6 @@ func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider
 			store: store,
 		},
 
-		ServistryBBS: &servistryBBS{
-			store: store,
-		},
-
 		store: store,
 	}
 }
@@ -89,7 +79,6 @@ type BBS struct {
 	ExecutorBBS
 	StagerBBS
 	FileServerBBS
-	ServistryBBS
 	MetricsBBS
 	store storeadapter.StoreAdapter
 }
