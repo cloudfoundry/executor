@@ -9,9 +9,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"code.google.com/p/gogoprotobuf/proto"
+	warden "github.com/cloudfoundry-incubator/garden/protocol"
 	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
-	"github.com/cloudfoundry-incubator/gordon/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 

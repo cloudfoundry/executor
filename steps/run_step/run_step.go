@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	warden "github.com/cloudfoundry-incubator/garden/protocol"
 	"github.com/cloudfoundry-incubator/gordon"
-	"github.com/cloudfoundry-incubator/gordon/warden"
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
