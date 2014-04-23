@@ -31,7 +31,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/gordon",
-			"Rev": "d048c4da2686b39fe6c912dfa2273eb934cd7d7b"
+			"Rev": "ad178ab9a752cd85c4f3bb5a9a138d6961df68d5"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
