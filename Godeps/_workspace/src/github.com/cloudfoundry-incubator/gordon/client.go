@@ -33,7 +33,6 @@ type Client interface {
 	NetIn(handle string) (*warden.NetInResponse, error)
 	LimitMemory(handle string, limit uint64) (*warden.LimitMemoryResponse, error)
 	GetMemoryLimit(handle string) (uint64, error)
-	LimitCPU(handle string, limitInShares uint64) (*warden.LimitCpuResponse, error)
 	LimitDisk(handle string, limits DiskLimits) (*warden.LimitDiskResponse, error)
 	GetDiskLimit(handle string) (uint64, error)
 	List(filterProperties map[string]string) (*warden.ListResponse, error)
@@ -169,18 +168,6 @@ func (c *client) GetMemoryLimit(handle string) (uint64, error) {
 	defer c.release(conn)
 
 	return conn.GetMemoryLimit(handle)
-}
-
-func (c *client) LimitCPU(handle string, limitInShares uint64) (*warden.LimitCpuResponse, error) {
-	conn := c.acquireConnection()
-	defer c.release(conn)
-
-	limitRequest := &warden.LimitCpuRequest{
-		Handle:        proto.String(handle),
-		LimitInShares: proto.Uint64(limitInShares),
-	}
-
-	return conn.LimitCPU(limitRequest)
 }
 
 func (c *client) LimitDisk(handle string, limits DiskLimits) (*warden.LimitDiskResponse, error) {
