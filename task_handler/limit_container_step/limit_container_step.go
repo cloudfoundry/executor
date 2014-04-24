@@ -2,7 +2,6 @@ package limit_container_step
 
 import (
 	"errors"
-
 	"github.com/cloudfoundry-incubator/gordon"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"

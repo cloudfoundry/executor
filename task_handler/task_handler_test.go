@@ -214,7 +214,74 @@ var _ = Describe("TaskHandler", func() {
 			})
 		})
 
-		Context("when the run once fails", func() {
+		Context("when the task fails at the register step", func() {
+			BeforeEach(func() {
+				taskRegistry.AddTaskErr = errors.New("boom")
+				handler.Task(task, "fake-executor-id", cancel)
+			})
+
+			It("should not try to claim the task", func() {
+				Ω(bbs.ClaimedTasks()).Should(BeEmpty())
+			})
+
+			It("should not complete the task", func() {
+				Ω(bbs.CompletedTasks()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the bbs returns an error, when the claim is attempted", func() {
+			BeforeEach(func() {
+				bbs.SetClaimTaskErr(errors.New("boom"))
+				handler.Task(task, "fake-executor-id", cancel)
+			})
+
+			It("should not create the container", func() {
+				Ω(wardenClient.CreatedHandles()).Should(BeEmpty())
+			})
+
+			It("should not complete the task", func() {
+				Ω(bbs.CompletedTasks()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the task fails at the create container step", func() {
+			BeforeEach(func() {
+				wardenClient.CreateError = errors.New("thou shall not pass")
+				handler.Task(task, "fake-executor-id", cancel)
+			})
+
+			It("should not limit the container", func() {
+				Ω(wardenClient.MemoryLimits()).Should(BeEmpty())
+			})
+
+			It("should not complete the task", func() {
+				Ω(bbs.CompletedTasks()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the task fails at the limit container step", func() {
+			BeforeEach(func() {
+				wardenClient.SetLimitMemoryError(errors.New("foo"))
+				handler.Task(task, "fake-executor-id", cancel)
+			})
+
+			It("should not complete the task", func() {
+				Ω(bbs.CompletedTasks()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the task fails at the start step", func() {
+			BeforeEach(func() {
+				bbs.SetStartTaskErr(errors.New("foo"))
+				handler.Task(task, "fake-executor-id", cancel)
+			})
+
+			It("should not complete the task", func() {
+				Ω(bbs.CompletedTasks()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the task fails at the execute step", func() {
 			BeforeEach(setUpFailedRuns)
 
 			It("registers, claims, creates container, starts, (executes...), completes (failure)", func() {
