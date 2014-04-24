@@ -1,6 +1,8 @@
 package uploader_test
 
 import (
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -37,9 +39,14 @@ var _ = Describe("Uploader", func() {
 		var url *url.URL
 		var file *os.File
 		var expectedBytes int
+		var expectedMD5 string
+
 		BeforeEach(func() {
 			file, _ = ioutil.TempFile("", "foo")
-			expectedBytes, _ = file.WriteString("content that we can check later")
+			contentString := "content that we can check later"
+			expectedBytes, _ = file.WriteString(contentString)
+			rawMD5 := md5.Sum([]byte(contentString))
+			expectedMD5 = base64.StdEncoding.EncodeToString(rawMD5[:])
 			file.Close()
 		})
 
@@ -80,6 +87,7 @@ var _ = Describe("Uploader", func() {
 
 				Ω(request.URL.Path).Should(Equal("/somepath"))
 				Ω(request.Header.Get("Content-Type")).Should(Equal("application/octet-stream"))
+				Ω(request.Header.Get("Content-MD5")).Should(Equal(expectedMD5))
 				Ω(strconv.Atoi(request.Header.Get("Content-Length"))).Should(BeNumerically("==", 31))
 				Ω(string(data)).Should(Equal("content that we can check later"))
 			})

@@ -1,7 +1,10 @@
 package uploader
 
 import (
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -55,10 +58,23 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 			return 0, err
 		}
 
+		contentHash := md5.New()
+		_, err = io.Copy(contentHash, sourceFile)
+		if err != nil {
+			return 0, err
+		}
+
+		_, err = sourceFile.Seek(0, 0)
+		if err != nil {
+			return 0, err
+		}
+
 		request, err = http.NewRequest("POST", url.String(), sourceFile)
+
 		uploadedBytes = fileInfo.Size()
 		request.ContentLength = uploadedBytes
 		request.Header.Set("Content-Type", "application/octet-stream")
+		request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(contentHash.Sum(nil)))
 
 		resp, err = httpClient.Do(request)
 		if err == nil {
