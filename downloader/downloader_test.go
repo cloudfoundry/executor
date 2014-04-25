@@ -1,11 +1,12 @@
 package downloader_test
 
 import (
+	"crypto/md5"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	Url "net/url"
 	"os"
 	"sync"
 	"time"
@@ -16,6 +17,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func md5HexEtag(content string) string {
+	contentHash := md5.New()
+	contentHash.Write([]byte(content))
+	return fmt.Sprintf(`"%x"`, contentHash.Sum(nil))
+}
 
 var _ = Describe("Downloader", func() {
 	var downloader Downloader
@@ -30,7 +37,7 @@ var _ = Describe("Downloader", func() {
 	})
 
 	Describe("download", func() {
-		var url *url.URL
+		var url *Url.URL
 		var file *os.File
 
 		BeforeEach(func() {
@@ -51,39 +58,80 @@ var _ = Describe("Downloader", func() {
 			var expectedBytes int64
 			var downloadErr error
 
-			BeforeEach(func() {
-				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					lock.Lock()
-					serverRequestUrls = append(serverRequestUrls, r.RequestURI)
-					lock.Unlock()
-
-					bytesWritten, _ := fmt.Fprintln(w, "Hello, client")
-					expectedBytes = int64(bytesWritten)
-				}))
-
+			JustBeforeEach(func() {
 				serverUrl := testServer.URL + "/somepath"
 				url, _ = url.Parse(serverUrl)
-			})
-
-			JustBeforeEach(func() {
 				uploadedBytes, downloadErr = downloader.Download(url, file)
-				Ω(downloadErr).ShouldNot(HaveOccurred())
 			})
 
-			It("gets a file from a url", func() {
-				lock.Lock()
-				urlFromServer := testServer.URL + serverRequestUrls[0]
-				Ω(urlFromServer).To(Equal(url.String()))
-				lock.Unlock()
+			Context("and contains a matching MD5 Hash in the Etag", func() {
+				var attempts int
+				BeforeEach(func() {
+					attempts = 0
+					testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						lock.Lock()
+						serverRequestUrls = append(serverRequestUrls, r.RequestURI)
+						attempts++
+						lock.Unlock()
+
+						msg := "Hello, client"
+						w.Header().Set("ETag", md5HexEtag(msg))
+
+						bytesWritten, _ := fmt.Fprint(w, msg)
+						expectedBytes = int64(bytesWritten)
+					}))
+				})
+
+				It("does not return an error", func() {
+					Ω(downloadErr).ShouldNot(HaveOccurred())
+				})
+
+				It("only tries once", func() {
+					Ω(attempts).Should(Equal(1))
+				})
+
+				It("gets a file from a url", func() {
+					lock.Lock()
+					urlFromServer := testServer.URL + serverRequestUrls[0]
+					Ω(urlFromServer).To(Equal(url.String()))
+					lock.Unlock()
+				})
+
+				It("should use the provided file as the download location", func() {
+					fileContents, _ := ioutil.ReadFile(file.Name())
+					Ω(fileContents).Should(ContainSubstring("Hello, client"))
+				})
+
+				It("return number of bytes it downloaded", func() {
+					Ω(uploadedBytes).Should(Equal(expectedBytes))
+				})
 			})
 
-			It("should use the provided file as the download location", func() {
-				fileContents, _ := ioutil.ReadFile(file.Name())
-				Ω(fileContents).Should(ContainSubstring("Hello, client"))
+			Context("and contains an Etag that is not an MD5 Hash ", func() {
+				BeforeEach(func() {
+					testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("ETag", "not the hex you are looking for")
+						bytesWritten, _ := fmt.Fprint(w, "Hello, client")
+						expectedBytes = int64(bytesWritten)
+					}))
+				})
+
+				It("succeeds without doing a checksum", func() {
+					Ω(downloadErr).ShouldNot(HaveOccurred())
+				})
 			})
 
-			It("return number of bytes it downloaded", func() {
-				Ω(uploadedBytes).Should(Equal(expectedBytes))
+			Context("and contains no Etag at all", func() {
+				BeforeEach(func() {
+					testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						bytesWritten, _ := fmt.Fprint(w, "Hello, client")
+						expectedBytes = int64(bytesWritten)
+					}))
+				})
+
+				It("succeeds without doing a checksum", func() {
+					Ω(downloadErr).ShouldNot(HaveOccurred())
+				})
 			})
 		})
 
@@ -97,7 +145,7 @@ var _ = Describe("Downloader", func() {
 					requestInitiated <- struct{}{}
 
 					time.Sleep(300 * time.Millisecond)
-					fmt.Fprintln(w, "Hello, client")
+					fmt.Fprint(w, "Hello, client")
 				}))
 
 				serverUrl := testServer.URL + "/somepath"
@@ -143,6 +191,27 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
+				_, err := downloader.Download(url, file)
+				Ω(err).NotTo(BeNil())
+			})
+		})
+
+		Context("when the download's ETag fails the checksum", func() {
+			BeforeEach(func() {
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					realMsg := "Hello, client"
+					incompleteMsg := "Hello, clien"
+
+					w.Header().Set("ETag", md5HexEtag(realMsg))
+
+					fmt.Fprint(w, incompleteMsg)
+				}))
+
+				serverUrl := testServer.URL + "/somepath"
+				url, _ = url.Parse(serverUrl)
+			})
+
+			It("should return an error", func() {
 				_, err := downloader.Download(url, file)
 				Ω(err).NotTo(BeNil())
 			})
