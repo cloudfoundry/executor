@@ -41,17 +41,21 @@ func (step LimitContainerStep) Perform() error {
 		return ErrPercentOutOfBounds
 	}
 
-	_, err := step.wardenClient.LimitMemory(*step.containerHandle, uint64(step.task.MemoryMB*1024*1024))
-	if err != nil {
-		step.logger.Errord(
-			map[string]interface{}{
-				"task-guid": step.task.Guid,
-				"error":     err.Error(),
-			},
-			"task.container-limit-memory.failed",
-		)
+	var err error
 
-		return err
+	if step.task.MemoryMB > 0 {
+		_, err = step.wardenClient.LimitMemory(*step.containerHandle, uint64(step.task.MemoryMB*1024*1024))
+		if err != nil {
+			step.logger.Errord(
+				map[string]interface{}{
+					"task-guid": step.task.Guid,
+					"error":     err.Error(),
+				},
+				"task.container-limit-memory.failed",
+			)
+
+			return err
+		}
 	}
 
 	_, err = step.wardenClient.LimitDisk(*step.containerHandle, gordon.DiskLimits{

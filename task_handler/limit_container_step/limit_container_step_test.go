@@ -80,6 +80,19 @@ var _ = Describe("LimitContainerStep", func() {
 			})
 		})
 
+		Context("when the memory limit is set to 0", func() {
+			BeforeEach(func() {
+				task.MemoryMB = 0
+			})
+
+			It("should not limit memory", func() {
+				err := step.Perform()
+				Ω(err).Should(BeNil())
+
+				Ω(gordon.MemoryLimits()).Should(BeEmpty())
+			})
+		})
+
 		It("should limit disk", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
