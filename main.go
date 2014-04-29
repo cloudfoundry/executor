@@ -11,6 +11,9 @@ import (
 
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
+
+	"github.com/cloudfoundry-incubator/executor/maintain"
+
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
@@ -224,9 +227,6 @@ func main() {
 		*containerMaxCpuShares,
 	)
 
-	maintaining := make(chan error, 1)
-	maintainPresenceErrors := make(chan error, 1)
-
 	err = taskHandler.Cleanup()
 	if err != nil {
 		logger.Errord(
@@ -246,75 +246,65 @@ func main() {
 		"executor.starting",
 	)
 
-	go executor.MaintainPresence(*heartbeatInterval, maintaining, maintainPresenceErrors)
-
-	err = <-maintaining
-	if err != nil {
-		logger.Errorf("failed to start maintaining presence: %s", err.Error())
-		os.Exit(1)
-	}
-
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
-	go executor.ConvergeTasks(*convergenceInterval, *timeToClaimTask)
+	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
+	go func() {
+		maintainerSigChan := make(chan os.Signal, 1)
+		signal.Notify(maintainerSigChan, syscall.SIGTERM, syscall.SIGINT)
+
+		err := maintainer.Run(maintainerSigChan)
+		if err != nil {
+			logger.Errorf("failed to start maintaining presence: %s", err.Error())
+			executor.Stop()
+			os.Exit(1)
+		}
+	}()
 
 	handling := make(chan bool)
-
 	go executor.Handle(taskHandler, handling)
 
 	<-handling
 	logger.Infof("executor.started")
 
-	select {
-	case err := <-maintainPresenceErrors:
-		executor.Stop()
+	firstSignal := <-signals
 
-		logger.Errord(
-			map[string]interface{}{
-				"error": err.Error(),
-			},
-			"executor.run-once-handling.failed",
-		)
-
-		os.Exit(1)
-
-	case sig := <-signals:
-		go func() {
-			for sig := range signals {
-				logger.Infod(
-					map[string]interface{}{
-						"signal": sig.String(),
-					},
-					"executor.signal.ignored",
-				)
-			}
-		}()
-
-		if sig == syscall.SIGUSR1 {
+	go func() {
+		// ignore all signals after the first
+		for sig := range signals {
 			logger.Infod(
 				map[string]interface{}{
-					"timeout": (*drainTimeout).String(),
+					"signal": sig.String(),
 				},
-				"executor.draining",
+				"executor.signal.ignored",
 			)
-
-			executor.Drain()
 		}
+	}()
 
-		stoppingAt := time.Now()
-
-		logger.Info("executor.stopping")
-
-		executor.Stop()
-
+	if firstSignal == syscall.SIGUSR1 {
 		logger.Infod(
 			map[string]interface{}{
-				"took": time.Since(stoppingAt).String(),
+				"timeout": (*drainTimeout).String(),
 			},
-			"executor.stopped",
+			"executor.draining",
 		)
 
-		os.Exit(0)
+		executor.Drain()
 	}
+
+	stoppingAt := time.Now()
+
+	logger.Info("executor.stopping")
+
+	executor.Stop()
+
+	logger.Infod(
+		map[string]interface{}{
+			"took": time.Since(stoppingAt).String(),
+		},
+		"executor.stopped",
+	)
+
+	os.Exit(0)
 }
