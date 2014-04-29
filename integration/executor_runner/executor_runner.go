@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/cloudfoundry/gunk/runner_support"
+	"github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
-	"github.com/vito/cmdtest"
-	. "github.com/vito/cmdtest/matchers"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
 )
 
 type ExecutorRunner struct {
@@ -23,7 +22,7 @@ type ExecutorRunner struct {
 	loggregatorServer string
 	loggregatorSecret string
 
-	Session *cmdtest.Session
+	Session *gexec.Session
 	Config  Config
 }
 
@@ -70,12 +69,12 @@ func New(executorBin, wardenNetwork, wardenAddr string, etcdCluster []string, lo
 func (r *ExecutorRunner) Start(config ...Config) {
 	r.StartWithoutCheck(config...)
 
-	Ω(r.Session).Should(SayWithTimeout("executor.started", 1*time.Second))
+	Eventually(r.Session).Should(gbytes.Say("executor.started"))
 }
 
 func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 	configToUse := r.generateConfig(config...)
-	executorSession, err := cmdtest.StartWrapped(
+	executorSession, err := gexec.Start(
 		exec.Command(
 			r.executorBin,
 			"-wardenNetwork", r.wardenNetwork,
@@ -94,8 +93,8 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
 			"-drainTimeout", fmt.Sprintf("%s", configToUse.DrainTimeout),
 		),
-		runner_support.TeeToGinkgoWriter,
-		runner_support.TeeToGinkgoWriter,
+		ginkgo.GinkgoWriter,
+		ginkgo.GinkgoWriter,
 	)
 	Ω(err).ShouldNot(HaveOccurred())
 	r.Config = configToUse
@@ -105,15 +104,13 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 func (r *ExecutorRunner) Stop() {
 	r.Config = defaultConfig
 	if r.Session != nil {
-		r.Session.Cmd.Process.Signal(syscall.SIGTERM)
-		_, err := r.Session.Wait(5 * time.Second)
-		Ω(err).ShouldNot(HaveOccurred())
+		r.Session.Terminate().Wait(5 * time.Second)
 	}
 }
 
 func (r *ExecutorRunner) KillWithFire() {
 	if r.Session != nil {
-		r.Session.Cmd.Process.Kill()
+		r.Session.Kill().Wait(5 * time.Second)
 	}
 }
 

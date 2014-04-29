@@ -17,4 +17,4 @@ install:
 
 script:
   - export PATH=$HOME/gopath/bin:$PATH
-  - ginkgo -r -i --randomizeAllSpecs --failOnPending -race
+  - ginkgo -r --randomizeAllSpecs --failOnPending -race

@@ -6,23 +6,21 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
-	etcdclient "github.com/coreos/go-etcd/etcd"
-	. "github.com/onsi/gomega"
-	"github.com/vito/cmdtest"
-
-	"github.com/cloudfoundry/gunk/runner_support"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
+	etcdclient "github.com/coreos/go-etcd/etcd"
+	"github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 )
 
 type ETCDClusterRunner struct {
 	startingPort int
 	numNodes     int
-	etcdSessions []*cmdtest.Session
+	etcdSessions []*gexec.Session
 	running      bool
 	client       *etcdclient.Client
 
@@ -114,7 +112,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 
 	etcd.mutex.Lock()
 
-	etcd.etcdSessions = make([]*cmdtest.Session, etcd.numNodes)
+	etcd.etcdSessions = make([]*gexec.Session, etcd.numNodes)
 
 	for i := 0; i < etcd.numNodes; i++ {
 		if nuke {
@@ -131,7 +129,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 			args = append(args, "-peers", etcd.serverUrl(0))
 		}
 
-		session, err := cmdtest.StartWrapped(exec.Command("etcd", args...), runner_support.TeeToGinkgoWriter, runner_support.TeeToGinkgoWriter)
+		session, err := gexec.Start(exec.Command("etcd", args...), ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred(), "Make sure etcd is compiled and on your $PATH.")
 
 		etcd.etcdSessions[i] = session
@@ -152,8 +150,7 @@ func (etcd *ETCDClusterRunner) stop(nuke bool) {
 
 	if etcd.running {
 		for i := 0; i < etcd.numNodes; i++ {
-			etcd.etcdSessions[i].Cmd.Process.Signal(syscall.SIGINT)
-			etcd.etcdSessions[i].Wait(5 * time.Second)
+			etcd.etcdSessions[i].Interrupt().Wait(5 * time.Second)
 			if nuke {
 				etcd.nukeArtifacts(i)
 			}

@@ -11,23 +11,23 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/backend",
-			"Rev": "27f354a16a7ca592136290e61b380ea67c64d0da"
+			"Rev": "87797087ea4f5e1cb45237bad0162a67a41a3609"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/drain",
-			"Rev": "27f354a16a7ca592136290e61b380ea67c64d0da"
+			"Rev": "87797087ea4f5e1cb45237bad0162a67a41a3609"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/message_reader",
-			"Rev": "27f354a16a7ca592136290e61b380ea67c64d0da"
+			"Rev": "87797087ea4f5e1cb45237bad0162a67a41a3609"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Rev": "27f354a16a7ca592136290e61b380ea67c64d0da"
+			"Rev": "87797087ea4f5e1cb45237bad0162a67a41a3609"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Rev": "27f354a16a7ca592136290e61b380ea67c64d0da"
+			"Rev": "87797087ea4f5e1cb45237bad0162a67a41a3609"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/gordon",
@@ -47,12 +47,8 @@
 			"Rev": "5eb8c6e554f0dfc39d6468813b8ac19ec28fe74f"
 		},
 		{
-			"ImportPath": "github.com/cloudfoundry/gunk/runner_support",
-			"Rev": "8c166e2e973df123b29351b396bb8d356192bd81"
-		},
-		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "8c166e2e973df123b29351b396bb8d356192bd81"
+			"Rev": "93aaeec320a837a8d6b47ecbb4b4eab957a3e1de"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
@@ -80,7 +76,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "75297e7f1b7c70951bb78c8122bc266288870829"
+			"Rev": "49b3830c5568b6193f6078bafa2262b2a1bae790"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -93,11 +89,11 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Rev": "d941db095ac86d29f8304472895d2fd512bf8f57"
+			"Rev": "1e48048b2e01c7f1830144e30eea21db3cd3b574"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "4fbbd0c858838cb79f21ce9da9dbb4129fcce862"
+			"Rev": "e287925a206d2f7cf070e08c082ed93dd38fcecc"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
@@ -110,10 +106,6 @@
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",
 			"Rev": "c0f14ae54cbbf4eb66a36bfd3c5436c243f7423c"
-		},
-		{
-			"ImportPath": "github.com/vito/cmdtest",
-			"Rev": "215c451d78ba1382cbccb2736c280c60a11b4b86"
 		}
 	]
 }

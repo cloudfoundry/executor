@@ -258,7 +258,7 @@ func (adapter *ETCDStoreAdapter) dispatchWatchEvents(key string, events chan<- s
 		response, err := adapter.client.Watch(key, index, true, nil, stop)
 		if err != nil {
 			if adapter.isEventIndexClearedError(err) {
-				index++
+				index = 0
 				continue
 			} else if err == etcd.ErrWatchStoppedByUser {
 				return

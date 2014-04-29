@@ -2,13 +2,13 @@ package etcdstoreadapter_test
 
 import (
 	"fmt"
+	"time"
 	. "github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"time"
 )
 
 var counter = 0
@@ -917,17 +917,26 @@ var _ = Describe("ETCD Store Adapter", func() {
 					Expect(err).ToNot(HaveOccurred())
 				}
 
-				event = <-events
+				Eventually(events).Should(Receive(&event))
 				Expect(event.Type).To(Equal(UpdateEvent))
 				Expect(event.Node.Key).To(Equal("/foo/a"))
 				Expect(string(event.Node.Value)).To(Equal("1"))
 
-				// 2 and 3 will be missed (rolling window of 1000)
+				// all events will be missed while we're not reading them
+				Consistently(events).ShouldNot(Receive())
 
-				event = <-events
+				err = adapter.SetMulti([]StoreNode{
+					{
+						Key:   "/foo/a",
+						Value: []byte("fast-forwarded index"),
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(events).Should(Receive(&event))
 				Expect(event.Type).To(Equal(UpdateEvent))
 				Expect(event.Node.Key).To(Equal("/foo/a"))
-				Expect(string(event.Node.Value)).To(Equal("4"))
+				Expect(string(event.Node.Value)).To(Equal("fast-forwarded index"))
 
 				Expect(errChan).To(BeEmpty())
 			})

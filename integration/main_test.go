@@ -15,10 +15,9 @@ import (
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
-	"github.com/vito/cmdtest"
-	. "github.com/vito/cmdtest/matchers"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
@@ -28,19 +27,39 @@ func TestExecutorMain(t *testing.T) {
 	RunSpecs(t, "Executor Suite")
 }
 
+var executorPath string
+var etcdRunner *etcdstorerunner.ETCDClusterRunner
+var gardenServer *GardenServer.WardenServer
+var runner *executor_runner.ExecutorRunner
+
+var _ = BeforeSuite(func() {
+	var err error
+	executorPath, err = gexec.Build("github.com/cloudfoundry-incubator/executor", "-race")
+	Ω(err).ShouldNot(HaveOccurred())
+})
+
+var _ = AfterSuite(func() {
+	gexec.CleanupBuildArtifacts()
+	if etcdRunner != nil {
+		etcdRunner.Stop()
+	}
+
+	if gardenServer != nil {
+		gardenServer.Stop()
+	}
+
+	if runner != nil {
+		runner.KillWithFire()
+	}
+})
+
 var _ = Describe("Main", func() {
 	var (
-		etcdRunner *etcdstorerunner.ETCDClusterRunner
-
 		etcdCluster []string
 		wardenAddr  string
 
-		executorPath string
-		runner       *executor_runner.ExecutorRunner
-
-		gardenServer *GardenServer.WardenServer
-		bbs          *Bbs.BBS
-		fakeBackend  *fake_backend.FakeBackend
+		bbs         *Bbs.BBS
+		fakeBackend *fake_backend.FakeBackend
 	)
 
 	drainTimeout := 5 * time.Second
@@ -49,8 +68,8 @@ var _ = Describe("Main", func() {
 	BeforeEach(func() {
 		var err error
 
-		etcdPort := 5001 + config.GinkgoConfig.ParallelNode
-		wardenPort := 9001 + config.GinkgoConfig.ParallelNode
+		etcdPort := 5001 + GinkgoParallelNode()
+		wardenPort := 9001 + GinkgoParallelNode()
 
 		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
 		etcdRunner.Start()
@@ -58,9 +77,6 @@ var _ = Describe("Main", func() {
 		etcdCluster = []string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)}
 
 		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
-
-		executorPath, err = cmdtest.Build("github.com/cloudfoundry-incubator/executor", "-race")
-		Ω(err).ShouldNot(HaveOccurred())
 
 		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
 
@@ -140,7 +156,7 @@ var _ = Describe("Main", func() {
 						ContainerOwnerName: "executor-name",
 					})
 
-					Ω(runner.Session).Should(ExitWithTimeout(1, 1*time.Second))
+					Eventually(runner.Session).Should(gexec.Exit(1))
 				})
 			})
 		})
@@ -172,14 +188,14 @@ var _ = Describe("Main", func() {
 				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
-				runner.Session.Cmd.Process.Signal(syscall.SIGTERM)
+				runner.Session.Terminate()
 
 				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
-				runner.Session.Cmd.Process.Signal(syscall.SIGTERM)
-				Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
+				runner.Session.Terminate()
+				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
 			})
 		})
 
@@ -188,21 +204,20 @@ var _ = Describe("Main", func() {
 				desireTask(time.Hour)
 				Eventually(fakeBackend.Containers).Should(HaveLen(1))
 
-				runner.Session.Cmd.Process.Signal(syscall.SIGINT)
-
+				runner.Session.Interrupt()
 				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
-				runner.Session.Cmd.Process.Signal(syscall.SIGINT)
-				Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
+				runner.Session.Interrupt()
+				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
 			})
 		})
 
 		Describe("when the executor receives the USR1 signal", func() {
 			sendDrainSignal := func() {
-				runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
-				Ω(runner.Session).Should(SayWithTimeout("executor.draining", time.Second))
+				runner.Session.Signal(syscall.SIGUSR1)
+				Eventually(runner.Session).Should(gbytes.Say("executor.draining"))
 			}
 
 			Context("when there are tasks running", func() {
@@ -218,11 +233,11 @@ var _ = Describe("Main", func() {
 						desireTask(time.Hour)
 						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
 
-						runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
-						Ω(runner.Session).Should(SayWithTimeout("executor.draining", time.Second))
+						runner.Session.Signal(syscall.SIGUSR1)
+						Eventually(runner.Session, time.Second).Should(gbytes.Say("executor.draining"))
 
-						runner.Session.Cmd.Process.Signal(syscall.SIGUSR1)
-						Ω(runner.Session).Should(SayWithTimeout("executor.signal.ignored", 5*time.Second))
+						runner.Session.Signal(syscall.SIGUSR1)
+						Eventually(runner.Session, 5*time.Second).Should(gbytes.Say("executor.signal.ignored"))
 					})
 				})
 
@@ -233,7 +248,7 @@ var _ = Describe("Main", func() {
 
 						sendDrainSignal()
 
-						Ω(runner.Session).Should(ExitWithTimeout(0, drainTimeout-aBit))
+						Eventually(runner.Session, drainTimeout-aBit).Should(gexec.Exit(0))
 					})
 				})
 
@@ -246,12 +261,12 @@ var _ = Describe("Main", func() {
 					It("cancels all running tasks", func() {
 						Ω(fakeBackend.Containers()).Should(HaveLen(1))
 						sendDrainSignal()
-						Eventually(fakeBackend.Containers, (drainTimeout + aBit).Seconds()).Should(BeEmpty())
+						Eventually(fakeBackend.Containers, drainTimeout+aBit).Should(BeEmpty())
 					})
 
 					It("exits successfully", func() {
 						sendDrainSignal()
-						Ω(runner.Session).Should(ExitWithTimeout(0, 2*drainTimeout))
+						Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
 					})
 				})
 			})
@@ -259,7 +274,7 @@ var _ = Describe("Main", func() {
 			Context("when there are no tasks running", func() {
 				It("exits successfully", func() {
 					sendDrainSignal()
-					Ω(runner.Session).Should(ExitWithTimeout(0, 1*time.Second))
+					Eventually(runner.Session).Should(gexec.Exit(0))
 				})
 			})
 		})
