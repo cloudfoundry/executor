@@ -14,7 +14,6 @@ var _ = Describe("Task", func() {
 
 	taskPayload := `{
 		"guid":"some-guid",
-		"reply_to":"some-requester",
 		"stack":"some-stack",
 		"executor_id":"executor",
 		"actions":[
@@ -45,9 +44,8 @@ var _ = Describe("Task", func() {
 		index := 42
 
 		task = Task{
-			Guid:    "some-guid",
-			ReplyTo: "some-requester",
-			Stack:   "some-stack",
+			Guid:  "some-guid",
+			Stack: "some-stack",
 			Actions: []ExecutorAction{
 				{
 					Action: DownloadAction{
