@@ -4,47 +4,43 @@ import (
 	"fmt"
 	"time"
 
-	warden "github.com/cloudfoundry-incubator/garden/protocol"
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 type RunStep struct {
-	containerHandle     string
+	container           warden.Container
 	model               models.RunAction
-	fileDescriptorLimit int
+	fileDescriptorLimit uint64
 	streamer            log_streamer.LogStreamer
-	wardenClient        gordon.Client
 	logger              *steno.Logger
 }
 
 func New(
-	containerHandle string,
+	container warden.Container,
 	model models.RunAction,
-	fileDescriptorLimit int,
+	fileDescriptorLimit uint64,
 	streamer log_streamer.LogStreamer,
-	wardenClient gordon.Client,
 	logger *steno.Logger,
 ) *RunStep {
 	return &RunStep{
-		containerHandle:     containerHandle,
+		container:           container,
 		model:               model,
 		fileDescriptorLimit: fileDescriptorLimit,
 		streamer:            streamer,
-		wardenClient:        wardenClient,
 		logger:              logger,
 	}
 }
 
-func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []gordon.EnvironmentVariable {
-	convertedEnvironmentVariables := []gordon.EnvironmentVariable{}
+func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []warden.EnvironmentVariable {
+	convertedEnvironmentVariables := []warden.EnvironmentVariable{}
 
 	for _, env := range environmentVariables {
-		convertedEnvironmentVariables = append(convertedEnvironmentVariables, gordon.EnvironmentVariable{env.Key, env.Value})
+		convertedEnvironmentVariables = append(convertedEnvironmentVariables, warden.EnvironmentVariable{env.Key, env.Value})
 	}
 
 	return convertedEnvironmentVariables
@@ -53,7 +49,7 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 func (step *RunStep) Perform() error {
 	step.logger.Debugd(
 		map[string]interface{}{
-			"handle": step.containerHandle,
+			"handle": step.container.Handle(),
 		},
 		"run-step.perform",
 	)
@@ -70,14 +66,13 @@ func (step *RunStep) Perform() error {
 	}
 
 	go func() {
-		_, stream, err := step.wardenClient.Run(
-			step.containerHandle,
-			step.model.Script,
-			gordon.ResourceLimits{
-				FileDescriptors: uint64(step.fileDescriptorLimit),
+		_, stream, err := step.container.Run(warden.ProcessSpec{
+			Script: step.model.Script,
+			Limits: warden.ResourceLimits{
+				Nofile: &step.fileDescriptorLimit,
 			},
-			convertEnvironmentVariables(step.model.Env),
-		)
+			EnvironmentVariables: convertEnvironmentVariables(step.model.Env),
+		})
 
 		if err != nil {
 			errChan <- err
@@ -88,32 +83,32 @@ func (step *RunStep) Perform() error {
 			if payload.ExitStatus != nil {
 				step.streamer.Flush()
 
-				exitStatusChan <- payload.GetExitStatus()
+				exitStatusChan <- *payload.ExitStatus
 				break
 			}
 
-			switch *payload.Source {
-			case warden.ProcessPayload_stdout:
-				fmt.Fprint(step.streamer.Stdout(), payload.GetData())
-			case warden.ProcessPayload_stderr:
-				fmt.Fprint(step.streamer.Stderr(), payload.GetData())
+			switch payload.Source {
+			case warden.ProcessStreamSourceStdout:
+				fmt.Fprint(step.streamer.Stdout(), string(payload.Data))
+			case warden.ProcessStreamSourceStderr:
+				fmt.Fprint(step.streamer.Stderr(), string(payload.Data))
 			}
 		}
 	}()
 
 	select {
 	case exitStatus := <-exitStatusChan:
-		info, err := step.wardenClient.Info(step.containerHandle)
+		info, err := step.container.Info()
 		if err != nil {
 			step.logger.Errord(
 				map[string]interface{}{
-					"handle": step.containerHandle,
+					"handle": step.container.Handle(),
 					"err":    err.Error(),
 				},
 				"run-step.info.failed",
 			)
 		} else {
-			for _, ev := range info.GetEvents() {
+			for _, ev := range info.Events {
 				if ev == "out of memory" {
 					return emittable_error.New(nil, "Exited with status %d (out of memory)", exitStatus)
 				}
@@ -137,7 +132,7 @@ func (step *RunStep) Perform() error {
 }
 
 func (step *RunStep) Cancel() {
-	step.wardenClient.Stop(step.containerHandle, false, false)
+	step.container.Stop(false)
 }
 
 func (step *RunStep) Cleanup() {}

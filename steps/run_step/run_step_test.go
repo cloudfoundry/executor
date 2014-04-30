@@ -4,16 +4,14 @@ import (
 	"errors"
 	"time"
 
-	"github.com/cloudfoundry-incubator/gordon"
-
 	"github.com/cloudfoundry-incubator/executor/sequence"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"code.google.com/p/gogoprotobuf/proto"
-	warden "github.com/cloudfoundry-incubator/garden/protocol"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/connection/fake_connection"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -27,14 +25,15 @@ var _ = Describe("RunAction", func() {
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var wardenClient *fake_gordon.FakeGordon
+	var wardenClient *fake_warden_client.FakeClient
 	var logger *steno.Logger
-	var fileDescriptorLimit int
+	var fileDescriptorLimit uint64
 
-	var processPayloadStream chan *warden.ProcessPayload
+	var processPayloadStream chan warden.ProcessStream
 
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
+
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: []models.EnvironmentVariable{
@@ -45,25 +44,36 @@ var _ = Describe("RunAction", func() {
 
 		fakeStreamer = fake_log_streamer.New()
 
-		wardenClient = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 
 		logger = steno.NewLogger("test-logger")
 
-		processPayloadStream = make(chan *warden.ProcessPayload, 1000)
+		processPayloadStream = make(chan warden.ProcessStream, 1000)
 
-		wardenClient.SetRunReturnValues(0, processPayloadStream, nil)
+		wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
+			return 0, processPayloadStream, nil
+		}
 	})
 
-	successfulExit := &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
-	failedExit := &warden.ProcessPayload{ExitStatus: proto.Uint32(19)}
+	exit0 := uint32(0)
+	exit19 := uint32(19)
+
+	successfulExit := warden.ProcessStream{ExitStatus: &exit0}
+	failedExit := warden.ProcessStream{ExitStatus: &exit19}
+
+	handle := "some-container-handle"
 
 	JustBeforeEach(func() {
+		container, err := wardenClient.Create(warden.ContainerSpec{
+			Handle: handle,
+		})
+		Ω(err).ShouldNot(HaveOccurred())
+
 		step = New(
-			"some-container-handle",
+			container,
 			runAction,
 			fileDescriptorLimit,
 			fakeStreamer,
-			wardenClient,
 			logger,
 		)
 	})
@@ -85,11 +95,13 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("executes the command in the passed-in container", func() {
-				runningScript := wardenClient.ScriptsThatRan()[0]
-				Ω(runningScript.Handle).Should(Equal("some-container-handle"))
+				runningScripts := wardenClient.Connection.SpawnedProcesses(handle)
+				Ω(runningScripts).Should(HaveLen(1))
+
+				runningScript := runningScripts[0]
 				Ω(runningScript.Script).Should(Equal("sudo reboot"))
-				Ω(runningScript.ResourceLimits.FileDescriptors).Should(BeNumerically("==", fileDescriptorLimit))
-				Ω(runningScript.EnvironmentVariables).Should(Equal([]gordon.EnvironmentVariable{
+				Ω(*runningScript.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
+				Ω(runningScript.EnvironmentVariables).Should(Equal([]warden.EnvironmentVariable{
 					{"A", "1"},
 					{"B", "2"},
 				}))
@@ -110,7 +122,9 @@ var _ = Describe("RunAction", func() {
 			disaster := errors.New("I, like, tried but failed")
 
 			BeforeEach(func() {
-				wardenClient.SetRunReturnValues(0, nil, disaster)
+				wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
+					return 0, nil, disaster
+				}
 			})
 
 			It("returns the error", func() {
@@ -163,9 +177,11 @@ var _ = Describe("RunAction", func() {
 
 		Context("regardless of status code, when an out of memory event has occured", func() {
 			BeforeEach(func() {
-				wardenClient.SetInfoResponse(&warden.InfoResponse{
-					Events: []string{"happy land", "out of memory", "another event"},
-				})
+				wardenClient.Connection.WhenGettingInfo = func(string) (warden.ContainerInfo, error) {
+					return warden.ContainerInfo{
+						Events: []string{"happy land", "out of memory", "another event"},
+					}, nil
+				}
 
 				processPayloadStream <- failedExit
 			})
@@ -176,18 +192,15 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Describe("emitting logs", func() {
-			stdout := warden.ProcessPayload_stdout
-			stderr := warden.ProcessPayload_stderr
-
 			BeforeEach(func() {
-				processPayloadStream <- &warden.ProcessPayload{
-					Source: &stdout,
-					Data:   proto.String("hi out"),
+				processPayloadStream <- warden.ProcessStream{
+					Source: warden.ProcessStreamSourceStdout,
+					Data:   []byte("hi out"),
 				}
 
-				processPayloadStream <- &warden.ProcessPayload{
-					Source: &stderr,
-					Data:   proto.String("hi err"),
+				processPayloadStream <- warden.ProcessStream{
+					Source: warden.ProcessStreamSourceStderr,
+					Data:   []byte("hi err"),
 				}
 
 				processPayloadStream <- successfulExit
@@ -211,7 +224,7 @@ var _ = Describe("RunAction", func() {
 
 		It("stops the container", func() {
 			step.Cancel()
-			Ω(wardenClient.StoppedHandles()).Should(ContainElement("some-container-handle"))
+			Ω(wardenClient.Connection.Stopped(handle)).Should(ContainElement(fake_connection.StopSpec{}))
 		})
 	})
 })

@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -28,7 +28,6 @@ type TaskTransformer struct {
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
 	compressor         compressor.Compressor
-	wardenClient       gordon.Client
 	logger             *steno.Logger
 	tempDir            string
 	result             *string
@@ -40,7 +39,6 @@ func NewTaskTransformer(
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
-	wardenClient gordon.Client,
 	logger *steno.Logger,
 	tempDir string,
 ) *TaskTransformer {
@@ -50,7 +48,6 @@ func NewTaskTransformer(
 		uploader:           uploader,
 		extractor:          extractor,
 		compressor:         compressor,
-		wardenClient:       wardenClient,
 		logger:             logger,
 		tempDir:            tempDir,
 	}
@@ -58,13 +55,13 @@ func NewTaskTransformer(
 
 func (transformer *TaskTransformer) StepsFor(
 	task *models.Task,
-	containerHandle string,
+	container warden.Container,
 	result *string,
 ) []sequence.Step {
 	subSteps := []sequence.Step{}
 
 	for _, a := range task.Actions {
-		step := transformer.convertAction(task, a, containerHandle, result)
+		step := transformer.convertAction(task, a, container, result)
 		subSteps = append(subSteps, step)
 	}
 
@@ -74,7 +71,7 @@ func (transformer *TaskTransformer) StepsFor(
 func (transformer *TaskTransformer) convertAction(
 	task *models.Task,
 	action models.ExecutorAction,
-	containerHandle string,
+	container warden.Container,
 	result *string,
 ) sequence.Step {
 	logStreamer := transformer.logStreamerFactory(task.Log)
@@ -82,41 +79,37 @@ func (transformer *TaskTransformer) convertAction(
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:
 		return run_step.New(
-			containerHandle,
+			container,
 			actionModel,
-			task.FileDescriptors,
+			uint64(task.FileDescriptors), // TODO
 			logStreamer,
-			transformer.wardenClient,
 			transformer.logger,
 		)
 	case models.DownloadAction:
 		return download_step.New(
-			containerHandle,
+			container,
 			actionModel,
 			transformer.downloader,
 			transformer.extractor,
 			transformer.tempDir,
-			transformer.wardenClient,
 			logStreamer,
 			transformer.logger,
 		)
 	case models.UploadAction:
 		return upload_step.New(
-			containerHandle,
+			container,
 			actionModel,
 			transformer.uploader,
 			transformer.compressor,
 			transformer.tempDir,
-			transformer.wardenClient,
 			logStreamer,
 			transformer.logger,
 		)
 	case models.FetchResultAction:
 		return fetch_result_step.New(
-			containerHandle,
+			container,
 			actionModel,
 			transformer.tempDir,
-			transformer.wardenClient,
 			transformer.logger,
 			result,
 		)
@@ -125,20 +118,21 @@ func (transformer *TaskTransformer) convertAction(
 			transformer.convertAction(
 				task,
 				actionModel.Action,
-				containerHandle,
+				container,
 				result,
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
 			actionModel.FailureMessage,
 			logStreamer,
-			transformer.logger)
+			transformer.logger,
+		)
 	case models.TryAction:
 		return try_step.New(
 			transformer.convertAction(
 				task,
 				actionModel.Action,
-				containerHandle,
+				container,
 				result,
 			),
 			transformer.logger,

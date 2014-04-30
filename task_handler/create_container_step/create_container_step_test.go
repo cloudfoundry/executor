@@ -8,7 +8,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -19,11 +20,11 @@ var _ = Describe("CreateContainerStep", func() {
 	var step sequence.Step
 
 	var task models.Task
-	var gordon *fake_gordon.FakeGordon
-	var containerHandle string
+	var wardenClient *fake_warden_client.FakeClient
+	var container warden.Container
 
 	BeforeEach(func() {
-		gordon = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 
 		task = models.Task{
 			Guid:  "totally-unique",
@@ -42,9 +43,9 @@ var _ = Describe("CreateContainerStep", func() {
 		step = New(
 			&task,
 			steno.NewLogger("test-logger"),
-			gordon,
+			wardenClient,
 			"container-owner-name",
-			&containerHandle,
+			&container,
 		)
 	})
 
@@ -55,30 +56,36 @@ var _ = Describe("CreateContainerStep", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			Ω(gordon.CreatedHandles()).Should(HaveLen(1))
+			Ω(wardenClient.Connection.Created()).Should(HaveLen(1))
 		})
 
 		It("creates a container with the given properties", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			handles := gordon.CreatedHandles()
-			Ω(handles).Should(HaveLen(1))
+			created := wardenClient.Connection.Created()
+			Ω(created).Should(HaveLen(1))
 
-			properties := gordon.CreatedProperties(handles[0])
+			properties := created[0].Properties
 			Ω(properties["owner"]).Should(Equal("container-owner-name"))
 		})
 
-		It("sets the shared containerHandle pointer", func() {
+		It("sets the shared container pointer", func() {
+			wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+				return "some-handle", nil
+			}
+
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			Ω(containerHandle).Should(Equal(gordon.CreatedHandles()[0]))
+			Ω(container.Handle()).Should(Equal("some-handle"))
 		})
 
 		Context("when registering fails", func() {
 			BeforeEach(func() {
-				gordon.CreateError = disaster
+				wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+					return "", disaster
+				}
 			})
 
 			It("sends back the error", func() {
@@ -90,12 +97,16 @@ var _ = Describe("CreateContainerStep", func() {
 
 	Describe("Cleanup", func() {
 		It("destroys the created container", func() {
+			wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+				return "some-handle", nil
+			}
+
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
 			step.Cleanup()
 
-			Ω(gordon.DestroyedHandles()).Should(Equal(gordon.CreatedHandles()))
+			Ω(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
 		})
 	})
 })

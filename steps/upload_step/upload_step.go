@@ -7,60 +7,56 @@ import (
 	"os"
 	"os/user"
 
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/pivotal-golang/archiver/compressor"
 )
 
 type UploadStep struct {
-	containerHandle string
-	model           models.UploadAction
-	uploader        uploader.Uploader
-	compressor      compressor.Compressor
-	tempDir         string
-	wardenClient    gordon.Client
-	streamer        log_streamer.LogStreamer
-	logger          *steno.Logger
+	container  warden.Container
+	model      models.UploadAction
+	uploader   uploader.Uploader
+	compressor compressor.Compressor
+	tempDir    string
+	streamer   log_streamer.LogStreamer
+	logger     *steno.Logger
 }
 
 func New(
-	containerHandle string,
+	container warden.Container,
 	model models.UploadAction,
 	uploader uploader.Uploader,
 	compressor compressor.Compressor,
 	tempDir string,
-	wardenClient gordon.Client,
 	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *UploadStep {
 	return &UploadStep{
-		containerHandle: containerHandle,
-		model:           model,
-		uploader:        uploader,
-		compressor:      compressor,
-		tempDir:         tempDir,
-		wardenClient:    wardenClient,
-		streamer:        streamer,
-		logger:          logger,
+		container:  container,
+		model:      model,
+		uploader:   uploader,
+		compressor: compressor,
+		tempDir:    tempDir,
+		streamer:   streamer,
+		logger:     logger,
 	}
 }
 
 func (step *UploadStep) Perform() (err error) {
 	step.logger.Infod(
 		map[string]interface{}{
-			"handle": step.containerHandle,
+			"handle": step.container.Handle(),
 		},
 		"task.handle.upload-step",
 	)
 
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
-
 	if err != nil {
 		return err
 	}
@@ -72,8 +68,7 @@ func (step *UploadStep) Perform() (err error) {
 		return err
 	}
 
-	_, err = step.wardenClient.CopyOut(
-		step.containerHandle,
+	err = step.container.CopyOut(
 		step.model.From,
 		tempDir,
 		currentUser.Username,

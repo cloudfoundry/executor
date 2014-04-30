@@ -6,12 +6,12 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -28,9 +28,11 @@ var _ = Describe("DownloadAction", func() {
 	var downloader *fake_downloader.FakeDownloader
 	var extractor *fake_extractor.FakeExtractor
 	var tempDir string
-	var wardenClient *fake_gordon.FakeGordon
+	var wardenClient *fake_warden_client.FakeClient
 	var logger *steno.Logger
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
+
+	handle := "some-container-handle"
 
 	BeforeEach(func() {
 		var err error
@@ -44,7 +46,7 @@ var _ = Describe("DownloadAction", func() {
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		wardenClient = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 
 		logger = steno.NewLogger("test-logger")
 
@@ -63,13 +65,17 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		JustBeforeEach(func() {
+			container, err := wardenClient.Create(warden.ContainerSpec{
+				Handle: handle,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
 			step = New(
-				"some-container-handle",
+				container,
 				downloadAction,
 				downloader,
 				extractor,
 				tempDir,
-				wardenClient,
 				fakeStreamer,
 				logger,
 			)
@@ -83,11 +89,11 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		It("places the file in the container", func() {
-			Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
+			copiedIn := wardenClient.Connection.CopiedIn(handle)
+			Ω(copiedIn).ShouldNot(BeEmpty())
 
-			copiedFile := wardenClient.ThingsCopiedIn()[0]
-			Ω(copiedFile.Handle).To(Equal("some-container-handle"))
-			Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica"))
+			Ω(copiedIn[0].Source).To(ContainSubstring(tempDir))
+			Ω(copiedIn[0].Destination).To(Equal("/tmp/Antarctica"))
 		})
 
 		It("loggregates the download filesize", func() {
@@ -122,7 +128,9 @@ var _ = Describe("DownloadAction", func() {
 			var expectedErr = errors.New("oh no!")
 
 			BeforeEach(func() {
-				wardenClient.SetCopyInErr(expectedErr)
+				wardenClient.Connection.WhenCopyingIn = func(string, string, string) error {
+					return expectedErr
+				}
 			})
 
 			It("returns an error", func() {
@@ -146,11 +154,11 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("places the file in the container under the destination", func() {
-				Ω(wardenClient.ThingsCopiedIn()).ShouldNot(BeEmpty())
-				copiedFile := wardenClient.ThingsCopiedIn()[0]
-				Ω(copiedFile.Handle).To(Equal("some-container-handle"))
-				Ω(copiedFile.Src).To(ContainSubstring(tempDir))
-				Ω(copiedFile.Dst).To(Equal("/tmp/Antarctica/"))
+				copiedIn := wardenClient.Connection.CopiedIn(handle)
+				Ω(copiedIn).ShouldNot(BeEmpty())
+
+				Ω(copiedIn[0].Source).To(ContainSubstring(tempDir))
+				Ω(copiedIn[0].Destination).To(Equal("/tmp/Antarctica/"))
 			})
 
 			Context("when there is an error extracting the file", func() {
@@ -168,7 +176,9 @@ var _ = Describe("DownloadAction", func() {
 				var expectedErr = errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.SetCopyInErr(expectedErr)
+					wardenClient.Connection.WhenCopyingIn = func(string, string, string) error {
+						return expectedErr
+					}
 				})
 
 				It("returns an error", func() {

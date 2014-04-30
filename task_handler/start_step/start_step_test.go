@@ -10,6 +10,8 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/task_handler/start_step"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -19,7 +21,8 @@ var _ = Describe("StartStep", func() {
 
 	var task models.Task
 	var bbs *fake_bbs.FakeExecutorBBS
-	var containerHandle string
+
+	handle := "some-container-handle"
 
 	BeforeEach(func() {
 		task = models.Task{
@@ -36,14 +39,18 @@ var _ = Describe("StartStep", func() {
 			ExecutorID: "some-executor-id",
 		}
 
+		wardenClient := fake_warden_client.New()
+
+		container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
+		Ω(err).ShouldNot(HaveOccurred())
+
 		bbs = fake_bbs.NewFakeExecutorBBS()
-		containerHandle = "some-container-handle"
 
 		step = New(
 			&task,
 			steno.NewLogger("test-logger"),
 			bbs,
-			&containerHandle,
+			&container,
 		)
 	})
 
@@ -55,7 +62,7 @@ var _ = Describe("StartStep", func() {
 			started := bbs.StartedTasks()
 			Ω(started).ShouldNot(BeEmpty())
 			Ω(started[0].Guid).Should(Equal(task.Guid))
-			Ω(started[0].ContainerHandle).Should(Equal(containerHandle))
+			Ω(started[0].ContainerHandle).Should(Equal(handle))
 		})
 
 		Context("when starting the Task in the BBS fails", func() {

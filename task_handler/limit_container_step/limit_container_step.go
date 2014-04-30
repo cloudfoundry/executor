@@ -2,7 +2,8 @@ package limit_container_step
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/gordon"
+
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 )
@@ -12,27 +13,24 @@ var ErrPercentOutOfBounds = errors.New("percentage must be between 0 and 100")
 type LimitContainerStep struct {
 	task                  *models.Task
 	logger                *steno.Logger
-	wardenClient          gordon.Client
 	containerInodeLimit   int
 	containerMaxCpuShares int
-	containerHandle       *string
+	container             *warden.Container
 }
 
 func New(
 	task *models.Task,
 	logger *steno.Logger,
-	wardenClient gordon.Client,
 	containerInodeLimit int,
 	containerMaxCpuShares int,
-	containerHandle *string,
+	container *warden.Container,
 ) *LimitContainerStep {
 	return &LimitContainerStep{
 		task:                  task,
 		logger:                logger,
-		wardenClient:          wardenClient,
 		containerInodeLimit:   containerInodeLimit,
 		containerMaxCpuShares: containerMaxCpuShares,
-		containerHandle:       containerHandle,
+		container:             container,
 	}
 }
 
@@ -44,7 +42,9 @@ func (step LimitContainerStep) Perform() error {
 	var err error
 
 	if step.task.MemoryMB > 0 {
-		_, err = step.wardenClient.LimitMemory(*step.containerHandle, uint64(step.task.MemoryMB*1024*1024))
+		err = (*step.container).LimitMemory(warden.MemoryLimits{
+			LimitInBytes: uint64(step.task.MemoryMB * 1024 * 1024),
+		})
 		if err != nil {
 			step.logger.Errord(
 				map[string]interface{}{
@@ -58,7 +58,7 @@ func (step LimitContainerStep) Perform() error {
 		}
 	}
 
-	_, err = step.wardenClient.LimitDisk(*step.containerHandle, gordon.DiskLimits{
+	err = (*step.container).LimitDisk(warden.DiskLimits{
 		ByteLimit:  uint64(step.task.DiskMB * 1024 * 1024),
 		InodeLimit: uint64(step.containerInodeLimit),
 	})
@@ -76,8 +76,7 @@ func (step LimitContainerStep) Perform() error {
 	}
 
 	if step.task.CpuPercent != 0 {
-		_, err = step.wardenClient.LimitCPU(*step.containerHandle, step.cpuShares())
-
+		err = (*step.container).LimitCPU(warden.CPULimits{step.cpuShares()})
 		if err != nil {
 			step.logger.Errord(
 				map[string]interface{}{

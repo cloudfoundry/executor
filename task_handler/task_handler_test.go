@@ -8,10 +8,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"code.google.com/p/gogoprotobuf/proto"
-	warden "github.com/cloudfoundry-incubator/garden/protocol"
-	"github.com/cloudfoundry-incubator/gordon"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -34,7 +32,7 @@ var _ = Describe("TaskHandler", func() {
 		cancel  chan struct{}
 
 		bbs                 *fake_bbs.FakeExecutorBBS
-		wardenClient        *fake_gordon.FakeGordon
+		wardenClient        *fake_warden_client.FakeClient
 		downloader          *fake_downloader.FakeDownloader
 		uploader            *fake_uploader.FakeUploader
 		extractor           *fake_extractor.FakeExtractor
@@ -44,6 +42,8 @@ var _ = Describe("TaskHandler", func() {
 		containerInodeLimit int
 		maxCpuShares        int
 	)
+
+	handle := "some-container-handle"
 
 	BeforeEach(func() {
 		cancel = make(chan struct{})
@@ -75,7 +75,7 @@ var _ = Describe("TaskHandler", func() {
 		}
 
 		bbs = fake_bbs.NewFakeExecutorBBS()
-		wardenClient = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 		taskRegistry = fake_task_registry.New()
 
 		logStreamerFactory := func(models.LogConfig) log_streamer.LogStreamer {
@@ -94,13 +94,16 @@ var _ = Describe("TaskHandler", func() {
 		tmpDir, err := ioutil.TempDir("", "run-once-handler-tmp")
 		Ω(err).ShouldNot(HaveOccurred())
 
+		wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+			return handle, nil
+		}
+
 		transformer = task_transformer.NewTaskTransformer(
 			logStreamerFactory,
 			downloader,
 			uploader,
 			extractor,
 			compressor,
-			wardenClient,
 			logger,
 			tmpDir,
 		)
@@ -120,11 +123,14 @@ var _ = Describe("TaskHandler", func() {
 
 	Describe("Task", func() {
 		setUpSuccessfulRuns := func() {
-			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
+			processPayloadStream := make(chan warden.ProcessStream, 1000)
 
-			wardenClient.SetRunReturnValues(0, processPayloadStream, nil)
+			wardenClient.Connection.WhenRunning = func(handle string, spec warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
+				return 0, processPayloadStream, nil
+			}
 
-			successfulExit := &warden.ProcessPayload{ExitStatus: proto.Uint32(0)}
+			exitStatus := uint32(0)
+			successfulExit := warden.ProcessStream{ExitStatus: &exitStatus}
 
 			go func() {
 				processPayloadStream <- successfulExit
@@ -132,11 +138,14 @@ var _ = Describe("TaskHandler", func() {
 		}
 
 		setUpFailedRuns := func() {
-			processPayloadStream := make(chan *warden.ProcessPayload, 1000)
+			processPayloadStream := make(chan warden.ProcessStream, 1000)
 
-			wardenClient.SetRunReturnValues(0, processPayloadStream, nil)
+			wardenClient.Connection.WhenRunning = func(handle string, spec warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
+				return 0, processPayloadStream, nil
+			}
 
-			failedExit := &warden.ProcessPayload{ExitStatus: proto.Uint32(3)}
+			exitStatus := uint32(3)
+			failedExit := warden.ProcessStream{ExitStatus: &exitStatus}
 
 			go func() {
 				processPayloadStream <- failedExit
@@ -160,23 +169,19 @@ var _ = Describe("TaskHandler", func() {
 				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
 
 				// create container
-				handles := wardenClient.CreatedHandles()
-				Ω(handles).Should(HaveLen(1))
+				createdSpecs := wardenClient.Connection.Created()
+				Ω(createdSpecs).Should(HaveLen(1))
 
-				handle := handles[0]
+				createdSpec := createdSpecs[0]
 
 				// container must have owner
-				properties := wardenClient.CreatedProperties(handle)
-				Ω(properties["owner"]).Should(Equal("container-owner-name"))
+				Ω(createdSpec.Properties["owner"]).Should(Equal("container-owner-name"))
 
 				//limit memory, disk, and cpu
-				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
-				Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
-				Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
-				Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
-				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
-				Ω(wardenClient.CPULimits()[0].Handle).Should(Equal(handle))
-				Ω(wardenClient.CPULimits()[0].Limit).Should(BeNumerically("==", float64(maxCpuShares)*0.25))
+				Ω(wardenClient.Connection.LimitedMemory(handle)[0].LimitInBytes).Should(BeNumerically("==", 512*1024*1024))
+				Ω(wardenClient.Connection.LimitedDisk(handle)[0].ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
+				Ω(wardenClient.Connection.LimitedDisk(handle)[0].InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+				Ω(wardenClient.Connection.LimitedCPU(handle)[0].LimitInShares).Should(BeNumerically("==", float64(maxCpuShares)*0.25))
 
 				// start
 				started := bbs.StartedTasks()
@@ -191,10 +196,8 @@ var _ = Describe("TaskHandler", func() {
 
 				// execute run step
 				ranScripts := []string{}
-				for _, script := range wardenClient.ScriptsThatRan() {
-					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
-
-					ranScripts = append(ranScripts, script.Script)
+				for _, spec := range wardenClient.Connection.SpawnedProcesses(handle) {
+					ranScripts = append(ranScripts, spec.Script)
 				}
 
 				Ω(ranScripts).Should(ContainElement("sudo reboot"))
@@ -208,7 +211,7 @@ var _ = Describe("TaskHandler", func() {
 				Ω(completed).ShouldNot(BeEmpty())
 				Ω(completed[0].Guid).Should(Equal("run-once-guid"))
 				Ω(completed[0].ExecutorID).Should(Equal("fake-executor-id"))
-				Ω(completed[0].ContainerHandle).ShouldNot(BeZero())
+				Ω(completed[0].ContainerHandle).Should(Equal(handle))
 				Ω(completed[0].Failed).Should(BeFalse())
 				Ω(completed[0].FailureReason).Should(BeZero())
 			})
@@ -236,7 +239,7 @@ var _ = Describe("TaskHandler", func() {
 			})
 
 			It("should not create the container", func() {
-				Ω(wardenClient.CreatedHandles()).Should(BeEmpty())
+				Ω(wardenClient.Connection.Created()).Should(BeEmpty())
 			})
 
 			It("should not complete the task", func() {
@@ -246,12 +249,11 @@ var _ = Describe("TaskHandler", func() {
 
 		Context("when the task fails at the create container step", func() {
 			BeforeEach(func() {
-				wardenClient.CreateError = errors.New("thou shall not pass")
-				handler.Task(task, "fake-executor-id", cancel)
-			})
+				wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+					return "", errors.New("thou shall not pass")
+				}
 
-			It("should not limit the container", func() {
-				Ω(wardenClient.MemoryLimits()).Should(BeEmpty())
+				handler.Task(task, "fake-executor-id", cancel)
 			})
 
 			It("should not complete the task", func() {
@@ -261,7 +263,10 @@ var _ = Describe("TaskHandler", func() {
 
 		Context("when the task fails at the limit container step", func() {
 			BeforeEach(func() {
-				wardenClient.SetLimitMemoryError(errors.New("foo"))
+				wardenClient.Connection.WhenLimitingMemory = func(string, warden.MemoryLimits) (warden.MemoryLimits, error) {
+					return warden.MemoryLimits{}, errors.New("thou shall not pass")
+				}
+
 				handler.Task(task, "fake-executor-id", cancel)
 			})
 
@@ -298,15 +303,19 @@ var _ = Describe("TaskHandler", func() {
 				Ω(claimed[0].ExecutorID).Should(Equal("fake-executor-id"))
 
 				// create container
-				Ω(wardenClient.CreatedHandles()).ShouldNot(BeEmpty())
-				handle := wardenClient.CreatedHandles()[0]
+				createdSpecs := wardenClient.Connection.Created()
+				Ω(createdSpecs).Should(HaveLen(1))
 
-				//limit memoru & disk
-				Ω(wardenClient.MemoryLimits()[0].Handle).Should(Equal(handle))
-				Ω(wardenClient.MemoryLimits()[0].Limit).Should(BeNumerically("==", 512*1024*1024))
-				Ω(wardenClient.DiskLimits()[0].Handle).Should(Equal(handle))
-				Ω(wardenClient.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
-				Ω(wardenClient.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+				createdSpec := createdSpecs[0]
+
+				// container must have owner
+				Ω(createdSpec.Properties["owner"]).Should(Equal("container-owner-name"))
+
+				//limit memory, disk, and cpu
+				Ω(wardenClient.Connection.LimitedMemory(handle)[0].LimitInBytes).Should(BeNumerically("==", 512*1024*1024))
+				Ω(wardenClient.Connection.LimitedDisk(handle)[0].ByteLimit).Should(BeNumerically("==", 1024*1024*1024))
+				Ω(wardenClient.Connection.LimitedDisk(handle)[0].InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+				Ω(wardenClient.Connection.LimitedCPU(handle)[0].LimitInShares).Should(BeNumerically("==", float64(maxCpuShares)*0.25))
 
 				// start
 				started := bbs.StartedTasks()
@@ -321,10 +330,8 @@ var _ = Describe("TaskHandler", func() {
 
 				// execute run step
 				ranScripts := []string{}
-				for _, script := range wardenClient.ScriptsThatRan() {
-					Ω(script.Handle).Should(Equal(started[0].ContainerHandle))
-
-					ranScripts = append(ranScripts, script.Script)
+				for _, spec := range wardenClient.Connection.SpawnedProcesses(handle) {
+					ranScripts = append(ranScripts, spec.Script)
 				}
 
 				Ω(ranScripts).Should(ContainElement("sudo reboot"))
@@ -350,11 +357,11 @@ var _ = Describe("TaskHandler", func() {
 				setUpSuccessfulRuns()
 				running = make(chan struct{})
 
-				wardenClient.WhenRunning("", "sudo reboot", gordon.ResourceLimits{}, []gordon.EnvironmentVariable{}, func() (uint32, <-chan *warden.ProcessPayload, error) {
+				wardenClient.Connection.WhenRunning = func(handle string, spec warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
 					running <- struct{}{}
 					time.Sleep(1 * time.Hour)
 					return 0, nil, nil
-				})
+				}
 			})
 
 			It("does not continue performing", func() {
@@ -371,7 +378,7 @@ var _ = Describe("TaskHandler", func() {
 
 				Eventually(done).Should(Receive())
 
-				Ω(wardenClient.StoppedHandles()).ShouldNot(BeEmpty())
+				Ω(wardenClient.Connection.Stopped(handle)).ShouldNot(BeEmpty())
 
 				Ω(uploader.UploadUrls).Should(BeEmpty())
 
@@ -386,22 +393,17 @@ var _ = Describe("TaskHandler", func() {
 	Describe("Cleanup", func() {
 		Context("when there are containers matching the owner name", func() {
 			BeforeEach(func() {
-				wardenClient.WhenListing(
-					func(properties map[string]string) (*warden.ListResponse, error) {
-						Ω(properties["owner"]).Should(Equal("container-owner-name"))
-
-						return &warden.ListResponse{
-							Handles: []string{"doomed-handle-1", "doomed-handle-2"},
-						}, nil
-					},
-				)
+				wardenClient.Connection.WhenListing = func(properties warden.Properties) ([]string, error) {
+					Ω(properties["owner"]).Should(Equal("container-owner-name"))
+					return []string{"doomed-handle-1", "doomed-handle-2"}, nil
+				}
 			})
 
 			It("destroys them", func() {
 				err := handler.Cleanup()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(wardenClient.DestroyedHandles()).Should(Equal([]string{
+				Ω(wardenClient.Connection.Destroyed()).Should(Equal([]string{
 					"doomed-handle-1",
 					"doomed-handle-2",
 				}))
@@ -411,7 +413,9 @@ var _ = Describe("TaskHandler", func() {
 				disaster := errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.DestroyError = disaster
+					wardenClient.Connection.WhenDestroying = func(string) error {
+						return disaster
+					}
 				})
 
 				It("returns the error", func() {
@@ -425,11 +429,9 @@ var _ = Describe("TaskHandler", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				wardenClient.WhenListing(
-					func(properties map[string]string) (*warden.ListResponse, error) {
-						return nil, disaster
-					},
-				)
+				wardenClient.Connection.WhenListing = func(properties warden.Properties) ([]string, error) {
+					return nil, disaster
+				}
 			})
 
 			It("returns the error", func() {

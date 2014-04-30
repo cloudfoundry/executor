@@ -9,7 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudfoundry-incubator/gordon"
+	WardenClient "github.com/cloudfoundry-incubator/garden/client"
+	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
@@ -173,18 +174,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	wardenClient := gordon.NewClient(&gordon.ConnectionInfo{
+	wardenClient := WardenClient.New(&WardenConnection.Info{
 		Network: *wardenNetwork,
 		Addr:    *wardenAddr,
 	})
-
-	err = wardenClient.Connect()
-	if err != nil {
-		logger.Errord(map[string]interface{}{
-			"error": err,
-		}, "warden is not up!")
-		os.Exit(1)
-	}
 
 	if *memoryMB <= 0 || *diskMB <= 0 {
 		logger.Error("valid memory and disk capacity must be specified on startup!")
@@ -215,7 +208,6 @@ func main() {
 		uploader,
 		extractor,
 		compressor,
-		wardenClient,
 		logger,
 		*tempDir,
 	)

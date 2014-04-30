@@ -1,7 +1,7 @@
 package create_container_step
 
 import (
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 )
@@ -9,30 +9,32 @@ import (
 type ContainerStep struct {
 	task               *models.Task
 	logger             *steno.Logger
-	wardenClient       gordon.Client
+	wardenClient       warden.Client
 	containerOwnerName string
-	containerHandle    *string
+	container          *warden.Container
 }
 
 func New(
 	task *models.Task,
 	logger *steno.Logger,
-	wardenClient gordon.Client,
+	wardenClient warden.Client,
 	containerOwnerName string,
-	containerHandle *string,
+	container *warden.Container,
 ) *ContainerStep {
 	return &ContainerStep{
 		task:               task,
 		logger:             logger,
 		wardenClient:       wardenClient,
 		containerOwnerName: containerOwnerName,
-		containerHandle:    containerHandle,
+		container:          container,
 	}
 }
 
 func (step ContainerStep) Perform() error {
-	createResponse, err := step.wardenClient.Create(map[string]string{
-		"owner": step.containerOwnerName,
+	container, err := step.wardenClient.Create(warden.ContainerSpec{
+		Properties: warden.Properties{
+			"owner": step.containerOwnerName,
+		},
 	})
 
 	if err != nil {
@@ -47,7 +49,7 @@ func (step ContainerStep) Perform() error {
 		return err
 	}
 
-	*step.containerHandle = createResponse.GetHandle()
+	*step.container = container
 
 	return nil
 }
@@ -55,7 +57,7 @@ func (step ContainerStep) Perform() error {
 func (step ContainerStep) Cancel() {}
 
 func (step ContainerStep) Cleanup() {
-	_, err := step.wardenClient.Destroy(*step.containerHandle)
+	err := step.wardenClient.Destroy((*step.container).Handle())
 	if err != nil {
 		step.logger.Errord(
 			map[string]interface{}{

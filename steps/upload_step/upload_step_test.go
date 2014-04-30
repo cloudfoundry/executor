@@ -13,12 +13,12 @@ import (
 	"path/filepath"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -37,7 +37,7 @@ var _ = Describe("UploadStep", func() {
 	var uploadAction *models.UploadAction
 	var uploader Uploader.Uploader
 	var tempDir string
-	var wardenClient *fake_gordon.FakeGordon
+	var wardenClient *fake_warden_client.FakeClient
 	var logger *steno.Logger
 	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -67,7 +67,7 @@ var _ = Describe("UploadStep", func() {
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		wardenClient = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 
 		logger = steno.NewLogger("test-logger")
 
@@ -84,14 +84,20 @@ var _ = Describe("UploadStep", func() {
 		uploadTarget.Close()
 	})
 
+	handle := "some-container-handle"
+
 	JustBeforeEach(func() {
+		container, err := wardenClient.Create(warden.ContainerSpec{
+			Handle: handle,
+		})
+		Ω(err).ShouldNot(HaveOccurred())
+
 		step = New(
-			"some-container-handle",
+			container,
 			*uploadAction,
 			uploader,
 			compressor,
 			tempDir,
-			wardenClient,
 			fakeStreamer,
 			logger,
 		)
@@ -99,28 +105,28 @@ var _ = Describe("UploadStep", func() {
 
 	Describe("Perform", func() {
 		It("uploads a .tgz to the destination", func() {
-			wardenClient.WhenCopyingOut(fake_gordon.CopiedOut{
-				Handle: "some-container-handle",
-				Src:    "/Antarctica",
-			}, func(out fake_gordon.CopiedOut) error {
-				err := ioutil.WriteFile(
-					filepath.Join(out.Dst, "some-file"),
-					[]byte("some-file-contents"),
-					0644,
-				)
-				Ω(err).ShouldNot(HaveOccurred())
+			wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
+				Ω(handle).Should(Equal("some-container-handle"))
+				Ω(owner).Should(Equal(currentUser.Username))
 
-				err = ioutil.WriteFile(
-					filepath.Join(out.Dst, "another-file"),
-					[]byte("another-file-contents"),
-					0644,
-				)
-				Ω(err).ShouldNot(HaveOccurred())
+				if src == "/Antarctica" {
+					err := ioutil.WriteFile(
+						filepath.Join(dst, "some-file"),
+						[]byte("some-file-contents"),
+						0644,
+					)
+					Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(out.Owner).To(Equal(currentUser.Username))
+					err = ioutil.WriteFile(
+						filepath.Join(dst, "another-file"),
+						[]byte("another-file-contents"),
+						0644,
+					)
+					Ω(err).ShouldNot(HaveOccurred())
+				}
 
 				return nil
-			})
+			}
 
 			err := step.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
@@ -191,12 +197,9 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.WhenCopyingOut(fake_gordon.CopiedOut{
-					Handle: "some-container-handle",
-					Src:    "/Antarctica",
-				}, func(fake_gordon.CopiedOut) error {
+				wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
 					return disaster
-				})
+				}
 			})
 
 			It("returns the error ", func() {

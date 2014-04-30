@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/downloader"
@@ -19,42 +19,39 @@ import (
 )
 
 type DownloadStep struct {
-	containerHandle string
-	model           models.DownloadAction
-	downloader      downloader.Downloader
-	extractor       extractor.Extractor
-	tempDir         string
-	wardenClient    gordon.Client
-	streamer        log_streamer.LogStreamer
-	logger          *steno.Logger
+	container  warden.Container
+	model      models.DownloadAction
+	downloader downloader.Downloader
+	extractor  extractor.Extractor
+	tempDir    string
+	streamer   log_streamer.LogStreamer
+	logger     *steno.Logger
 }
 
 func New(
-	containerHandle string,
+	container warden.Container,
 	model models.DownloadAction,
 	downloader downloader.Downloader,
 	extractor extractor.Extractor,
 	tempDir string,
-	wardenClient gordon.Client,
 	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *DownloadStep {
 	return &DownloadStep{
-		containerHandle: containerHandle,
-		model:           model,
-		downloader:      downloader,
-		extractor:       extractor,
-		tempDir:         tempDir,
-		wardenClient:    wardenClient,
-		streamer:        streamer,
-		logger:          logger,
+		container:  container,
+		model:      model,
+		downloader: downloader,
+		extractor:  extractor,
+		tempDir:    tempDir,
+		streamer:   streamer,
+		logger:     logger,
 	}
 }
 
-func (step *DownloadStep) Perform() (err error) {
+func (step *DownloadStep) Perform() error {
 	step.logger.Infod(
 		map[string]interface{}{
-			"handle": step.containerHandle,
+			"handle": step.container.Handle(),
 		},
 		"task.handle.download-action",
 	)
@@ -81,34 +78,37 @@ func (step *DownloadStep) Perform() (err error) {
 		if err != nil {
 			return emittable_error.New(err, "Copying into the container failed")
 		}
+
 		return err
 	} else {
-		_, err = step.wardenClient.CopyIn(step.containerHandle, downloadedFile.Name(), step.model.To)
+		err := step.container.CopyIn(downloadedFile.Name(), step.model.To)
 		if err != nil {
 			return emittable_error.New(err, "Copying into the container failed")
 		}
+
 		return err
 	}
 }
 
-func (step *DownloadStep) download() (downloadedFile *os.File, err error) {
+func (step *DownloadStep) download() (*os.File, error) {
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	downloadedFile, err = ioutil.TempFile(step.tempDir, "downloaded")
+	downloadedFile, err := ioutil.TempFile(step.tempDir, "downloaded")
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	downloadSize, err := step.downloader.Download(url, downloadedFile)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	fmt.Fprintf(step.streamer.Stdout(), "Downloaded (%s)\n", bytefmt.ByteSize(uint64(downloadSize)))
-	return
+
+	return downloadedFile, err
 }
 
 func (step *DownloadStep) extract(downloadedFile *os.File) (string, error) {
@@ -158,6 +158,7 @@ func (step *DownloadStep) extract(downloadedFile *os.File) (string, error) {
 
 		return "", err
 	}
+
 	return extractionDir, nil
 }
 
@@ -166,11 +167,8 @@ func (step *DownloadStep) Cancel() {}
 func (step *DownloadStep) Cleanup() {}
 
 func (step *DownloadStep) copyExtractedFiles(source string, destination string) error {
-	_, err := step.wardenClient.CopyIn(
-		step.containerHandle,
+	return step.container.CopyIn(
 		source+string(filepath.Separator),
 		destination+string(filepath.Separator),
 	)
-
-	return err
 }

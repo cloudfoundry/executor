@@ -11,7 +11,7 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/task_handler/fake_task_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -25,7 +25,7 @@ var _ = Describe("Executor", func() {
 		task           *models.Task
 		executor       *Executor
 		taskRegistry   *task_registry.TaskRegistry
-		gordon         *fake_gordon.FakeGordon
+		wardenClient   *fake_warden_client.FakeClient
 		ready          chan bool
 		startingMemory int
 		startingDisk   int
@@ -40,7 +40,7 @@ var _ = Describe("Executor", func() {
 
 		storeAdapter = etcdRunner.Adapter()
 		bbs = Bbs.New(storeAdapter, timeprovider.NewTimeProvider())
-		gordon = fake_gordon.New()
+		wardenClient = fake_warden_client.New()
 
 		startingMemory = 256
 		startingDisk = 1024

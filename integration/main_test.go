@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry-incubator/garden/backend"
-	"github.com/cloudfoundry-incubator/garden/backend/fake_backend"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
 	"github.com/cloudfoundry/gunk/timeprovider"
@@ -105,9 +105,9 @@ var _ = Describe("Main", func() {
 	desireTask := func(duration time.Duration) {
 		exitStatus := uint32(0)
 
-		fakeContainer := fake_backend.NewFakeContainer(backend.ContainerSpec{})
+		fakeContainer := fake_backend.NewFakeContainer(warden.ContainerSpec{})
 		fakeContainer.StreamDelay = duration
-		fakeContainer.StreamedProcessChunks = []backend.ProcessStream{
+		fakeContainer.StreamedProcessChunks = []warden.ProcessStream{
 			{ExitStatus: &exitStatus},
 		}
 
@@ -122,9 +122,9 @@ var _ = Describe("Main", func() {
 			var handleThatShouldDie string
 
 			BeforeEach(func() {
-				container, err := fakeBackend.Create(backend.ContainerSpec{
+				container, err := fakeBackend.Create(warden.ContainerSpec{
 					Handle: "container-that-should-die",
-					Properties: backend.Properties{
+					Properties: warden.Properties{
 						"owner": "executor-name",
 					},
 				})
@@ -132,7 +132,7 @@ var _ = Describe("Main", func() {
 
 				handleThatShouldDie = container.Handle()
 
-				_, err = fakeBackend.Create(backend.ContainerSpec{
+				_, err = fakeBackend.Create(warden.ContainerSpec{
 					Handle: "container-that-should-live",
 				})
 				Ω(err).ShouldNot(HaveOccurred())
@@ -174,23 +174,31 @@ var _ = Describe("Main", func() {
 		Describe("when the executor fails to maintain its presence", func() {
 			It("stops all running tasks", func() {
 				desireTask(time.Hour)
-				Eventually(fakeBackend.Containers).Should(HaveLen(1))
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}).Should(HaveLen(1))
 
 				// delete the executor's key (and everything else lol)
 				etcdRunner.Reset()
 
-				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}, 5.0).Should(BeEmpty())
 			})
 		})
 
 		Describe("when the executor receives the TERM signal", func() {
 			It("stops all running tasks", func() {
 				desireTask(time.Hour)
-				Eventually(fakeBackend.Containers).Should(HaveLen(1))
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}).Should(HaveLen(1))
 
 				runner.Session.Terminate()
 
-				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
@@ -202,10 +210,14 @@ var _ = Describe("Main", func() {
 		Describe("when the executor receives the INT signal", func() {
 			It("stops all running tasks", func() {
 				desireTask(time.Hour)
-				Eventually(fakeBackend.Containers).Should(HaveLen(1))
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}).Should(HaveLen(1))
 
 				runner.Session.Interrupt()
-				Eventually(fakeBackend.Containers, 7).Should(BeEmpty())
+				Eventually(func() ([]warden.Container, error) {
+					return fakeBackend.Containers(nil)
+				}).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
@@ -259,9 +271,13 @@ var _ = Describe("Main", func() {
 					})
 
 					It("cancels all running tasks", func() {
-						Ω(fakeBackend.Containers()).Should(HaveLen(1))
+						Ω(fakeBackend.Containers(nil)).Should(HaveLen(1))
+
 						sendDrainSignal()
-						Eventually(fakeBackend.Containers, drainTimeout+aBit).Should(BeEmpty())
+
+						Eventually(func() ([]warden.Container, error) {
+							return fakeBackend.Containers(nil)
+						}, drainTimeout+aBit).Should(BeEmpty())
 					})
 
 					It("exits successfully", func() {

@@ -8,7 +8,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/gordon/fake_gordon"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -19,14 +20,22 @@ var _ = Describe("LimitContainerStep", func() {
 	var step sequence.Step
 
 	var task models.Task
-	var gordon *fake_gordon.FakeGordon
-	var handle string
+	var wardenClient *fake_warden_client.FakeClient
+	var container warden.Container
 	var containerInodeLimit int
 
+	handle := "some-container-handle"
+
 	BeforeEach(func() {
-		gordon = fake_gordon.New()
-		handle = "some-container-handle"
+		wardenClient = fake_warden_client.New()
+
+		var err error
+
+		container, err = wardenClient.Create(warden.ContainerSpec{Handle: handle})
+		Ω(err).ShouldNot(HaveOccurred())
+
 		containerInodeLimit = 200000
+
 		task = models.Task{
 			Guid:       "totally-unique",
 			Stack:      "penguin",
@@ -49,10 +58,9 @@ var _ = Describe("LimitContainerStep", func() {
 		step = New(
 			&task,
 			steno.NewLogger("test-logger"),
-			gordon,
 			containerInodeLimit,
 			maxCpuShares,
-			&handle,
+			&container,
 		)
 	})
 
@@ -64,14 +72,15 @@ var _ = Describe("LimitContainerStep", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			Ω(gordon.MemoryLimits()).Should(HaveLen(1))
-			Ω(gordon.MemoryLimits()[0].Handle).Should(Equal(handle))
-			Ω(gordon.MemoryLimits()[0].Limit).Should(BeNumerically("==", 1024*1024*1024))
+			Ω(wardenClient.Connection.LimitedMemory(handle)[0].LimitInBytes).Should(BeNumerically("==", 1024*1024*1024))
 		})
 
 		Context("when limiting memory fails", func() {
 			BeforeEach(func() {
-				gordon.SetLimitMemoryError(disaster)
+				wardenClient.Connection.WhenLimitingMemory = func(string, warden.MemoryLimits) (warden.MemoryLimits, error) {
+					return warden.MemoryLimits{}, disaster
+				}
+
 				err = step.Perform()
 			})
 
@@ -89,7 +98,7 @@ var _ = Describe("LimitContainerStep", func() {
 				err := step.Perform()
 				Ω(err).Should(BeNil())
 
-				Ω(gordon.MemoryLimits()).Should(BeEmpty())
+				Ω(wardenClient.Connection.LimitedMemory(handle)).Should(BeEmpty())
 			})
 		})
 
@@ -97,15 +106,16 @@ var _ = Describe("LimitContainerStep", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			Ω(gordon.DiskLimits()).Should(HaveLen(1))
-			Ω(gordon.DiskLimits()[0].Handle).Should(Equal(handle))
-			Ω(gordon.DiskLimits()[0].Limits.ByteLimit).Should(BeNumerically("==", 512*1024*1024))
-			Ω(gordon.DiskLimits()[0].Limits.InodeLimit).Should(BeNumerically("==", containerInodeLimit))
+			Ω(wardenClient.Connection.LimitedDisk(handle)[0].ByteLimit).Should(BeNumerically("==", 512*1024*1024))
+			Ω(wardenClient.Connection.LimitedDisk(handle)[0].InodeLimit).Should(BeNumerically("==", containerInodeLimit))
 		})
 
 		Context("when limiting disk fails", func() {
 			BeforeEach(func() {
-				gordon.SetLimitDiskError(disaster)
+				wardenClient.Connection.WhenLimitingDisk = func(string, warden.DiskLimits) (warden.DiskLimits, error) {
+					return warden.DiskLimits{}, disaster
+				}
+
 				err = step.Perform()
 			})
 
@@ -118,9 +128,7 @@ var _ = Describe("LimitContainerStep", func() {
 			err := step.Perform()
 			Ω(err).Should(BeNil())
 
-			Ω(gordon.CPULimits()).Should(HaveLen(1))
-			Ω(gordon.CPULimits()[0].Handle).Should(Equal(handle))
-			Ω(gordon.CPULimits()[0].Limit).Should(BeNumerically("==", 100))
+			Ω(wardenClient.Connection.LimitedCPU(handle)[0].LimitInShares).Should(BeNumerically("==", 100))
 		})
 
 		It("returns an error unless the cpu percentage is between 0 and 100", func() {
@@ -149,13 +157,17 @@ var _ = Describe("LimitContainerStep", func() {
 			It("does not limit the cpu", func() {
 				err := step.Perform()
 				Ω(err).Should(BeNil())
-				Ω(gordon.CPULimits()).Should(BeEmpty())
+
+				Ω(wardenClient.Connection.LimitedCPU(handle)).Should(BeEmpty())
 			})
 		})
 
 		Context("when limiting cpu shares fails", func() {
 			BeforeEach(func() {
-				gordon.SetLimitCPUError(disaster)
+				wardenClient.Connection.WhenLimitingCPU = func(string, warden.CPULimits) (warden.CPULimits, error) {
+					return warden.CPULimits{}, disaster
+				}
+
 				err = step.Perform()
 			})
 

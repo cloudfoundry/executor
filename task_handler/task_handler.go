@@ -4,7 +4,7 @@ import (
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
@@ -26,7 +26,7 @@ type TaskHandlerInterface interface {
 
 type TaskHandler struct {
 	bbs                   Bbs.ExecutorBBS
-	wardenClient          gordon.Client
+	wardenClient          warden.Client
 	containerOwnerName    string
 	transformer           *task_transformer.TaskTransformer
 	logStreamerFactory    log_streamer_factory.LogStreamerFactory
@@ -38,7 +38,7 @@ type TaskHandler struct {
 
 func New(
 	bbs Bbs.ExecutorBBS,
-	wardenClient gordon.Client,
+	wardenClient warden.Client,
 	containerOwnerName string,
 	taskRegistry task_registry.TaskRegistryInterface,
 	transformer *task_transformer.TaskTransformer,
@@ -61,22 +61,22 @@ func New(
 }
 
 func (handler *TaskHandler) Cleanup() error {
-	res, err := handler.wardenClient.List(map[string]string{
+	containers, err := handler.wardenClient.Containers(warden.Properties{
 		"owner": handler.containerOwnerName,
 	})
 	if err != nil {
 		return err
 	}
 
-	for _, handle := range res.GetHandles() {
+	for _, container := range containers {
 		handler.logger.Infod(
 			map[string]interface{}{
-				"handle": handle,
+				"handle": container.Handle(),
 			},
 			"executor.cleanup",
 		)
 
-		_, err := handler.wardenClient.Destroy(handle)
+		err := handler.wardenClient.Destroy(container.Handle())
 		if err != nil {
 			return err
 		}
@@ -86,8 +86,9 @@ func (handler *TaskHandler) Cleanup() error {
 }
 
 func (handler *TaskHandler) Task(task *models.Task, executorID string, cancel <-chan struct{}) {
-	var containerHandle string
+	var container warden.Container
 	var taskResult string
+
 	runner := sequence.New([]sequence.Step{
 		register_step.New(
 			task,
@@ -105,27 +106,26 @@ func (handler *TaskHandler) Task(task *models.Task, executorID string, cancel <-
 			handler.logger,
 			handler.wardenClient,
 			handler.containerOwnerName,
-			&containerHandle,
+			&container,
 		),
 		limit_container_step.New(
 			task,
 			handler.logger,
-			handler.wardenClient,
 			handler.containerInodeLimit,
 			handler.containerMaxCpuShares,
-			&containerHandle,
+			&container,
 		),
 		start_step.New(
 			task,
 			handler.logger,
 			handler.bbs,
-			&containerHandle,
+			&container,
 		),
 		execute_step.New(
 			task,
 			handler.logger,
 			lazy_sequence.New(func() []sequence.Step {
-				return handler.transformer.StepsFor(task, containerHandle, &taskResult)
+				return handler.transformer.StepsFor(task, container, &taskResult)
 			}),
 			handler.bbs,
 			&taskResult,

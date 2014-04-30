@@ -7,33 +7,30 @@ import (
 	"os/user"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	"github.com/cloudfoundry-incubator/gordon"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 )
 
 type FetchResultStep struct {
-	handle            string
+	container         warden.Container
 	fetchResultAction models.FetchResultAction
 	tempDir           string
-	wardenClient      gordon.Client
 	logger            *steno.Logger
 	result            *string
 }
 
 func New(
-	handle string,
+	container warden.Container,
 	fetchResultAction models.FetchResultAction,
 	tempDir string,
-	wardenClient gordon.Client,
 	logger *steno.Logger,
 	result *string,
 ) *FetchResultStep {
 	return &FetchResultStep{
-		handle:            handle,
+		container:         container,
 		fetchResultAction: fetchResultAction,
 		tempDir:           tempDir,
-		wardenClient:      wardenClient,
 		logger:            logger,
 		result:            result,
 	}
@@ -42,7 +39,7 @@ func New(
 func (step *FetchResultStep) Perform() error {
 	step.logger.Infod(
 		map[string]interface{}{
-			"handle": step.handle,
+			"handle": step.container.Handle(),
 		},
 		"task.handle.fetch-result-step",
 	)
@@ -70,11 +67,13 @@ func (step *FetchResultStep) copyAndReadResult() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = step.wardenClient.CopyOut(
-		step.handle,
+
+	err = step.container.CopyOut(
 		step.fetchResultAction.File,
 		fileName,
-		currentUser.Username)
+		currentUser.Username,
+	)
+
 	if err != nil {
 		return nil, err
 	}
