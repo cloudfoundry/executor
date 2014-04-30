@@ -19,6 +19,7 @@ const MAX_DOWNLOAD_ATTEMPTS = 3
 
 type Downloader interface {
 	Download(url *url.URL, destinationFile *os.File) (int64, error)
+	ModifiedSince(url *url.URL, ifModifiedSince time.Time) (bool, error)
 }
 
 type URLDownloader struct {
@@ -55,6 +56,26 @@ func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File
 	return
 }
 
+func (downloader *URLDownloader) ModifiedSince(url *url.URL, ifModifiedSince time.Time) (bool, error) {
+	req, err := http.NewRequest("HEAD", url.String(), nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("If-Modified-Since", ifModifiedSince.Format(http.TimeFormat))
+
+	resp, err := downloader.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+
+	if resp.StatusCode == http.StatusNotModified {
+		return false, nil
+	} else if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("invalid status code: %d", resp.StatusCode)
+	}
+
+	return true, nil
+}
 func (downloader *URLDownloader) fetchToFile(url *url.URL, destinationFile *os.File) (int64, error) {
 	_, err := destinationFile.Seek(0, 0)
 	if err != nil {

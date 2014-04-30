@@ -3,6 +3,7 @@ package download_step_test
 import (
 	"errors"
 	"io/ioutil"
+	"strings"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 
@@ -40,7 +41,7 @@ var _ = Describe("DownloadAction", func() {
 		result = make(chan error)
 
 		downloader = &fake_downloader.FakeDownloader{}
-		downloader.DownloadSize = 1024
+		downloader.DownloadContent = []byte(strings.Repeat("7", 1024))
 		extractor = &fake_extractor.FakeExtractor{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/gomega/ghttp"
+
 	. "github.com/cloudfoundry-incubator/executor/downloader"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -214,6 +216,73 @@ var _ = Describe("Downloader", func() {
 			It("should return an error", func() {
 				_, err := downloader.Download(url, file)
 				Ω(err).NotTo(BeNil())
+			})
+		})
+	})
+
+	Describe("ModifiedSince", func() {
+		var (
+			server       *ghttp.Server
+			modifiedTime time.Time
+			statusCode   int
+			url          *Url.URL
+		)
+
+		BeforeEach(func() {
+			statusCode = http.StatusNotModified
+			modifiedTime = time.Now()
+			server = ghttp.NewServer()
+			server.AppendHandlers(ghttp.CombineHandlers(
+				ghttp.VerifyRequest("HEAD", "/get-the-file"),
+				ghttp.VerifyHeader(http.Header{"If-Modified-Since": []string{modifiedTime.Format(http.TimeFormat)}}),
+				ghttp.RespondWithPtr(&statusCode, nil),
+			))
+
+			url, _ = Url.Parse(server.URL() + "/get-the-file")
+		})
+
+		AfterEach(func() {
+			server.Close()
+		})
+
+		It("should perform a HEAD request with the correct If-Modified-Since header", func() {
+			downloader.ModifiedSince(url, modifiedTime)
+			Ω(server.ReceivedRequests()).Should(HaveLen(1))
+		})
+
+		Context("when the server returns 304", func() {
+			BeforeEach(func() {
+				statusCode = http.StatusNotModified
+			})
+
+			It("should return false", func() {
+				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(isModified).Should(BeFalse())
+			})
+		})
+
+		Context("when the server returns 200", func() {
+			BeforeEach(func() {
+				statusCode = http.StatusOK
+			})
+
+			It("should return true", func() {
+				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(isModified).Should(BeTrue())
+			})
+		})
+
+		Context("for anything else (including a server error)", func() {
+			BeforeEach(func() {
+				statusCode = http.StatusInternalServerError
+			})
+
+			It("should return false with an error", func() {
+				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+				Ω(err).Should(HaveOccurred())
+				Ω(isModified).Should(BeFalse())
 			})
 		})
 	})
