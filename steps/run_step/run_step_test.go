@@ -48,10 +48,11 @@ var _ = Describe("RunAction", func() {
 
 		logger = steno.NewLogger("test-logger")
 
-		processPayloadStream = make(chan warden.ProcessStream, 1000)
+		stream := make(chan warden.ProcessStream, 1000)
+		processPayloadStream = stream
 
 		wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
-			return 0, processPayloadStream, nil
+			return 0, stream, nil
 		}
 	})
 
