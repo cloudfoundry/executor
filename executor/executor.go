@@ -58,13 +58,52 @@ func New(bbs Bbs.ExecutorBBS, drainTimeout time.Duration, logger *steno.Logger) 
 
 		closeOnce: new(sync.Once),
 
-		stopHandlingTasks:  make(chan struct{}, 2),
-		cancelRunningTasks: make(chan error, 1),
+		stopHandlingTasks:       make(chan struct{}, 2),
+		cancelRunningTasks:      make(chan error, 1),
+		stopConvergeTask:        make(chan struct{}),
+		stopMaintainingPresence: make(chan struct{}),
 	}
 }
 
 func (e *Executor) ID() string {
 	return e.id
+}
+
+func (e *Executor) MaintainPresence(heartbeatInterval time.Duration, ready chan<- error, errs chan<- error) {
+	e.outstandingPresence.Add(1)
+	defer e.outstandingPresence.Done()
+
+	presence, statusChannel, err := e.bbs.MaintainExecutorPresence(heartbeatInterval, e.ID())
+
+	if err != nil {
+		ready <- err
+		return
+	}
+
+	go func() {
+		<-e.stopMaintainingPresence
+		presence.Remove()
+	}()
+
+	sentReady := false
+
+	for {
+		locked, ok := <-statusChannel
+
+		if locked && !sentReady {
+			ready <- nil
+			sentReady = true
+		}
+
+		if !locked && ok {
+			e.logger.Error("executor.maintaining-presence.failed")
+			errs <- ErrLostPresence
+		}
+
+		if !ok {
+			break
+		}
+	}
 }
 
 func (e *Executor) Handle(taskHandler task_handler.TaskHandlerInterface, ready chan<- bool) {
@@ -143,12 +182,45 @@ func (e *Executor) Stop() {
 	e.closeOnce.Do(func() {
 		e.stopHandlingTasks <- struct{}{}
 		e.cancelRunningTasks <- nil
+
+		close(e.stopMaintainingPresence)
+		close(e.stopConvergeTask)
 	})
 
 	//wait for any running task goroutines to end
 	e.outstandingTasks.Wait()
 	e.outstandingPresence.Wait()
 	e.outstandingConverge.Wait()
+}
+
+func (e *Executor) ConvergeTasks(period time.Duration, timeToClaim time.Duration) {
+	e.outstandingConverge.Add(1)
+	defer e.outstandingConverge.Done()
+
+	statusChannel, releaseLock, err := e.bbs.MaintainConvergeLock(period, e.ID())
+
+	if err != nil {
+		e.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "error when creating converge lock")
+		return
+	}
+
+	go func() {
+		<-e.stopConvergeTask
+		close(releaseLock)
+	}()
+
+	for {
+		locked, ok := <-statusChannel
+		if !ok {
+			return
+		}
+
+		if locked {
+			e.bbs.ConvergeTask(timeToClaim)
+		}
+	}
 }
 
 func (e *Executor) sleepForARandomInterval() {
