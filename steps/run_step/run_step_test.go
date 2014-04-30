@@ -109,6 +109,21 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
+		Context("when a file descriptor limit is not configured", func() {
+			BeforeEach(func() {
+				fileDescriptorLimit = 0
+				processPayloadStream <- successfulExit
+			})
+
+			It("does not enforce it on the process", func() {
+				runningScripts := wardenClient.Connection.SpawnedProcesses(handle)
+				Ω(runningScripts).Should(HaveLen(1))
+
+				runningScript := runningScripts[0]
+				Ω(runningScript.Limits.Nofile).Should(BeNil())
+			})
+		})
+
 		Context("when the script has a non-zero exit code", func() {
 			BeforeEach(func() {
 				processPayloadStream <- failedExit

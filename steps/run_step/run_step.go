@@ -66,11 +66,15 @@ func (step *RunStep) Perform() error {
 	}
 
 	go func() {
+		var nofile *uint64
+		if step.fileDescriptorLimit != 0 {
+			nofile = &step.fileDescriptorLimit
+		}
+
 		_, stream, err := step.container.Run(warden.ProcessSpec{
 			Script: step.model.Script,
-			Limits: warden.ResourceLimits{
-				Nofile: &step.fileDescriptorLimit,
-			},
+			Limits: warden.ResourceLimits{Nofile: nofile},
+
 			EnvironmentVariables: convertEnvironmentVariables(step.model.Env),
 		})
 
