@@ -17,10 +17,14 @@ type FakeExecutorBBS struct {
 	maintainConvergeStopChannel   chan<- chan bool
 	maintainConvergeLockError     error
 
-	maintainingPresenceHeartbeatInterval time.Duration
-	maintainingPresenceExecutorID        string
-	maintainingPresencePresence          *FakePresence
-	maintainingPresenceError             error
+	MaintainExecutorPresenceInputs struct {
+		HeartbeatInterval chan time.Duration
+		ExecutorID        chan string
+	}
+	MaintainExecutorPresenceOutputs struct {
+		Presence *FakePresence
+		Error    error
+	}
 
 	claimedTasks []*models.Task
 	claimTaskErr error
@@ -36,16 +40,35 @@ type FakeExecutorBBS struct {
 }
 
 func NewFakeExecutorBBS() *FakeExecutorBBS {
-	return &FakeExecutorBBS{}
+	fakeBBS := &FakeExecutorBBS{}
+	fakeBBS.MaintainExecutorPresenceInputs.HeartbeatInterval = make(chan time.Duration, 1)
+	fakeBBS.MaintainExecutorPresenceInputs.ExecutorID = make(chan string, 1)
+	return fakeBBS
 }
 
 func (fakeBBS *FakeExecutorBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorID string) (bbs.Presence, <-chan bool, error) {
-	fakeBBS.maintainingPresenceHeartbeatInterval = heartbeatInterval
-	fakeBBS.maintainingPresenceExecutorID = executorID
-	fakeBBS.maintainingPresencePresence = &FakePresence{}
-	status, _ := fakeBBS.maintainingPresencePresence.Maintain(heartbeatInterval)
+	fakeBBS.MaintainExecutorPresenceInputs.HeartbeatInterval <- heartbeatInterval
+	fakeBBS.MaintainExecutorPresenceInputs.ExecutorID <- executorID
 
-	return fakeBBS.maintainingPresencePresence, status, fakeBBS.maintainingPresenceError
+	presence := fakeBBS.MaintainExecutorPresenceOutputs.Presence
+
+	if presence == nil {
+		presence = &FakePresence{
+			MaintainStatus: true,
+		}
+	}
+
+	status, _ := presence.Maintain(heartbeatInterval)
+
+	return presence, status, fakeBBS.MaintainExecutorPresenceOutputs.Error
+}
+
+func (fakeBBS *FakeExecutorBBS) GetMaintainExecutorPresenceHeartbeatInterval() time.Duration {
+	return <-fakeBBS.MaintainExecutorPresenceInputs.HeartbeatInterval
+}
+
+func (fakeBBS *FakeExecutorBBS) GetMaintainExecutorPresenceId() string {
+	return <-fakeBBS.MaintainExecutorPresenceInputs.ExecutorID
 }
 
 func (fakeBBS *FakeExecutorBBS) WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error) {
@@ -217,7 +240,7 @@ func (fakeBBS *FakeExecutorBBS) SetMaintainConvergeLockError(err error) {
 
 func (fakeBBS *FakeExecutorBBS) Stop() {
 	fakeBBS.RLock()
-	presence := fakeBBS.maintainingPresencePresence
+	presence := fakeBBS.MaintainExecutorPresenceOutputs.Presence
 	stopConverge := fakeBBS.maintainConvergeStopChannel
 	fakeBBS.RUnlock()
 

@@ -16,35 +16,35 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/drain",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/message_reader",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Rev": "734a1065da92024d7d0f4a748744771a3c99029d"
+			"Rev": "675a10a946f55dae6678088e30ab13a25979725c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "db82ae944dda942b1dccc6598c8b85c22e830077"
+			"Rev": "6c0f259f60b4e4d5a472e6d474086ec8c73605b1"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "db82ae944dda942b1dccc6598c8b85c22e830077"
+			"Rev": "6c0f259f60b4e4d5a472e6d474086ec8c73605b1"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -81,12 +81,12 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "49b3830c5568b6193f6078bafa2262b2a1bae790"
+			"Rev": "28086a050c8acb6bc1d28fd23645e208aa95585d"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-96-g1e26d8e",
-			"Rev": "1e26d8ee84cf9b1000d2af8acfb45b2521f49be5"
+			"Comment": "v0.2.0-rc1-98-gd88f477",
+			"Rev": "d88f477a542c781eb9ad18ce82b3a0b9b6e2d07e"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",

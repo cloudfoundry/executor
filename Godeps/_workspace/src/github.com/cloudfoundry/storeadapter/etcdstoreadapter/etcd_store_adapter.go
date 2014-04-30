@@ -151,7 +151,7 @@ func (adapter *ETCDStoreAdapter) ListRecursively(key string) (storeadapter.Store
 		return storeadapter.StoreNode{Key: key, Dir: true, Value: []byte{}, ChildNodes: []storeadapter.StoreNode{}}, nil
 	}
 
-	return adapter.makeStoreNode(*response.Node), nil
+	return adapter.makeStoreNode(response.Node), nil
 }
 
 func (adapter *ETCDStoreAdapter) Create(node storeadapter.StoreNode) error {
@@ -301,7 +301,7 @@ func (adapter *ETCDStoreAdapter) cancelInflightWatches() {
 	}
 }
 
-func (adapter *ETCDStoreAdapter) makeStoreNode(etcdNode etcd.Node) storeadapter.StoreNode {
+func (adapter *ETCDStoreAdapter) makeStoreNode(etcdNode *etcd.Node) storeadapter.StoreNode {
 	if etcdNode.Dir {
 		node := storeadapter.StoreNode{
 			Key:        etcdNode.Key,
@@ -349,7 +349,7 @@ func (adapter *ETCDStoreAdapter) makeWatchEvent(event *etcd.Response) storeadapt
 
 	return storeadapter.WatchEvent{
 		Type: eventType,
-		Node: adapter.makeStoreNode(*node),
+		Node: adapter.makeStoreNode(node),
 	}
 }
 

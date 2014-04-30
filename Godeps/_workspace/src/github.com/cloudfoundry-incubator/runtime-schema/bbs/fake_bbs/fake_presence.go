@@ -6,27 +6,26 @@ import (
 )
 
 type FakePresence struct {
-	maintainStatus bool
-	maintained     bool
-	removed        bool
+	MaintainStatus bool
+	Maintained     bool
+	Removed        bool
 	ticker         *time.Ticker
 	done           chan struct{}
 }
 
 func (p *FakePresence) Maintain(interval time.Duration) (<-chan bool, error) {
-	if p.ticker != nil {
+	if p.Maintained == true {
 		return nil, errors.New("Already being maintained")
 	}
 
 	status := make(chan bool)
 	p.done = make(chan struct{})
-	p.ticker = time.NewTicker(interval)
 	go func() {
-		status <- p.maintainStatus
+		status <- p.MaintainStatus
 		for {
 			select {
-			case <-p.ticker.C:
-				status <- p.maintainStatus
+			case <-time.Tick(interval):
+				status <- p.MaintainStatus
 			case <-p.done:
 				close(status)
 				return
@@ -34,15 +33,13 @@ func (p *FakePresence) Maintain(interval time.Duration) (<-chan bool, error) {
 		}
 	}()
 
-	p.maintained = true
+	p.Maintained = true
 
 	return status, nil
 }
 
 func (p *FakePresence) Remove() {
-	p.ticker.Stop()
-	p.ticker = nil
 	close(p.done)
 
-	p.removed = true
+	p.Removed = true
 }

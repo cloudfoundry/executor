@@ -90,7 +90,7 @@ func (etcd *ETCDClusterRunner) FastForwardTime(seconds int) {
 	if running {
 		response, err := etcd.client.Get("/", false, true)
 		Ω(err).ShouldNot(HaveOccurred())
-		etcd.fastForwardTime(*response.Node, seconds)
+		etcd.fastForwardTime(response.Node, seconds)
 	}
 }
 
@@ -168,7 +168,7 @@ func (etcd *ETCDClusterRunner) detectRunningEtcd(index int) bool {
 	return client.SetCluster([]string{"http://" + etcd.clientUrl(index)})
 }
 
-func (etcd *ETCDClusterRunner) fastForwardTime(etcdNode etcdclient.Node, seconds int) {
+func (etcd *ETCDClusterRunner) fastForwardTime(etcdNode *etcdclient.Node, seconds int) {
 	if etcdNode.Dir == true {
 		for _, child := range etcdNode.Nodes {
 			etcd.fastForwardTime(child, seconds)
