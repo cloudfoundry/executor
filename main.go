@@ -17,6 +17,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 
+	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
@@ -64,15 +65,15 @@ var syslogName = flag.String(
 	"syslog name",
 )
 
-var memoryMB = flag.Int(
+var memoryMBFlag = flag.String(
 	"memoryMB",
-	0,
+	configuration.Automatic,
 	"the amount of memory the executor has available in megabytes",
 )
 
-var diskMB = flag.Int(
+var diskMBFlag = flag.String(
 	"diskMB",
-	0,
+	configuration.Automatic,
 	"the amount of disk the executor has available in megabytes",
 )
 
@@ -179,10 +180,20 @@ func main() {
 		Addr:    *wardenAddr,
 	})
 
-	if *memoryMB <= 0 || *diskMB <= 0 {
-		logger.Error("valid memory and disk capacity must be specified on startup!")
+	config := configuration.New(wardenClient)
+	memoryMB, err := config.GetMemoryInMB(*memoryMBFlag)
+	if err != nil {
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
+	logger.Infof("Using memory limit %dMB", memoryMB)
+
+	diskMB, err := config.GetDiskInMB(*diskMBFlag)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	logger.Infof("Using disk limit %dMB", diskMB)
 
 	if *containerMaxCpuShares <= 0 {
 		logger.Error("valid maximum container cpu shares must be specified on startup!")
@@ -195,7 +206,7 @@ func main() {
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
-	taskRegistry := task_registry.NewTaskRegistry(*stack, *memoryMB, *diskMB)
+	taskRegistry := task_registry.NewTaskRegistry(*stack, memoryMB, diskMB)
 
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,

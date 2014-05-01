@@ -27,8 +27,8 @@ type ExecutorRunner struct {
 }
 
 type Config struct {
-	MemoryMB              int
-	DiskMB                int
+	MemoryMB              string
+	DiskMB                string
 	ConvergenceInterval   time.Duration
 	HeartbeatInterval     time.Duration
 	Stack                 string
@@ -40,8 +40,8 @@ type Config struct {
 }
 
 var defaultConfig = Config{
-	MemoryMB:              1024,
-	DiskMB:                1024,
+	MemoryMB:              "1024",
+	DiskMB:                "1024",
 	ConvergenceInterval:   30 * time.Second,
 	HeartbeatInterval:     60 * time.Second,
 	Stack:                 "lucid64",
@@ -80,8 +80,8 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-wardenNetwork", r.wardenNetwork,
 			"-wardenAddr", r.wardenAddr,
 			"-etcdCluster", strings.Join(r.etcdCluster, ","),
-			"-memoryMB", fmt.Sprintf("%d", configToUse.MemoryMB),
-			"-diskMB", fmt.Sprintf("%d", configToUse.DiskMB),
+			"-memoryMB", configToUse.MemoryMB,
+			"-diskMB", configToUse.DiskMB,
 			"-convergenceInterval", fmt.Sprintf("%s", configToUse.ConvergenceInterval),
 			"-heartbeatInterval", fmt.Sprintf("%s", configToUse.HeartbeatInterval),
 			"-stack", configToUse.Stack,
@@ -123,10 +123,10 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	}
 
 	givenConfig := configs[0]
-	if givenConfig.MemoryMB != 0 {
+	if givenConfig.MemoryMB != "" {
 		configToReturn.MemoryMB = givenConfig.MemoryMB
 	}
-	if givenConfig.DiskMB != 0 {
+	if givenConfig.DiskMB != "" {
 		configToReturn.DiskMB = givenConfig.DiskMB
 	}
 	if givenConfig.ConvergenceInterval != 0 {
