@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/downloader"
 )
@@ -18,6 +19,8 @@ type Cache struct {
 	basePath       string
 	maxSizeInBytes int
 	downloader     downloader.Downloader
+	fileLocks      map[string]*sync.RWMutex
+	lock           *sync.Mutex
 }
 
 func New(basePath string, maxSizeInBytes int, downloader downloader.Downloader) *Cache {
@@ -25,6 +28,8 @@ func New(basePath string, maxSizeInBytes int, downloader downloader.Downloader) 
 		basePath:       basePath,
 		maxSizeInBytes: maxSizeInBytes,
 		downloader:     downloader,
+		fileLocks:      make(map[string]*sync.RWMutex),
+		lock:           &sync.Mutex{},
 	}
 }
 
@@ -49,30 +54,62 @@ func (c *Cache) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
 	}
 	destinationFile.Seek(0, 0)
 
-	return &SingleUseFile{destinationFile}, err
+	return NewSingleUseFile(destinationFile), nil
 }
 
 func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, error) {
-	if c.hasCachedFileForCacheKey(cacheKey) {
-		fileInfo, err := os.Stat(c.pathForCacheKey(cacheKey))
+	lock := c.lockForCacheKey(cacheKey)
+
+	//do we have the file?  is it up-to-date?
+	lock.RLock()
+	if c.hasUpToDateCachedFileForCacheKey(url, cacheKey) {
+		destinationFile, err := os.Open(c.pathForCacheKey(cacheKey))
 		if err != nil {
+			lock.RUnlock()
 			return nil, err
 		}
 
-		modified, err := c.downloader.ModifiedSince(url, fileInfo.ModTime())
-		if err != nil {
-			return nil, err
-		}
+		return NewCachedFile(destinationFile, lock), nil
+	}
+	lock.RUnlock()
 
-		if !modified {
-			return os.Open(c.pathForCacheKey(cacheKey))
-		}
+	//download the file
+	lock.Lock()
+	destinationFile, err := c.downloadToCache(url, cacheKey)
+	lock.Unlock()
+
+	if err != nil {
+		return nil, err
 	}
 
+	lock.RLock()
+	return NewCachedFile(destinationFile, lock), err
+}
+
+func (c *Cache) pathForCacheKey(cacheKey string) string {
+	return filepath.Join(c.basePath, cacheKey)
+}
+
+func (c *Cache) hasUpToDateCachedFileForCacheKey(url *url.URL, cacheKey string) bool {
+	fileInfo, err := os.Stat(c.pathForCacheKey(cacheKey))
+	if err != nil {
+		return false
+	}
+
+	modified, err := c.downloader.ModifiedSince(url, fileInfo.ModTime())
+	if err != nil {
+		return false
+	}
+
+	return !modified
+}
+
+func (c *Cache) downloadToCache(url *url.URL, cacheKey string) (*os.File, error) {
 	destinationFile, err := os.Create(c.pathForCacheKey(cacheKey))
 	if err != nil {
 		return nil, err
 	}
+
 	_, err = c.downloader.Download(url, destinationFile)
 	if err != nil {
 		os.Remove(destinationFile.Name())
@@ -80,31 +117,17 @@ func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, e
 	}
 	destinationFile.Seek(0, 0)
 
-	return destinationFile, err
+	return destinationFile, nil
 }
 
-func (c *Cache) pathForCacheKey(cacheKey string) string {
-	return filepath.Join(c.basePath, cacheKey)
-}
-
-func (c *Cache) hasCachedFileForCacheKey(cacheKey string) bool {
-	_, err := os.Stat(c.pathForCacheKey(cacheKey))
-	return err == nil
-}
-
-type SingleUseFile struct {
-	file *os.File
-}
-
-func (f *SingleUseFile) Read(p []byte) (n int, err error) {
-	return f.file.Read(p)
-}
-
-func (f *SingleUseFile) Close() error {
-	err := f.file.Close()
-	if err != nil {
-		return err
+func (c *Cache) lockForCacheKey(cacheKey string) *sync.RWMutex {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	lock, ok := c.fileLocks[c.pathForCacheKey(cacheKey)]
+	if !ok {
+		lock = &sync.RWMutex{}
+		c.fileLocks[c.pathForCacheKey(cacheKey)] = lock
 	}
 
-	return os.Remove(f.file.Name())
+	return lock
 }

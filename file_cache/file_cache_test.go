@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/file_cache"
@@ -206,8 +207,89 @@ var _ = Describe("File cache", func() {
 			})
 		})
 
+		Describe("handling concurrent cache access", func() {
+			Context("when two things Fetch the same file", func() {
+				var finishedFetching chan bool
+				BeforeEach(func() {
+					downloader.DownloadContent = []byte("highlander")
+					downloader.IsModified = false
+					downloader.DownloadSleepDuration = 100 * time.Millisecond
+
+					finishedFetching = make(chan bool, 2)
+
+					fetchHighlander := func() {
+						defer GinkgoRecover()
+						file, err := cache.Fetch(url, cacheKey)
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(ioutil.ReadAll(file)).Should(Equal(downloader.DownloadContent))
+						file.Close()
+
+						finishedFetching <- true
+					}
+
+					go fetchHighlander()
+					go fetchHighlander()
+				})
+
+				It("should only download it once and provide it to both fetchers", func(done Done) {
+					<-finishedFetching
+					<-finishedFetching
+
+					Ω(downloader.DownloadedUrls).Should(HaveLen(1))
+					close(done)
+				})
+			})
+
+			Context("when a file is currently being read", func() {
+				var fileContent []byte
+				BeforeEach(func() {
+					err := ioutil.WriteFile(filepath.Join(basePath, cacheKey), []byte("highlander"), 0666)
+					Ω(err).ShouldNot(HaveOccurred())
+					downloader.DownloadContent = []byte("highlander II is a terrible sequel")
+					fileContent = []byte("highlander")
+				})
+
+				Context("and someone else tries to fetch it *and* the server claims it is modified", func() {
+					It("should not attempt the download until current readers finish", func() {
+						//fetch the file from disk
+						downloader.IsModified = false
+						slowlyReadFile, err := cache.Fetch(url, cacheKey)
+						Ω(err).ShouldNot(HaveOccurred())
+						//...but don't read it yet
+
+						//meanwhile, someone else comes along to fetch it
+						//but they must get it from the server
+						downloader.IsModified = true
+						fetchedFile := make(chan bool, 1)
+						go func() {
+							file, err := cache.Fetch(url, cacheKey)
+							Ω(err).ShouldNot(HaveOccurred())
+							Ω(ioutil.ReadAll(file)).Should(Equal(downloader.DownloadContent))
+							close(fetchedFile)
+						}()
+
+						//they should block until the first reader finishes reading
+						Consistently(fetchedFile).ShouldNot(BeClosed())
+
+						//go ahead an finish reading. also, verify that the bytes on disk haven't changed yet
+						Ω(ioutil.ReadFile(filepath.Join(basePath, cacheKey))).Should(Equal([]byte("highlander")))
+						Ω(ioutil.ReadAll(slowlyReadFile)).Should(Equal([]byte("highlander")))
+						slowlyReadFile.Close()
+
+						//now that we're done reading, the blocked goroutine should get unblocked and the new file should be downloaded
+						Eventually(fetchedFile).Should(BeClosed())
+						Ω(ioutil.ReadFile(filepath.Join(basePath, cacheKey))).Should(Equal(downloader.DownloadContent))
+					})
+				})
+			})
+		})
+
 		Context("when the file is too large for the cache", func() {
 
+		})
+
+		Context("when the cache is full", func() {
+			It("deletes the oldest cached files until there is space", func() {})
 		})
 	})
 })

@@ -8,9 +8,10 @@ import (
 )
 
 type FakeDownloader struct {
-	DownloadedUrls  []*url.URL
-	DownloadContent []byte
-	alwaysFail      bool
+	DownloadedUrls        []*url.URL
+	DownloadContent       []byte
+	DownloadSleepDuration time.Duration
+	alwaysFail            bool
 
 	ModifiedSinceURL   *url.URL
 	ModifiedSinceTime  time.Time
@@ -19,6 +20,10 @@ type FakeDownloader struct {
 }
 
 func (downloader *FakeDownloader) Download(url *url.URL, destinationFile *os.File) (int64, error) {
+	if downloader.DownloadSleepDuration != 0 {
+		time.Sleep(downloader.DownloadSleepDuration)
+	}
+
 	if downloader.alwaysFail {
 		return 0, errors.New("I accidentally the download")
 	}
