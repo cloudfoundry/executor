@@ -62,14 +62,15 @@ var _ = Describe("Downloader", func() {
 				downloadErr error
 				didDownload bool
 
-				downloadEtag string
-				expectedEtag string
+				downloadCachingInfo CachingInfoType
+				expectedCachingInfo CachingInfoType
+				expectedEtag        string
 			)
 
 			JustBeforeEach(func() {
 				serverUrl := testServer.URL + "/somepath"
 				url, _ = url.Parse(serverUrl)
-				didDownload, downloadSize, downloadEtag, downloadErr = downloader.Download(url, file, "")
+				didDownload, downloadSize, downloadCachingInfo, downloadErr = downloader.Download(url, file, CachingInfoType{})
 			})
 
 			Context("and contains a matching MD5 Hash in the Etag", func() {
@@ -83,8 +84,12 @@ var _ = Describe("Downloader", func() {
 						lock.Unlock()
 
 						msg := "Hello, client"
-						expectedEtag = md5HexEtag(msg)
-						w.Header().Set("ETag", expectedEtag)
+						expectedCachingInfo = CachingInfoType{
+							ETag:         md5HexEtag(msg),
+							LastModified: "The 70s",
+						}
+						w.Header().Set("ETag", expectedCachingInfo.ETag)
+						w.Header().Set("Last-Modified", expectedCachingInfo.LastModified)
 
 						bytesWritten, _ := fmt.Fprint(w, msg)
 						expectedSize = int64(bytesWritten)
@@ -120,7 +125,7 @@ var _ = Describe("Downloader", func() {
 				})
 
 				It("returns the ETag", func() {
-					Ω(downloadEtag).Should(Equal(expectedEtag))
+					Ω(downloadCachingInfo).Should(Equal(expectedCachingInfo))
 				})
 			})
 
@@ -139,8 +144,8 @@ var _ = Describe("Downloader", func() {
 					Ω(downloadErr).ShouldNot(HaveOccurred())
 				})
 
-				It("should returns the ETag", func() {
-					Ω(downloadEtag).Should(Equal(expectedEtag))
+				It("should returns the ETag in the caching info", func() {
+					Ω(downloadCachingInfo.ETag).Should(Equal(expectedEtag))
 				})
 			})
 
@@ -157,8 +162,8 @@ var _ = Describe("Downloader", func() {
 					Ω(downloadErr).ShouldNot(HaveOccurred())
 				})
 
-				It("should returns no ETag", func() {
-					Ω(downloadEtag).Should(BeEmpty())
+				It("should returns no ETag in the caching info", func() {
+					Ω(downloadCachingInfo).Should(BeZero())
 				})
 			})
 		})
@@ -185,7 +190,7 @@ var _ = Describe("Downloader", func() {
 				didDownloads := make(chan bool)
 
 				go func() {
-					didDownload, _, _, err := downloader.Download(url, file, "")
+					didDownload, _, _, err := downloader.Download(url, file, CachingInfoType{})
 					errs <- err
 					didDownloads <- didDownload
 				}()
@@ -208,7 +213,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				didDownload, _, _, err := downloader.Download(url, file, "")
+				didDownload, _, _, err := downloader.Download(url, file, CachingInfoType{})
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
 			})
@@ -223,7 +228,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				didDownload, _, _, err := downloader.Download(url, file, "")
+				didDownload, _, _, err := downloader.Download(url, file, CachingInfoType{})
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
 			})
@@ -245,18 +250,18 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return an error", func() {
-				didDownload, _, etag, err := downloader.Download(url, file, "")
+				didDownload, _, cachingInfo, err := downloader.Download(url, file, CachingInfoType{})
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
-				Ω(etag).Should(BeEmpty())
+				Ω(cachingInfo).Should(BeZero())
 			})
 		})
 	})
 
-	Context("Downloading witbh an ETag", func() {
+	Context("Downloading witbh caching info", func() {
 		var (
 			server     *ghttp.Server
-			ETag       string
+			cachedInfo CachingInfoType
 			statusCode int
 			url        *Url.URL
 			body       string
@@ -264,12 +269,18 @@ var _ = Describe("Downloader", func() {
 		)
 
 		BeforeEach(func() {
-			ETag = "It's Just a Flesh Wound"
+			cachedInfo = CachingInfoType{
+				ETag:         "It's Just a Flesh Wound",
+				LastModified: "The 60s",
+			}
 			file, _ = ioutil.TempFile("", "foo")
 			server = ghttp.NewServer()
 			server.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", "/get-the-file"),
-				ghttp.VerifyHeader(http.Header{"If-None-Match": []string{ETag}}),
+				ghttp.VerifyHeader(http.Header{
+					"If-None-Match":     []string{cachedInfo.ETag},
+					"If-Modified-Since": []string{cachedInfo.LastModified},
+				}),
 				ghttp.RespondWithPtr(&statusCode, &body),
 			))
 
@@ -286,14 +297,14 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return that it did not download", func() {
-				didDownload, size, _, err := downloader.Download(url, file, ETag)
+				didDownload, size, _, err := downloader.Download(url, file, cachedInfo)
 				Ω(didDownload).Should(BeFalse())
 				Ω(size).Should(Equal(int64(0)))
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should not download anything", func() {
-				downloader.Download(url, file, ETag)
+				downloader.Download(url, file, cachedInfo)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(0)))
@@ -307,14 +318,14 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return that it did download and the file size", func() {
-				didDownload, size, _, err := downloader.Download(url, file, ETag)
+				didDownload, size, _, err := downloader.Download(url, file, cachedInfo)
 				Ω(didDownload).Should(BeTrue())
 				Ω(size).Should(Equal(int64(len(body))))
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should download the file", func() {
-				downloader.Download(url, file, ETag)
+				downloader.Download(url, file, cachedInfo)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(len(body))))
@@ -329,21 +340,24 @@ var _ = Describe("Downloader", func() {
 				for i := 0; i < MAX_DOWNLOAD_ATTEMPTS; i++ {
 					server.AppendHandlers(ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/get-the-file"),
-						ghttp.VerifyHeader(http.Header{"If-None-Match": []string{ETag}}),
+						ghttp.VerifyHeader(http.Header{
+							"If-None-Match":     []string{cachedInfo.ETag},
+							"If-Modified-Since": []string{cachedInfo.LastModified},
+						}),
 						ghttp.RespondWithPtr(&statusCode, &body),
 					))
 				}
 			})
 
 			It("should return false with an error", func() {
-				didDownload, size, _, err := downloader.Download(url, file, ETag)
+				didDownload, size, _, err := downloader.Download(url, file, cachedInfo)
 				Ω(didDownload).Should(BeFalse())
 				Ω(size).Should(Equal(int64(0)))
 				Ω(err).Should(HaveOccurred())
 			})
 
 			It("should not download anything", func() {
-				downloader.Download(url, file, ETag)
+				downloader.Download(url, file, cachedInfo)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(0)))

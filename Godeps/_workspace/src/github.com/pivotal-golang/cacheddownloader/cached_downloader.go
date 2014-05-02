@@ -16,10 +16,15 @@ type CachedDownloader interface {
 	Fetch(url *url.URL, cache bool) (io.ReadCloser, error)
 }
 
+type CachingInfoType struct {
+	ETag         string
+	LastModified string
+}
+
 type CachedFile struct {
-	size   int64
-	access time.Time
-	etag   string
+	size        int64
+	access      time.Time
+	cachingInfo CachingInfoType
 }
 
 type cachedDownloader struct {
@@ -66,7 +71,7 @@ func (c *cachedDownloader) fetchUncachedFile(url *url.URL) (io.ReadCloser, error
 		return nil, err
 	}
 
-	_, _, _, err = c.downloader.Download(url, destinationFile, "")
+	_, _, _, err = c.downloader.Download(url, destinationFile, CachingInfoType{})
 	if err != nil {
 		os.Remove(destinationFile.Name())
 		return nil, err
@@ -95,7 +100,7 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 	}
 	defer os.Remove(tempFile.Name()) //OK, even if we return tempFile 'cause that's how UNIX works.
 
-	didDownload, size, etag, err := c.downloader.Download(url, tempFile, c.etagForCacheKey(cacheKey))
+	didDownload, size, cachingInfo, err := c.downloader.Download(url, tempFile, c.cachingInfoForCacheKey(cacheKey))
 	if err != nil {
 		if fileExists {
 			f.Close()
@@ -107,7 +112,7 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 		return f, nil
 	}
 
-	if etag == "" {
+	if cachingInfo.ETag == "" && cachingInfo.LastModified == "" {
 		c.removeCacheEntryFor(cacheKey)
 		_, err = tempFile.Seek(0, 0)
 		if err != nil {
@@ -117,7 +122,7 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 		return tempFile, nil
 	}
 
-	c.setEtagForCacheKey(cacheKey, etag)
+	c.setCachingInfoForCacheKey(cacheKey, cachingInfo)
 
 	//make room for the file and move it in (if possible)
 	c.moveFileIntoCache(cacheKey, tempFile.Name(), size)
@@ -186,16 +191,16 @@ func (c *cachedDownloader) recordAccessForCacheKey(cacheKey string) {
 	c.cachedFiles[cacheKey] = f
 }
 
-func (c *cachedDownloader) etagForCacheKey(cacheKey string) string {
+func (c *cachedDownloader) cachingInfoForCacheKey(cacheKey string) CachingInfoType {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	return c.cachedFiles[cacheKey].etag
+	return c.cachedFiles[cacheKey].cachingInfo
 }
 
-func (c *cachedDownloader) setEtagForCacheKey(cacheKey string, etag string) {
+func (c *cachedDownloader) setCachingInfoForCacheKey(cacheKey string, cachingInfo CachingInfoType) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	f := c.cachedFiles[cacheKey]
-	f.etag = etag
+	f.cachingInfo = cachingInfo
 	c.cachedFiles[cacheKey] = f
 }

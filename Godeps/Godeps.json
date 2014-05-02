@@ -114,7 +114,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
-			"Rev": "fb9b2bbdb19956968d4231cdabe6833a55252c04"
+			"Rev": "b510db91c95fc31536eb5536bc72fce82aaab3bd"
 		}
 	]
 }
