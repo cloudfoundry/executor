@@ -19,13 +19,14 @@ type CachedDownloader interface {
 type CachedFile struct {
 	size   int64
 	access time.Time
+	etag   string
 }
 
 type cachedDownloader struct {
 	cachedPath     string
 	uncachedPath   string
 	maxSizeInBytes int64
-	downloader     Downloader
+	downloader     *Downloader
 	lock           *sync.Mutex
 
 	cachedFiles map[string]CachedFile
@@ -65,7 +66,7 @@ func (c *cachedDownloader) fetchUncachedFile(url *url.URL) (io.ReadCloser, error
 		return nil, err
 	}
 
-	_, _, err = c.downloader.Download(url, destinationFile, time.Time{})
+	_, _, _, err = c.downloader.Download(url, destinationFile, "")
 	if err != nil {
 		os.Remove(destinationFile.Name())
 		return nil, err
@@ -84,16 +85,6 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 	f, err := os.Open(path)
 	fileExists := err == nil
 
-	modTime := time.Time{}
-	if fileExists {
-		info, err := os.Stat(path)
-		if err != nil {
-			f.Close()
-			return nil, err
-		}
-		modTime = info.ModTime()
-	}
-
 	//download the file to a temporary location
 	tempFile, err := ioutil.TempFile(c.uncachedPath, "temporary")
 	if err != nil {
@@ -104,7 +95,7 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 	}
 	defer os.Remove(tempFile.Name()) //OK, even if we return tempFile 'cause that's how UNIX works.
 
-	didDownload, size, err := c.downloader.Download(url, tempFile, modTime)
+	didDownload, size, etag, err := c.downloader.Download(url, tempFile, c.etagForCacheKey(cacheKey))
 	if err != nil {
 		if fileExists {
 			f.Close()
@@ -115,6 +106,18 @@ func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.Re
 	if !didDownload {
 		return f, nil
 	}
+
+	if etag == "" {
+		c.removeCacheEntryFor(cacheKey)
+		_, err = tempFile.Seek(0, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		return tempFile, nil
+	}
+
+	c.setEtagForCacheKey(cacheKey, etag)
 
 	//make room for the file and move it in (if possible)
 	c.moveFileIntoCache(cacheKey, tempFile.Name(), size)
@@ -168,10 +171,31 @@ func (c *cachedDownloader) moveFileIntoCache(cacheKey string, sourcePath string,
 	os.Rename(sourcePath, c.pathForCacheKey(cacheKey))
 }
 
+func (c *cachedDownloader) removeCacheEntryFor(cacheKey string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	delete(c.cachedFiles, cacheKey)
+	os.RemoveAll(c.pathForCacheKey(cacheKey))
+}
+
 func (c *cachedDownloader) recordAccessForCacheKey(cacheKey string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	f := c.cachedFiles[cacheKey]
 	f.access = time.Now()
+	c.cachedFiles[cacheKey] = f
+}
+
+func (c *cachedDownloader) etagForCacheKey(cacheKey string) string {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.cachedFiles[cacheKey].etag
+}
+
+func (c *cachedDownloader) setEtagForCacheKey(cacheKey string, etag string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	f := c.cachedFiles[cacheKey]
+	f.etag = etag
 	c.cachedFiles[cacheKey] = f
 }

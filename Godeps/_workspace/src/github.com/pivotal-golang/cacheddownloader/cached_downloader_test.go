@@ -84,9 +84,11 @@ var _ = Describe("File cache", func() {
 			BeforeEach(func() {
 				downloadContent = []byte(strings.Repeat("7", int(maxSizeInBytes*3)))
 
+				header := http.Header{}
+				header.Set("ETag", "foo")
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/my_file"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), header),
 				))
 
 				file, err = cache.Fetch(url, false)
@@ -127,8 +129,11 @@ var _ = Describe("File cache", func() {
 
 	Describe("When providing a file that should be cached", func() {
 		var cacheFilePath string
+		var returnedHeader http.Header
 		BeforeEach(func() {
 			cacheFilePath = filepath.Join(cachedPath, computeMd5(url.String()))
+			returnedHeader = http.Header{}
+			returnedHeader.Set("ETag", "my-original-etag")
 		})
 
 		Context("when the file is not in the cache", func() {
@@ -138,9 +143,9 @@ var _ = Describe("File cache", func() {
 					server.AppendHandlers(ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/my_file"),
 						http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-							Ω(req.Header.Get("If-Modified-Since")).Should(BeEmpty())
+							Ω(req.Header.Get("If-None-Match")).Should(BeEmpty())
 						}),
-						ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+						ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 					))
 
 					file, err = cache.Fetch(url, true)
@@ -160,6 +165,35 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should remove any temporary assets generated along the way", func() {
+					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
+				})
+			})
+
+			Context("when the download succeeds but does not have an ETag", func() {
+				BeforeEach(func() {
+					downloadContent = []byte(strings.Repeat("7", int(maxSizeInBytes/2)))
+					server.AppendHandlers(ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/my_file"),
+						http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+							Ω(req.Header.Get("If-None-Match")).Should(BeEmpty())
+						}),
+						ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					))
+
+					file, err = cache.Fetch(url, true)
+				})
+
+				It("should not error", func() {
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("should return a readCloser that streams the file", func() {
+					Ω(file).ShouldNot(BeNil())
+					Ω(ioutil.ReadAll(file)).Should(Equal(downloadContent))
+				})
+
+				It("should not store the file", func() {
+					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(0))
 					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
 				})
 			})
@@ -190,26 +224,34 @@ var _ = Describe("File cache", func() {
 			BeforeEach(func() {
 				status = http.StatusOK
 				fileContent = []byte("now you see it")
-				err := ioutil.WriteFile(cacheFilePath, fileContent, 0666)
-				Ω(err).ShouldNot(HaveOccurred())
 
-				fileInfo, err := os.Stat(cacheFilePath)
+				server.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/my_file"),
+					ghttp.RespondWith(http.StatusOK, string(fileContent), returnedHeader),
+				))
+
+				cache.Fetch(url, true)
+
+				err := ioutil.WriteFile(cacheFilePath, fileContent, 0666)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				downloadContent = "now you don't"
 
+				etag := "second-round-etag"
+				returnedHeader.Set("ETag", etag)
+
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/my_file"),
 					http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-						Ω(req.Header.Get("If-Modified-Since")).Should(Equal(fileInfo.ModTime().Format(http.TimeFormat)))
+						Ω(req.Header.Get("If-None-Match")).Should(Equal("my-original-etag"))
 					}),
-					ghttp.RespondWithPtr(&status, &downloadContent),
+					ghttp.RespondWithPtr(&status, &downloadContent, returnedHeader),
 				))
 			})
 
 			It("should perform the request with the correct modified headers", func() {
 				cache.Fetch(url, true)
-				Ω(server.ReceivedRequests()).Should(HaveLen(1))
+				Ω(server.ReceivedRequests()).Should(HaveLen(2))
 			})
 
 			Context("if the file has been modified", func() {
@@ -232,6 +274,26 @@ var _ = Describe("File cache", func() {
 					_, err := cache.Fetch(url, true)
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(1))
+					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
+				})
+			})
+
+			Context("if the file has been modified, but the new file has no etag", func() {
+				BeforeEach(func() {
+					status = http.StatusOK
+					returnedHeader.Del("ETag")
+				})
+
+				It("should return a readcloser pointing to the file", func() {
+					file, err := cache.Fetch(url, true)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(ioutil.ReadAll(file)).Should(Equal([]byte(downloadContent)))
+				})
+
+				It("should have removed the file from the cache", func() {
+					_, err := cache.Fetch(url, true)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(0))
 					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
 				})
 			})
@@ -261,7 +323,7 @@ var _ = Describe("File cache", func() {
 
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/my_file"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 				))
 
 				file, err = cache.Fetch(url, true)
@@ -291,7 +353,7 @@ var _ = Describe("File cache", func() {
 				url, _ = Url.Parse(server.URL() + "/C")
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/C"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 				))
 
 				cachedFile1, err := cache.Fetch(url, true)
@@ -302,7 +364,7 @@ var _ = Describe("File cache", func() {
 				url, _ = Url.Parse(server.URL() + "/A")
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/A"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 				))
 
 				cachedFile2, err := cache.Fetch(url, true)
@@ -313,7 +375,7 @@ var _ = Describe("File cache", func() {
 				url, _ = Url.Parse(server.URL() + "/B")
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/B"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 				))
 
 				cachedFile3, err := cache.Fetch(url, true)
@@ -336,7 +398,7 @@ var _ = Describe("File cache", func() {
 				url, _ = Url.Parse(server.URL() + "/D")
 				server.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/D"),
-					ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+					ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 				))
 
 				cachedFile4, err := cache.Fetch(url, true)
@@ -361,22 +423,26 @@ var _ = Describe("File cache", func() {
 
 	Context("when the URL has query parameters", func() {
 		It("ignores the query parameters for the purposes of caching", func() {
+			returnedHeader := http.Header{}
+			returnedHeader.Set("ETag", "my-original-etag")
+
 			// download some stuff
 			downloadContent = []byte("hi")
 			url, _ = Url.Parse(server.URL() + "/A?param=1")
 			server.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", "/A", "param=1"),
-				ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+				ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 			))
 			_, err := cache.Fetch(url, true)
 			Ω(err).ShouldNot(HaveOccurred())
 
+			returnedHeader.Set("ETag", "my-new-etag")
 			// download some different stuff from the same path with different query string
 			downloadContent = []byte("hello")
 			url, _ = Url.Parse(server.URL() + "/A?param=2")
 			server.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", "/A", "param=2"),
-				ghttp.RespondWith(http.StatusOK, string(downloadContent)),
+				ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
 			))
 			_, err = cache.Fetch(url, true)
 			Ω(err).ShouldNot(HaveOccurred())

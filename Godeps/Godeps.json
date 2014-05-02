@@ -98,7 +98,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "660b70079010c9eeeffdc381fcb3a8cde45ce495"
+			"Rev": "7bd23e46a966cc441ac27f153dbac56b40d1f41b"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
@@ -114,7 +114,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
-			"Rev": "44731c7134daeec31ed083347e98030687a9636e"
+			"Rev": "fb9b2bbdb19956968d4231cdabe6833a55252c04"
 		}
 	]
 }

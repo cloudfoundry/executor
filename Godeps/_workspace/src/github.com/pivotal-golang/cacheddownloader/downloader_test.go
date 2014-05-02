@@ -26,7 +26,7 @@ func md5HexEtag(content string) string {
 }
 
 var _ = Describe("Downloader", func() {
-	var downloader Downloader
+	var downloader *Downloader
 	var testServer *httptest.Server
 	var serverRequestUrls []string
 	var lock *sync.Mutex
@@ -55,15 +55,21 @@ var _ = Describe("Downloader", func() {
 		})
 
 		Context("when the download is successful", func() {
-			var uploadedBytes int64
-			var expectedBytes int64
-			var downloadErr error
-			var didDownload bool
+			var (
+				downloadSize int64
+				expectedSize int64
+
+				downloadErr error
+				didDownload bool
+
+				downloadEtag string
+				expectedEtag string
+			)
 
 			JustBeforeEach(func() {
 				serverUrl := testServer.URL + "/somepath"
 				url, _ = url.Parse(serverUrl)
-				didDownload, uploadedBytes, downloadErr = downloader.Download(url, file, time.Time{})
+				didDownload, downloadSize, downloadEtag, downloadErr = downloader.Download(url, file, "")
 			})
 
 			Context("and contains a matching MD5 Hash in the Etag", func() {
@@ -77,10 +83,11 @@ var _ = Describe("Downloader", func() {
 						lock.Unlock()
 
 						msg := "Hello, client"
-						w.Header().Set("ETag", md5HexEtag(msg))
+						expectedEtag = md5HexEtag(msg)
+						w.Header().Set("ETag", expectedEtag)
 
 						bytesWritten, _ := fmt.Fprint(w, msg)
-						expectedBytes = int64(bytesWritten)
+						expectedSize = int64(bytesWritten)
 					}))
 				})
 
@@ -109,22 +116,31 @@ var _ = Describe("Downloader", func() {
 				})
 
 				It("return number of bytes it downloaded", func() {
-					Ω(uploadedBytes).Should(Equal(expectedBytes))
+					Ω(downloadSize).Should(Equal(expectedSize))
+				})
+
+				It("returns the ETag", func() {
+					Ω(downloadEtag).Should(Equal(expectedEtag))
 				})
 			})
 
 			Context("and contains an Etag that is not an MD5 Hash ", func() {
 				BeforeEach(func() {
+					expectedEtag = "not the hex you are looking for"
 					testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						w.Header().Set("ETag", "not the hex you are looking for")
+						w.Header().Set("ETag", expectedEtag)
 						bytesWritten, _ := fmt.Fprint(w, "Hello, client")
-						expectedBytes = int64(bytesWritten)
+						expectedSize = int64(bytesWritten)
 					}))
 				})
 
 				It("succeeds without doing a checksum", func() {
 					Ω(didDownload).Should(BeTrue())
 					Ω(downloadErr).ShouldNot(HaveOccurred())
+				})
+
+				It("should returns the ETag", func() {
+					Ω(downloadEtag).Should(Equal(expectedEtag))
 				})
 			})
 
@@ -132,13 +148,17 @@ var _ = Describe("Downloader", func() {
 				BeforeEach(func() {
 					testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						bytesWritten, _ := fmt.Fprint(w, "Hello, client")
-						expectedBytes = int64(bytesWritten)
+						expectedSize = int64(bytesWritten)
 					}))
 				})
 
 				It("succeeds without doing a checksum", func() {
 					Ω(didDownload).Should(BeTrue())
 					Ω(downloadErr).ShouldNot(HaveOccurred())
+				})
+
+				It("should returns no ETag", func() {
+					Ω(downloadEtag).Should(BeEmpty())
 				})
 			})
 		})
@@ -165,7 +185,7 @@ var _ = Describe("Downloader", func() {
 				didDownloads := make(chan bool)
 
 				go func() {
-					didDownload, _, err := downloader.Download(url, file, time.Time{})
+					didDownload, _, _, err := downloader.Download(url, file, "")
 					errs <- err
 					didDownloads <- didDownload
 				}()
@@ -188,7 +208,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				didDownload, _, err := downloader.Download(url, file, time.Time{})
+				didDownload, _, _, err := downloader.Download(url, file, "")
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
 			})
@@ -203,7 +223,7 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				didDownload, _, err := downloader.Download(url, file, time.Time{})
+				didDownload, _, _, err := downloader.Download(url, file, "")
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
 			})
@@ -225,30 +245,31 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return an error", func() {
-				didDownload, _, err := downloader.Download(url, file, time.Time{})
+				didDownload, _, etag, err := downloader.Download(url, file, "")
 				Ω(err).NotTo(BeNil())
 				Ω(didDownload).Should(BeFalse())
+				Ω(etag).Should(BeEmpty())
 			})
 		})
 	})
 
-	Context("Downloading with a modified time", func() {
+	Context("Downloading witbh an ETag", func() {
 		var (
-			server       *ghttp.Server
-			modifiedTime time.Time
-			statusCode   int
-			url          *Url.URL
-			body         string
-			file         *os.File
+			server     *ghttp.Server
+			ETag       string
+			statusCode int
+			url        *Url.URL
+			body       string
+			file       *os.File
 		)
 
 		BeforeEach(func() {
-			modifiedTime = time.Now()
+			ETag = "It's Just a Flesh Wound"
 			file, _ = ioutil.TempFile("", "foo")
 			server = ghttp.NewServer()
 			server.AppendHandlers(ghttp.CombineHandlers(
 				ghttp.VerifyRequest("GET", "/get-the-file"),
-				ghttp.VerifyHeader(http.Header{"If-Modified-Since": []string{modifiedTime.Format(http.TimeFormat)}}),
+				ghttp.VerifyHeader(http.Header{"If-None-Match": []string{ETag}}),
 				ghttp.RespondWithPtr(&statusCode, &body),
 			))
 
@@ -265,14 +286,14 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return that it did not download", func() {
-				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				didDownload, size, _, err := downloader.Download(url, file, ETag)
 				Ω(didDownload).Should(BeFalse())
 				Ω(size).Should(Equal(int64(0)))
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should not download anything", func() {
-				downloader.Download(url, file, modifiedTime)
+				downloader.Download(url, file, ETag)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(0)))
@@ -286,14 +307,14 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return that it did download and the file size", func() {
-				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				didDownload, size, _, err := downloader.Download(url, file, ETag)
 				Ω(didDownload).Should(BeTrue())
 				Ω(size).Should(Equal(int64(len(body))))
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should download the file", func() {
-				downloader.Download(url, file, modifiedTime)
+				downloader.Download(url, file, ETag)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(len(body))))
@@ -308,21 +329,21 @@ var _ = Describe("Downloader", func() {
 				for i := 0; i < MAX_DOWNLOAD_ATTEMPTS; i++ {
 					server.AppendHandlers(ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/get-the-file"),
-						ghttp.VerifyHeader(http.Header{"If-Modified-Since": []string{modifiedTime.Format(http.TimeFormat)}}),
+						ghttp.VerifyHeader(http.Header{"If-None-Match": []string{ETag}}),
 						ghttp.RespondWithPtr(&statusCode, &body),
 					))
 				}
 			})
 
 			It("should return false with an error", func() {
-				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				didDownload, size, _, err := downloader.Download(url, file, ETag)
 				Ω(didDownload).Should(BeFalse())
 				Ω(size).Should(Equal(int64(0)))
 				Ω(err).Should(HaveOccurred())
 			})
 
 			It("should not download anything", func() {
-				downloader.Download(url, file, modifiedTime)
+				downloader.Download(url, file, ETag)
 				info, err := os.Stat(file.Name())
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(info.Size()).Should(Equal(int64(0)))
