@@ -18,8 +18,7 @@ import (
 const MAX_DOWNLOAD_ATTEMPTS = 3
 
 type Downloader interface {
-	Download(url *url.URL, destinationFile *os.File) (int64, error)
-	ModifiedSince(url *url.URL, ifModifiedSince time.Time) (bool, error)
+	Download(url *url.URL, destinationFile *os.File, ifModifiedSince time.Time) (bool, int64, error)
 }
 
 type URLDownloader struct {
@@ -41,77 +40,77 @@ func New(timeout time.Duration, logger *steno.Logger) Downloader {
 	}
 }
 
-func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File) (length int64, err error) {
+/*
+Download takes an optional ifModifiedSince time.
+
+If ifModifiedSince is non-zero, the If-Modified-Since header is sent.
+If the server responds with a 304, no download is attempted and didDownload is false.
+
+Otherwise, if a download occurs succesfully, didDownload is true.
+*/
+func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File, ifModifiedSince time.Time) (didDownload bool, length int64, err error) {
 	for attempt := 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++ {
 		downloader.logger.Infof("downloader.attempt #%d", attempt)
-		length, err = downloader.fetchToFile(url, destinationFile)
+		didDownload, length, err = downloader.fetchToFile(url, destinationFile, ifModifiedSince)
 		if err == nil {
 			break
 		}
 	}
 
 	if err != nil {
-		return 0, err
+		return false, 0, err
 	}
 	return
 }
 
-func (downloader *URLDownloader) ModifiedSince(url *url.URL, ifModifiedSince time.Time) (bool, error) {
-	req, err := http.NewRequest("HEAD", url.String(), nil)
-	if err != nil {
-		return false, err
-	}
-	req.Header.Add("If-Modified-Since", ifModifiedSince.Format(http.TimeFormat))
-
-	resp, err := downloader.client.Do(req)
-	if err != nil {
-		return false, err
-	}
-
-	if resp.StatusCode == http.StatusNotModified {
-		return false, nil
-	} else if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("invalid status code: %d", resp.StatusCode)
-	}
-
-	return true, nil
-}
-func (downloader *URLDownloader) fetchToFile(url *url.URL, destinationFile *os.File) (int64, error) {
+func (downloader *URLDownloader) fetchToFile(url *url.URL, destinationFile *os.File, ifModifiedSince time.Time) (bool, int64, error) {
 	_, err := destinationFile.Seek(0, 0)
 	if err != nil {
-		return 0, err
+		return false, 0, err
 	}
 
 	err = destinationFile.Truncate(0)
 	if err != nil {
-		return 0, err
+		return false, 0, err
 	}
 
-	resp, err := downloader.client.Get(url.String())
+	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {
-		return 0, err
+		return false, 0, err
+	}
+
+	if !ifModifiedSince.IsZero() {
+		req.Header.Add("If-Modified-Since", ifModifiedSince.Format(http.TimeFormat))
+	}
+	resp, err := downloader.client.Do(req)
+	if err != nil {
+		return false, 0, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return 0, fmt.Errorf("Download failed: Status code %d", resp.StatusCode)
+		return false, 0, fmt.Errorf("Download failed: Status code %d", resp.StatusCode)
+	}
+
+	if resp.StatusCode == http.StatusNotModified {
+		return false, 0, nil
 	}
 
 	hash := md5.New()
 
 	count, err := io.Copy(io.MultiWriter(destinationFile, hash), resp.Body)
 	if err != nil {
-		return 0, err
+		return false, 0, err
 	}
 
 	etagChecksum, ok := convertETagToChecksum(resp.Header.Get("ETag"))
 
 	if ok && !bytes.Equal(etagChecksum, hash.Sum(nil)) {
-		return 0, fmt.Errorf("Download failed: Checksum mismatch")
+		return false, 0, fmt.Errorf("Download failed: Checksum mismatch")
 	}
 
-	return count, nil
+	return true, count, nil
 }
 
 // convertETagToChecksum returns true if ETag is a valid MD5 hash, so a checksum action was intended.

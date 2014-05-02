@@ -7,29 +7,40 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor/downloader"
 )
 
 type FileCache interface {
-	Fetch(url string, cacheKey string) (io.ReadCloser, error)
+	Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error)
+}
+
+type CachedFile struct {
+	size   int64
+	access time.Time
 }
 
 type Cache struct {
-	basePath       string
-	maxSizeInBytes int
+	cachedPath     string
+	uncachedPath   string
+	maxSizeInBytes int64
 	downloader     downloader.Downloader
-	fileLocks      map[string]*sync.RWMutex
 	lock           *sync.Mutex
+
+	cachedFiles map[string]CachedFile
 }
 
-func New(basePath string, maxSizeInBytes int, downloader downloader.Downloader) *Cache {
+func New(cachedPath string, uncachedPath string, maxSizeInBytes int64, downloader downloader.Downloader) *Cache {
+	os.RemoveAll(cachedPath)
+	os.MkdirAll(cachedPath, 0770)
 	return &Cache{
-		basePath:       basePath,
+		cachedPath:     cachedPath,
+		uncachedPath:   uncachedPath,
 		maxSizeInBytes: maxSizeInBytes,
 		downloader:     downloader,
-		fileLocks:      make(map[string]*sync.RWMutex),
 		lock:           &sync.Mutex{},
+		cachedFiles:    map[string]CachedFile{},
 	}
 }
 
@@ -42,92 +53,118 @@ func (c *Cache) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 }
 
 func (c *Cache) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
-	destinationFile, err := ioutil.TempFile(c.basePath, "uncached")
+	destinationFile, err := ioutil.TempFile(c.uncachedPath, "uncached")
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = c.downloader.Download(url, destinationFile)
+	_, _, err = c.downloader.Download(url, destinationFile, time.Time{})
 	if err != nil {
 		os.Remove(destinationFile.Name())
 		return nil, err
 	}
-	destinationFile.Seek(0, 0)
-
-	return NewSingleUseFile(destinationFile), nil
-}
-
-func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, error) {
-	lock := c.lockForCacheKey(cacheKey)
-
-	//do we have the file?  is it up-to-date?
-	lock.RLock()
-	if c.hasUpToDateCachedFileForCacheKey(url, cacheKey) {
-		destinationFile, err := os.Open(c.pathForCacheKey(cacheKey))
-		if err != nil {
-			lock.RUnlock()
-			return nil, err
-		}
-
-		return NewCachedFile(destinationFile, lock), nil
-	}
-	lock.RUnlock()
-
-	//download the file
-	lock.Lock()
-	destinationFile, err := c.downloadToCache(url, cacheKey)
-	lock.Unlock()
-
-	if err != nil {
-		return nil, err
-	}
-
-	lock.RLock()
-	return NewCachedFile(destinationFile, lock), err
-}
-
-func (c *Cache) pathForCacheKey(cacheKey string) string {
-	return filepath.Join(c.basePath, cacheKey)
-}
-
-func (c *Cache) hasUpToDateCachedFileForCacheKey(url *url.URL, cacheKey string) bool {
-	fileInfo, err := os.Stat(c.pathForCacheKey(cacheKey))
-	if err != nil {
-		return false
-	}
-
-	modified, err := c.downloader.ModifiedSince(url, fileInfo.ModTime())
-	if err != nil {
-		return false
-	}
-
-	return !modified
-}
-
-func (c *Cache) downloadToCache(url *url.URL, cacheKey string) (*os.File, error) {
-	destinationFile, err := os.Create(c.pathForCacheKey(cacheKey))
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = c.downloader.Download(url, destinationFile)
-	if err != nil {
-		os.Remove(destinationFile.Name())
-		return nil, err
-	}
+	os.Remove(destinationFile.Name()) //OK, 'cause that's how unix works
 	destinationFile.Seek(0, 0)
 
 	return destinationFile, nil
 }
 
-func (c *Cache) lockForCacheKey(cacheKey string) *sync.RWMutex {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	lock, ok := c.fileLocks[c.pathForCacheKey(cacheKey)]
-	if !ok {
-		lock = &sync.RWMutex{}
-		c.fileLocks[c.pathForCacheKey(cacheKey)] = lock
+func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, error) {
+	c.recordAccessForCacheKey(cacheKey)
+
+	path := c.pathForCacheKey(cacheKey)
+
+	f, err := os.Open(path)
+	fileExists := err == nil
+
+	modTime := time.Time{}
+	if fileExists {
+		info, err := os.Stat(path)
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+		modTime = info.ModTime()
 	}
 
-	return lock
+	//download the file to a temporary location
+	tempFile, err := ioutil.TempFile(c.uncachedPath, "temporary")
+	if err != nil {
+		if fileExists {
+			f.Close()
+		}
+		return nil, err
+	}
+	defer os.Remove(tempFile.Name()) //OK, even if we return tempFile 'cause that's how UNIX works.
+
+	didDownload, size, err := c.downloader.Download(url, tempFile, modTime)
+	if err != nil {
+		if fileExists {
+			f.Close()
+		}
+		return nil, err
+	}
+
+	if !didDownload {
+		return f, nil
+	}
+
+	//make room for the file and move it in (if possible)
+	c.moveFileIntoCache(cacheKey, tempFile.Name(), size)
+
+	_, err = tempFile.Seek(0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return tempFile, nil
+}
+
+func (c *Cache) pathForCacheKey(cacheKey string) string {
+	return filepath.Join(c.cachedPath, cacheKey)
+}
+
+func (c *Cache) moveFileIntoCache(cacheKey string, sourcePath string, size int64) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if size > c.maxSizeInBytes {
+		//file does not fit in cache...
+		return
+	}
+
+	usedSpace := int64(0)
+	for ck, f := range c.cachedFiles {
+		if ck != cacheKey {
+			usedSpace += f.size
+		}
+	}
+
+	for c.maxSizeInBytes < usedSpace+size {
+		oldestAccessTime, oldestCacheKey := time.Now(), ""
+		for ck, f := range c.cachedFiles {
+			if ck != cacheKey {
+				if f.access.Before(oldestAccessTime) {
+					oldestCacheKey = ck
+					oldestAccessTime = f.access
+				}
+			}
+		}
+		os.Remove(c.pathForCacheKey(oldestCacheKey))
+		usedSpace -= c.cachedFiles[oldestCacheKey].size
+		delete(c.cachedFiles, oldestCacheKey)
+	}
+
+	f := c.cachedFiles[cacheKey]
+	f.size = size
+	c.cachedFiles[cacheKey] = f
+	os.Rename(sourcePath, c.pathForCacheKey(cacheKey))
+}
+
+func (c *Cache) recordAccessForCacheKey(cacheKey string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	f := c.cachedFiles[cacheKey]
+	f.access = time.Now()
+	c.cachedFiles[cacheKey] = f
 }

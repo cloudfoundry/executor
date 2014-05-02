@@ -20,6 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/task_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
@@ -137,6 +138,18 @@ var containerMaxCpuShares = flag.Int(
 	"cpu shares allocatable to a container",
 )
 
+var cachePath = flag.String(
+	"cachePath",
+	"/tmp/cache",
+	"location to cache assets",
+)
+
+var maxCacheSizeInBytes = flag.Int64(
+	"maxCacheSizeInBytes",
+	10*1024*1024*1024,
+	"maximum size of the cache (in bytes) - you should include a healthy amount of overhead",
+)
+
 func main() {
 	flag.Parse()
 
@@ -203,6 +216,7 @@ func main() {
 	executor := executor.New(bbs, *drainTimeout, logger)
 
 	downloader := downloader.New(10*time.Minute, logger)
+	cache := file_cache.New(*cachePath, *tempDir, *maxCacheSizeInBytes, downloader)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -215,7 +229,7 @@ func main() {
 
 	transformer := task_transformer.NewTaskTransformer(
 		logStreamerFactory,
-		downloader,
+		cache,
 		uploader,
 		extractor,
 		compressor,

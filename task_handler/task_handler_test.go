@@ -8,19 +8,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-
-	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/task_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry/fake_task_registry"
 	"github.com/cloudfoundry-incubator/executor/task_transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
@@ -33,7 +32,7 @@ var _ = Describe("TaskHandler", func() {
 
 		bbs                 *fake_bbs.FakeExecutorBBS
 		wardenClient        *fake_warden_client.FakeClient
-		downloader          *fake_downloader.FakeDownloader
+		cache               *fake_file_cache.FakeFileCache
 		uploader            *fake_uploader.FakeUploader
 		extractor           *fake_extractor.FakeExtractor
 		compressor          *fake_compressor.FakeCompressor
@@ -86,7 +85,7 @@ var _ = Describe("TaskHandler", func() {
 
 		containerInodeLimit = 200000
 		maxCpuShares = 1024
-		downloader = &fake_downloader.FakeDownloader{}
+		cache = fake_file_cache.New()
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
 		compressor = &fake_compressor.FakeCompressor{}
@@ -100,7 +99,7 @@ var _ = Describe("TaskHandler", func() {
 
 		transformer = task_transformer.NewTaskTransformer(
 			logStreamerFactory,
-			downloader,
+			cache,
 			uploader,
 			extractor,
 			compressor,
@@ -191,8 +190,7 @@ var _ = Describe("TaskHandler", func() {
 				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
 				// execute download step
-				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
+				Ω(cache.FetchedURL.String()).Should(Equal("http://download-src.com"))
 
 				// execute run step
 				ranScripts := []string{}
@@ -325,8 +323,7 @@ var _ = Describe("TaskHandler", func() {
 				Ω(started[0].ContainerHandle).Should(Equal(handle))
 
 				// execute download step
-				Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-				Ω(downloader.DownloadedUrls[0].String()).Should(Equal("http://download-src.com"))
+				Ω(cache.FetchedURL.String()).Should(Equal("http://download-src.com"))
 
 				// execute run step
 				ranScripts := []string{}

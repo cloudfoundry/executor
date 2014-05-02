@@ -3,13 +3,9 @@ package task_transformer
 import (
 	"fmt"
 
+	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-
-	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -18,13 +14,16 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 )
 
 type TaskTransformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
-	downloader         downloader.Downloader
+	cache              file_cache.FileCache
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
 	compressor         compressor.Compressor
@@ -35,7 +34,7 @@ type TaskTransformer struct {
 
 func NewTaskTransformer(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
-	downloader downloader.Downloader,
+	cache file_cache.FileCache,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
@@ -44,7 +43,7 @@ func NewTaskTransformer(
 ) *TaskTransformer {
 	return &TaskTransformer{
 		logStreamerFactory: logStreamerFactory,
-		downloader:         downloader,
+		cache:              cache,
 		uploader:           uploader,
 		extractor:          extractor,
 		compressor:         compressor,
@@ -89,10 +88,9 @@ func (transformer *TaskTransformer) convertAction(
 		return download_step.New(
 			container,
 			actionModel,
-			transformer.downloader,
+			transformer.cache,
 			transformer.extractor,
 			transformer.tempDir,
-			logStreamer,
 			transformer.logger,
 		)
 	case models.UploadAction:

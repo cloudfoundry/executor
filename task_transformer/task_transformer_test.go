@@ -1,8 +1,8 @@
 package task_transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/executor/file_cache"
+	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("TaskTransformer", func() {
 	var (
-		downloader      downloader.Downloader
+		cache           file_cache.FileCache
 		logger          *steno.Logger
 		logStreamer     *fake_log_streamer.FakeLogStreamer
 		uploader        uploader.Uploader
@@ -44,7 +44,7 @@ var _ = Describe("TaskTransformer", func() {
 
 	BeforeEach(func() {
 		logStreamer = fake_log_streamer.New()
-		downloader = &fake_downloader.FakeDownloader{}
+		cache = fake_file_cache.New()
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
 		compressor = &fake_compressor.FakeCompressor{}
@@ -57,7 +57,7 @@ var _ = Describe("TaskTransformer", func() {
 
 		taskTransformer = NewTaskTransformer(
 			logStreamerFactory,
-			downloader,
+			cache,
 			uploader,
 			extractor,
 			compressor,
@@ -107,10 +107,9 @@ var _ = Describe("TaskTransformer", func() {
 			download_step.New(
 				container,
 				downloadActionModel,
-				downloader,
+				cache,
 				extractor,
 				"/fake/temp/dir",
-				logStreamer,
 				logger,
 			),
 			upload_step.New(

@@ -1,50 +1,44 @@
 package download_step
 
 import (
-	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
-	steno "github.com/cloudfoundry/gosteno"
-
-	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/bytefmt"
 )
 
 type DownloadStep struct {
-	container  warden.Container
-	model      models.DownloadAction
-	downloader downloader.Downloader
-	extractor  extractor.Extractor
-	tempDir    string
-	streamer   log_streamer.LogStreamer
-	logger     *steno.Logger
+	container warden.Container
+	model     models.DownloadAction
+	cache     file_cache.FileCache
+	extractor extractor.Extractor
+	tempDir   string
+	logger    *steno.Logger
 }
 
 func New(
 	container warden.Container,
 	model models.DownloadAction,
-	downloader downloader.Downloader,
+	cache file_cache.FileCache,
 	extractor extractor.Extractor,
 	tempDir string,
-	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *DownloadStep {
 	return &DownloadStep{
-		container:  container,
-		model:      model,
-		downloader: downloader,
-		extractor:  extractor,
-		tempDir:    tempDir,
-		streamer:   streamer,
-		logger:     logger,
+		container: container,
+		model:     model,
+		cache:     cache,
+		extractor: extractor,
+		tempDir:   tempDir,
+		logger:    logger,
 	}
 }
 
@@ -56,18 +50,18 @@ func (step *DownloadStep) Perform() error {
 		"task.handle.download-action",
 	)
 
-	downloadedFile, err := step.download()
+	//Stream this to the extractor + container when we have streaming support!
+	downloadedPath, err := step.download()
 	if err != nil {
 		return err
 	}
 
 	defer func() {
-		downloadedFile.Close()
-		os.RemoveAll(downloadedFile.Name())
+		os.Remove(downloadedPath)
 	}()
 
 	if step.model.Extract {
-		extractionDir, err := step.extract(downloadedFile)
+		extractionDir, err := step.extract(downloadedPath)
 		if err != nil {
 			return emittable_error.New(err, "Extraction failed")
 		}
@@ -81,7 +75,7 @@ func (step *DownloadStep) Perform() error {
 
 		return err
 	} else {
-		err := step.container.CopyIn(downloadedFile.Name(), step.model.To)
+		err := step.container.CopyIn(downloadedPath, step.model.To)
 		if err != nil {
 			return emittable_error.New(err, "Copying into the container failed")
 		}
@@ -90,68 +84,41 @@ func (step *DownloadStep) Perform() error {
 	}
 }
 
-func (step *DownloadStep) download() (*os.File, error) {
+func (step *DownloadStep) download() (string, error) {
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	downloadedFile, err := ioutil.TempFile(step.tempDir, "downloaded")
+	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
+	defer tempFile.Close()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	downloadSize, err := step.downloader.Download(url, downloadedFile)
+	downloadedFile, err := step.cache.Fetch(url, step.model.CacheKey)
+	defer downloadedFile.Close()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	fmt.Fprintf(step.streamer.Stdout(), "Downloaded (%s)\n", bytefmt.ByteSize(uint64(downloadSize)))
+	io.Copy(tempFile, downloadedFile)
 
-	return downloadedFile, err
+	return tempFile.Name(), nil
 }
 
-func (step *DownloadStep) extract(downloadedFile *os.File) (string, error) {
+func (step *DownloadStep) extract(downloadedPath string) (string, error) {
 	extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")
 	if err != nil {
 		return "", err
 	}
 
-	err = step.extractor.Extract(downloadedFile.Name(), extractionDir)
+	err = step.extractor.Extract(downloadedPath, extractionDir)
 	if err != nil {
-		info, statErr := downloadedFile.Stat()
-		if statErr != nil {
-			step.logger.Warnd(
-				map[string]interface{}{
-					"error":      err.Error(),
-					"stat-error": statErr.Error(),
-					"url":        step.model.From,
-				},
-				"downloader.extracted-stat-failed",
-			)
-			return "", err
-		}
-
-		body, readErr := ioutil.ReadAll(downloadedFile)
-		if readErr != nil {
-			step.logger.Warnd(
-				map[string]interface{}{
-					"error":      err.Error(),
-					"read-error": readErr.Error(),
-					"url":        step.model.From,
-					"info":       info.Size(),
-				},
-				"downloader.extracted-read-failed",
-			)
-			return "", err
-		}
-
 		step.logger.Warnd(
 			map[string]interface{}{
 				"error": err.Error(),
 				"url":   step.model.From,
-				"info":  info.Size(),
-				"body":  string(body),
 			},
 			"downloader.extract-failed",
 		)

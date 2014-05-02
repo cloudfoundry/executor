@@ -59,11 +59,12 @@ var _ = Describe("Downloader", func() {
 			var uploadedBytes int64
 			var expectedBytes int64
 			var downloadErr error
+			var didDownload bool
 
 			JustBeforeEach(func() {
 				serverUrl := testServer.URL + "/somepath"
 				url, _ = url.Parse(serverUrl)
-				uploadedBytes, downloadErr = downloader.Download(url, file)
+				didDownload, uploadedBytes, downloadErr = downloader.Download(url, file, time.Time{})
 			})
 
 			Context("and contains a matching MD5 Hash in the Etag", func() {
@@ -90,6 +91,10 @@ var _ = Describe("Downloader", func() {
 
 				It("only tries once", func() {
 					Ω(attempts).Should(Equal(1))
+				})
+
+				It("claims to have downloaded", func() {
+					Ω(didDownload).Should(BeTrue())
 				})
 
 				It("gets a file from a url", func() {
@@ -119,6 +124,7 @@ var _ = Describe("Downloader", func() {
 				})
 
 				It("succeeds without doing a checksum", func() {
+					Ω(didDownload).Should(BeTrue())
 					Ω(downloadErr).ShouldNot(HaveOccurred())
 				})
 			})
@@ -132,6 +138,7 @@ var _ = Describe("Downloader", func() {
 				})
 
 				It("succeeds without doing a checksum", func() {
+					Ω(didDownload).Should(BeTrue())
 					Ω(downloadErr).ShouldNot(HaveOccurred())
 				})
 			})
@@ -156,10 +163,12 @@ var _ = Describe("Downloader", func() {
 
 			It("should retry 3 times and return an error", func() {
 				errs := make(chan error)
+				didDownloads := make(chan bool)
 
 				go func() {
-					_, err := downloader.Download(url, file)
+					didDownload, _, err := downloader.Download(url, file, time.Time{})
 					errs <- err
+					didDownloads <- didDownload
 				}()
 
 				Eventually(requestInitiated).Should(Receive())
@@ -167,6 +176,7 @@ var _ = Describe("Downloader", func() {
 				Eventually(requestInitiated).Should(Receive())
 
 				Ω(<-errs).Should(HaveOccurred())
+				Ω(<-didDownloads).Should(BeFalse())
 			})
 		})
 
@@ -179,8 +189,9 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := downloader.Download(url, file)
+				didDownload, _, err := downloader.Download(url, file, time.Time{})
 				Ω(err).NotTo(BeNil())
+				Ω(didDownload).Should(BeFalse())
 			})
 		})
 
@@ -193,8 +204,9 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := downloader.Download(url, file)
+				didDownload, _, err := downloader.Download(url, file, time.Time{})
 				Ω(err).NotTo(BeNil())
+				Ω(didDownload).Should(BeFalse())
 			})
 		})
 
@@ -214,28 +226,31 @@ var _ = Describe("Downloader", func() {
 			})
 
 			It("should return an error", func() {
-				_, err := downloader.Download(url, file)
+				didDownload, _, err := downloader.Download(url, file, time.Time{})
 				Ω(err).NotTo(BeNil())
+				Ω(didDownload).Should(BeFalse())
 			})
 		})
 	})
 
-	Describe("ModifiedSince", func() {
+	Context("Downloading with a modified time", func() {
 		var (
 			server       *ghttp.Server
 			modifiedTime time.Time
 			statusCode   int
 			url          *Url.URL
+			body         string
+			file         *os.File
 		)
 
 		BeforeEach(func() {
-			statusCode = http.StatusNotModified
 			modifiedTime = time.Now()
+			file, _ = ioutil.TempFile("", "foo")
 			server = ghttp.NewServer()
 			server.AppendHandlers(ghttp.CombineHandlers(
-				ghttp.VerifyRequest("HEAD", "/get-the-file"),
+				ghttp.VerifyRequest("GET", "/get-the-file"),
 				ghttp.VerifyHeader(http.Header{"If-Modified-Since": []string{modifiedTime.Format(http.TimeFormat)}}),
-				ghttp.RespondWithPtr(&statusCode, nil),
+				ghttp.RespondWithPtr(&statusCode, &body),
 			))
 
 			url, _ = Url.Parse(server.URL() + "/get-the-file")
@@ -245,44 +260,73 @@ var _ = Describe("Downloader", func() {
 			server.Close()
 		})
 
-		It("should perform a HEAD request with the correct If-Modified-Since header", func() {
-			downloader.ModifiedSince(url, modifiedTime)
-			Ω(server.ReceivedRequests()).Should(HaveLen(1))
-		})
-
-		Context("when the server returns 304", func() {
+		Context("when the server replies with 304", func() {
 			BeforeEach(func() {
 				statusCode = http.StatusNotModified
 			})
 
-			It("should return false", func() {
-				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+			It("should return that it did not download", func() {
+				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				Ω(didDownload).Should(BeFalse())
+				Ω(size).Should(Equal(int64(0)))
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(isModified).Should(BeFalse())
+			})
+
+			It("should not download anything", func() {
+				downloader.Download(url, file, modifiedTime)
+				info, err := os.Stat(file.Name())
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(info.Size()).Should(Equal(int64(0)))
 			})
 		})
 
-		Context("when the server returns 200", func() {
+		Context("when the server replies with 200", func() {
 			BeforeEach(func() {
 				statusCode = http.StatusOK
+				body = "quarb!"
 			})
 
-			It("should return true", func() {
-				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+			It("should return that it did download and the file size", func() {
+				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				Ω(didDownload).Should(BeTrue())
+				Ω(size).Should(Equal(int64(len(body))))
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(isModified).Should(BeTrue())
+			})
+
+			It("should download the file", func() {
+				downloader.Download(url, file, modifiedTime)
+				info, err := os.Stat(file.Name())
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(info.Size()).Should(Equal(int64(len(body))))
 			})
 		})
 
 		Context("for anything else (including a server error)", func() {
 			BeforeEach(func() {
 				statusCode = http.StatusInternalServerError
+
+				// cope with built in retry
+				for i := 0; i < MAX_DOWNLOAD_ATTEMPTS; i++ {
+					server.AppendHandlers(ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/get-the-file"),
+						ghttp.VerifyHeader(http.Header{"If-Modified-Since": []string{modifiedTime.Format(http.TimeFormat)}}),
+						ghttp.RespondWithPtr(&statusCode, &body),
+					))
+				}
 			})
 
 			It("should return false with an error", func() {
-				isModified, err := downloader.ModifiedSince(url, modifiedTime)
+				didDownload, size, err := downloader.Download(url, file, modifiedTime)
+				Ω(didDownload).Should(BeFalse())
+				Ω(size).Should(Equal(int64(0)))
 				Ω(err).Should(HaveOccurred())
-				Ω(isModified).Should(BeFalse())
+			})
+
+			It("should not download anything", func() {
+				downloader.Download(url, file, modifiedTime)
+				info, err := os.Stat(file.Name())
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(info.Size()).Should(Equal(int64(0)))
 			})
 		})
 	})

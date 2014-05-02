@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
+	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -14,7 +14,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -26,12 +25,11 @@ var _ = Describe("DownloadAction", func() {
 	var result chan error
 
 	var downloadAction models.DownloadAction
-	var downloader *fake_downloader.FakeDownloader
+	var cache *fake_file_cache.FakeFileCache
 	var extractor *fake_extractor.FakeExtractor
 	var tempDir string
 	var wardenClient *fake_warden_client.FakeClient
 	var logger *steno.Logger
-	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 
 	handle := "some-container-handle"
 
@@ -40,8 +38,8 @@ var _ = Describe("DownloadAction", func() {
 
 		result = make(chan error)
 
-		downloader = &fake_downloader.FakeDownloader{}
-		downloader.DownloadContent = []byte(strings.Repeat("7", 1024))
+		cache = &fake_file_cache.FakeFileCache{}
+		cache.FetchedContent = []byte(strings.Repeat("7", 1024))
 		extractor = &fake_extractor.FakeExtractor{}
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
@@ -50,8 +48,6 @@ var _ = Describe("DownloadAction", func() {
 		wardenClient = fake_warden_client.New()
 
 		logger = steno.NewLogger("test-logger")
-
-		fakeStreamer = fake_log_streamer.New()
 	})
 
 	Describe("Perform", func() {
@@ -59,9 +55,10 @@ var _ = Describe("DownloadAction", func() {
 
 		BeforeEach(func() {
 			downloadAction = models.DownloadAction{
-				From:    "http://mr_jones",
-				To:      "/tmp/Antarctica",
-				Extract: false,
+				From:     "http://mr_jones",
+				To:       "/tmp/Antarctica",
+				Extract:  false,
+				CacheKey: "foo",
 			}
 		})
 
@@ -74,19 +71,18 @@ var _ = Describe("DownloadAction", func() {
 			step = New(
 				container,
 				downloadAction,
-				downloader,
+				cache,
 				extractor,
 				tempDir,
-				fakeStreamer,
 				logger,
 			)
 
 			stepErr = step.Perform()
 		})
 
-		It("downloads the file from the given URL", func() {
-			Ω(downloader.DownloadedUrls).ShouldNot(BeEmpty())
-			Ω(downloader.DownloadedUrls[0].Host).To(ContainSubstring("mr_jones"))
+		It("asks the cache for the file", func() {
+			Ω(cache.FetchedURL.Host).Should(ContainSubstring("mr_jones"))
+			Ω(cache.FetchedCacheKey).Should(Equal("foo"))
 		})
 
 		It("places the file in the container", func() {
@@ -95,10 +91,6 @@ var _ = Describe("DownloadAction", func() {
 
 			Ω(copiedIn[0].Source).To(ContainSubstring(tempDir))
 			Ω(copiedIn[0].Destination).To(Equal("/tmp/Antarctica"))
-		})
-
-		It("loggregates the download filesize", func() {
-			Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Downloaded (1K)\n"))
 		})
 
 		It("does not return an error", func() {
@@ -115,13 +107,13 @@ var _ = Describe("DownloadAction", func() {
 			})
 		})
 
-		Context("when there is an error downloading the file", func() {
+		Context("when there is an error fetching the file", func() {
 			BeforeEach(func() {
-				downloader.AlwaysFail()
+				cache.FetchError = errors.New("bam")
 			})
 
 			It("returns an error", func() {
-				Ω(stepErr).Should(HaveOccurred())
+				Ω(stepErr).Should(MatchError(cache.FetchError))
 			})
 		})
 
