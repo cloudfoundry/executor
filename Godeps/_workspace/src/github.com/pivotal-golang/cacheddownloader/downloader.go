@@ -1,4 +1,4 @@
-package downloader
+package cacheddownloader
 
 import (
 	"bytes"
@@ -11,8 +11,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	steno "github.com/cloudfoundry/gosteno"
 )
 
 const MAX_DOWNLOAD_ATTEMPTS = 3
@@ -22,11 +20,10 @@ type Downloader interface {
 }
 
 type URLDownloader struct {
-	logger *steno.Logger
 	client *http.Client
 }
 
-func New(timeout time.Duration, logger *steno.Logger) Downloader {
+func NewDownloader(timeout time.Duration) Downloader {
 	transport := &http.Transport{
 		ResponseHeaderTimeout: timeout,
 	}
@@ -35,7 +32,6 @@ func New(timeout time.Duration, logger *steno.Logger) Downloader {
 	}
 
 	return &URLDownloader{
-		logger: logger,
 		client: client,
 	}
 }
@@ -50,7 +46,6 @@ Otherwise, if a download occurs succesfully, didDownload is true.
 */
 func (downloader *URLDownloader) Download(url *url.URL, destinationFile *os.File, ifModifiedSince time.Time) (didDownload bool, length int64, err error) {
 	for attempt := 0; attempt < MAX_DOWNLOAD_ATTEMPTS; attempt++ {
-		downloader.logger.Infof("downloader.attempt #%d", attempt)
 		didDownload, length, err = downloader.fetchToFile(url, destinationFile, ifModifiedSince)
 		if err == nil {
 			break

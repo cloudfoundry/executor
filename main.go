@@ -18,9 +18,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/workerpool"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
-	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/task_handler"
 	"github.com/cloudfoundry-incubator/executor/task_registry"
@@ -28,6 +26,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 )
 
 var containerOwnerName = flag.String(
@@ -215,8 +214,7 @@ func main() {
 
 	executor := executor.New(bbs, *drainTimeout, logger)
 
-	downloader := downloader.New(10*time.Minute, logger)
-	cache := file_cache.New(*cachePath, *tempDir, *maxCacheSizeInBytes, downloader)
+	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()

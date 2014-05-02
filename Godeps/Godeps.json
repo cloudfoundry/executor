@@ -111,6 +111,10 @@
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",
 			"Rev": "c0f14ae54cbbf4eb66a36bfd3c5436c243f7423c"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
+			"Rev": "e5ea3a30a1013d7616653f6d0d2972474a2adda3"
 		}
 	]
 }

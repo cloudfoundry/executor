@@ -1,4 +1,4 @@
-package file_cache
+package cacheddownloader
 
 import (
 	"crypto/md5"
@@ -10,11 +10,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/cloudfoundry-incubator/executor/downloader"
 )
 
-type FileCache interface {
+type CachedDownloader interface {
 	Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error)
 }
 
@@ -23,30 +21,30 @@ type CachedFile struct {
 	access time.Time
 }
 
-type Cache struct {
+type cachedDownloader struct {
 	cachedPath     string
 	uncachedPath   string
 	maxSizeInBytes int64
-	downloader     downloader.Downloader
+	downloader     Downloader
 	lock           *sync.Mutex
 
 	cachedFiles map[string]CachedFile
 }
 
-func New(cachedPath string, uncachedPath string, maxSizeInBytes int64, downloader downloader.Downloader) *Cache {
+func New(cachedPath string, uncachedPath string, maxSizeInBytes int64, downloadTimeout time.Duration) *cachedDownloader {
 	os.RemoveAll(cachedPath)
 	os.MkdirAll(cachedPath, 0770)
-	return &Cache{
+	return &cachedDownloader{
 		cachedPath:     cachedPath,
 		uncachedPath:   uncachedPath,
 		maxSizeInBytes: maxSizeInBytes,
-		downloader:     downloader,
+		downloader:     NewDownloader(downloadTimeout),
 		lock:           &sync.Mutex{},
 		cachedFiles:    map[string]CachedFile{},
 	}
 }
 
-func (c *Cache) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
+func (c *cachedDownloader) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	if cacheKey == "" {
 		return c.fetchUncachedFile(url)
 	} else {
@@ -55,7 +53,7 @@ func (c *Cache) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	}
 }
 
-func (c *Cache) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
+func (c *cachedDownloader) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
 	destinationFile, err := ioutil.TempFile(c.uncachedPath, "uncached")
 	if err != nil {
 		return nil, err
@@ -72,7 +70,7 @@ func (c *Cache) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
 	return destinationFile, nil
 }
 
-func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, error) {
+func (c *cachedDownloader) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	c.recordAccessForCacheKey(cacheKey)
 
 	path := c.pathForCacheKey(cacheKey)
@@ -123,11 +121,11 @@ func (c *Cache) fetchCachedFile(url *url.URL, cacheKey string) (io.ReadCloser, e
 	return tempFile, nil
 }
 
-func (c *Cache) pathForCacheKey(cacheKey string) string {
+func (c *cachedDownloader) pathForCacheKey(cacheKey string) string {
 	return filepath.Join(c.cachedPath, cacheKey)
 }
 
-func (c *Cache) moveFileIntoCache(cacheKey string, sourcePath string, size int64) {
+func (c *cachedDownloader) moveFileIntoCache(cacheKey string, sourcePath string, size int64) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -164,7 +162,7 @@ func (c *Cache) moveFileIntoCache(cacheKey string, sourcePath string, size int64
 	os.Rename(sourcePath, c.pathForCacheKey(cacheKey))
 }
 
-func (c *Cache) recordAccessForCacheKey(cacheKey string) {
+func (c *cachedDownloader) recordAccessForCacheKey(cacheKey string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	f := c.cachedFiles[cacheKey]

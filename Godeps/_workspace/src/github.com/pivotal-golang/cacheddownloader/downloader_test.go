@@ -1,4 +1,4 @@
-package downloader_test
+package cacheddownloader_test
 
 import (
 	"crypto/md5"
@@ -13,8 +13,7 @@ import (
 
 	"github.com/onsi/gomega/ghttp"
 
-	. "github.com/cloudfoundry-incubator/executor/downloader"
-	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/pivotal-golang/cacheddownloader"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -34,7 +33,7 @@ var _ = Describe("Downloader", func() {
 
 	BeforeEach(func() {
 		testServer = nil
-		downloader = New(100*time.Millisecond, steno.NewLogger("test-logger"))
+		downloader = NewDownloader(100 * time.Millisecond)
 		lock = &sync.Mutex{}
 	})
 

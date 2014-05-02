@@ -1,8 +1,6 @@
 package task_transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/executor/file_cache"
-	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -25,11 +23,12 @@ import (
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 )
 
 var _ = Describe("TaskTransformer", func() {
 	var (
-		cache           file_cache.FileCache
+		cache           *fakecacheddownloader.FakeCachedDownloader
 		logger          *steno.Logger
 		logStreamer     *fake_log_streamer.FakeLogStreamer
 		uploader        uploader.Uploader
@@ -44,7 +43,7 @@ var _ = Describe("TaskTransformer", func() {
 
 	BeforeEach(func() {
 		logStreamer = fake_log_streamer.New()
-		cache = fake_file_cache.New()
+		cache = fakecacheddownloader.New()
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
 		compressor = &fake_compressor.FakeCompressor{}

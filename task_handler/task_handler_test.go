@@ -5,10 +5,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/task_handler"
@@ -20,8 +16,11 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 )
 
 var _ = Describe("TaskHandler", func() {
@@ -32,7 +31,7 @@ var _ = Describe("TaskHandler", func() {
 
 		bbs                 *fake_bbs.FakeExecutorBBS
 		wardenClient        *fake_warden_client.FakeClient
-		cache               *fake_file_cache.FakeFileCache
+		cache               *fakecacheddownloader.FakeCachedDownloader
 		uploader            *fake_uploader.FakeUploader
 		extractor           *fake_extractor.FakeExtractor
 		compressor          *fake_compressor.FakeCompressor
@@ -85,7 +84,7 @@ var _ = Describe("TaskHandler", func() {
 
 		containerInodeLimit = 200000
 		maxCpuShares = 1024
-		cache = fake_file_cache.New()
+		cache = &fakecacheddownloader.FakeCachedDownloader{}
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
 		compressor = &fake_compressor.FakeCompressor{}

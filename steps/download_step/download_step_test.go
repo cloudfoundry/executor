@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/cloudfoundry-incubator/executor/file_cache/fake_file_cache"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -25,7 +25,7 @@ var _ = Describe("DownloadAction", func() {
 	var result chan error
 
 	var downloadAction models.DownloadAction
-	var cache *fake_file_cache.FakeFileCache
+	var cache *fakecacheddownloader.FakeCachedDownloader
 	var extractor *fake_extractor.FakeExtractor
 	var tempDir string
 	var wardenClient *fake_warden_client.FakeClient
@@ -38,7 +38,7 @@ var _ = Describe("DownloadAction", func() {
 
 		result = make(chan error)
 
-		cache = &fake_file_cache.FakeFileCache{}
+		cache = &fakecacheddownloader.FakeCachedDownloader{}
 		cache.FetchedContent = []byte(strings.Repeat("7", 1024))
 		extractor = &fake_extractor.FakeExtractor{}
 

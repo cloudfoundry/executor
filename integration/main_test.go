@@ -24,7 +24,7 @@ import (
 
 func TestExecutorMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Executor Suite")
+	RunSpecs(t, "Integration Suite")
 }
 
 var executorPath string

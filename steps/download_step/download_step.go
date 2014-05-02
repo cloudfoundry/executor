@@ -7,38 +7,38 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 )
 
 type DownloadStep struct {
-	container warden.Container
-	model     models.DownloadAction
-	cache     file_cache.FileCache
-	extractor extractor.Extractor
-	tempDir   string
-	logger    *steno.Logger
+	container        warden.Container
+	model            models.DownloadAction
+	cachedDownloader cacheddownloader.CachedDownloader
+	extractor        extractor.Extractor
+	tempDir          string
+	logger           *steno.Logger
 }
 
 func New(
 	container warden.Container,
 	model models.DownloadAction,
-	cache file_cache.FileCache,
+	cachedDownloader cacheddownloader.CachedDownloader,
 	extractor extractor.Extractor,
 	tempDir string,
 	logger *steno.Logger,
 ) *DownloadStep {
 	return &DownloadStep{
-		container: container,
-		model:     model,
-		cache:     cache,
-		extractor: extractor,
-		tempDir:   tempDir,
-		logger:    logger,
+		container:        container,
+		model:            model,
+		cachedDownloader: cachedDownloader,
+		extractor:        extractor,
+		tempDir:          tempDir,
+		logger:           logger,
 	}
 }
 
@@ -96,7 +96,7 @@ func (step *DownloadStep) download() (string, error) {
 		return "", err
 	}
 
-	downloadedFile, err := step.cache.Fetch(url, step.model.CacheKey)
+	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
 	defer downloadedFile.Close()
 	if err != nil {
 		return "", err

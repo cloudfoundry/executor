@@ -3,8 +3,8 @@ package task_transformer
 import (
 	"fmt"
 
-	"github.com/cloudfoundry-incubator/executor/file_cache"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
+	"github.com/pivotal-golang/cacheddownloader"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -23,7 +23,7 @@ import (
 
 type TaskTransformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
-	cache              file_cache.FileCache
+	cachedDownloader   cacheddownloader.CachedDownloader
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
 	compressor         compressor.Compressor
@@ -34,7 +34,7 @@ type TaskTransformer struct {
 
 func NewTaskTransformer(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
-	cache file_cache.FileCache,
+	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
@@ -43,7 +43,7 @@ func NewTaskTransformer(
 ) *TaskTransformer {
 	return &TaskTransformer{
 		logStreamerFactory: logStreamerFactory,
-		cache:              cache,
+		cachedDownloader:   cachedDownloader,
 		uploader:           uploader,
 		extractor:          extractor,
 		compressor:         compressor,
@@ -88,7 +88,7 @@ func (transformer *TaskTransformer) convertAction(
 		return download_step.New(
 			container,
 			actionModel,
-			transformer.cache,
+			transformer.cachedDownloader,
 			transformer.extractor,
 			transformer.tempDir,
 			transformer.logger,

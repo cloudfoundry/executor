@@ -1,4 +1,4 @@
-package fake_file_cache
+package fakecacheddownloader
 
 import (
 	"bytes"
@@ -6,18 +6,18 @@ import (
 	"net/url"
 )
 
-type FakeFileCache struct {
+type FakeCachedDownloader struct {
 	FetchedURL      *url.URL
 	FetchedCacheKey string
 	FetchedContent  []byte
 	FetchError      error
 }
 
-func New() *FakeFileCache {
-	return &FakeFileCache{}
+func New() *FakeCachedDownloader {
+	return &FakeCachedDownloader{}
 }
 
-func (c *FakeFileCache) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
+func (c *FakeCachedDownloader) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	c.FetchedURL = url
 	c.FetchedCacheKey = cacheKey
 	return &readCloser{bytes.NewBuffer(c.FetchedContent)}, c.FetchError
