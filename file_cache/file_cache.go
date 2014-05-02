@@ -1,6 +1,8 @@
 package file_cache
 
 import (
+	"crypto/md5"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -48,6 +50,7 @@ func (c *Cache) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	if cacheKey == "" {
 		return c.fetchUncachedFile(url)
 	} else {
+		cacheKey = fmt.Sprintf("%x", md5.Sum([]byte(cacheKey)))
 		return c.fetchCachedFile(url, cacheKey)
 	}
 }

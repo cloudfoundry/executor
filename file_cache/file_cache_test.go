@@ -1,6 +1,8 @@
 package file_cache_test
 
 import (
+	"crypto/md5"
+	"fmt"
 	"io"
 	"io/ioutil"
 	Url "net/url"
@@ -13,6 +15,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func computeMd5(key string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(key)))
+}
 
 var _ = Describe("File cache", func() {
 	var (
@@ -168,7 +174,7 @@ var _ = Describe("File cache", func() {
 			var cacheFilePath string
 			var fileContent []byte
 			BeforeEach(func() {
-				cacheFilePath = filepath.Join(cachedPath, cacheKey)
+				cacheFilePath = filepath.Join(cachedPath, computeMd5(cacheKey))
 				fileContent = []byte("now you see it")
 				err := ioutil.WriteFile(cacheFilePath, fileContent, 0666)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -254,6 +260,17 @@ var _ = Describe("File cache", func() {
 			})
 		})
 
+		Context("when the cache key has weird characters", func() {
+			It("shouldn't miss a beat", func() {
+				cacheKey = "http://mwahahaha/foo.com:c:/rm -rf"
+				_, err := cache.Fetch(url, cacheKey)
+				Ω(err).ShouldNot(HaveOccurred())
+				dir, err := ioutil.ReadDir(cachedPath)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(dir[0].Name()).Should(Equal(computeMd5(cacheKey)))
+			})
+		})
+
 		Context("when the cache is full", func() {
 			It("deletes the oldest cached files until there is space", func() {
 				//read them one at a time
@@ -287,14 +304,14 @@ var _ = Describe("File cache", func() {
 				//make sure we removed the two we read first
 				Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(2))
 
-				_, err = os.Stat(filepath.Join(cachedPath, "A"))
+				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("A")))
 				Ω(err).Should(HaveOccurred())
-				_, err = os.Stat(filepath.Join(cachedPath, "B"))
+				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("B")))
 				Ω(err).Should(HaveOccurred())
 
-				_, err = os.Stat(filepath.Join(cachedPath, "C"))
+				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("C")))
 				Ω(err).ShouldNot(HaveOccurred())
-				_, err = os.Stat(filepath.Join(cachedPath, "D"))
+				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("D")))
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
