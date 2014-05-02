@@ -96,7 +96,7 @@ func (step *DownloadStep) download() (string, error) {
 		return "", err
 	}
 
-	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
+	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.Cache)
 	defer downloadedFile.Close()
 	if err != nil {
 		return "", err

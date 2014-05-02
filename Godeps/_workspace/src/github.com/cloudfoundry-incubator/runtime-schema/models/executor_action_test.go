@@ -55,16 +55,16 @@ var _ = Describe("ExecutorAction", func() {
 				"args": {
 					"from": "web_location",
 					"to": "local_location",
-					"cache_key": "the-cache-key",
+					"cache": true,
 					"extract": true
 				}
 			}`,
 			ExecutorAction{
 				Action: DownloadAction{
-					From:     "web_location",
-					To:       "local_location",
-					Extract:  true,
-					CacheKey: "the-cache-key",
+					From:    "web_location",
+					To:      "local_location",
+					Extract: true,
+					Cache:   true,
 				},
 			},
 		)

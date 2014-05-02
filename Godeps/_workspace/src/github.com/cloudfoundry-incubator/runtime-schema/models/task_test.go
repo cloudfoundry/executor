@@ -22,7 +22,7 @@ var _ = Describe("Task", func() {
 				"args":{
 					"from":"old_location",
 					"to":"new_location",
-					"cache_key":"the-cache-key",
+					"cache":true,
 					"extract":true
 				}
 			}
@@ -54,10 +54,10 @@ var _ = Describe("Task", func() {
 			Actions: []ExecutorAction{
 				{
 					Action: DownloadAction{
-						From:     "old_location",
-						To:       "new_location",
-						CacheKey: "the-cache-key",
-						Extract:  true,
+						From:    "old_location",
+						To:      "new_location",
+						Cache:   true,
+						Extract: true,
 					},
 				},
 			},

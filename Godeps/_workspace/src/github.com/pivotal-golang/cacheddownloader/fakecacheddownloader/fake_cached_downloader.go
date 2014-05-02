@@ -7,19 +7,19 @@ import (
 )
 
 type FakeCachedDownloader struct {
-	FetchedURL      *url.URL
-	FetchedCacheKey string
-	FetchedContent  []byte
-	FetchError      error
+	FetchedURL     *url.URL
+	FetchedCache   bool
+	FetchedContent []byte
+	FetchError     error
 }
 
 func New() *FakeCachedDownloader {
 	return &FakeCachedDownloader{}
 }
 
-func (c *FakeCachedDownloader) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
+func (c *FakeCachedDownloader) Fetch(url *url.URL, cache bool) (io.ReadCloser, error) {
 	c.FetchedURL = url
-	c.FetchedCacheKey = cacheKey
+	c.FetchedCache = cache
 	return &readCloser{bytes.NewBuffer(c.FetchedContent)}, c.FetchError
 }
 

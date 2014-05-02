@@ -40,11 +40,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "8c635818b9f69ed575427731051002eae191f793"
+			"Rev": "ab46902e895d141fbada91cb102c1323b99fd532"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "8c635818b9f69ed575427731051002eae191f793"
+			"Rev": "ab46902e895d141fbada91cb102c1323b99fd532"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -114,7 +114,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
-			"Rev": "e5ea3a30a1013d7616653f6d0d2972474a2adda3"
+			"Rev": "44731c7134daeec31ed083347e98030687a9636e"
 		}
 	]
 }

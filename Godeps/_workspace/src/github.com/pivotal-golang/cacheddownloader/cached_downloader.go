@@ -13,7 +13,7 @@ import (
 )
 
 type CachedDownloader interface {
-	Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error)
+	Fetch(url *url.URL, cache bool) (io.ReadCloser, error)
 }
 
 type CachedFile struct {
@@ -44,13 +44,19 @@ func New(cachedPath string, uncachedPath string, maxSizeInBytes int64, downloadT
 	}
 }
 
-func (c *cachedDownloader) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
-	if cacheKey == "" {
-		return c.fetchUncachedFile(url)
-	} else {
-		cacheKey = fmt.Sprintf("%x", md5.Sum([]byte(cacheKey)))
+func (c *cachedDownloader) Fetch(url *url.URL, cache bool) (io.ReadCloser, error) {
+	if cache {
+		cacheKey := cacheKeyForURL(url)
 		return c.fetchCachedFile(url, cacheKey)
+	} else {
+		return c.fetchUncachedFile(url)
 	}
+}
+
+func cacheKeyForURL(originalURL *url.URL) string {
+	modifiedURL, _ := url.Parse(originalURL.String()) //bleugh
+	modifiedURL.RawQuery = ""
+	return fmt.Sprintf("%x", md5.Sum([]byte(modifiedURL.String())))
 }
 
 func (c *cachedDownloader) fetchUncachedFile(url *url.URL) (io.ReadCloser, error) {
