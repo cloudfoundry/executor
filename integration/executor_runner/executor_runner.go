@@ -69,7 +69,7 @@ func New(executorBin, wardenNetwork, wardenAddr string, etcdCluster []string, lo
 func (r *ExecutorRunner) Start(config ...Config) {
 	r.StartWithoutCheck(config...)
 
-	Eventually(r.Session).Should(gbytes.Say("executor.started"))
+	Eventually(r.Session, 5*time.Second).Should(gbytes.Say("executor.started"))
 }
 
 func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
