@@ -12,6 +12,10 @@ type FakeUploader struct {
 	alwaysFail            bool
 }
 
+func New() *FakeUploader {
+	return &FakeUploader{}
+}
+
 func (uploader *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int64, error) {
 	if uploader.alwaysFail {
 		return 0, errors.New("I accidentally the upload")
