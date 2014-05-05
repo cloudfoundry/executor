@@ -1,8 +1,19 @@
 package transformer_test
 
 import (
-	"github.com/cloudfoundry-incubator/executor/downloader"
-	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
+	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -15,36 +26,26 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
-	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 )
 
 var _ = Describe("Transformer", func() {
 	var (
-		downloader   downloader.Downloader
-		logger       *steno.Logger
-		logStreamer  *fake_log_streamer.FakeLogStreamer
-		uploader     uploader.Uploader
-		extractor    extractor.Extractor
-		compressor   compressor.Compressor
-		wardenClient *fake_warden_client.FakeClient
-		transformer  *Transformer
-		result       string
+		cachedDownloader cacheddownloader.CachedDownloader
+		logger           *steno.Logger
+		logStreamer      *fake_log_streamer.FakeLogStreamer
+		uploader         uploader.Uploader
+		extractor        extractor.Extractor
+		compressor       compressor.Compressor
+		wardenClient     *fake_warden_client.FakeClient
+		transformer      *Transformer
+		result           string
 	)
 
 	handle := "some-container-handle"
 
 	BeforeEach(func() {
 		logStreamer = fake_log_streamer.New()
-		downloader = &fake_downloader.FakeDownloader{}
+		cachedDownloader = fakecacheddownloader.New()
 		uploader = &fake_uploader.FakeUploader{}
 		extractor = &fake_extractor.FakeExtractor{}
 		compressor = &fake_compressor.FakeCompressor{}
@@ -57,7 +58,7 @@ var _ = Describe("Transformer", func() {
 
 		transformer = NewTransformer(
 			logStreamerFactory,
-			downloader,
+			cachedDownloader,
 			uploader,
 			extractor,
 			compressor,
@@ -103,10 +104,9 @@ var _ = Describe("Transformer", func() {
 			download_step.New(
 				container,
 				downloadActionModel,
-				downloader,
+				cachedDownloader,
 				extractor,
 				"/fake/temp/dir",
-				logStreamer,
 				logger,
 			),
 			upload_step.New(

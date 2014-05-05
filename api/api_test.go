@@ -11,7 +11,6 @@ import (
 
 	. "github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/api/containers"
-	"github.com/cloudfoundry-incubator/executor/downloader/fake_downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/routes"
@@ -23,6 +22,7 @@ import (
 	"github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 	"github.com/tedsuo/router"
 
 	. "github.com/onsi/ginkgo"
@@ -73,7 +73,7 @@ var _ = Describe("Api", func() {
 			Registry: registry,
 			Transformer: transformer.NewTransformer(
 				log_streamer_factory.New("", ""),
-				fake_downloader.New(),
+				fakecacheddownloader.New(),
 				fake_uploader.New(),
 				&fake_extractor.FakeExtractor{},
 				&fake_compressor.FakeCompressor{},

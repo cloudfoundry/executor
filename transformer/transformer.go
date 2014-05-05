@@ -3,28 +3,27 @@ package transformer
 import (
 	"fmt"
 
-	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
-
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 
-	"github.com/cloudfoundry-incubator/executor/downloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/extractor"
 )
 
 type Transformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
-	downloader         downloader.Downloader
+	cachedDownloader   cacheddownloader.CachedDownloader
 	uploader           uploader.Uploader
 	extractor          extractor.Extractor
 	compressor         compressor.Compressor
@@ -35,7 +34,7 @@ type Transformer struct {
 
 func NewTransformer(
 	logStreamerFactory log_streamer_factory.LogStreamerFactory,
-	downloader downloader.Downloader,
+	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
@@ -44,7 +43,7 @@ func NewTransformer(
 ) *Transformer {
 	return &Transformer{
 		logStreamerFactory: logStreamerFactory,
-		downloader:         downloader,
+		cachedDownloader:   cachedDownloader,
 		uploader:           uploader,
 		extractor:          extractor,
 		compressor:         compressor,
@@ -91,10 +90,9 @@ func (transformer *Transformer) convertAction(
 		return download_step.New(
 			container,
 			actionModel,
-			transformer.downloader,
+			transformer.cachedDownloader,
 			transformer.extractor,
 			transformer.tempDir,
-			logStreamer,
 			transformer.logger,
 		)
 	case models.UploadAction:
