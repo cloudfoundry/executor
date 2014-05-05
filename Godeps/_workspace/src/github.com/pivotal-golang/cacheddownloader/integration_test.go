@@ -57,7 +57,7 @@ var _ = Describe("Integration", func() {
 		url, err := url.Parse(server.URL + "/file")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		reader, err := downloader.Fetch(url, true)
+		reader, err := downloader.Fetch(url, "the-cache-key")
 		Ω(err).ShouldNot(HaveOccurred())
 
 		readData, err := ioutil.ReadAll(reader)

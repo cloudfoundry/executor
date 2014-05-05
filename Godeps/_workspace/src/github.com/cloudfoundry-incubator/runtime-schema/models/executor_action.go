@@ -9,10 +9,10 @@ import (
 var InvalidActionConversion = errors.New("Invalid Action Conversion")
 
 type DownloadAction struct {
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Extract bool   `json:"extract"`
-	Cache   bool   `json:"cache"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Extract  bool   `json:"extract"`
+	CacheKey string `json:"cache_key"`
 }
 
 type UploadAction struct {

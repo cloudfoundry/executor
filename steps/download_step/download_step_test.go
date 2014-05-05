@@ -55,10 +55,10 @@ var _ = Describe("DownloadAction", func() {
 
 		BeforeEach(func() {
 			downloadAction = models.DownloadAction{
-				From:    "http://mr_jones",
-				To:      "/tmp/Antarctica",
-				Extract: false,
-				Cache:   true,
+				From:     "http://mr_jones",
+				To:       "/tmp/Antarctica",
+				Extract:  false,
+				CacheKey: "the-cache-key",
 			}
 		})
 
@@ -82,7 +82,7 @@ var _ = Describe("DownloadAction", func() {
 
 		It("asks the cache for the file", func() {
 			Ω(cache.FetchedURL.Host).Should(ContainSubstring("mr_jones"))
-			Ω(cache.FetchedCache).Should(BeTrue())
+			Ω(cache.FetchedCacheKey).Should(Equal("the-cache-key"))
 		})
 
 		It("places the file in the container", func() {
