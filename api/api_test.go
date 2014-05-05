@@ -37,29 +37,12 @@ func MarshalledPayload(payload interface{}) io.Reader {
 	return bytes.NewBuffer(reqBody)
 }
 
-type RequestGenerator struct {
-	Host   string
-	Routes router.Routes
-}
-
-func (generator RequestGenerator) RequestForHandler(handler string, params router.Params, body io.Reader) (*http.Request, error) {
-	req, err := generator.Routes.RequestForHandler(handler, params, body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.URL.Scheme = "http"
-	req.URL.Host = generator.Host
-
-	return req, nil
-}
-
 var _ = Describe("Api", func() {
 	var registry Registry.Registry
 	var wardenClient *fake_warden_client.FakeClient
 
 	var server *httptest.Server
-	var generator *RequestGenerator
+	var generator *router.RequestGenerator
 
 	BeforeEach(func() {
 		wardenClient = fake_warden_client.New()
@@ -93,10 +76,7 @@ var _ = Describe("Api", func() {
 
 		server = httptest.NewServer(handler)
 
-		generator = &RequestGenerator{
-			Host:   server.Listener.Addr().String(),
-			Routes: routes.Routes,
-		}
+		generator = router.NewRequestGenerator("http://"+server.Listener.Addr().String(), routes.Routes)
 	})
 
 	AfterEach(func() {
