@@ -15,6 +15,10 @@
 			"Rev": "556b9de4249f50f311584f75324a45e426324a19"
 		},
 		{
+			"ImportPath": "github.com/bmizerany/pat",
+			"Rev": "51b7af73e39f6dc59846b22d56ca886d105ef0c3"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
 			"Rev": "6520863bc8bc2e143a862023e3511b44af98aa1a"
 		},
@@ -40,11 +44,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "f8bb2b1d5ebb914620736b0241fe077ef5bd12f0"
+			"Rev": "3e0ba94e208f4b443aaa5d40d039c35c14f1c37c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "f8bb2b1d5ebb914620736b0241fe077ef5bd12f0"
+			"Rev": "3e0ba94e208f4b443aaa5d40d039c35c14f1c37c"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -115,6 +119,10 @@
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
 			"Rev": "2344b15ff13869e2e69dbcee35da98000a445ba2"
+		},
+		{
+			"ImportPath": "github.com/tedsuo/router",
+			"Rev": "1fded58241bc8f10dca9c601059607a036c7ed7c"
 		}
 	]
 }

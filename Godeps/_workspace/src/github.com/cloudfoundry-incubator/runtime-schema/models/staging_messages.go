@@ -14,8 +14,9 @@ type StagingRequestFromCC struct {
 }
 
 type Buildpack struct {
-	Key string `json:"key"`
-	Url string `json:"url"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
+	Url  string `json:"url"`
 }
 
 type EnvironmentVariable struct {
