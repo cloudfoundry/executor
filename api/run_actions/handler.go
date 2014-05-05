@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
@@ -74,15 +75,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result string
 	steps := h.transformer.StepsFor(models.LogConfig{}, request.Actions, container, &result)
 
-	go performRunActions(request.CompleteURL, sequence.New(steps), &result, h.logger)
+	go performRunActions(request, sequence.New(steps), &result, h.logger)
 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func performRunActions(completeURL string, seq sequence.Step, result *string, logger *gosteno.Logger) {
+func performRunActions(request executor_api.ContainerRunRequest, seq sequence.Step, result *string, logger *gosteno.Logger) {
 	err := seq.Perform()
 
-	if completeURL == "" {
+	if request.CompleteURL == "" {
 		return
 	}
 
@@ -92,7 +93,7 @@ func performRunActions(completeURL string, seq sequence.Step, result *string, lo
 		payload.Failed = true
 		payload.FailureReason = err.Error()
 	}
-
+	payload.Metadata = request.Metadata
 	payload.Result = *result
 
 	resultPayload, err := json.Marshal(payload)
@@ -104,7 +105,7 @@ func performRunActions(completeURL string, seq sequence.Step, result *string, lo
 	}
 
 	for i := 1; i <= MAX_CALLBACK_ATTEMPTS; i++ {
-		err = performCompleteCallback(completeURL, resultPayload)
+		err = performCompleteCallback(request.CompleteURL, resultPayload)
 		// break if we succeed
 		if err == nil {
 			return

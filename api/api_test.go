@@ -433,7 +433,7 @@ var _ = Describe("Api", func() {
 				Ω(spawned[0].Script).Should(Equal("ls -al"))
 			})
 
-			Context("when there is a completeURL", func() {
+			Context("when there is a completeURL and metadata", func() {
 				var callbackHandler *ghttp.Server
 
 				BeforeEach(func() {
@@ -441,6 +441,7 @@ var _ = Describe("Api", func() {
 
 					runRequestBody = MarshalledPayload(executor_api.ContainerRunRequest{
 						CompleteURL: callbackHandler.URL() + "/result",
+						Metadata:    []byte("some metadata"),
 						Actions: []models.ExecutorAction{
 							{
 								models.RunAction{
@@ -461,6 +462,7 @@ var _ = Describe("Api", func() {
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("PUT", "/result"),
 								ghttp.VerifyJSONRepresenting(executor_api.ContainerRunResult{
+									Metadata:      []byte("some metadata"),
 									Failed:        false,
 									FailureReason: "",
 									Result:        "",
