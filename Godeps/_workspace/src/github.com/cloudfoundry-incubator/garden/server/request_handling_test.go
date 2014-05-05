@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/garden/message_reader"
+	"github.com/cloudfoundry-incubator/garden/transport"
 	protocol "github.com/cloudfoundry-incubator/garden/protocol"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -60,15 +60,22 @@ var _ = Describe("When a client connects", func() {
 		responses = bufio.NewReader(serverConnection)
 	})
 
-	writeMessages := func(message proto.Message) {
-		num, err := protocol.Messages(message).WriteTo(serverConnection)
+	writeMessages := func(messages ...proto.Message) {
+		num, err := protocol.Messages(messages...).WriteTo(serverConnection)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(num).ToNot(Equal(0))
 	}
 
 	readResponse := func(response proto.Message) {
-		err := message_reader.ReadMessage(responses, response)
+		err := transport.ReadMessage(responses, response)
 		ExpectWithOffset(1, err).ToNot(HaveOccurred())
+	}
+
+	readAnyResponse := func() {
+		err := transport.ReadMessage(responses, &protocol.CreateResponse{})
+		if _, ok := err.(*transport.TypeMismatchError); !ok {
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+		}
 	}
 
 	itResetsGraceTimeWhenHandling := func(request proto.Message) {
@@ -86,9 +93,7 @@ var _ = Describe("When a client connects", func() {
 					time.Sleep(100 * time.Millisecond)
 
 					writeMessages(request)
-
-					response := protocol.ResponseMessageForType(protocol.TypeForMessage(request))
-					readResponse(response)
+					readAnyResponse()
 				}
 
 				before := time.Now()
@@ -157,8 +162,8 @@ var _ = Describe("When a client connects", func() {
 				writeMessages(&protocol.CapacityRequest{})
 
 				var response protocol.CapacityResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -298,8 +303,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.CreateResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -336,8 +341,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.DestroyResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -416,8 +421,8 @@ var _ = Describe("When a client connects", func() {
 				writeMessages(&protocol.ListRequest{})
 
 				var response protocol.ListResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -509,8 +514,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.StopResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -529,8 +534,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.StopResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -589,8 +594,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.CopyInResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -611,8 +616,172 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.CopyInResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
+
+				close(done)
+			}, 1.0)
+		})
+	})
+
+	Context("and the client sends a StreamInRequest", func() {
+		var fakeContainer *fake_backend.FakeContainer
+
+		BeforeEach(func() {
+			container, err := serverBackend.Create(warden.ContainerSpec{Handle: "some-handle"})
+			Expect(err).ToNot(HaveOccurred())
+
+			fakeContainer = container.(*fake_backend.FakeContainer)
+		})
+
+		makeRequest := func() {
+			writeMessages(
+				&protocol.StreamInRequest{
+					Handle:  proto.String(fakeContainer.Handle()),
+					DstPath: proto.String("/dst/path"),
+				},
+				&protocol.StreamChunk{
+					Content: []byte("chunk-1;"),
+				},
+				&protocol.StreamChunk{
+					Content: []byte("chunk-2;"),
+				},
+				&protocol.StreamChunk{
+					Content: []byte("chunk-3;"),
+				},
+				&protocol.StreamChunk{
+					EOF: proto.Bool(true),
+				},
+			)
+		}
+
+		It("streams the file in and sends a StreamInResponse", func(done Done) {
+			makeRequest()
+
+			var response protocol.StreamInResponse
+			readResponse(&response)
+
+			Expect(fakeContainer.StreamedIn).To(HaveLen(1))
+			Expect(fakeContainer.StreamedIn[0]).To(Equal(fake_backend.StreamInSpec{
+				SrcContent: "chunk-1;chunk-2;chunk-3;",
+				DestPath:   "/dst/path",
+			}))
+
+			close(done)
+		}, 1.0)
+
+		Context("when the container is not found", func() {
+			BeforeEach(func() {
+				serverBackend.Destroy(fakeContainer.Handle())
+			})
+
+			It("sends a WardenError response", func(done Done) {
+				makeRequest()
+
+				err := transport.ReadMessage(responses, &protocol.StreamInResponse{})
+				Expect(err).To(Equal(&transport.WardenError{
+					Message: "unknown handle: some-handle",
+				}))
+
+				close(done)
+			}, 1.0)
+		})
+
+		Context("when copying in to the container fails", func() {
+			BeforeEach(func() {
+				fakeContainer.StreamInError = errors.New("oh no!")
+			})
+
+			It("sends a WardenError response", func(done Done) {
+				makeRequest()
+
+				err := transport.ReadMessage(responses, &protocol.StreamInResponse{})
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
+
+				close(done)
+			}, 1.0)
+		})
+	})
+
+	Context("and the client sends a StreamOutRequest", func() {
+		var fakeContainer *fake_backend.FakeContainer
+
+		BeforeEach(func() {
+			container, err := serverBackend.Create(warden.ContainerSpec{Handle: "some-handle"})
+			Expect(err).ToNot(HaveOccurred())
+
+			fakeContainer = container.(*fake_backend.FakeContainer)
+			fakeContainer.StreamOutChunks = [][]byte{
+				[]byte("hello-"),
+				[]byte("world"),
+			}
+		})
+
+		It("streams the file out and sends a StreamOutResponse", func(done Done) {
+			writeMessages(&protocol.StreamOutRequest{
+				Handle:  proto.String(fakeContainer.Handle()),
+				SrcPath: proto.String("/src/path"),
+			})
+
+			var response protocol.StreamOutResponse
+			readResponse(&response)
+
+			for _, data := range fakeContainer.StreamOutChunks {
+				chunk := protocol.StreamChunk{}
+				readResponse(&chunk)
+				Expect(chunk.Content).To(Equal(data))
+			}
+
+			chunk := protocol.StreamChunk{}
+			readResponse(&chunk)
+			Expect(chunk.GetEOF()).To(BeTrue())
+
+			Expect(fakeContainer.StreamedOut).To(Equal([]string{
+				"/src/path",
+			}))
+
+			close(done)
+		}, 1.0)
+
+		itResetsGraceTimeWhenHandling(&protocol.StreamOutRequest{
+			Handle:  proto.String("some-handle"),
+			SrcPath: proto.String("/src/path"),
+		})
+
+		Context("when the container is not found", func() {
+			BeforeEach(func() {
+				serverBackend.Destroy(fakeContainer.Handle())
+			})
+
+			It("sends a WardenError response", func(done Done) {
+				writeMessages(&protocol.StreamOutRequest{
+					Handle:  proto.String(fakeContainer.Handle()),
+					SrcPath: proto.String("/src/path"),
+				})
+
+				err := transport.ReadMessage(responses, &protocol.StreamOutResponse{})
+				Expect(err).To(Equal(&transport.WardenError{
+					Message: "unknown handle: some-handle",
+				}))
+
+				close(done)
+			}, 1.0)
+		})
+
+		Context("when streaming out of the container fails", func() {
+			BeforeEach(func() {
+				fakeContainer.StreamOutError = errors.New("oh no!")
+			})
+
+			It("sends a WardenError response", func(done Done) {
+				writeMessages(&protocol.StreamOutRequest{
+					Handle:  proto.String(fakeContainer.Handle()),
+					SrcPath: proto.String("/src/path"),
+				})
+
+				transport.ReadMessage(responses, &protocol.StreamOutResponse{})
+				err := transport.ReadMessage(responses, &protocol.StreamOutResponse{})
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -667,8 +836,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.CopyOutResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -690,8 +859,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.CopyOutResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -823,8 +992,8 @@ var _ = Describe("When a client connects", func() {
 
 				var response protocol.ProcessPayload
 
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -845,8 +1014,8 @@ var _ = Describe("When a client connects", func() {
 
 				var response protocol.ProcessPayload
 
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -992,8 +1161,8 @@ var _ = Describe("When a client connects", func() {
 
 				var response protocol.ProcessPayload
 
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1014,8 +1183,8 @@ var _ = Describe("When a client connects", func() {
 
 				var response protocol.ProcessPayload
 
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1135,8 +1304,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitBandwidthResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1157,8 +1326,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitBandwidthResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1177,8 +1346,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitBandwidthResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1254,8 +1423,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitMemoryResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1275,8 +1444,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitMemoryResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1294,8 +1463,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitMemoryResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1576,8 +1745,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitDiskResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1600,8 +1769,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitDiskResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1622,8 +1791,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitDiskResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1699,8 +1868,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitCpuResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1720,8 +1889,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitCpuResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1739,8 +1908,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.LimitCpuResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1796,8 +1965,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.NetInResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1818,8 +1987,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.NetInResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -1872,8 +2041,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.NetOutResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -1894,8 +2063,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.NetOutResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)
@@ -2074,8 +2243,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.InfoResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{
 					Message: "unknown handle: some-handle",
 				}))
 
@@ -2094,8 +2263,8 @@ var _ = Describe("When a client connects", func() {
 				})
 
 				var response protocol.InfoResponse
-				err := message_reader.ReadMessage(responses, &response)
-				Expect(err).To(Equal(&message_reader.WardenError{Message: "oh no!"}))
+				err := transport.ReadMessage(responses, &response)
+				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
 
 				close(done)
 			}, 1.0)

@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bufio"
 	"net"
 	"time"
+
+	"github.com/cloudfoundry-incubator/garden/transport"
 
 	"code.google.com/p/gogoprotobuf/proto"
 
@@ -175,6 +178,56 @@ func (s *WardenServer) handleCopyIn(copyIn *protocol.CopyInRequest) (proto.Messa
 	}
 
 	return &protocol.CopyInResponse{}, nil
+}
+
+func (s *WardenServer) handleStreamIn(reader *bufio.Reader, request *protocol.StreamInRequest) (proto.Message, error) {
+	handle := request.GetHandle()
+	dstPath := request.GetDstPath()
+
+	container, err := s.backend.Lookup(handle)
+	if err != nil {
+		return nil, err
+	}
+
+	s.bomberman.Pause(container.Handle())
+	defer s.bomberman.Unpause(container.Handle())
+
+	streamReader := transport.NewProtobufStreamReader(reader)
+
+	err = container.StreamIn(streamReader, dstPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.StreamInResponse{}, nil
+}
+
+func (s *WardenServer) handleStreamOut(conn net.Conn, request *protocol.StreamOutRequest) (proto.Message, error) {
+	handle := request.GetHandle()
+	srcPath := request.GetSrcPath()
+
+	container, err := s.backend.Lookup(handle)
+	if err != nil {
+		return nil, err
+	}
+
+	s.bomberman.Pause(container.Handle())
+	defer s.bomberman.Unpause(container.Handle())
+
+	_, err = protocol.Messages(&protocol.StreamOutResponse{}).WriteTo(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	writer := transport.NewProtobufStreamWriter(conn)
+	err = container.StreamOut(srcPath, writer)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.StreamChunk{
+		EOF: proto.Bool(true),
+	}, nil
 }
 
 func (s *WardenServer) handleLimitBandwidth(request *protocol.LimitBandwidthRequest) (proto.Message, error) {
