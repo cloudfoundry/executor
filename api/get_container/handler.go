@@ -2,19 +2,21 @@ package get_container
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry/gosteno"
 )
 
 type handler struct {
 	registry registry.Registry
+	logger   *gosteno.Logger
 }
 
-func New(registry registry.Registry) http.Handler {
+func New(registry registry.Registry, logger *gosteno.Logger) http.Handler {
 	return &handler{
 		registry: registry,
+		logger:   logger,
 	}
 }
 
@@ -23,7 +25,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resource, err := h.registry.FindByGuid(guid)
 	if err != nil {
-		log.Println("no", err)
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.get-container.not-found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

@@ -14,9 +14,11 @@ var ErrContainerNotReserved = errors.New("container not reserved")
 var blankContainer = containers.Container{}
 
 type Registry interface {
+	CurrentCapacity() Capacity
 	FindByGuid(guid string) (containers.Container, error)
 	Reserve(containers.ContainerAllocationRequest) (containers.Container, error)
 	Create(guid, containerHandle string) (containers.Container, error)
+	Delete(guid string) error
 }
 
 type registry struct {
@@ -33,6 +35,13 @@ func New(executorGuid string, capacity Capacity) Registry {
 		registeredContainers: make(map[string]containers.Container),
 		containersMutex:      &sync.RWMutex{},
 	}
+}
+
+func (r *registry) CurrentCapacity() Capacity {
+	r.containersMutex.RLock()
+	defer r.containersMutex.RUnlock()
+
+	return *r.currentCapacity
 }
 
 func (r *registry) FindByGuid(guid string) (containers.Container, error) {
@@ -93,4 +102,19 @@ func (r *registry) Create(guid, containerHandle string) (containers.Container, e
 	res.ContainerHandle = containerHandle
 	r.registeredContainers[guid] = res
 	return res, nil
+}
+
+func (r *registry) Delete(guid string) error {
+	r.containersMutex.Lock()
+	defer r.containersMutex.Unlock()
+
+	res, ok := r.registeredContainers[guid]
+	if !ok {
+		return ErrContainerNotFound
+	}
+
+	r.currentCapacity.free(res)
+	delete(r.registeredContainers, guid)
+
+	return nil
 }

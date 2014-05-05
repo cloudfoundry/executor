@@ -69,6 +69,9 @@ var _ = Describe("Api", func() {
 			DiskMB:   1024,
 		})
 
+		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
+		logger := gosteno.NewLogger("api-test-logger")
+
 		handler, err := New(&Config{
 			Registry: registry,
 			Transformer: transformer.NewTransformer(
@@ -77,12 +80,13 @@ var _ = Describe("Api", func() {
 				fake_uploader.New(),
 				&fake_extractor.FakeExtractor{},
 				&fake_compressor.FakeCompressor{},
-				gosteno.NewLogger("api-test-logger"),
+				logger,
 				"/tmp",
 			),
 			WardenClient:          wardenClient,
 			ContainerOwnerName:    "some-container-owner-name",
 			ContainerMaxCPUShares: 1024,
+			Logger:                logger,
 		})
 
 		Ω(err).ShouldNot(HaveOccurred())
@@ -223,6 +227,13 @@ var _ = Describe("Api", func() {
 						State:           "reserved",
 					}))
 				})
+
+				It("reduces the capacity by the amount reserved", func() {
+					Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
+						MemoryMB: 960,
+						DiskMB:   512,
+					}))
+				})
 			})
 
 			Describe("POST /containers/:guid/initialize", func() {
@@ -325,6 +336,7 @@ var _ = Describe("Api", func() {
 						Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
 					})
 				})
+
 			})
 		})
 
@@ -558,5 +570,102 @@ var _ = Describe("Api", func() {
 				Ω(runResponse.StatusCode).Should(Equal(http.StatusBadRequest))
 			})
 		})
+	})
+
+	Describe("DELETE /containers/:guid", func() {
+		var deleteResponse *http.Response
+		var containerGuid string
+
+		JustBeforeEach(func() {
+			deleteResponse = DoRequest(generator.RequestForHandler(
+				routes.DeleteContainer,
+				router.Params{"guid": containerGuid},
+				nil,
+			))
+		})
+
+		Context("when the container has been allocated", func() {
+			BeforeEach(func() {
+				allocRequestBody := MarshalledPayload(containers.ContainerAllocationRequest{
+					MemoryMB:        64,
+					DiskMB:          512,
+					CpuPercent:      0.5,
+					FileDescriptors: 1,
+				})
+
+				allocResponse := DoRequest(generator.RequestForHandler(
+					routes.AllocateContainer,
+					nil,
+					allocRequestBody,
+				))
+				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+
+				allocatedContainer := containers.Container{}
+				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				containerGuid = allocatedContainer.Guid
+			})
+
+			It("returns 200 OK", func() {
+				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("the previously allocated resources become available", func() {
+				Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
+					MemoryMB: 1024,
+					DiskMB:   1024,
+				}))
+			})
+		})
+
+		Context("when the container has been initalized", func() {
+			BeforeEach(func() {
+				allocRequestBody := MarshalledPayload(containers.ContainerAllocationRequest{
+					MemoryMB:        64,
+					DiskMB:          512,
+					CpuPercent:      0.5,
+					FileDescriptors: 1,
+				})
+
+				allocResponse := DoRequest(generator.RequestForHandler(
+					routes.AllocateContainer,
+					nil,
+					allocRequestBody,
+				))
+				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+
+				wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
+					return "some-handle", nil
+				}
+
+				wardenClient.Connection.WhenListing = func(warden.Properties) ([]string, error) {
+					return []string{"some-handle"}, nil
+				}
+
+				allocatedContainer := containers.Container{}
+				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				containerGuid = allocatedContainer.Guid
+
+				initResponse := DoRequest(generator.RequestForHandler(
+					routes.InitializeContainer,
+					router.Params{"guid": allocatedContainer.Guid},
+					nil,
+				))
+				Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
+			})
+
+			It("returns 200 OK", func() {
+				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("destroys the warden container", func() {
+				Ω(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
+			})
+
+		})
+
 	})
 })

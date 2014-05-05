@@ -6,15 +6,18 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api/containers"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry/gosteno"
 )
 
 type Handler struct {
 	registry registry.Registry
+	logger   *gosteno.Logger
 }
 
-func New(registry registry.Registry) *Handler {
+func New(registry registry.Registry, logger *gosteno.Logger) *Handler {
 	return &Handler{
 		registry: registry,
+		logger:   logger,
 	}
 }
 
@@ -22,6 +25,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := containers.ContainerAllocationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.allocate-container.bad-request")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -33,6 +39,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	container, err := h.registry.Reserve(req)
 	if err != nil {
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.allocate-container.full")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

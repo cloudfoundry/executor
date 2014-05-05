@@ -2,12 +2,12 @@ package initialize_container
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api/containers"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry/gosteno"
 )
 
 type handler struct {
@@ -15,6 +15,7 @@ type handler struct {
 	containerMaxCPUShares uint64
 	wardenClient          warden.Client
 	registry              registry.Registry
+	logger                *gosteno.Logger
 }
 
 func New(
@@ -22,12 +23,14 @@ func New(
 	containerMaxCPUShares uint64,
 	wardenClient warden.Client,
 	reg registry.Registry,
+	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{
 		containerOwnerName:    containerOwnerName,
 		containerMaxCPUShares: containerMaxCPUShares,
 		wardenClient:          wardenClient,
 		registry:              reg,
+		logger:                logger,
 	}
 }
 
@@ -36,7 +39,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	reg, err := h.registry.FindByGuid(guid)
 	if err != nil {
-		log.Println("container not found:", err)
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.not-found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -47,21 +52,27 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		log.Println("container create failed:", err)
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.create-failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	err = h.limitContainer(reg, containerClient)
 	if err != nil {
-		log.Println("container limit failed:", err)
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.limit-failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	reg, err = h.registry.Create(reg.Guid, containerClient.Handle())
 	if err != nil {
-		log.Println("registry create failed:", err)
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.registry-failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
