@@ -3,9 +3,8 @@ package allocate_container
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/cloudfoundry-incubator/executor/api/containers"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -22,7 +21,7 @@ func New(registry registry.Registry, logger *gosteno.Logger) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	req := containers.ContainerAllocationRequest{}
+	req := executor_api.ContainerAllocationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{

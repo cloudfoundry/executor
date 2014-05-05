@@ -3,28 +3,27 @@ package registry
 import (
 	"errors"
 	"sync"
-
-	"github.com/cloudfoundry-incubator/executor/api/containers"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/nu7hatch/gouuid"
 )
 
 var ErrContainerNotFound = errors.New("container not found")
 var ErrContainerNotReserved = errors.New("container not reserved")
 
-var blankContainer = containers.Container{}
+var blankContainer = executor_api.Container{}
 
 type Registry interface {
 	CurrentCapacity() Capacity
-	FindByGuid(guid string) (containers.Container, error)
-	Reserve(containers.ContainerAllocationRequest) (containers.Container, error)
-	Create(guid, containerHandle string) (containers.Container, error)
+	FindByGuid(guid string) (executor_api.Container, error)
+	Reserve(executor_api.ContainerAllocationRequest) (executor_api.Container, error)
+	Create(guid, containerHandle string) (executor_api.Container, error)
 	Delete(guid string) error
 }
 
 type registry struct {
 	executorGuid         string
 	currentCapacity      *Capacity
-	registeredContainers map[string]containers.Container
+	registeredContainers map[string]executor_api.Container
 	containersMutex      *sync.RWMutex
 }
 
@@ -32,7 +31,7 @@ func New(executorGuid string, capacity Capacity) Registry {
 	return &registry{
 		executorGuid:         executorGuid,
 		currentCapacity:      &capacity,
-		registeredContainers: make(map[string]containers.Container),
+		registeredContainers: make(map[string]executor_api.Container),
 		containersMutex:      &sync.RWMutex{},
 	}
 }
@@ -44,7 +43,7 @@ func (r *registry) CurrentCapacity() Capacity {
 	return *r.currentCapacity
 }
 
-func (r *registry) FindByGuid(guid string) (containers.Container, error) {
+func (r *registry) FindByGuid(guid string) (executor_api.Container, error) {
 	r.containersMutex.RLock()
 	defer r.containersMutex.RUnlock()
 
@@ -56,20 +55,20 @@ func (r *registry) FindByGuid(guid string) (containers.Container, error) {
 	return res, nil
 }
 
-func (r *registry) Reserve(req containers.ContainerAllocationRequest) (containers.Container, error) {
+func (r *registry) Reserve(req executor_api.ContainerAllocationRequest) (executor_api.Container, error) {
 	guid, err := uuid.NewV4()
 	if err != nil {
-		return containers.Container{}, err
+		return executor_api.Container{}, err
 	}
 
-	res := containers.Container{
+	res := executor_api.Container{
 		Guid:            guid.String(),
 		ExecutorGuid:    r.executorGuid,
 		MemoryMB:        req.MemoryMB,
 		DiskMB:          req.DiskMB,
 		CpuPercent:      req.CpuPercent,
 		FileDescriptors: req.FileDescriptors,
-		State:           containers.StateReserved,
+		State:           executor_api.StateReserved,
 	}
 
 	r.containersMutex.Lock()
@@ -77,7 +76,7 @@ func (r *registry) Reserve(req containers.ContainerAllocationRequest) (container
 
 	err = r.currentCapacity.alloc(res)
 	if err != nil {
-		return containers.Container{}, err
+		return executor_api.Container{}, err
 	}
 
 	r.registeredContainers[res.Guid] = res
@@ -85,7 +84,7 @@ func (r *registry) Reserve(req containers.ContainerAllocationRequest) (container
 	return res, nil
 }
 
-func (r *registry) Create(guid, containerHandle string) (containers.Container, error) {
+func (r *registry) Create(guid, containerHandle string) (executor_api.Container, error) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
@@ -94,11 +93,11 @@ func (r *registry) Create(guid, containerHandle string) (containers.Container, e
 		return blankContainer, ErrContainerNotFound
 	}
 
-	if res.State != containers.StateReserved {
+	if res.State != executor_api.StateReserved {
 		return blankContainer, ErrContainerNotReserved
 	}
 
-	res.State = containers.StateCreated
+	res.State = executor_api.StateCreated
 	res.ContainerHandle = containerHandle
 	r.registeredContainers[guid] = res
 	return res, nil

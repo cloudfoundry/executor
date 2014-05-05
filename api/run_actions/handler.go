@@ -7,13 +7,12 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/cloudfoundry-incubator/executor/api/containers"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -43,7 +42,7 @@ func New(
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	guid := r.FormValue(":guid")
 
-	var request containers.ContainerRunRequest
+	var request executor_api.ContainerRunRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
@@ -87,7 +86,7 @@ func performRunActions(completeURL string, seq sequence.Step, result *string, lo
 		return
 	}
 
-	var payload containers.ContainerRunResult
+	var payload executor_api.ContainerRunResult
 
 	if err != nil {
 		payload.Failed = true

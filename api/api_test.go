@@ -10,15 +10,14 @@ import (
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/api/containers"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/executor/routes"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
@@ -76,7 +75,7 @@ var _ = Describe("Api", func() {
 
 		server = httptest.NewServer(handler)
 
-		generator = router.NewRequestGenerator("http://"+server.Listener.Addr().String(), routes.Routes)
+		generator = router.NewRequestGenerator("http://"+server.Listener.Addr().String(), executor_api.Routes)
 	})
 
 	AfterEach(func() {
@@ -103,7 +102,7 @@ var _ = Describe("Api", func() {
 
 		JustBeforeEach(func() {
 			reserveResponse = DoRequest(generator.RequestForHandler(
-				routes.AllocateContainer,
+				executor_api.AllocateContainer,
 				nil,
 				reserveRequestBody,
 			))
@@ -111,7 +110,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the requested CPU percent is > 100", func() {
 			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(containers.ContainerAllocationRequest{
+				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      101.0,
@@ -126,7 +125,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the requested CPU percent is < 0", func() {
 			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(containers.ContainerAllocationRequest{
+				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      -14.0,
@@ -140,10 +139,10 @@ var _ = Describe("Api", func() {
 		})
 
 		Context("when there are containers available", func() {
-			var reservedContainer containers.Container
+			var reservedContainer executor_api.Container
 
 			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(containers.ContainerAllocationRequest{
+				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      0.5,
@@ -161,7 +160,7 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a container", func() {
-				Ω(reservedContainer).Should(Equal(containers.Container{
+				Ω(reservedContainer).Should(Equal(executor_api.Container{
 					ExecutorGuid:    "executor-guid-123",
 					Guid:            reservedContainer.Guid,
 					MemoryMB:        64,
@@ -178,7 +177,7 @@ var _ = Describe("Api", func() {
 
 				JustBeforeEach(func() {
 					getResponse = DoRequest(generator.RequestForHandler(
-						routes.GetContainer,
+						executor_api.GetContainer,
 						router.Params{"guid": reservedContainer.Guid},
 						nil,
 					))
@@ -193,11 +192,11 @@ var _ = Describe("Api", func() {
 				})
 
 				It("retains the reserved containers", func() {
-					var returnedContainer containers.Container
+					var returnedContainer executor_api.Container
 					err := json.NewDecoder(getResponse.Body).Decode(&returnedContainer)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Ω(returnedContainer).Should(Equal(containers.Container{
+					Ω(returnedContainer).Should(Equal(executor_api.Container{
 						ExecutorGuid:    "executor-guid-123",
 						Guid:            reservedContainer.Guid,
 						MemoryMB:        64,
@@ -221,7 +220,7 @@ var _ = Describe("Api", func() {
 
 				JustBeforeEach(func() {
 					createResponse = DoRequest(generator.RequestForHandler(
-						routes.InitializeContainer,
+						executor_api.InitializeContainer,
 						router.Params{"guid": reservedContainer.Guid},
 						nil,
 					))
@@ -322,13 +321,13 @@ var _ = Describe("Api", func() {
 
 		Context("when the container cannot be reserved", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve(containers.ContainerAllocationRequest{
+				_, err := registry.Reserve(executor_api.ContainerAllocationRequest{
 					MemoryMB: 680,
 					DiskMB:   680,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				reserveRequestBody = MarshalledPayload(containers.ContainerAllocationRequest{
+				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      50.0,
@@ -352,7 +351,7 @@ var _ = Describe("Api", func() {
 			runRequestBody = nil
 			runResponse = nil
 
-			allocRequestBody := MarshalledPayload(containers.ContainerAllocationRequest{
+			allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
 				MemoryMB:        64,
 				DiskMB:          512,
 				CpuPercent:      0.5,
@@ -360,7 +359,7 @@ var _ = Describe("Api", func() {
 			})
 
 			allocResponse := DoRequest(generator.RequestForHandler(
-				routes.AllocateContainer,
+				executor_api.AllocateContainer,
 				nil,
 				allocRequestBody,
 			))
@@ -374,14 +373,14 @@ var _ = Describe("Api", func() {
 				return []string{"some-handle"}, nil
 			}
 
-			allocatedContainer := containers.Container{}
+			allocatedContainer := executor_api.Container{}
 			err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			containerGuid = allocatedContainer.Guid
 
 			initResponse := DoRequest(generator.RequestForHandler(
-				routes.InitializeContainer,
+				executor_api.InitializeContainer,
 				router.Params{"guid": allocatedContainer.Guid},
 				nil,
 			))
@@ -390,7 +389,7 @@ var _ = Describe("Api", func() {
 
 		JustBeforeEach(func() {
 			runResponse = DoRequest(generator.RequestForHandler(
-				routes.RunActions,
+				executor_api.RunActions,
 				router.Params{"guid": containerGuid},
 				runRequestBody,
 			))
@@ -407,7 +406,7 @@ var _ = Describe("Api", func() {
 					return 0, successfulStream, nil
 				}
 
-				runRequestBody = MarshalledPayload(containers.ContainerRunRequest{
+				runRequestBody = MarshalledPayload(executor_api.ContainerRunRequest{
 					Actions: []models.ExecutorAction{
 						{
 							models.RunAction{
@@ -440,7 +439,7 @@ var _ = Describe("Api", func() {
 				BeforeEach(func() {
 					callbackHandler = ghttp.NewServer()
 
-					runRequestBody = MarshalledPayload(containers.ContainerRunRequest{
+					runRequestBody = MarshalledPayload(executor_api.ContainerRunRequest{
 						CompleteURL: callbackHandler.URL() + "/result",
 						Actions: []models.ExecutorAction{
 							{
@@ -461,7 +460,7 @@ var _ = Describe("Api", func() {
 						callbackHandler.AppendHandlers(
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(containers.ContainerRunResult{
+								ghttp.VerifyJSONRepresenting(executor_api.ContainerRunResult{
 									Failed:        false,
 									FailureReason: "",
 									Result:        "",
@@ -510,7 +509,7 @@ var _ = Describe("Api", func() {
 						callbackHandler.AppendHandlers(
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(containers.ContainerRunResult{
+								ghttp.VerifyJSONRepresenting(executor_api.ContainerRunResult{
 									Failed:        true,
 									FailureReason: "because i said so",
 									Result:        "",
@@ -518,7 +517,7 @@ var _ = Describe("Api", func() {
 							),
 						)
 
-						runRequestBody = MarshalledPayload(containers.ContainerRunRequest{
+						runRequestBody = MarshalledPayload(executor_api.ContainerRunRequest{
 							CompleteURL: callbackHandler.URL() + "/result",
 							Actions: []models.ExecutorAction{
 								{
@@ -558,7 +557,7 @@ var _ = Describe("Api", func() {
 
 		JustBeforeEach(func() {
 			deleteResponse = DoRequest(generator.RequestForHandler(
-				routes.DeleteContainer,
+				executor_api.DeleteContainer,
 				router.Params{"guid": containerGuid},
 				nil,
 			))
@@ -566,7 +565,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container has been allocated", func() {
 			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(containers.ContainerAllocationRequest{
+				allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      0.5,
@@ -574,13 +573,13 @@ var _ = Describe("Api", func() {
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
-					routes.AllocateContainer,
+					executor_api.AllocateContainer,
 					nil,
 					allocRequestBody,
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-				allocatedContainer := containers.Container{}
+				allocatedContainer := executor_api.Container{}
 				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -601,7 +600,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container has been initalized", func() {
 			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(containers.ContainerAllocationRequest{
+				allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
 					MemoryMB:        64,
 					DiskMB:          512,
 					CpuPercent:      0.5,
@@ -609,7 +608,7 @@ var _ = Describe("Api", func() {
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
-					routes.AllocateContainer,
+					executor_api.AllocateContainer,
 					nil,
 					allocRequestBody,
 				))
@@ -623,14 +622,14 @@ var _ = Describe("Api", func() {
 					return []string{"some-handle"}, nil
 				}
 
-				allocatedContainer := containers.Container{}
+				allocatedContainer := executor_api.Container{}
 				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				containerGuid = allocatedContainer.Guid
 
 				initResponse := DoRequest(generator.RequestForHandler(
-					routes.InitializeContainer,
+					executor_api.InitializeContainer,
 					router.Params{"guid": allocatedContainer.Guid},
 					nil,
 				))
