@@ -1,16 +1,18 @@
 package fetch_result_step
 
 import (
+	"archive/tar"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"os/user"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 )
+
+const MAX_RESULT_SIZE = 1024 * 10
+
+var ErrResultTooLarge = fmt.Errorf("result file size exceeds limit of %d bytes", MAX_RESULT_SIZE)
 
 type FetchResultStep struct {
 	container         warden.Container
@@ -55,45 +57,26 @@ func (step *FetchResultStep) Perform() error {
 }
 
 func (step *FetchResultStep) copyAndReadResult() ([]byte, error) {
-	tempFile, err := ioutil.TempFile(step.tempDir, "fetch-result")
-	if err != nil {
-		return nil, err
-	}
-	fileName := tempFile.Name()
-	tempFile.Close()
-	defer os.RemoveAll(fileName)
-
-	currentUser, err := user.Current()
+	reader, err := step.container.StreamOut(step.fetchResultAction.File)
 	if err != nil {
 		return nil, err
 	}
 
-	err = step.container.CopyOut(
-		step.fetchResultAction.File,
-		fileName,
-		currentUser.Username,
-	)
+	tarReader := tar.NewReader(reader)
 
+	_, err = tarReader.Next()
 	if err != nil {
 		return nil, err
 	}
 
-	resultFile, err := os.Open(fileName)
-	defer resultFile.Close()
-	if err != nil {
-		return nil, err
+	buf := make([]byte, MAX_RESULT_SIZE+1)
+
+	n, err := tarReader.Read(buf)
+	if n > MAX_RESULT_SIZE {
+		return nil, ErrResultTooLarge
 	}
 
-	fileStat, err := resultFile.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	if fileStat.Size() > 1024*10 {
-		return nil, fmt.Errorf("result file size exceeds allowed limit (got %d bytes > 10 kilo-bytes)", fileStat.Size())
-	}
-
-	return ioutil.ReadAll(resultFile)
+	return buf[:n], nil
 }
 
 func (step *FetchResultStep) Cancel() {}

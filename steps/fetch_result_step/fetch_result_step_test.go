@@ -1,9 +1,10 @@
 package fetch_result_step_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"errors"
-	"io/ioutil"
-	"strings"
+	"io"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,7 +34,7 @@ var _ = Describe("FetchResultStep", func() {
 		result = ""
 
 		fetchResultAction = models.FetchResultAction{
-			File: "/tmp/foo",
+			File: "/var/some-dir/foo",
 		}
 
 		logger = steno.NewLogger("test-logger")
@@ -58,11 +59,24 @@ var _ = Describe("FetchResultStep", func() {
 
 	Context("when the file exists", func() {
 		BeforeEach(func() {
-			wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
-				err := ioutil.WriteFile(dst, []byte("result content"), 0644)
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+				Ω(src).Should(Equal("/var/some-dir/foo"))
+
+				buffer := new(bytes.Buffer)
+				tarWriter := tar.NewWriter(buffer)
+
+				content := []byte("result content")
+
+				err := tarWriter.WriteHeader(&tar.Header{
+					Name: "foo",
+					Size: int64(len(content)),
+				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				return nil
+				_, err = tarWriter.Write(content)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				return buffer, nil
 			}
 		})
 
@@ -76,21 +90,29 @@ var _ = Describe("FetchResultStep", func() {
 
 	Context("when the file exists but is too large", func() {
 		BeforeEach(func() {
-			//overflow the (hard-coded) file content limit of 10KB by 1 byte:
-			largeFileContent := strings.Repeat("7", 1024*10+1)
+			// overflow the (hard-coded) file content limit of 10KB by 1 byte:
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+				buffer := new(bytes.Buffer)
+				tarWriter := tar.NewWriter(buffer)
 
-			wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
-				err := ioutil.WriteFile(dst, []byte(largeFileContent), 0644)
+				tooBig := int64(1024*10 + 1)
+				err := tarWriter.WriteHeader(&tar.Header{
+					Name: "foo",
+					Size: tooBig,
+				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				return nil
+				_, err = tarWriter.Write(make([]byte, tooBig))
+				Ω(err).ShouldNot(HaveOccurred())
+
+				return buffer, nil
 			}
 		})
 
 		It("should error", func() {
 			err := step.Perform()
 			Ω(err.Error()).Should(ContainSubstring("Copying out of the container failed"))
-			Ω(err.Error()).Should(ContainSubstring("result file size exceeds allowed limit"))
+			Ω(err.Error()).Should(ContainSubstring("result file size exceeds limit"))
 
 			Ω(result).Should(BeZero())
 		})
@@ -100,8 +122,8 @@ var _ = Describe("FetchResultStep", func() {
 		disaster := errors.New("kaboom")
 
 		BeforeEach(func() {
-			wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
-				return disaster
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+				return nil, disaster
 			}
 		})
 
