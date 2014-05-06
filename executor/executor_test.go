@@ -1,168 +1,126 @@
 package executor_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"syscall"
 	"time"
 
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/storeadapter"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+	"github.com/tedsuo/router"
 
 	. "github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/task_handler/fake_task_handler"
-	"github.com/cloudfoundry-incubator/executor/task_registry"
+	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/transformer"
+	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Executor", func() {
 	var (
-		bbs            *Bbs.BBS
-		task           *models.Task
-		executor       *Executor
-		taskRegistry   *task_registry.TaskRegistry
-		wardenClient   *fake_warden_client.FakeClient
-		ready          chan bool
-		startingMemory int
-		startingDisk   int
-		storeAdapter   storeadapter.StoreAdapter
+		executor     *Executor
+		wardenClient *fake_warden_client.FakeClient
+		logger       *steno.Logger
+		trans        *transformer.Transformer
+		executorURL  string
+		reqGen       *router.RequestGenerator
 	)
 
-	var fakeTaskHandler *fake_task_handler.FakeTaskHandler
-
 	BeforeEach(func() {
-		fakeTaskHandler = fake_task_handler.New()
-		ready = make(chan bool, 1)
-
-		storeAdapter = etcdRunner.Adapter()
-		bbs = Bbs.New(storeAdapter, timeprovider.NewTimeProvider())
+		steno.EnterTestMode()
+		logger = steno.NewLogger("test-logger")
 		wardenClient = fake_warden_client.New()
-
-		startingMemory = 256
-		startingDisk = 1024
-		taskRegistry = task_registry.NewTaskRegistry(
-			"some-stack",
-			startingMemory,
-			startingDisk,
+		trans = transformer.NewTransformer(
+			log_streamer_factory.New("", ""),
+			fakecacheddownloader.New(),
+			fake_uploader.New(),
+			&fake_extractor.FakeExtractor{},
+			&fake_compressor.FakeCompressor{},
+			logger,
+			"/tmp",
 		)
+		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
 
-		task = &models.Task{
-			Guid:     "totally-unique",
-			MemoryMB: 256,
-			DiskMB:   1024,
-			Stack:    "some-stack",
-		}
+		reqGen = router.NewRequestGenerator("http://"+executorURL, executor_api.Routes)
 
-		executor = New(bbs, 0, steno.NewLogger("test-logger"))
-	})
-
-	AfterEach(func() {
-		executor.Stop()
-		storeAdapter.Disconnect()
+		executor = New(executorURL, 100, 1024, 1024, wardenClient, trans, time.Second, logger)
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor1 := New(bbs, 0, steno.NewLogger("test-logger"))
-			executor2 := New(bbs, 0, steno.NewLogger("test-logger"))
+			executor2 := New(executorURL, 100, 1024, 1024, wardenClient, trans, time.Second, logger)
 
-			Ω(executor1.ID()).ShouldNot(BeZero())
+			Ω(executor.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())
 
-			Ω(executor1.ID()).ShouldNot(Equal(executor2.ID()))
+			Ω(executor.ID()).ShouldNot(Equal(executor2.ID()))
 		})
 	})
 
-	Describe("Handling", func() {
+	Describe("Run", func() {
+		var errChan chan error
+		var sigChan chan os.Signal
+
 		BeforeEach(func() {
-			go executor.Handle(fakeTaskHandler, ready)
-			<-ready
+			errChan = make(chan error)
+			sigChan = make(chan os.Signal)
+			ready := make(chan struct{})
+			go func() {
+				errChan <- executor.Run(sigChan, ready)
+			}()
+			Eventually(ready).Should(BeClosed())
 		})
 
-		Context("when ETCD disappears then reappers", func() {
-			BeforeEach(func() {
-				etcdRunner.Stop()
-
-				// give the etcd driver time to realize we timed out.  the etcd driver
-				// is hardcoded to have a 200 ms timeout
-				time.Sleep(200 * time.Millisecond)
-
-				etcdRunner.Start()
-
-				// give the etcd driver a chance to connect
-				time.Sleep(200 * time.Millisecond)
-
-				err := bbs.DesireTask(task)
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("should handle any new desired Tasks", func() {
-				Eventually(func() int {
-					return fakeTaskHandler.NumberOfCalls()
-				}).Should(Equal(1))
-			})
-		})
-
-		Context("when told to stop", func() {
-			BeforeEach(func() {
-				executor.Stop()
-			})
-
-			It("does not handle any new desired Tasks", func() {
-				err := bbs.DesireTask(task)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Consistently(func() int {
-					return fakeTaskHandler.NumberOfCalls()
-				}).Should(Equal(0))
-			})
-		})
-
-		Context("when two executors are fighting for a Task", func() {
-			var otherExecutor *Executor
-
-			BeforeEach(func() {
-				otherExecutor = New(bbs, 0, steno.NewLogger("test-logger"))
-
-				go otherExecutor.Handle(fakeTaskHandler, ready)
-				<-ready
-			})
-
+		Context("while running", func() {
 			AfterEach(func() {
-				otherExecutor.Stop()
+				sigChan <- syscall.SIGTERM
+				Eventually(errChan).Should(Receive(BeNil()))
 			})
 
-			It("the winner should be randomly distributed", func() {
-				samples := 40
+			It("spins up an API server", func() {
+				payload, err := json.Marshal(executor_api.ContainerAllocationRequest{
+					MemoryMB: 32,
+					DiskMB:   512,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 
-				//generate N desired run onces
-				for i := 0; i < samples; i++ {
-					task := &models.Task{
-						Guid: fmt.Sprintf("totally-unique-%d", i),
-					}
-					err := bbs.DesireTask(task)
-					Ω(err).ShouldNot(HaveOccurred())
-				}
+				req, err := reqGen.RequestForHandler(executor_api.AllocateContainer, nil, bytes.NewBuffer(payload))
+				Ω(err).ShouldNot(HaveOccurred())
 
-				//eventually the taskhandlers should have been called N times
-				Eventually(func() int {
-					return fakeTaskHandler.NumberOfCalls()
-				}, 5).Should(Equal(samples))
+				res, err := http.DefaultClient.Do(req)
+				Ω(err).ShouldNot(HaveOccurred())
 
-				var numberHandledByFirst int
-				var numberHandledByOther int
-				for _, executorId := range fakeTaskHandler.HandledTasks() {
-					if executor.ID() == executorId {
-						numberHandledByFirst++
-					} else if otherExecutor.ID() == executorId {
-						numberHandledByOther++
-					}
-				}
-				Ω(numberHandledByFirst).Should(BeNumerically(">", 3))
-				Ω(numberHandledByOther).Should(BeNumerically(">", 3))
+				Ω(res.StatusCode).Should(Equal(http.StatusCreated))
+			})
+		})
+
+		Context("after receiving SIGINT", func() {
+			var err error
+			BeforeEach(func() {
+				sigChan <- syscall.SIGTERM
+				err = <-errChan
+			})
+
+			It("completes without error", func() {
+				Ω(err).Should(BeNil())
+			})
+
+			It("shuts down the API server", func() {
+				req, err := reqGen.RequestForHandler(executor_api.GetContainer, router.Params{"guid": "123"}, nil)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = http.DefaultClient.Do(req)
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

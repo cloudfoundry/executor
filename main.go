@@ -11,10 +11,9 @@ import (
 
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
+	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 
 	"github.com/cloudfoundry-incubator/executor/maintain"
-
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
@@ -23,14 +22,17 @@ import (
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
-	"github.com/cloudfoundry-incubator/executor/task_handler"
-	"github.com/cloudfoundry-incubator/executor/task_registry"
-	"github.com/cloudfoundry-incubator/executor/task_transformer"
+	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 )
+
+var executorAddress = flag.String(
+	"executorAddress",
+	"0.0.0.0:1700",
+	"host:port to serve API requests on")
 
 var containerOwnerName = flag.String(
 	"containerOwnerName",
@@ -80,12 +82,6 @@ var diskMBFlag = flag.String(
 	"the amount of disk the executor has available in megabytes",
 )
 
-var convergenceInterval = flag.Duration(
-	"convergenceInterval",
-	30*time.Second,
-	"the interval, in seconds, between convergences",
-)
-
 var heartbeatInterval = flag.Duration(
 	"heartbeatInterval",
 	60*time.Second,
@@ -114,12 +110,6 @@ var stack = flag.String(
 	"stack",
 	"",
 	"the executor stack - must be specified",
-)
-
-var timeToClaimTask = flag.Duration(
-	"timeToClaimTask",
-	30*time.Minute,
-	"unclaimed run onces are marked as failed, after this time (in seconds)",
 )
 
 var drainTimeout = flag.Duration(
@@ -182,6 +172,7 @@ func main() {
 	)
 
 	bbs := Bbs.New(etcdAdapter, timeprovider.NewTimeProvider())
+
 	err = etcdAdapter.Connect()
 	if err != nil {
 		logger.Errord(map[string]interface{}{
@@ -215,20 +206,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	executor := executor.New(bbs, *drainTimeout, logger)
-
 	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
-	taskRegistry := task_registry.NewTaskRegistry(*stack, memoryMB, diskMB)
-
 	logStreamerFactory := log_streamer_factory.New(
 		*loggregatorServer,
 		*loggregatorSecret,
 	)
 
-	transformer := task_transformer.NewTaskTransformer(
+	transformer := Transformer.NewTransformer(
 		logStreamerFactory,
 		cache,
 		uploader,
@@ -238,100 +225,49 @@ func main() {
 		*tempDir,
 	)
 
-	taskHandler := task_handler.New(
-		bbs,
+	logger.Info("executor.starting")
+
+	executor := executor.New(
+		*executorAddress,
+		uint64(*containerMaxCpuShares),
+		memoryMB,
+		diskMB,
 		wardenClient,
-		*containerOwnerName,
-		taskRegistry,
 		transformer,
-		logStreamerFactory,
+		*drainTimeout,
 		logger,
-		*containerInodeLimit,
-		*containerMaxCpuShares,
 	)
 
-	err = taskHandler.Cleanup()
-	if err != nil {
-		logger.Errord(
-			map[string]interface{}{
-				"error": err.Error(),
-			},
-			"executor.cleanup.failed",
-		)
-		os.Exit(1)
-	}
+	maintainSignals := make(chan os.Signal, 1)
+	signal.Notify(maintainSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
-	logger.Infod(
-		map[string]interface{}{
-			"id":    executor.ID(),
-			"stack": *stack,
-		},
-		"executor.starting",
-	)
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	executorSignals := make(chan os.Signal, 1)
+	signal.Notify(executorSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
 	maintainReady := make(chan struct{})
+	executorReady := make(chan struct{})
 
 	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
-	go func() {
-		maintainerSigChan := make(chan os.Signal, 1)
-		signal.Notify(maintainerSigChan, syscall.SIGTERM, syscall.SIGINT)
 
-		err := maintainer.Run(maintainerSigChan, maintainReady)
+	go func() {
+		err := maintainer.Run(maintainSignals, maintainReady)
 		if err != nil {
 			logger.Errorf("failed to start maintaining presence: %s", err.Error())
-			executor.Stop()
-			os.Exit(1)
+			executorSignals <- syscall.SIGTERM
 		}
 	}()
 
 	<-maintainReady
 
-	handling := make(chan bool)
-	go executor.Handle(taskHandler, handling)
-
-	<-handling
-	logger.Infof("executor.started")
-
-	firstSignal := <-signals
-
 	go func() {
-		// ignore all signals after the first
-		for sig := range signals {
-			logger.Infod(
-				map[string]interface{}{
-					"signal": sig.String(),
-				},
-				"executor.signal.ignored",
-			)
-		}
+		<-executorReady
+		logger.Info("executor.started")
 	}()
 
-	if firstSignal == syscall.SIGUSR1 {
-		logger.Infod(
-			map[string]interface{}{
-				"timeout": (*drainTimeout).String(),
-			},
-			"executor.draining",
-		)
+	err = executor.Run(executorSignals, executorReady)
 
-		executor.Drain()
+	if err != nil {
+		os.Exit(1)
 	}
-
-	stoppingAt := time.Now()
-
-	logger.Info("executor.stopping")
-
-	executor.Stop()
-
-	logger.Infod(
-		map[string]interface{}{
-			"took": time.Since(stoppingAt).String(),
-		},
-		"executor.stopped",
-	)
-
 	os.Exit(0)
 }
