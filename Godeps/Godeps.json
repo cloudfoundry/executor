@@ -102,7 +102,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "d53f20ed6065e75dd459ceb4904b3e0a5cadbf0d"
+			"Rev": "f5533d435ebfcf4fa0463202dc0e966b983618b8"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
@@ -118,7 +118,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
-			"Rev": "2344b15ff13869e2e69dbcee35da98000a445ba2"
+			"Rev": "995b567ce8f9dfe4f796aa439aa8b237ac1feae6"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/router",

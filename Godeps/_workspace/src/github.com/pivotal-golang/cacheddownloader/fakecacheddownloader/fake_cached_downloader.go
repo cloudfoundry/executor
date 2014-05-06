@@ -20,6 +20,11 @@ func New() *FakeCachedDownloader {
 func (c *FakeCachedDownloader) Fetch(url *url.URL, cacheKey string) (io.ReadCloser, error) {
 	c.FetchedURL = url
 	c.FetchedCacheKey = cacheKey
+
+	if c.FetchError != nil {
+		return nil, c.FetchError
+	}
+
 	return &readCloser{bytes.NewBuffer(c.FetchedContent)}, c.FetchError
 }
 

@@ -91,16 +91,16 @@ func (step *DownloadStep) download() (string, error) {
 	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
-	defer tempFile.Close()
 	if err != nil {
 		return "", err
 	}
+	defer tempFile.Close()
 
 	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
-	defer downloadedFile.Close()
 	if err != nil {
 		return "", err
 	}
+	defer downloadedFile.Close()
 
 	io.Copy(tempFile, downloadedFile)
 
