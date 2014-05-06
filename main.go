@@ -272,18 +272,22 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
+	maintainReady := make(chan struct{})
+
 	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
 	go func() {
 		maintainerSigChan := make(chan os.Signal, 1)
 		signal.Notify(maintainerSigChan, syscall.SIGTERM, syscall.SIGINT)
 
-		err := maintainer.Run(maintainerSigChan)
+		err := maintainer.Run(maintainerSigChan, maintainReady)
 		if err != nil {
 			logger.Errorf("failed to start maintaining presence: %s", err.Error())
 			executor.Stop()
 			os.Exit(1)
 		}
 	}()
+
+	<-maintainReady
 
 	handling := make(chan bool)
 	go executor.Handle(taskHandler, handling)
