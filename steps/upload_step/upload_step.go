@@ -93,7 +93,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	err = step.compressor.Compress(tempDir, finalFileLocation)
+	err = step.compressor.Compress(tempDir+"/", finalFileLocation)
 	if err != nil {
 		return emittable_error.New(err, "Compression failed")
 	}
