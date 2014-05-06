@@ -1,11 +1,12 @@
 package upload_step
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
-	"os/user"
 
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -56,6 +57,11 @@ func (step *UploadStep) Perform() (err error) {
 		"task.handle.upload-step",
 	)
 
+	url, err := url.ParseRequestURI(step.model.To)
+	if err != nil {
+		return err
+	}
+
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
 	if err != nil {
 		return err
@@ -63,23 +69,9 @@ func (step *UploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(tempDir)
 
-	currentUser, err := user.Current()
-	if err != nil {
-		return err
-	}
-
-	err = step.container.CopyOut(
-		step.model.From,
-		tempDir,
-		currentUser.Username,
-	)
+	streamOut, err := step.container.StreamOut(step.model.From)
 	if err != nil {
 		return emittable_error.New(err, "Copying out of the container failed")
-	}
-
-	url, err := url.ParseRequestURI(step.model.To)
-	if err != nil {
-		return err
 	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
@@ -87,16 +79,19 @@ func (step *UploadStep) Perform() (err error) {
 		return emittable_error.New(err, "Compression failed")
 	}
 
+	gzipWriter := gzip.NewWriter(tempFile)
+
+	_, err = io.Copy(gzipWriter, streamOut)
+	if err != nil {
+		return emittable_error.New(err, "Copying out of the container failed")
+	}
+
+	gzipWriter.Close()
 	tempFile.Close()
 
 	finalFileLocation := tempFile.Name()
 
 	defer os.RemoveAll(finalFileLocation)
-
-	err = step.compressor.Compress(tempDir+"/", finalFileLocation)
-	if err != nil {
-		return emittable_error.New(err, "Compression failed")
-	}
 
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
 	if err != nil {

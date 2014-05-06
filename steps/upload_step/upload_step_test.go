@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/user"
-	"path/filepath"
 	"time"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
@@ -27,7 +26,6 @@ import (
 	Uploader "github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 )
 
 var _ = Describe("UploadStep", func() {
@@ -105,27 +103,32 @@ var _ = Describe("UploadStep", func() {
 
 	Describe("Perform", func() {
 		It("uploads a .tgz to the destination", func() {
-			wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
 				Ω(handle).Should(Equal("some-container-handle"))
-				Ω(owner).Should(Equal(currentUser.Username))
 
 				if src == "/Antarctica" {
-					err := ioutil.WriteFile(
-						filepath.Join(dst, "some-file"),
-						[]byte("some-file-contents"),
-						0644,
-					)
+					tarBuf := new(bytes.Buffer)
+
+					tarWriter := tar.NewWriter(tarBuf)
+
+					contents1 := "some-file-contents"
+
+					err := tarWriter.WriteHeader(&tar.Header{
+						Name: "some-file",
+						Size: int64(len(contents1)),
+					})
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = ioutil.WriteFile(
-						filepath.Join(dst, "another-file"),
-						[]byte("another-file-contents"),
-						0644,
-					)
+					_, err = tarWriter.Write([]byte(contents1))
 					Ω(err).ShouldNot(HaveOccurred())
+
+					err = tarWriter.Flush()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return tarBuf, nil
 				}
 
-				return nil
+				return nil, nil
 			}
 
 			err := step.Perform()
@@ -154,9 +157,8 @@ var _ = Describe("UploadStep", func() {
 			}
 
 			Ω(tarContents).Should(HaveKey("some-file"))
-			Ω(tarContents).Should(HaveKey("another-file"))
+
 			Ω(string(tarContents["some-file"])).Should(Equal("some-file-contents"))
-			Ω(string(tarContents["another-file"])).Should(Equal("another-file-contents"))
 		})
 
 		Describe("streaming logs for uploads", func() {
@@ -193,12 +195,12 @@ var _ = Describe("UploadStep", func() {
 			})
 		})
 
-		Context("when there is an error copying the file out", func() {
+		Context("when there is an error initiating the stream", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenCopyingOut = func(handle, src, dst, owner string) error {
-					return disaster
+				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.Reader, error) {
+					return nil, disaster
 				}
 			})
 
@@ -208,19 +210,18 @@ var _ = Describe("UploadStep", func() {
 			})
 		})
 
-		Context("and compressing fails", func() {
-			disaster := errors.New("oh no!")
+		Context("when there is an error in the middle of streaming the data", func() {
+			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				fakeCompressor := &fake_compressor.FakeCompressor{}
-				fakeCompressor.CompressError = disaster
-
-				compressor = fakeCompressor
+				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.Reader, error) {
+					return &errorReader{err: disaster}, nil
+				}
 			})
 
-			It("returns the error and loggregates a message to STDERR stream", func() {
+			It("returns the error ", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(emittable_error.New(disaster, "Compression failed")))
+				Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
 			})
 		})
 
@@ -239,3 +240,11 @@ var _ = Describe("UploadStep", func() {
 		})
 	})
 })
+
+type errorReader struct {
+	err error
+}
+
+func (r *errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
