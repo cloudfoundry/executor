@@ -41,7 +41,7 @@ var _ = Describe("Maintain Presence", func() {
 	Context("when maintaining presence", func() {
 		BeforeEach(func() {
 			go func() {
-				err := maintainer.Run(sigChan)
+				err := maintainer.Run(sigChan, nil)
 				Ω(err).ShouldNot(HaveOccurred())
 			}()
 		})
@@ -60,7 +60,7 @@ var _ = Describe("Maintain Presence", func() {
 
 			errChan := make(chan error, 1)
 			runToEnd := func() bool {
-				errChan <- maintainer.Run(sigChan)
+				errChan <- maintainer.Run(sigChan, nil)
 				return true
 			}
 

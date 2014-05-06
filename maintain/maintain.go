@@ -26,12 +26,16 @@ func New(id string, bbs Bbs.ExecutorBBS, logger *steno.Logger, heartbeatInterval
 	}
 }
 
-func (m *Maintainer) Run(sigChan chan os.Signal) error {
+func (m *Maintainer) Run(sigChan chan os.Signal, ready chan struct{}) error {
 	presence, status, err := m.bbs.MaintainExecutorPresence(m.heartbeatInterval, m.id)
 	if err != nil {
 		m.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.maintain_presence_begin.failed")
+	}
+
+	if ready != nil {
+		close(ready)
 	}
 
 	for {
