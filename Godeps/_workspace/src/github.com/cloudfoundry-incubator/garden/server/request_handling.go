@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"io"
 	"net"
 	"time"
 
@@ -180,7 +181,7 @@ func (s *WardenServer) handleCopyIn(copyIn *protocol.CopyInRequest) (proto.Messa
 	return &protocol.CopyInResponse{}, nil
 }
 
-func (s *WardenServer) handleStreamIn(reader *bufio.Reader, request *protocol.StreamInRequest) (proto.Message, error) {
+func (s *WardenServer) handleStreamIn(conn net.Conn, reader *bufio.Reader, request *protocol.StreamInRequest) (proto.Message, error) {
 	handle := request.GetHandle()
 	dstPath := request.GetDstPath()
 
@@ -192,14 +193,24 @@ func (s *WardenServer) handleStreamIn(reader *bufio.Reader, request *protocol.St
 	s.bomberman.Pause(container.Handle())
 	defer s.bomberman.Unpause(container.Handle())
 
-	streamReader := transport.NewProtobufStreamReader(reader)
-
-	err = container.StreamIn(streamReader, dstPath)
+	streamWriter, err := container.StreamIn(dstPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &protocol.StreamInResponse{}, nil
+	_, err = protocol.Messages(&protocol.StreamInResponse{}).WriteTo(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	streamReader := transport.NewProtobufStreamReader(reader)
+
+	_, err = io.Copy(streamWriter, streamReader)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, streamWriter.Close()
 }
 
 func (s *WardenServer) handleStreamOut(conn net.Conn, request *protocol.StreamOutRequest) (proto.Message, error) {
@@ -220,14 +231,18 @@ func (s *WardenServer) handleStreamOut(conn net.Conn, request *protocol.StreamOu
 	}
 
 	writer := transport.NewProtobufStreamWriter(conn)
-	err = container.StreamOut(srcPath, writer)
+
+	reader, err := container.StreamOut(srcPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &protocol.StreamChunk{
-		EOF: proto.Bool(true),
-	}, nil
+	_, err = io.Copy(writer, reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, writer.Close()
 }
 
 func (s *WardenServer) handleLimitBandwidth(request *protocol.LimitBandwidthRequest) (proto.Message, error) {

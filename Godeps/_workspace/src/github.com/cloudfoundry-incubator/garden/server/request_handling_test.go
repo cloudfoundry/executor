@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,10 +15,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
-	"github.com/cloudfoundry-incubator/garden/transport"
 	protocol "github.com/cloudfoundry-incubator/garden/protocol"
 	"github.com/cloudfoundry-incubator/garden/server"
+	"github.com/cloudfoundry-incubator/garden/transport"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
 )
@@ -634,12 +636,17 @@ var _ = Describe("When a client connects", func() {
 			fakeContainer = container.(*fake_backend.FakeContainer)
 		})
 
-		makeRequest := func() {
+		startStream := func() {
 			writeMessages(
 				&protocol.StreamInRequest{
 					Handle:  proto.String(fakeContainer.Handle()),
 					DstPath: proto.String("/dst/path"),
 				},
+			)
+		}
+
+		sendChunks := func() {
+			writeMessages(
 				&protocol.StreamChunk{
 					Content: []byte("chunk-1;"),
 				},
@@ -655,17 +662,22 @@ var _ = Describe("When a client connects", func() {
 			)
 		}
 
-		It("streams the file in and sends a StreamInResponse", func(done Done) {
-			makeRequest()
+		It("streams the file in and sends two StreamInResponses", func(done Done) {
+			startStream()
 
 			var response protocol.StreamInResponse
 			readResponse(&response)
 
 			Expect(fakeContainer.StreamedIn).To(HaveLen(1))
-			Expect(fakeContainer.StreamedIn[0]).To(Equal(fake_backend.StreamInSpec{
-				SrcContent: "chunk-1;chunk-2;chunk-3;",
-				DestPath:   "/dst/path",
-			}))
+
+			streamedIn := fakeContainer.StreamedIn[0]
+			Expect(streamedIn.DestPath).To(Equal("/dst/path"))
+
+			sendChunks()
+
+			Eventually(streamedIn.InStream).Should(gbytes.Say("chunk-1;chunk-2;chunk-3;"))
+
+			Expect(streamedIn.CloseTracker.IsClosed()).Should(BeTrue())
 
 			close(done)
 		}, 1.0)
@@ -676,7 +688,7 @@ var _ = Describe("When a client connects", func() {
 			})
 
 			It("sends a WardenError response", func(done Done) {
-				makeRequest()
+				startStream()
 
 				err := transport.ReadMessage(responses, &protocol.StreamInResponse{})
 				Expect(err).To(Equal(&transport.WardenError{
@@ -693,7 +705,7 @@ var _ = Describe("When a client connects", func() {
 			})
 
 			It("sends a WardenError response", func(done Done) {
-				makeRequest()
+				startStream()
 
 				err := transport.ReadMessage(responses, &protocol.StreamInResponse{})
 				Expect(err).To(Equal(&transport.WardenError{Message: "oh no!"}))
@@ -711,10 +723,7 @@ var _ = Describe("When a client connects", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			fakeContainer = container.(*fake_backend.FakeContainer)
-			fakeContainer.StreamOutChunks = [][]byte{
-				[]byte("hello-"),
-				[]byte("world"),
-			}
+			fakeContainer.StreamOutBuffer = bytes.NewBuffer([]byte("hello-world!"))
 		})
 
 		It("streams the file out and sends a StreamOutResponse", func(done Done) {
@@ -726,15 +735,17 @@ var _ = Describe("When a client connects", func() {
 			var response protocol.StreamOutResponse
 			readResponse(&response)
 
-			for _, data := range fakeContainer.StreamOutChunks {
-				chunk := protocol.StreamChunk{}
+			streamedContent := ""
+			for {
+				var chunk protocol.StreamChunk
 				readResponse(&chunk)
-				Expect(chunk.Content).To(Equal(data))
+				if chunk.GetEOF() {
+					break
+				}
+				streamedContent += string(chunk.Content)
 			}
 
-			chunk := protocol.StreamChunk{}
-			readResponse(&chunk)
-			Expect(chunk.GetEOF()).To(BeTrue())
+			Expect(streamedContent).To(Equal("hello-world!"))
 
 			Expect(fakeContainer.StreamedOut).To(Equal([]string{
 				"/src/path",

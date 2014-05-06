@@ -1,10 +1,12 @@
 package fake_connection
 
 import (
+	"bytes"
 	"io"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/onsi/gomega/gbytes"
 )
 
 type FakeConnection struct {
@@ -37,10 +39,10 @@ type FakeConnection struct {
 	WhenCopyingOut func(handle string, src, dst, owner string) error
 
 	streamedIn      map[string][]StreamInSpec
-	WhenStreamingIn func(handle string, src io.Reader, dst string) error
+	WhenStreamingIn func(handle string, dst string) (io.WriteCloser, error)
 
 	streamedOut      map[string][]StreamOutSpec
-	WhenStreamingOut func(handle string, src string, dst io.Writer) error
+	WhenStreamingOut func(handle string, src string) (io.Reader, error)
 
 	limitedBandwidth      map[string][]warden.BandwidthLimits
 	WhenLimitingBandwidth func(handle string, limits warden.BandwidthLimits) (warden.BandwidthLimits, error)
@@ -84,13 +86,13 @@ type CopyOutSpec struct {
 }
 
 type StreamInSpec struct {
-	Source      io.Reader
 	Destination string
+	WriteBuffer *gbytes.Buffer
 }
 
 type StreamOutSpec struct {
-	Source      string
-	Destination io.Writer
+	Source     string
+	ReadBuffer *bytes.Buffer
 }
 
 type NetInSpec struct {
@@ -291,19 +293,21 @@ func (connection *FakeConnection) CopiedOut(handle string) []CopyOutSpec {
 	return connection.copiedOut[handle]
 }
 
-func (connection *FakeConnection) StreamIn(handle string, src io.Reader, dstPath string) error {
+func (connection *FakeConnection) StreamIn(handle string, dstPath string) (io.WriteCloser, error) {
+	buffer := gbytes.NewBuffer()
+
 	connection.lock.Lock()
 	connection.streamedIn[handle] = append(connection.streamedIn[handle], StreamInSpec{
-		Source:      src,
 		Destination: dstPath,
+		WriteBuffer: buffer,
 	})
 	connection.lock.Unlock()
 
 	if connection.WhenStreamingIn != nil {
-		return connection.WhenStreamingIn(handle, src, dstPath)
+		return connection.WhenStreamingIn(handle, dstPath)
 	}
 
-	return nil
+	return buffer, nil
 }
 
 func (connection *FakeConnection) StreamedIn(handle string) []StreamInSpec {
@@ -313,19 +317,20 @@ func (connection *FakeConnection) StreamedIn(handle string) []StreamInSpec {
 	return connection.streamedIn[handle]
 }
 
-func (connection *FakeConnection) StreamOut(handle string, srcPath string, dest io.Writer) error {
+func (connection *FakeConnection) StreamOut(handle string, srcPath string) (io.Reader, error) {
+	buffer := new(bytes.Buffer)
 	connection.lock.Lock()
 	connection.streamedOut[handle] = append(connection.streamedOut[handle], StreamOutSpec{
-		Source:      srcPath,
-		Destination: dest,
+		Source:     srcPath,
+		ReadBuffer: buffer,
 	})
 	connection.lock.Unlock()
 
 	if connection.WhenStreamingOut != nil {
-		return connection.WhenStreamingOut(handle, srcPath, dest)
+		return connection.WhenStreamingOut(handle, srcPath)
 	}
 
-	return nil
+	return buffer, nil
 }
 
 func (connection *FakeConnection) StreamedOut(handle string) []StreamOutSpec {
