@@ -3,6 +3,7 @@ package allocate_container
 import (
 	"encoding/json"
 	"net/http"
+
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"

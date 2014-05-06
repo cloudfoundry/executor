@@ -3,6 +3,7 @@ package registry
 import (
 	"errors"
 	"sync"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/nu7hatch/gouuid"
 )
