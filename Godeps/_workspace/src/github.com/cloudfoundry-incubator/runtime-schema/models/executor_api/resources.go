@@ -28,6 +28,7 @@ type ContainerAllocationRequest struct {
 
 type ContainerRunRequest struct {
 	Actions     []models.ExecutorAction `json:"actions"`
+	Metadata    []byte                  `json:"metadata"`
 	CompleteURL string                  `json:"complete_url"`
 }
 
@@ -35,4 +36,5 @@ type ContainerRunResult struct {
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
 	Result        string `json:"result"`
+	Metadata      []byte `json:"metadata"`
 }
