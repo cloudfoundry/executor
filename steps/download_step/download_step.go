@@ -1,6 +1,7 @@
 package download_step
 
 import (
+	"archive/tar"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 )
@@ -56,9 +58,7 @@ func (step *DownloadStep) Perform() error {
 		return err
 	}
 
-	defer func() {
-		os.Remove(downloadedPath)
-	}()
+	defer os.Remove(downloadedPath)
 
 	if step.model.Extract {
 		extractionDir, err := step.extract(downloadedPath)
@@ -75,12 +75,25 @@ func (step *DownloadStep) Perform() error {
 
 		return err
 	} else {
-		err := step.container.CopyIn(downloadedPath, step.model.To)
+		// TODO - get rid of this file
+		streamIn, err := step.container.StreamIn(filepath.Dir(step.model.To))
+		if err != nil {
+			return err
+		}
+
+		downloadedFile, err := os.Open(downloadedPath)
+		if err != nil {
+			return err
+		}
+
+		defer downloadedFile.Close()
+
+		err = writeTarTo(filepath.Base(step.model.To), downloadedFile, streamIn)
 		if err != nil {
 			return emittable_error.New(err, "Copying into the container failed")
 		}
 
-		return err
+		return nil
 	}
 }
 
@@ -102,7 +115,10 @@ func (step *DownloadStep) download() (string, error) {
 	}
 	defer downloadedFile.Close()
 
-	io.Copy(tempFile, downloadedFile)
+	_, err = io.Copy(tempFile, downloadedFile)
+	if err != nil {
+		return "", err
+	}
 
 	return tempFile.Name(), nil
 }
@@ -134,8 +150,42 @@ func (step *DownloadStep) Cancel() {}
 func (step *DownloadStep) Cleanup() {}
 
 func (step *DownloadStep) copyExtractedFiles(source string, destination string) error {
-	return step.container.CopyIn(
-		source+string(filepath.Separator),
-		destination+string(filepath.Separator),
-	)
+	streamIn, err := step.container.StreamIn(destination)
+	if err != nil {
+		return err
+	}
+
+	return compressor.WriteTar(source+string(filepath.Separator), streamIn)
+}
+
+func writeTarTo(name string, source *os.File, destination io.WriteCloser) error {
+	tarWriter := tar.NewWriter(destination)
+
+	fileInfo, err := source.Stat()
+	if err != nil {
+		return err
+	}
+
+	err = tarWriter.WriteHeader(&tar.Header{
+		Name: name,
+		Size: fileInfo.Size(),
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(tarWriter, source)
+	if err != nil {
+		return err
+	}
+
+	if err := tarWriter.Flush(); err != nil {
+		return err
+	}
+
+	if err := destination.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
