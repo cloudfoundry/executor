@@ -11,6 +11,7 @@ import (
 type FakeExecutorBBS struct {
 	callsToConverge int
 
+	desiredTaskChan               chan *models.Task
 	maintainConvergeInterval      time.Duration
 	maintainConvergeExecutorID    string
 	maintainConvergeStatusChannel <-chan bool
@@ -43,6 +44,7 @@ func NewFakeExecutorBBS() *FakeExecutorBBS {
 	fakeBBS := &FakeExecutorBBS{}
 	fakeBBS.MaintainExecutorPresenceInputs.HeartbeatInterval = make(chan time.Duration, 1)
 	fakeBBS.MaintainExecutorPresenceInputs.ExecutorID = make(chan string, 1)
+	fakeBBS.desiredTaskChan = make(chan *models.Task, 1)
 	return fakeBBS
 }
 
@@ -72,7 +74,11 @@ func (fakeBBS *FakeExecutorBBS) GetMaintainExecutorPresenceId() string {
 }
 
 func (fakeBBS *FakeExecutorBBS) WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error) {
-	return nil, nil, nil
+	return fakeBBS.desiredTaskChan, nil, nil
+}
+
+func (fakeBBS *FakeExecutorBBS) EmitDesiredTask(task *models.Task) {
+	fakeBBS.desiredTaskChan <- task
 }
 
 func (fakeBBS *FakeExecutorBBS) ClaimTask(task *models.Task, executorID string) error {

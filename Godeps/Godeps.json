@@ -44,11 +44,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "e48fc8795110a1aa5c4b9a0aed3055a6741bf609"
+			"Rev": "7e61a26d4dcb5d2cbcd417b7d00d4379df304d9d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "e48fc8795110a1aa5c4b9a0aed3055a6741bf609"
+			"Rev": "7e61a26d4dcb5d2cbcd417b7d00d4379df304d9d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -57,7 +57,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+			"Rev": "93aaeec320a837a8d6b47ecbb4b4eab957a3e1de"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
@@ -106,11 +106,11 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
-			"Rev": "a6611a7bea4a1e54692b873837bb8ca4a30bdb91"
+			"Rev": "9f697e9047406639e0977fa99cb0b6aa95a3fdca"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/extractor",
-			"Rev": "a6611a7bea4a1e54692b873837bb8ca4a30bdb91"
+			"Rev": "9f697e9047406639e0977fa99cb0b6aa95a3fdca"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",
