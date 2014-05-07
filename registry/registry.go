@@ -63,13 +63,12 @@ func (r *registry) Reserve(req executor_api.ContainerAllocationRequest) (executo
 	}
 
 	res := executor_api.Container{
-		Guid:            guid.String(),
-		ExecutorGuid:    r.executorGuid,
-		MemoryMB:        req.MemoryMB,
-		DiskMB:          req.DiskMB,
-		CpuPercent:      req.CpuPercent,
-		FileDescriptors: req.FileDescriptors,
-		State:           executor_api.StateReserved,
+		Guid:         guid.String(),
+		ExecutorGuid: r.executorGuid,
+		MemoryMB:     req.MemoryMB,
+		DiskMB:       req.DiskMB,
+		CpuPercent:   req.CpuPercent,
+		State:        executor_api.StateReserved,
 	}
 
 	r.containersMutex.Lock()

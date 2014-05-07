@@ -113,10 +113,9 @@ var _ = Describe("Api", func() {
 		Context("when the requested CPU percent is > 100", func() {
 			BeforeEach(func() {
 				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      101.0,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 101.0,
 				})
 			})
 
@@ -128,10 +127,9 @@ var _ = Describe("Api", func() {
 		Context("when the requested CPU percent is < 0", func() {
 			BeforeEach(func() {
 				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      -14.0,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: -14.0,
 				})
 			})
 
@@ -145,10 +143,9 @@ var _ = Describe("Api", func() {
 
 			BeforeEach(func() {
 				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      0.5,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 0.5,
 				})
 			})
 
@@ -163,13 +160,12 @@ var _ = Describe("Api", func() {
 
 			It("returns a container", func() {
 				Ω(reservedContainer).Should(Equal(executor_api.Container{
-					ExecutorGuid:    "executor-guid-123",
-					Guid:            reservedContainer.Guid,
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      0.5,
-					FileDescriptors: 1,
-					State:           "reserved",
+					ExecutorGuid: "executor-guid-123",
+					Guid:         reservedContainer.Guid,
+					MemoryMB:     64,
+					DiskMB:       512,
+					CpuPercent:   0.5,
+					State:        "reserved",
 				}))
 				Ω(reservedContainer.Guid).ShouldNot(Equal(""))
 			})
@@ -199,13 +195,12 @@ var _ = Describe("Api", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 
 					Ω(returnedContainer).Should(Equal(executor_api.Container{
-						ExecutorGuid:    "executor-guid-123",
-						Guid:            reservedContainer.Guid,
-						MemoryMB:        64,
-						DiskMB:          512,
-						CpuPercent:      0.5,
-						FileDescriptors: 1,
-						State:           "reserved",
+						ExecutorGuid: "executor-guid-123",
+						Guid:         reservedContainer.Guid,
+						MemoryMB:     64,
+						DiskMB:       512,
+						CpuPercent:   0.5,
+						State:        "reserved",
 					}))
 				})
 
@@ -330,10 +325,9 @@ var _ = Describe("Api", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      50.0,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 50.0,
 				})
 			})
 
@@ -354,10 +348,9 @@ var _ = Describe("Api", func() {
 			runResponse = nil
 
 			allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
-				MemoryMB:        64,
-				DiskMB:          512,
-				CpuPercent:      0.5,
-				FileDescriptors: 1,
+				MemoryMB:   64,
+				DiskMB:     512,
+				CpuPercent: 0.5,
 			})
 
 			allocResponse := DoRequest(generator.RequestForHandler(
@@ -570,10 +563,9 @@ var _ = Describe("Api", func() {
 		Context("when the container has been allocated", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      0.5,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 0.5,
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
@@ -605,10 +597,9 @@ var _ = Describe("Api", func() {
 		Context("when the container has been initalized", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(executor_api.ContainerAllocationRequest{
-					MemoryMB:        64,
-					DiskMB:          512,
-					CpuPercent:      0.5,
-					FileDescriptors: 1,
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 0.5,
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
