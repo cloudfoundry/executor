@@ -1,9 +1,10 @@
 package bbs_test
 
 import (
-	"github.com/cloudfoundry/storeadapter/test_helpers"
 	"path"
 	"time"
+
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,6 +22,7 @@ var _ = Describe("Executor BBS", func() {
 	var timeToClaim time.Duration
 	var presence Presence
 	var timeProvider *faketimeprovider.FakeTimeProvider
+	var lrp models.TransitionalLongRunningProcess
 
 	BeforeEach(func() {
 		timeToClaim = 30 * time.Second
@@ -29,27 +31,10 @@ var _ = Describe("Executor BBS", func() {
 		task = &models.Task{
 			Guid: "some-guid",
 		}
+		lrp = models.TransitionalLongRunningProcess{
+			Guid: "the-lrp-guid",
+		}
 	})
-
-	itRetriesUntilStoreComesBack := func(action func() error) {
-		It("should keep trying until the store comes back", func(done Done) {
-			etcdRunner.GoAway()
-
-			runResult := make(chan error)
-			go func() {
-				err := action()
-				runResult <- err
-			}()
-
-			time.Sleep(200 * time.Millisecond)
-
-			etcdRunner.ComeBack()
-
-			Ω(<-runResult).ShouldNot(HaveOccurred())
-
-			close(done)
-		}, 5)
-	}
 
 	Describe("ClaimTask", func() {
 		Context("when claiming a pending Task", func() {
@@ -674,6 +659,100 @@ var _ = Describe("Executor BBS", func() {
 				release2 <- nil
 
 				Eventually(reporter2.Reporting).Should(BeFalse())
+			})
+		})
+	})
+
+	Describe("WatchForDesiredTransitionalLongRunningProcesses", func() {
+		var (
+			events  <-chan models.TransitionalLongRunningProcess
+			stop    chan<- bool
+			errors  <-chan error
+			stopped bool
+		)
+
+		BeforeEach(func() {
+			events, stop, errors = bbs.WatchForDesiredTransitionalLongRunningProcess()
+		})
+
+		AfterEach(func() {
+			if !stopped {
+				stop <- true
+			}
+		})
+
+		It("sends an event down the pipe for creates", func() {
+			err := bbs.DesireTransitionalLongRunningProcess(lrp)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			lrp.State = models.TransitionalLRPStateDesired
+			Eventually(events).Should(Receive(Equal(lrp)))
+		})
+
+		It("sends an event down the pipe for updates", func() {
+			err := bbs.DesireTransitionalLongRunningProcess(lrp)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			lrp.State = models.TransitionalLRPStateDesired
+			Eventually(events).Should(Receive(Equal(lrp)))
+
+			err = bbs.DesireTransitionalLongRunningProcess(lrp)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Eventually(events).Should(Receive(Equal(lrp)))
+		})
+
+		It("closes the events and errors channel when told to stop", func() {
+			stop <- true
+			stopped = true
+
+			err := bbs.DesireTransitionalLongRunningProcess(lrp)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(events).Should(BeClosed())
+			Ω(errors).Should(BeClosed())
+		})
+	})
+
+	Describe("StartTransitionalLongRunningProcess", func() {
+		BeforeEach(func() {
+			err := bbs.DesireTransitionalLongRunningProcess(lrp)
+			lrp.State = models.TransitionalLRPStateDesired
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		Context("when starting a desired LRP", func() {
+			It("sets the state to running", func() {
+				err := bbs.StartTransitionalLongRunningProcess(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedLrp := lrp
+				expectedLrp.State = models.TransitionalLRPStateRunning
+
+				node, err := store.Get("/v1/transitional_lrp/the-lrp-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(node).Should(Equal(storeadapter.StoreNode{
+					Key:   "/v1/transitional_lrp/the-lrp-guid",
+					Value: expectedLrp.ToJSON(),
+				}))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.StartTransitionalLongRunningProcess(lrp)
+				})
+			})
+		})
+
+		Context("When starting an LRP that is not in the desired state", func() {
+			BeforeEach(func() {
+				err := bbs.StartTransitionalLongRunningProcess(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				err := bbs.StartTransitionalLongRunningProcess(lrp)
+				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

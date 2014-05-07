@@ -29,26 +29,6 @@ var _ = Describe("Stager BBS", func() {
 		}
 	})
 
-	itRetriesUntilStoreComesBack := func(action func() error) {
-		It("should keep trying until the store comes back", func(done Done) {
-			etcdRunner.GoAway()
-
-			runResult := make(chan error)
-			go func() {
-				err := action()
-				runResult <- err
-			}()
-
-			time.Sleep(200 * time.Millisecond)
-
-			etcdRunner.ComeBack()
-
-			Ω(<-runResult).ShouldNot(HaveOccurred())
-
-			close(done)
-		}, 5)
-	}
-
 	Describe("DesireTask", func() {
 		Context("when the Task has a CreatedAt time", func() {
 			BeforeEach(func() {

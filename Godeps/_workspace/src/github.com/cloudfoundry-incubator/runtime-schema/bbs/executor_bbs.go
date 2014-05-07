@@ -24,6 +24,10 @@ func (self *executorBBS) WatchForDesiredTask() (<-chan *models.Task, chan<- bool
 	return watchForTaskModificationsOnState(self.store, models.TaskStatePending)
 }
 
+func (self *executorBBS) WatchForDesiredTransitionalLongRunningProcess() (<-chan models.TransitionalLongRunningProcess, chan<- bool, <-chan error) {
+	return watchForLrpModificationsOnState(self.store, models.TransitionalLRPStateDesired)
+}
+
 // The executor calls this when it wants to claim a task
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the executor should assume that someone else is handling the claim and should bail
@@ -64,6 +68,23 @@ func (self *executorBBS) StartTask(task *models.Task, containerHandle string) er
 		}, storeadapter.StoreNode{
 			Key:   taskSchemaPath(task),
 			Value: task.ToJSON(),
+		})
+	})
+}
+
+func (self *executorBBS) StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error {
+	originalValue := lrp.ToJSON()
+
+	lrp.State = models.TransitionalLRPStateRunning
+	changedValue := lrp.ToJSON()
+
+	return retryIndefinitelyOnStoreTimeout(func() error {
+		return self.store.CompareAndSwap(storeadapter.StoreNode{
+			Key:   transitionalLongRunningProcessSchemaPath(lrp),
+			Value: originalValue,
+		}, storeadapter.StoreNode{
+			Key:   transitionalLongRunningProcessSchemaPath(lrp),
+			Value: changedValue,
 		})
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"testing"
+	"time"
 
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
@@ -59,4 +60,24 @@ func registerSignalHandler() {
 			os.Exit(0)
 		}
 	}()
+}
+
+func itRetriesUntilStoreComesBack(action func() error) {
+	It("should keep trying until the store comes back", func(done Done) {
+		etcdRunner.GoAway()
+
+		runResult := make(chan error)
+		go func() {
+			err := action()
+			runResult <- err
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		etcdRunner.ComeBack()
+
+		Ω(<-runResult).ShouldNot(HaveOccurred())
+
+		close(done)
+	}, 5)
 }

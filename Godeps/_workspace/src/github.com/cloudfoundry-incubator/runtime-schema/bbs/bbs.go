@@ -19,13 +19,20 @@ type ExecutorBBS interface {
 	) (presence Presence, disappeared <-chan bool, err error)
 
 	WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error)
+	WatchForDesiredTransitionalLongRunningProcess() (<-chan models.TransitionalLongRunningProcess, chan<- bool, <-chan error)
 
 	ClaimTask(task *models.Task, executorID string) error
 	StartTask(task *models.Task, containerHandle string) error
 	CompleteTask(task *models.Task, failed bool, failureReason string, result string) error
 
+	StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error
+
 	ConvergeTask(timeToClaim time.Duration)
 	MaintainConvergeLock(interval time.Duration, executorID string) (disappeared <-chan bool, stop chan<- chan bool, err error)
+}
+
+type AppManagerBBS interface {
+	DesireTransitionalLongRunningProcess(models.TransitionalLongRunningProcess) error
 }
 
 type StagerBBS interface {
@@ -58,6 +65,10 @@ func New(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider
 			timeProvider: timeProvider,
 		},
 
+		AppManagerBBS: &appManagerBBS{
+			store: store,
+		},
+
 		StagerBBS: &stagerBBS{
 			store:        store,
 			timeProvider: timeProvider,
@@ -80,5 +91,6 @@ type BBS struct {
 	StagerBBS
 	FileServerBBS
 	MetricsBBS
+	AppManagerBBS
 	store storeadapter.StoreAdapter
 }

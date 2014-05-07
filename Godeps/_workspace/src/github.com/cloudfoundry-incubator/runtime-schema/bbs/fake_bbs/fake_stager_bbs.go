@@ -8,12 +8,12 @@ import (
 )
 
 type FakeStagerBBS struct {
-	watchingForCompleted    chan bool
+	watchingForCompleted chan bool
 	completedTaskChan    chan *models.Task
 	completedTaskErrChan chan error
 
-	whenSettingResolving  func() error
-	resolvingTaskInput struct {
+	whenSettingResolving func() error
+	resolvingTaskInput   struct {
 		TaskToResolve *models.Task
 	}
 

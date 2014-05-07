@@ -40,12 +40,6 @@ type Task struct {
 	Annotation string `json:"annotation,omitempty"`
 }
 
-type LogConfig struct {
-	Guid       string `json:"guid"`
-	SourceName string `json:"source_name"`
-	Index      *int   `json:"index"`
-}
-
 func NewTaskFromJSON(payload []byte) (Task, error) {
 	var task Task
 
