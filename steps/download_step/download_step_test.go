@@ -131,6 +131,9 @@ var _ = Describe("DownloadAction", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(header.Name).Should(Equal("Antarctica"))
+				Ω(header.Mode).Should(Equal(int64(0644)))
+				Ω(header.AccessTime.UnixNano()).ShouldNot(BeZero())
+				Ω(header.ChangeTime.UnixNano()).ShouldNot(BeZero())
 
 				fileBody, err := ioutil.ReadAll(tarReader)
 				Ω(err).ShouldNot(HaveOccurred())

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -167,8 +168,11 @@ func writeTarTo(name string, source *os.File, destination io.WriteCloser) error 
 	}
 
 	err = tarWriter.WriteHeader(&tar.Header{
-		Name: name,
-		Size: fileInfo.Size(),
+		Name:       name,
+		Size:       fileInfo.Size(),
+		Mode:       0644,
+		AccessTime: time.Now(),
+		ChangeTime: time.Now(),
 	})
 	if err != nil {
 		return err
