@@ -106,12 +106,6 @@ var loggregatorSecret = flag.String(
 	"secret for the loggregator server",
 )
 
-var stack = flag.String(
-	"stack",
-	"",
-	"the executor stack - must be specified",
-)
-
 var drainTimeout = flag.Duration(
 	"drainTimeout",
 	15*time.Minute,
@@ -144,10 +138,6 @@ var maxCacheSizeInBytes = flag.Int64(
 
 func main() {
 	flag.Parse()
-
-	if *stack == "" {
-		log.Fatalf("A stack must be specified")
-	}
 
 	l, err := steno.GetLogLevel(*logLevel)
 	if err != nil {

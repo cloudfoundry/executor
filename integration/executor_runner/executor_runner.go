@@ -32,7 +32,6 @@ type Config struct {
 	DiskMB                string
 	ConvergenceInterval   time.Duration
 	HeartbeatInterval     time.Duration
-	Stack                 string
 	TempDir               string
 	TimeToClaim           time.Duration
 	ContainerOwnerName    string
@@ -45,7 +44,6 @@ var defaultConfig = Config{
 	DiskMB:                "1024",
 	ConvergenceInterval:   30 * time.Second,
 	HeartbeatInterval:     60 * time.Second,
-	Stack:                 "lucid64",
 	TempDir:               "/tmp",
 	TimeToClaim:           30 * 60 * time.Second,
 	ContainerOwnerName:    "",
@@ -86,7 +84,6 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-memoryMB", configToUse.MemoryMB,
 			"-diskMB", configToUse.DiskMB,
 			"-heartbeatInterval", fmt.Sprintf("%s", configToUse.HeartbeatInterval),
-			"-stack", configToUse.Stack,
 			"-loggregatorServer", r.loggregatorServer,
 			"-loggregatorSecret", r.loggregatorSecret,
 			"-tempDir", configToUse.TempDir,
@@ -135,9 +132,6 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	}
 	if givenConfig.HeartbeatInterval != 0 {
 		configToReturn.HeartbeatInterval = givenConfig.HeartbeatInterval
-	}
-	if givenConfig.Stack != "" {
-		configToReturn.Stack = givenConfig.Stack
 	}
 	if givenConfig.TempDir != "" {
 		configToReturn.TempDir = givenConfig.TempDir

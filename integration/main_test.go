@@ -195,7 +195,6 @@ var _ = Describe("Main", func() {
 		BeforeEach(func() {
 			runner.Start(executor_runner.Config{
 				HeartbeatInterval: 3 * time.Second,
-				Stack:             "the-stack",
 				DrainTimeout:      drainTimeout,
 			})
 		})
