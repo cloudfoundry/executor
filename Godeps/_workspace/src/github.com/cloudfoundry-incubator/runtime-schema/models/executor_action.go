@@ -25,7 +25,7 @@ type RunAction struct {
 	Script         string                `json:"script"`
 	Env            []EnvironmentVariable `json:"env"`
 	Timeout        time.Duration         `json:"timeout"`
-	ResourceLimits ResourceLimits
+	ResourceLimits ResourceLimits        `json:"resource_limits"`
 }
 
 type ResourceLimits struct {

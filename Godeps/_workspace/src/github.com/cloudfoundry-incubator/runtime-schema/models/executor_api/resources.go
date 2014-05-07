@@ -14,16 +14,14 @@ type Container struct {
 	MemoryMB        int     `json:"memory_mb"`
 	DiskMB          int     `json:"disk_mb"`
 	CpuPercent      float64 `json:"cpu_percent"`
-	FileDescriptors int     `json:"file_descriptors"`
 	State           string  `json:"state"`
 	ContainerHandle string  `json:"container_handle"`
 }
 
 type ContainerAllocationRequest struct {
-	MemoryMB        int     `json:"memory_mb"`
-	DiskMB          int     `json:"disk_mb"`
-	CpuPercent      float64 `json:"cpu_percent"`
-	FileDescriptors int     `json:"file_descriptors"`
+	MemoryMB   int     `json:"memory_mb"`
+	DiskMB     int     `json:"disk_mb"`
+	CpuPercent float64 `json:"cpu_percent"`
 }
 
 type ContainerRunRequest struct {
