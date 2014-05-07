@@ -29,8 +29,8 @@ import (
 	"github.com/pivotal-golang/cacheddownloader"
 )
 
-var executorAddress = flag.String(
-	"executorAddress",
+var listenAddr = flag.String(
+	"listenAddr",
 	"0.0.0.0:1700",
 	"host:port to serve API requests on")
 
@@ -228,7 +228,7 @@ func main() {
 	logger.Info("executor.starting")
 
 	executor := executor.New(
-		*executorAddress,
+		*listenAddr,
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		memoryMB,
