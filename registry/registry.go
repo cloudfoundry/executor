@@ -69,6 +69,7 @@ func (r *registry) Reserve(req executor_api.ContainerAllocationRequest) (executo
 		DiskMB:       req.DiskMB,
 		CpuPercent:   req.CpuPercent,
 		State:        executor_api.StateReserved,
+		Log:          req.Log,
 	}
 
 	r.containersMutex.Lock()

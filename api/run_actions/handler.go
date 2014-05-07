@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
@@ -82,7 +81,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result string
-	steps := h.transformer.StepsFor(models.LogConfig{}, request.Actions, container, &result)
+	steps := h.transformer.StepsFor(reg.Log, request.Actions, container, &result)
 
 	go h.performRunActions(request, sequence.New(steps), &result)
 
