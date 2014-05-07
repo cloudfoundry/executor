@@ -227,6 +227,10 @@ var _ = Describe("DownloadAction", func() {
 				Ω(header.Name).Should(Equal("file1"))
 			})
 
+			It("closes the write stream", func() {
+				Ω(buffer.IsClosed()).Should(BeTrue())
+			})
+
 			Context("when there is an error extracting the file", func() {
 				BeforeEach(func() {
 					cache.FetchedContent = []byte("not-a-tgz")

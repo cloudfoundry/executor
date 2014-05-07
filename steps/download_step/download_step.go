@@ -156,7 +156,12 @@ func (step *DownloadStep) copyExtractedFiles(source string, destination string) 
 		return err
 	}
 
-	return compressor.WriteTar(source+string(filepath.Separator), streamIn)
+	err = compressor.WriteTar(source+string(filepath.Separator), streamIn)
+	if err != nil {
+		return err
+	}
+
+	return streamIn.Close()
 }
 
 func writeTarTo(name string, source *os.File, destination io.WriteCloser) error {
