@@ -10,18 +10,20 @@ const (
 type Container struct {
 	Guid string `json:"guid"`
 
-	ExecutorGuid    string  `json:"executor_guid"`
-	MemoryMB        int     `json:"memory_mb"`
-	DiskMB          int     `json:"disk_mb"`
-	CpuPercent      float64 `json:"cpu_percent"`
-	State           string  `json:"state"`
-	ContainerHandle string  `json:"container_handle"`
+	ExecutorGuid    string           `json:"executor_guid"`
+	MemoryMB        int              `json:"memory_mb"`
+	DiskMB          int              `json:"disk_mb"`
+	CpuPercent      float64          `json:"cpu_percent"`
+	State           string           `json:"state"`
+	ContainerHandle string           `json:"container_handle"`
+	Log             models.LogConfig `json:"log"`
 }
 
 type ContainerAllocationRequest struct {
-	MemoryMB   int     `json:"memory_mb"`
-	DiskMB     int     `json:"disk_mb"`
-	CpuPercent float64 `json:"cpu_percent"`
+	MemoryMB   int              `json:"memory_mb"`
+	DiskMB     int              `json:"disk_mb"`
+	CpuPercent float64          `json:"cpu_percent"`
+	Log        models.LogConfig `json:"log"`
 }
 
 type ContainerRunRequest struct {
