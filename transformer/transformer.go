@@ -81,8 +81,6 @@ func (transformer *Transformer) convertAction(
 		return run_step.New(
 			container,
 			actionModel,
-			42, // TODO
-			//uint64(task.FileDescriptors), // TODO
 			logStreamer,
 			transformer.logger,
 		)

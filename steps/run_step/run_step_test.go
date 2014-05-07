@@ -40,6 +40,9 @@ var _ = Describe("RunAction", func() {
 				{"A", "1"},
 				{"B", "2"},
 			},
+			ResourceLimits: models.ResourceLimits{
+				Nofile: &fileDescriptorLimit,
+			},
 		}
 
 		fakeStreamer = fake_log_streamer.New()
@@ -73,7 +76,6 @@ var _ = Describe("RunAction", func() {
 		step = New(
 			container,
 			runAction,
-			fileDescriptorLimit,
 			fakeStreamer,
 			logger,
 		)
@@ -111,7 +113,7 @@ var _ = Describe("RunAction", func() {
 
 		Context("when a file descriptor limit is not configured", func() {
 			BeforeEach(func() {
-				fileDescriptorLimit = 0
+				runAction.ResourceLimits.Nofile = nil
 				processPayloadStream <- successfulExit
 			})
 

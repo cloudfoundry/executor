@@ -13,26 +13,23 @@ import (
 )
 
 type RunStep struct {
-	container           warden.Container
-	model               models.RunAction
-	fileDescriptorLimit uint64
-	streamer            log_streamer.LogStreamer
-	logger              *steno.Logger
+	container warden.Container
+	model     models.RunAction
+	streamer  log_streamer.LogStreamer
+	logger    *steno.Logger
 }
 
 func New(
 	container warden.Container,
 	model models.RunAction,
-	fileDescriptorLimit uint64,
 	streamer log_streamer.LogStreamer,
 	logger *steno.Logger,
 ) *RunStep {
 	return &RunStep{
-		container:           container,
-		model:               model,
-		fileDescriptorLimit: fileDescriptorLimit,
-		streamer:            streamer,
-		logger:              logger,
+		container: container,
+		model:     model,
+		streamer:  streamer,
+		logger:    logger,
 	}
 }
 
@@ -66,14 +63,9 @@ func (step *RunStep) Perform() error {
 	}
 
 	go func() {
-		var nofile *uint64
-		if step.fileDescriptorLimit != 0 {
-			nofile = &step.fileDescriptorLimit
-		}
-
 		_, stream, err := step.container.Run(warden.ProcessSpec{
 			Script: step.model.Script,
-			Limits: warden.ResourceLimits{Nofile: nofile},
+			Limits: warden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
 
 			EnvironmentVariables: convertEnvironmentVariables(step.model.Env),
 		})

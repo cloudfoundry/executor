@@ -97,7 +97,6 @@ var _ = Describe("Transformer", func() {
 			run_step.New(
 				container,
 				runActionModel,
-				42,
 				logStreamer,
 				logger,
 			),
@@ -129,7 +128,6 @@ var _ = Describe("Transformer", func() {
 				run_step.New(
 					container,
 					runActionModel,
-					42,
 					logStreamer,
 					logger,
 				),
@@ -139,7 +137,6 @@ var _ = Describe("Transformer", func() {
 				run_step.New(
 					container,
 					runActionModel,
-					42,
 					logStreamer,
 					logger,
 				),
