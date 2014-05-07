@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/api/delete_container"
@@ -23,25 +24,34 @@ type Config struct {
 	ContainerMaxCPUShares uint64
 	Transformer           *transformer.Transformer
 	Logger                *gosteno.Logger
+	WaitGroup             *sync.WaitGroup
+	Cancel                chan struct{}
 }
 
 func New(c *Config) (http.Handler, error) {
 	handlers := map[string]http.Handler{
-		executor_api.AllocateContainer: allocate_container.New(c.Registry, c.Logger),
+		executor_api.AllocateContainer: allocate_container.New(c.Registry, c.WaitGroup, c.Logger),
 
-		executor_api.GetContainer: get_container.New(c.Registry, c.Logger),
+		executor_api.GetContainer: get_container.New(c.Registry, c.WaitGroup, c.Logger),
 
 		executor_api.InitializeContainer: initialize_container.New(
 			c.ContainerOwnerName,
 			c.ContainerMaxCPUShares,
 			c.WardenClient,
 			c.Registry,
+			c.WaitGroup,
 			c.Logger,
 		),
 
-		executor_api.RunActions: run_actions.New(c.WardenClient, c.Registry, c.Transformer, c.Logger),
+		executor_api.RunActions: run_actions.New(
+			c.WardenClient,
+			c.Registry,
+			c.Transformer,
+			c.WaitGroup,
+			c.Cancel,
+			c.Logger),
 
-		executor_api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.Logger),
+		executor_api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
 	}
 
 	return router.NewRouter(executor_api.Routes, handlers)

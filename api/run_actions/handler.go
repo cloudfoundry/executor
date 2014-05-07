@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
@@ -23,6 +24,8 @@ type handler struct {
 	wardenClient warden.Client
 	registry     registry.Registry
 	transformer  *transformer.Transformer
+	waitGroup    *sync.WaitGroup
+	cancelChan   chan struct{}
 	logger       *gosteno.Logger
 }
 
@@ -30,17 +33,23 @@ func New(
 	wardenClient warden.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
+	waitGroup *sync.WaitGroup,
+	cancelChan chan struct{},
 	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{
 		wardenClient: wardenClient,
 		registry:     registry,
 		transformer:  transformer,
+		waitGroup:    waitGroup,
+		cancelChan:   cancelChan,
 		logger:       logger,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.waitGroup.Add(1)
+
 	guid := r.FormValue(":guid")
 
 	var request executor_api.ContainerRunRequest
@@ -75,13 +84,21 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result string
 	steps := h.transformer.StepsFor(models.LogConfig{}, request.Actions, container, &result)
 
-	go performRunActions(request, sequence.New(steps), &result, h.logger)
+	go h.performRunActions(request, sequence.New(steps), &result)
 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func performRunActions(request executor_api.ContainerRunRequest, seq sequence.Step, result *string, logger *gosteno.Logger) {
-	err := seq.Perform()
+func (h *handler) performRunActions(request executor_api.ContainerRunRequest, seq sequence.Step, result *string) {
+	defer h.waitGroup.Done()
+
+	seqErr := h.performSequence(seq)
+
+	if seqErr != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": seqErr.Error(),
+		}, "executor.perform-sequence.failed")
+	}
 
 	if request.CompleteURL == "" {
 		return
@@ -89,16 +106,16 @@ func performRunActions(request executor_api.ContainerRunRequest, seq sequence.St
 
 	var payload executor_api.ContainerRunResult
 
-	if err != nil {
+	if seqErr != nil {
 		payload.Failed = true
-		payload.FailureReason = err.Error()
+		payload.FailureReason = seqErr.Error()
 	}
 	payload.Metadata = request.Metadata
 	payload.Result = *result
 
 	resultPayload, err := json.Marshal(payload)
 	if err != nil {
-		logger.Errord(map[string]interface{}{
+		h.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.run-action-callback.json-marshal-failed")
 		return
@@ -114,9 +131,27 @@ func performRunActions(request executor_api.ContainerRunRequest, seq sequence.St
 		time.Sleep(time.Duration(i) * 500 * time.Millisecond)
 	}
 
-	logger.Errord(map[string]interface{}{
+	h.logger.Errord(map[string]interface{}{
 		"error": err.Error(),
 	}, "executor.run-action-callback.callback-failed")
+}
+
+func (h *handler) performSequence(seq sequence.Step) error {
+	doneChan := make(chan error)
+
+	go func() {
+		doneChan <- seq.Perform()
+	}()
+
+	select {
+	case err := <-doneChan:
+		return err
+
+	case <-h.cancelChan:
+		h.logger.Info("executor.perform-action.cancelled")
+		seq.Cancel()
+		return <-doneChan
+	}
 }
 
 func performCompleteCallback(completeURL string, payload []byte) error {

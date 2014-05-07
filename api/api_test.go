@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/api"
@@ -68,6 +69,7 @@ var _ = Describe("Api", func() {
 			WardenClient:          wardenClient,
 			ContainerOwnerName:    "some-container-owner-name",
 			ContainerMaxCPUShares: 1024,
+			WaitGroup:             &sync.WaitGroup{},
 			Logger:                logger,
 		})
 

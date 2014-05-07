@@ -53,12 +53,12 @@ var _ = Describe("Executor", func() {
 
 		reqGen = router.NewRequestGenerator("http://"+executorURL, executor_api.Routes)
 
-		executor = New(executorURL, 100, 1024, 1024, wardenClient, trans, time.Second, logger)
+		executor = New(executorURL, "executor", 100, 1024, 1024, wardenClient, trans, time.Second, logger)
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor2 := New(executorURL, 100, 1024, 1024, wardenClient, trans, time.Second, logger)
+			executor2 := New(executorURL, "executor2", 100, 1024, 1024, wardenClient, trans, time.Second, logger)
 
 			Ω(executor.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())

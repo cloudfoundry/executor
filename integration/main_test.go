@@ -1,8 +1,12 @@
 package integration_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"syscall"
 	"testing"
 	"time"
@@ -11,13 +15,15 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/tedsuo/router"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
@@ -31,6 +37,7 @@ var executorPath string
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var gardenServer *GardenServer.WardenServer
 var runner *executor_runner.ExecutorRunner
+var reqGen *router.RequestGenerator
 
 var _ = BeforeSuite(func() {
 	var err error
@@ -70,6 +77,9 @@ var _ = Describe("Main", func() {
 
 		etcdPort := 5001 + GinkgoParallelNode()
 		wardenPort := 9001 + GinkgoParallelNode()
+		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
+
+		reqGen = router.NewRequestGenerator("http://"+executorAddr, executor_api.Routes)
 
 		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
 		etcdRunner.Start()
@@ -88,6 +98,7 @@ var _ = Describe("Main", func() {
 
 		runner = executor_runner.New(
 			executorPath,
+			executorAddr,
 			"tcp",
 			wardenAddr,
 			etcdCluster,
@@ -102,10 +113,14 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	desireTask := func(duration time.Duration) {
+	runTask := func(duration time.Duration) {
 		exitStatus := uint32(0)
 
-		fakeContainer := fake_backend.NewFakeContainer(warden.ContainerSpec{})
+		fakeContainer := fake_backend.NewFakeContainer(warden.ContainerSpec{
+			Properties: warden.Properties{
+				"owner": runner.Config.ContainerOwnerName,
+			},
+		})
 		fakeContainer.StreamDelay = duration
 		fakeContainer.StreamedProcessChunks = []warden.ProcessStream{
 			{ExitStatus: &exitStatus},
@@ -113,8 +128,22 @@ var _ = Describe("Main", func() {
 
 		fakeBackend.CreateResult = fakeContainer
 
-		err := bbs.DesireTask(factories.BuildTaskWithRunAction("the-stack", 1024, 1024, "ls"))
-		Ω(err).ShouldNot(HaveOccurred())
+		req := executor_api.ContainerAllocationRequest{
+			MemoryMB: 1024,
+			DiskMB:   1024,
+		}
+		container := executor_api.Container{}
+		PerformRequest(reqGen, executor_api.AllocateContainer, nil, req, &container)
+
+		params := router.Params{"guid": container.Guid}
+		PerformRequest(reqGen, executor_api.InitializeContainer, params, nil, nil)
+
+		actions := executor_api.ContainerRunRequest{
+			Actions: []models.ExecutorAction{
+				{Action: models.RunAction{Script: "ls"}},
+			},
+		}
+		PerformRequest(reqGen, executor_api.RunActions, params, actions, nil)
 	}
 
 	Describe("starting up", func() {
@@ -167,38 +196,33 @@ var _ = Describe("Main", func() {
 			runner.Start(executor_runner.Config{
 				HeartbeatInterval: 3 * time.Second,
 				Stack:             "the-stack",
-				DrainTimeout:      1 * time.Second,
+				DrainTimeout:      drainTimeout,
 			})
 		})
 
 		Describe("when the executor fails to maintain its presence", func() {
 			It("stops all running tasks", func() {
-				desireTask(time.Hour)
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}).Should(HaveLen(1))
+				runTask(time.Hour)
+				Eventually(pollContainers(fakeBackend), 10).Should(HaveLen(1))
 
 				// delete the executor's key (and everything else lol)
 				etcdRunner.Reset()
 
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}, 5.0).Should(BeEmpty())
+				Eventually(pollContainers(fakeBackend), 5.0).Should(BeEmpty())
 			})
 		})
 
 		Describe("when the executor receives the TERM signal", func() {
 			It("stops all running tasks", func() {
-				desireTask(time.Hour)
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}).Should(HaveLen(1))
+				runTask(time.Hour)
+				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 				runner.Session.Terminate()
 
 				Eventually(func() ([]warden.Container, error) {
 					return fakeBackend.Containers(nil)
 				}).Should(BeEmpty())
+
 			})
 
 			It("exits successfully", func() {
@@ -209,15 +233,11 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the INT signal", func() {
 			It("stops all running tasks", func() {
-				desireTask(time.Hour)
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}).Should(HaveLen(1))
+				runTask(time.Hour)
+				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 				runner.Session.Interrupt()
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}).Should(BeEmpty())
+				Eventually(pollContainers(fakeBackend)).Should(BeEmpty())
 			})
 
 			It("exits successfully", func() {
@@ -233,17 +253,21 @@ var _ = Describe("Main", func() {
 			}
 
 			Context("when there are tasks running", func() {
-				It("stops accepting new tasks", func() {
+				It("stops accepting requests", func() {
 					sendDrainSignal()
 
-					desireTask(time.Hour)
-					Consistently(bbs.GetAllPendingTasks, 2).Should(HaveLen(1))
+					body := MarshalledPayload(executor_api.ContainerAllocationRequest{})
+					req, err := reqGen.RequestForHandler(executor_api.AllocateContainer, nil, body)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = http.DefaultClient.Do(req)
+					Ω(err).Should(HaveOccurred())
 				})
 
 				Context("and USR1 is received again", func() {
 					It("does not die", func() {
-						desireTask(time.Hour)
-						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
+						runTask(time.Hour)
+						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						runner.Session.Signal(syscall.SIGUSR1)
 						Eventually(runner.Session, time.Second).Should(gbytes.Say("executor.draining"))
@@ -255,8 +279,8 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks complete before the drain timeout", func() {
 					It("exits successfully", func() {
-						desireTask(1 * time.Second)
-						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
+						runTask(1 * time.Second)
+						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						sendDrainSignal()
 
@@ -266,18 +290,14 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks do not complete before the drain timeout", func() {
 					BeforeEach(func() {
-						desireTask(time.Hour)
-						Eventually(bbs.GetAllStartingTasks).Should(HaveLen(1))
+						runTask(time.Hour)
+						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 					})
 
 					It("cancels all running tasks", func() {
-						Ω(fakeBackend.Containers(nil)).Should(HaveLen(1))
-
 						sendDrainSignal()
 
-						Eventually(func() ([]warden.Container, error) {
-							return fakeBackend.Containers(nil)
-						}, drainTimeout+aBit).Should(BeEmpty())
+						Eventually(pollContainers(fakeBackend), drainTimeout+aBit).Should(BeEmpty())
 					})
 
 					It("exits successfully", func() {
@@ -296,3 +316,34 @@ var _ = Describe("Main", func() {
 		})
 	})
 })
+
+func pollContainers(fakeBackend *fake_backend.FakeBackend) func() ([]warden.Container, error) {
+	return func() ([]warden.Container, error) {
+		return fakeBackend.Containers(nil)
+	}
+}
+
+func PerformRequest(reqGen *router.RequestGenerator, handler string, params router.Params, reqBody interface{}, resBody interface{}) {
+	body := MarshalledPayload(reqBody)
+
+	req, err := reqGen.RequestForHandler(handler, params, body)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	client := &http.Client{
+		Transport: &http.Transport{},
+	}
+
+	resp, err := client.Do(req)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	Ω(resp.StatusCode).Should(BeNumerically("<", 400))
+
+	json.NewDecoder(resp.Body).Decode(resBody)
+}
+
+func MarshalledPayload(payload interface{}) io.Reader {
+	reqBody, err := json.Marshal(payload)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	return bytes.NewBuffer(reqBody)
+}

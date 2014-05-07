@@ -15,6 +15,7 @@ import (
 
 type ExecutorRunner struct {
 	executorBin   string
+	executorAddr  string
 	wardenNetwork string
 	wardenAddr    string
 	etcdCluster   []string
@@ -52,9 +53,10 @@ var defaultConfig = Config{
 	DrainTimeout:          5 * time.Second,
 }
 
-func New(executorBin, wardenNetwork, wardenAddr string, etcdCluster []string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
+func New(executorBin, executorAddr, wardenNetwork, wardenAddr string, etcdCluster []string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
 	return &ExecutorRunner{
 		executorBin:   executorBin,
+		executorAddr:  executorAddr,
 		wardenNetwork: wardenNetwork,
 		wardenAddr:    wardenAddr,
 		etcdCluster:   etcdCluster,
@@ -77,6 +79,7 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 	executorSession, err := gexec.Start(
 		exec.Command(
 			r.executorBin,
+			"-executorAddress", r.executorAddr,
 			"-wardenNetwork", r.wardenNetwork,
 			"-wardenAddr", r.wardenAddr,
 			"-etcdCluster", strings.Join(r.etcdCluster, ","),

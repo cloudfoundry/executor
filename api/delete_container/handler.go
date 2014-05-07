@@ -2,6 +2,7 @@ package delete_container
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -11,18 +12,23 @@ import (
 type handler struct {
 	wardenClient warden.Client
 	registry     registry.Registry
+	waitGroup    *sync.WaitGroup
 	logger       *gosteno.Logger
 }
 
-func New(wardenClient warden.Client, registry registry.Registry, logger *gosteno.Logger) http.Handler {
+func New(wardenClient warden.Client, registry registry.Registry, waitGroup *sync.WaitGroup, logger *gosteno.Logger) http.Handler {
 	return &handler{
 		wardenClient: wardenClient,
 		registry:     registry,
+		waitGroup:    waitGroup,
 		logger:       logger,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.waitGroup.Add(1)
+	defer h.waitGroup.Done()
+
 	guid := r.FormValue(":guid")
 
 	container, err := h.registry.FindByGuid(guid)

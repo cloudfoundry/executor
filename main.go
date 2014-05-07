@@ -229,6 +229,7 @@ func main() {
 
 	executor := executor.New(
 		*executorAddress,
+		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		memoryMB,
 		diskMB,

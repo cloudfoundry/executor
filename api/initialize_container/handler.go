@@ -2,11 +2,13 @@ package initialize_container
 
 import (
 	"encoding/json"
+	"net/http"
+	"sync"
+
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
-	"net/http"
 )
 
 type handler struct {
@@ -14,6 +16,7 @@ type handler struct {
 	containerMaxCPUShares uint64
 	wardenClient          warden.Client
 	registry              registry.Registry
+	waitGroup             *sync.WaitGroup
 	logger                *gosteno.Logger
 }
 
@@ -22,6 +25,7 @@ func New(
 	containerMaxCPUShares uint64,
 	wardenClient warden.Client,
 	reg registry.Registry,
+	waitGroup *sync.WaitGroup,
 	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{
@@ -29,11 +33,15 @@ func New(
 		containerMaxCPUShares: containerMaxCPUShares,
 		wardenClient:          wardenClient,
 		registry:              reg,
+		waitGroup:             waitGroup,
 		logger:                logger,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.waitGroup.Add(1)
+	defer h.waitGroup.Done()
+
 	guid := r.FormValue(":guid")
 
 	reg, err := h.registry.FindByGuid(guid)

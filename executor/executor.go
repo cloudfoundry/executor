@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,6 +25,7 @@ const ServerCloseErrMsg = "use of closed network connection"
 type Executor struct {
 	id                    string
 	apiURL                string
+	containerOwnerName    string
 	containerMaxCPUShares uint64
 	registry              registry.Registry
 	wardenClient          warden.Client
@@ -30,6 +33,9 @@ type Executor struct {
 	drainTimeout          time.Duration
 	logger                *steno.Logger
 	listener              net.Listener
+	waitGroup             *sync.WaitGroup
+	cancelChan            chan struct{}
+	stoppedChan           chan error
 	serverErrChan         chan error
 }
 
@@ -37,6 +43,7 @@ var ErrDrainTimeout = errors.New("tasks did not complete within timeout")
 
 func New(
 	apiURL string,
+	containerOwnerName string,
 	containerMaxCPUShares uint64,
 	maxMemoryMB int,
 	maxDiskMB int,
@@ -58,18 +65,106 @@ func New(
 	return &Executor{
 		id:                    executorID,
 		apiURL:                apiURL,
+		containerOwnerName:    containerOwnerName,
 		containerMaxCPUShares: containerMaxCPUShares,
 		registry:              reg,
 		wardenClient:          wardenClient,
 		transformer:           transformer,
 		drainTimeout:          drainTimeout,
 		logger:                logger,
+		waitGroup:             &sync.WaitGroup{},
+		cancelChan:            make(chan struct{}),
+		stoppedChan:           make(chan error, 1),
 		serverErrChan:         make(chan error),
 	}
 }
 
 func (e *Executor) ID() string {
 	return e.id
+}
+
+func (e *Executor) Run(sigChan chan os.Signal, readyChan chan struct{}) error {
+	err := e.init()
+	if err != nil {
+		return err
+	}
+
+	if readyChan != nil {
+		close(readyChan)
+	}
+
+	stopping := false
+
+	for {
+		select {
+		case err := <-e.serverErrChan:
+			if err != nil && !strings.Contains(err.Error(), ServerCloseErrMsg) {
+				e.logger.Errord(map[string]interface{}{
+					"error": err.Error(),
+				}, "executor.server.failed")
+				return err
+			}
+			e.logger.Info("executor.server.stopped")
+
+		case signal := <-sigChan:
+			if stopping {
+				e.logger.Info("executor.signal.ignored")
+				break
+			}
+
+			switch signal {
+			case syscall.SIGINT, syscall.SIGTERM:
+				e.logger.Info("executor.stopping")
+				stopping = true
+				e.drain(0)
+			case syscall.SIGUSR1:
+				e.logger.Info("executor.draining")
+				stopping = true
+				e.drain(e.drainTimeout)
+			}
+
+		case err := <-e.stoppedChan:
+			e.logger.Info("executor.stopped")
+			return err
+		}
+	}
+}
+
+func (e *Executor) init() error {
+	err := e.destroyContainers()
+	if err != nil {
+		return err
+	}
+
+	router, err := api.New(&api.Config{
+		Registry:              e.registry,
+		WardenClient:          e.wardenClient,
+		ContainerOwnerName:    fmt.Sprintf("executor-%s", e.ID()),
+		ContainerMaxCPUShares: e.containerMaxCPUShares,
+		Transformer:           e.transformer,
+		WaitGroup:             e.waitGroup,
+		Cancel:                e.cancelChan,
+		Logger:                e.logger,
+	})
+	if err != nil {
+		return err
+	}
+
+	return e.startServer(router)
+}
+
+func (e *Executor) drain(drainTimeout time.Duration) {
+	e.stopServer()
+
+	time.AfterFunc(drainTimeout, func() {
+		close(e.cancelChan)
+	})
+
+	go func() {
+		e.waitGroup.Wait()
+		e.destroyContainers()
+		e.stoppedChan <- nil
+	}()
 }
 
 func (e *Executor) startServer(router http.Handler) (err error) {
@@ -90,52 +185,26 @@ func (e *Executor) stopServer() {
 	}
 }
 
-func (e *Executor) Run(sigChan chan os.Signal, readyChan chan struct{}) error {
-	router, err := api.New(&api.Config{
-		Registry:              e.registry,
-		WardenClient:          e.wardenClient,
-		ContainerOwnerName:    fmt.Sprintf("executor-%s", e.ID()),
-		ContainerMaxCPUShares: e.containerMaxCPUShares,
-		Transformer:           e.transformer,
-		Logger:                e.logger,
+func (e *Executor) destroyContainers() error {
+	containers, err := e.wardenClient.Containers(warden.Properties{
+		"owner": e.containerOwnerName,
 	})
 	if err != nil {
 		return err
 	}
 
-	err = e.startServer(router)
-	if err != nil {
-		return err
-	}
-
-	if readyChan != nil {
-		close(readyChan)
-	}
-
-	for {
-		select {
-		case err := <-e.serverErrChan:
-			if err != nil && err.Error() != ServerCloseErrMsg {
-				e.logger.Errord(map[string]interface{}{
-					"error": err.Error(),
-				}, "executor.server.failed")
-			}
+	for _, container := range containers {
+		e.logger.Infod(
+			map[string]interface{}{
+				"handle": container.Handle(),
+			},
+			"executor.destroy-container",
+		)
+		err := e.wardenClient.Destroy(container.Handle())
+		if err != nil {
 			return err
-
-		case signal := <-sigChan:
-			switch signal {
-			case syscall.SIGINT, syscall.SIGTERM:
-				e.logger.Info("executor.stoping")
-				e.stopServer()
-				e.logger.Info("executor.stopped")
-				return nil
-
-			case syscall.SIGUSR1:
-				e.logger.Info("executor.draining")
-				e.stopServer()
-				e.logger.Info("executor.drained")
-				return nil
-			}
 		}
 	}
+
+	return nil
 }
