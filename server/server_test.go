@@ -256,6 +256,51 @@ var _ = Describe("Api", func() {
 						Ω(limitedCPU[0].LimitInShares).Should(Equal(uint64(512)))
 					})
 
+					Context("when a zero-value memory limit is specified", func() {
+						BeforeEach(func() {
+							reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
+								MemoryMB:   0,
+								DiskMB:     512,
+								CpuPercent: 0.5,
+							})
+						})
+
+						It("does not apply it", func() {
+							limitedMemory := wardenClient.Connection.LimitedMemory("some-handle")
+							Ω(limitedMemory).Should(BeEmpty())
+						})
+					})
+
+					Context("when a zero-value disk limit is specified", func() {
+						BeforeEach(func() {
+							reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
+								MemoryMB:   64,
+								DiskMB:     0,
+								CpuPercent: 0.5,
+							})
+						})
+
+						It("does not apply it", func() {
+							limitedDisk := wardenClient.Connection.LimitedDisk("some-handle")
+							Ω(limitedDisk).Should(BeEmpty())
+						})
+					})
+
+					Context("when a zero-value CPU percentage is specified", func() {
+						BeforeEach(func() {
+							reserveRequestBody = MarshalledPayload(executor_api.ContainerAllocationRequest{
+								MemoryMB:   64,
+								DiskMB:     512,
+								CpuPercent: 0,
+							})
+						})
+
+						It("does not apply it", func() {
+							limitedCPU := wardenClient.Connection.LimitedCPU("some-handle")
+							Ω(limitedCPU).Should(BeEmpty())
+						})
+					})
+
 					Context("when limiting memory fails", func() {
 						disaster := errors.New("oh no!")
 

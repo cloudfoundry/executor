@@ -89,25 +89,32 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) limitContainer(reg executor_api.Container, containerClient warden.Container) error {
-	err := containerClient.LimitMemory(warden.MemoryLimits{
-		LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),
-	})
-	if err != nil {
-		return err
+	if reg.MemoryMB != 0 {
+		err := containerClient.LimitMemory(warden.MemoryLimits{
+			LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),
+		})
+		if err != nil {
+			return err
+		}
 	}
 
-	err = containerClient.LimitDisk(warden.DiskLimits{
-		ByteLimit: uint64(reg.DiskMB * 1024 * 1024),
-	})
-	if err != nil {
-		return err
+	if reg.DiskMB != 0 {
+		err := containerClient.LimitDisk(warden.DiskLimits{
+			ByteLimit: uint64(reg.DiskMB * 1024 * 1024),
+		})
+		if err != nil {
+			return err
+		}
 	}
 
-	err = containerClient.LimitCPU(warden.CPULimits{
-		LimitInShares: uint64(float64(h.containerMaxCPUShares) * reg.CpuPercent),
-	})
-	if err != nil {
-		return err
+	if reg.CpuPercent != 0 {
+		err := containerClient.LimitCPU(warden.CPULimits{
+			LimitInShares: uint64(float64(h.containerMaxCPUShares) * reg.CpuPercent),
+		})
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
