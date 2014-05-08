@@ -73,6 +73,10 @@ func (r *ExecutorRunner) Start(config ...Config) {
 }
 
 func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
+	if r.Session != nil {
+		panic("starting more than one executor!!!")
+	}
+
 	configToUse := r.generateConfig(config...)
 	executorSession, err := gexec.Start(
 		exec.Command(
@@ -103,12 +107,14 @@ func (r *ExecutorRunner) Stop() {
 	r.Config = defaultConfig
 	if r.Session != nil {
 		r.Session.Terminate().Wait(5 * time.Second)
+		r.Session = nil
 	}
 }
 
 func (r *ExecutorRunner) KillWithFire() {
 	if r.Session != nil {
 		r.Session.Kill().Wait(5 * time.Second)
+		r.Session = nil
 	}
 }
 
