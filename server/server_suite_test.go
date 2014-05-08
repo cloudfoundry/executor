@@ -1,4 +1,4 @@
-package api_test
+package server_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -9,5 +9,5 @@ import (
 
 func TestApi(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Api Suite")
+	RunSpecs(t, "Server Suite")
 }

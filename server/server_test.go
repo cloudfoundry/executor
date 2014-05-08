@@ -1,4 +1,4 @@
-package api_test
+package server_test
 
 import (
 	"bytes"
@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
+	. "github.com/cloudfoundry-incubator/executor/server"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"

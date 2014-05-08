@@ -15,8 +15,8 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/nu7hatch/gouuid"
 
-	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/executor/server"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 )
 
@@ -136,7 +136,7 @@ func (e *Executor) init() error {
 		return err
 	}
 
-	router, err := api.New(&api.Config{
+	router, err := server.New(&server.Config{
 		Registry:              e.registry,
 		WardenClient:          e.wardenClient,
 		ContainerOwnerName:    fmt.Sprintf("executor-%s", e.ID()),

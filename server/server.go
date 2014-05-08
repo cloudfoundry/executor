@@ -1,15 +1,15 @@
-package api
+package server
 
 import (
 	"net/http"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor/api/allocate_container"
-	"github.com/cloudfoundry-incubator/executor/api/delete_container"
-	"github.com/cloudfoundry-incubator/executor/api/get_container"
-	"github.com/cloudfoundry-incubator/executor/api/initialize_container"
-	"github.com/cloudfoundry-incubator/executor/api/run_actions"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
+	"github.com/cloudfoundry-incubator/executor/server/delete_container"
+	"github.com/cloudfoundry-incubator/executor/server/get_container"
+	"github.com/cloudfoundry-incubator/executor/server/initialize_container"
+	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
