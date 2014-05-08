@@ -2,7 +2,7 @@ package registry
 
 import (
 	"errors"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
+	"github.com/cloudfoundry-incubator/executor/api"
 )
 
 var ErrOutOfDisk = errors.New("out of disk capacity")
@@ -13,7 +13,7 @@ type Capacity struct {
 	DiskMB   int
 }
 
-func (c *Capacity) alloc(res executor_api.Container) error {
+func (c *Capacity) alloc(res api.Container) error {
 	if c.MemoryMB-res.MemoryMB < 0 {
 		return ErrOutOfMemory
 	}
@@ -28,7 +28,7 @@ func (c *Capacity) alloc(res executor_api.Container) error {
 	return nil
 }
 
-func (c *Capacity) free(res executor_api.Container) {
+func (c *Capacity) free(res api.Container) {
 	c.MemoryMB += res.MemoryMB
 	c.DiskMB += res.DiskMB
 }

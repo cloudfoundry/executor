@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -28,7 +28,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.waitGroup.Add(1)
 	defer h.waitGroup.Done()
 
-	req := executor_api.ContainerAllocationRequest{}
+	req := api.ContainerAllocationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{

@@ -15,12 +15,12 @@ import (
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 	"github.com/tedsuo/router"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
@@ -51,7 +51,7 @@ var _ = Describe("Executor", func() {
 		)
 		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
 
-		reqGen = router.NewRequestGenerator("http://"+executorURL, executor_api.Routes)
+		reqGen = router.NewRequestGenerator("http://"+executorURL, api.Routes)
 
 		executor = New(executorURL, "executor", 100, 1024, 1024, wardenClient, trans, time.Second, logger)
 	})
@@ -88,13 +88,13 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("spins up an API server", func() {
-				payload, err := json.Marshal(executor_api.ContainerAllocationRequest{
+				payload, err := json.Marshal(api.ContainerAllocationRequest{
 					MemoryMB: 32,
 					DiskMB:   512,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				req, err := reqGen.RequestForHandler(executor_api.AllocateContainer, nil, bytes.NewBuffer(payload))
+				req, err := reqGen.RequestForHandler(api.AllocateContainer, nil, bytes.NewBuffer(payload))
 				Ω(err).ShouldNot(HaveOccurred())
 
 				res, err := http.DefaultClient.Do(req)
@@ -116,7 +116,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("shuts down the API server", func() {
-				req, err := reqGen.RequestForHandler(executor_api.GetContainer, router.Params{"guid": "123"}, nil)
+				req, err := reqGen.RequestForHandler(api.GetContainer, router.Params{"guid": "123"}, nil)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				_, err = http.DefaultClient.Do(req)

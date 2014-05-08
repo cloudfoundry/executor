@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/tedsuo/router"
 	"io/ioutil"
 	"net/http"
@@ -41,7 +41,7 @@ type ContainerResponse struct {
 func New(httpClient *http.Client, baseUrl string) Client {
 	return &client{
 		httpClient: httpClient,
-		reqGen:     router.NewRequestGenerator(baseUrl, executor_api.Routes),
+		reqGen:     router.NewRequestGenerator(baseUrl, api.Routes),
 	}
 }
 
@@ -53,7 +53,7 @@ type client struct {
 func (c client) AllocateContainer(request ContainerRequest) (ContainerResponse, error) {
 	containerResponse := ContainerResponse{}
 
-	response, err := c.makeRequest(executor_api.AllocateContainer, router.Params{}, executor_api.ContainerAllocationRequest{
+	response, err := c.makeRequest(api.AllocateContainer, router.Params{}, api.ContainerAllocationRequest{
 		MemoryMB:   request.MemoryMB,
 		DiskMB:     request.DiskMB,
 		CpuPercent: request.CpuPercent,
@@ -75,7 +75,7 @@ func (c client) AllocateContainer(request ContainerRequest) (ContainerResponse, 
 
 	response.Body.Close()
 
-	containerJson := executor_api.Container{}
+	containerJson := api.Container{}
 	err = json.Unmarshal(responseBody, &containerJson)
 	if err != nil {
 		return containerResponse, err
@@ -89,12 +89,12 @@ func (c client) AllocateContainer(request ContainerRequest) (ContainerResponse, 
 }
 
 func (c client) InitializeContainer(allocationGuid string) error {
-	_, err := c.makeRequest(executor_api.InitializeContainer, router.Params{"guid": allocationGuid}, nil)
+	_, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, nil)
 	return err
 }
 
 func (c client) Run(allocationGuid string, request RunRequest) error {
-	_, err := c.makeRequest(executor_api.RunActions, router.Params{"guid": allocationGuid}, &executor_api.ContainerRunRequest{
+	_, err := c.makeRequest(api.RunActions, router.Params{"guid": allocationGuid}, &api.ContainerRunRequest{
 		Actions:     request.Actions,
 		Metadata:    []byte(request.Metadata),
 		CompleteURL: request.CompletionURL,
@@ -104,7 +104,7 @@ func (c client) Run(allocationGuid string, request RunRequest) error {
 }
 
 func (c client) DeleteContainer(allocationGuid string) error {
-	_, err := c.makeRequest(executor_api.DeleteContainer, router.Params{"guid": allocationGuid}, nil)
+	_, err := c.makeRequest(api.DeleteContainer, router.Params{"guid": allocationGuid}, nil)
 	return err
 }
 

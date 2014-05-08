@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -51,7 +51,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	guid := r.FormValue(":guid")
 
-	var request executor_api.ContainerRunRequest
+	var request api.ContainerRunRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
@@ -88,7 +88,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *handler) performRunActions(request executor_api.ContainerRunRequest, seq sequence.Step, result *string) {
+func (h *handler) performRunActions(request api.ContainerRunRequest, seq sequence.Step, result *string) {
 	defer h.waitGroup.Done()
 
 	seqErr := h.performSequence(seq)
@@ -103,7 +103,7 @@ func (h *handler) performRunActions(request executor_api.ContainerRunRequest, se
 		return
 	}
 
-	var payload executor_api.ContainerRunResult
+	var payload api.ContainerRunResult
 
 	if seqErr != nil {
 		payload.Failed = true

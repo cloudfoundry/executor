@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
@@ -12,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/tedsuo/router"
 )
@@ -30,11 +30,11 @@ type Config struct {
 
 func New(c *Config) (http.Handler, error) {
 	handlers := map[string]http.Handler{
-		executor_api.AllocateContainer: allocate_container.New(c.Registry, c.WaitGroup, c.Logger),
+		api.AllocateContainer: allocate_container.New(c.Registry, c.WaitGroup, c.Logger),
 
-		executor_api.GetContainer: get_container.New(c.Registry, c.WaitGroup, c.Logger),
+		api.GetContainer: get_container.New(c.Registry, c.WaitGroup, c.Logger),
 
-		executor_api.InitializeContainer: initialize_container.New(
+		api.InitializeContainer: initialize_container.New(
 			c.ContainerOwnerName,
 			c.ContainerMaxCPUShares,
 			c.WardenClient,
@@ -43,7 +43,7 @@ func New(c *Config) (http.Handler, error) {
 			c.Logger,
 		),
 
-		executor_api.RunActions: run_actions.New(
+		api.RunActions: run_actions.New(
 			c.WardenClient,
 			c.Registry,
 			c.Transformer,
@@ -51,8 +51,8 @@ func New(c *Config) (http.Handler, error) {
 			c.Cancel,
 			c.Logger),
 
-		executor_api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
+		api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
 	}
 
-	return router.NewRouter(executor_api.Routes, handlers)
+	return router.NewRouter(api.Routes, handlers)
 }

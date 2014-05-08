@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -88,7 +88,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reg)
 }
 
-func (h *handler) limitContainer(reg executor_api.Container, containerClient warden.Container) error {
+func (h *handler) limitContainer(reg api.Container, containerClient warden.Container) error {
 	if reg.MemoryMB != 0 {
 		err := containerClient.LimitMemory(warden.MemoryLimits{
 			LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),

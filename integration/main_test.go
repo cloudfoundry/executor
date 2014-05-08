@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry-incubator/runtime-schema/models/executor_api"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
@@ -79,7 +79,7 @@ var _ = Describe("Main", func() {
 		wardenPort := 9001 + GinkgoParallelNode()
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
-		reqGen = router.NewRequestGenerator("http://"+executorAddr, executor_api.Routes)
+		reqGen = router.NewRequestGenerator("http://"+executorAddr, api.Routes)
 
 		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
 		etcdRunner.Start()
@@ -128,22 +128,22 @@ var _ = Describe("Main", func() {
 
 		fakeBackend.CreateResult = fakeContainer
 
-		req := executor_api.ContainerAllocationRequest{
+		req := api.ContainerAllocationRequest{
 			MemoryMB: 1024,
 			DiskMB:   1024,
 		}
-		container := executor_api.Container{}
-		PerformRequest(reqGen, executor_api.AllocateContainer, nil, req, &container)
+		container := api.Container{}
+		PerformRequest(reqGen, api.AllocateContainer, nil, req, &container)
 
 		params := router.Params{"guid": container.Guid}
-		PerformRequest(reqGen, executor_api.InitializeContainer, params, nil, nil)
+		PerformRequest(reqGen, api.InitializeContainer, params, nil, nil)
 
-		actions := executor_api.ContainerRunRequest{
+		actions := api.ContainerRunRequest{
 			Actions: []models.ExecutorAction{
 				{Action: models.RunAction{Script: "ls"}},
 			},
 		}
-		PerformRequest(reqGen, executor_api.RunActions, params, actions, nil)
+		PerformRequest(reqGen, api.RunActions, params, actions, nil)
 	}
 
 	Describe("starting up", func() {
@@ -255,8 +255,8 @@ var _ = Describe("Main", func() {
 				It("stops accepting requests", func() {
 					sendDrainSignal()
 
-					body := MarshalledPayload(executor_api.ContainerAllocationRequest{})
-					req, err := reqGen.RequestForHandler(executor_api.AllocateContainer, nil, body)
+					body := MarshalledPayload(api.ContainerAllocationRequest{})
+					req, err := reqGen.RequestForHandler(api.AllocateContainer, nil, body)
 					Ω(err).ShouldNot(HaveOccurred())
 
 					_, err = http.DefaultClient.Do(req)
