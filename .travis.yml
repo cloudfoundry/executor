@@ -3,6 +3,4 @@ language: go
 go:
   - 1.2
 
-install: []
-
 script: scripts/test
