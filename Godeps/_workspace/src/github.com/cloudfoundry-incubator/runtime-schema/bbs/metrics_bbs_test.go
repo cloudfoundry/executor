@@ -18,7 +18,7 @@ var _ = Context("Metrics BBS", func() {
 
 	BeforeEach(func() {
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(store, timeProvider)
+		bbs = New(etcdClient, timeProvider)
 	})
 
 	Describe("GetServiceRegistrations", func() {
@@ -43,7 +43,7 @@ var _ = Context("Metrics BBS", func() {
 						Value: []byte("http://example.com/file-server"),
 					},
 				}
-				err := store.SetMulti(serviceNodes)
+				err := etcdClient.SetMulti(serviceNodes)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 

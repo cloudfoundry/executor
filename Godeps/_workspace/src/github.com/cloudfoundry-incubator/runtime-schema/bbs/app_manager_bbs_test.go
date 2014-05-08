@@ -1,9 +1,9 @@
 package bbs_test
 
 import (
+	"time"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"time"
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -16,7 +16,7 @@ var _ = Describe("App Manager BBS", func() {
 
 	BeforeEach(func() {
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(store, timeProvider)
+		bbs = New(etcdClient, timeProvider)
 	})
 
 	Describe("DesireTransitionalLongRunningProcess", func() {
@@ -47,7 +47,7 @@ var _ = Describe("App Manager BBS", func() {
 			err := bbs.DesireTransitionalLongRunningProcess(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			node, err := store.Get("/v1/transitional_lrp/some-guid")
+			node, err := etcdClient.Get("/v1/transitional_lrp/some-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			lrp.State = models.TransitionalLRPStateDesired

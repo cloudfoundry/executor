@@ -13,13 +13,15 @@ import (
 
 var _ = Describe("Task BBS", func() {
 	var bbs *BBS
-	var task *models.Task
+	var task models.Task
 	var timeProvider *faketimeprovider.FakeTimeProvider
+	var err error
 
 	BeforeEach(func() {
+		err = nil
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(store, timeProvider)
-		task = &models.Task{
+		bbs = New(etcdClient, timeProvider)
+		task = models.Task{
 			Guid:      "some-guid",
 			CreatedAt: time.Now().UnixNano(),
 		}
@@ -27,7 +29,7 @@ var _ = Describe("Task BBS", func() {
 
 	Describe("GetAllPendingTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireTask(task)
+			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -41,10 +43,10 @@ var _ = Describe("Task BBS", func() {
 
 	Describe("GetAllClaimedTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireTask(task)
+			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimTask(task, "executor-ID")
+			task, err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -58,13 +60,13 @@ var _ = Describe("Task BBS", func() {
 
 	Describe("GetAllStartingTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireTask(task)
+			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimTask(task, "executor-ID")
+			task, err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartTask(task, "container-handle")
+			task, err = bbs.StartTask(task, "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -78,16 +80,16 @@ var _ = Describe("Task BBS", func() {
 
 	Describe("GetAllCompletedTasks", func() {
 		BeforeEach(func() {
-			err := bbs.DesireTask(task)
+			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimTask(task, "executor-ID")
+			task, err = bbs.ClaimTask(task, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartTask(task, "container-handle")
+			task, err = bbs.StartTask(task, "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.CompleteTask(task, true, "a reason", "a result")
+			task, err = bbs.CompleteTask(task, true, "a reason", "a result")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 

@@ -9,15 +9,15 @@ import (
 
 type FakeStagerBBS struct {
 	watchingForCompleted chan bool
-	completedTaskChan    chan *models.Task
+	completedTaskChan    chan models.Task
 	completedTaskErrChan chan error
 
 	whenSettingResolving func() error
 	resolvingTaskInput   struct {
-		TaskToResolve *models.Task
+		TaskToResolve models.Task
 	}
 
-	resolvedTask   *models.Task
+	resolvedTask   models.Task
 	resolveTaskErr error
 
 	sync.RWMutex
@@ -29,8 +29,8 @@ func NewFakeStagerBBS() *FakeStagerBBS {
 	}
 }
 
-func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan *models.Task, chan<- bool, <-chan error) {
-	completedChan := make(chan *models.Task)
+func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error) {
+	completedChan := make(chan models.Task)
 	completedErrChan := make(chan error)
 
 	fakeBBS.Lock()
@@ -43,7 +43,7 @@ func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan *models.Task, chan
 	return completedChan, nil, completedErrChan
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvingTask(task *models.Task) error {
+func (fakeBBS *FakeStagerBBS) ResolvingTask(task models.Task) (models.Task, error) {
 	fakeBBS.RLock()
 	callback := fakeBBS.whenSettingResolving
 	fakeBBS.RUnlock()
@@ -51,7 +51,7 @@ func (fakeBBS *FakeStagerBBS) ResolvingTask(task *models.Task) error {
 	if callback != nil {
 		err := callback()
 		if err != nil {
-			return err
+			return task, err
 		}
 	}
 
@@ -60,31 +60,31 @@ func (fakeBBS *FakeStagerBBS) ResolvingTask(task *models.Task) error {
 
 	fakeBBS.resolvingTaskInput.TaskToResolve = task
 
-	return nil
+	return task, nil
 }
 
-func (fakeBBS *FakeStagerBBS) DesireTask(task *models.Task) error {
+func (fakeBBS *FakeStagerBBS) DesireTask(task models.Task) (models.Task, error) {
 	panic("implement me!")
 }
 
-func (fakeBBS *FakeStagerBBS) ResolveTask(task *models.Task) error {
+func (fakeBBS *FakeStagerBBS) ResolveTask(task models.Task) (models.Task, error) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
 	if fakeBBS.resolveTaskErr != nil {
-		return fakeBBS.resolveTaskErr
+		return task, fakeBBS.resolveTaskErr
 	}
 
 	fakeBBS.resolvedTask = task
 
-	return nil
+	return task, nil
 }
 
 func (fakeBBS *FakeStagerBBS) GetAvailableFileServer() (string, error) {
 	panic("implement me!")
 }
 
-func (fakeBBS *FakeStagerBBS) SendCompletedTask(task *models.Task) {
+func (fakeBBS *FakeStagerBBS) SendCompletedTask(task models.Task) {
 	fakeBBS.completedTaskChan <- task
 }
 
@@ -106,14 +106,14 @@ func (fakeBBS *FakeStagerBBS) WhenSettingResolving(callback func() error) {
 	fakeBBS.whenSettingResolving = callback
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvingTaskInput() *models.Task {
+func (fakeBBS *FakeStagerBBS) ResolvingTaskInput() models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
 	return fakeBBS.resolvingTaskInput.TaskToResolve
 }
 
-func (fakeBBS *FakeStagerBBS) ResolvedTask() *models.Task {
+func (fakeBBS *FakeStagerBBS) ResolvedTask() models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 

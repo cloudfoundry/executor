@@ -18,12 +18,12 @@ type ExecutorBBS interface {
 		executorID string,
 	) (presence Presence, disappeared <-chan bool, err error)
 
-	WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error)
+	WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error)
 	WatchForDesiredTransitionalLongRunningProcess() (<-chan models.TransitionalLongRunningProcess, chan<- bool, <-chan error)
 
-	ClaimTask(task *models.Task, executorID string) error
-	StartTask(task *models.Task, containerHandle string) error
-	CompleteTask(task *models.Task, failed bool, failureReason string, result string) error
+	ClaimTask(task models.Task, executorID string) (models.Task, error)
+	StartTask(task models.Task, containerHandle string) (models.Task, error)
+	CompleteTask(task models.Task, failed bool, failureReason string, result string) (models.Task, error)
 
 	StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error
 
@@ -36,17 +36,17 @@ type AppManagerBBS interface {
 }
 
 type StagerBBS interface {
-	WatchForCompletedTask() (<-chan *models.Task, chan<- bool, <-chan error)
+	WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error)
 
-	DesireTask(*models.Task) error
-	ResolvingTask(*models.Task) error
-	ResolveTask(*models.Task) error
+	DesireTask(models.Task) (models.Task, error)
+	ResolvingTask(models.Task) (models.Task, error)
+	ResolveTask(models.Task) (models.Task, error)
 
 	GetAvailableFileServer() (string, error)
 }
 
 type MetricsBBS interface {
-	GetAllTasks() ([]*models.Task, error)
+	GetAllTasks() ([]models.Task, error)
 	GetServiceRegistrations() (models.ServiceRegistrations, error)
 }
 

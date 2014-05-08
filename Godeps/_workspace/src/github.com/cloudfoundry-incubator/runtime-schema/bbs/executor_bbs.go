@@ -1,9 +1,10 @@
 package bbs
 
 import (
+	"time"
+
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
-	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
@@ -20,7 +21,7 @@ func (self *executorBBS) MaintainExecutorPresence(heartbeatInterval time.Duratio
 	return presence, status, err
 }
 
-func (self *executorBBS) WatchForDesiredTask() (<-chan *models.Task, chan<- bool, <-chan error) {
+func (self *executorBBS) WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error) {
 	return watchForTaskModificationsOnState(self.store, models.TaskStatePending)
 }
 
@@ -31,7 +32,7 @@ func (self *executorBBS) WatchForDesiredTransitionalLongRunningProcess() (<-chan
 // The executor calls this when it wants to claim a task
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the executor should assume that someone else is handling the claim and should bail
-func (self *executorBBS) ClaimTask(task *models.Task, executorID string) error {
+func (self *executorBBS) ClaimTask(task models.Task, executorID string) (models.Task, error) {
 	originalValue := task.ToJSON()
 
 	task.UpdatedAt = self.timeProvider.Time().UnixNano()
@@ -39,7 +40,7 @@ func (self *executorBBS) ClaimTask(task *models.Task, executorID string) error {
 	task.State = models.TaskStateClaimed
 	task.ExecutorID = executorID
 
-	return retryIndefinitelyOnStoreTimeout(func() error {
+	err := retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
 			Key:   taskSchemaPath(task),
 			Value: originalValue,
@@ -48,12 +49,14 @@ func (self *executorBBS) ClaimTask(task *models.Task, executorID string) error {
 			Value: task.ToJSON(),
 		})
 	})
+
+	return task, err
 }
 
 // The executor calls this when it is about to run the task in the claimed container
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the executor should assume that someone else is running and should clean up and bail
-func (self *executorBBS) StartTask(task *models.Task, containerHandle string) error {
+func (self *executorBBS) StartTask(task models.Task, containerHandle string) (models.Task, error) {
 	originalValue := task.ToJSON()
 
 	task.UpdatedAt = self.timeProvider.Time().UnixNano()
@@ -61,7 +64,7 @@ func (self *executorBBS) StartTask(task *models.Task, containerHandle string) er
 	task.State = models.TaskStateRunning
 	task.ContainerHandle = containerHandle
 
-	return retryIndefinitelyOnStoreTimeout(func() error {
+	err := retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
 			Key:   taskSchemaPath(task),
 			Value: originalValue,
@@ -70,6 +73,8 @@ func (self *executorBBS) StartTask(task *models.Task, containerHandle string) er
 			Value: task.ToJSON(),
 		})
 	})
+
+	return task, err
 }
 
 func (self *executorBBS) StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error {
@@ -93,7 +98,7 @@ func (self *executorBBS) StartTransitionalLongRunningProcess(lrp models.Transiti
 // stagerBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // This really really shouldn't fail.  If it does, blog about it and walk away. If it failed in a
 // consistent way (i.e. key already exists), there's probably a flaw in our design.
-func (self *executorBBS) CompleteTask(task *models.Task, failed bool, failureReason string, result string) error {
+func (self *executorBBS) CompleteTask(task models.Task, failed bool, failureReason string, result string) (models.Task, error) {
 	originalValue := task.ToJSON()
 
 	task.UpdatedAt = self.timeProvider.Time().UnixNano()
@@ -103,7 +108,7 @@ func (self *executorBBS) CompleteTask(task *models.Task, failed bool, failureRea
 	task.FailureReason = failureReason
 	task.Result = result
 
-	return retryIndefinitelyOnStoreTimeout(func() error {
+	err := retryIndefinitelyOnStoreTimeout(func() error {
 		return self.store.CompareAndSwap(storeadapter.StoreNode{
 			Key:   taskSchemaPath(task),
 			Value: originalValue,
@@ -112,6 +117,7 @@ func (self *executorBBS) CompleteTask(task *models.Task, failed bool, failureRea
 			Value: task.ToJSON(),
 		})
 	})
+	return task, err
 }
 
 // ConvergeTask is run by *one* executor every X seconds (doesn't really matter what X is.. pick something performant)
@@ -211,13 +217,13 @@ func (self *executorBBS) batchCompareAndSwapTasks(tasksToCAS [][]models.Task, lo
 
 	for _, taskPair := range tasksToCAS {
 		originalStoreNode := storeadapter.StoreNode{
-			Key:   taskSchemaPath(&taskPair[0]),
+			Key:   taskSchemaPath(taskPair[0]),
 			Value: taskPair[0].ToJSON(),
 		}
 
 		taskPair[1].UpdatedAt = self.timeProvider.Time().UnixNano()
 		newStoreNode := storeadapter.StoreNode{
-			Key:   taskSchemaPath(&taskPair[1]),
+			Key:   taskSchemaPath(taskPair[1]),
 			Value: taskPair[1].ToJSON(),
 		}
 

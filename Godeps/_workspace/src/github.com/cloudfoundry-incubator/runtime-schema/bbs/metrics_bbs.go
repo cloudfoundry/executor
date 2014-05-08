@@ -1,10 +1,11 @@
 package bbs
 
 import (
+	"path"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
-	"path"
 )
 
 var serviceSchemas = map[string]string{
@@ -16,23 +17,23 @@ type metricsBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func (bbs *metricsBBS) GetAllTasks() ([]*models.Task, error) {
+func (bbs *metricsBBS) GetAllTasks() ([]models.Task, error) {
 	node, err := bbs.store.ListRecursively(TaskSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
-		return []*models.Task{}, nil
+		return []models.Task{}, nil
 	}
 
 	if err != nil {
-		return []*models.Task{}, err
+		return []models.Task{}, err
 	}
 
-	tasks := []*models.Task{}
+	tasks := []models.Task{}
 	for _, node := range node.ChildNodes {
 		task, err := models.NewTaskFromJSON(node.Value)
 		if err != nil {
 			steno.NewLogger("bbs").Errorf("cannot parse task JSON for key %s: %s", node.Key, err.Error())
 		} else {
-			tasks = append(tasks, &task)
+			tasks = append(tasks, task)
 		}
 	}
 

@@ -27,7 +27,7 @@ var _ = Describe("File Server BBS", func() {
 
 	BeforeEach(func() {
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(store, timeProvider)
+		bbs = New(etcdClient, timeProvider)
 	})
 
 	Describe("MaintainFileServerPresence", func() {
@@ -48,7 +48,7 @@ var _ = Describe("File Server BBS", func() {
 		})
 
 		It("should put /file_server/FILE_SERVER_ID in the store with a TTL", func() {
-			node, err := store.Get("/v1/file_server/" + fileServerId)
+			node, err := etcdClient.Get("/v1/file_server/" + fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(node).Should(Equal(storeadapter.StoreNode{
 				Key:   "/v1/file_server/" + fileServerId,

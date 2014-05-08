@@ -1,10 +1,11 @@
 package bbs
 
 import (
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/storeadapter"
 	"path"
 	"time"
+
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/storeadapter"
 )
 
 const ClaimTTL = 10 * time.Second
@@ -13,7 +14,7 @@ const TaskSchemaRoot = SchemaRoot + "task"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 const LockSchemaRoot = SchemaRoot + "locks"
 
-func taskSchemaPath(task *models.Task) string {
+func taskSchemaPath(task models.Task) string {
 	return path.Join(TaskSchemaRoot, task.Guid)
 }
 
@@ -38,8 +39,8 @@ func retryIndefinitelyOnStoreTimeout(callback func() error) error {
 	}
 }
 
-func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state models.TaskState) (<-chan *models.Task, chan<- bool, <-chan error) {
-	tasks := make(chan *models.Task)
+func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state models.TaskState) (<-chan models.Task, chan<- bool, <-chan error) {
+	tasks := make(chan models.Task)
 	stopOuter := make(chan bool)
 	errsOuter := make(chan error)
 
@@ -67,7 +68,7 @@ func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state mod
 					}
 
 					if task.State == state {
-						tasks <- &task
+						tasks <- task
 					}
 				}
 
