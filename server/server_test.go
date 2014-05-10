@@ -48,8 +48,9 @@ var _ = Describe("Api", func() {
 		wardenClient = fake_warden_client.New()
 
 		registry = Registry.New("executor-guid-123", Registry.Capacity{
-			MemoryMB: 1024,
-			DiskMB:   1024,
+			MemoryMB:   1024,
+			DiskMB:     1024,
+			Containers: 1024,
 		})
 
 		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
@@ -206,8 +207,9 @@ var _ = Describe("Api", func() {
 
 				It("reduces the capacity by the amount reserved", func() {
 					Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
-						MemoryMB: 960,
-						DiskMB:   512,
+						MemoryMB:   960,
+						DiskMB:     512,
+						Containers: 1023,
 					}))
 				})
 			})
@@ -633,8 +635,9 @@ var _ = Describe("Api", func() {
 
 			It("the previously allocated resources become available", func() {
 				Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
-					MemoryMB: 1024,
-					DiskMB:   1024,
+					MemoryMB:   1024,
+					DiskMB:     1024,
+					Containers: 1024,
 				}))
 			})
 		})

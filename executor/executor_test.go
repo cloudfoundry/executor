@@ -18,6 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
@@ -34,6 +35,7 @@ var _ = Describe("Executor", func() {
 		trans        *transformer.Transformer
 		executorURL  string
 		reqGen       *router.RequestGenerator
+		capacity     registry.Capacity
 	)
 
 	BeforeEach(func() {
@@ -50,15 +52,15 @@ var _ = Describe("Executor", func() {
 			"/tmp",
 		)
 		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
-
 		reqGen = router.NewRequestGenerator("http://"+executorURL, api.Routes)
+		capacity = registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
 
-		executor = New(executorURL, "executor", 100, 1024, 1024, wardenClient, trans, time.Second, logger)
+		executor = New(executorURL, "executor", 100, capacity, wardenClient, trans, time.Second, logger)
 	})
 
 	Describe("Executor IDs", func() {
 		It("should generate a random ID when created", func() {
-			executor2 := New(executorURL, "executor2", 100, 1024, 1024, wardenClient, trans, time.Second, logger)
+			executor2 := New(executorURL, "executor2", 100, capacity, wardenClient, trans, time.Second, logger)
 
 			Ω(executor.ID()).ShouldNot(BeZero())
 			Ω(executor2.ID()).ShouldNot(BeZero())

@@ -176,20 +176,12 @@ func main() {
 		Addr:    *wardenAddr,
 	})
 
-	config := configuration.New(wardenClient)
-	memoryMB, err := config.GetMemoryInMB(*memoryMBFlag)
+	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	logger.Infof("Using memory limit %dMB", memoryMB)
-
-	diskMB, err := config.GetDiskInMB(*diskMBFlag)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	logger.Infof("Using disk limit %dMB", diskMB)
+	logger.Infof("Initial Capacity: %s", capacity)
 
 	if *containerMaxCpuShares <= 0 {
 		logger.Error("valid maximum container cpu shares must be specified on startup!")
@@ -221,8 +213,7 @@ func main() {
 		*listenAddr,
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
-		memoryMB,
-		diskMB,
+		capacity,
 		wardenClient,
 		transformer,
 		*drainTimeout,

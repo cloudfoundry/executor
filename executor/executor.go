@@ -45,8 +45,7 @@ func New(
 	apiURL string,
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
-	maxMemoryMB int,
-	maxDiskMB int,
+	capacity registry.Capacity,
 	wardenClient warden.Client,
 	transformer *transformer.Transformer,
 	drainTimeout time.Duration,
@@ -59,7 +58,6 @@ func New(
 	}
 
 	executorID := uuid.String()
-	capacity := registry.Capacity{MemoryMB: maxMemoryMB, DiskMB: maxDiskMB}
 	reg := registry.New(executorID, capacity)
 
 	return &Executor{
