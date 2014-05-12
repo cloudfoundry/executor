@@ -146,7 +146,7 @@ var _ = Describe("Api", func() {
 				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
 					MemoryMB:   64,
 					DiskMB:     512,
-					CpuPercent: 0.5,
+					CpuPercent: 50,
 				})
 			})
 
@@ -165,7 +165,7 @@ var _ = Describe("Api", func() {
 					Guid:         reservedContainer.Guid,
 					MemoryMB:     64,
 					DiskMB:       512,
-					CpuPercent:   0.5,
+					CpuPercent:   50,
 					State:        "reserved",
 				}))
 				Ω(reservedContainer.Guid).ShouldNot(Equal(""))
@@ -200,7 +200,7 @@ var _ = Describe("Api", func() {
 						Guid:         reservedContainer.Guid,
 						MemoryMB:     64,
 						DiskMB:       512,
-						CpuPercent:   0.5,
+						CpuPercent:   50,
 						State:        "reserved",
 					}))
 				})

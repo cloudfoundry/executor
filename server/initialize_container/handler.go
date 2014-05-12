@@ -109,7 +109,7 @@ func (h *handler) limitContainer(reg api.Container, containerClient warden.Conta
 
 	if reg.CpuPercent != 0 {
 		err := containerClient.LimitCPU(warden.CPULimits{
-			LimitInShares: uint64(float64(h.containerMaxCPUShares) * reg.CpuPercent),
+			LimitInShares: uint64(float64(h.containerMaxCPUShares) * float64(reg.CpuPercent) / 100.0),
 		})
 		if err != nil {
 			return err
