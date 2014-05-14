@@ -12,7 +12,20 @@ type FakeClient struct {
 }
 
 func New() *FakeClient {
-	return &FakeClient{}
+	return &FakeClient{
+		WhenAllocatingContainer: func(req client.ContainerRequest) (client.ContainerResponse, error) {
+			return client.ContainerResponse{}, nil
+		},
+		WhenInitializingContainer: func(allocationGuid string) error {
+			return nil
+		},
+		WhenRunning: func(allocationGuid string, request client.RunRequest) error {
+			return nil
+		},
+		WhenDeletingContainer: func(allocationGuid string) error {
+			return nil
+		},
+	}
 }
 
 func (c *FakeClient) AllocateContainer(request client.ContainerRequest) (client.ContainerResponse, error) {
