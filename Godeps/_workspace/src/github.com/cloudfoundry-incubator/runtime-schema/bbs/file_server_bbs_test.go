@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
+	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
@@ -50,7 +51,7 @@ var _ = Describe("File Server BBS", func() {
 		It("should put /file_server/FILE_SERVER_ID in the store with a TTL", func() {
 			node, err := etcdClient.Get("/v1/file_server/" + fileServerId)
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(node).Should(Equal(storeadapter.StoreNode{
+			Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 				Key:   "/v1/file_server/" + fileServerId,
 				Value: []byte(fileServerURL),
 				TTL:   uint64(interval.Seconds()), // move to config one day

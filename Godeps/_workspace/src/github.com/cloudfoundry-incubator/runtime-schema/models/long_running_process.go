@@ -12,6 +12,7 @@ const (
 
 type TransitionalLongRunningProcess struct {
 	Guid    string               `json:"guid"`
+	Stack   string               `json:"stack"`
 	Actions []ExecutorAction     `json:"actions"`
 	Log     LogConfig            `json:"log"`
 	State   TransitionalLRPState `json:"state"`

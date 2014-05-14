@@ -14,6 +14,7 @@ import (
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 )
 
 var _ = Describe("Executor BBS", func() {
@@ -54,7 +55,7 @@ var _ = Describe("Executor BBS", func() {
 				node, err := etcdClient.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(node).Should(Equal(storeadapter.StoreNode{
+				Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
@@ -102,7 +103,7 @@ var _ = Describe("Executor BBS", func() {
 
 				node, err := etcdClient.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(node).Should(Equal(storeadapter.StoreNode{
+				Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
@@ -155,7 +156,7 @@ var _ = Describe("Executor BBS", func() {
 
 				node, err := etcdClient.Get("/v1/task/some-guid")
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(node).Should(Equal(storeadapter.StoreNode{
+				Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 					Key:   "/v1/task/some-guid",
 					Value: task.ToJSON(),
 				}))
@@ -735,7 +736,7 @@ var _ = Describe("Executor BBS", func() {
 
 				node, err := etcdClient.Get("/v1/transitional_lrp/the-lrp-guid")
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(node).Should(Equal(storeadapter.StoreNode{
+				Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 					Key:   "/v1/transitional_lrp/the-lrp-guid",
 					Value: expectedLrp.ToJSON(),
 				}))

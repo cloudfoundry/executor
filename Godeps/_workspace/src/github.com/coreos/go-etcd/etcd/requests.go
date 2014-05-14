@@ -208,19 +208,15 @@ func (c *Client) SendRequest(rr *RawRequest) (*RawResponse, error) {
 
 		reqLock.Lock()
 		if rr.Values == nil {
-			req, err = http.NewRequest(rr.Method, httpPath, nil)
+			req, _ = http.NewRequest(rr.Method, httpPath, nil)
 		} else {
-			req, err = http.NewRequest(rr.Method, httpPath,
+			req, _ = http.NewRequest(rr.Method, httpPath,
 				strings.NewReader(rr.Values.Encode()))
 
 			req.Header.Set("Content-Type",
 				"application/x-www-form-urlencoded; param=value")
 		}
 		reqLock.Unlock()
-
-		if err != nil {
-			return nil, err
-		}
 
 		resp, err = c.httpClient.Do(req)
 		// If the request was cancelled, return ErrRequestCancelled directly

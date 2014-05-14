@@ -8,6 +8,7 @@ import (
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry/storeadapter"
+	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
@@ -46,7 +47,7 @@ var _ = Describe("Presence", func() {
 
 			node, err := etcdClient.Get(key)
 			Ω(err).ShouldNot(HaveOccurred())
-			Ω(node).Should(Equal(storeadapter.StoreNode{
+			Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
 				Key:   key,
 				Value: []byte(value),
 				TTL:   uint64(interval.Seconds()), // move to config one day

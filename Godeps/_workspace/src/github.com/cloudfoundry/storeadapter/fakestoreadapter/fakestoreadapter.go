@@ -1,10 +1,11 @@
 package fakestoreadapter
 
 import (
-	"github.com/cloudfoundry/storeadapter"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/cloudfoundry/storeadapter"
 )
 
 type containerNode struct {
@@ -265,6 +266,10 @@ func (adapter *FakeStoreAdapter) Update(node storeadapter.StoreNode) error {
 }
 
 func (adapter *FakeStoreAdapter) CompareAndSwap(oldNode storeadapter.StoreNode, newNode storeadapter.StoreNode) error {
+	panic("not implemented")
+}
+
+func (adapter *FakeStoreAdapter) CompareAndSwapByIndex(oldNodeIndex uint64, newNode storeadapter.StoreNode) error {
 	panic("not implemented")
 }
 

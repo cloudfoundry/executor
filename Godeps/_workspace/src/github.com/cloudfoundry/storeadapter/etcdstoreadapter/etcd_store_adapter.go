@@ -123,6 +123,7 @@ func (adapter *ETCDStoreAdapter) Get(key string) (storeadapter.StoreNode, error)
 		Value: []byte(response.Node.Value),
 		Dir:   response.Node.Dir,
 		TTL:   uint64(response.Node.TTL),
+		Index: response.Node.ModifiedIndex,
 	}, nil
 }
 
@@ -186,6 +187,24 @@ func (adapter *ETCDStoreAdapter) CompareAndSwap(oldNode storeadapter.StoreNode, 
 			newNode.TTL,
 			string(oldNode.Value),
 			0,
+		)
+
+		results <- err
+	})
+
+	return adapter.convertError(<-results)
+}
+
+func (adapter *ETCDStoreAdapter) CompareAndSwapByIndex(oldNodeIndex uint64, newNode storeadapter.StoreNode) error {
+	results := make(chan error, 1)
+
+	adapter.workerPool.ScheduleWork(func() {
+		_, err := adapter.client.CompareAndSwap(
+			newNode.Key,
+			string(newNode.Value),
+			newNode.TTL,
+			"",
+			oldNodeIndex,
 		)
 
 		results <- err
@@ -321,6 +340,7 @@ func (adapter *ETCDStoreAdapter) makeStoreNode(etcdNode *etcd.Node) storeadapter
 			Key:   etcdNode.Key,
 			Value: []byte(etcdNode.Value),
 			TTL:   uint64(etcdNode.TTL),
+			Index: uint64(etcdNode.ModifiedIndex),
 		}
 	}
 }

@@ -120,6 +120,11 @@ func (self *executorBBS) CompleteTask(task models.Task, failed bool, failureReas
 	return task, err
 }
 
+type compareAndSwappableTask struct {
+	OldIndex uint64
+	NewTask  models.Task
+}
+
 // ConvergeTask is run by *one* executor every X seconds (doesn't really matter what X is.. pick something performant)
 // Converge will:
 // 1. Kick (by setting) any run-onces that are still pending
@@ -151,11 +156,11 @@ func (self *executorBBS) ConvergeTask(timeToClaim time.Duration) {
 	keysToDelete := []string{}
 	unclaimedTimeoutBoundary := self.timeProvider.Time().Add(-timeToClaim).UnixNano()
 
-	tasksToCAS := [][]models.Task{}
-	scheduleForCAS := func(oldTask, newTask models.Task) {
-		tasksToCAS = append(tasksToCAS, []models.Task{
-			oldTask,
-			newTask,
+	tasksToCAS := []compareAndSwappableTask{}
+	scheduleForCASByIndex := func(index uint64, newTask models.Task) {
+		tasksToCAS = append(tasksToCAS, compareAndSwappableTask{
+			OldIndex: index,
+			NewTask:  newTask,
 		})
 	}
 
@@ -174,9 +179,9 @@ func (self *executorBBS) ConvergeTask(timeToClaim time.Duration) {
 		case models.TaskStatePending:
 			if task.CreatedAt <= unclaimedTimeoutBoundary {
 				logError(task, "task.converge.failed-to-claim")
-				scheduleForCAS(task, markTaskFailed(task, "not claimed within time limit"))
+				scheduleForCASByIndex(node.Index, markTaskFailed(task, "not claimed within time limit"))
 			} else {
-				scheduleForCAS(task, task)
+				scheduleForCASByIndex(node.Index, task)
 			}
 		case models.TaskStateClaimed:
 			claimedTooLong := self.timeProvider.Time().Sub(time.Unix(0, task.UpdatedAt)) >= 30*time.Second
@@ -184,26 +189,26 @@ func (self *executorBBS) ConvergeTask(timeToClaim time.Duration) {
 
 			if !executorIsAlive {
 				logError(task, "task.converge.executor-disappeared")
-				scheduleForCAS(task, markTaskFailed(task, "executor disappeared before completion"))
+				scheduleForCASByIndex(node.Index, markTaskFailed(task, "executor disappeared before completion"))
 			} else if claimedTooLong {
 				logError(task, "task.converge.failed-to-start")
-				scheduleForCAS(task, demoteToPending(task))
+				scheduleForCASByIndex(node.Index, demoteToPending(task))
 			}
 		case models.TaskStateRunning:
 			_, executorIsAlive := executorState.Lookup(task.ExecutorID)
 
 			if !executorIsAlive {
 				logError(task, "task.converge.executor-disappeared")
-				scheduleForCAS(task, markTaskFailed(task, "executor disappeared before completion"))
+				scheduleForCASByIndex(node.Index, markTaskFailed(task, "executor disappeared before completion"))
 			}
 		case models.TaskStateCompleted:
-			scheduleForCAS(task, task)
+			scheduleForCASByIndex(node.Index, task)
 		case models.TaskStateResolving:
 			resolvingTooLong := self.timeProvider.Time().Sub(time.Unix(0, task.UpdatedAt)) >= 30*time.Second
 
 			if resolvingTooLong {
 				logError(task, "task.converge.failed-to-resolve")
-				scheduleForCAS(task, demoteToCompleted(task))
+				scheduleForCASByIndex(node.Index, demoteToCompleted(task))
 			}
 		}
 	}
@@ -212,23 +217,19 @@ func (self *executorBBS) ConvergeTask(timeToClaim time.Duration) {
 	self.store.Delete(keysToDelete...)
 }
 
-func (self *executorBBS) batchCompareAndSwapTasks(tasksToCAS [][]models.Task, logger *gosteno.Logger) {
+func (self *executorBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTask, logger *gosteno.Logger) {
 	done := make(chan struct{}, len(tasksToCAS))
 
-	for _, taskPair := range tasksToCAS {
-		originalStoreNode := storeadapter.StoreNode{
-			Key:   taskSchemaPath(taskPair[0]),
-			Value: taskPair[0].ToJSON(),
-		}
-
-		taskPair[1].UpdatedAt = self.timeProvider.Time().UnixNano()
+	for _, taskToCAS := range tasksToCAS {
+		task := taskToCAS.NewTask
+		task.UpdatedAt = self.timeProvider.Time().UnixNano()
 		newStoreNode := storeadapter.StoreNode{
-			Key:   taskSchemaPath(taskPair[1]),
-			Value: taskPair[1].ToJSON(),
+			Key:   taskSchemaPath(task),
+			Value: task.ToJSON(),
 		}
 
 		go func() {
-			err := self.store.CompareAndSwap(originalStoreNode, newStoreNode)
+			err := self.store.CompareAndSwapByIndex(taskToCAS.OldIndex, newStoreNode)
 			if err != nil {
 				logger.Errord(map[string]interface{}{
 					"error": err.Error(),
