@@ -20,6 +20,9 @@ type FakeStagerBBS struct {
 	resolvedTask   models.Task
 	resolveTaskErr error
 
+	WhenDesiringTask               func(models.Task) (models.Task, error)
+	WhenGettingAvailableFileServer func() (string, error)
+
 	sync.RWMutex
 }
 
@@ -64,7 +67,7 @@ func (fakeBBS *FakeStagerBBS) ResolvingTask(task models.Task) (models.Task, erro
 }
 
 func (fakeBBS *FakeStagerBBS) DesireTask(task models.Task) (models.Task, error) {
-	panic("implement me!")
+	return fakeBBS.WhenDesiringTask(task)
 }
 
 func (fakeBBS *FakeStagerBBS) ResolveTask(task models.Task) (models.Task, error) {
@@ -81,7 +84,7 @@ func (fakeBBS *FakeStagerBBS) ResolveTask(task models.Task) (models.Task, error)
 }
 
 func (fakeBBS *FakeStagerBBS) GetAvailableFileServer() (string, error) {
-	panic("implement me!")
+	return fakeBBS.WhenGettingAvailableFileServer()
 }
 
 func (fakeBBS *FakeStagerBBS) SendCompletedTask(task models.Task) {

@@ -25,11 +25,9 @@ func (s *stagerBBS) DesireTask(task models.Task) (models.Task, error) {
 		}
 		task.UpdatedAt = s.timeProvider.Time().UnixNano()
 		task.State = models.TaskStatePending
-		return s.store.SetMulti([]storeadapter.StoreNode{
-			{
-				Key:   taskSchemaPath(task),
-				Value: task.ToJSON(),
-			},
+		return s.store.Create(storeadapter.StoreNode{
+			Key:   taskSchemaPath(task),
+			Value: task.ToJSON(),
 		})
 	})
 	return task, err

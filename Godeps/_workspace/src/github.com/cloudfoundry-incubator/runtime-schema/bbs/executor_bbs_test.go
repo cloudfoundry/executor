@@ -271,7 +271,7 @@ var _ = Describe("Executor BBS", func() {
 			close(done)
 		})
 
-		It("should send an event down the pipe for sets", func(done Done) {
+		It("should send an event down the pipe when the converge is run", func(done Done) {
 			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -279,8 +279,7 @@ var _ = Describe("Executor BBS", func() {
 
 			Expect(e).To(Equal(task))
 
-			task, err = bbs.DesireTask(task)
-			Ω(err).ShouldNot(HaveOccurred())
+			bbs.ConvergeTask(time.Second)
 
 			Expect(<-events).To(Equal(task))
 

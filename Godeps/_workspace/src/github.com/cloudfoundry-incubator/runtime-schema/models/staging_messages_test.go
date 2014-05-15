@@ -74,26 +74,6 @@ var _ = Describe("StagingMessages", func() {
 	})
 
 	Describe("StagingInfo", func() {
-		Context("when json", func() {
-			stagingJSON := `{
-				"buildpack_key": "buildpack-key",
-				"detected_buildpack": "ocaml-buildpack",
-				"start_command": "ocaml-my-camel"
-			}`
-
-			It("does not extract the `start_command` property", func() {
-				var stagingInfo StagingInfo
-
-				err := json.Unmarshal([]byte(stagingJSON), &stagingInfo)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(stagingInfo).Should(Equal(StagingInfo{
-					BuildpackKey:      "buildpack-key",
-					DetectedBuildpack: "ocaml-buildpack",
-				}))
-			})
-		})
-
 		Context("when yaml", func() {
 			stagingYAML := `---
 detected_buildpack: yaml-buildpack
@@ -106,8 +86,8 @@ start_command: yaml-ize -d`
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(stagingInfo).Should(Equal(StagingInfo{
-					DetectedBuildpack: "yaml-buildpack",
-					StartCommand:      "yaml-ize -d",
+					DetectedBuildpack:    "yaml-buildpack",
+					DetectedStartCommand: "yaml-ize -d",
 				}))
 			})
 		})

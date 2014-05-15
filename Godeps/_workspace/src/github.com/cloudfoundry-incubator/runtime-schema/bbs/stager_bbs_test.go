@@ -68,16 +68,13 @@ var _ = Describe("Stager BBS", func() {
 		})
 
 		Context("Common cases", func() {
-			BeforeEach(func() {
-				task.CreatedAt = 1234812
-				task, err = bbs.DesireTask(task)
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
 			Context("when the Task is already pending", func() {
-				It("should happily overwrite the existing Task", func() {
+				It("returns an error", func() {
 					task, err = bbs.DesireTask(task)
 					Ω(err).ShouldNot(HaveOccurred())
+
+					task, err = bbs.DesireTask(task)
+					Ω(err).Should(HaveOccurred())
 				})
 			})
 
@@ -88,7 +85,9 @@ var _ = Describe("Stager BBS", func() {
 				})
 			})
 
-			It("should bump UpdatedAt", func() {
+			It("bumps UpdatedAt", func() {
+				task, err = bbs.DesireTask(task)
+
 				tasks, err := bbs.GetAllPendingTasks()
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -123,7 +122,7 @@ var _ = Describe("Stager BBS", func() {
 			Ω(node.Value).Should(Equal(task.ToJSON()))
 		})
 
-		It("should bump UpdatedAt", func() {
+		It("bumps UpdatedAt", func() {
 			timeProvider.IncrementBySeconds(1)
 
 			task, err = bbs.ResolvingTask(task)
