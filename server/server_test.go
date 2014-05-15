@@ -516,6 +516,18 @@ var _ = Describe("Api", func() {
 					It("invokes the callback with failed false", func() {
 						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
 					})
+
+					It("destroys the container and removes it from the registry", func() {
+						Eventually(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
+					})
+
+					It("frees the container's reserved resources", func() {
+						Eventually(registry.CurrentCapacity).Should(Equal(Registry.Capacity{
+							MemoryMB:   1024,
+							DiskMB:     1024,
+							Containers: 1024,
+						}))
+					})
 				})
 
 				Context("and the completeURL fails", func() {

@@ -83,12 +83,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result string
 	steps := h.transformer.StepsFor(reg.Log, request.Actions, container, &result)
 
-	go h.performRunActions(request, sequence.New(steps), &result)
+	go h.performRunActions(guid, container, request, sequence.New(steps), &result)
 
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *handler) performRunActions(request api.ContainerRunRequest, seq sequence.Step, result *string) {
+func (h *handler) performRunActions(guid string, container warden.Container, request api.ContainerRunRequest, seq sequence.Step, result *string) {
 	defer h.waitGroup.Done()
 
 	seqErr := h.performSequence(seq)
@@ -98,6 +98,16 @@ func (h *handler) performRunActions(request api.ContainerRunRequest, seq sequenc
 			"error": seqErr.Error(),
 		}, "executor.perform-sequence.failed")
 	}
+
+	err := h.wardenClient.Destroy(container.Handle())
+	if err != nil {
+		h.logger.Warnd(map[string]interface{}{
+			"error":  err.Error(),
+			"handle": container.Handle(),
+		}, "executor.run-action.destroy-failed")
+	}
+
+	h.registry.Delete(guid)
 
 	if request.CompleteURL == "" {
 		return
