@@ -1,9 +1,10 @@
-package bbs
+package services_bbs
 
 import (
 	"errors"
-	"github.com/cloudfoundry/storeadapter"
 	"time"
+
+	"github.com/cloudfoundry/storeadapter"
 )
 
 type Presence interface {

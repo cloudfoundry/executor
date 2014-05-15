@@ -1,42 +1,17 @@
-package bbs
+package task_bbs
 
 import (
-	"path"
-	"time"
-
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
 )
 
-const ClaimTTL = 10 * time.Second
-const ResolvingTTL = 5 * time.Second
-const TaskSchemaRoot = SchemaRoot + "task"
-const ExecutorSchemaRoot = SchemaRoot + "executor"
-const LockSchemaRoot = SchemaRoot + "locks"
-
-func taskSchemaPath(task models.Task) string {
-	return path.Join(TaskSchemaRoot, task.Guid)
+func (self *TaskBBS) WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error) {
+	return watchForTaskModificationsOnState(self.store, models.TaskStatePending)
 }
 
-func executorSchemaPath(executorID string) string {
-	return path.Join(ExecutorSchemaRoot, executorID)
-}
-
-func lockSchemaPath(lockName string) string {
-	return path.Join(LockSchemaRoot, lockName)
-}
-
-func retryIndefinitelyOnStoreTimeout(callback func() error) error {
-	for {
-		err := callback()
-
-		if err == storeadapter.ErrorTimeout {
-			time.Sleep(time.Second)
-			continue
-		}
-
-		return err
-	}
+func (s *TaskBBS) WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error) {
+	return watchForTaskModificationsOnState(s.store, models.TaskStateCompleted)
 }
 
 func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state models.TaskState) (<-chan models.Task, chan<- bool, <-chan error) {
@@ -44,7 +19,7 @@ func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state mod
 	stopOuter := make(chan bool)
 	errsOuter := make(chan error)
 
-	events, stopInner, errsInner := store.Watch(TaskSchemaRoot)
+	events, stopInner, errsInner := store.Watch(shared.TaskSchemaRoot)
 
 	go func() {
 		defer close(tasks)

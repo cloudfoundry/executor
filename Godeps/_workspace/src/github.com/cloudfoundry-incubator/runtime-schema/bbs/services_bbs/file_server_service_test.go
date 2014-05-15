@@ -1,4 +1,4 @@
-package bbs_test
+package services_bbs_test
 
 import (
 	"time"
@@ -6,57 +6,24 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
-	"github.com/cloudfoundry/storeadapter"
-	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
-var _ = Describe("File Server BBS", func() {
+var _ = Describe("Fetching available file servers", func() {
 	var (
-		bbs           *BBS
+		bbs           *ServicesBBS
 		fileServerURL string
 		fileServerId  string
 		interval      time.Duration
 		status        <-chan bool
 		err           error
 		presence      Presence
-		timeProvider  *faketimeprovider.FakeTimeProvider
 	)
 
 	BeforeEach(func() {
-		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(etcdClient, timeProvider)
-	})
-
-	Describe("MaintainFileServerPresence", func() {
-		BeforeEach(func() {
-			fileServerURL = "stubFileServerURL"
-			fileServerId = factories.GenerateGuid()
-			interval = 1 * time.Second
-
-			presence, status, err = bbs.MaintainFileServerPresence(interval, fileServerURL, fileServerId)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			reporter := test_helpers.NewStatusReporter(status)
-			Eventually(reporter.Locked).Should(BeTrue())
-		})
-
-		AfterEach(func() {
-			presence.Remove()
-		})
-
-		It("should put /file_server/FILE_SERVER_ID in the store with a TTL", func() {
-			node, err := etcdClient.Get("/v1/file_server/" + fileServerId)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
-				Key:   "/v1/file_server/" + fileServerId,
-				Value: []byte(fileServerURL),
-				TTL:   uint64(interval.Seconds()), // move to config one day
-			}))
-		})
+		bbs = New(etcdClient)
 	})
 
 	Describe("GetAvailableFileServer", func() {

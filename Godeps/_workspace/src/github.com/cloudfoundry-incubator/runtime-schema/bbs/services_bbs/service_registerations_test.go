@@ -1,24 +1,22 @@
-package bbs_test
+package services_bbs_test
 
 import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
+	"github.com/cloudfoundry/storeadapter/test_helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 )
 
-var _ = Context("Metrics BBS", func() {
-	var bbs *BBS
-	var timeProvider *faketimeprovider.FakeTimeProvider
+var _ = Context("Getting Generic Services", func() {
+	var bbs *ServicesBBS
 
 	BeforeEach(func() {
-		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(etcdClient, timeProvider)
+		bbs = New(etcdClient)
 	})
 
 	Describe("GetServiceRegistrations", func() {
@@ -77,6 +75,36 @@ var _ = Context("Metrics BBS", func() {
 			It("returns empty registrations", func() {
 				Ω(registrations).Should(BeEmpty())
 			})
+		})
+	})
+
+	Describe("GetAllExecutors", func() {
+		It("returns a list of the executor IDs that exist", func() {
+			executors, err := bbs.GetAllExecutors()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(executors).Should(BeEmpty())
+
+			presenceA, statusA, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-a")
+			Ω(err).ShouldNot(HaveOccurred())
+			test_helpers.NewStatusReporter(statusA)
+
+			presenceB, statusB, err := bbs.MaintainExecutorPresence(1*time.Second, "executor-b")
+			Ω(err).ShouldNot(HaveOccurred())
+			test_helpers.NewStatusReporter(statusB)
+
+			Eventually(func() []string {
+				executors, _ := bbs.GetAllExecutors()
+				return executors
+			}).Should(ContainElement("executor-a"))
+
+			Eventually(func() []string {
+				executors, _ := bbs.GetAllExecutors()
+				return executors
+			}).Should(ContainElement("executor-b"))
+
+			presenceA.Remove()
+			presenceB.Remove()
 		})
 	})
 })

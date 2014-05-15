@@ -1,46 +1,19 @@
-package bbs
+package services_bbs
 
 import (
 	"path"
 
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 )
 
 var serviceSchemas = map[string]string{
-	models.ExecutorServiceName:   ExecutorSchemaRoot,
-	models.FileServerServiceName: FileServerSchemaRoot,
+	models.ExecutorServiceName:   shared.ExecutorSchemaRoot,
+	models.FileServerServiceName: shared.FileServerSchemaRoot,
 }
 
-type metricsBBS struct {
-	store storeadapter.StoreAdapter
-}
-
-func (bbs *metricsBBS) GetAllTasks() ([]models.Task, error) {
-	node, err := bbs.store.ListRecursively(TaskSchemaRoot)
-	if err == storeadapter.ErrorKeyNotFound {
-		return []models.Task{}, nil
-	}
-
-	if err != nil {
-		return []models.Task{}, err
-	}
-
-	tasks := []models.Task{}
-	for _, node := range node.ChildNodes {
-		task, err := models.NewTaskFromJSON(node.Value)
-		if err != nil {
-			steno.NewLogger("bbs").Errorf("cannot parse task JSON for key %s: %s", node.Key, err.Error())
-		} else {
-			tasks = append(tasks, task)
-		}
-	}
-
-	return tasks, nil
-}
-
-func (bbs *metricsBBS) GetServiceRegistrations() (models.ServiceRegistrations, error) {
+func (bbs *ServicesBBS) GetServiceRegistrations() (models.ServiceRegistrations, error) {
 	registrations := models.ServiceRegistrations{}
 
 	for serviceName := range serviceSchemas {
@@ -54,7 +27,7 @@ func (bbs *metricsBBS) GetServiceRegistrations() (models.ServiceRegistrations, e
 	return registrations, nil
 }
 
-func (bbs *metricsBBS) registrationsForServiceName(name string) (models.ServiceRegistrations, error) {
+func (bbs *ServicesBBS) registrationsForServiceName(name string) (models.ServiceRegistrations, error) {
 	registrations := models.ServiceRegistrations{}
 
 	rootNode, err := bbs.store.ListRecursively(serviceSchemas[name])
@@ -74,4 +47,21 @@ func (bbs *metricsBBS) registrationsForServiceName(name string) (models.ServiceR
 	}
 
 	return registrations, nil
+}
+
+func (self *ServicesBBS) GetAllExecutors() ([]string, error) {
+	nodes, err := self.store.ListRecursively(shared.ExecutorSchemaRoot)
+	if err == storeadapter.ErrorKeyNotFound {
+		return []string{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	executors := []string{}
+
+	for _, node := range nodes.ChildNodes {
+		executors = append(executors, node.KeyComponents()[2])
+	}
+
+	return executors, nil
 }

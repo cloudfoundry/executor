@@ -161,7 +161,7 @@ func main() {
 		workerpool.NewWorkerPool(10),
 	)
 
-	bbs := Bbs.New(etcdAdapter, timeprovider.NewTimeProvider())
+	bbs := Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider())
 
 	err = etcdAdapter.Connect()
 	if err != nil {

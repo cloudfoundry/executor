@@ -1,18 +1,17 @@
-package bbs_test
+package task_bbs_test
 
 import (
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/task_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Task BBS", func() {
-	var bbs *BBS
+	var bbs *TaskBBS
 	var task models.Task
 	var timeProvider *faketimeprovider.FakeTimeProvider
 	var err error
@@ -22,8 +21,7 @@ var _ = Describe("Task BBS", func() {
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
 		bbs = New(etcdClient, timeProvider)
 		task = models.Task{
-			Guid:      "some-guid",
-			CreatedAt: time.Now().UnixNano(),
+			Guid: "some-guid",
 		}
 	})
 

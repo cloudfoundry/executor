@@ -65,7 +65,7 @@ var _ = Describe("Main", func() {
 		etcdCluster []string
 		wardenAddr  string
 
-		bbs         *Bbs.BBS
+		bbs         Bbs.ExecutorBBS
 		fakeBackend *fake_backend.FakeBackend
 	)
 
@@ -86,7 +86,7 @@ var _ = Describe("Main", func() {
 
 		etcdCluster = []string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)}
 
-		bbs = Bbs.New(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
+		bbs = Bbs.NewExecutorBBS(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
 
 		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
 
