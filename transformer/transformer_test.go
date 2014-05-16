@@ -20,6 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
+	"github.com/cloudfoundry-incubator/executor/steps/parallel_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
@@ -74,6 +75,13 @@ var _ = Describe("Transformer", func() {
 		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
 		tryActionModel := models.TryAction{Action: models.ExecutorAction{runActionModel}}
 
+		parallelActionModel := models.ParallelAction{
+			Actions: []models.ExecutorAction{
+				{downloadActionModel},
+				{runActionModel},
+			},
+		}
+
 		emitProgressActionModel := models.EmitProgressAction{
 			Action:         models.ExecutorAction{runActionModel},
 			StartMessage:   "starting",
@@ -87,6 +95,7 @@ var _ = Describe("Transformer", func() {
 			{uploadActionModel},
 			{fetchResultActionModel},
 			{tryActionModel},
+			{parallelActionModel},
 			{emitProgressActionModel},
 		}
 
@@ -132,6 +141,24 @@ var _ = Describe("Transformer", func() {
 					logger,
 				),
 				logger,
+			),
+			parallel_step.New(
+				[]sequence.Step{
+					download_step.New(
+						container,
+						downloadActionModel,
+						cachedDownloader,
+						extractor,
+						"/fake/temp/dir",
+						logger,
+					),
+					run_step.New(
+						container,
+						runActionModel,
+						logStreamer,
+						logger,
+					),
+				},
 			),
 			emit_progress_step.New(
 				run_step.New(

@@ -15,6 +15,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
+	"github.com/cloudfoundry-incubator/executor/steps/parallel_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
@@ -135,6 +136,18 @@ func (transformer *Transformer) convertAction(
 			),
 			transformer.logger,
 		)
+	case models.ParallelAction:
+		steps := make([]sequence.Step, len(actionModel.Actions))
+		for i, action := range actionModel.Actions {
+			steps[i] = transformer.convertAction(
+				logConfig,
+				action,
+				container,
+				result,
+			)
+		}
+
+		return parallel_step.New(steps)
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))
