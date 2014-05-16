@@ -1,15 +1,12 @@
 package monitor_step
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 )
-
-var ErrNoInterval = errors.New("no interval configured")
 
 type HealthCheck interface {
 	Check() bool
@@ -43,10 +40,6 @@ func New(
 }
 
 func (step *monitorStep) Perform() error {
-	if step.interval == 0 {
-		return ErrNoInterval
-	}
-
 	timer := time.NewTicker(step.interval)
 
 	var healthyCount uint

@@ -81,7 +81,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result string
-	steps := h.transformer.StepsFor(reg.Log, request.Actions, container, &result)
+	steps, err := h.transformer.StepsFor(reg.Log, request.Actions, container, &result)
+	if err != nil {
+		h.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.run-actions.steps-invalid")
+		w.WriteHeader(http.StatusBadRequest)
+	}
 
 	go h.performRunActions(guid, container, request, sequence.New(steps), &result)
 

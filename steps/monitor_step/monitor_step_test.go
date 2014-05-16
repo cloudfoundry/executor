@@ -83,13 +83,6 @@ var _ = Describe("MonitorStep", func() {
 	})
 
 	Describe("Perform", func() {
-		Context("with no interval configured", func() {
-			It("returns ErrNoInterval", func() {
-				err := step.Perform()
-				Ω(err).Should(Equal(ErrNoInterval))
-			})
-		})
-
 		Context("when the healthy and unhealthy threshold is 2", func() {
 			BeforeEach(func() {
 				healthyThreshold = 2

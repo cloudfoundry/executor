@@ -535,6 +535,22 @@ var _ = Describe("Api", func() {
 				Ω(spawned[0].Script).Should(Equal("ls -al"))
 			})
 
+			Context("when the actions are invalid", func() {
+				BeforeEach(func() {
+					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
+						Actions: []models.ExecutorAction{
+							{
+								models.MonitorAction{},
+							},
+						},
+					})
+				})
+
+				It("returns 400", func() {
+					Ω(runResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+				})
+			})
+
 			Context("when there is a completeURL and metadata", func() {
 				var callbackHandler *ghttp.Server
 

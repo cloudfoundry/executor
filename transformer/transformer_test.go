@@ -1,6 +1,9 @@
 package transformer_test
 
 import (
+	"net/url"
+	"time"
+
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -20,6 +23,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
 	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
+	"github.com/cloudfoundry-incubator/executor/steps/monitor_step"
 	"github.com/cloudfoundry-incubator/executor/steps/parallel_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
@@ -75,6 +79,21 @@ var _ = Describe("Transformer", func() {
 		fetchResultActionModel := models.FetchResultAction{File: "some-file"}
 		tryActionModel := models.TryAction{Action: models.ExecutorAction{runActionModel}}
 
+		healthyURL, err := url.Parse("http://google.com/search?q=health")
+		Ω(err).ShouldNot(HaveOccurred())
+
+		unhealthyURL, err := url.Parse("http://google.com/search?q=health")
+		Ω(err).ShouldNot(HaveOccurred())
+
+		monitorModel := models.MonitorAction{
+			Check:              nil,
+			Interval:           10 * time.Second,
+			HealthyHook:        healthyURL.String(),
+			UnhealthyHook:      unhealthyURL.String(),
+			HealthyThreshold:   2,
+			UnhealthyThreshold: 5,
+		}
+
 		parallelActionModel := models.ParallelAction{
 			Actions: []models.ExecutorAction{
 				{downloadActionModel},
@@ -97,12 +116,16 @@ var _ = Describe("Transformer", func() {
 			{tryActionModel},
 			{parallelActionModel},
 			{emitProgressActionModel},
+			{monitorModel},
 		}
 
 		container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		Ω(transformer.StepsFor(models.LogConfig{}, actions, container, &result)).To(Equal([]sequence.Step{
+		steps, err := transformer.StepsFor(models.LogConfig{}, actions, container, &result)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		Ω(steps).To(Equal([]sequence.Step{
 			run_step.New(
 				container,
 				runActionModel,
@@ -173,6 +196,60 @@ var _ = Describe("Transformer", func() {
 				logStreamer,
 				logger,
 			),
+			monitor_step.New(
+				nil,
+				10*time.Second,
+				2,
+				5,
+				healthyURL,
+				unhealthyURL,
+			),
 		}))
+	})
+
+	Context("when a monitor action does not have an interval configured", func() {
+		It("returns an error", func() {
+			monitorModel := models.MonitorAction{
+				Check:              nil,
+				Interval:           0,
+				HealthyHook:        "http://example.com/healthy",
+				UnhealthyHook:      "http://example.com/unhealthy",
+				HealthyThreshold:   2,
+				UnhealthyThreshold: 5,
+			}
+
+			actions := []models.ExecutorAction{
+				{monitorModel},
+			}
+
+			container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, err = transformer.StepsFor(models.LogConfig{}, actions, container, &result)
+			Ω(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("when a monitor action's url is invalid", func() {
+		It("returns an error", func() {
+			monitorModel := models.MonitorAction{
+				Check:              nil,
+				Interval:           10 * time.Second,
+				HealthyHook:        "http:\\loljk",
+				UnhealthyHook:      "unΩ",
+				HealthyThreshold:   2,
+				UnhealthyThreshold: 5,
+			}
+
+			actions := []models.ExecutorAction{
+				{monitorModel},
+			}
+
+			container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, err = transformer.StepsFor(models.LogConfig{}, actions, container, &result)
+			Ω(err).Should(HaveOccurred())
+		})
 	})
 })
