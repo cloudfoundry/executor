@@ -2,6 +2,7 @@ package shared
 
 import (
 	"path"
+	"strconv"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -10,6 +11,7 @@ const SchemaRoot = "/v1/"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 const FileServerSchemaRoot = SchemaRoot + "file_server"
 const LongRunningProcessSchemaRoot = SchemaRoot + "transitional_lrp"
+const LRPStartAuctionSchemaRoot = SchemaRoot + "start"
 const TaskSchemaRoot = SchemaRoot + "task"
 const LockSchemaRoot = SchemaRoot + "locks"
 
@@ -23,6 +25,10 @@ func FileServerSchemaPath(segments ...string) string {
 
 func TransitionalLongRunningProcessSchemaPath(lrp models.TransitionalLongRunningProcess) string {
 	return path.Join(LongRunningProcessSchemaRoot, lrp.Guid)
+}
+
+func LRPStartAuctionSchemaPath(lrp models.LRPStartAuction) string {
+	return path.Join(LRPStartAuctionSchemaRoot, lrp.Guid, strconv.Itoa(lrp.Index))
 }
 
 func TaskSchemaPath(task models.Task) string {

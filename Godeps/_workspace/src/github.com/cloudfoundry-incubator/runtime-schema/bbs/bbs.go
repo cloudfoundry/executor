@@ -45,6 +45,14 @@ type ConvergerBBS interface {
 type AppManagerBBS interface {
 	//lrp
 	DesireTransitionalLongRunningProcess(models.TransitionalLongRunningProcess) error
+	RequestLRPStartAuction(models.LRPStartAuction) error
+}
+
+type AuctioneerBBS interface {
+	//lrp
+	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
+	ClaimLPRStartAuction(models.LRPStartAuction) error
+	ResolveLRPStartAuction(models.LRPStartAuction) error
 }
 
 type StagerBBS interface {
