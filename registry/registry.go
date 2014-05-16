@@ -68,6 +68,7 @@ func (r *registry) Reserve(req api.ContainerAllocationRequest) (api.Container, e
 		MemoryMB:     req.MemoryMB,
 		DiskMB:       req.DiskMB,
 		CpuPercent:   req.CpuPercent,
+		Ports:        req.Ports,
 		State:        api.StateReserved,
 		Log:          req.Log,
 	}

@@ -14,16 +14,27 @@ type Container struct {
 	MemoryMB        int              `json:"memory_mb"`
 	DiskMB          int              `json:"disk_mb"`
 	CpuPercent      float64          `json:"cpu_percent"`
+	Ports           []PortMapping    `json:"ports"`
 	State           string           `json:"state"`
 	ContainerHandle string           `json:"container_handle"`
 	Log             models.LogConfig `json:"log"`
+}
+
+type PortMapping struct {
+	ContainerPort uint32 `json:"container_port"`
+	HostPort      uint32 `json:"host_port,omitempty"`
 }
 
 type ContainerAllocationRequest struct {
 	MemoryMB   int              `json:"memory_mb"`
 	DiskMB     int              `json:"disk_mb"`
 	CpuPercent float64          `json:"cpu_percent"`
+	Ports      []PortMapping    `json:"ports"`
 	Log        models.LogConfig `json:"log"`
+}
+
+type ContainerInitializeResult struct {
+	Ports []PortMapping `json:"ports"`
 }
 
 type ContainerRunRequest struct {

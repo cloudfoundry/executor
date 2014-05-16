@@ -75,6 +75,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reg, err = h.mapPorts(reg, containerClient)
+	if err != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.port-mapping-failed")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	reg, err = h.registry.Create(reg.Guid, containerClient.Handle())
 	if err != nil {
 		h.logger.Errord(map[string]interface{}{
@@ -117,4 +126,20 @@ func (h *handler) limitContainer(reg api.Container, containerClient warden.Conta
 	}
 
 	return nil
+}
+
+func (h *handler) mapPorts(reg api.Container, containerClient warden.Container) (api.Container, error) {
+	for i, mapping := range reg.Ports {
+		hostPort, containerPort, err := containerClient.NetIn(mapping.HostPort, mapping.ContainerPort)
+		if err != nil {
+			return api.Container{}, err
+		}
+
+		mapping.HostPort = hostPort
+		mapping.ContainerPort = containerPort
+
+		reg.Ports[i] = mapping
+	}
+
+	return reg, nil
 }

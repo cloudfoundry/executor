@@ -258,6 +258,66 @@ var _ = Describe("Api", func() {
 						Ω(limitedCPU[0].LimitInShares).Should(Equal(uint64(512)))
 					})
 
+					Context("when ports are exposed", func() {
+						BeforeEach(func() {
+							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
+								MemoryMB:   0,
+								DiskMB:     512,
+								CpuPercent: 0.5,
+								Ports: []api.PortMapping{
+									{ContainerPort: 8080, HostPort: 0},
+									{ContainerPort: 8081, HostPort: 1234},
+								},
+							})
+						})
+
+						It("exposes the configured ports", func() {
+							netInned := wardenClient.Connection.NetInned("some-handle")
+							Ω(netInned).Should(HaveLen(2))
+
+							Ω(netInned[0].ContainerPort).Should(Equal(uint32(8080)))
+							Ω(netInned[0].HostPort).Should(Equal(uint32(0)))
+							Ω(netInned[1].ContainerPort).Should(Equal(uint32(8081)))
+							Ω(netInned[1].HostPort).Should(Equal(uint32(1234)))
+						})
+
+						Context("when net-in succeeds", func() {
+							BeforeEach(func() {
+								calls := uint32(0)
+								wardenClient.Connection.WhenNetInning = func(string, uint32, uint32) (uint32, uint32, error) {
+									calls++
+									return 1234 * calls, 4567 * calls, nil
+								}
+							})
+
+							It("returns the mapped ports in the response", func() {
+								var initialized api.Container
+
+								err := json.NewDecoder(createResponse.Body).Decode(&initialized)
+								Ω(err).ShouldNot(HaveOccurred())
+
+								Ω(initialized.Ports).Should(Equal([]api.PortMapping{
+									{HostPort: 1234, ContainerPort: 4567},
+									{HostPort: 2468, ContainerPort: 9134},
+								}))
+							})
+						})
+
+						Context("when mapping the ports fails", func() {
+							disaster := errors.New("oh no!")
+
+							BeforeEach(func() {
+								wardenClient.Connection.WhenNetInning = func(string, uint32, uint32) (uint32, uint32, error) {
+									return 0, 0, disaster
+								}
+							})
+
+							It("returns 500", func() {
+								Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+							})
+						})
+					})
+
 					Context("when a zero-value memory limit is specified", func() {
 						BeforeEach(func() {
 							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{

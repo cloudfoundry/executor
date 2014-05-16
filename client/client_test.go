@@ -1,11 +1,11 @@
 package client_test
 
 import (
+	"net/http"
+	"time"
 	. "github.com/cloudfoundry-incubator/executor/client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/onsi/gomega/ghttp"
-	"net/http"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -46,6 +46,7 @@ var _ = Describe("Client", func() {
             "memory_mb": 64,
             "disk_mb": 1024,
             "cpu_percent": 0.5,
+            "ports": null,
             "log": {
               "guid":"some-guid",
               "source_name":"XYZ",
