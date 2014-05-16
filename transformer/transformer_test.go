@@ -1,6 +1,7 @@
 package transformer_test
 
 import (
+	"encoding/json"
 	"net/url"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 
+	"github.com/cloudfoundry-incubator/executor/checks"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -72,6 +74,8 @@ var _ = Describe("Transformer", func() {
 		)
 	})
 
+	dialCheck := json.RawMessage(`{"name":"dial","args":{"network":"tcp","addr":":8080"}}`)
+
 	It("is correct", func() {
 		runActionModel := models.RunAction{Script: "do-something"}
 		downloadActionModel := models.DownloadAction{From: "/file/to/download"}
@@ -86,7 +90,7 @@ var _ = Describe("Transformer", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 
 		monitorModel := models.MonitorAction{
-			Check:              nil,
+			Check:              &dialCheck,
 			Interval:           10 * time.Second,
 			HealthyHook:        healthyURL.String(),
 			UnhealthyHook:      unhealthyURL.String(),
@@ -197,7 +201,7 @@ var _ = Describe("Transformer", func() {
 				logger,
 			),
 			monitor_step.New(
-				nil,
+				checks.NewDial("tcp", ":8080"),
 				10*time.Second,
 				2,
 				5,
@@ -210,8 +214,56 @@ var _ = Describe("Transformer", func() {
 	Context("when a monitor action does not have an interval configured", func() {
 		It("returns an error", func() {
 			monitorModel := models.MonitorAction{
-				Check:              nil,
+				Check:              &dialCheck,
 				Interval:           0,
+				HealthyHook:        "http://example.com/healthy",
+				UnhealthyHook:      "http://example.com/unhealthy",
+				HealthyThreshold:   2,
+				UnhealthyThreshold: 5,
+			}
+
+			actions := []models.ExecutorAction{
+				{monitorModel},
+			}
+
+			container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, err = transformer.StepsFor(models.LogConfig{}, actions, container, &result)
+			Ω(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("when a monitor action's check is missing", func() {
+		It("returns an error", func() {
+			monitorModel := models.MonitorAction{
+				Check:              nil,
+				Interval:           10 * time.Second,
+				HealthyHook:        "http://example.com/healthy",
+				UnhealthyHook:      "http://example.com/unhealthy",
+				HealthyThreshold:   2,
+				UnhealthyThreshold: 5,
+			}
+
+			actions := []models.ExecutorAction{
+				{monitorModel},
+			}
+
+			container, err := wardenClient.Create(warden.ContainerSpec{Handle: handle})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, err = transformer.StepsFor(models.LogConfig{}, actions, container, &result)
+			Ω(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("when a monitor action's check is bogus", func() {
+		It("returns an error", func() {
+			bogusCheck := json.RawMessage(`{"name":"bogus"}`)
+
+			monitorModel := models.MonitorAction{
+				Check:              &bogusCheck,
+				Interval:           10 * time.Second,
 				HealthyHook:        "http://example.com/healthy",
 				UnhealthyHook:      "http://example.com/unhealthy",
 				HealthyThreshold:   2,
@@ -233,7 +285,7 @@ var _ = Describe("Transformer", func() {
 	Context("when a monitor action's url is invalid", func() {
 		It("returns an error", func() {
 			monitorModel := models.MonitorAction{
-				Check:              nil,
+				Check:              &dialCheck,
 				Interval:           10 * time.Second,
 				HealthyHook:        "http:\\loljk",
 				UnhealthyHook:      "unΩ",

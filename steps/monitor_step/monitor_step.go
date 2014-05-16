@@ -5,15 +5,12 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/checks"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 )
 
-type HealthCheck interface {
-	Check() bool
-}
-
 type monitorStep struct {
-	check HealthCheck
+	check checks.Check
 
 	interval           time.Duration
 	healthyThreshold   uint
@@ -24,7 +21,7 @@ type monitorStep struct {
 }
 
 func New(
-	check HealthCheck,
+	check checks.Check,
 	interval time.Duration,
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *url.URL,

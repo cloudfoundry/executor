@@ -12,6 +12,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 
+	"github.com/cloudfoundry-incubator/executor/checks"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -26,6 +27,7 @@ import (
 )
 
 var ErrNoInterval = errors.New("no interval configured")
+var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
 	logStreamerFactory log_streamer_factory.LogStreamerFactory
@@ -167,8 +169,17 @@ func (transformer *Transformer) convertAction(
 			return nil, ErrNoInterval
 		}
 
+		if actionModel.Check == nil {
+			return nil, ErrNoCheck
+		}
+
+		check, err := checks.Parse(*actionModel.Check)
+		if err != nil {
+			return nil, err
+		}
+
 		return monitor_step.New(
-			nil,
+			check,
 			actionModel.Interval,
 			actionModel.HealthyThreshold,
 			actionModel.UnhealthyThreshold,
