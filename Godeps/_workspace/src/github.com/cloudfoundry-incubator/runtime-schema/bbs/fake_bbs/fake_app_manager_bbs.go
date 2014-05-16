@@ -7,8 +7,10 @@ import (
 )
 
 type FakeAppManagerBBS struct {
-	desiredLrps  []models.TransitionalLongRunningProcess
-	DesireLrpErr error
+	desiredLrps        []models.TransitionalLongRunningProcess
+	lrpStartAuctions   []models.LRPStartAuction
+	DesireLrpErr       error
+	LRPStartAuctionErr error
 	sync.RWMutex
 }
 
@@ -27,4 +29,19 @@ func (fakeBBS *FakeAppManagerBBS) DesiredLrps() []models.TransitionalLongRunning
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 	return fakeBBS.desiredLrps
+}
+
+///////////////////////
+
+func (fakeBBS *FakeAppManagerBBS) RequestLRPStartAuction(lrp models.LRPStartAuction) error {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+	fakeBBS.lrpStartAuctions = append(fakeBBS.lrpStartAuctions, lrp)
+	return fakeBBS.LRPStartAuctionErr
+}
+
+func (fakeBBS *FakeAppManagerBBS) GetLRPStartAuctions() []models.LRPStartAuction {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+	return fakeBBS.lrpStartAuctions
 }

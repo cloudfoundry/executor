@@ -182,4 +182,47 @@ var _ = Describe("ExecutorAction", func() {
 			}),
 		)
 	})
+
+	Describe("Parallel", func() {
+		itSerializesAndDeserializes(
+			`{
+        "action": "parallel",
+        "args": {
+          "actions": [
+            {
+              "args": {
+                "extract": true,
+                "cache_key": "elephant",
+                "to": "local_location",
+                "from": "web_location"
+              },
+              "action": "download"
+            },
+            {
+              "args": {
+                "resource_limits": {},
+                "env": null,
+                "timeout": 0,
+                "script": "echo"
+              },
+              "action": "run"
+            }
+          ]
+        }
+      }`,
+			Parallel(
+				ExecutorAction{
+					DownloadAction{
+						From:     "web_location",
+						To:       "local_location",
+						Extract:  true,
+						CacheKey: "elephant",
+					},
+				},
+				ExecutorAction{
+					RunAction{Script: "echo"},
+				},
+			),
+		)
+	})
 })

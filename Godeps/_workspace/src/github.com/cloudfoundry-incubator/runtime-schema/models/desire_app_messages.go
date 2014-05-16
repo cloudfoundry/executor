@@ -10,4 +10,5 @@ type DesireAppRequestFromCC struct {
 	MemoryMB        int                   `json:"memory_mb"`
 	DiskMB          int                   `json:"disk_mb"`
 	FileDescriptors uint64                `json:"file_descriptors"`
+	NumInstances    int                   `json:"num_instances"`
 }

@@ -1,6 +1,8 @@
 package lrp_bbs
 
 import (
+	"fmt"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
@@ -16,6 +18,32 @@ func (bbs *LongRunningProcessBBS) RequestLRPStartAuction(lrp models.LRPStartAuct
 			},
 		})
 	})
+}
+
+func (bbs *LongRunningProcessBBS) GetAllLRPStartAuctions() ([]models.LRPStartAuction, error) {
+	lrps := []models.LRPStartAuction{}
+
+	node, err := bbs.store.ListRecursively(shared.LRPStartAuctionSchemaRoot)
+	if err == storeadapter.ErrorKeyNotFound {
+		return lrps, nil
+	}
+
+	if err != nil {
+		return lrps, err
+	}
+
+	for _, node := range node.ChildNodes {
+		for _, node := range node.ChildNodes {
+			lrp, err := models.NewLRPStartAuctionFromJSON(node.Value)
+			if err != nil {
+				return lrps, fmt.Errorf("cannot parse lrp JSON for key %s: %s", node.Key, err.Error())
+			} else {
+				lrps = append(lrps, lrp)
+			}
+		}
+	}
+
+	return lrps, nil
 }
 
 func (self *LongRunningProcessBBS) WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error) {
