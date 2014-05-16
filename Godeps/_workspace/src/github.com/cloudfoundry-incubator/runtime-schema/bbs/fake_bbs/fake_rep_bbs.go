@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -28,6 +29,15 @@ type FakeRepBBS struct {
 
 	startedLrps []models.TransitionalLongRunningProcess
 	startLrpErr error
+
+	MaintainRepPresenceInput struct {
+		HeartbeatInterval time.Duration
+		RepPresence       models.RepPresence
+	}
+	MaintainRepPresenceOutput struct {
+		Presence *FakePresence
+		Error    error
+	}
 
 	sync.RWMutex
 }
@@ -197,4 +207,45 @@ func (fakeBBS *FakeRepBBS) SetCompleteTaskErr(err error) {
 	defer fakeBBS.Unlock()
 
 	fakeBBS.completeTaskErr = err
+}
+
+func (fakeBBS *FakeRepBBS) MaintainRepPresence(heartbeatInterval time.Duration, repPresence models.RepPresence) (services_bbs.Presence, <-chan bool, error) {
+	fakeBBS.Lock()
+	fakeBBS.MaintainRepPresenceInput.HeartbeatInterval = heartbeatInterval
+	fakeBBS.MaintainRepPresenceInput.RepPresence = repPresence
+	fakeBBS.Unlock()
+
+	presence := fakeBBS.MaintainRepPresenceOutput.Presence
+
+	if presence == nil {
+		presence = &FakePresence{
+			MaintainStatus: true,
+		}
+	}
+
+	status, _ := presence.Maintain(heartbeatInterval)
+
+	return presence, status, fakeBBS.MaintainRepPresenceOutput.Error
+}
+
+func (fakeBBS *FakeRepBBS) GetMaintainRepPresenceHeartbeatInterval() time.Duration {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+	return fakeBBS.MaintainRepPresenceInput.HeartbeatInterval
+}
+
+func (fakeBBS *FakeRepBBS) GetMaintainRepPresence() models.RepPresence {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+	return fakeBBS.MaintainRepPresenceInput.RepPresence
+}
+
+func (fakeBBS *FakeRepBBS) Stop() {
+	fakeBBS.RLock()
+	presence := fakeBBS.MaintainRepPresenceOutput.Presence
+	fakeBBS.RUnlock()
+
+	if presence != nil {
+		presence.Remove()
+	}
 }

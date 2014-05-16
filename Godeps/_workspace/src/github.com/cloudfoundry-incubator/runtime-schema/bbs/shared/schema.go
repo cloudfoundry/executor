@@ -9,6 +9,7 @@ import (
 
 const SchemaRoot = "/v1/"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
+const RepSchemaRoot = SchemaRoot + "rep"
 const FileServerSchemaRoot = SchemaRoot + "file_server"
 const LongRunningProcessSchemaRoot = SchemaRoot + "transitional_lrp"
 const LRPStartAuctionSchemaRoot = SchemaRoot + "start"
@@ -17,6 +18,10 @@ const LockSchemaRoot = SchemaRoot + "locks"
 
 func ExecutorSchemaPath(executorID string) string {
 	return path.Join(ExecutorSchemaRoot, executorID)
+}
+
+func RepSchemaPath(repID string) string {
+	return path.Join(RepSchemaRoot, repID)
 }
 
 func FileServerSchemaPath(segments ...string) string {

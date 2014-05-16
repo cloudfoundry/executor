@@ -4,10 +4,17 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 func (self *ServicesBBS) MaintainExecutorPresence(heartbeatInterval time.Duration, executorId string) (Presence, <-chan bool, error) {
 	presence := NewPresence(self.store, shared.ExecutorSchemaPath(executorId), []byte{})
+	status, err := presence.Maintain(heartbeatInterval)
+	return presence, status, err
+}
+
+func (self *ServicesBBS) MaintainRepPresence(heartbeatInterval time.Duration, repPresence models.RepPresence) (Presence, <-chan bool, error) {
+	presence := NewPresence(self.store, shared.RepSchemaPath(repPresence.RepID), repPresence.ToJSON())
 	status, err := presence.Maintain(heartbeatInterval)
 	return presence, status, err
 }

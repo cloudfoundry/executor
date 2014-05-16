@@ -23,6 +23,9 @@ type ExecutorBBS interface {
 }
 
 type RepBBS interface {
+	//services
+	MaintainRepPresence(heartbeatInterval time.Duration, repPresence models.RepPresence) (services_bbs.Presence, <-chan bool, error)
+
 	//task
 	WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error)
 	ClaimTask(task models.Task, executorID string) (models.Task, error)
@@ -49,6 +52,9 @@ type AppManagerBBS interface {
 }
 
 type AuctioneerBBS interface {
+	//services
+	GetAllReps() ([]models.RepPresence, error)
+
 	//lrp
 	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
 	ClaimLPRStartAuction(models.LRPStartAuction) error
