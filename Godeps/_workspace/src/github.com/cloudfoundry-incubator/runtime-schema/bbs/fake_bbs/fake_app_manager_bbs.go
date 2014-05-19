@@ -7,6 +7,8 @@ import (
 )
 
 type FakeAppManagerBBS struct {
+	FileServerGetter
+
 	desiredLrps        []models.TransitionalLongRunningProcess
 	lrpStartAuctions   []models.LRPStartAuction
 	DesireLrpErr       error

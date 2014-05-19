@@ -13,6 +13,7 @@ var _ = Describe("LongRunningProcess", func() {
 
 		startAuctionPayload := `{
     "guid":"some-guid",
+    "instance_guid":"some-instance-guid",
     "stack":"some-stack",
     "memory_mb" : 128,
     "disk_mb" : 512,
@@ -44,10 +45,11 @@ var _ = Describe("LongRunningProcess", func() {
 			index := 42
 
 			startAuction = LRPStartAuction{
-				Guid:     "some-guid",
-				Stack:    "some-stack",
-				MemoryMB: 128,
-				DiskMB:   512,
+				Guid:         "some-guid",
+				InstanceGuid: "some-instance-guid",
+				Stack:        "some-stack",
+				MemoryMB:     128,
+				DiskMB:       512,
 				Ports: []PortMapping{
 					{ContainerPort: 8080},
 					{ContainerPort: 8081, HostPort: 1234},

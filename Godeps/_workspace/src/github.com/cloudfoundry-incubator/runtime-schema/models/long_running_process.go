@@ -57,13 +57,16 @@ const (
 )
 
 type LRPStartAuction struct {
-	Guid     string           `json:"guid"`
-	Stack    string           `json:"stack"`
-	Actions  []ExecutorAction `json:"actions"`
-	Log      LogConfig        `json:"log"`
-	MemoryMB int              `json:"memory_mb"`
-	DiskMB   int              `json:"disk_mb"`
-	Ports    []PortMapping    `json:"ports"`
+	Guid         string `json:"guid"`
+	InstanceGuid string `json:"instance_guid"`
+
+	DiskMB   int `json:"disk_mb"`
+	MemoryMB int `json:"memory_mb"`
+
+	Stack   string           `json:"stack"`
+	Actions []ExecutorAction `json:"actions"`
+	Log     LogConfig        `json:"log"`
+	Ports   []PortMapping    `json:"ports"`
 
 	Index int `json:"index"`
 

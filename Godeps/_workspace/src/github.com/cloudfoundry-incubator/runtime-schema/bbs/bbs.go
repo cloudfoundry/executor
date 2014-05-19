@@ -49,6 +49,9 @@ type AppManagerBBS interface {
 	//lrp
 	DesireTransitionalLongRunningProcess(models.TransitionalLongRunningProcess) error
 	RequestLRPStartAuction(models.LRPStartAuction) error
+
+	//services
+	GetAvailableFileServer() (string, error)
 }
 
 type AuctioneerBBS interface {
@@ -57,7 +60,7 @@ type AuctioneerBBS interface {
 
 	//lrp
 	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
-	ClaimLPRStartAuction(models.LRPStartAuction) error
+	ClaimLRPStartAuction(models.LRPStartAuction) error
 	ResolveLRPStartAuction(models.LRPStartAuction) error
 }
 
@@ -102,6 +105,10 @@ func NewConvergerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.
 }
 
 func NewAppManagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) AppManagerBBS {
+	return NewBBS(store, timeProvider)
+}
+
+func NewAuctioneerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) AuctioneerBBS {
 	return NewBBS(store, timeProvider)
 }
 

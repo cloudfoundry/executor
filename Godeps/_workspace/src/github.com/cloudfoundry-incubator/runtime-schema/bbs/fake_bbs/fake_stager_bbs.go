@@ -8,6 +8,8 @@ import (
 )
 
 type FakeStagerBBS struct {
+	FileServerGetter
+
 	watchingForCompleted chan bool
 	completedTaskChan    chan models.Task
 	completedTaskErrChan chan error
@@ -20,8 +22,7 @@ type FakeStagerBBS struct {
 	resolvedTask   models.Task
 	resolveTaskErr error
 
-	WhenDesiringTask               func(models.Task) (models.Task, error)
-	WhenGettingAvailableFileServer func() (string, error)
+	WhenDesiringTask func(models.Task) (models.Task, error)
 
 	sync.RWMutex
 }
@@ -81,10 +82,6 @@ func (fakeBBS *FakeStagerBBS) ResolveTask(task models.Task) (models.Task, error)
 	fakeBBS.resolvedTask = task
 
 	return task, nil
-}
-
-func (fakeBBS *FakeStagerBBS) GetAvailableFileServer() (string, error) {
-	return fakeBBS.WhenGettingAvailableFileServer()
 }
 
 func (fakeBBS *FakeStagerBBS) SendCompletedTask(task models.Task) {
