@@ -198,18 +198,30 @@ var _ = Describe("ExecutorAction", func() {
 						}
 					},
 					"interval_in_nanoseconds": 10000000000,
-					"healthy_hook": "bogus_healthy_hook",
-					"unhealthy_hook": "bogus_unhealthy_hook",
+					"healthy_hook": {
+						"method": "POST",
+						"url": "bogus_healthy_hook"
+					},
+					"unhealthy_hook": {
+						"method": "DELETE",
+						"url": "bogus_unhealthy_hook"
+					},
 					"healthy_threshold": 2,
 					"unhealthy_threshold": 5
 				}
 			}`,
 			ExecutorAction{
 				MonitorAction{
-					Action:             ExecutorAction{RunAction{Script: "echo"}},
-					Interval:           10 * time.Second,
-					HealthyHook:        "bogus_healthy_hook",
-					UnhealthyHook:      "bogus_unhealthy_hook",
+					Action:   ExecutorAction{RunAction{Script: "echo"}},
+					Interval: 10 * time.Second,
+					HealthyHook: HealthRequest{
+						Method: "POST",
+						URL:    "bogus_healthy_hook",
+					},
+					UnhealthyHook: HealthRequest{
+						Method: "DELETE",
+						URL:    "bogus_unhealthy_hook",
+					},
 					HealthyThreshold:   2,
 					UnhealthyThreshold: 5,
 				},

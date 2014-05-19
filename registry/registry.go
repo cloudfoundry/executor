@@ -5,9 +5,9 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/nu7hatch/gouuid"
 )
 
+var ErrContainerAlreadyExists = errors.New("container already exists")
 var ErrContainerNotFound = errors.New("container not found")
 var ErrContainerNotReserved = errors.New("container not reserved")
 
@@ -16,7 +16,7 @@ var blankContainer = api.Container{}
 type Registry interface {
 	CurrentCapacity() Capacity
 	FindByGuid(guid string) (api.Container, error)
-	Reserve(api.ContainerAllocationRequest) (api.Container, error)
+	Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error)
 	Create(guid, containerHandle string) (api.Container, error)
 	Delete(guid string) error
 }
@@ -56,14 +56,9 @@ func (r *registry) FindByGuid(guid string) (api.Container, error) {
 	return res, nil
 }
 
-func (r *registry) Reserve(req api.ContainerAllocationRequest) (api.Container, error) {
-	guid, err := uuid.NewV4()
-	if err != nil {
-		return api.Container{}, err
-	}
-
+func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error) {
 	res := api.Container{
-		Guid:         guid.String(),
+		Guid:         guid,
 		ExecutorGuid: r.executorGuid,
 		MemoryMB:     req.MemoryMB,
 		DiskMB:       req.DiskMB,
@@ -76,7 +71,12 @@ func (r *registry) Reserve(req api.ContainerAllocationRequest) (api.Container, e
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
-	err = r.currentCapacity.alloc(res)
+	_, ok := r.registeredContainers[guid]
+	if ok {
+		return api.Container{}, ErrContainerAlreadyExists
+	}
+
+	err := r.currentCapacity.alloc(res)
 	if err != nil {
 		return api.Container{}, err
 	}

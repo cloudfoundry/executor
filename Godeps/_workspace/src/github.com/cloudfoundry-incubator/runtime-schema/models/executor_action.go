@@ -52,7 +52,6 @@ type MonitorAction struct {
 type HealthRequest struct {
 	Method string `json:"method"`
 	URL    string `json:"url"`
-	Body   []byte `json:"body"`
 }
 
 type ParallelAction struct {

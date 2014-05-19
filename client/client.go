@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/tedsuo/router"
-	"io/ioutil"
-	"net/http"
 )
 
 type Client interface {
-	AllocateContainer(ContainerRequest) (ContainerResponse, error)
+	AllocateContainer(allocationGuid string, request ContainerRequest) (ContainerResponse, error)
 	InitializeContainer(allocationGuid string) error
 	Run(allocationGuid string, request RunRequest) error
 	DeleteContainer(allocationGuid string) error
@@ -50,10 +51,10 @@ type client struct {
 	httpClient *http.Client
 }
 
-func (c client) AllocateContainer(request ContainerRequest) (ContainerResponse, error) {
+func (c client) AllocateContainer(allocationGuid string, request ContainerRequest) (ContainerResponse, error) {
 	containerResponse := ContainerResponse{}
 
-	response, err := c.makeRequest(api.AllocateContainer, router.Params{}, api.ContainerAllocationRequest{
+	response, err := c.makeRequest(api.AllocateContainer, router.Params{"guid": allocationGuid}, api.ContainerAllocationRequest{
 		MemoryMB:   request.MemoryMB,
 		DiskMB:     request.DiskMB,
 		CpuPercent: request.CpuPercent,

@@ -19,6 +19,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
+	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -132,10 +133,14 @@ var _ = Describe("Main", func() {
 			MemoryMB: 1024,
 			DiskMB:   1024,
 		}
-		container := api.Container{}
-		PerformRequest(reqGen, api.AllocateContainer, nil, req, &container)
 
-		params := router.Params{"guid": container.Guid}
+		guid, err := uuid.NewV4()
+		Ω(err).ShouldNot(HaveOccurred())
+
+		container := api.Container{}
+		PerformRequest(reqGen, api.AllocateContainer, router.Params{"guid": guid.String()}, req, &container)
+
+		params := router.Params{"guid": guid.String()}
 		PerformRequest(reqGen, api.InitializeContainer, params, nil, nil)
 
 		actions := api.ContainerRunRequest{
@@ -256,7 +261,7 @@ var _ = Describe("Main", func() {
 					sendDrainSignal()
 
 					body := MarshalledPayload(api.ContainerAllocationRequest{})
-					req, err := reqGen.RequestForHandler(api.AllocateContainer, nil, body)
+					req, err := reqGen.RequestForHandler(api.AllocateContainer, router.Params{"guid": "container-123"}, body)
 					Ω(err).ShouldNot(HaveOccurred())
 
 					_, err = http.DefaultClient.Do(req)

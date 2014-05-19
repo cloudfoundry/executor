@@ -40,11 +40,14 @@ func MarshalledPayload(payload interface{}) io.Reader {
 var _ = Describe("Api", func() {
 	var registry Registry.Registry
 	var wardenClient *fake_warden_client.FakeClient
+	var containerGuid string
 
 	var server *httptest.Server
 	var generator *router.RequestGenerator
 
 	BeforeEach(func() {
+		containerGuid = "container-guid"
+
 		wardenClient = fake_warden_client.New()
 
 		registry = Registry.New("executor-guid-123", Registry.Capacity{
@@ -94,7 +97,7 @@ var _ = Describe("Api", func() {
 		return resp
 	}
 
-	Describe("POST /containers", func() {
+	Describe("POST /containers/:guid", func() {
 		var reserveRequestBody io.Reader
 		var reserveResponse *http.Response
 
@@ -106,7 +109,7 @@ var _ = Describe("Api", func() {
 		JustBeforeEach(func() {
 			reserveResponse = DoRequest(generator.RequestForHandler(
 				api.AllocateContainer,
-				nil,
+				router.Params{"guid": containerGuid},
 				reserveRequestBody,
 			))
 		})
@@ -162,13 +165,12 @@ var _ = Describe("Api", func() {
 			It("returns a container", func() {
 				Ω(reservedContainer).Should(Equal(api.Container{
 					ExecutorGuid: "executor-guid-123",
-					Guid:         reservedContainer.Guid,
+					Guid:         containerGuid,
 					MemoryMB:     64,
 					DiskMB:       512,
 					CpuPercent:   50,
 					State:        "reserved",
 				}))
-				Ω(reservedContainer.Guid).ShouldNot(Equal(""))
 			})
 
 			Context("and we request an available container", func() {
@@ -177,7 +179,7 @@ var _ = Describe("Api", func() {
 				JustBeforeEach(func() {
 					getResponse = DoRequest(generator.RequestForHandler(
 						api.GetContainer,
-						router.Params{"guid": reservedContainer.Guid},
+						router.Params{"guid": containerGuid},
 						nil,
 					))
 				})
@@ -197,7 +199,7 @@ var _ = Describe("Api", func() {
 
 					Ω(returnedContainer).Should(Equal(api.Container{
 						ExecutorGuid: "executor-guid-123",
-						Guid:         reservedContainer.Guid,
+						Guid:         containerGuid,
 						MemoryMB:     64,
 						DiskMB:       512,
 						CpuPercent:   50,
@@ -220,7 +222,7 @@ var _ = Describe("Api", func() {
 				JustBeforeEach(func() {
 					createResponse = DoRequest(generator.RequestForHandler(
 						api.InitializeContainer,
-						router.Params{"guid": reservedContainer.Guid},
+						router.Params{"guid": containerGuid},
 						nil,
 					))
 				})
@@ -423,9 +425,28 @@ var _ = Describe("Api", func() {
 			})
 		})
 
-		Context("when the container cannot be reserved", func() {
+		Context("when the container cannot be reserved because the guid is already taken", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve(api.ContainerAllocationRequest{
+				_, err := registry.Reserve(containerGuid, api.ContainerAllocationRequest{
+					MemoryMB: 1,
+					DiskMB:   1,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
+					MemoryMB: 1,
+					DiskMB:   1,
+				})
+			})
+
+			It("returns 400", func() {
+				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+			})
+		})
+
+		Context("when the container cannot be reserved because there is no room", func() {
+			BeforeEach(func() {
+				_, err := registry.Reserve("another-container-guid", api.ContainerAllocationRequest{
 					MemoryMB: 680,
 					DiskMB:   680,
 				})
@@ -448,8 +469,6 @@ var _ = Describe("Api", func() {
 		var runRequestBody io.Reader
 		var runResponse *http.Response
 
-		var containerGuid string
-
 		BeforeEach(func() {
 			runRequestBody = nil
 			runResponse = nil
@@ -462,7 +481,7 @@ var _ = Describe("Api", func() {
 
 			allocResponse := DoRequest(generator.RequestForHandler(
 				api.AllocateContainer,
-				nil,
+				router.Params{"guid": containerGuid},
 				allocRequestBody,
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -475,15 +494,9 @@ var _ = Describe("Api", func() {
 				return []string{"some-handle"}, nil
 			}
 
-			allocatedContainer := api.Container{}
-			err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			containerGuid = allocatedContainer.Guid
-
 			initResponse := DoRequest(generator.RequestForHandler(
 				api.InitializeContainer,
-				router.Params{"guid": allocatedContainer.Guid},
+				router.Params{"guid": containerGuid},
 				nil,
 			))
 			Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -691,7 +704,6 @@ var _ = Describe("Api", func() {
 
 	Describe("DELETE /containers/:guid", func() {
 		var deleteResponse *http.Response
-		var containerGuid string
 
 		JustBeforeEach(func() {
 			deleteResponse = DoRequest(generator.RequestForHandler(
@@ -711,16 +723,10 @@ var _ = Describe("Api", func() {
 
 				allocResponse := DoRequest(generator.RequestForHandler(
 					api.AllocateContainer,
-					nil,
+					router.Params{"guid": containerGuid},
 					allocRequestBody,
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-
-				allocatedContainer := api.Container{}
-				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				containerGuid = allocatedContainer.Guid
 			})
 
 			It("returns 200 OK", func() {
@@ -746,7 +752,7 @@ var _ = Describe("Api", func() {
 
 				allocResponse := DoRequest(generator.RequestForHandler(
 					api.AllocateContainer,
-					nil,
+					router.Params{"guid": containerGuid},
 					allocRequestBody,
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -759,15 +765,9 @@ var _ = Describe("Api", func() {
 					return []string{"some-handle"}, nil
 				}
 
-				allocatedContainer := api.Container{}
-				err := json.NewDecoder(allocResponse.Body).Decode(&allocatedContainer)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				containerGuid = allocatedContainer.Guid
-
 				initResponse := DoRequest(generator.RequestForHandler(
 					api.InitializeContainer,
-					router.Params{"guid": allocatedContainer.Guid},
+					router.Params{"guid": containerGuid},
 					nil,
 				))
 				Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -780,8 +780,6 @@ var _ = Describe("Api", func() {
 			It("destroys the warden container", func() {
 				Ω(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
 			})
-
 		})
-
 	})
 })

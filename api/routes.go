@@ -12,7 +12,7 @@ const (
 
 var Routes = router.Routes{
 	{Path: "/containers/:guid", Method: "GET", Handler: GetContainer},
-	{Path: "/containers", Method: "POST", Handler: AllocateContainer},
+	{Path: "/containers/:guid", Method: "POST", Handler: AllocateContainer},
 	{Path: "/containers/:guid/initialize", Method: "POST", Handler: InitializeContainer},
 	{Path: "/containers/:guid/run", Method: "POST", Handler: RunActions},
 	{Path: "/containers/:guid", Method: "DELETE", Handler: DeleteContainer},

@@ -5,7 +5,7 @@ import (
 )
 
 type FakeClient struct {
-	WhenAllocatingContainer   func(client.ContainerRequest) (client.ContainerResponse, error)
+	WhenAllocatingContainer   func(allocationGuid string, request client.ContainerRequest) (client.ContainerResponse, error)
 	WhenInitializingContainer func(allocationGuid string) error
 	WhenRunning               func(allocationGuid string, request client.RunRequest) error
 	WhenDeletingContainer     func(allocationGuid string) error
@@ -13,7 +13,7 @@ type FakeClient struct {
 
 func New() *FakeClient {
 	return &FakeClient{
-		WhenAllocatingContainer: func(req client.ContainerRequest) (client.ContainerResponse, error) {
+		WhenAllocatingContainer: func(allocationGuid string, req client.ContainerRequest) (client.ContainerResponse, error) {
 			return client.ContainerResponse{}, nil
 		},
 		WhenInitializingContainer: func(allocationGuid string) error {
@@ -28,8 +28,8 @@ func New() *FakeClient {
 	}
 }
 
-func (c *FakeClient) AllocateContainer(request client.ContainerRequest) (client.ContainerResponse, error) {
-	return c.WhenAllocatingContainer(request)
+func (c *FakeClient) AllocateContainer(allocationGuid string, request client.ContainerRequest) (client.ContainerResponse, error) {
+	return c.WhenAllocatingContainer(allocationGuid, request)
 }
 
 func (c *FakeClient) InitializeContainer(allocationGuid string) error {

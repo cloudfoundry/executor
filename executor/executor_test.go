@@ -96,7 +96,7 @@ var _ = Describe("Executor", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				req, err := reqGen.RequestForHandler(api.AllocateContainer, nil, bytes.NewBuffer(payload))
+				req, err := reqGen.RequestForHandler(api.AllocateContainer, router.Params{"guid": "container-123"}, bytes.NewBuffer(payload))
 				Ω(err).ShouldNot(HaveOccurred())
 
 				res, err := http.DefaultClient.Do(req)

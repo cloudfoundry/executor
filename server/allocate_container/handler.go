@@ -43,7 +43,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	container, err := h.registry.Reserve(req)
+	guid := r.FormValue(":guid")
+
+	container, err := h.registry.Reserve(guid, req)
+	if err == registry.ErrContainerAlreadyExists {
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+			"guid":  guid,
+		}, "executor.allocate-container.container-already-exists")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),

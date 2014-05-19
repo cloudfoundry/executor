@@ -14,8 +14,10 @@ import (
 var _ = Describe("Client", func() {
 	var fakeExecutor *ghttp.Server
 	var client Client
+	var containerGuid string
 
 	BeforeEach(func() {
+		containerGuid = "container-guid"
 		fakeExecutor = ghttp.NewServer()
 		client = New(http.DefaultClient, fakeExecutor.URL())
 	})
@@ -40,7 +42,7 @@ var _ = Describe("Client", func() {
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers"),
+					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
 					ghttp.VerifyJSON(`
           {
             "memory_mb": 64,
@@ -58,7 +60,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns a container", func() {
-				response, err := client.AllocateContainer(validRequest)
+				response, err := client.AllocateContainer(containerGuid, validRequest)
 
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(response).Should(Equal(ContainerResponse{
@@ -72,13 +74,13 @@ var _ = Describe("Client", func() {
 		Context("when the call fails because the resources are unavailable", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers"),
+					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
 					ghttp.RespondWith(http.StatusServiceUnavailable, "")),
 				)
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(validRequest)
+				_, err := client.AllocateContainer(containerGuid, validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -86,13 +88,13 @@ var _ = Describe("Client", func() {
 		Context("when the call fails for any other reason", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers"),
+					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
 					ghttp.RespondWith(http.StatusInternalServerError, "")),
 				)
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(validRequest)
+				_, err := client.AllocateContainer(containerGuid, validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
