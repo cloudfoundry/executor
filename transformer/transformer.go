@@ -5,14 +5,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/cacheddownloader"
-
-	"github.com/cloudfoundry-incubator/executor/checks"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -24,6 +16,12 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 )
 
 var ErrNoInterval = errors.New("no interval configured")
@@ -169,11 +167,12 @@ func (transformer *Transformer) convertAction(
 			return nil, ErrNoInterval
 		}
 
-		if actionModel.Check == nil {
-			return nil, ErrNoCheck
-		}
-
-		check, err := checks.Parse(*actionModel.Check)
+		check, err := transformer.convertAction(
+			logConfig,
+			actionModel.Action,
+			container,
+			result,
+		)
 		if err != nil {
 			return nil, err
 		}

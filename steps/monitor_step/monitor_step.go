@@ -5,12 +5,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/checks"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 )
 
 type monitorStep struct {
-	check checks.Check
+	check sequence.Step
 
 	interval           time.Duration
 	healthyThreshold   uint
@@ -21,7 +20,7 @@ type monitorStep struct {
 }
 
 func New(
-	check checks.Check,
+	check sequence.Step,
 	interval time.Duration,
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *url.URL,
@@ -45,7 +44,7 @@ func (step *monitorStep) Perform() error {
 	for {
 		<-timer.C
 
-		healthy := step.check.Check()
+		healthy := step.check.Perform() == nil
 
 		if healthy {
 			healthyCount++

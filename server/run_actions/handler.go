@@ -87,6 +87,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"error": err.Error(),
 		}, "executor.run-actions.steps-invalid")
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	go h.performRunActions(guid, container, request, sequence.New(steps), &result)

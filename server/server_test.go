@@ -540,7 +540,13 @@ var _ = Describe("Api", func() {
 					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
 						Actions: []models.ExecutorAction{
 							{
-								models.MonitorAction{},
+								models.MonitorAction{
+									Action: models.ExecutorAction{
+										models.RunAction{
+											Script: "ls -al",
+										},
+									},
+								},
 							},
 						},
 					})
