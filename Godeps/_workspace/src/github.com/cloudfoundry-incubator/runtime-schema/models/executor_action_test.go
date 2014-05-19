@@ -184,13 +184,19 @@ var _ = Describe("ExecutorAction", func() {
 	})
 
 	Describe("Monitor", func() {
-		checkPayload := json.RawMessage(`{ "type": "port", "args": { "port": "1234" } }`)
-
 		itSerializesAndDeserializes(
 			`{
 				"action": "monitor",
 				"args": {
-					"check": { "type": "port", "args": { "port": "1234" } },
+					"action": {
+						"action": "run",
+						"args": {
+							"resource_limits": {},
+							"env": null,
+							"timeout": 0,
+							"script": "echo"
+						}
+					},
 					"interval_in_nanoseconds": 10000000000,
 					"healthy_hook": "bogus_healthy_hook",
 					"unhealthy_hook": "bogus_unhealthy_hook",
@@ -200,7 +206,7 @@ var _ = Describe("ExecutorAction", func() {
 			}`,
 			ExecutorAction{
 				MonitorAction{
-					Check:              &checkPayload,
+					Action:             ExecutorAction{RunAction{Script: "echo"}},
 					Interval:           10 * time.Second,
 					HealthyHook:        "bogus_healthy_hook",
 					UnhealthyHook:      "bogus_unhealthy_hook",
@@ -218,22 +224,22 @@ var _ = Describe("ExecutorAction", func() {
         "args": {
           "actions": [
             {
+              "action": "download",
               "args": {
                 "extract": true,
                 "cache_key": "elephant",
                 "to": "local_location",
                 "from": "web_location"
-              },
-              "action": "download"
+              }
             },
             {
+              "action": "run",
               "args": {
                 "resource_limits": {},
                 "env": null,
                 "timeout": 0,
                 "script": "echo"
-              },
-              "action": "run"
+              }
             }
           ]
         }
