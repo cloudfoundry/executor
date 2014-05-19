@@ -17,8 +17,9 @@ import (
 
 var _ = Describe("MonitorStep", func() {
 	var (
-		check        sequence.Step
-		checkResults []error
+		check          sequence.Step
+		checkResults   []error
+		interruptCheck chan struct{}
 
 		interval           time.Duration
 		healthyThreshold   uint
@@ -36,11 +37,13 @@ var _ = Describe("MonitorStep", func() {
 		stepSequence := 0
 
 		checkResults = []error{}
+		interruptCheck = make(chan struct{})
 
 		check = fake_step.FakeStep{
 			WhenPerforming: func() error {
 				if len(checkResults) <= stepSequence {
-					select {}
+					<-interruptCheck
+					return nil
 				}
 
 				result := checkResults[stepSequence]
@@ -87,6 +90,15 @@ var _ = Describe("MonitorStep", func() {
 
 			JustBeforeEach(func() {
 				go step.Perform()
+			})
+
+			AfterEach(func() {
+				// unblocking check sequence; opens the floodgates, so ignore any
+				// requests after this point
+				hookServer.AllowUnhandledRequests = true
+				close(interruptCheck)
+
+				step.Cancel()
 			})
 
 			Context("when the check succeeds", func() {
@@ -215,6 +227,18 @@ var _ = Describe("MonitorStep", func() {
 					Consistently(hookServer.ReceivedRequests()).Should(BeEmpty())
 				})
 			})
+		})
+	})
+
+	Describe("Cancel", func() {
+		It("interrupts the monitoring", func() {
+			performResult := make(chan error)
+
+			go func() { performResult <- step.Perform() }()
+
+			step.Cancel()
+
+			Eventually(performResult).Should(Receive())
 		})
 	})
 })

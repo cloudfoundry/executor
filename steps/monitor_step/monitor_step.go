@@ -17,6 +17,8 @@ type monitorStep struct {
 
 	healthyHook   *url.URL
 	unhealthyHook *url.URL
+
+	cancel chan struct{}
 }
 
 func New(
@@ -32,6 +34,8 @@ func New(
 		unhealthyThreshold: unhealthyThreshold,
 		healthyHook:        healthyHook,
 		unhealthyHook:      unhealthyHook,
+
+		cancel: make(chan struct{}),
 	}
 }
 
@@ -42,43 +46,46 @@ func (step *monitorStep) Perform() error {
 	var unhealthyCount uint
 
 	for {
-		<-timer.C
+		select {
+		case <-timer.C:
+			healthy := step.check.Perform() == nil
 
-		healthy := step.check.Perform() == nil
-
-		if healthy {
-			healthyCount++
-			unhealthyCount = 0
-		} else {
-			unhealthyCount++
-			healthyCount = 0
-		}
-
-		var request *http.Request
-
-		if healthyCount >= step.healthyThreshold {
-			healthyCount = 0
-
-			request = &http.Request{
-				Method: "PUT",
-				URL:    step.healthyHook,
+			if healthy {
+				healthyCount++
+				unhealthyCount = 0
+			} else {
+				unhealthyCount++
+				healthyCount = 0
 			}
-		}
 
-		if unhealthyCount >= step.unhealthyThreshold {
-			unhealthyCount = 0
+			var request *http.Request
 
-			request = &http.Request{
-				Method: "PUT",
-				URL:    step.unhealthyHook,
+			if healthyCount >= step.healthyThreshold {
+				healthyCount = 0
+
+				request = &http.Request{
+					Method: "PUT",
+					URL:    step.healthyHook,
+				}
 			}
-		}
 
-		if request != nil {
-			resp, err := http.DefaultClient.Do(request)
-			if err == nil {
-				resp.Body.Close()
+			if unhealthyCount >= step.unhealthyThreshold {
+				unhealthyCount = 0
+
+				request = &http.Request{
+					Method: "PUT",
+					URL:    step.unhealthyHook,
+				}
 			}
+
+			if request != nil {
+				resp, err := http.DefaultClient.Do(request)
+				if err == nil {
+					resp.Body.Close()
+				}
+			}
+		case <-step.cancel:
+			return nil
 		}
 	}
 
@@ -86,6 +93,7 @@ func (step *monitorStep) Perform() error {
 }
 
 func (step *monitorStep) Cancel() {
+	step.cancel <- struct{}{}
 }
 
 func (step *monitorStep) Cleanup() {
