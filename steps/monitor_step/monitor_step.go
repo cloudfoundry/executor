@@ -2,7 +2,6 @@ package monitor_step
 
 import (
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -15,8 +14,8 @@ type monitorStep struct {
 	healthyThreshold   uint
 	unhealthyThreshold uint
 
-	healthyHook   *url.URL
-	unhealthyHook *url.URL
+	healthyHook   http.Request
+	unhealthyHook http.Request
 
 	cancel chan struct{}
 }
@@ -25,7 +24,7 @@ func New(
 	check sequence.Step,
 	interval time.Duration,
 	healthyThreshold, unhealthyThreshold uint,
-	healthyHook, unhealthyHook *url.URL,
+	healthyHook, unhealthyHook http.Request,
 ) sequence.Step {
 	return &monitorStep{
 		check:              check,
@@ -62,20 +61,12 @@ func (step *monitorStep) Perform() error {
 
 			if healthyCount >= step.healthyThreshold {
 				healthyCount = 0
-
-				request = &http.Request{
-					Method: "PUT",
-					URL:    step.healthyHook,
-				}
+				request = &step.healthyHook
 			}
 
 			if unhealthyCount >= step.unhealthyThreshold {
 				unhealthyCount = 0
-
-				request = &http.Request{
-					Method: "PUT",
-					URL:    step.unhealthyHook,
-				}
+				request = &step.unhealthyHook
 			}
 
 			if request != nil {

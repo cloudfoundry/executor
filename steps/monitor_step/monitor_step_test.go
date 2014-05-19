@@ -25,8 +25,8 @@ var _ = Describe("MonitorStep", func() {
 		healthyThreshold   uint
 		unhealthyThreshold uint
 
-		healthyHook   *url.URL
-		unhealthyHook *url.URL
+		healthyHookURL   *url.URL
+		unhealthyHookURL *url.URL
 
 		step sequence.Step
 
@@ -56,13 +56,13 @@ var _ = Describe("MonitorStep", func() {
 
 		hookServer = ghttp.NewServer()
 
-		healthyHook = &url.URL{
+		healthyHookURL = &url.URL{
 			Scheme: "http",
 			Host:   hookServer.HTTPTestServer.Listener.Addr().String(),
 			Path:   "/healthy",
 		}
 
-		unhealthyHook = &url.URL{
+		unhealthyHookURL = &url.URL{
 			Scheme: "http",
 			Host:   hookServer.HTTPTestServer.Listener.Addr().String(),
 			Path:   "/unhealthy",
@@ -75,8 +75,14 @@ var _ = Describe("MonitorStep", func() {
 			interval,
 			healthyThreshold,
 			unhealthyThreshold,
-			healthyHook,
-			unhealthyHook,
+			http.Request{
+				Method: "PUT",
+				URL:    healthyHookURL,
+			},
+			http.Request{
+				Method: "PUT",
+				URL:    unhealthyHookURL,
+			},
 		)
 	})
 

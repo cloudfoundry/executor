@@ -3,6 +3,7 @@ package transformer
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
@@ -153,12 +154,12 @@ func (transformer *Transformer) convertAction(
 
 		return try_step.New(subStep, transformer.logger), nil
 	case models.MonitorAction:
-		healthyHook, err := url.ParseRequestURI(actionModel.HealthyHook)
+		healthyHookURL, err := url.ParseRequestURI(actionModel.HealthyHook.URL)
 		if err != nil {
 			return nil, err
 		}
 
-		unhealthyHook, err := url.ParseRequestURI(actionModel.UnhealthyHook)
+		unhealthyHookURL, err := url.ParseRequestURI(actionModel.UnhealthyHook.URL)
 		if err != nil {
 			return nil, err
 		}
@@ -182,8 +183,14 @@ func (transformer *Transformer) convertAction(
 			actionModel.Interval,
 			actionModel.HealthyThreshold,
 			actionModel.UnhealthyThreshold,
-			healthyHook,
-			unhealthyHook,
+			http.Request{
+				Method: actionModel.HealthyHook.Method,
+				URL:    healthyHookURL,
+			},
+			http.Request{
+				Method: actionModel.UnhealthyHook.Method,
+				URL:    unhealthyHookURL,
+			},
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))
