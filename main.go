@@ -83,13 +83,13 @@ var tempDir = flag.String(
 
 var loggregatorServer = flag.String(
 	"loggregatorServer",
-	"",
+	"localhost:3456",
 	"loggregator server to emit logs to",
 )
 
 var loggregatorSecret = flag.String(
 	"loggregatorSecret",
-	"",
+	"secret",
 	"secret for the loggregator server",
 )
 
