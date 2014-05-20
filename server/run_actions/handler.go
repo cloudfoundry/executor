@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -48,6 +47,7 @@ func New(
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.waitGroup.Add(1)
+	defer h.waitGroup.Done()
 
 	guid := r.FormValue(":guid")
 
@@ -63,7 +63,6 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	reg, err := h.registry.FindByGuid(guid)
 	if err != nil {
-		log.Println("container not found:", err)
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.run-actions.container-not-found")
@@ -90,6 +89,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.waitGroup.Add(1)
 	go h.performRunActions(guid, container, request, sequence.New(steps), &result)
 
 	w.WriteHeader(http.StatusCreated)
@@ -139,10 +139,15 @@ func (h *handler) performRunActions(guid string, container warden.Container, req
 
 	for i := 1; i <= MAX_CALLBACK_ATTEMPTS; i++ {
 		err = performCompleteCallback(request.CompleteURL, resultPayload)
+
 		// break if we succeed
 		if err == nil {
 			return
 		}
+
+		h.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.run-action-callback.failed")
 
 		time.Sleep(time.Duration(i) * 500 * time.Millisecond)
 	}

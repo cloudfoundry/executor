@@ -49,7 +49,8 @@ func New(c *Config) (http.Handler, error) {
 			c.Transformer,
 			c.WaitGroup,
 			c.Cancel,
-			c.Logger),
+			c.Logger,
+		),
 
 		api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
 	}
