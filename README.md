@@ -14,6 +14,7 @@ cd warden-linux
 
 vagrant up
 scripts/run-warden-remote-linux
+# password: vagrant
 ```
 
 1) Run Executor locally
