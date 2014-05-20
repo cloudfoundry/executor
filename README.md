@@ -27,6 +27,7 @@ scripts/run-warden-remote-linux
 # download
 go get github.com/cloudfoundry/loggregator
 cd ~/go/src/github.com/cloudfoundry/loggregator
+git submodule update --init --recursive
 
 # compile for mac os x
 GOPATH=~/go/src/github.com/cloudfoundry/loggregator && PLATFORMS="darwin/amd64" bin/build-platforms
