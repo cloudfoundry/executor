@@ -5,19 +5,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-
-	"github.com/cloudfoundry-incubator/executor/maintain"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
-	"github.com/cloudfoundry/storeadapter/workerpool"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/executor"
@@ -42,20 +35,14 @@ var containerOwnerName = flag.String(
 
 var wardenNetwork = flag.String(
 	"wardenNetwork",
-	"unix",
+	"tcp",
 	"network mode for warden server (tcp, unix)",
 )
 
 var wardenAddr = flag.String(
 	"wardenAddr",
-	"/tmp/warden.sock",
+	":7031",
 	"network address for warden server",
-)
-
-var etcdCluster = flag.String(
-	"etcdCluster",
-	"http://127.0.0.1:4001",
-	"comma-separated list of etcd addresses (http://ip:port)",
 )
 
 var logLevel = flag.String(
@@ -120,7 +107,7 @@ var containerInodeLimit = flag.Int(
 
 var containerMaxCpuShares = flag.Int(
 	"containerMaxCpuShares",
-	0,
+	100,
 	"cpu shares allocatable to a container",
 )
 
@@ -155,21 +142,6 @@ func main() {
 
 	steno.Init(&stenoConfig)
 	logger := steno.NewLogger("executor")
-
-	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
-		strings.Split(*etcdCluster, ","),
-		workerpool.NewWorkerPool(10),
-	)
-
-	bbs := Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider())
-
-	err = etcdAdapter.Connect()
-	if err != nil {
-		logger.Errord(map[string]interface{}{
-			"error": err,
-		}, "failed to get etcdAdapter to connect")
-		os.Exit(1)
-	}
 
 	wardenClient := WardenClient.New(&WardenConnection.Info{
 		Network: *wardenNetwork,
@@ -220,26 +192,10 @@ func main() {
 		logger,
 	)
 
-	maintainSignals := make(chan os.Signal, 1)
-	signal.Notify(maintainSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
-
 	executorSignals := make(chan os.Signal, 1)
 	signal.Notify(executorSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
 
-	maintainReady := make(chan struct{})
 	executorReady := make(chan struct{})
-
-	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
-
-	go func() {
-		err := maintainer.Run(maintainSignals, maintainReady)
-		if err != nil {
-			logger.Errorf("failed to start maintaining presence: %s", err.Error())
-			executorSignals <- syscall.SIGTERM
-		}
-	}()
-
-	<-maintainReady
 
 	go func() {
 		<-executorReady
