@@ -702,6 +702,47 @@ var _ = Describe("Api", func() {
 		})
 	})
 
+	Describe("GET /containers", func() {
+		BeforeEach(func() {
+			allocResponse := DoRequest(generator.RequestForHandler(
+				api.AllocateContainer,
+				router.Params{"guid": "first-container"},
+				MarshalledPayload(api.ContainerAllocationRequest{
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 0.5,
+				}),
+			))
+			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+
+			allocResponse = DoRequest(generator.RequestForHandler(
+				api.AllocateContainer,
+				router.Params{"guid": "second-container"},
+				MarshalledPayload(api.ContainerAllocationRequest{
+					MemoryMB:   64,
+					DiskMB:     512,
+					CpuPercent: 0.5,
+				}),
+			))
+			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+		})
+
+		It("should return all reserved containers", func() {
+			listResponse := DoRequest(generator.RequestForHandler(
+				api.ListContainers,
+				nil,
+				nil,
+			))
+
+			containers := []api.Container{}
+			err := json.NewDecoder(listResponse.Body).Decode(&containers)
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(containers).Should(HaveLen(2))
+			Ω([]string{containers[0].Guid, containers[1].Guid}).Should(ContainElement("first-container"))
+			Ω([]string{containers[0].Guid, containers[1].Guid}).Should(ContainElement("second-container"))
+		})
+	})
+
 	Describe("DELETE /containers/:guid", func() {
 		var deleteResponse *http.Response
 

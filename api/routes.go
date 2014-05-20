@@ -8,9 +8,11 @@ const (
 	InitializeContainer = "InitializeContainer"
 	RunActions          = "RunActions"
 	DeleteContainer     = "DeleteContainer"
+	ListContainers      = "ListContainers"
 )
 
 var Routes = router.Routes{
+	{Path: "/containers", Method: "GET", Handler: ListContainers},
 	{Path: "/containers/:guid", Method: "GET", Handler: GetContainer},
 	{Path: "/containers/:guid", Method: "POST", Handler: AllocateContainer},
 	{Path: "/containers/:guid/initialize", Method: "POST", Handler: InitializeContainer},

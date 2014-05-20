@@ -10,14 +10,15 @@ const (
 type Container struct {
 	Guid string `json:"guid"`
 
-	ExecutorGuid    string           `json:"executor_guid"`
-	MemoryMB        int              `json:"memory_mb"`
-	DiskMB          int              `json:"disk_mb"`
-	CpuPercent      float64          `json:"cpu_percent"`
-	Ports           []PortMapping    `json:"ports"`
-	State           string           `json:"state"`
-	ContainerHandle string           `json:"container_handle"`
-	Log             models.LogConfig `json:"log"`
+	ExecutorGuid    string            `json:"executor_guid"`
+	MemoryMB        int               `json:"memory_mb"`
+	DiskMB          int               `json:"disk_mb"`
+	CpuPercent      float64           `json:"cpu_percent"`
+	Ports           []PortMapping     `json:"ports"`
+	State           string            `json:"state"`
+	ContainerHandle string            `json:"container_handle"`
+	Log             models.LogConfig  `json:"log"`
+	Metadata        map[string]string `json:"metadata"`
 }
 
 type PortMapping struct {
@@ -26,11 +27,12 @@ type PortMapping struct {
 }
 
 type ContainerAllocationRequest struct {
-	MemoryMB   int              `json:"memory_mb"`
-	DiskMB     int              `json:"disk_mb"`
-	CpuPercent float64          `json:"cpu_percent"`
-	Ports      []PortMapping    `json:"ports"`
-	Log        models.LogConfig `json:"log"`
+	MemoryMB   int               `json:"memory_mb"`
+	DiskMB     int               `json:"disk_mb"`
+	CpuPercent float64           `json:"cpu_percent"`
+	Ports      []PortMapping     `json:"ports"`
+	Log        models.LogConfig  `json:"log"`
+	Metadata   map[string]string `json:"metadata"`
 }
 
 type ContainerInitializeResult struct {

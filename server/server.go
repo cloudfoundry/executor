@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/server/initialize_container"
+	"github.com/cloudfoundry-incubator/executor/server/list_containers"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -33,6 +34,8 @@ func New(c *Config) (http.Handler, error) {
 		api.AllocateContainer: allocate_container.New(c.Registry, c.WaitGroup, c.Logger),
 
 		api.GetContainer: get_container.New(c.Registry, c.WaitGroup, c.Logger),
+
+		api.ListContainers: list_containers.New(c.Registry, c.WaitGroup),
 
 		api.InitializeContainer: initialize_container.New(
 			c.ContainerOwnerName,
