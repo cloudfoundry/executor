@@ -12,7 +12,7 @@ it's time to play the game
 
 ```bash
 # download
-go get github.com/cloudfoundry-incubator/warden-linux
+go get -u -v github.com/cloudfoundry-incubator/warden-linux
 cd ~/go/src/github.com/cloudfoundry-incubator/warden-linux
 
 # start warden
@@ -25,7 +25,7 @@ scripts/run-warden-remote-linux
 
 ```bash
 # download
-go get github.com/cloudfoundry/loggregator
+go get -v github.com/cloudfoundry/loggregator
 cd ~/go/src/github.com/cloudfoundry/loggregator
 git submodule update --init --recursive
 
@@ -40,7 +40,7 @@ release/loggregator-darwin-amd64 --config ~/go/src/github.com/cloudfoundry-incub
 
 ```bash
 # download
-git clone https://github.com/cloudfoundry-incubator/executor
+go get -v github.com/cloudfoundry-incubator/executor
 cd executor
 
 # start executor
