@@ -11,19 +11,37 @@ it's time to play the game
 1) Start Warden-Linux locally with vagrant and virtualbox
 
 ```bash
-git clone https://github.com/cloudfoundry-incubator/warden-linux
-cd warden-linux
+# download
+go get github.com/cloudfoundry-incubator/warden-linux
+cd ~/go/src/github.com/cloudfoundry-incubator/warden-linux
 
+# start warden
 vagrant up
 scripts/run-warden-remote-linux
 # password: vagrant
 ```
 
-1) Run Executor locally
+2) Start Loggregator
 
 ```bash
+# download
+go get github.com/cloudfoundry/loggregator
+cd ~/go/src/github.com/cloudfoundry/loggregator
+
+# compile for mac os x
+GOPATH=~/go/src/github.com/cloudfoundry/loggregator && PLATFORMS="darwin/amd64" bin/build-platforms
+
+# start loggregator
+release/loggregator-darwin-amd64 --config ~/go/src/github.com/cloudfoundry-incubator/executor/loggregator-config.json
+```
+
+3) Run Executor locally
+
+```bash
+# download
 git clone https://github.com/cloudfoundry-incubator/executor
 cd executor
 
+# start executor
 scripts/run-local
 ```
