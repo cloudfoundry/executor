@@ -30,6 +30,9 @@ type FakeRepBBS struct {
 	startedLrps []models.TransitionalLongRunningProcess
 	startLrpErr error
 
+	runningLrps   []models.LRP
+	runningLrpErr error
+
 	MaintainRepPresenceInput struct {
 		HeartbeatInterval time.Duration
 		RepPresence       models.RepPresence
@@ -138,6 +141,22 @@ func (fakeBBS *FakeRepBBS) StartTransitionalLongRunningProcess(lrp models.Transi
 	return nil
 }
 
+func (fakeBBS *FakeRepBBS) ReportLongRunningProcessAsRunning(lrp models.LRP) error {
+	fakeBBS.RLock()
+	err := fakeBBS.runningLrpErr
+	fakeBBS.RUnlock()
+
+	if err != nil {
+		return err
+	}
+
+	fakeBBS.Lock()
+	fakeBBS.runningLrps = append(fakeBBS.runningLrps, lrp)
+	fakeBBS.Unlock()
+
+	return nil
+}
+
 func (fakeBBS *FakeRepBBS) StartedTasks() []models.Task {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
@@ -156,6 +175,23 @@ func (fakeBBS *FakeRepBBS) StartedLongRunningProcesses() []models.TransitionalLo
 	copy(started, fakeBBS.startedLrps)
 
 	return started
+}
+
+func (fakeBBS *FakeRepBBS) RunningLongRunningProcesses() []models.LRP {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	running := make([]models.LRP, len(fakeBBS.runningLrps))
+	copy(running, fakeBBS.runningLrps)
+
+	return running
+}
+
+func (fakeBBS *FakeRepBBS) SetRunningError(err error) {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+
+	fakeBBS.runningLrpErr = err
 }
 
 func (fakeBBS *FakeRepBBS) SetStartTaskErr(err error) {

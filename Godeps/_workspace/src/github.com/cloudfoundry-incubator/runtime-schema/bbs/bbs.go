@@ -35,6 +35,9 @@ type RepBBS interface {
 	//lrp
 	WatchForDesiredTransitionalLongRunningProcess() (<-chan models.TransitionalLongRunningProcess, chan<- bool, <-chan error)
 	StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error
+
+	///
+	ReportLongRunningProcessAsRunning(lrp models.LRP) error
 }
 
 type ConvergerBBS interface {
