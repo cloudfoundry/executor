@@ -7,10 +7,12 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 )
 
+const BaseInterval = 500 * time.Millisecond
+const MaxInterval = 30 * time.Second
+
 type monitorStep struct {
 	check sequence.Step
 
-	interval           time.Duration
 	healthyThreshold   uint
 	unhealthyThreshold uint
 
@@ -22,13 +24,11 @@ type monitorStep struct {
 
 func New(
 	check sequence.Step,
-	interval time.Duration,
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *http.Request,
 ) sequence.Step {
 	return &monitorStep{
 		check:              check,
-		interval:           interval,
 		healthyThreshold:   healthyThreshold,
 		unhealthyThreshold: unhealthyThreshold,
 		healthyHook:        healthyHook,
@@ -39,34 +39,32 @@ func New(
 }
 
 func (step *monitorStep) Perform() error {
-	timer := time.NewTicker(step.interval)
+	timer := time.After(BaseInterval)
 
 	var healthyCount uint
 	var unhealthyCount uint
 
 	for {
 		select {
-		case <-timer.C:
+		case <-timer:
 			healthy := step.check.Perform() == nil
+
+			var request *http.Request
 
 			if healthy {
 				healthyCount++
 				unhealthyCount = 0
+
+				if step.healthyHook != nil && (healthyCount%step.healthyThreshold) == 0 {
+					request = step.healthyHook
+				}
 			} else {
 				unhealthyCount++
 				healthyCount = 0
-			}
 
-			var request *http.Request
-
-			if step.healthyHook != nil && healthyCount >= step.healthyThreshold {
-				healthyCount = 0
-				request = step.healthyHook
-			}
-
-			if step.healthyHook != nil && unhealthyCount >= step.unhealthyThreshold {
-				unhealthyCount = 0
-				request = step.unhealthyHook
+				if step.unhealthyHook != nil && (unhealthyCount%step.unhealthyThreshold) == 0 {
+					request = step.unhealthyHook
+				}
 			}
 
 			if request != nil {
@@ -75,6 +73,15 @@ func (step *monitorStep) Perform() error {
 					resp.Body.Close()
 				}
 			}
+
+			backoff := BaseInterval * time.Duration(1<<(healthyCount-1))
+			if backoff < BaseInterval {
+				backoff = BaseInterval
+			} else if backoff > MaxInterval {
+				backoff = MaxInterval
+			}
+
+			timer = time.After(backoff)
 		case <-step.cancel:
 			return nil
 		}

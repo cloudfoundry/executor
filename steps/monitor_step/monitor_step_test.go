@@ -19,9 +19,9 @@ var _ = Describe("MonitorStep", func() {
 	var (
 		check          sequence.Step
 		checkResults   []error
+		checkTimes     chan time.Time
 		interruptCheck chan struct{}
 
-		interval           time.Duration
 		healthyThreshold   uint
 		unhealthyThreshold uint
 
@@ -37,10 +37,13 @@ var _ = Describe("MonitorStep", func() {
 		stepSequence := 0
 
 		checkResults = []error{}
+		checkTimes = make(chan time.Time, 1024)
 		interruptCheck = make(chan struct{})
 
 		check = fake_step.FakeStep{
 			WhenPerforming: func() error {
+				checkTimes <- time.Now()
+
 				if len(checkResults) <= stepSequence {
 					<-interruptCheck
 					return nil
@@ -72,7 +75,6 @@ var _ = Describe("MonitorStep", func() {
 	JustBeforeEach(func() {
 		step = New(
 			check,
-			interval,
 			healthyThreshold,
 			unhealthyThreshold,
 			&http.Request{
@@ -91,7 +93,6 @@ var _ = Describe("MonitorStep", func() {
 			BeforeEach(func() {
 				healthyThreshold = 2
 				unhealthyThreshold = 2
-				interval = 1 * time.Nanosecond
 			})
 
 			JustBeforeEach(func() {
@@ -116,6 +117,20 @@ var _ = Describe("MonitorStep", func() {
 					Consistently(hookServer.ReceivedRequests()).Should(BeEmpty())
 				})
 
+				Context("and then fails", func() {
+					BeforeEach(func() {
+						checkResults = append(checkResults, errors.New("nope"))
+					})
+
+					It("checked again after half a second", func() {
+						time1 := <-checkTimes
+
+						time2 := <-checkTimes
+						Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
+						Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
+					})
+				})
+
 				Context("and succeeds again", func() {
 					BeforeEach(func() {
 						checkResults = append(checkResults, nil)
@@ -126,7 +141,7 @@ var _ = Describe("MonitorStep", func() {
 					})
 
 					It("hits the healthy endpoint", func() {
-						Eventually(hookServer.ReceivedRequests).Should(HaveLen(1))
+						Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 					})
 
 					Context("when hitting the endpoint fails", func() {
@@ -134,17 +149,10 @@ var _ = Describe("MonitorStep", func() {
 							hookServer.SetHandler(0, func(w http.ResponseWriter, r *http.Request) {
 								hookServer.HTTPTestServer.CloseClientConnections()
 							})
-
-							hookServer.AppendHandlers(
-								ghttp.VerifyRequest("PUT", "/healthy"),
-							)
-
-							checkResults = append(checkResults, nil)
-							checkResults = append(checkResults, nil)
 						})
 
 						It("keeps calm and carries on", func() {
-							Eventually(hookServer.ReceivedRequests).Should(HaveLen(2))
+							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 						})
 					})
 
@@ -154,7 +162,7 @@ var _ = Describe("MonitorStep", func() {
 						})
 
 						It("hits the healthy endpoint once and only once", func() {
-							Eventually(hookServer.ReceivedRequests).Should(HaveLen(1))
+							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 							Consistently(hookServer.ReceivedRequests).Should(HaveLen(1))
 						})
 
@@ -168,7 +176,23 @@ var _ = Describe("MonitorStep", func() {
 							})
 
 							It("hits the healthy endpoint a total of two times", func() {
-								Eventually(hookServer.ReceivedRequests).Should(HaveLen(2))
+								Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(2))
+							})
+
+							It("had checked on an exponentially increasing backoff", func() {
+								time1 := <-checkTimes
+
+								time2 := <-checkTimes
+								Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
+								Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
+
+								time3 := <-checkTimes
+								Ω(time3.Sub(time2)).Should(BeNumerically(">=", 1*time.Second))
+								Ω(time3.Sub(time2)).Should(BeNumerically("<", 2*time.Second))
+
+								time4 := <-checkTimes
+								Ω(time4.Sub(time3)).Should(BeNumerically(">=", 2*time.Second))
+								Ω(time4.Sub(time3)).Should(BeNumerically("<", 3*time.Second))
 							})
 						})
 					})
@@ -194,7 +218,7 @@ var _ = Describe("MonitorStep", func() {
 					})
 
 					It("hits the unhealthy endpoint", func() {
-						Eventually(hookServer.ReceivedRequests).Should(HaveLen(1))
+						Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 					})
 
 					Context("and again", func() {
@@ -203,7 +227,7 @@ var _ = Describe("MonitorStep", func() {
 						})
 
 						It("hits the unhealthy endpoint once and only once", func() {
-							Eventually(hookServer.ReceivedRequests).Should(HaveLen(1))
+							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 							Consistently(hookServer.ReceivedRequests).Should(HaveLen(1))
 						})
 
@@ -217,7 +241,23 @@ var _ = Describe("MonitorStep", func() {
 							})
 
 							It("hits the unhealthy endpoint a total of two times", func() {
-								Eventually(hookServer.ReceivedRequests).Should(HaveLen(2))
+								Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(2))
+							})
+
+							It("had checked again after half a second", func() {
+								time1 := <-checkTimes
+
+								time2 := <-checkTimes
+								Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
+								Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
+
+								time3 := <-checkTimes
+								Ω(time3.Sub(time2)).Should(BeNumerically(">=", 500*time.Millisecond))
+								Ω(time3.Sub(time2)).Should(BeNumerically("<", 1*time.Second))
+
+								time4 := <-checkTimes
+								Ω(time4.Sub(time3)).Should(BeNumerically(">=", 500*time.Millisecond))
+								Ω(time4.Sub(time3)).Should(BeNumerically("<", 1*time.Second))
 							})
 						})
 					})
@@ -230,7 +270,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("does not hit any endpoint", func() {
-					Consistently(hookServer.ReceivedRequests()).Should(BeEmpty())
+					Consistently(hookServer.ReceivedRequests).Should(BeEmpty())
 				})
 			})
 		})

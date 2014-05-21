@@ -25,7 +25,6 @@ import (
 	"github.com/pivotal-golang/cacheddownloader"
 )
 
-var ErrNoInterval = errors.New("no interval configured")
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
@@ -181,10 +180,6 @@ func (transformer *Transformer) convertAction(
 			}
 		}
 
-		if actionModel.Interval == 0 {
-			return nil, ErrNoInterval
-		}
-
 		check, err := transformer.convertAction(
 			logConfig,
 			actionModel.Action,
@@ -197,7 +192,6 @@ func (transformer *Transformer) convertAction(
 
 		return monitor_step.New(
 			check,
-			actionModel.Interval,
 			actionModel.HealthyThreshold,
 			actionModel.UnhealthyThreshold,
 			healthyHook,
