@@ -181,7 +181,7 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	logger.Infof("Initial Capacity: %s", capacity)
+	logger.Infof("Initial Capacity: %s", capacity.String())
 
 	if *containerMaxCpuShares <= 0 {
 		logger.Error("valid maximum container cpu shares must be specified on startup!")
