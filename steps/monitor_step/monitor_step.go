@@ -14,8 +14,8 @@ type monitorStep struct {
 	healthyThreshold   uint
 	unhealthyThreshold uint
 
-	healthyHook   http.Request
-	unhealthyHook http.Request
+	healthyHook   *http.Request
+	unhealthyHook *http.Request
 
 	cancel chan struct{}
 }
@@ -24,7 +24,7 @@ func New(
 	check sequence.Step,
 	interval time.Duration,
 	healthyThreshold, unhealthyThreshold uint,
-	healthyHook, unhealthyHook http.Request,
+	healthyHook, unhealthyHook *http.Request,
 ) sequence.Step {
 	return &monitorStep{
 		check:              check,
@@ -59,14 +59,14 @@ func (step *monitorStep) Perform() error {
 
 			var request *http.Request
 
-			if healthyCount >= step.healthyThreshold {
+			if step.healthyHook != nil && healthyCount >= step.healthyThreshold {
 				healthyCount = 0
-				request = &step.healthyHook
+				request = step.healthyHook
 			}
 
-			if unhealthyCount >= step.unhealthyThreshold {
+			if step.healthyHook != nil && unhealthyCount >= step.unhealthyThreshold {
 				unhealthyCount = 0
-				request = &step.unhealthyHook
+				request = step.unhealthyHook
 			}
 
 			if request != nil {

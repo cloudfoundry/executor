@@ -154,14 +154,31 @@ func (transformer *Transformer) convertAction(
 
 		return try_step.New(subStep, transformer.logger), nil
 	case models.MonitorAction:
-		healthyHookURL, err := url.ParseRequestURI(actionModel.HealthyHook.URL)
-		if err != nil {
-			return nil, err
+		var healthyHook *http.Request
+		var unhealthyHook *http.Request
+
+		if actionModel.HealthyHook.URL != "" {
+			healthyHookURL, err := url.ParseRequestURI(actionModel.HealthyHook.URL)
+			if err != nil {
+				return nil, err
+			}
+
+			healthyHook = &http.Request{
+				Method: actionModel.HealthyHook.Method,
+				URL:    healthyHookURL,
+			}
 		}
 
-		unhealthyHookURL, err := url.ParseRequestURI(actionModel.UnhealthyHook.URL)
-		if err != nil {
-			return nil, err
+		if actionModel.UnhealthyHook.URL != "" {
+			unhealthyHookURL, err := url.ParseRequestURI(actionModel.UnhealthyHook.URL)
+			if err != nil {
+				return nil, err
+			}
+
+			unhealthyHook = &http.Request{
+				Method: actionModel.UnhealthyHook.Method,
+				URL:    unhealthyHookURL,
+			}
 		}
 
 		if actionModel.Interval == 0 {
@@ -183,14 +200,8 @@ func (transformer *Transformer) convertAction(
 			actionModel.Interval,
 			actionModel.HealthyThreshold,
 			actionModel.UnhealthyThreshold,
-			http.Request{
-				Method: actionModel.HealthyHook.Method,
-				URL:    healthyHookURL,
-			},
-			http.Request{
-				Method: actionModel.UnhealthyHook.Method,
-				URL:    unhealthyHookURL,
-			},
+			healthyHook,
+			unhealthyHook,
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))

@@ -75,11 +75,11 @@ var _ = Describe("MonitorStep", func() {
 			interval,
 			healthyThreshold,
 			unhealthyThreshold,
-			http.Request{
+			&http.Request{
 				Method: "PUT",
 				URL:    healthyHookURL,
 			},
-			http.Request{
+			&http.Request{
 				Method: "PUT",
 				URL:    unhealthyHookURL,
 			},
