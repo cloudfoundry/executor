@@ -11,7 +11,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/server/initialize_container"
 	"github.com/cloudfoundry-incubator/executor/server/list_containers"
+	"github.com/cloudfoundry-incubator/executor/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
+	"github.com/cloudfoundry-incubator/executor/server/total_resources"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
@@ -56,6 +58,10 @@ func New(c *Config) (http.Handler, error) {
 		),
 
 		api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
+
+		api.GetRemainingResources: remaining_resources.New(c.Registry, c.WaitGroup, c.Logger),
+
+		api.GetTotalResources: total_resources.New(c.Registry, c.WaitGroup, c.Logger),
 	}
 
 	return router.NewRouter(api.Routes, handlers)

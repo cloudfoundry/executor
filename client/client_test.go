@@ -3,6 +3,8 @@ package client_test
 import (
 	"net/http"
 	"time"
+
+	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/onsi/gomega/ghttp"
@@ -23,15 +25,28 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Allocate", func() {
-		var validRequest ContainerRequest
+		var validRequest api.ContainerAllocationRequest
+		var validResponse api.Container
 
 		BeforeEach(func() {
 			zero := 0
-			validRequest = ContainerRequest{
+			validRequest = api.ContainerAllocationRequest{
 				MemoryMB:   64,
 				DiskMB:     1024,
 				CpuPercent: 0.5,
-				LogConfig: models.LogConfig{
+				Log: models.LogConfig{
+					Guid:       "some-guid",
+					SourceName: "XYZ",
+					Index:      &zero,
+				},
+			}
+			validResponse = api.Container{
+				Guid:         "guid-123",
+				ExecutorGuid: "executor-guid",
+				MemoryMB:     64,
+				DiskMB:       1024,
+				CpuPercent:   0.5,
+				Log: models.LogConfig{
 					Guid:       "some-guid",
 					SourceName: "XYZ",
 					Index:      &zero,
@@ -56,7 +71,7 @@ var _ = Describe("Client", func() {
               "index":0
             }
           }`),
-					ghttp.RespondWith(http.StatusCreated, `{"executor_guid":"executor-guid","guid":"guid-123"}`)),
+					ghttp.RespondWithJSONEncoded(http.StatusCreated, validResponse)),
 				)
 			})
 
@@ -64,11 +79,7 @@ var _ = Describe("Client", func() {
 				response, err := client.AllocateContainer(containerGuid, validRequest)
 
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(ContainerResponse{
-					ContainerRequest: validRequest,
-					Guid:             "guid-123",
-					ExecutorGuid:     "executor-guid",
-				}))
+				Ω(response).Should(Equal(validResponse))
 			})
 		})
 
@@ -132,12 +143,12 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Run", func() {
-		var validRequest RunRequest
+		var validRequest api.ContainerRunRequest
 
 		BeforeEach(func() {
-			validRequest = RunRequest{
-				Metadata:      []byte("abc"), // base64-encoded in JSON
-				CompletionURL: "the-completion-url",
+			validRequest = api.ContainerRunRequest{
+				Metadata:    []byte("abc"), // base64-encoded in JSON
+				CompleteURL: "the-completion-url",
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{
@@ -224,4 +235,72 @@ var _ = Describe("Client", func() {
 			})
 		})
 	})
+
+	Describe("ListContainers", func() {
+		var listResponse []api.Container
+		BeforeEach(func() {
+			listResponse = []api.Container{
+				{Guid: "a"},
+				{Guid: "b"},
+			}
+
+			fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/containers"),
+				ghttp.RespondWithJSONEncoded(http.StatusOK, listResponse)),
+			)
+		})
+
+		It("should returns the list of containers sent back by the server", func() {
+			response, err := client.ListContainers()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(response).Should(Equal(listResponse))
+		})
+	})
+
+	Describe("Total Resources", func() {
+		var totalResourcesResponse api.ExecutorResources
+
+		BeforeEach(func() {
+			totalResourcesResponse = api.ExecutorResources{
+				MemoryMB:   1024,
+				DiskMB:     2048,
+				Containers: 32,
+			}
+
+			fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/resources/total"),
+				ghttp.RespondWithJSONEncoded(http.StatusOK, totalResourcesResponse)),
+			)
+		})
+
+		It("Should returns the total resources", func() {
+			response, err := client.TotalResources()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(response).Should(Equal(totalResourcesResponse))
+		})
+	})
+
+	Describe("Remaining Resources", func() {
+		var remainingResourcesResponse api.ExecutorResources
+
+		BeforeEach(func() {
+			remainingResourcesResponse = api.ExecutorResources{
+				MemoryMB:   1024,
+				DiskMB:     2048,
+				Containers: 32,
+			}
+
+			fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/resources/remaining"),
+				ghttp.RespondWithJSONEncoded(http.StatusOK, remainingResourcesResponse)),
+			)
+		})
+
+		It("Should returns the remaining resources", func() {
+			response, err := client.RemainingResources()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(response).Should(Equal(remainingResourcesResponse))
+		})
+	})
+
 })

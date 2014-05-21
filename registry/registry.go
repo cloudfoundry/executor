@@ -86,8 +86,7 @@ func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api
 		Ports:        req.Ports,
 		State:        api.StateReserved,
 		Log:          req.Log,
-		Metadata:     req.Metadata,
-	}
+		Metadata:     req.Metadata}
 
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()

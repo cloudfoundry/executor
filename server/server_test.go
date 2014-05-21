@@ -823,4 +823,82 @@ var _ = Describe("Api", func() {
 			})
 		})
 	})
+
+	Describe("GET /resources/remaining", func() {
+		var resourcesResponse *http.Response
+
+		BeforeEach(func() {
+			resourcesResponse = nil
+
+			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
+				MemoryMB:   64,
+				DiskMB:     512,
+				CpuPercent: 0.5,
+			})
+
+			allocResponse := DoRequest(generator.RequestForHandler(
+				api.AllocateContainer,
+				router.Params{"guid": containerGuid},
+				allocRequestBody,
+			))
+			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+
+			resourcesResponse = DoRequest(generator.RequestForHandler(
+				api.GetRemainingResources,
+				nil,
+				nil,
+			))
+		})
+
+		It("should return the remaining resources", func() {
+			var resources api.ExecutorResources
+			err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+
+			Ω(resources.MemoryMB).Should(Equal(1024 - 64))
+			Ω(resources.DiskMB).Should(Equal(1024 - 512))
+			Ω(resources.Containers).Should(Equal(1024 - 1))
+		})
+	})
+
+	Describe("GET /resources/total", func() {
+		var resourcesResponse *http.Response
+
+		BeforeEach(func() {
+			resourcesResponse = nil
+
+			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
+				MemoryMB:   64,
+				DiskMB:     512,
+				CpuPercent: 0.5,
+			})
+
+			allocResponse := DoRequest(generator.RequestForHandler(
+				api.AllocateContainer,
+				router.Params{"guid": containerGuid},
+				allocRequestBody,
+			))
+			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+
+			resourcesResponse = DoRequest(generator.RequestForHandler(
+				api.GetTotalResources,
+				nil,
+				nil,
+			))
+		})
+
+		It("should return the total resources", func() {
+			var resources api.ExecutorResources
+			err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+
+			Ω(resources.MemoryMB).Should(Equal(1024))
+			Ω(resources.DiskMB).Should(Equal(1024))
+			Ω(resources.Containers).Should(Equal(1024))
+		})
+	})
 })

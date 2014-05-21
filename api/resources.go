@@ -51,3 +51,9 @@ type ContainerRunResult struct {
 	Result        string `json:"result"`
 	Metadata      []byte `json:"metadata"`
 }
+
+type ExecutorResources struct {
+	MemoryMB   int `json:"memory_mb"`
+	DiskMB     int `json:"disk_mb"`
+	Containers int `json:"containers"`
+}

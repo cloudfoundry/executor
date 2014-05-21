@@ -48,7 +48,7 @@ func (bbs *FakeAuctioneerBBS) WatchForLRPStartAuction() (<-chan models.LRPStartA
 	return bbs.LRPStartAuctionChan, bbs.LRPStartAuctionStopChan, bbs.LRPStartAuctionErrorChan
 }
 
-func (bbs *FakeAuctioneerBBS) ClaimLRRStartAuction(auction models.LRPStartAuction) error {
+func (bbs *FakeAuctioneerBBS) ClaimLRPStartAuction(auction models.LRPStartAuction) error {
 	bbs.lock.Lock()
 	defer bbs.lock.Unlock()
 

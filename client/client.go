@@ -4,39 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/tedsuo/router"
 )
 
 type Client interface {
-	AllocateContainer(allocationGuid string, request ContainerRequest) (ContainerResponse, error)
+	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
 	InitializeContainer(allocationGuid string) error
-	Run(allocationGuid string, request RunRequest) error
+	Run(allocationGuid string, request api.ContainerRunRequest) error
 	DeleteContainer(allocationGuid string) error
-}
-
-type ContainerRequest struct {
-	Stack      string
-	MemoryMB   int
-	DiskMB     int
-	CpuPercent float64
-	LogConfig  models.LogConfig
-}
-
-type RunRequest struct {
-	Actions       []models.ExecutorAction
-	Metadata      []byte
-	CompletionURL string
-}
-
-type ContainerResponse struct {
-	ContainerRequest
-	ExecutorGuid string
-	Guid         string
+	ListContainers() ([]api.Container, error)
+	RemainingResources() (api.ExecutorResources, error)
+	TotalResources() (api.ExecutorResources, error)
 }
 
 func New(httpClient *http.Client, baseUrl string) Client {
@@ -51,42 +32,25 @@ type client struct {
 	httpClient *http.Client
 }
 
-func (c client) AllocateContainer(allocationGuid string, request ContainerRequest) (ContainerResponse, error) {
-	containerResponse := ContainerResponse{}
+func (c client) AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error) {
+	container := api.Container{}
 
-	response, err := c.makeRequest(api.AllocateContainer, router.Params{"guid": allocationGuid}, api.ContainerAllocationRequest{
-		MemoryMB:   request.MemoryMB,
-		DiskMB:     request.DiskMB,
-		CpuPercent: request.CpuPercent,
-		Log:        request.LogConfig,
-	})
-
-	if response != nil && response.StatusCode == http.StatusServiceUnavailable {
-		return containerResponse, fmt.Errorf("Resources %v unavailable", request)
-	}
-
+	response, err := c.makeRequest(api.AllocateContainer, router.Params{"guid": allocationGuid}, request)
 	if err != nil {
-		return containerResponse, err
+		return container, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusServiceUnavailable {
+		return container, fmt.Errorf("Resources %v unavailable", request)
 	}
 
-	responseBody, err := ioutil.ReadAll(response.Body)
+	err = json.NewDecoder(response.Body).Decode(&container)
 	if err != nil {
-		return containerResponse, err
+		return container, err
 	}
 
-	response.Body.Close()
-
-	containerJson := api.Container{}
-	err = json.Unmarshal(responseBody, &containerJson)
-	if err != nil {
-		return containerResponse, err
-	}
-
-	return ContainerResponse{
-		ContainerRequest: request,
-		Guid:             containerJson.Guid,
-		ExecutorGuid:     containerJson.ExecutorGuid,
-	}, nil
+	return container, nil
 }
 
 func (c client) InitializeContainer(allocationGuid string) error {
@@ -94,12 +58,8 @@ func (c client) InitializeContainer(allocationGuid string) error {
 	return err
 }
 
-func (c client) Run(allocationGuid string, request RunRequest) error {
-	_, err := c.makeRequest(api.RunActions, router.Params{"guid": allocationGuid}, &api.ContainerRunRequest{
-		Actions:     request.Actions,
-		Metadata:    []byte(request.Metadata),
-		CompleteURL: request.CompletionURL,
-	})
+func (c client) Run(allocationGuid string, request api.ContainerRunRequest) error {
+	_, err := c.makeRequest(api.RunActions, router.Params{"guid": allocationGuid}, request)
 
 	return err
 }
@@ -107,6 +67,48 @@ func (c client) Run(allocationGuid string, request RunRequest) error {
 func (c client) DeleteContainer(allocationGuid string) error {
 	_, err := c.makeRequest(api.DeleteContainer, router.Params{"guid": allocationGuid}, nil)
 	return err
+}
+
+func (c client) ListContainers() ([]api.Container, error) {
+	containers := []api.Container{}
+
+	response, err := c.makeRequest(api.ListContainers, nil, nil)
+	if err != nil {
+		return containers, err
+	}
+	defer response.Body.Close()
+
+	err = json.NewDecoder(response.Body).Decode(&containers)
+	if err != nil {
+		return containers, err
+	}
+
+	return containers, nil
+}
+
+func (c client) RemainingResources() (api.ExecutorResources, error) {
+	return c.getResources(api.GetRemainingResources)
+}
+
+func (c client) TotalResources() (api.ExecutorResources, error) {
+	return c.getResources(api.GetTotalResources)
+}
+
+func (c client) getResources(apiEndpoint string) (api.ExecutorResources, error) {
+	resources := api.ExecutorResources{}
+
+	response, err := c.makeRequest(apiEndpoint, nil, nil)
+	if err != nil {
+		return resources, err
+	}
+	defer response.Body.Close()
+
+	err = json.NewDecoder(response.Body).Decode(&resources)
+	if err != nil {
+		return resources, err
+	}
+
+	return resources, nil
 }
 
 func (c client) makeRequest(handlerName string, params router.Params, payload interface{}) (*http.Response, error) {
