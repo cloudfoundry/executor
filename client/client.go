@@ -12,6 +12,7 @@ import (
 
 type Client interface {
 	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
+	GetContainer(allocationGuid string) (api.Container, error)
 	InitializeContainer(allocationGuid string) error
 	Run(allocationGuid string, request api.ContainerRunRequest) error
 	DeleteContainer(allocationGuid string) error
@@ -48,6 +49,28 @@ func (c client) AllocateContainer(allocationGuid string, request api.ContainerAl
 	err = json.NewDecoder(response.Body).Decode(&container)
 	if err != nil {
 		return container, err
+	}
+
+	return container, nil
+}
+
+func (c client) GetContainer(allocationGuid string) (api.Container, error) {
+	response, err := c.makeRequest(api.GetContainer, router.Params{"guid": allocationGuid}, nil)
+	if response != nil && response.StatusCode == http.StatusNotFound {
+		return api.Container{}, fmt.Errorf("Container not found: %s", allocationGuid)
+	}
+
+	if err != nil {
+		return api.Container{}, err
+	}
+
+	defer response.Body.Close()
+
+	container := api.Container{}
+
+	err = json.NewDecoder(response.Body).Decode(&container)
+	if err != nil {
+		return api.Container{}, err
 	}
 
 	return container, nil

@@ -112,6 +112,74 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("Get", func() {
+		Context("when the call succeeds", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid),
+					ghttp.RespondWith(http.StatusOK, `
+          {
+						"guid": "guid-123",
+						"executor_guid": "executor-guid",
+            "memory_mb": 64,
+            "disk_mb": 1024,
+            "cpu_percent": 0.5,
+            "ports": [
+							{ "container_port": 8080, "host_port": 1234 },
+							{ "container_port": 8081, "host_port": 1235 }
+						],
+            "metadata": null,
+            "log": {
+              "guid":"some-guid",
+              "source_name":"XYZ",
+              "index":0
+            }
+          }`),
+				))
+			})
+
+			It("returns a container", func() {
+				response, err := client.GetContainer(containerGuid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				zero := 0
+				Ω(response).Should(Equal(api.Container{
+					Guid: "guid-123",
+
+					MemoryMB:   64,
+					DiskMB:     1024,
+					CpuPercent: 0.5,
+					Ports: []api.PortMapping{
+						{ContainerPort: 8080, HostPort: 1234},
+						{ContainerPort: 8081, HostPort: 1235},
+					},
+
+					Log: models.LogConfig{
+						Guid:       "some-guid",
+						SourceName: "XYZ",
+						Index:      &zero,
+					},
+
+					ExecutorGuid: "executor-guid",
+				}))
+			})
+		})
+
+		Context("when the get fails", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid),
+					ghttp.RespondWith(http.StatusNotFound, "")),
+				)
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetContainer(containerGuid)
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("InitializeContainer", func() {
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
