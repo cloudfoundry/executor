@@ -5,7 +5,7 @@ import "github.com/cloudfoundry-incubator/executor/api"
 type FakeClient struct {
 	WhenAllocatingContainer        func(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
 	WhenGettingContainer           func(allocationGuid string) (api.Container, error)
-	WhenInitializingContainer      func(allocationGuid string) error
+	WhenInitializingContainer      func(allocationGuid string, request api.ContainerInitializationRequest) error
 	WhenRunning                    func(allocationGuid string, request api.ContainerRunRequest) error
 	WhenDeletingContainer          func(allocationGuid string) error
 	WhenListingContainers          func() ([]api.Container, error)
@@ -21,7 +21,7 @@ func New() *FakeClient {
 		WhenGettingContainer: func(allocationGuid string) (api.Container, error) {
 			return api.Container{}, nil
 		},
-		WhenInitializingContainer: func(allocationGuid string) error {
+		WhenInitializingContainer: func(allocationGuid string, request api.ContainerInitializationRequest) error {
 			return nil
 		},
 		WhenRunning: func(allocationGuid string, request api.ContainerRunRequest) error {
@@ -50,8 +50,8 @@ func (c *FakeClient) GetContainer(allocationGuid string) (api.Container, error) 
 	return c.WhenGettingContainer(allocationGuid)
 }
 
-func (c *FakeClient) InitializeContainer(allocationGuid string) error {
-	return c.WhenInitializingContainer(allocationGuid)
+func (c *FakeClient) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) error {
+	return c.WhenInitializingContainer(allocationGuid, request)
 }
 
 func (c *FakeClient) Run(allocationGuid string, request api.ContainerRunRequest) error {

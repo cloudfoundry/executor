@@ -3,6 +3,7 @@ package registry_test
 import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -190,26 +191,34 @@ var _ = Describe("Registry", func() {
 
 	Describe("creating a container", func() {
 		Context("when the container exists and is reserved", func() {
+			var container api.Container
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
+
+				container, err = registry.Create("a-container", "handle", api.ContainerInitializationRequest{
+					CpuPercent: 0.5,
+					Ports:      []api.PortMapping{{ContainerPort: 8080}},
+					Log:        models.LogConfig{Guid: "log-guid"},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should transition the container to the created state and attach the passed in handle", func() {
-				container, err := registry.Create("a-container", "handle")
-				Ω(err).ShouldNot(HaveOccurred())
-
 				Ω(container.State).Should(Equal(api.StateCreated))
 				Ω(container.ContainerHandle).Should(Equal("handle"))
+				Ω(container.CpuPercent).Should(Equal(0.5))
+				Ω(container.Ports[0].ContainerPort).Should(Equal(uint32(8080)))
+				Ω(container.Log.Guid).Should(Equal("log-guid"))
 			})
 		})
 
 		Context("when the container does not exist", func() {
 			It("should return an ErrContainerNotFound", func() {
-				_, err := registry.Create("a-container", "handle")
+				_, err := registry.Create("a-container", "handle", api.ContainerInitializationRequest{})
 				Ω(err).Should(MatchError(ErrContainerNotFound))
 			})
 		})
@@ -222,12 +231,12 @@ var _ = Describe("Registry", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = registry.Create("a-container", "handle")
+				_, err = registry.Create("a-container", "handle", api.ContainerInitializationRequest{})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should return an ErrContainerNotFound", func() {
-				_, err := registry.Create("a-container", "another-handle")
+				_, err := registry.Create("a-container", "another-handle", api.ContainerInitializationRequest{})
 				Ω(err).Should(MatchError(ErrContainerNotReserved))
 			})
 		})

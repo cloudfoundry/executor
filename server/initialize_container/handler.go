@@ -42,6 +42,21 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.waitGroup.Add(1)
 	defer h.waitGroup.Done()
 
+	req := api.ContainerInitializationRequest{}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.initialize-container.bad-request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if req.CpuPercent > 100 || req.CpuPercent < 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	guid := r.FormValue(":guid")
 
 	reg, err := h.registry.FindByGuid(guid)
@@ -66,16 +81,25 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.limitContainer(reg, containerClient)
+	err = h.limitContainerDiskAndMemory(reg, containerClient)
 	if err != nil {
 		h.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
-		}, "executor.init-container.limit-failed")
+		}, "executor.init-container.limit-disk-and-memory-failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	reg, err = h.mapPorts(reg, containerClient)
+	err = h.limitContainerCPU(req, containerClient)
+	if err != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.limit-cpu-failed")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	portMapping, err := h.mapPorts(req, containerClient)
 	if err != nil {
 		h.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
@@ -84,7 +108,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reg, err = h.registry.Create(reg.Guid, containerClient.Handle())
+	req.Ports = portMapping
+
+	reg, err = h.registry.Create(reg.Guid, containerClient.Handle(), req)
 	if err != nil {
 		h.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
@@ -98,7 +124,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reg)
 }
 
-func (h *handler) limitContainer(reg api.Container, containerClient warden.Container) error {
+func (h *handler) limitContainerDiskAndMemory(reg api.Container, containerClient warden.Container) error {
 	if reg.MemoryMB != 0 {
 		err := containerClient.LimitMemory(warden.MemoryLimits{
 			LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),
@@ -117,9 +143,13 @@ func (h *handler) limitContainer(reg api.Container, containerClient warden.Conta
 		}
 	}
 
-	if reg.CpuPercent != 0 {
+	return nil
+}
+
+func (h *handler) limitContainerCPU(req api.ContainerInitializationRequest, containerClient warden.Container) error {
+	if req.CpuPercent != 0 {
 		err := containerClient.LimitCPU(warden.CPULimits{
-			LimitInShares: uint64(float64(h.containerMaxCPUShares) * float64(reg.CpuPercent) / 100.0),
+			LimitInShares: uint64(float64(h.containerMaxCPUShares) * float64(req.CpuPercent) / 100.0),
 		})
 		if err != nil {
 			return err
@@ -129,18 +159,19 @@ func (h *handler) limitContainer(reg api.Container, containerClient warden.Conta
 	return nil
 }
 
-func (h *handler) mapPorts(reg api.Container, containerClient warden.Container) (api.Container, error) {
-	for i, mapping := range reg.Ports {
+func (h *handler) mapPorts(req api.ContainerInitializationRequest, containerClient warden.Container) ([]api.PortMapping, error) {
+	var result []api.PortMapping
+	for _, mapping := range req.Ports {
 		hostPort, containerPort, err := containerClient.NetIn(mapping.HostPort, mapping.ContainerPort)
 		if err != nil {
-			return api.Container{}, err
+			return nil, err
 		}
 
-		mapping.HostPort = hostPort
-		mapping.ContainerPort = containerPort
-
-		reg.Ports[i] = mapping
+		result = append(result, api.PortMapping{
+			HostPort:      hostPort,
+			ContainerPort: containerPort,
+		})
 	}
 
-	return reg, nil
+	return result, nil
 }

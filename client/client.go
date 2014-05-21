@@ -13,7 +13,7 @@ import (
 type Client interface {
 	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
 	GetContainer(allocationGuid string) (api.Container, error)
-	InitializeContainer(allocationGuid string) error
+	InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) error
 	Run(allocationGuid string, request api.ContainerRunRequest) error
 	DeleteContainer(allocationGuid string) error
 	ListContainers() ([]api.Container, error)
@@ -76,8 +76,8 @@ func (c client) GetContainer(allocationGuid string) (api.Container, error) {
 	return container, nil
 }
 
-func (c client) InitializeContainer(allocationGuid string) error {
-	_, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, nil)
+func (c client) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) error {
+	_, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, request)
 	return err
 }
 

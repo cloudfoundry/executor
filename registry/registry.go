@@ -19,7 +19,7 @@ type Registry interface {
 	FindByGuid(guid string) (api.Container, error)
 	GetAllContainers() []api.Container
 	Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error)
-	Create(guid, containerHandle string) (api.Container, error)
+	Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error)
 	Delete(guid string) error
 }
 
@@ -82,10 +82,7 @@ func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api
 		ExecutorGuid: r.executorGuid,
 		MemoryMB:     req.MemoryMB,
 		DiskMB:       req.DiskMB,
-		CpuPercent:   req.CpuPercent,
-		Ports:        req.Ports,
 		State:        api.StateReserved,
-		Log:          req.Log,
 		Metadata:     req.Metadata}
 
 	r.containersMutex.Lock()
@@ -106,7 +103,7 @@ func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api
 	return res, nil
 }
 
-func (r *registry) Create(guid, containerHandle string) (api.Container, error) {
+func (r *registry) Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
@@ -121,6 +118,10 @@ func (r *registry) Create(guid, containerHandle string) (api.Container, error) {
 
 	res.State = api.StateCreated
 	res.ContainerHandle = containerHandle
+	res.CpuPercent = req.CpuPercent
+	res.Ports = req.Ports
+	res.Log = req.Log
+
 	r.registeredContainers[guid] = res
 	return res, nil
 }

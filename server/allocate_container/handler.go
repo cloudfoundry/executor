@@ -38,11 +38,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.CpuPercent > 100 || req.CpuPercent < 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	guid := r.FormValue(":guid")
 
 	container, err := h.registry.Reserve(guid, req)

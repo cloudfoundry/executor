@@ -114,42 +114,13 @@ var _ = Describe("Api", func() {
 			))
 		})
 
-		Context("when the requested CPU percent is > 100", func() {
-			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 101.0,
-				})
-			})
-
-			It("returns 400", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-			})
-		})
-
-		Context("when the requested CPU percent is < 0", func() {
-			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: -14.0,
-				})
-			})
-
-			It("returns 400", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-			})
-		})
-
 		Context("when there are containers available", func() {
 			var reservedContainer api.Container
 
 			BeforeEach(func() {
 				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 50,
+					MemoryMB: 64,
+					DiskMB:   512,
 				})
 			})
 
@@ -168,7 +139,6 @@ var _ = Describe("Api", func() {
 					Guid:         containerGuid,
 					MemoryMB:     64,
 					DiskMB:       512,
-					CpuPercent:   50,
 					State:        "reserved",
 				}))
 			})
@@ -202,7 +172,6 @@ var _ = Describe("Api", func() {
 						Guid:         containerGuid,
 						MemoryMB:     64,
 						DiskMB:       512,
-						CpuPercent:   50,
 						State:        "reserved",
 					}))
 				})
@@ -218,13 +187,44 @@ var _ = Describe("Api", func() {
 
 			Describe("POST /containers/:guid/initialize", func() {
 				var createResponse *http.Response
+				var createRequestBody io.Reader
 
 				JustBeforeEach(func() {
 					createResponse = DoRequest(generator.RequestForHandler(
 						api.InitializeContainer,
 						router.Params{"guid": containerGuid},
-						nil,
+						createRequestBody,
 					))
+				})
+
+				BeforeEach(func() {
+					createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
+						CpuPercent: 50.0,
+					})
+				})
+
+				Context("when the requested CPU percent is > 100", func() {
+					BeforeEach(func() {
+						createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
+							CpuPercent: 101.0,
+						})
+					})
+
+					It("returns 400", func() {
+						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+					})
+				})
+
+				Context("when the requested CPU percent is < 0", func() {
+					BeforeEach(func() {
+						createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
+							CpuPercent: -14.0,
+						})
+					})
+
+					It("returns 400", func() {
+						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+					})
 				})
 
 				Context("when the container can be created", func() {
@@ -262,9 +262,7 @@ var _ = Describe("Api", func() {
 
 					Context("when ports are exposed", func() {
 						BeforeEach(func() {
-							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB:   0,
-								DiskMB:     512,
+							createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
 								CpuPercent: 0.5,
 								Ports: []api.PortMapping{
 									{ContainerPort: 8080, HostPort: 0},
@@ -323,9 +321,8 @@ var _ = Describe("Api", func() {
 					Context("when a zero-value memory limit is specified", func() {
 						BeforeEach(func() {
 							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB:   0,
-								DiskMB:     512,
-								CpuPercent: 0.5,
+								MemoryMB: 0,
+								DiskMB:   512,
 							})
 						})
 
@@ -338,9 +335,8 @@ var _ = Describe("Api", func() {
 					Context("when a zero-value disk limit is specified", func() {
 						BeforeEach(func() {
 							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB:   64,
-								DiskMB:     0,
-								CpuPercent: 0.5,
+								MemoryMB: 64,
+								DiskMB:   0,
 							})
 						})
 
@@ -352,9 +348,7 @@ var _ = Describe("Api", func() {
 
 					Context("when a zero-value CPU percentage is specified", func() {
 						BeforeEach(func() {
-							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB:   64,
-								DiskMB:     512,
+							createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
 								CpuPercent: 0,
 							})
 						})
@@ -453,9 +447,8 @@ var _ = Describe("Api", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 50.0,
+					MemoryMB: 64,
+					DiskMB:   512,
 				})
 			})
 
@@ -474,9 +467,8 @@ var _ = Describe("Api", func() {
 			runResponse = nil
 
 			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     512,
-				CpuPercent: 0.5,
+				MemoryMB: 64,
+				DiskMB:   512,
 			})
 
 			allocResponse := DoRequest(generator.RequestForHandler(
@@ -497,7 +489,9 @@ var _ = Describe("Api", func() {
 			initResponse := DoRequest(generator.RequestForHandler(
 				api.InitializeContainer,
 				router.Params{"guid": containerGuid},
-				nil,
+				MarshalledPayload(api.ContainerInitializationRequest{
+					CpuPercent: 50.0,
+				}),
 			))
 			Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
 		})
@@ -708,9 +702,8 @@ var _ = Describe("Api", func() {
 				api.AllocateContainer,
 				router.Params{"guid": "first-container"},
 				MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 0.5,
+					MemoryMB: 64,
+					DiskMB:   512,
 				}),
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -719,9 +712,8 @@ var _ = Describe("Api", func() {
 				api.AllocateContainer,
 				router.Params{"guid": "second-container"},
 				MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 0.5,
+					MemoryMB: 64,
+					DiskMB:   512,
 				}),
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -757,9 +749,8 @@ var _ = Describe("Api", func() {
 		Context("when the container has been allocated", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 0.5,
+					MemoryMB: 64,
+					DiskMB:   512,
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
@@ -786,9 +777,8 @@ var _ = Describe("Api", func() {
 		Context("when the container has been initalized", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB:   64,
-					DiskMB:     512,
-					CpuPercent: 0.5,
+					MemoryMB: 64,
+					DiskMB:   512,
 				})
 
 				allocResponse := DoRequest(generator.RequestForHandler(
@@ -809,7 +799,9 @@ var _ = Describe("Api", func() {
 				initResponse := DoRequest(generator.RequestForHandler(
 					api.InitializeContainer,
 					router.Params{"guid": containerGuid},
-					nil,
+					MarshalledPayload(api.ContainerInitializationRequest{
+						CpuPercent: 50.0,
+					}),
 				))
 				Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
 			})
@@ -831,9 +823,8 @@ var _ = Describe("Api", func() {
 			resourcesResponse = nil
 
 			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     512,
-				CpuPercent: 0.5,
+				MemoryMB: 64,
+				DiskMB:   512,
 			})
 
 			allocResponse := DoRequest(generator.RequestForHandler(
@@ -870,9 +861,8 @@ var _ = Describe("Api", func() {
 			resourcesResponse = nil
 
 			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     512,
-				CpuPercent: 0.5,
+				MemoryMB: 64,
+				DiskMB:   512,
 			})
 
 			allocResponse := DoRequest(generator.RequestForHandler(

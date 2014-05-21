@@ -27,12 +27,15 @@ type PortMapping struct {
 }
 
 type ContainerAllocationRequest struct {
-	MemoryMB   int               `json:"memory_mb"`
-	DiskMB     int               `json:"disk_mb"`
-	CpuPercent float64           `json:"cpu_percent"`
-	Ports      []PortMapping     `json:"ports"`
-	Log        models.LogConfig  `json:"log"`
-	Metadata   map[string]string `json:"metadata"`
+	MemoryMB int               `json:"memory_mb"`
+	DiskMB   int               `json:"disk_mb"`
+	Metadata map[string]string `json:"metadata"`
+}
+
+type ContainerInitializationRequest struct {
+	CpuPercent float64          `json:"cpu_percent"`
+	Ports      []PortMapping    `json:"ports"`
+	Log        models.LogConfig `json:"log"`
 }
 
 type ContainerInitializeResult struct {

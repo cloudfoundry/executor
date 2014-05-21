@@ -29,28 +29,15 @@ var _ = Describe("Client", func() {
 		var validResponse api.Container
 
 		BeforeEach(func() {
-			zero := 0
 			validRequest = api.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     1024,
-				CpuPercent: 0.5,
-				Log: models.LogConfig{
-					Guid:       "some-guid",
-					SourceName: "XYZ",
-					Index:      &zero,
-				},
+				MemoryMB: 64,
+				DiskMB:   1024,
 			}
 			validResponse = api.Container{
 				Guid:         "guid-123",
 				ExecutorGuid: "executor-guid",
 				MemoryMB:     64,
 				DiskMB:       1024,
-				CpuPercent:   0.5,
-				Log: models.LogConfig{
-					Guid:       "some-guid",
-					SourceName: "XYZ",
-					Index:      &zero,
-				},
 			}
 		})
 
@@ -62,14 +49,7 @@ var _ = Describe("Client", func() {
           {
             "memory_mb": 64,
             "disk_mb": 1024,
-            "cpu_percent": 0.5,
-            "ports": null,
-            "metadata": null,
-            "log": {
-              "guid":"some-guid",
-              "source_name":"XYZ",
-              "index":0
-            }
+            "metadata": null
           }`),
 					ghttp.RespondWithJSONEncoded(http.StatusCreated, validResponse)),
 				)
@@ -181,16 +161,40 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("InitializeContainer", func() {
+		var validRequest api.ContainerInitializationRequest
+
+		BeforeEach(func() {
+			zero := 0
+			validRequest = api.ContainerInitializationRequest{
+				CpuPercent: 0.5,
+				Log: models.LogConfig{
+					Guid:       "some-guid",
+					SourceName: "XYZ",
+					Index:      &zero,
+				},
+			}
+		})
+
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/containers/guid-123/initialize"),
+					ghttp.VerifyJSON(`
+          {
+            "cpu_percent": 0.5,
+            "ports": null,
+            "log": {
+              "guid":"some-guid",
+              "source_name":"XYZ",
+              "index":0
+            }
+          }`),
 					ghttp.RespondWith(http.StatusCreated, "")),
 				)
 			})
 
 			It("does not return an error", func() {
-				err := client.InitializeContainer("guid-123")
+				err := client.InitializeContainer("guid-123", validRequest)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -204,7 +208,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns an error", func() {
-				err := client.InitializeContainer("guid-123")
+				err := client.InitializeContainer("guid-123", validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
