@@ -197,7 +197,6 @@ var _ = Describe("ExecutorAction", func() {
 							"script": "echo"
 						}
 					},
-					"interval_in_nanoseconds": 10000000000,
 					"healthy_hook": {
 						"method": "POST",
 						"url": "bogus_healthy_hook"
@@ -212,8 +211,7 @@ var _ = Describe("ExecutorAction", func() {
 			}`,
 			ExecutorAction{
 				MonitorAction{
-					Action:   ExecutorAction{RunAction{Script: "echo"}},
-					Interval: 10 * time.Second,
+					Action: ExecutorAction{RunAction{Script: "echo"}},
 					HealthyHook: HealthRequest{
 						Method: "POST",
 						URL:    "bogus_healthy_hook",

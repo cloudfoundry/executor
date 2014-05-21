@@ -50,6 +50,7 @@ type ConvergerBBS interface {
 
 type AppManagerBBS interface {
 	//lrp
+	DesireLongRunningProcess(models.DesiredLRP) error
 	DesireTransitionalLongRunningProcess(models.TransitionalLongRunningProcess) error
 	RequestLRPStartAuction(models.LRPStartAuction) error
 

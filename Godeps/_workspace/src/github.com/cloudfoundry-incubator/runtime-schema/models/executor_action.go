@@ -42,7 +42,6 @@ type TryAction struct {
 
 type MonitorAction struct {
 	Action             ExecutorAction `json:"action"`
-	Interval           time.Duration  `json:"interval_in_nanoseconds"`
 	HealthyHook        HealthRequest  `json:"healthy_hook"`
 	UnhealthyHook      HealthRequest  `json:"unhealthy_hook"`
 	HealthyThreshold   uint           `json:"healthy_threshold"`

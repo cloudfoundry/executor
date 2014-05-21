@@ -13,7 +13,8 @@ const RepSchemaRoot = SchemaRoot + "rep"
 const FileServerSchemaRoot = SchemaRoot + "file_server"
 const LongRunningProcessSchemaRoot = SchemaRoot + "transitional_lrp"
 const LRPStartAuctionSchemaRoot = SchemaRoot + "start"
-const LRPSchemaRoot = SchemaRoot + "actual"
+const ActualLRPSchemaRoot = SchemaRoot + "actual"
+const DesiredLRPSchemaRoot = SchemaRoot + "desired"
 const TaskSchemaRoot = SchemaRoot + "task"
 const LockSchemaRoot = SchemaRoot + "locks"
 
@@ -37,8 +38,12 @@ func LRPStartAuctionSchemaPath(lrp models.LRPStartAuction) string {
 	return path.Join(LRPStartAuctionSchemaRoot, lrp.Guid, strconv.Itoa(lrp.Index))
 }
 
-func LRPSchemaPath(lrp models.LRP) string {
-	return path.Join(LRPSchemaRoot, lrp.ProcessGuid, strconv.Itoa(lrp.Index), lrp.InstanceGuid)
+func ActualLRPSchemaPath(lrp models.LRP) string {
+	return path.Join(ActualLRPSchemaRoot, lrp.ProcessGuid, strconv.Itoa(lrp.Index), lrp.InstanceGuid)
+}
+
+func DesiredLRPSchemaPath(lrp models.DesiredLRP) string {
+	return path.Join(DesiredLRPSchemaRoot, lrp.ProcessGuid)
 }
 
 func TaskSchemaPath(task models.Task) string {

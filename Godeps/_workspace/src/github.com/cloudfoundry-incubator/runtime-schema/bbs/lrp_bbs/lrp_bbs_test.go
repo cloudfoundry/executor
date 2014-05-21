@@ -15,6 +15,37 @@ var _ = Describe("LRP", func() {
 		bbs = New(etcdClient)
 	})
 
+	Describe("DesireLongRunningProcess", func() {
+		var lrp models.DesiredLRP
+
+		BeforeEach(func() {
+			lrp = models.DesiredLRP{
+				ProcessGuid: "some-process-guid",
+				Instances:   5,
+				Stack:       "some-stack",
+				MemoryMB:    1024,
+				DiskMB:      512,
+				Routes:      []string{"route-1", "route-2"},
+			}
+		})
+
+		It("creates /v1/desired/<process-guid>/<index>", func() {
+			err := bbs.DesireLongRunningProcess(lrp)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			node, err := etcdClient.Get("/v1/desired/some-process-guid")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(node.Value).Should(Equal(lrp.ToJSON()))
+		})
+
+		Context("when the store is out of commission", func() {
+			itRetriesUntilStoreComesBack(func() error {
+				return bbs.DesireLongRunningProcess(lrp)
+			})
+		})
+	})
+
 	Describe("ReportLongRunningProcessAsRunning", func() {
 		var lrp models.LRP
 
