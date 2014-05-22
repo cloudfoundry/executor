@@ -11,7 +11,6 @@ const SchemaRoot = "/v1/"
 const ExecutorSchemaRoot = SchemaRoot + "executor"
 const RepSchemaRoot = SchemaRoot + "rep"
 const FileServerSchemaRoot = SchemaRoot + "file_server"
-const LongRunningProcessSchemaRoot = SchemaRoot + "transitional_lrp"
 const LRPStartAuctionSchemaRoot = SchemaRoot + "start"
 const ActualLRPSchemaRoot = SchemaRoot + "actual"
 const DesiredLRPSchemaRoot = SchemaRoot + "desired"
@@ -28,10 +27,6 @@ func RepSchemaPath(repID string) string {
 
 func FileServerSchemaPath(segments ...string) string {
 	return path.Join(append([]string{FileServerSchemaRoot}, segments...)...)
-}
-
-func TransitionalLongRunningProcessSchemaPath(lrp models.TransitionalLongRunningProcess) string {
-	return path.Join(LongRunningProcessSchemaRoot, lrp.Guid)
 }
 
 func LRPStartAuctionSchemaPath(lrp models.LRPStartAuction) string {

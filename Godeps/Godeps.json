@@ -20,35 +20,35 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/drain",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/transport",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
+			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "5231d04ee049399e1dbbda3d7ff902757ce6915e"
+			"Rev": "f4ccd84ffb364e6d27e30d9e0677729986b94dcc"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "5231d04ee049399e1dbbda3d7ff902757ce6915e"
+			"Rev": "f4ccd84ffb364e6d27e30d9e0677729986b94dcc"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -61,27 +61,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",

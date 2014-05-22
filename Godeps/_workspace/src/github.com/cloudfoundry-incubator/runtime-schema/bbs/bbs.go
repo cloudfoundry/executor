@@ -32,10 +32,6 @@ type RepBBS interface {
 	StartTask(task models.Task, containerHandle string) (models.Task, error)
 	CompleteTask(task models.Task, failed bool, failureReason string, result string) (models.Task, error)
 
-	//lrp
-	WatchForDesiredTransitionalLongRunningProcess() (<-chan models.TransitionalLongRunningProcess, chan<- bool, <-chan error)
-	StartTransitionalLongRunningProcess(lrp models.TransitionalLongRunningProcess) error
-
 	///
 	ReportLongRunningProcessAsRunning(lrp models.LRP) error
 }
@@ -51,7 +47,6 @@ type ConvergerBBS interface {
 type AppManagerBBS interface {
 	//lrp
 	DesireLongRunningProcess(models.DesiredLRP) error
-	DesireTransitionalLongRunningProcess(models.TransitionalLongRunningProcess) error
 	RequestLRPStartAuction(models.LRPStartAuction) error
 
 	//services
