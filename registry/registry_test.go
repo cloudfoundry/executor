@@ -1,9 +1,12 @@
 package registry_test
 
 import (
+	"time"
+
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,6 +15,7 @@ import (
 var _ = Describe("Registry", func() {
 	var registry Registry
 	var initialCapacity Capacity
+	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	BeforeEach(func() {
 		initialCapacity = Capacity{
@@ -20,7 +24,8 @@ var _ = Describe("Registry", func() {
 			Containers: 3,
 		}
 
-		registry = New("executor-guid", initialCapacity)
+		timeProvider = faketimeprovider.New(time.Now())
+		registry = New("executor-guid", initialCapacity, timeProvider)
 	})
 
 	Describe("TotalCapacity", func() {
@@ -140,6 +145,7 @@ var _ = Describe("Registry", func() {
 			Ω(container.DiskMB).Should(Equal(100))
 			Ω(container.State).Should(Equal(api.StateReserved))
 			Ω(container.Metadata).Should(Equal(map[string]string{"some": "metadata", "is": "nice"}))
+			Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
 		})
 
 		Context("when reusing an existing guid", func() {

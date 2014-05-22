@@ -12,7 +12,7 @@ var _ = Describe("LongRunningProcess", func() {
 		var startAuction LRPStartAuction
 
 		startAuctionPayload := `{
-    "guid":"some-guid",
+    "process_guid":"some-guid",
     "instance_guid":"some-instance-guid",
     "stack":"some-stack",
     "memory_mb" : 128,
@@ -45,7 +45,7 @@ var _ = Describe("LongRunningProcess", func() {
 			index := 42
 
 			startAuction = LRPStartAuction{
-				Guid:         "some-guid",
+				ProcessGuid:  "some-guid",
 				InstanceGuid: "some-instance-guid",
 				Stack:        "some-stack",
 				MemoryMB:     128,

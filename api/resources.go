@@ -19,6 +19,7 @@ type Container struct {
 	ContainerHandle string            `json:"container_handle"`
 	Log             models.LogConfig  `json:"log"`
 	Metadata        map[string]string `json:"metadata"`
+	AllocatedAt     int64             `json:"allocated_at"`
 }
 
 type PortMapping struct {

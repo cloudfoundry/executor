@@ -44,11 +44,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "f4ccd84ffb364e6d27e30d9e0677729986b94dcc"
+			"Rev": "c841d6a44bd454e5a97a5b05a9833c979b4affc3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "f4ccd84ffb364e6d27e30d9e0677729986b94dcc"
+			"Rev": "c841d6a44bd454e5a97a5b05a9833c979b4affc3"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -57,7 +57,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+			"Rev": "7961fb4a446e96ef5a35fee37aa4b4945dca6745"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",

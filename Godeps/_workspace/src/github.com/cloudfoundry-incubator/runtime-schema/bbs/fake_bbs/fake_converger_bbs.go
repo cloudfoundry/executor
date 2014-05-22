@@ -15,6 +15,7 @@ type FakeConvergerBBS struct {
 	maintainConvergeLockError     error
 
 	convergeTimeToClaimTasks time.Duration
+	converganceInterval      time.Duration
 
 	sync.RWMutex
 }
@@ -24,11 +25,12 @@ func NewFakeConvergerBBS() *FakeConvergerBBS {
 	return fakeBBS
 }
 
-func (fakeBBS *FakeConvergerBBS) ConvergeTask(timeToClaim time.Duration) {
+func (fakeBBS *FakeConvergerBBS) ConvergeTask(timeToClaim time.Duration, converganceInterval time.Duration) {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 
 	fakeBBS.convergeTimeToClaimTasks = timeToClaim
+	fakeBBS.converganceInterval = converganceInterval
 	fakeBBS.callsToConverge++
 }
 

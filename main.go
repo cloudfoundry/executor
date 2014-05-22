@@ -112,6 +112,12 @@ var drainTimeout = flag.Duration(
 	"time to give running tasks to drain before exiting",
 )
 
+var registryPruningInterval = flag.Duration(
+	"pruneInterval",
+	time.Minute,
+	"amount of time during which a container can remain in the allocated state",
+)
+
 var containerInodeLimit = flag.Int(
 	"containerInodeLimit",
 	200000,
@@ -217,6 +223,7 @@ func main() {
 		wardenClient,
 		transformer,
 		*drainTimeout,
+		*registryPruningInterval,
 		logger,
 	)
 

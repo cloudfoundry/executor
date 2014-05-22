@@ -18,7 +18,8 @@ import (
 var _ = Describe("Convergence of Tasks", func() {
 	var bbs *TaskBBS
 	var task models.Task
-	var timeToClaim time.Duration
+	var timeToClaimInSeconds, convergenceIntervalInSeconds uint64
+	var timeToClaim, convergenceInterval time.Duration
 	var timeProvider *faketimeprovider.FakeTimeProvider
 	var err error
 	var servicesBBS *services_bbs.ServicesBBS
@@ -26,7 +27,13 @@ var _ = Describe("Convergence of Tasks", func() {
 
 	BeforeEach(func() {
 		err = nil
-		timeToClaim = 30 * time.Second
+
+		timeToClaimInSeconds = 30
+		timeToClaim = time.Duration(timeToClaimInSeconds) * time.Second
+
+		convergenceIntervalInSeconds = 10
+		convergenceInterval = time.Duration(convergenceIntervalInSeconds) * time.Second
+
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
 		bbs = New(etcdClient, timeProvider)
 		task = models.Task{
@@ -57,7 +64,7 @@ var _ = Describe("Convergence of Tasks", func() {
 				_, err = etcdClient.Get(nodeKey)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				bbs.ConvergeTask(timeToClaim)
+				bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 				_, err = etcdClient.Get(nodeKey)
 				Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
@@ -70,23 +77,35 @@ var _ = Describe("Convergence of Tasks", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should kick the Task", func() {
-				timeProvider.IncrementBySeconds(1)
-				commenceWatching()
-				bbs.ConvergeTask(timeToClaim)
+			Context("when the Task has *not* been pending for too long", func() {
+				It("should not kick the Task", func() {
+					timeProvider.IncrementBySeconds(1)
+					commenceWatching()
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
-				var noticedOnce models.Task
-				Eventually(desiredEvents).Should(Receive(&noticedOnce))
+					Consistently(desiredEvents).ShouldNot(Receive())
+				})
+			})
 
-				task.UpdatedAt = timeProvider.Time().UnixNano()
-				Ω(noticedOnce).Should(Equal(task))
+			Context("when the Task has been pending for longer than the convergence interval", func() {
+				It("should kick the Task", func() {
+					timeProvider.IncrementBySeconds(convergenceIntervalInSeconds + 1)
+					commenceWatching()
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
+
+					var noticedOnce models.Task
+					Eventually(desiredEvents).Should(Receive(&noticedOnce))
+
+					task.UpdatedAt = timeProvider.Time().UnixNano()
+					Ω(noticedOnce).Should(Equal(task))
+				})
 			})
 
 			Context("when the Task has been pending for longer than the timeToClaim", func() {
 				It("should mark the Task as completed & failed", func() {
-					timeProvider.IncrementBySeconds(31)
+					timeProvider.IncrementBySeconds(timeToClaimInSeconds + 1)
 					commenceWatching()
-					bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 					Consistently(desiredEvents).ShouldNot(Receive())
 
@@ -120,7 +139,7 @@ var _ = Describe("Convergence of Tasks", func() {
 			It("should do nothing", func() {
 				commenceWatching()
 
-				bbs.ConvergeTask(timeToClaim)
+				bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 				Consistently(desiredEvents).ShouldNot(Receive())
 				Consistently(completedEvents).ShouldNot(Receive())
@@ -128,10 +147,10 @@ var _ = Describe("Convergence of Tasks", func() {
 
 			Context("when the run once has been claimed for > 30 seconds", func() {
 				It("should mark the Task as pending", func() {
-					timeProvider.IncrementBySeconds(30)
+					timeProvider.IncrementBySeconds(convergenceIntervalInSeconds)
 					commenceWatching()
 
-					bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 					Consistently(completedEvents).ShouldNot(Receive())
 
@@ -154,7 +173,7 @@ var _ = Describe("Convergence of Tasks", func() {
 					timeProvider.IncrementBySeconds(1)
 					commenceWatching()
 
-					bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 					Consistently(desiredEvents).ShouldNot(Receive())
 
@@ -192,7 +211,7 @@ var _ = Describe("Convergence of Tasks", func() {
 			It("should do nothing", func() {
 				commenceWatching()
 
-				bbs.ConvergeTask(timeToClaim)
+				bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 				Consistently(desiredEvents).ShouldNot(Receive())
 				Consistently(completedEvents).ShouldNot(Receive())
@@ -207,7 +226,7 @@ var _ = Describe("Convergence of Tasks", func() {
 					timeProvider.IncrementBySeconds(1)
 					commenceWatching()
 
-					bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 					Consistently(desiredEvents).ShouldNot(Receive())
 
@@ -236,21 +255,35 @@ var _ = Describe("Convergence of Tasks", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should kick the Task", func() {
-				timeProvider.IncrementBySeconds(1)
-				commenceWatching()
+			Context("when the task has been completed for > the convergence interval", func() {
+				It("should kick the Task", func() {
+					timeProvider.IncrementBySeconds(convergenceIntervalInSeconds + 1)
+					commenceWatching()
 
-				bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
-				Consistently(desiredEvents).ShouldNot(Receive())
+					Consistently(desiredEvents).ShouldNot(Receive())
 
-				var noticedOnce models.Task
-				Eventually(completedEvents).Should(Receive(&noticedOnce))
+					var noticedOnce models.Task
+					Eventually(completedEvents).Should(Receive(&noticedOnce))
 
-				Ω(noticedOnce.Failed).Should(Equal(true))
-				Ω(noticedOnce.FailureReason).Should(Equal("'cause I said so"))
-				Ω(noticedOnce.Result).Should(Equal("a magical result"))
-				Ω(noticedOnce.UpdatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+					Ω(noticedOnce.Failed).Should(Equal(true))
+					Ω(noticedOnce.FailureReason).Should(Equal("'cause I said so"))
+					Ω(noticedOnce.Result).Should(Equal("a magical result"))
+					Ω(noticedOnce.UpdatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+				})
+			})
+
+			Context("when the task has been completed for < the convergence interval", func() {
+				It("should kick the Task", func() {
+					timeProvider.IncrementBySeconds(1)
+					commenceWatching()
+
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
+
+					Consistently(desiredEvents).ShouldNot(Receive())
+					Consistently(completedEvents).ShouldNot(Receive())
+				})
 			})
 		})
 
@@ -275,7 +308,7 @@ var _ = Describe("Convergence of Tasks", func() {
 			It("should do nothing", func() {
 				commenceWatching()
 
-				bbs.ConvergeTask(timeToClaim)
+				bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 				Consistently(desiredEvents).ShouldNot(Receive())
 				Consistently(completedEvents).ShouldNot(Receive())
@@ -283,10 +316,10 @@ var _ = Describe("Convergence of Tasks", func() {
 
 			Context("when the run once has been resolving for > 30 seconds", func() {
 				It("should put the Task back into the completed state", func() {
-					timeProvider.IncrementBySeconds(30)
+					timeProvider.IncrementBySeconds(convergenceIntervalInSeconds)
 					commenceWatching()
 
-					bbs.ConvergeTask(timeToClaim)
+					bbs.ConvergeTask(timeToClaim, convergenceInterval)
 
 					var noticedOnce models.Task
 					Eventually(completedEvents).Should(Receive(&noticedOnce))

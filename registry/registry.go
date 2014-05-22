@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry/gunk/timeprovider"
 )
 
 var ErrContainerAlreadyExists = errors.New("container already exists")
@@ -27,17 +28,19 @@ type registry struct {
 	executorGuid         string
 	totalCapacity        Capacity
 	currentCapacity      *Capacity
+	timeProvider         timeprovider.TimeProvider
 	registeredContainers map[string]api.Container
 	containersMutex      *sync.RWMutex
 }
 
-func New(executorGuid string, capacity Capacity) Registry {
+func New(executorGuid string, capacity Capacity, timeProvider timeprovider.TimeProvider) Registry {
 	return &registry{
 		executorGuid:         executorGuid,
 		totalCapacity:        capacity,
 		currentCapacity:      &capacity,
 		registeredContainers: make(map[string]api.Container),
 		containersMutex:      &sync.RWMutex{},
+		timeProvider:         timeProvider,
 	}
 }
 
@@ -83,7 +86,9 @@ func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api
 		MemoryMB:     req.MemoryMB,
 		DiskMB:       req.DiskMB,
 		State:        api.StateReserved,
-		Metadata:     req.Metadata}
+		Metadata:     req.Metadata,
+		AllocatedAt:  r.timeProvider.Time().UnixNano(),
+	}
 
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()

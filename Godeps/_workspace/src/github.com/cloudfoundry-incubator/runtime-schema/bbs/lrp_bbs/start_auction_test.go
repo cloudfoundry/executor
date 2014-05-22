@@ -23,8 +23,8 @@ var _ = Describe("Start Auction", func() {
 
 		BeforeEach(func() {
 			auctionLRP = models.LRPStartAuction{
-				Guid:  "some-guid",
-				Index: 1,
+				ProcessGuid: "some-guid",
+				Index:       1,
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{
@@ -71,8 +71,8 @@ var _ = Describe("Start Auction", func() {
 
 		BeforeEach(func() {
 			auctionLRP = models.LRPStartAuction{
-				Guid:  "some-guid",
-				Index: 1,
+				ProcessGuid: "some-guid",
+				Index:       1,
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{
@@ -135,8 +135,8 @@ var _ = Describe("Start Auction", func() {
 
 		BeforeEach(func() {
 			auctionLRP = models.LRPStartAuction{
-				Guid:  "some-guid",
-				Index: 1,
+				ProcessGuid: "some-guid",
+				Index:       1,
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{
@@ -200,8 +200,8 @@ var _ = Describe("Start Auction", func() {
 
 		BeforeEach(func() {
 			auctionLRP = models.LRPStartAuction{
-				Guid:  "some-guid",
-				Index: 1,
+				ProcessGuid: "some-guid",
+				Index:       1,
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{

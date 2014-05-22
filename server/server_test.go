@@ -20,6 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
@@ -44,17 +45,19 @@ var _ = Describe("Api", func() {
 
 	var server *httptest.Server
 	var generator *router.RequestGenerator
+	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	BeforeEach(func() {
 		containerGuid = "container-guid"
 
 		wardenClient = fake_warden_client.New()
 
+		timeProvider = faketimeprovider.New(time.Now())
 		registry = Registry.New("executor-guid-123", Registry.Capacity{
 			MemoryMB:   1024,
 			DiskMB:     1024,
 			Containers: 1024,
-		})
+		}, timeProvider)
 
 		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
 		logger := gosteno.NewLogger("api-test-logger")
@@ -140,6 +143,7 @@ var _ = Describe("Api", func() {
 					MemoryMB:     64,
 					DiskMB:       512,
 					State:        "reserved",
+					AllocatedAt:  timeProvider.Time().UnixNano(),
 				}))
 			})
 
@@ -173,6 +177,7 @@ var _ = Describe("Api", func() {
 						MemoryMB:     64,
 						DiskMB:       512,
 						State:        "reserved",
+						AllocatedAt:  timeProvider.Time().UnixNano(),
 					}))
 				})
 

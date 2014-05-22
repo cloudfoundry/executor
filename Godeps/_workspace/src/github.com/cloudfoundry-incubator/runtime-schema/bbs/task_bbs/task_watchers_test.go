@@ -54,9 +54,10 @@ var _ = Describe("Task BBS", func() {
 
 			Expect(e).To(Equal(task))
 
-			bbs.ConvergeTask(time.Second)
+			timeProvider.IncrementBySeconds(2)
+			bbs.ConvergeTask(5*time.Second, time.Second)
 
-			Expect(<-events).To(Equal(task))
+			Eventually(events).Should(Receive())
 
 			close(done)
 		})

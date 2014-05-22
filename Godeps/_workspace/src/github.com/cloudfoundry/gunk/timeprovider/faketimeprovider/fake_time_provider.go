@@ -33,6 +33,10 @@ func (provider *FakeTimeProvider) IncrementBySeconds(seconds uint64) {
 	provider.TimeToProvide = time.Unix(provider.TimeToProvide.Unix()+int64(seconds), 0)
 }
 
+func (provider *FakeTimeProvider) Increment(duration time.Duration) {
+	provider.TimeToProvide = provider.TimeToProvide.Add(duration)
+}
+
 func (provider *FakeTimeProvider) NewTickerChannel(name string, d time.Duration) <-chan time.Time {
 	if !provider.ProvideFakeChannels {
 		return time.NewTicker(d).C

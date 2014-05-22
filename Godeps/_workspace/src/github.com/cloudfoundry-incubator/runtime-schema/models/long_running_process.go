@@ -18,7 +18,7 @@ const (
 )
 
 type LRPStartAuction struct {
-	Guid         string `json:"guid"`
+	ProcessGuid  string `json:"process_guid"`
 	InstanceGuid string `json:"instance_guid"`
 
 	DiskMB   int `json:"disk_mb"`
