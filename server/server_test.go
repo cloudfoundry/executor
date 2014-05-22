@@ -548,6 +548,9 @@ var _ = Describe("Api", func() {
 						Actions: []models.ExecutorAction{
 							{
 								models.MonitorAction{
+									HealthyHook: models.HealthRequest{
+										URL: "some/bogus/url",
+									},
 									Action: models.ExecutorAction{
 										models.RunAction{
 											Script: "ls -al",
