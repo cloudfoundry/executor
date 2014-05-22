@@ -607,7 +607,7 @@ var _ = Describe("Api", func() {
 					})
 
 					It("destroys the container and removes it from the registry", func() {
-						Eventually(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
+						Eventually(wardenClient.Connection.Destroyed).Should(ContainElement("some-handle"))
 					})
 
 					It("frees the container's reserved resources", func() {
