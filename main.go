@@ -12,6 +12,7 @@ import (
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/maintain"
@@ -172,22 +173,24 @@ func main() {
 		logger,
 	)
 
-	maintainerWaitChan := ifrit.Envoke(maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)).Wait()
+	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
 
-	executorProcess := ifrit.Envoke(executor)
+	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
+		"executor":   executor,
+		"maintainer": maintainer,
+	})
 
 	logger.Info("executor.started")
 
-	monitor := ifrit.Envoke(sigmon.New(executorProcess, syscall.SIGUSR1))
+	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
+	exitChan := processGroup.Exits()
 
 	for {
 		select {
-		case err := <-maintainerWaitChan:
-			if err != nil {
-				logger.Errorf("failed to start maintaining presence: %s", err.Error())
+		case member := <-exitChan:
+			if member.Error != nil || member.Name == "executor" {
 				monitor.Signal(syscall.SIGTERM)
 			}
-			maintainerWaitChan = nil
 
 		case err := <-monitor.Wait():
 			if err != nil {
