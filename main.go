@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -12,8 +11,11 @@ import (
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/maintain"
+	"github.com/cloudfoundry-incubator/executor/registry"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
@@ -145,73 +147,16 @@ var maxCacheSizeInBytes = flag.Int64(
 func main() {
 	flag.Parse()
 
-	l, err := steno.GetLogLevel(*logLevel)
-	if err != nil {
-		log.Fatalf("Invalid loglevel: %s\n", *logLevel)
-	}
-
-	stenoConfig := steno.Config{
-		Level: l,
-		Sinks: []steno.Sink{steno.NewIOSink(os.Stdout)},
-	}
-
-	if *syslogName != "" {
-		stenoConfig.Sinks = append(stenoConfig.Sinks, steno.NewSyslogSink(*syslogName))
-	}
-
-	steno.Init(&stenoConfig)
-	logger := steno.NewLogger("executor")
-
-	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
-		strings.Split(*etcdCluster, ","),
-		workerpool.NewWorkerPool(10),
-	)
-
-	bbs := Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider())
-
-	err = etcdAdapter.Connect()
-	if err != nil {
-		logger.Errord(map[string]interface{}{
-			"error": err,
-		}, "failed to get etcdAdapter to connect")
-		os.Exit(1)
-	}
-
-	wardenClient := WardenClient.New(&WardenConnection.Info{
-		Network: *wardenNetwork,
-		Addr:    *wardenAddr,
-	})
-
-	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	logger.Infof("Initial Capacity: %s", capacity.String())
+	logger := initializeLogger()
 
 	if *containerMaxCpuShares <= 0 {
 		logger.Error("valid maximum container cpu shares must be specified on startup!")
 		os.Exit(1)
 	}
 
-	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
-	uploader := uploader.New(10*time.Minute, logger)
-	extractor := extractor.NewDetectable()
-	compressor := compressor.NewTgz()
-	logStreamerFactory := log_streamer_factory.New(
-		*loggregatorServer,
-		*loggregatorSecret,
-	)
-
-	transformer := Transformer.NewTransformer(
-		logStreamerFactory,
-		cache,
-		uploader,
-		extractor,
-		compressor,
-		logger,
-		*tempDir,
-	)
+	bbs := initializeBbs(logger)
+	wardenClient, capacity := initializeWardenClient(logger)
+	transformer := initializeTransformer(logger)
 
 	logger.Info("executor.starting")
 
@@ -227,36 +172,102 @@ func main() {
 		logger,
 	)
 
-	maintainSignals := make(chan os.Signal, 1)
-	signal.Notify(maintainSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	maintainerWaitChan := ifrit.Envoke(maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)).Wait()
 
-	executorSignals := make(chan os.Signal, 1)
-	signal.Notify(executorSignals, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR1)
+	executorProcess := ifrit.Envoke(executor)
 
-	maintainReady := make(chan struct{})
-	executorReady := make(chan struct{})
+	logger.Info("executor.started")
 
-	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
+	monitor := ifrit.Envoke(sigmon.New(executorProcess, syscall.SIGUSR1))
 
-	go func() {
-		err := maintainer.Run(maintainSignals, maintainReady)
-		if err != nil {
-			logger.Errorf("failed to start maintaining presence: %s", err.Error())
-			executorSignals <- syscall.SIGTERM
+	for {
+		select {
+		case err := <-maintainerWaitChan:
+			if err != nil {
+				logger.Errorf("failed to start maintaining presence: %s", err.Error())
+				monitor.Signal(syscall.SIGTERM)
+			}
+			maintainerWaitChan = nil
+
+		case err := <-monitor.Wait():
+			if err != nil {
+				os.Exit(1)
+			}
+			os.Exit(0)
 		}
-	}()
+	}
+}
 
-	<-maintainReady
-
-	go func() {
-		<-executorReady
-		logger.Info("executor.started")
-	}()
-
-	err = executor.Run(executorSignals, executorReady)
-
+func initializeLogger() *steno.Logger {
+	l, err := steno.GetLogLevel(*logLevel)
 	if err != nil {
+		log.Fatalf("Invalid loglevel: %s\n", *logLevel)
+	}
+
+	stenoConfig := steno.Config{
+		Level: l,
+		Sinks: []steno.Sink{steno.NewIOSink(os.Stdout)},
+	}
+
+	if *syslogName != "" {
+		stenoConfig.Sinks = append(stenoConfig.Sinks, steno.NewSyslogSink(*syslogName))
+	}
+
+	steno.Init(&stenoConfig)
+	return steno.NewLogger("executor")
+}
+
+func initializeBbs(logger *steno.Logger) Bbs.ExecutorBBS {
+	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
+		strings.Split(*etcdCluster, ","),
+		workerpool.NewWorkerPool(10),
+	)
+
+	err := etcdAdapter.Connect()
+	if err != nil {
+		logger.Errord(map[string]interface{}{
+			"error": err,
+		}, "failed to get etcdAdapter to connect")
 		os.Exit(1)
 	}
-	os.Exit(0)
+
+	return Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider())
+}
+
+func initializeWardenClient(logger *steno.Logger) (WardenClient.Client, registry.Capacity) {
+	wardenClient := WardenClient.New(&WardenConnection.Info{
+		Network: *wardenNetwork,
+		Addr:    *wardenAddr,
+	})
+
+	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	logger.Infof("Initial Capacity: %s", capacity.String())
+
+	return wardenClient, capacity
+}
+
+func initializeTransformer(logger *steno.Logger) *Transformer.Transformer {
+	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
+	uploader := uploader.New(10*time.Minute, logger)
+	extractor := extractor.NewDetectable()
+	compressor := compressor.NewTgz()
+	logStreamerFactory := log_streamer_factory.New(
+		*loggregatorServer,
+		*loggregatorSecret,
+	)
+
+	return Transformer.NewTransformer(
+		logStreamerFactory,
+		cache,
+		uploader,
+		extractor,
+		compressor,
+		logger,
+		*tempDir,
+	)
 }

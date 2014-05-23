@@ -26,7 +26,7 @@ func New(id string, bbs Bbs.ExecutorBBS, logger *steno.Logger, heartbeatInterval
 	}
 }
 
-func (m *Maintainer) Run(sigChan chan os.Signal, ready chan struct{}) error {
+func (m *Maintainer) Run(sigChan <-chan os.Signal, ready chan<- struct{}) error {
 	presence, status, err := m.bbs.MaintainExecutorPresence(m.heartbeatInterval, m.id)
 	if err != nil {
 		m.logger.Errord(map[string]interface{}{
