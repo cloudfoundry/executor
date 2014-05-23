@@ -22,7 +22,7 @@ func NewFakeAppManagerBBS() *FakeAppManagerBBS {
 	return &FakeAppManagerBBS{}
 }
 
-func (fakeBBS *FakeAppManagerBBS) DesireLongRunningProcess(lrp models.DesiredLRP) error {
+func (fakeBBS *FakeAppManagerBBS) DesireLRP(lrp models.DesiredLRP) error {
 	fakeBBS.Lock()
 	defer fakeBBS.Unlock()
 

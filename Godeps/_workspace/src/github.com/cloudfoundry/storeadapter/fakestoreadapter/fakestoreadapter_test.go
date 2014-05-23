@@ -2,6 +2,7 @@ package fakestoreadapter_test
 
 import (
 	"errors"
+
 	"github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/fakestoreadapter"
 	. "github.com/onsi/ginkgo"
@@ -385,7 +386,7 @@ var _ = Describe("Fakestoreadapter", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("sends an event with DeleteEvent type and the node's value", func(done Done) {
+			It("sends an event with DeleteEvent type and the node's previous value", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				err := adapter.Delete("/foo/a")
@@ -393,8 +394,8 @@ var _ = Describe("Fakestoreadapter", func() {
 
 				event := <-events
 				Expect(event.Type).To(Equal(storeadapter.DeleteEvent))
-				Expect(event.Node.Key).To(Equal("/foo/a"))
-				Expect(string(event.Node.Value)).To(Equal("some value"))
+				Expect(event.PrevNode.Key).To(Equal("/foo/a"))
+				Expect(string(event.PrevNode.Value)).To(Equal("some value"))
 
 				close(done)
 			}, 5.0)

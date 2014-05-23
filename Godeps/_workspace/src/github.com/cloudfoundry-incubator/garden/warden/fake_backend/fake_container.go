@@ -25,8 +25,6 @@ type FakeContainer struct {
 	stopMutex    *sync.RWMutex
 	StopCallback func()
 
-	SavedSnapshots []io.Writer
-
 	CleanedUp bool
 
 	StreamInError error
@@ -317,10 +315,6 @@ func (c *FakeContainer) NetOut(network string, port uint32) error {
 	c.PermittedOut = append(c.PermittedOut, NetOutSpec{network, port})
 
 	return nil
-}
-
-func (c *FakeContainer) Snapshot(io.Writer) error {
-	panic("NO!")
 }
 
 func (c *FakeContainer) Cleanup() {

@@ -6,17 +6,17 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-type LongRunningProcessBBS struct {
+type LRPBBS struct {
 	store storeadapter.StoreAdapter
 }
 
-func New(store storeadapter.StoreAdapter) *LongRunningProcessBBS {
-	return &LongRunningProcessBBS{
+func New(store storeadapter.StoreAdapter) *LRPBBS {
+	return &LRPBBS{
 		store: store,
 	}
 }
 
-func (bbs *LongRunningProcessBBS) DesireLongRunningProcess(lrp models.DesiredLRP) error {
+func (bbs *LRPBBS) DesireLRP(lrp models.DesiredLRP) error {
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
 		return bbs.store.SetMulti([]storeadapter.StoreNode{
 			{
@@ -27,7 +27,26 @@ func (bbs *LongRunningProcessBBS) DesireLongRunningProcess(lrp models.DesiredLRP
 	})
 }
 
-func (bbs *LongRunningProcessBBS) ReportLongRunningProcessAsRunning(lrp models.LRP) error {
+func (bbs *LRPBBS) RemoveActualLRP(lrp models.LRP) error {
+	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
+		return bbs.store.Delete(shared.ActualLRPSchemaPath(lrp))
+	})
+}
+
+func (bbs *LRPBBS) ReportActualLRPAsStarting(lrp models.LRP) error {
+	lrp.State = models.LRPStateStarting
+	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
+		return bbs.store.SetMulti([]storeadapter.StoreNode{
+			{
+				Key:   shared.ActualLRPSchemaPath(lrp),
+				Value: lrp.ToJSON(),
+			},
+		})
+	})
+}
+
+func (bbs *LRPBBS) ReportActualLRPAsRunning(lrp models.LRP) error {
+	lrp.State = models.LRPStateRunning
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
 		return bbs.store.SetMulti([]storeadapter.StoreNode{
 			{

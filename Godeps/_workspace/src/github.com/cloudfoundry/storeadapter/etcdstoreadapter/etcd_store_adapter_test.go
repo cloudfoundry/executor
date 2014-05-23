@@ -769,7 +769,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 	Describe("Watching", func() {
 		Context("when a node under the key is created", func() {
-			It("sends an event with CreateEvent type and the node's value", func(done Done) {
+			It("sends an event with CreateEvent type and the node's value, and no previous node", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				err := adapter.Create(StoreNode{
@@ -782,6 +782,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(event.Type).To(Equal(CreateEvent))
 				Expect(event.Node.Key).To(Equal("/foo/a"))
 				Expect(string(event.Node.Value)).To(Equal("new value"))
+				Expect(event.PrevNode).To(BeZero())
 
 				close(done)
 			}, 5.0)
@@ -798,7 +799,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("sends an event with UpdateEvent type and the node's value", func(done Done) {
+			It("sends an event with UpdateEvent type and the node's value, and the previous node", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				err := adapter.SetMulti([]StoreNode{
@@ -813,12 +814,14 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(event.Type).To(Equal(UpdateEvent))
 				Expect(event.Node.Key).To(Equal("/foo/a"))
 				Expect(string(event.Node.Value)).To(Equal("new value"))
+				Expect(event.PrevNode.Key).To(Equal("/foo/a"))
+				Expect(string(event.PrevNode.Value)).To(Equal("some value"))
 
 				close(done)
 			}, 5.0)
 		})
 
-		Context("when a node under the key is updated", func() {
+		Context("when a node under the key is updated, and the previous node", func() {
 			BeforeEach(func() {
 				err := adapter.SetMulti([]StoreNode{
 					{
@@ -839,6 +842,8 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(event.Type).To(Equal(UpdateEvent))
 				Expect(event.Node.Key).To(Equal("/foo"))
 				Expect(event.Node.TTL).To(BeNumerically("==", 10))
+				Expect(event.PrevNode.Key).To(Equal("/foo"))
+				Expect(event.PrevNode.TTL).To(BeNumerically("==", 0))
 
 				close(done)
 			}, 5.0)
@@ -855,7 +860,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("sends an event with UpdateEvent type and the node's value", func(done Done) {
+			It("sends an event with UpdateEvent type and the node's value, and the previous node", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				newNode := node
@@ -865,7 +870,9 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 				event := <-events
 				Expect(event.Type).To(Equal(UpdateEvent))
-				Expect(event.Node).To(MatchStoreNode(newNode))
+				Expect(*event.Node).To(MatchStoreNode(newNode))
+				Expect(event.PrevNode.Key).To(Equal("/foo/a"))
+				Expect(string(event.PrevNode.Value)).To(Equal("some value"))
 
 				close(done)
 			}, 5.0)
@@ -882,7 +889,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("sends an event with DeleteEvent type and the node's value", func(done Done) {
+			It("sends an event with DeleteEvent type and the previous node", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				err := adapter.Delete("/foo/a")
@@ -890,8 +897,9 @@ var _ = Describe("ETCD Store Adapter", func() {
 
 				event := <-events
 				Expect(event.Type).To(Equal(DeleteEvent))
-				Expect(event.Node.Key).To(Equal("/foo/a"))
-				Expect(string(event.Node.Value)).To(Equal("some value"))
+				Expect(event.Node).To(BeNil())
+				Expect(event.PrevNode.Key).To(Equal("/foo/a"))
+				Expect(string(event.PrevNode.Value)).To(Equal("some value"))
 
 				close(done)
 			}, 5.0)
@@ -909,15 +917,16 @@ var _ = Describe("ETCD Store Adapter", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("sends an event with ExpireEvent type and the node's value", func(done Done) {
+			It("sends an event with ExpireEvent type and the previous node", func(done Done) {
 				events, _, _ := adapter.Watch("/foo")
 
 				time.Sleep(2 * time.Second)
 
 				event := <-events
 				Expect(event.Type).To(Equal(ExpireEvent))
-				Expect(event.Node.Key).To(Equal("/foo/a"))
-				Expect(string(event.Node.Value)).To(Equal("some value"))
+				Expect(event.Node).To(BeNil())
+				Expect(event.PrevNode.Key).To(Equal("/foo/a"))
+				Expect(string(event.PrevNode.Value)).To(Equal("some value"))
 
 				close(done)
 			}, 5.0)

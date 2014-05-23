@@ -91,12 +91,13 @@ func (adapter *FakeStoreAdapter) Disconnect() error {
 	return adapter.DisconnectErr
 }
 
-func (adapter *FakeStoreAdapter) sendEvent(node storeadapter.StoreNode, eventType storeadapter.EventType) {
+func (adapter *FakeStoreAdapter) sendEvent(prevNode *storeadapter.StoreNode, node *storeadapter.StoreNode, eventType storeadapter.EventType) {
 	if adapter.sendEvents {
 		go func() {
 			adapter.eventChannel <- storeadapter.WatchEvent{
-				Type: eventType,
-				Node: node,
+				Type:     eventType,
+				Node:     node,
+				PrevNode: prevNode,
 			}
 		}()
 	}
@@ -106,8 +107,7 @@ func (adapter *FakeStoreAdapter) SetMulti(nodes []storeadapter.StoreNode) error 
 	var eventType storeadapter.EventType
 
 	for _, node := range nodes {
-
-		_, err := adapter.Get(node.Key)
+		prevNode, err := adapter.Get(node.Key)
 		if err == nil {
 			eventType = storeadapter.UpdateEvent
 		}
@@ -140,7 +140,7 @@ func (adapter *FakeStoreAdapter) SetMulti(nodes []storeadapter.StoreNode) error 
 			}
 		}
 
-		adapter.sendEvent(node, eventType)
+		adapter.sendEvent(&prevNode, &node, eventType)
 	}
 
 	return nil
@@ -251,7 +251,7 @@ func (adapter *FakeStoreAdapter) Delete(keys ...string) error {
 		}
 
 		delete(parentNode.nodes, components[len(components)-1])
-		adapter.sendEvent(node, storeadapter.DeleteEvent)
+		adapter.sendEvent(&node, nil, storeadapter.DeleteEvent)
 	}
 
 	return nil

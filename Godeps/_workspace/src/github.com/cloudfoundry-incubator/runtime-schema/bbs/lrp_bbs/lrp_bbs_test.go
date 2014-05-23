@@ -1,21 +1,21 @@
 package lrp_bbs_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/storeadapter"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("LRP", func() {
-	var bbs *LongRunningProcessBBS
+	var bbs *LRPBBS
 
 	BeforeEach(func() {
 		bbs = New(etcdClient)
 	})
 
-	Describe("DesireLongRunningProcess", func() {
+	Describe("DesireLRP", func() {
 		var lrp models.DesiredLRP
 
 		BeforeEach(func() {
@@ -30,23 +30,22 @@ var _ = Describe("LRP", func() {
 		})
 
 		It("creates /v1/desired/<process-guid>/<index>", func() {
-			err := bbs.DesireLongRunningProcess(lrp)
+			err := bbs.DesireLRP(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			node, err := etcdClient.Get("/v1/desired/some-process-guid")
 			Ω(err).ShouldNot(HaveOccurred())
-
 			Ω(node.Value).Should(Equal(lrp.ToJSON()))
 		})
 
 		Context("when the store is out of commission", func() {
 			itRetriesUntilStoreComesBack(func() error {
-				return bbs.DesireLongRunningProcess(lrp)
+				return bbs.DesireLRP(lrp)
 			})
 		})
 	})
 
-	Describe("ReportLongRunningProcessAsRunning", func() {
+	Describe("Adding and removing actual LRPs", func() {
 		var lrp models.LRP
 
 		BeforeEach(func() {
@@ -63,20 +62,65 @@ var _ = Describe("LRP", func() {
 			}
 		})
 
-		It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
-			err := bbs.ReportLongRunningProcessAsRunning(lrp)
-			Ω(err).ShouldNot(HaveOccurred())
+		Describe("ReportActualLRPAsStarting", func() {
+			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
+				err := bbs.ReportActualLRPAsStarting(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
 
-			node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
-			Ω(err).ShouldNot(HaveOccurred())
+				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(node.Value).Should(Equal(lrp.ToJSON()))
+				expectedLRP := lrp
+				expectedLRP.State = models.LRPStateStarting
+				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.ReportActualLRPAsStarting(lrp)
+				})
+			})
 		})
 
-		Context("when the store is out of commission", func() {
-			itRetriesUntilStoreComesBack(func() error {
-				return bbs.ReportLongRunningProcessAsRunning(lrp)
+		Describe("ReportActualLRPAsRunning", func() {
+			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
+				err := bbs.ReportActualLRPAsRunning(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedLRP := lrp
+				expectedLRP.State = models.LRPStateRunning
+				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.ReportActualLRPAsRunning(lrp)
+				})
+			})
+		})
+
+		Describe("RemoveActualLRP", func() {
+			BeforeEach(func() {
+				bbs.ReportActualLRPAsStarting(lrp)
+			})
+
+			It("should remove the LRP", func() {
+				err := bbs.RemoveActualLRP(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).Should(MatchError(storeadapter.ErrorKeyNotFound))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.RemoveActualLRP(lrp)
+				})
 			})
 		})
 	})
+
 })

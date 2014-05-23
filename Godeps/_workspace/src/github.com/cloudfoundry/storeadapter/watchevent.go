@@ -1,8 +1,9 @@
 package storeadapter
 
 type WatchEvent struct {
-	Type EventType
-	Node StoreNode
+	Type     EventType
+	Node     *StoreNode
+	PrevNode *StoreNode
 }
 
 type EventType int

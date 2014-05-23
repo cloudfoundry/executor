@@ -26,6 +26,11 @@ type FakeRepBBS struct {
 	runningLrps   []models.LRP
 	runningLrpErr error
 
+	startingLrps   []models.LRP
+	startingLrpErr error
+
+	removedLrps []models.LRP
+
 	MaintainRepPresenceInput struct {
 		HeartbeatInterval time.Duration
 		RepPresence       models.RepPresence
@@ -107,7 +112,40 @@ func (fakeBBS *FakeRepBBS) StartTask(task models.Task, containerHandle string) (
 	return task, nil
 }
 
-func (fakeBBS *FakeRepBBS) ReportLongRunningProcessAsRunning(lrp models.LRP) error {
+func (fakeBBS *FakeRepBBS) ReportActualLRPAsStarting(lrp models.LRP) error {
+	fakeBBS.RLock()
+	err := fakeBBS.startingLrpErr
+	fakeBBS.RUnlock()
+
+	if err != nil {
+		return err
+	}
+
+	fakeBBS.Lock()
+	fakeBBS.startingLrps = append(fakeBBS.startingLrps, lrp)
+	fakeBBS.Unlock()
+
+	return nil
+}
+
+func (fakeBBS *FakeRepBBS) StartingLRPs() []models.LRP {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	running := make([]models.LRP, len(fakeBBS.startingLrps))
+	copy(running, fakeBBS.startingLrps)
+
+	return running
+}
+
+func (fakeBBS *FakeRepBBS) SetStartingError(err error) {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+
+	fakeBBS.startingLrpErr = err
+}
+
+func (fakeBBS *FakeRepBBS) ReportActualLRPAsRunning(lrp models.LRP) error {
 	fakeBBS.RLock()
 	err := fakeBBS.runningLrpErr
 	fakeBBS.RUnlock()
@@ -123,17 +161,7 @@ func (fakeBBS *FakeRepBBS) ReportLongRunningProcessAsRunning(lrp models.LRP) err
 	return nil
 }
 
-func (fakeBBS *FakeRepBBS) StartedTasks() []models.Task {
-	fakeBBS.RLock()
-	defer fakeBBS.RUnlock()
-
-	started := make([]models.Task, len(fakeBBS.startedTasks))
-	copy(started, fakeBBS.startedTasks)
-
-	return started
-}
-
-func (fakeBBS *FakeRepBBS) RunningLongRunningProcesses() []models.LRP {
+func (fakeBBS *FakeRepBBS) RunningLRPs() []models.LRP {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
@@ -148,6 +176,34 @@ func (fakeBBS *FakeRepBBS) SetRunningError(err error) {
 	defer fakeBBS.Unlock()
 
 	fakeBBS.runningLrpErr = err
+}
+
+func (fakeBBS *FakeRepBBS) RemoveActualLRP(lrp models.LRP) error {
+	fakeBBS.Lock()
+	fakeBBS.removedLrps = append(fakeBBS.removedLrps, lrp)
+	fakeBBS.Unlock()
+
+	return nil
+}
+
+func (fakeBBS *FakeRepBBS) RemovedLRPs() []models.LRP {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	removed := make([]models.LRP, len(fakeBBS.removedLrps))
+	copy(removed, fakeBBS.removedLrps)
+
+	return removed
+}
+
+func (fakeBBS *FakeRepBBS) StartedTasks() []models.Task {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	started := make([]models.Task, len(fakeBBS.startedTasks))
+	copy(started, fakeBBS.startedTasks)
+
+	return started
 }
 
 func (fakeBBS *FakeRepBBS) SetStartTaskErr(err error) {

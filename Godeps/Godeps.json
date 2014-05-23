@@ -20,35 +20,35 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/drain",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/transport",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Rev": "65f970f3fb2aca644ef7b1113f4f28914c8cf3e4"
+			"Rev": "ed61704cf072f19c957b6741ed65ffdc90d2c9bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "c841d6a44bd454e5a97a5b05a9833c979b4affc3"
+			"Rev": "89f8d3b9af9e15729c19bd05137a0691c8fca5a8"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "c841d6a44bd454e5a97a5b05a9833c979b4affc3"
+			"Rev": "89f8d3b9af9e15729c19bd05137a0691c8fca5a8"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -85,7 +85,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "c21b707184aa2b2b4a8c8a25e90bc36011dd147d"
+			"Rev": "4ab2c502399a8be4998fb8d76a2cc16654d135ee"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -102,7 +102,7 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "f5533d435ebfcf4fa0463202dc0e966b983618b8"
+			"Rev": "31890964f058d62158db8efe8ccd6cb55a5ecd6d"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
@@ -119,6 +119,10 @@
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
 			"Rev": "b49bb276c002a7efefbf53e40180d2edd026fdc3"
+		},
+		{
+			"ImportPath": "github.com/tedsuo/ifrit",
+			"Rev": "28e5a1d991b72ee764526ec08f53e757ed214784"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/router",
