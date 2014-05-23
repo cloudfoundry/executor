@@ -27,6 +27,14 @@ func New(
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *http.Request,
 ) sequence.Step {
+	if healthyThreshold == 0 {
+		healthyThreshold = 1
+	}
+
+	if unhealthyThreshold == 0 {
+		unhealthyThreshold = 1
+	}
+
 	return &monitorStep{
 		check:              check,
 		healthyThreshold:   healthyThreshold,

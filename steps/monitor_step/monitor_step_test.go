@@ -274,6 +274,54 @@ var _ = Describe("MonitorStep", func() {
 				})
 			})
 		})
+
+		Context("when the healthy and unhealthy thresholds are not specified", func() {
+			BeforeEach(func() {
+				healthyThreshold = 0
+				unhealthyThreshold = 0
+			})
+
+			JustBeforeEach(func() {
+				go step.Perform()
+			})
+
+			AfterEach(func() {
+				// unblocking check sequence; opens the floodgates, so ignore any
+				// requests after this point
+				hookServer.AllowUnhandledRequests = true
+				close(interruptCheck)
+
+				step.Cancel()
+			})
+
+			Context("when the check succeeds", func() {
+				BeforeEach(func() {
+					checkResults = append(checkResults, nil)
+
+					hookServer.AppendHandlers(
+						ghttp.VerifyRequest("PUT", "/healthy"),
+					)
+				})
+
+				It("hits the healthy endpoint", func() {
+					Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
+				})
+			})
+
+			Context("when the check fails", func() {
+				BeforeEach(func() {
+					checkResults = append(checkResults, errors.New("nope"))
+
+					hookServer.AppendHandlers(
+						ghttp.VerifyRequest("PUT", "/unhealthy"),
+					)
+				})
+
+				It("hits the unhealthy endpoint", func() {
+					Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
+				})
+			})
+		})
 	})
 
 	Describe("Cancel", func() {
