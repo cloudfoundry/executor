@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/task_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
 )
@@ -50,6 +51,7 @@ type AppManagerBBS interface {
 	//lrp
 	DesireLRP(models.DesiredLRP) error
 	RequestLRPStartAuction(models.LRPStartAuction) error
+	GetActualLRPsByProcessGuid(string) ([]models.LRP, error)
 
 	//services
 	GetAvailableFileServer() (string, error)
@@ -63,6 +65,9 @@ type AuctioneerBBS interface {
 	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
 	ClaimLRPStartAuction(models.LRPStartAuction) error
 	ResolveLRPStartAuction(models.LRPStartAuction) error
+
+	//lock
+	MaintainAuctioneerLock(interval time.Duration, auctioneerID string) (<-chan bool, chan<- chan bool, error)
 }
 
 type StagerBBS interface {
@@ -103,48 +108,48 @@ type LRPRouterBBS interface {
 	GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.LRP, error)
 }
 
-func NewExecutorBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) ExecutorBBS {
-	return NewBBS(store, timeProvider)
+func NewExecutorBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) ExecutorBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewRepBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) RepBBS {
-	return NewBBS(store, timeProvider)
+func NewRepBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) RepBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewConvergerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) ConvergerBBS {
-	return NewBBS(store, timeProvider)
+func NewConvergerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) ConvergerBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewAppManagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) AppManagerBBS {
-	return NewBBS(store, timeProvider)
+func NewAppManagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) AppManagerBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewAuctioneerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) AuctioneerBBS {
-	return NewBBS(store, timeProvider)
+func NewAuctioneerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) AuctioneerBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewStagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) StagerBBS {
-	return NewBBS(store, timeProvider)
+func NewStagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) StagerBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewMetricsBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) MetricsBBS {
-	return NewBBS(store, timeProvider)
+func NewMetricsBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) MetricsBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewFileServerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) FileServerBBS {
-	return NewBBS(store, timeProvider)
+func NewFileServerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) FileServerBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewLRPRouterBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) LRPRouterBBS {
-	return NewBBS(store, timeProvider)
+func NewLRPRouterBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) LRPRouterBBS {
+	return NewBBS(store, timeProvider, logger)
 }
 
-func NewBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider) *BBS {
+func NewBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) *BBS {
 	return &BBS{
 		LockBBS:     lock_bbs.New(store),
 		LRPBBS:      lrp_bbs.New(store),
-		ServicesBBS: services_bbs.New(store),
-		TaskBBS:     task_bbs.New(store, timeProvider),
+		ServicesBBS: services_bbs.New(store, logger),
+		TaskBBS:     task_bbs.New(store, timeProvider, logger),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 )
 
@@ -20,7 +21,16 @@ var _ = Describe("Task BBS", func() {
 	BeforeEach(func() {
 		err = nil
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(etcdClient, timeProvider)
+
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+		bbs = New(etcdClient, timeProvider, logger)
 		task = models.Task{
 			Guid: "some-guid",
 		}

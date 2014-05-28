@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/task_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
@@ -35,11 +36,21 @@ var _ = Describe("Convergence of Tasks", func() {
 		convergenceInterval = time.Duration(convergenceIntervalInSeconds) * time.Second
 
 		timeProvider = faketimeprovider.New(time.Unix(1238, 0))
-		bbs = New(etcdClient, timeProvider)
+
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+
+		bbs = New(etcdClient, timeProvider, logger)
 		task = models.Task{
 			Guid: "some-guid",
 		}
-		servicesBBS = services_bbs.New(etcdClient)
+		servicesBBS = services_bbs.New(etcdClient, logger)
 	})
 
 	Describe("ConvergeTask", func() {

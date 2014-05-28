@@ -11,11 +11,9 @@ import (
 func (bbs *LRPBBS) RequestLRPStartAuction(lrp models.LRPStartAuction) error {
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
 		lrp.State = models.LRPStartAuctionStatePending
-		return bbs.store.SetMulti([]storeadapter.StoreNode{
-			{
-				Key:   shared.LRPStartAuctionSchemaPath(lrp),
-				Value: lrp.ToJSON(),
-			},
+		return bbs.store.Create(storeadapter.StoreNode{
+			Key:   shared.LRPStartAuctionSchemaPath(lrp),
+			Value: lrp.ToJSON(),
 		})
 	})
 }

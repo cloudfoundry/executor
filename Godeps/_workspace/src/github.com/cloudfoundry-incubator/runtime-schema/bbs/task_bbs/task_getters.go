@@ -3,7 +3,6 @@ package task_bbs
 import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 )
 
@@ -21,7 +20,7 @@ func (bbs *TaskBBS) GetAllTasks() ([]models.Task, error) {
 	for _, node := range node.ChildNodes {
 		task, err := models.NewTaskFromJSON(node.Value)
 		if err != nil {
-			steno.NewLogger("bbs").Errorf("cannot parse task JSON for key %s: %s", node.Key, err.Error())
+			bbs.logger.Errorf("cannot parse task JSON for key %s: %s", node.Key, err.Error())
 		} else {
 			tasks = append(tasks, task)
 		}

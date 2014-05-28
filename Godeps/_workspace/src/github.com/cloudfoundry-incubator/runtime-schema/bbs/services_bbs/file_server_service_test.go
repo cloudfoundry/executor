@@ -8,6 +8,7 @@ import (
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
 
@@ -23,7 +24,15 @@ var _ = Describe("Fetching available file servers", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = New(etcdClient)
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+		bbs = New(etcdClient, logger)
 	})
 
 	Describe("GetAvailableFileServer", func() {

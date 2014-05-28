@@ -9,6 +9,7 @@ import (
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry-incubator/runtime-schema/models/factories"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
@@ -26,7 +27,16 @@ var _ = Describe("Services BBS", func() {
 
 	BeforeEach(func() {
 		err = nil
-		bbs = New(etcdClient)
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+
+		bbs = New(etcdClient, logger)
 	})
 
 	Describe("MaintainExecutorPresence", func() {

@@ -10,13 +10,23 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
+	steno "github.com/cloudfoundry/gosteno"
 )
 
 var _ = Context("Getting Generic Services", func() {
 	var bbs *ServicesBBS
 
 	BeforeEach(func() {
-		bbs = New(etcdClient)
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+
+		bbs = New(etcdClient, logger)
 	})
 
 	Describe("GetServiceRegistrations", func() {

@@ -10,9 +10,9 @@ type ServicesBBS struct {
 	logger *steno.Logger
 }
 
-func New(store storeadapter.StoreAdapter) *ServicesBBS {
+func New(store storeadapter.StoreAdapter, logger *steno.Logger) *ServicesBBS {
 	return &ServicesBBS{
 		store:  store,
-		logger: steno.NewLogger("bbs"),
+		logger: logger,
 	}
 }

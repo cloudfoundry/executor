@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/storenodematchers"
@@ -51,6 +52,16 @@ var _ = Describe("Start Auction", func() {
 
 			auctionLRP.State = models.LRPStartAuctionStatePending
 			Ω(node.Value).Should(Equal(auctionLRP.ToJSON()))
+		})
+
+		Context("when the key already exists", func() {
+			It("should error", func() {
+				err := bbs.RequestLRPStartAuction(auctionLRP)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = bbs.RequestLRPStartAuction(auctionLRP)
+				Ω(err).Should(MatchError(storeadapter.ErrorKeyExists))
+			})
 		})
 
 		Context("when the store is out of commission", func() {
@@ -112,7 +123,12 @@ var _ = Describe("Start Auction", func() {
 			auctionLRP.State = models.LRPStartAuctionStatePending
 			Eventually(events).Should(Receive(Equal(auctionLRP)))
 
-			err = bbs.RequestLRPStartAuction(auctionLRP)
+			err = etcdClient.SetMulti([]storeadapter.StoreNode{
+				{
+					Key:   shared.LRPStartAuctionSchemaPath(auctionLRP),
+					Value: auctionLRP.ToJSON(),
+				},
+			})
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(events).Should(Receive(Equal(auctionLRP)))

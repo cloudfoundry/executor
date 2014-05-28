@@ -9,6 +9,7 @@ import (
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/test_helpers"
 )
@@ -26,7 +27,16 @@ var _ = Describe("Fetching all Reps", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = New(etcdClient)
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+
+		bbs = New(etcdClient, logger)
 
 		firstRepPresence = models.RepPresence{
 			RepID: "first-rep",

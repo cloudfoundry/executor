@@ -19,6 +19,9 @@ type FakeLRPRouterBBS struct {
 
 	WhenGettingRunningActualLRPs func() ([]models.LRP, error)
 	WhenGettingAllDesiredLRPs    func() ([]models.DesiredLRP, error)
+
+	WhenGettingActualLRPsByProcessGuid func(string) ([]models.LRP, error)
+	WhenGettingDesiredLRPByProcessGuid func(string) (models.DesiredLRP, error)
 }
 
 func NewFakeLRPRouterBBS() *FakeLRPRouterBBS {
@@ -45,6 +48,7 @@ func (fakeBBS *FakeLRPRouterBBS) GetAllDesiredLRPs() ([]models.DesiredLRP, error
 	if fakeBBS.WhenGettingAllDesiredLRPs != nil {
 		return fakeBBS.WhenGettingAllDesiredLRPs()
 	}
+
 	return fakeBBS.AllDesiredLRPs, nil
 }
 
@@ -52,13 +56,22 @@ func (fakeBBS *FakeLRPRouterBBS) GetRunningActualLRPs() ([]models.LRP, error) {
 	if fakeBBS.WhenGettingRunningActualLRPs != nil {
 		return fakeBBS.WhenGettingRunningActualLRPs()
 	}
+
 	return fakeBBS.AllActualLRPs, nil
 }
 
 func (fakeBBS *FakeLRPRouterBBS) GetDesiredLRPByProcessGuid(processGuid string) (models.DesiredLRP, error) {
+	if fakeBBS.WhenGettingDesiredLRPByProcessGuid != nil {
+		return fakeBBS.WhenGettingDesiredLRPByProcessGuid(processGuid)
+	}
+
 	return fakeBBS.DesiredLRP, nil
 }
 
 func (fakeBBS *FakeLRPRouterBBS) GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.LRP, error) {
+	if fakeBBS.WhenGettingActualLRPsByProcessGuid != nil {
+		return fakeBBS.WhenGettingActualLRPsByProcessGuid(processGuid)
+	}
+
 	return fakeBBS.ActualLRPs, nil
 }

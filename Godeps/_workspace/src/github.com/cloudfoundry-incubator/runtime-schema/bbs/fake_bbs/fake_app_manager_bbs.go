@@ -15,6 +15,9 @@ type FakeAppManagerBBS struct {
 	desiredLRPs  []models.DesiredLRP
 	DesireLRPErr error
 
+	ActualLRPs    []models.LRP
+	ActualLRPsErr error
+
 	sync.RWMutex
 }
 
@@ -47,4 +50,10 @@ func (fakeBBS *FakeAppManagerBBS) GetLRPStartAuctions() []models.LRPStartAuction
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 	return fakeBBS.lrpStartAuctions
+}
+
+func (fakeBBS *FakeAppManagerBBS) GetActualLRPsByProcessGuid(string) ([]models.LRP, error) {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+	return fakeBBS.ActualLRPs, fakeBBS.ActualLRPsErr
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/storeadapter"
 )
 
@@ -31,9 +30,8 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 		return
 	}
 
-	logger := steno.NewLogger("bbs")
 	logError := func(task models.Task, message string) {
-		logger.Errord(map[string]interface{}{
+		self.logger.Errord(map[string]interface{}{
 			"task": task,
 		}, message)
 	}
@@ -51,7 +49,7 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 	for _, node := range taskState.ChildNodes {
 		task, err := models.NewTaskFromJSON(node.Value)
 		if err != nil {
-			logger.Errord(map[string]interface{}{
+			self.logger.Errord(map[string]interface{}{
 				"key":   node.Key,
 				"value": string(node.Value),
 			}, "task.converge.json-parse-failure")
@@ -99,7 +97,7 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 		}
 	}
 
-	self.batchCompareAndSwapTasks(tasksToCAS, logger)
+	self.batchCompareAndSwapTasks(tasksToCAS)
 	self.store.Delete(keysToDelete...)
 }
 
@@ -118,7 +116,7 @@ func markTaskFailed(task models.Task, reason string) models.Task {
 	return task
 }
 
-func (self *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTask, logger *steno.Logger) {
+func (self *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTask) {
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(tasksToCAS))
 	for _, taskToCAS := range tasksToCAS {
@@ -132,7 +130,7 @@ func (self *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTa
 		go func(taskToCAS compareAndSwappableTask, newStoreNode storeadapter.StoreNode) {
 			err := self.store.CompareAndSwapByIndex(taskToCAS.OldIndex, newStoreNode)
 			if err != nil {
-				logger.Errord(map[string]interface{}{
+				self.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
 				}, "task.converge.failed-to-compare-and-swap")
 			}
