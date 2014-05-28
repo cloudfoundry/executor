@@ -234,7 +234,7 @@ func initializeBbs(logger *steno.Logger) Bbs.ExecutorBBS {
 		os.Exit(1)
 	}
 
-	return Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider())
+	return Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
 }
 
 func initializeWardenClient(logger *steno.Logger) (WardenClient.Client, registry.Capacity) {

@@ -11,12 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/api"
-	GardenServer "github.com/cloudfoundry-incubator/garden/server"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	"github.com/nu7hatch/gouuid"
@@ -25,6 +20,13 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/router"
+
+	"github.com/cloudfoundry-incubator/executor/api"
+	GardenServer "github.com/cloudfoundry-incubator/garden/server"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
+	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
@@ -87,7 +89,16 @@ var _ = Describe("Main", func() {
 
 		etcdCluster = []string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)}
 
-		bbs = Bbs.NewExecutorBBS(etcdRunner.Adapter(), timeprovider.NewTimeProvider())
+		logSink := steno.NewTestingSink()
+
+		steno.Init(&steno.Config{
+			Sinks: []steno.Sink{logSink},
+		})
+
+		logger := steno.NewLogger("the-logger")
+		steno.EnterTestMode()
+
+		bbs = Bbs.NewExecutorBBS(etcdRunner.Adapter(), timeprovider.NewTimeProvider(), logger)
 
 		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
 
