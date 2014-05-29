@@ -56,6 +56,16 @@ func (step *DownloadStep) Perform() error {
 	//Stream this to the extractor + container when we have streaming support!
 	downloadedPath, err := step.download()
 	if err != nil {
+		step.logger.Errord(
+			map[string]interface{}{
+				"handle": step.container.Handle(),
+				"from":   step.model.From,
+				"to":     step.model.To,
+				"error":  err,
+			},
+			"task.handle.download-failed",
+		)
+
 		return err
 	}
 

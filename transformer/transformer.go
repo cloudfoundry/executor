@@ -196,6 +196,7 @@ func (transformer *Transformer) convertAction(
 			actionModel.UnhealthyThreshold,
 			healthyHook,
 			unhealthyHook,
+			transformer.logger,
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))
