@@ -32,32 +32,32 @@ var _ = Describe("ParallelStep", func() {
 		running := new(sync.WaitGroup)
 		running.Add(2)
 
-		subStep1 = fake_step.FakeStep{
-			WhenPerforming: func() error {
+		subStep1 = &fake_step.FakeStep{
+			PerformStub: func() error {
 				running.Done()
 				running.Wait()
 				thingHappened <- true
 				return nil
 			},
-			WhenCleaningUp: func() {
+			CleanupStub: func() {
 				cleanedUp <- true
 			},
-			WhenCancelling: func() {
+			CancelStub: func() {
 				cancelled <- true
 			},
 		}
 
-		subStep2 = fake_step.FakeStep{
-			WhenPerforming: func() error {
+		subStep2 = &fake_step.FakeStep{
+			PerformStub: func() error {
 				running.Done()
 				running.Wait()
 				thingHappened <- true
 				return nil
 			},
-			WhenCleaningUp: func() {
+			CleanupStub: func() {
 				cleanedUp <- true
 			},
-			WhenCancelling: func() {
+			CancelStub: func() {
 				cancelled <- true
 			},
 		}
@@ -86,14 +86,14 @@ var _ = Describe("ParallelStep", func() {
 			triggerStep2 = make(chan struct{})
 			step2Completed = make(chan struct{})
 
-			subStep1 = fake_step.FakeStep{
-				WhenPerforming: func() error {
+			subStep1 = &fake_step.FakeStep{
+				PerformStub: func() error {
 					return disaster
 				},
 			}
 
-			subStep2 = fake_step.FakeStep{
-				WhenPerforming: func() error {
+			subStep2 = &fake_step.FakeStep{
+				PerformStub: func() error {
 					<-triggerStep2
 					close(step2Completed)
 					return nil

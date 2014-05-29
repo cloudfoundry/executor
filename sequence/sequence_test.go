@@ -17,20 +17,20 @@ var _ = Describe("Sequence", func() {
 		seq := make(chan int, 3)
 
 		sequence := New([]Step{
-			fake_step.FakeStep{
-				WhenPerforming: func() error {
+			&fake_step.FakeStep{
+				PerformStub: func() error {
 					seq <- 1
 					return nil
 				},
 			},
-			fake_step.FakeStep{
-				WhenPerforming: func() error {
+			&fake_step.FakeStep{
+				PerformStub: func() error {
 					seq <- 2
 					return nil
 				},
 			},
-			fake_step.FakeStep{
-				WhenPerforming: func() error {
+			&fake_step.FakeStep{
+				PerformStub: func() error {
 					seq <- 3
 					return nil
 				},
@@ -53,18 +53,18 @@ var _ = Describe("Sequence", func() {
 		cleanup := make(chan int, 3)
 
 		sequence := New([]Step{
-			fake_step.FakeStep{
-				WhenCleaningUp: func() {
+			&fake_step.FakeStep{
+				CleanupStub: func() {
 					cleanup <- 1
 				},
 			},
-			fake_step.FakeStep{
-				WhenCleaningUp: func() {
+			&fake_step.FakeStep{
+				CleanupStub: func() {
 					cleanup <- 2
 				},
 			},
-			fake_step.FakeStep{
-				WhenCleaningUp: func() {
+			&fake_step.FakeStep{
+				CleanupStub: func() {
 					cleanup <- 3
 				},
 			},
@@ -90,29 +90,29 @@ var _ = Describe("Sequence", func() {
 			cleanup := make(chan int, 3)
 
 			sequence := New([]Step{
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						seq <- 1
 						return nil
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						cleanup <- 1
 					},
 				},
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						return disaster
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						cleanup <- 2
 					},
 				},
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						seq <- 3
 						return nil
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						cleanup <- 3
 					},
 				},
@@ -145,18 +145,18 @@ var _ = Describe("Sequence", func() {
 			startCleanup := make(chan bool)
 
 			sequence := New([]Step{
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						seq <- 1
 						return nil
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						<-startCleanup
 						cleanup <- 1
 					},
 				},
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						seq <- 2
 
 						waitingForInterrupt <- true
@@ -165,19 +165,19 @@ var _ = Describe("Sequence", func() {
 
 						return nil
 					},
-					WhenCancelling: func() {
+					CancelStub: func() {
 						interrupt <- true
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						cleanup <- 2
 					},
 				},
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						seq <- 3
 						return nil
 					},
-					WhenCleaningUp: func() {
+					CleanupStub: func() {
 						cleanup <- 3
 					},
 				},

@@ -1,6 +1,7 @@
 package run_step_test
 
 import (
+	"bytes"
 	"errors"
 	"time"
 
@@ -45,7 +46,7 @@ var _ = Describe("RunAction", func() {
 			},
 		}
 
-		fakeStreamer = fake_log_streamer.New()
+		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 
 		wardenClient = fake_warden_client.New()
 
@@ -210,7 +211,18 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Describe("emitting logs", func() {
+			var (
+				stdoutBuffer *bytes.Buffer
+				stderrBuffer *bytes.Buffer
+			)
+
 			BeforeEach(func() {
+				stdoutBuffer = new(bytes.Buffer)
+				stderrBuffer = new(bytes.Buffer)
+
+				fakeStreamer.StdoutReturns(stdoutBuffer)
+				fakeStreamer.StderrReturns(stderrBuffer)
+
 				processPayloadStream <- warden.ProcessStream{
 					Source: warden.ProcessStreamSourceStdout,
 					Data:   []byte("hi out"),
@@ -225,12 +237,12 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("emits the output chunks as they come in", func() {
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("hi out"))
-				Ω(fakeStreamer.StderrBuffer.String()).Should(ContainSubstring("hi err"))
+				Ω(stdoutBuffer.String()).Should(ContainSubstring("hi out"))
+				Ω(stderrBuffer.String()).Should(ContainSubstring("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {
-				Ω(fakeStreamer.Flushed).Should(BeTrue())
+				Ω(fakeStreamer.FlushCallCount()).Should(Equal(1))
 			})
 		})
 	})

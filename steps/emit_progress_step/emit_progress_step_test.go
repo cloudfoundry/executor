@@ -1,6 +1,7 @@
 package emit_progress_step_test
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -25,24 +26,31 @@ var _ = Describe("EmitProgressStep", func() {
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var startMessage, successMessage, failureMessage string
 	var fakeLogger *steno.Logger
+	var stderrBuffer *bytes.Buffer
+	var stdoutBuffer *bytes.Buffer
 
 	BeforeEach(func() {
+		stderrBuffer = new(bytes.Buffer)
+		stdoutBuffer = new(bytes.Buffer)
 		errorToReturn = nil
 		startMessage, successMessage, failureMessage = "", "", ""
 		cleanedUp, cancelled = false, false
-		fakeStreamer = fake_log_streamer.New()
+		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
+
+		fakeStreamer.StderrReturns(stderrBuffer)
+		fakeStreamer.StdoutReturns(stdoutBuffer)
 
 		steno.EnterTestMode(steno.LOG_DEBUG)
 
-		subStep = fake_step.FakeStep{
-			WhenPerforming: func() error {
+		subStep = &fake_step.FakeStep{
+			PerformStub: func() error {
 				fakeStreamer.Stdout().Write([]byte("RUNNING\n"))
 				return errorToReturn
 			},
-			WhenCleaningUp: func() {
+			CleanupStub: func() {
 				cleanedUp = true
 			},
-			WhenCancelling: func() {
+			CancelStub: func() {
 				cancelled = true
 			},
 		}
@@ -63,7 +71,7 @@ var _ = Describe("EmitProgressStep", func() {
 			It("should emit the start message before performing", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("STARTING\nRUNNING\n"))
+				Ω(stdoutBuffer.String()).Should(Equal("STARTING\nRUNNING\n"))
 			})
 		})
 
@@ -71,7 +79,7 @@ var _ = Describe("EmitProgressStep", func() {
 			It("should not emit the start message (i.e. a newline) before performing", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("RUNNING\n"))
+				Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
 			})
 		})
 
@@ -83,7 +91,7 @@ var _ = Describe("EmitProgressStep", func() {
 			It("should emit the sucess message", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("RUNNING\nSUCCESS\n"))
+				Ω(stdoutBuffer.String()).Should(Equal("RUNNING\nSUCCESS\n"))
 			})
 		})
 
@@ -105,8 +113,8 @@ var _ = Describe("EmitProgressStep", func() {
 				It("should emit the failure message", func() {
 					step.Perform()
 
-					Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("RUNNING\n"))
-					Ω(fakeStreamer.StderrBuffer.String()).Should(Equal("FAIL\n"))
+					Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
+					Ω(stderrBuffer.String()).Should(Equal("FAIL\n"))
 				})
 
 				Context("with an emittable error", func() {
@@ -117,8 +125,8 @@ var _ = Describe("EmitProgressStep", func() {
 					It("should print out the emittable error", func() {
 						step.Perform()
 
-						Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("RUNNING\n"))
-						Ω(fakeStreamer.StderrBuffer.String()).Should(Equal("FAIL\nFailed to reticulate\n"))
+						Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
+						Ω(stderrBuffer.String()).Should(Equal("FAIL\nFailed to reticulate\n"))
 					})
 				})
 			})
@@ -131,8 +139,8 @@ var _ = Describe("EmitProgressStep", func() {
 				It("should not emit the failure message or error, even with an emittable error", func() {
 					step.Perform()
 
-					Ω(fakeStreamer.StdoutBuffer.String()).Should(Equal("RUNNING\n"))
-					Ω(fakeStreamer.StderrBuffer.String()).Should(BeEmpty())
+					Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
+					Ω(stderrBuffer.String()).Should(BeEmpty())
 				})
 			})
 		})

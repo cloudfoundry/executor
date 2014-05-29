@@ -67,7 +67,7 @@ var _ = Describe("Api", func() {
 			Transformer: transformer.NewTransformer(
 				log_streamer_factory.New("", ""),
 				fakecacheddownloader.New(),
-				fake_uploader.New(),
+				new(fake_uploader.FakeUploader),
 				&fake_extractor.FakeExtractor{},
 				&fake_compressor.FakeCompressor{},
 				logger,

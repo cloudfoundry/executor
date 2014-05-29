@@ -42,6 +42,8 @@ var _ = Describe("UploadStep", func() {
 	var currentUser *user.User
 	var uploadTarget *httptest.Server
 	var uploadedPayload []byte
+	var stdoutBuffer *bytes.Buffer
+	var stderrBuffer *bytes.Buffer
 
 	BeforeEach(func() {
 		var err error
@@ -72,10 +74,15 @@ var _ = Describe("UploadStep", func() {
 		compressor = Compressor.NewTgz()
 		uploader = Uploader.New(5*time.Second, logger)
 
-		fakeStreamer = fake_log_streamer.New()
+		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 
 		currentUser, err = user.Current()
 		Ω(err).ShouldNot(HaveOccurred())
+
+		stdoutBuffer = new(bytes.Buffer)
+		stderrBuffer = new(bytes.Buffer)
+		fakeStreamer.StdoutReturns(stdoutBuffer)
+		fakeStreamer.StderrReturns(stderrBuffer)
 	})
 
 	AfterEach(func() {
@@ -162,25 +169,26 @@ var _ = Describe("UploadStep", func() {
 		})
 
 		Describe("streaming logs for uploads", func() {
-			BeforeEach(func() {
-				fakeUploader := &fake_uploader.FakeUploader{}
-				fakeUploader.UploadSize = 1024
 
+			BeforeEach(func() {
+				fakeUploader := new(fake_uploader.FakeUploader)
+				fakeUploader.UploadReturns(1024, nil)
 				uploader = fakeUploader
+
 			})
 
 			It("streams the upload filesize", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
+				Ω(stdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
 			})
 
 			It("does not stream an error", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(fakeStreamer.StderrBuffer.String()).Should(Equal(""))
+				Ω(stderrBuffer.String()).Should(Equal(""))
 			})
 		})
 
@@ -227,9 +235,8 @@ var _ = Describe("UploadStep", func() {
 
 		Context("when there is an error uploading", func() {
 			BeforeEach(func() {
-				fakeUploader := &fake_uploader.FakeUploader{}
-				fakeUploader.AlwaysFail() //and bring shame and dishonor to your house
-
+				fakeUploader := new(fake_uploader.FakeUploader)
+				fakeUploader.UploadReturns(0, errors.New("Upload failed!"))
 				uploader = fakeUploader
 			})
 

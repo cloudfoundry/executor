@@ -40,8 +40,8 @@ var _ = Describe("MonitorStep", func() {
 		checkTimes = make(chan time.Time, 1024)
 		interruptCheck = make(chan struct{})
 
-		check = fake_step.FakeStep{
-			WhenPerforming: func() error {
+		check = &fake_step.FakeStep{
+			PerformStub: func() error {
 				checkTimes <- time.Now()
 
 				if len(checkResults) <= stepSequence {
