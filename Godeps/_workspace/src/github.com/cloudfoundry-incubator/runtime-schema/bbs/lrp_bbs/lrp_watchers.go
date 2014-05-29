@@ -97,11 +97,11 @@ func watchForActualLRPs(store storeadapter.StoreAdapter) (<-chan models.ActualLR
 					return
 				}
 
-				var before *models.LRP
-				var after *models.LRP
+				var before *models.ActualLRP
+				var after *models.ActualLRP
 
 				if event.Node != nil {
-					aft, err := models.NewLRPFromJSON(event.Node.Value)
+					aft, err := models.NewActualLRPFromJSON(event.Node.Value)
 					if err != nil {
 						continue
 					}
@@ -110,7 +110,7 @@ func watchForActualLRPs(store storeadapter.StoreAdapter) (<-chan models.ActualLR
 				}
 
 				if event.PrevNode != nil {
-					bef, err := models.NewLRPFromJSON(event.PrevNode.Value)
+					bef, err := models.NewActualLRPFromJSON(event.PrevNode.Value)
 					if err != nil {
 						continue
 					}

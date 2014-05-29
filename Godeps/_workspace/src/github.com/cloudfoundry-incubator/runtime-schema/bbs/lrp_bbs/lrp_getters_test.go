@@ -64,9 +64,9 @@ var _ = Describe("LrpGetters", func() {
 	})
 
 	Describe("GetAllActualLRPs", func() {
-		lrp1 := models.LRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
-		lrp2 := models.LRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateStarting}
-		lrp3 := models.LRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp1 := models.ActualLRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
+		lrp2 := models.ActualLRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateStarting}
+		lrp3 := models.ActualLRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
 
 		BeforeEach(func() {
 			err := bbs.ReportActualLRPAsRunning(lrp1)
@@ -83,14 +83,14 @@ var _ = Describe("LrpGetters", func() {
 			all, err := bbs.GetAllActualLRPs()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(all).Should(Equal([]models.LRP{lrp1, lrp2, lrp3}))
+			Ω(all).Should(Equal([]models.ActualLRP{lrp1, lrp2, lrp3}))
 		})
 	})
 
 	Describe("GetRunningActualLRPs", func() {
-		lrp1 := models.LRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
-		lrp2 := models.LRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateStarting}
-		lrp3 := models.LRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp1 := models.ActualLRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
+		lrp2 := models.ActualLRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateStarting}
+		lrp3 := models.ActualLRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
 
 		BeforeEach(func() {
 			err := bbs.ReportActualLRPAsRunning(lrp1)
@@ -114,9 +114,9 @@ var _ = Describe("LrpGetters", func() {
 	})
 
 	Describe("GetActualLRPsByProcessGuid", func() {
-		lrp1 := models.LRP{ProcessGuid: "guidA", Index: 1, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
-		lrp2 := models.LRP{ProcessGuid: "guidA", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateStarting}
-		lrp3 := models.LRP{ProcessGuid: "guidB", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp1 := models.ActualLRP{ProcessGuid: "guidA", Index: 1, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
+		lrp2 := models.ActualLRP{ProcessGuid: "guidA", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateStarting}
+		lrp3 := models.ActualLRP{ProcessGuid: "guidB", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
 
 		BeforeEach(func() {
 			err := bbs.ReportActualLRPAsRunning(lrp1)
@@ -139,9 +139,9 @@ var _ = Describe("LrpGetters", func() {
 	})
 
 	Describe("GetRunningActualLRPsByProcessGuid", func() {
-		lrp1 := models.LRP{ProcessGuid: "guidA", Index: 1, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
-		lrp2 := models.LRP{ProcessGuid: "guidA", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateStarting}
-		lrp3 := models.LRP{ProcessGuid: "guidB", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp1 := models.ActualLRP{ProcessGuid: "guidA", Index: 1, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
+		lrp2 := models.ActualLRP{ProcessGuid: "guidA", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateStarting}
+		lrp3 := models.ActualLRP{ProcessGuid: "guidB", Index: 2, InstanceGuid: "some-instance-guid", State: models.ActualLRPStateRunning}
 
 		BeforeEach(func() {
 			err := bbs.ReportActualLRPAsRunning(lrp1)

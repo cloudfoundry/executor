@@ -33,7 +33,7 @@ func LRPStartAuctionSchemaPath(lrp models.LRPStartAuction) string {
 	return path.Join(LRPStartAuctionSchemaRoot, lrp.ProcessGuid, strconv.Itoa(lrp.Index))
 }
 
-func ActualLRPSchemaPath(lrp models.LRP) string {
+func ActualLRPSchemaPath(lrp models.ActualLRP) string {
 	return path.Join(ActualLRPSchemaRoot, lrp.ProcessGuid, strconv.Itoa(lrp.Index), lrp.InstanceGuid)
 }
 

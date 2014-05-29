@@ -36,6 +36,7 @@ func NewFakeStagerBBS() *FakeStagerBBS {
 func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error) {
 	completedChan := make(chan models.Task)
 	completedErrChan := make(chan error)
+	doneChan := make(chan bool)
 
 	fakeBBS.Lock()
 	fakeBBS.completedTaskChan = completedChan
@@ -44,7 +45,7 @@ func (fakeBBS *FakeStagerBBS) WatchForCompletedTask() (<-chan models.Task, chan<
 
 	fakeBBS.watchingForCompleted <- true
 
-	return completedChan, nil, completedErrChan
+	return completedChan, doneChan, completedErrChan
 }
 
 func (fakeBBS *FakeStagerBBS) ResolvingTask(task models.Task) (models.Task, error) {

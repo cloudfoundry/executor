@@ -43,8 +43,8 @@ func (bbs *LRPBBS) GetDesiredLRPByProcessGuid(processGuid string) (models.Desire
 	return models.NewDesiredLRPFromJSON(node.Value)
 }
 
-func (bbs *LRPBBS) GetAllActualLRPs() ([]models.LRP, error) {
-	lrps := []models.LRP{}
+func (bbs *LRPBBS) GetAllActualLRPs() ([]models.ActualLRP, error) {
+	lrps := []models.ActualLRP{}
 
 	node, err := bbs.store.ListRecursively(shared.ActualLRPSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
@@ -58,7 +58,7 @@ func (bbs *LRPBBS) GetAllActualLRPs() ([]models.LRP, error) {
 	for _, node := range node.ChildNodes {
 		for _, indexNode := range node.ChildNodes {
 			for _, instanceNode := range indexNode.ChildNodes {
-				lrp, err := models.NewLRPFromJSON(instanceNode.Value)
+				lrp, err := models.NewActualLRPFromJSON(instanceNode.Value)
 				if err != nil {
 					return lrps, fmt.Errorf("cannot parse lrp JSON for key %s: %s", instanceNode.Key, err.Error())
 				} else {
@@ -71,17 +71,17 @@ func (bbs *LRPBBS) GetAllActualLRPs() ([]models.LRP, error) {
 	return lrps, nil
 }
 
-func (bbs *LRPBBS) GetRunningActualLRPs() ([]models.LRP, error) {
+func (bbs *LRPBBS) GetRunningActualLRPs() ([]models.ActualLRP, error) {
 	lrps, err := bbs.GetAllActualLRPs()
 	if err != nil {
-		return []models.LRP{}, err
+		return []models.ActualLRP{}, err
 	}
 
-	return filterActualLRPs(lrps, models.LRPStateRunning), nil
+	return filterActualLRPs(lrps, models.ActualLRPStateRunning), nil
 }
 
-func (bbs *LRPBBS) GetActualLRPsByProcessGuid(processGuid string) ([]models.LRP, error) {
-	lrps := []models.LRP{}
+func (bbs *LRPBBS) GetActualLRPsByProcessGuid(processGuid string) ([]models.ActualLRP, error) {
+	lrps := []models.ActualLRP{}
 
 	node, err := bbs.store.ListRecursively(path.Join(shared.ActualLRPSchemaRoot, processGuid))
 	if err == storeadapter.ErrorKeyNotFound {
@@ -94,7 +94,7 @@ func (bbs *LRPBBS) GetActualLRPsByProcessGuid(processGuid string) ([]models.LRP,
 
 	for _, indexNode := range node.ChildNodes {
 		for _, instanceNode := range indexNode.ChildNodes {
-			lrp, err := models.NewLRPFromJSON(instanceNode.Value)
+			lrp, err := models.NewActualLRPFromJSON(instanceNode.Value)
 			if err != nil {
 				return lrps, fmt.Errorf("cannot parse lrp JSON for key %s: %s", instanceNode.Key, err.Error())
 			} else {
@@ -106,17 +106,17 @@ func (bbs *LRPBBS) GetActualLRPsByProcessGuid(processGuid string) ([]models.LRP,
 	return lrps, nil
 }
 
-func (bbs *LRPBBS) GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.LRP, error) {
+func (bbs *LRPBBS) GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.ActualLRP, error) {
 	lrps, err := bbs.GetActualLRPsByProcessGuid(processGuid)
 	if err != nil {
-		return []models.LRP{}, err
+		return []models.ActualLRP{}, err
 	}
 
-	return filterActualLRPs(lrps, models.LRPStateRunning), nil
+	return filterActualLRPs(lrps, models.ActualLRPStateRunning), nil
 }
 
-func filterActualLRPs(lrps []models.LRP, state models.LRPState) []models.LRP {
-	filteredLRPs := []models.LRP{}
+func filterActualLRPs(lrps []models.ActualLRP, state models.ActualLRPState) []models.ActualLRP {
+	filteredLRPs := []models.ActualLRP{}
 	for _, lrp := range lrps {
 		if lrp.State == state {
 			filteredLRPs = append(filteredLRPs, lrp)

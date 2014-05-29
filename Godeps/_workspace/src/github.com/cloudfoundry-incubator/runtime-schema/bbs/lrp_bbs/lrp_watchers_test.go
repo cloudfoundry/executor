@@ -106,7 +106,7 @@ var _ = Describe("LrpWatchers", func() {
 			stopped bool
 		)
 
-		lrp := models.LRP{ProcessGuid: "some-process-guid", State: models.LRPStateStarting}
+		lrp := models.ActualLRP{ProcessGuid: "some-process-guid", State: models.ActualLRPStateStarting}
 
 		BeforeEach(func() {
 			events, stop, errors = bbs.WatchForActualLRPChanges()
@@ -135,7 +135,7 @@ var _ = Describe("LrpWatchers", func() {
 			Eventually(events).Should(Receive())
 
 			changedLRP := lrp
-			changedLRP.State = models.LRPStateRunning
+			changedLRP.State = models.ActualLRPStateRunning
 
 			err = bbs.ReportActualLRPAsRunning(changedLRP)
 			Ω(err).ShouldNot(HaveOccurred())

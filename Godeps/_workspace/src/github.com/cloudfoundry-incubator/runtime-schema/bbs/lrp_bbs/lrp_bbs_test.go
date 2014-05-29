@@ -46,10 +46,10 @@ var _ = Describe("LRP", func() {
 	})
 
 	Describe("Adding and removing actual LRPs", func() {
-		var lrp models.LRP
+		var lrp models.ActualLRP
 
 		BeforeEach(func() {
-			lrp = models.LRP{
+			lrp = models.ActualLRP{
 				ProcessGuid:  "some-process-guid",
 				InstanceGuid: "some-instance-guid",
 				Index:        1,
@@ -71,7 +71,7 @@ var _ = Describe("LRP", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				expectedLRP := lrp
-				expectedLRP.State = models.LRPStateStarting
+				expectedLRP.State = models.ActualLRPStateStarting
 				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
 			})
 
@@ -91,7 +91,7 @@ var _ = Describe("LRP", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				expectedLRP := lrp
-				expectedLRP.State = models.LRPStateRunning
+				expectedLRP.State = models.ActualLRPStateRunning
 				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
 			})
 

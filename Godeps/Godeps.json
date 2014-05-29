@@ -44,11 +44,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "2357a40e3b2744288cb9a1cbc32e1bd8e6760e8e"
+			"Rev": "6cd833ad6c7343deb7f0e7b8424225999c7176fe"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "2357a40e3b2744288cb9a1cbc32e1bd8e6760e8e"
+			"Rev": "6cd833ad6c7343deb7f0e7b8424225999c7176fe"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -89,8 +89,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-108-g4c69444",
-			"Rev": "4c694447f66ad846c7ab72d16993ebe6904f2d90"
+			"Comment": "v0.2.0-rc1-110-ga0969dd",
+			"Rev": "a0969dd27a1c11e0bad6daacfccfd2a47d1fcf2f"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -98,8 +98,8 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Comment": "v1.0.0-2-g4cf6831",
-			"Rev": "4cf683101c36426dc975f4db4d7f01d9c071f31a"
+			"Comment": "v1.0.0-3-g0b6046e",
+			"Rev": "0b6046ec39957332de4c0aa68726a7418c37e531"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
