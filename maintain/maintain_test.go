@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/maintain"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,7 +22,7 @@ var _ = Describe("Maintain Presence", func() {
 	var sigChan chan os.Signal
 	var logger *steno.Logger
 
-	var maintainer *maintain.Maintainer
+	var maintainer ifrit.Process
 
 	BeforeSuite(func() {
 		steno.EnterTestMode(steno.LOG_DEBUG)
@@ -31,45 +32,34 @@ var _ = Describe("Maintain Presence", func() {
 		fakeBBS = fake_bbs.NewFakeExecutorBBS()
 		logger = steno.NewLogger("test-logger")
 		sigChan = make(chan os.Signal, 1)
-		maintainer = maintain.New(id, fakeBBS, logger, heartbeatInterval)
+	})
+
+	JustBeforeEach(func() {
+		maintainer = ifrit.Envoke(maintain.New(id, fakeBBS, logger, heartbeatInterval))
 	})
 
 	AfterEach(func() {
-		sigChan <- syscall.SIGTERM
+		maintainer.Signal(syscall.SIGTERM)
+		<-maintainer.Wait()
 	})
 
 	Context("when maintaining presence", func() {
-		BeforeEach(func() {
-			go func() {
-				err := maintainer.Run(sigChan, nil)
-				Ω(err).ShouldNot(HaveOccurred())
-			}()
-		})
 		It("should maintain presence", func() {
 			Eventually(fakeBBS.GetMaintainExecutorPresenceId).Should(Equal("executor-id"))
 		})
 	})
 
 	Context("when we fail to maintain our presence", func() {
-		var err error
-
 		BeforeEach(func() {
 			fakeBBS.MaintainExecutorPresenceOutputs.Presence = &fake_bbs.FakePresence{
 				MaintainStatus: false,
 			}
-
-			errChan := make(chan error, 1)
-			runToEnd := func() bool {
-				errChan <- maintainer.Run(sigChan, nil)
-				return true
-			}
-
-			Eventually(runToEnd, 1).Should(BeTrue())
-			err = <-errChan
 		})
 
-		It("sends an error to the given error channel", func() {
-			Ω(err).ShouldNot(BeNil())
+		It("sends an error to the given error channel", func(done Done) {
+			err := <-maintainer.Wait()
+			Ω(err).Should(Equal(maintain.ErrFailedToAquireLock))
+			close(done)
 		})
 
 		It("logs an error message", func() {

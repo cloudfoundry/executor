@@ -10,6 +10,8 @@ import (
 	steno "github.com/cloudfoundry/gosteno"
 )
 
+var ErrFailedToAquireLock = errors.New("Failed to aquire maintain presence lock")
+
 type Maintainer struct {
 	id                string
 	bbs               Bbs.ExecutorBBS
@@ -34,17 +36,15 @@ func (m *Maintainer) Run(sigChan <-chan os.Signal, ready chan<- struct{}) error 
 		}, "executor.maintain_presence_begin.failed")
 	}
 
-	if ready != nil {
-		close(ready)
-	}
+	close(ready)
 
 	for {
 		select {
 		case sig := <-sigChan:
-			switch sig {
-			case syscall.SIGINT, syscall.SIGTERM:
-				presence.Remove()
-				return nil
+			if sig != syscall.SIGUSR1 {
+				go func() {
+					presence.Remove()
+				}()
 			}
 
 		case locked, ok := <-status:
@@ -54,7 +54,7 @@ func (m *Maintainer) Run(sigChan <-chan os.Signal, ready chan<- struct{}) error 
 
 			if !locked {
 				m.logger.Error("executor.maintain_presence.failed")
-				return errors.New("Failed to maintain presence")
+				return ErrFailedToAquireLock
 			}
 		}
 	}

@@ -91,9 +91,7 @@ func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) erro
 		return err
 	}
 
-	if readyChan != nil {
-		close(readyChan)
-	}
+	close(readyChan)
 
 	stopping := false
 
