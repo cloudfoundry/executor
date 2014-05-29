@@ -25,15 +25,15 @@ var _ = Describe("TryStep", func() {
 
 		steno.EnterTestMode(steno.LOG_DEBUG)
 
-		subStep = fake_step.FakeStep{
-			WhenPerforming: func() error {
+		subStep = &fake_step.FakeStep{
+			PerformStub: func() error {
 				thingHappened = true
 				return nil
 			},
-			WhenCleaningUp: func() {
+			CleanupStub: func() {
 				cleanedUp = true
 			},
-			WhenCancelling: func() {
+			CancelStub: func() {
 				cancelled = true
 			},
 		}
@@ -56,8 +56,8 @@ var _ = Describe("TryStep", func() {
 		disaster := errors.New("oh no!")
 
 		BeforeEach(func() {
-			subStep = fake_step.FakeStep{
-				WhenPerforming: func() error {
+			subStep = &fake_step.FakeStep{
+				PerformStub: func() error {
 					return disaster
 				},
 			}

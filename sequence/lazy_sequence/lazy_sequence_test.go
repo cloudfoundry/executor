@@ -33,8 +33,8 @@ var _ = Describe("LazySequence", func() {
 			performed = false
 
 			generatedSteps = []sequence.Step{
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						performed = true
 						return nil
 					},
@@ -62,13 +62,13 @@ var _ = Describe("LazySequence", func() {
 			cancelled = make(chan bool)
 
 			generatedSteps = []sequence.Step{
-				fake_step.FakeStep{
-					WhenPerforming: func() error {
+				&fake_step.FakeStep{
+					PerformStub: func() error {
 						performing <- true
 						<-canceling
 						return nil
 					},
-					WhenCancelling: func() {
+					CancelStub: func() {
 						canceling <- true
 						cancelled <- true
 					},
@@ -113,8 +113,8 @@ var _ = Describe("LazySequence", func() {
 			cleanedUp = false
 
 			generatedSteps = []sequence.Step{
-				fake_step.FakeStep{
-					WhenCleaningUp: func() {
+				&fake_step.FakeStep{
+					CleanupStub: func() {
 						cleanedUp = true
 					},
 				},
