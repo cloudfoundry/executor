@@ -1,4 +1,4 @@
-package shared_test
+package fake_bbs_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestShared(t *testing.T) {
+func TestFakeBbs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Shared Suite")
+	RunSpecs(t, "Fake BBS Suite")
 }

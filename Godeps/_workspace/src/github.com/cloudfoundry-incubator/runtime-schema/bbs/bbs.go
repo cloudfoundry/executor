@@ -37,6 +37,8 @@ type RepBBS interface {
 	ReportActualLRPAsStarting(lrp models.ActualLRP) error
 	ReportActualLRPAsRunning(lrp models.ActualLRP) error
 	RemoveActualLRP(lrp models.ActualLRP) error
+	WatchForStopLRPInstance() (<-chan models.StopLRPInstance, chan<- bool, <-chan error)
+	RemoveStopLRPInstance(stopInstance models.StopLRPInstance) error
 }
 
 type ConvergerBBS interface {
@@ -50,8 +52,9 @@ type ConvergerBBS interface {
 type AppManagerBBS interface {
 	//lrp
 	DesireLRP(models.DesiredLRP) error
-	RequestLRPStartAuction(models.LRPStartAuction) error
 	GetActualLRPsByProcessGuid(string) ([]models.ActualLRP, error)
+	RequestLRPStartAuction(models.LRPStartAuction) error
+	RequestStopLRPInstance(stopInstance models.StopLRPInstance) error
 
 	//services
 	GetAvailableFileServer() (string, error)

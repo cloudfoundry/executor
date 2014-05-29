@@ -6,55 +6,33 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-func (self *TaskBBS) WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error) {
-	return watchForTaskModificationsOnState(self.store, models.TaskStatePending)
-}
-
-func (s *TaskBBS) WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error) {
-	return watchForTaskModificationsOnState(s.store, models.TaskStateCompleted)
-}
-
-func watchForTaskModificationsOnState(store storeadapter.StoreAdapter, state models.TaskState) (<-chan models.Task, chan<- bool, <-chan error) {
+func (bbs *TaskBBS) WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error) {
 	tasks := make(chan models.Task)
-	stopOuter := make(chan bool)
-	errsOuter := make(chan error)
+	stop, err := shared.WatchWithFilter(bbs.store, shared.TaskSchemaRoot, tasks, taskFilterByState(models.TaskStatePending))
+	return tasks, stop, err
+}
 
-	events, stopInner, errsInner := store.Watch(shared.TaskSchemaRoot)
+func (bbs *TaskBBS) WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error) {
+	tasks := make(chan models.Task)
+	stop, err := shared.WatchWithFilter(bbs.store, shared.TaskSchemaRoot, tasks, taskFilterByState(models.TaskStateCompleted))
+	return tasks, stop, err
+}
 
-	go func() {
-		defer close(tasks)
-		defer close(errsOuter)
+func taskFilterByState(state models.TaskState) func(storeadapter.WatchEvent) (models.Task, bool) {
+	return func(event storeadapter.WatchEvent) (models.Task, bool) {
 
-		for {
-			select {
-			case <-stopOuter:
-				close(stopInner)
-				return
+		switch event.Type {
+		case storeadapter.CreateEvent, storeadapter.UpdateEvent:
+			task, err := models.NewTaskFromJSON(event.Node.Value)
+			if err != nil {
+				return models.Task{}, false
+			}
 
-			case event, ok := <-events:
-				if !ok {
-					return
-				}
-				switch event.Type {
-				case storeadapter.CreateEvent, storeadapter.UpdateEvent:
-					task, err := models.NewTaskFromJSON(event.Node.Value)
-					if err != nil {
-						continue
-					}
-
-					if task.State == state {
-						tasks <- task
-					}
-				}
-
-			case err, ok := <-errsInner:
-				if ok {
-					errsOuter <- err
-				}
-				return
+			if task.State == state {
+				return task, true
 			}
 		}
-	}()
 
-	return tasks, stopOuter, errsOuter
+		return models.Task{}, false
+	}
 }

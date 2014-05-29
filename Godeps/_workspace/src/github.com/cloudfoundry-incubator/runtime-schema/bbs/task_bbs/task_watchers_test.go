@@ -47,6 +47,10 @@ var _ = Describe("Task BBS", func() {
 			events, stop, errors = bbs.WatchForDesiredTask()
 		})
 
+		AfterEach(func() {
+			stop <- true
+		})
+
 		It("should send an event down the pipe for creates", func(done Done) {
 			task, err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -91,18 +95,6 @@ var _ = Describe("Task BBS", func() {
 
 			close(done)
 		})
-
-		It("closes the events and errors channel when told to stop", func(done Done) {
-			stop <- true
-
-			task, err = bbs.DesireTask(task)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(events).Should(BeClosed())
-			Ω(errors).Should(BeClosed())
-
-			close(done)
-		})
 	})
 
 	Describe("WatchForCompletedTask", func() {
@@ -123,6 +115,10 @@ var _ = Describe("Task BBS", func() {
 
 			task, err = bbs.StartTask(task, "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			stop <- true
 		})
 
 		It("should not send any events for state transitions that we are not interested in", func() {
@@ -151,18 +147,6 @@ var _ = Describe("Task BBS", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Consistently(events).ShouldNot(Receive())
-
-			close(done)
-		})
-
-		It("closes the events and errorschannel when told to stop", func(done Done) {
-			stop <- true
-
-			task, err = bbs.CompleteTask(task, true, "a reason", "a result")
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(events).Should(BeClosed())
-			Ω(errors).Should(BeClosed())
 
 			close(done)
 		})

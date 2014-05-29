@@ -13,6 +13,12 @@ type FakeRepBBS struct {
 	desiredTaskStopChan chan bool
 	desiredTaskErrChan  chan error
 
+	stopLRPInstanceChan     chan models.StopLRPInstance
+	stopLRPInstanceStopChan chan bool
+	stopLRPInstanceErrChan  chan error
+
+	removedStopLRPInstances []models.StopLRPInstance
+
 	claimedTasks []models.Task
 	claimTaskErr error
 
@@ -48,6 +54,10 @@ func NewFakeRepBBS() *FakeRepBBS {
 	fakeBBS.desiredTaskChan = make(chan models.Task, 1)
 	fakeBBS.desiredTaskStopChan = make(chan bool)
 	fakeBBS.desiredTaskErrChan = make(chan error)
+	fakeBBS.stopLRPInstanceChan = make(chan models.StopLRPInstance)
+	fakeBBS.stopLRPInstanceStopChan = make(chan bool)
+	fakeBBS.stopLRPInstanceErrChan = make(chan error)
+
 	return fakeBBS
 }
 
@@ -192,6 +202,32 @@ func (fakeBBS *FakeRepBBS) RemovedLRPs() []models.ActualLRP {
 
 	removed := make([]models.ActualLRP, len(fakeBBS.removedLrps))
 	copy(removed, fakeBBS.removedLrps)
+
+	return removed
+}
+
+func (fakeBBS *FakeRepBBS) WatchForStopLRPInstance() (<-chan models.StopLRPInstance, chan<- bool, <-chan error) {
+	return fakeBBS.stopLRPInstanceChan, fakeBBS.stopLRPInstanceStopChan, fakeBBS.stopLRPInstanceErrChan
+}
+
+func (fakeBBS *FakeRepBBS) EmitStopLRPInstance(stopInstance models.StopLRPInstance) {
+	fakeBBS.stopLRPInstanceChan <- stopInstance
+}
+
+func (fakeBBS *FakeRepBBS) RemoveStopLRPInstance(stopInstance models.StopLRPInstance) error {
+	fakeBBS.Lock()
+	fakeBBS.removedStopLRPInstances = append(fakeBBS.removedStopLRPInstances, stopInstance)
+	fakeBBS.Unlock()
+
+	return nil
+}
+
+func (fakeBBS *FakeRepBBS) RemovedStopLRPInstances() []models.StopLRPInstance {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	removed := make([]models.StopLRPInstance, len(fakeBBS.removedStopLRPInstances))
+	copy(removed, fakeBBS.removedStopLRPInstances)
 
 	return removed
 }

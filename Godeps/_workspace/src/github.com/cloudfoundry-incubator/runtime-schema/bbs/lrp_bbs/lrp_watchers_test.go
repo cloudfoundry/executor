@@ -18,10 +18,9 @@ var _ = Describe("LrpWatchers", func() {
 
 	Describe("WatchForDesiredLRPChanges", func() {
 		var (
-			events  <-chan models.DesiredLRPChange
-			stop    chan<- bool
-			errors  <-chan error
-			stopped bool
+			events <-chan models.DesiredLRPChange
+			stop   chan<- bool
+			errors <-chan error
 		)
 
 		lrp := models.DesiredLRP{
@@ -38,9 +37,7 @@ var _ = Describe("LrpWatchers", func() {
 		})
 
 		AfterEach(func() {
-			if !stopped {
-				stop <- true
-			}
+			stop <- true
 		})
 
 		It("sends an event down the pipe for creates", func() {
@@ -85,25 +82,13 @@ var _ = Describe("LrpWatchers", func() {
 				After:  nil,
 			})))
 		})
-
-		It("closes the events and errors channel when told to stop", func() {
-			stop <- true
-			stopped = true
-
-			err := bbs.DesireLRP(lrp)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(events).Should(BeClosed())
-			Ω(errors).Should(BeClosed())
-		})
 	})
 
 	Describe("WatchForActualLRPChanges", func() {
 		var (
-			events  <-chan models.ActualLRPChange
-			stop    chan<- bool
-			errors  <-chan error
-			stopped bool
+			events <-chan models.ActualLRPChange
+			stop   chan<- bool
+			errors <-chan error
 		)
 
 		lrp := models.ActualLRP{ProcessGuid: "some-process-guid", State: models.ActualLRPStateStarting}
@@ -113,9 +98,7 @@ var _ = Describe("LrpWatchers", func() {
 		})
 
 		AfterEach(func() {
-			if !stopped {
-				stop <- true
-			}
+			stop <- true
 		})
 
 		It("sends an event down the pipe for creates", func() {
@@ -159,17 +142,6 @@ var _ = Describe("LrpWatchers", func() {
 				Before: &lrp,
 				After:  nil,
 			})))
-		})
-
-		It("closes the events and errors channel when told to stop", func() {
-			stop <- true
-			stopped = true
-
-			err := bbs.ReportActualLRPAsRunning(lrp)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(events).Should(BeClosed())
-			Ω(errors).Should(BeClosed())
 		})
 	})
 

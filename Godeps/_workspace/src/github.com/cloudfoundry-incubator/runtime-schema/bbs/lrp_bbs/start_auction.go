@@ -45,7 +45,26 @@ func (bbs *LRPBBS) GetAllLRPStartAuctions() ([]models.LRPStartAuction, error) {
 }
 
 func (self *LRPBBS) WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error) {
-	return watchForAuctionLrpModificationsOnState(self.store, models.LRPStartAuctionStatePending)
+	lrps := make(chan models.LRPStartAuction)
+
+	filter := func(event storeadapter.WatchEvent) (models.LRPStartAuction, bool) {
+		switch event.Type {
+		case storeadapter.CreateEvent, storeadapter.UpdateEvent:
+			lrp, err := models.NewLRPStartAuctionFromJSON(event.Node.Value)
+			if err != nil {
+				return models.LRPStartAuction{}, false
+			}
+
+			if lrp.State == models.LRPStartAuctionStatePending {
+				return lrp, true
+			}
+		}
+		return models.LRPStartAuction{}, false
+	}
+
+	stop, errs := shared.WatchWithFilter(self.store, shared.LRPStartAuctionSchemaRoot, lrps, filter)
+
+	return lrps, stop, errs
 }
 
 func (self *LRPBBS) ClaimLRPStartAuction(lrp models.LRPStartAuction) error {
@@ -70,50 +89,4 @@ func (s *LRPBBS) ResolveLRPStartAuction(lrp models.LRPStartAuction) error {
 		return s.store.Delete(shared.LRPStartAuctionSchemaPath(lrp))
 	})
 	return err
-}
-
-func watchForAuctionLrpModificationsOnState(store storeadapter.StoreAdapter, state models.LRPStartAuctionState) (<-chan models.LRPStartAuction, chan<- bool, <-chan error) {
-	lrps := make(chan models.LRPStartAuction)
-	stopOuter := make(chan bool)
-	errsOuter := make(chan error)
-
-	events, stopInner, errsInner := store.Watch(shared.LRPStartAuctionSchemaRoot)
-
-	go func() {
-		defer close(lrps)
-		defer close(errsOuter)
-
-		for {
-			select {
-			case <-stopOuter:
-				close(stopInner)
-				return
-
-			case event, ok := <-events:
-				if !ok {
-					return
-				}
-
-				switch event.Type {
-				case storeadapter.CreateEvent, storeadapter.UpdateEvent:
-					lrp, err := models.NewLRPStartAuctionFromJSON(event.Node.Value)
-					if err != nil {
-						continue
-					}
-
-					if lrp.State == state {
-						lrps <- lrp
-					}
-				}
-
-			case err, ok := <-errsInner:
-				if ok {
-					errsOuter <- err
-				}
-				return
-			}
-		}
-	}()
-
-	return lrps, stopOuter, errsOuter
 }

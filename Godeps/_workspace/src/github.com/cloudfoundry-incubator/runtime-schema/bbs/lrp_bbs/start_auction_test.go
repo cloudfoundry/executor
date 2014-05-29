@@ -76,7 +76,6 @@ var _ = Describe("Start Auction", func() {
 			events     <-chan models.LRPStartAuction
 			stop       chan<- bool
 			errors     <-chan error
-			stopped    bool
 			auctionLRP models.LRPStartAuction
 		)
 
@@ -103,9 +102,7 @@ var _ = Describe("Start Auction", func() {
 		})
 
 		AfterEach(func() {
-			if !stopped {
-				stop <- true
-			}
+			stop <- true
 		})
 
 		It("sends an event down the pipe for creates", func() {
@@ -145,17 +142,6 @@ var _ = Describe("Start Auction", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Consistently(events).ShouldNot(Receive())
-		})
-
-		It("closes the events and errors channel when told to stop", func() {
-			stop <- true
-			stopped = true
-
-			err := bbs.RequestLRPStartAuction(auctionLRP)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(events).Should(BeClosed())
-			Ω(errors).Should(BeClosed())
 		})
 	})
 
