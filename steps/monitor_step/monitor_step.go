@@ -90,10 +90,11 @@ func (step *monitorStep) Perform() error {
 
 			if request != nil {
 				resp, err := http.DefaultClient.Do(request)
-				if err == nil {
+				if err != nil {
 					step.logger.Errord(map[string]interface{}{
-						"error": err,
+						"error" : err,
 					}, "executor.health-monitor.request-failed")
+				} else {
 					resp.Body.Close()
 				}
 			}
