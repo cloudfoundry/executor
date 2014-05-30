@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "dc9b8350fb4568b6562900df872672f378242552"
+			"Rev": "fb9da014650ebc7037bf74d4f4b835cb44949a93"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
@@ -44,11 +44,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "8fb024ad82be1cfcd2557eaaf9c03ff04877bb64"
+			"Rev": "6582840f2a02dfb4f69f4ba498a8c7534e497661"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "8fb024ad82be1cfcd2557eaaf9c03ff04877bb64"
+			"Rev": "6582840f2a02dfb4f69f4ba498a8c7534e497661"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -61,27 +61,27 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "90e9aee1f6ae4ba750c6656c3fb529bf217b4908"
+			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -89,8 +89,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-110-ga0969dd",
-			"Rev": "a0969dd27a1c11e0bad6daacfccfd2a47d1fcf2f"
+			"Comment": "v0.2.0-rc1-114-g7745cfd",
+			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -98,8 +98,8 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Comment": "v1.0.0-3-g0b6046e",
-			"Rev": "0b6046ec39957332de4c0aa68726a7418c37e531"
+			"Comment": "v1.0.0-8-g291d5d8",
+			"Rev": "291d5d88535787731a9a43acfa0fa00d41aafaa8"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
@@ -107,11 +107,11 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
-			"Rev": "95890bdee16f0b84ba4a442e956ea278f7d7f0ef"
+			"Rev": "02489ef5ef1eaae09e95d0abae099593c8c5e03c"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/extractor",
-			"Rev": "95890bdee16f0b84ba4a442e956ea278f7d7f0ef"
+			"Rev": "02489ef5ef1eaae09e95d0abae099593c8c5e03c"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",

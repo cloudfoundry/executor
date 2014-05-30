@@ -38,12 +38,20 @@ func StopLRPInstanceSchemaPath(stopInstance models.StopLRPInstance) string {
 	return path.Join(StopLRPInstanceSchemaRoot, stopInstance.InstanceGuid)
 }
 
+func ActualLRPSchemaPathFromStopLRPInstance(stopInstance models.StopLRPInstance) string {
+	return path.Join(ActualLRPSchemaRoot, stopInstance.ProcessGuid, strconv.Itoa(stopInstance.Index), stopInstance.InstanceGuid)
+}
+
 func ActualLRPSchemaPath(lrp models.ActualLRP) string {
 	return path.Join(ActualLRPSchemaRoot, lrp.ProcessGuid, strconv.Itoa(lrp.Index), lrp.InstanceGuid)
 }
 
 func DesiredLRPSchemaPath(lrp models.DesiredLRP) string {
-	return path.Join(DesiredLRPSchemaRoot, lrp.ProcessGuid)
+	return DesiredLRPSchemaPathByProcessGuid(lrp.ProcessGuid)
+}
+
+func DesiredLRPSchemaPathByProcessGuid(processGuid string) string {
+	return path.Join(DesiredLRPSchemaRoot, processGuid)
 }
 
 func TaskSchemaPath(task models.Task) string {

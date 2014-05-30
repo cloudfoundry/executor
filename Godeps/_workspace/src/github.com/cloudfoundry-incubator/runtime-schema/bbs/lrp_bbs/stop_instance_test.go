@@ -3,7 +3,6 @@ package lrp_bbs_test
 import (
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/storeadapter"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,7 +15,9 @@ var _ = Describe("StopInstance", func() {
 	BeforeEach(func() {
 		bbs = New(etcdClient)
 		stopInstance = models.StopLRPInstance{
+			ProcessGuid:  "some-process-guid",
 			InstanceGuid: "some-instance-guid",
+			Index:        5678,
 		}
 	})
 
@@ -73,21 +74,62 @@ var _ = Describe("StopInstance", func() {
 		})
 	})
 
-	Describe("RemoveStopLRPInstance", func() {
-		It("removes the key if it exists", func() {
-			err := bbs.RequestStopLRPInstance(stopInstance)
-			Ω(err).ShouldNot(HaveOccurred())
+	Describe("ResolveStopLRPInstance", func() {
+		Context("the happy path", func() {
+			BeforeEach(func() {
+				err := bbs.RequestStopLRPInstance(stopInstance)
+				Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.RemoveStopLRPInstance(stopInstance)
-			Ω(err).ShouldNot(HaveOccurred())
+				err = bbs.ReportActualLRPAsRunning(models.ActualLRP{
+					ProcessGuid:  stopInstance.ProcessGuid,
+					InstanceGuid: stopInstance.InstanceGuid,
+					Index:        stopInstance.Index,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 
-			_, err = etcdClient.Get("/v1/stop-instance/some-instance-guid")
-			Ω(err).Should(MatchError(storeadapter.ErrorKeyNotFound))
+				err = bbs.ResolveStopLRPInstance(stopInstance)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("removes the StopLRPInstance", func() {
+				Ω(bbs.GetAllStopLRPInstances()).Should(BeEmpty())
+			})
+
+			It("removes the associate ActualLRP", func() {
+				Ω(bbs.GetAllActualLRPs()).Should(BeEmpty())
+			})
 		})
 
-		It("does not error if the key does not exist", func() {
-			err := bbs.RemoveStopLRPInstance(stopInstance)
-			Ω(err).ShouldNot(HaveOccurred())
+		Context("when the StopLRPInstance does not exist", func() {
+			BeforeEach(func() {
+				err := bbs.ReportActualLRPAsRunning(models.ActualLRP{
+					ProcessGuid:  stopInstance.ProcessGuid,
+					InstanceGuid: stopInstance.InstanceGuid,
+					Index:        stopInstance.Index,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("does not error, and still removes the ActualLRP", func() {
+				err := bbs.ResolveStopLRPInstance(stopInstance)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(bbs.GetAllActualLRPs()).Should(BeEmpty())
+			})
+		})
+
+		Context("when the ActualLRP does not exist", func() {
+			BeforeEach(func() {
+				err := bbs.RequestStopLRPInstance(stopInstance)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("does not error, and still removes the StopLRPInstance", func() {
+				err := bbs.ResolveStopLRPInstance(stopInstance)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(bbs.GetAllStopLRPInstances()).Should(BeEmpty())
+			})
 		})
 
 		Context("when the store is out of commission", func() {
@@ -97,7 +139,7 @@ var _ = Describe("StopInstance", func() {
 			})
 
 			itRetriesUntilStoreComesBack(func() error {
-				return bbs.RemoveStopLRPInstance(stopInstance)
+				return bbs.ResolveStopLRPInstance(stopInstance)
 			})
 		})
 	})
@@ -143,7 +185,7 @@ var _ = Describe("StopInstance", func() {
 
 			Eventually(events).Should(Receive(Equal(stopInstance)))
 
-			err = bbs.RemoveStopLRPInstance(stopInstance)
+			err = bbs.ResolveStopLRPInstance(stopInstance)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Consistently(events).ShouldNot(Receive())

@@ -3,7 +3,9 @@ package models
 import "encoding/json"
 
 type StopLRPInstance struct {
+	ProcessGuid  string `json:"process_guid"`
 	InstanceGuid string `json:"instance_guid"`
+	Index        int    `json:"index"`
 }
 
 func NewStopLRPInstanceFromJSON(payload []byte) (StopLRPInstance, error) {

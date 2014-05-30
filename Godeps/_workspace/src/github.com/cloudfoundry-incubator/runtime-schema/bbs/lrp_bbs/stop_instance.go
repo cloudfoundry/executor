@@ -43,11 +43,11 @@ func (bbs *LRPBBS) GetAllStopLRPInstances() ([]models.StopLRPInstance, error) {
 	return stopInstances, nil
 }
 
-func (bbs *LRPBBS) RemoveStopLRPInstance(stopInstance models.StopLRPInstance) error {
+func (bbs *LRPBBS) ResolveStopLRPInstance(stopInstance models.StopLRPInstance) error {
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
-		err := bbs.store.Delete(shared.StopLRPInstanceSchemaPath(stopInstance))
+		err := bbs.store.Delete(shared.StopLRPInstanceSchemaPath(stopInstance), shared.ActualLRPSchemaPathFromStopLRPInstance(stopInstance))
 		if err == storeadapter.ErrorKeyNotFound {
-			return nil
+			err = nil
 		}
 		return err
 	})

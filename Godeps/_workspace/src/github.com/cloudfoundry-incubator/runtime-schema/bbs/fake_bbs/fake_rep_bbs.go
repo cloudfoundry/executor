@@ -17,7 +17,7 @@ type FakeRepBBS struct {
 	stopLRPInstanceStopChan chan bool
 	stopLRPInstanceErrChan  chan error
 
-	removedStopLRPInstances []models.StopLRPInstance
+	resolvedStopLRPInstances []models.StopLRPInstance
 
 	claimedTasks []models.Task
 	claimTaskErr error
@@ -214,20 +214,20 @@ func (fakeBBS *FakeRepBBS) EmitStopLRPInstance(stopInstance models.StopLRPInstan
 	fakeBBS.stopLRPInstanceChan <- stopInstance
 }
 
-func (fakeBBS *FakeRepBBS) RemoveStopLRPInstance(stopInstance models.StopLRPInstance) error {
+func (fakeBBS *FakeRepBBS) ResolveStopLRPInstance(stopInstance models.StopLRPInstance) error {
 	fakeBBS.Lock()
-	fakeBBS.removedStopLRPInstances = append(fakeBBS.removedStopLRPInstances, stopInstance)
+	fakeBBS.resolvedStopLRPInstances = append(fakeBBS.resolvedStopLRPInstances, stopInstance)
 	fakeBBS.Unlock()
 
 	return nil
 }
 
-func (fakeBBS *FakeRepBBS) RemovedStopLRPInstances() []models.StopLRPInstance {
+func (fakeBBS *FakeRepBBS) ResolvedStopLRPInstances() []models.StopLRPInstance {
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 
-	removed := make([]models.StopLRPInstance, len(fakeBBS.removedStopLRPInstances))
-	copy(removed, fakeBBS.removedStopLRPInstances)
+	removed := make([]models.StopLRPInstance, len(fakeBBS.resolvedStopLRPInstances))
+	copy(removed, fakeBBS.resolvedStopLRPInstances)
 
 	return removed
 }

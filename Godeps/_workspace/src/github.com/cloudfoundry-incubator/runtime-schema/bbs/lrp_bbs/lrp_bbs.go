@@ -27,6 +27,17 @@ func (bbs *LRPBBS) DesireLRP(lrp models.DesiredLRP) error {
 	})
 }
 
+func (bbs *LRPBBS) RemoveDesiredLRPByProcessGuid(processGuid string) error {
+	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
+		err := bbs.store.Delete(shared.DesiredLRPSchemaPathByProcessGuid(processGuid))
+		if err == storeadapter.ErrorKeyNotFound {
+			return nil
+		}
+		return err
+	})
+	return nil
+}
+
 func (bbs *LRPBBS) RemoveActualLRP(lrp models.ActualLRP) error {
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
 		return bbs.store.Delete(shared.ActualLRPSchemaPath(lrp))

@@ -18,6 +18,9 @@ type FakeAppManagerBBS struct {
 	desiredLRPs  []models.DesiredLRP
 	DesireLRPErr error
 
+	removeDesiredLRPProcessGuids    []string
+	removeDesiredLRPProcessGuidsErr error
+
 	ActualLRPs    []models.ActualLRP
 	ActualLRPsErr error
 
@@ -72,4 +75,17 @@ func (fakeBBS *FakeAppManagerBBS) GetActualLRPsByProcessGuid(string) ([]models.A
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 	return fakeBBS.ActualLRPs, fakeBBS.ActualLRPsErr
+}
+
+func (fakeBBS *FakeAppManagerBBS) RemoveDesiredLRPByProcessGuid(processGuid string) error {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+	fakeBBS.removeDesiredLRPProcessGuids = append(fakeBBS.removeDesiredLRPProcessGuids, processGuid)
+	return fakeBBS.removeDesiredLRPProcessGuidsErr
+}
+
+func (fakeBBS *FakeAppManagerBBS) GetRemovedDesiredLRPProcessGuids() []string {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+	return fakeBBS.removeDesiredLRPProcessGuids
 }
