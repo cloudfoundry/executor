@@ -9,6 +9,11 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
+type compareAndSwappableTask struct {
+	OldIndex uint64
+	NewTask  models.Task
+}
+
 // ConvergeTask is run by *one* executor every X seconds (doesn't really matter what X is.. pick something performant)
 // Converge will:
 // 1. Kick (by setting) any run-onces that are still pending (and have been for > convergence interval)

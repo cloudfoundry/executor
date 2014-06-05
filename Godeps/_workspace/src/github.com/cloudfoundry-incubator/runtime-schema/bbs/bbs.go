@@ -34,8 +34,8 @@ type RepBBS interface {
 	CompleteTask(task models.Task, failed bool, failureReason string, result string) (models.Task, error)
 
 	///lrp
-	ReportActualLRPAsStarting(lrp models.ActualLRP) error
-	ReportActualLRPAsRunning(lrp models.ActualLRP) error
+	ReportActualLRPAsStarting(lrp models.ActualLRP, executorID string) error
+	ReportActualLRPAsRunning(lrp models.ActualLRP, executorId string) error
 	RemoveActualLRP(lrp models.ActualLRP) error
 	WatchForStopLRPInstance() (<-chan models.StopLRPInstance, chan<- bool, <-chan error)
 	ResolveStopLRPInstance(stopInstance models.StopLRPInstance) error
@@ -49,6 +49,11 @@ type ConvergerBBS interface {
 	MaintainConvergeLock(interval time.Duration, executorID string) (disappeared <-chan bool, stop chan<- chan bool, err error)
 }
 
+type TPSBBS interface {
+	//lrp
+	GetActualLRPsByProcessGuid(string) ([]models.ActualLRP, error)
+}
+
 type AppManagerBBS interface {
 	//lrp
 	DesireLRP(models.DesiredLRP) error
@@ -56,6 +61,7 @@ type AppManagerBBS interface {
 	GetActualLRPsByProcessGuid(string) ([]models.ActualLRP, error)
 	RequestLRPStartAuction(models.LRPStartAuction) error
 	RequestStopLRPInstance(stopInstance models.StopLRPInstance) error
+	WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error)
 
 	//services
 	GetAvailableFileServer() (string, error)
@@ -148,10 +154,14 @@ func NewLRPRouterBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.
 	return NewBBS(store, timeProvider, logger)
 }
 
+func NewTPSBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) TPSBBS {
+	return NewBBS(store, timeProvider, logger)
+}
+
 func NewBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) *BBS {
 	return &BBS{
 		LockBBS:     lock_bbs.New(store),
-		LRPBBS:      lrp_bbs.New(store),
+		LRPBBS:      lrp_bbs.New(store, timeProvider, logger),
 		ServicesBBS: services_bbs.New(store, logger),
 		TaskBBS:     task_bbs.New(store, timeProvider, logger),
 	}

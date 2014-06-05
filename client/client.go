@@ -13,7 +13,7 @@ import (
 type Client interface {
 	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
 	GetContainer(allocationGuid string) (api.Container, error)
-	InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) error
+	InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error)
 	Run(allocationGuid string, request api.ContainerRunRequest) error
 	DeleteContainer(allocationGuid string) error
 	ListContainers() ([]api.Container, error)
@@ -66,19 +66,19 @@ func (c client) GetContainer(allocationGuid string) (api.Container, error) {
 
 	defer response.Body.Close()
 
-	container := api.Container{}
-
-	err = json.NewDecoder(response.Body).Decode(&container)
-	if err != nil {
-		return api.Container{}, err
-	}
-
-	return container, nil
+	return c.buildContainerFromApiResponse(response)
 }
 
-func (c client) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) error {
-	_, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, request)
-	return err
+func (c client) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error) {
+	response, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, request)
+
+	if err != nil {
+		// do some logging
+		return api.Container{}, err
+	}
+	defer response.Body.Close()
+
+	return c.buildContainerFromApiResponse(response)
 }
 
 func (c client) Run(allocationGuid string, request api.ContainerRunRequest) error {
@@ -115,6 +115,17 @@ func (c client) RemainingResources() (api.ExecutorResources, error) {
 
 func (c client) TotalResources() (api.ExecutorResources, error) {
 	return c.getResources(api.GetTotalResources)
+}
+
+func (c client) buildContainerFromApiResponse(response *http.Response) (api.Container, error) {
+	container := api.Container{}
+
+	err := json.NewDecoder(response.Body).Decode(&container)
+	if err != nil {
+		return api.Container{}, err
+	}
+
+	return container, nil
 }
 
 func (c client) getResources(apiEndpoint string) (api.ExecutorResources, error) {

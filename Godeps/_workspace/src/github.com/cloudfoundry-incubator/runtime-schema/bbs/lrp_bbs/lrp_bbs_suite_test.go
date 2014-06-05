@@ -1,6 +1,9 @@
 package lrp_bbs_test
 
 import (
+	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
+	"github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
@@ -13,6 +16,8 @@ import (
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var etcdClient storeadapter.StoreAdapter
+var bbs *LRPBBS
+var timeProvider *faketimeprovider.FakeTimeProvider
 
 func TestLRPBbs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -31,6 +36,9 @@ var _ = AfterSuite(func() {
 var _ = BeforeEach(func() {
 	etcdRunner.Stop()
 	etcdRunner.Start()
+
+	timeProvider = faketimeprovider.New(time.Unix(0, 1138))
+	bbs = New(etcdClient, timeProvider, gosteno.NewLogger("test"))
 })
 
 func itRetriesUntilStoreComesBack(action func() error) {

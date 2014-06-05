@@ -3,12 +3,17 @@ package models
 import "encoding/json"
 
 type DesiredLRP struct {
-	ProcessGuid string   `json:"process_guid"`
-	Instances   int      `json:"instances"`
-	Stack       string   `json:"stack"`
-	MemoryMB    int      `json:"memory_mb"`
-	DiskMB      int      `json:"disk_mb"`
-	Routes      []string `json:"routes"`
+	ProcessGuid     string                `json:"process_guid"`
+	Instances       int                   `json:"instances"`
+	Stack           string                `json:"stack"`
+	MemoryMB        int                   `json:"memory_mb"`
+	DiskMB          int                   `json:"disk_mb"`
+	FileDescriptors uint64                `json:"file_descriptors"`
+	Source          string                `json:"source"`
+	StartCommand    string                `json:"start_command"`
+	Environment     []EnvironmentVariable `json:"environment"`
+	Routes          []string              `json:"routes"`
+	LogGuid         string                `json:"log_guid"`
 }
 
 type DesiredLRPChange struct {

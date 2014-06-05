@@ -1,7 +1,6 @@
 package lrp_bbs_test
 
 import (
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
 	. "github.com/onsi/ginkgo"
@@ -9,11 +8,7 @@ import (
 )
 
 var _ = Describe("LRP", func() {
-	var bbs *LRPBBS
-
-	BeforeEach(func() {
-		bbs = New(etcdClient)
-	})
+	executorID := "some-executor-id"
 
 	Describe("Adding and removing DesireLRP", func() {
 		var lrp models.DesiredLRP
@@ -86,7 +81,7 @@ var _ = Describe("LRP", func() {
 
 		Describe("ReportActualLRPAsStarting", func() {
 			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
-				err := bbs.ReportActualLRPAsStarting(lrp)
+				err := bbs.ReportActualLRPAsStarting(lrp, executorID)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
@@ -94,19 +89,21 @@ var _ = Describe("LRP", func() {
 
 				expectedLRP := lrp
 				expectedLRP.State = models.ActualLRPStateStarting
+				expectedLRP.Since = timeProvider.Time().UnixNano()
+				expectedLRP.ExecutorID = executorID
 				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
 			})
 
 			Context("when the store is out of commission", func() {
 				itRetriesUntilStoreComesBack(func() error {
-					return bbs.ReportActualLRPAsStarting(lrp)
+					return bbs.ReportActualLRPAsStarting(lrp, executorID)
 				})
 			})
 		})
 
 		Describe("ReportActualLRPAsRunning", func() {
 			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
-				err := bbs.ReportActualLRPAsRunning(lrp)
+				err := bbs.ReportActualLRPAsRunning(lrp, executorID)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
@@ -114,19 +111,21 @@ var _ = Describe("LRP", func() {
 
 				expectedLRP := lrp
 				expectedLRP.State = models.ActualLRPStateRunning
+				expectedLRP.Since = timeProvider.Time().UnixNano()
+				expectedLRP.ExecutorID = executorID
 				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
 			})
 
 			Context("when the store is out of commission", func() {
 				itRetriesUntilStoreComesBack(func() error {
-					return bbs.ReportActualLRPAsRunning(lrp)
+					return bbs.ReportActualLRPAsRunning(lrp, executorID)
 				})
 			})
 		})
 
 		Describe("RemoveActualLRP", func() {
 			BeforeEach(func() {
-				bbs.ReportActualLRPAsStarting(lrp)
+				bbs.ReportActualLRPAsStarting(lrp, executorID)
 			})
 
 			It("should remove the LRP", func() {

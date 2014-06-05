@@ -40,8 +40,16 @@ func (fakeBBS *FakeLRPRouterBBS) WatchForDesiredLRPChanges() (<-chan models.Desi
 	return fakeBBS.DesiredLRPChangeChan, fakeBBS.desiredLRPStopChan, fakeBBS.desiredLRPErrChan
 }
 
+func (fakeBBS *FakeLRPRouterBBS) SendWatchForDesiredLRPChangesError(err error) {
+	fakeBBS.desiredLRPErrChan <- err
+}
+
 func (fakeBBS *FakeLRPRouterBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error) {
 	return fakeBBS.ActualLRPChangeChan, fakeBBS.actualLRPStopChan, fakeBBS.actualLRPErrChan
+}
+
+func (fakeBBS *FakeLRPRouterBBS) SendWatchForActualLRPChangesError(err error) {
+	fakeBBS.actualLRPErrChan <- err
 }
 
 func (fakeBBS *FakeLRPRouterBBS) GetAllDesiredLRPs() ([]models.DesiredLRP, error) {

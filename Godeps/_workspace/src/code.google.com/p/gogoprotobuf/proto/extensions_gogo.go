@@ -93,6 +93,14 @@ func StringFromExtensionsMap(m map[int32]Extension) string {
 	return newSortableExtensionsFromMap(m).String()
 }
 
+func StringFromExtensionsBytes(ext []byte) string {
+	m, err := BytesToExtensionsMap(ext)
+	if err != nil {
+		panic(err)
+	}
+	return StringFromExtensionsMap(m)
+}
+
 func EncodeExtensionMap(m map[int32]Extension, data []byte) (n int, err error) {
 	if err := encodeExtensionMap(m); err != nil {
 		return 0, err
@@ -116,6 +124,58 @@ func GetRawExtension(m map[int32]Extension, id int32) ([]byte, error) {
 		return nil, err
 	}
 	return m[id].enc, nil
+}
+
+func size(buf []byte, wire int) (int, error) {
+	switch wire {
+	case WireVarint:
+		_, n := DecodeVarint(buf)
+		return n, nil
+	case WireFixed64:
+		return 8, nil
+	case WireBytes:
+		v, n := DecodeVarint(buf)
+		return int(v) + n, nil
+	case WireFixed32:
+		return 4, nil
+	case WireStartGroup:
+		offset := 0
+		for {
+			u, n := DecodeVarint(buf[offset:])
+			fwire := int(u & 0x7)
+			offset += n
+			if fwire == WireEndGroup {
+				return offset, nil
+			}
+			s, err := size(buf[offset:], wire)
+			if err != nil {
+				return 0, err
+			}
+			offset += s
+		}
+	}
+	return 0, fmt.Errorf("proto: can't get size for unknown wire type %d", wire)
+}
+
+func BytesToExtensionsMap(buf []byte) (map[int32]Extension, error) {
+	m := make(map[int32]Extension)
+	i := 0
+	for i < len(buf) {
+		tag, n := DecodeVarint(buf[i:])
+		if n <= 0 {
+			return nil, fmt.Errorf("unable to decode varint")
+		}
+		fieldNum := int32(tag >> 3)
+		wireType := int(tag & 0x7)
+		l, err := size(buf[i+n:], wireType)
+		if err != nil {
+			return nil, err
+		}
+		end := i + int(l) + n
+		m[int32(fieldNum)] = Extension{enc: buf[i:end]}
+		i = end
+	}
+	return m, nil
 }
 
 func NewExtension(e []byte) Extension {

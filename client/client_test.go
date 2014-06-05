@@ -189,13 +189,33 @@ var _ = Describe("Client", func() {
               "index":0
             }
           }`),
-					ghttp.RespondWith(http.StatusCreated, "")),
+					ghttp.RespondWith(http.StatusCreated, `
+          {
+						"guid": "guid-123",
+						"executor_guid": "executor-guid",
+						"container_handle": "xyz",
+            "memory_mb": 64,
+            "disk_mb": 1024,
+            "cpu_percent": 0.5,
+            "ports": [
+							{ "container_port": 8080, "host_port": 1234 },
+							{ "container_port": 8081, "host_port": 1235 }
+						],
+            "metadata": null,
+            "log": {
+              "guid":"some-guid",
+              "source_name":"XYZ",
+              "index":0
+            }
+          }`),
+				),
 				)
 			})
 
-			It("does not return an error", func() {
-				err := client.InitializeContainer("guid-123", validRequest)
+			It("returns the initialized container", func() {
+				container, err := client.InitializeContainer("guid-123", validRequest)
 				Ω(err).ShouldNot(HaveOccurred())
+				Ω(container.ContainerHandle).Should(Equal("xyz"))
 			})
 		})
 
@@ -208,8 +228,9 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns an error", func() {
-				err := client.InitializeContainer("guid-123", validRequest)
+				container, err := client.InitializeContainer("guid-123", validRequest)
 				Ω(err).Should(HaveOccurred())
+				Ω(container).Should(BeZero())
 			})
 		})
 	})

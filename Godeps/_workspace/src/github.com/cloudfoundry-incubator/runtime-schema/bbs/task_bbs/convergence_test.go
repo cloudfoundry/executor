@@ -31,7 +31,6 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		timeToClaimInSeconds = 30
 		timeToClaim = time.Duration(timeToClaimInSeconds) * time.Second
-
 		convergenceIntervalInSeconds = 10
 		convergenceInterval = time.Duration(convergenceIntervalInSeconds) * time.Second
 

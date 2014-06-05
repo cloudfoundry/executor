@@ -5,7 +5,6 @@ import (
 	. "github.com/onsi/gomega"
 	"time"
 
-	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
@@ -13,12 +12,6 @@ import (
 )
 
 var _ = Describe("Start Auction", func() {
-	var bbs *LRPBBS
-
-	BeforeEach(func() {
-		bbs = New(etcdClient)
-	})
-
 	Describe("RequestLRPStartAuction", func() {
 		var auctionLRP models.LRPStartAuction
 

@@ -6,11 +6,6 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-type compareAndSwappableTask struct {
-	OldIndex uint64
-	NewTask  models.Task
-}
-
 // The stager calls this when it wants to desire a payload
 // stagerTaskBBS will retry this repeatedly if it gets a StoreTimeout error (up to N seconds?)
 // If this fails, the stager should bail and run its "this-failed-to-stage" routine

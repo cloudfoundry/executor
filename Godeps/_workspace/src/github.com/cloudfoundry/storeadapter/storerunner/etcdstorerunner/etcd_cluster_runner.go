@@ -44,6 +44,10 @@ func (etcd *ETCDClusterRunner) Stop() {
 	etcd.stop(true)
 }
 
+func (etcd *ETCDClusterRunner) KillWithFire() {
+	etcd.kill()
+}
+
 func (etcd *ETCDClusterRunner) GoAway() {
 	etcd.stop(false)
 }
@@ -147,6 +151,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 
 func (etcd *ETCDClusterRunner) stop(nuke bool) {
 	etcd.mutex.Lock()
+	defer etcd.mutex.Unlock()
 
 	if etcd.running {
 		for i := 0; i < etcd.numNodes; i++ {
@@ -155,12 +160,27 @@ func (etcd *ETCDClusterRunner) stop(nuke bool) {
 				etcd.nukeArtifacts(i)
 			}
 		}
-		etcd.etcdSessions = nil
-		etcd.running = false
-		etcd.client = nil
+		etcd.markAsStopped()
 	}
+}
 
-	etcd.mutex.Unlock()
+func (etcd *ETCDClusterRunner) kill() {
+	etcd.mutex.Lock()
+	defer etcd.mutex.Unlock()
+
+	if etcd.running {
+		for i := 0; i < etcd.numNodes; i++ {
+			etcd.etcdSessions[i].Kill().Wait(5 * time.Second)
+			etcd.nukeArtifacts(i)
+		}
+		etcd.markAsStopped()
+	}
+}
+
+func (etcd *ETCDClusterRunner) markAsStopped() {
+	etcd.etcdSessions = nil
+	etcd.running = false
+	etcd.client = nil
 }
 
 func (etcd *ETCDClusterRunner) detectRunningEtcd(index int) bool {
