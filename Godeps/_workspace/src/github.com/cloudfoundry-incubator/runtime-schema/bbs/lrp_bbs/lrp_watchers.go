@@ -6,7 +6,7 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-func (self *LRPBBS) WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error) {
+func (bbs *LRPBBS) WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error) {
 	desired := make(chan models.DesiredLRPChange)
 
 	filter := func(event storeadapter.WatchEvent) (models.DesiredLRPChange, bool) {
@@ -38,12 +38,12 @@ func (self *LRPBBS) WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange,
 
 	}
 
-	stop, err := shared.WatchWithFilter(self.store, shared.DesiredLRPSchemaRoot, desired, filter)
+	stop, err := shared.WatchWithFilter(bbs.store, shared.DesiredLRPSchemaRoot, desired, filter)
 
 	return desired, stop, err
 }
 
-func (self *LRPBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error) {
+func (bbs *LRPBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error) {
 	actual := make(chan models.ActualLRPChange)
 
 	filter := func(event storeadapter.WatchEvent) (models.ActualLRPChange, bool) {
@@ -75,7 +75,7 @@ func (self *LRPBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, c
 
 	}
 
-	stop, err := shared.WatchWithFilter(self.store, shared.ActualLRPSchemaRoot, actual, filter)
+	stop, err := shared.WatchWithFilter(bbs.store, shared.ActualLRPSchemaRoot, actual, filter)
 
 	return actual, stop, err
 }

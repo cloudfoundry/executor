@@ -17,16 +17,16 @@ func New(store storeadapter.StoreAdapter) *LockBBS {
 	}
 }
 
-func (self *LockBBS) MaintainAuctioneerLock(interval time.Duration, auctioneerID string) (<-chan bool, chan<- chan bool, error) {
-	return self.store.MaintainNode(storeadapter.StoreNode{
+func (bbs *LockBBS) MaintainAuctioneerLock(interval time.Duration, auctioneerID string) (<-chan bool, chan<- chan bool, error) {
+	return bbs.store.MaintainNode(storeadapter.StoreNode{
 		Key:   shared.LockSchemaPath("auctioneer_lock"),
 		Value: []byte(auctioneerID),
 		TTL:   uint64(interval.Seconds()),
 	})
 }
 
-func (self *LockBBS) MaintainConvergeLock(interval time.Duration, convergerID string) (<-chan bool, chan<- chan bool, error) {
-	return self.store.MaintainNode(storeadapter.StoreNode{
+func (bbs *LockBBS) MaintainConvergeLock(interval time.Duration, convergerID string) (<-chan bool, chan<- chan bool, error) {
+	return bbs.store.MaintainNode(storeadapter.StoreNode{
 		Key:   shared.LockSchemaPath("converge_lock"),
 		Value: []byte(convergerID),
 		TTL:   uint64(interval.Seconds()),

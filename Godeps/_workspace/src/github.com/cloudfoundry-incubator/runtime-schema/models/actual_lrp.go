@@ -40,8 +40,8 @@ func NewActualLRPFromJSON(payload []byte) (ActualLRP, error) {
 	return task, nil
 }
 
-func (self ActualLRP) ToJSON() []byte {
-	bytes, err := json.Marshal(self)
+func (actual ActualLRP) ToJSON() []byte {
+	bytes, err := json.Marshal(actual)
 	if err != nil {
 		panic(err)
 	}

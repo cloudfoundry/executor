@@ -14,6 +14,7 @@ func (bbs *LRPBBS) RequestStopLRPInstance(stopInstance models.StopLRPInstance) e
 			{
 				Key:   shared.StopLRPInstanceSchemaPath(stopInstance),
 				Value: stopInstance.ToJSON(),
+				TTL:   60,
 			},
 		})
 	})
@@ -27,6 +28,7 @@ func (bbs *LRPBBS) RequestStopLRPInstances(stopInstances []models.StopLRPInstanc
 			nodes = append(nodes, storeadapter.StoreNode{
 				Key:   shared.StopLRPInstanceSchemaPath(stopInstance),
 				Value: stopInstance.ToJSON(),
+				TTL:   60,
 			})
 		}
 		return bbs.store.SetMulti(nodes)

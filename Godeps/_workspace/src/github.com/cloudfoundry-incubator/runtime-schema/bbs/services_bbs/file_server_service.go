@@ -7,8 +7,8 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 )
 
-func (self *ServicesBBS) GetAvailableFileServer() (string, error) {
-	node, err := self.store.ListRecursively(shared.FileServerSchemaRoot)
+func (bbs *ServicesBBS) GetAvailableFileServer() (string, error) {
+	node, err := bbs.store.ListRecursively(shared.FileServerSchemaRoot)
 	if err != nil {
 		return "", err
 	}

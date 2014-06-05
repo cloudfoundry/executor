@@ -6,8 +6,8 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 )
 
-func (self *ServicesBBS) GetAllReps() ([]models.RepPresence, error) {
-	node, err := self.store.ListRecursively(shared.RepSchemaRoot)
+func (bbs *ServicesBBS) GetAllReps() ([]models.RepPresence, error) {
+	node, err := bbs.store.ListRecursively(shared.RepSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
 		return []models.RepPresence{}, nil
 	}
@@ -19,7 +19,7 @@ func (self *ServicesBBS) GetAllReps() ([]models.RepPresence, error) {
 	for _, node := range node.ChildNodes {
 		repPresence, err := models.NewRepPresenceFromJSON(node.Value)
 		if err != nil {
-			self.logger.Errord(map[string]interface{}{
+			bbs.logger.Errord(map[string]interface{}{
 				"error": err.Error(),
 			}, "bbs.get-all-reps.invalid-json")
 			continue

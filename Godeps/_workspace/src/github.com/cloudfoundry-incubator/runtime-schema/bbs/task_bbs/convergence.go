@@ -22,13 +22,13 @@ type compareAndSwappableTask struct {
 // 4. Demote to completed any resolving run-onces that have been resolving for > 30s
 // 5. Mark as failed any run-onces that have been in the pending state for > timeToClaim
 // 6. Mark as failed any claimed or running run-onces whose executor has stopped maintaining presence
-func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval time.Duration) {
-	taskState, err := self.store.ListRecursively(shared.TaskSchemaRoot)
+func (bbs *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval time.Duration) {
+	taskState, err := bbs.store.ListRecursively(shared.TaskSchemaRoot)
 	if err != nil {
 		return
 	}
 
-	executorState, err := self.store.ListRecursively(shared.ExecutorSchemaRoot)
+	executorState, err := bbs.store.ListRecursively(shared.ExecutorSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
 		executorState = storeadapter.StoreNode{}
 	} else if err != nil {
@@ -36,7 +36,7 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 	}
 
 	logError := func(task models.Task, message string) {
-		self.logger.Errord(map[string]interface{}{
+		bbs.logger.Errord(map[string]interface{}{
 			"task": task,
 		}, message)
 	}
@@ -54,7 +54,7 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 	for _, node := range taskState.ChildNodes {
 		task, err := models.NewTaskFromJSON(node.Value)
 		if err != nil {
-			self.logger.Errord(map[string]interface{}{
+			bbs.logger.Errord(map[string]interface{}{
 				"key":   node.Key,
 				"value": string(node.Value),
 			}, "task.converge.json-parse-failure")
@@ -62,11 +62,11 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 			continue
 		}
 
-		shouldKickTask := self.durationSinceTaskUpdated(task) >= convergenceInterval
+		shouldKickTask := bbs.durationSinceTaskUpdated(task) >= convergenceInterval
 
 		switch task.State {
 		case models.TaskStatePending:
-			shouldMarkAsFailed := self.durationSinceTaskCreated(task) >= timeToClaim
+			shouldMarkAsFailed := bbs.durationSinceTaskCreated(task) >= timeToClaim
 			if shouldMarkAsFailed {
 				logError(task, "task.converge.failed-to-claim")
 				scheduleForCASByIndex(node.Index, markTaskFailed(task, "not claimed within time limit"))
@@ -102,16 +102,16 @@ func (self *TaskBBS) ConvergeTask(timeToClaim time.Duration, convergenceInterval
 		}
 	}
 
-	self.batchCompareAndSwapTasks(tasksToCAS)
-	self.store.Delete(keysToDelete...)
+	bbs.batchCompareAndSwapTasks(tasksToCAS)
+	bbs.store.Delete(keysToDelete...)
 }
 
-func (self *TaskBBS) durationSinceTaskCreated(task models.Task) time.Duration {
-	return self.timeProvider.Time().Sub(time.Unix(0, task.CreatedAt))
+func (bbs *TaskBBS) durationSinceTaskCreated(task models.Task) time.Duration {
+	return bbs.timeProvider.Time().Sub(time.Unix(0, task.CreatedAt))
 }
 
-func (self *TaskBBS) durationSinceTaskUpdated(task models.Task) time.Duration {
-	return self.timeProvider.Time().Sub(time.Unix(0, task.UpdatedAt))
+func (bbs *TaskBBS) durationSinceTaskUpdated(task models.Task) time.Duration {
+	return bbs.timeProvider.Time().Sub(time.Unix(0, task.UpdatedAt))
 }
 
 func markTaskFailed(task models.Task, reason string) models.Task {
@@ -121,21 +121,21 @@ func markTaskFailed(task models.Task, reason string) models.Task {
 	return task
 }
 
-func (self *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTask) {
+func (bbs *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTask) {
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(len(tasksToCAS))
 	for _, taskToCAS := range tasksToCAS {
 		task := taskToCAS.NewTask
-		task.UpdatedAt = self.timeProvider.Time().UnixNano()
+		task.UpdatedAt = bbs.timeProvider.Time().UnixNano()
 		newStoreNode := storeadapter.StoreNode{
 			Key:   shared.TaskSchemaPath(task),
 			Value: task.ToJSON(),
 		}
 
 		go func(taskToCAS compareAndSwappableTask, newStoreNode storeadapter.StoreNode) {
-			err := self.store.CompareAndSwapByIndex(taskToCAS.OldIndex, newStoreNode)
+			err := bbs.store.CompareAndSwapByIndex(taskToCAS.OldIndex, newStoreNode)
 			if err != nil {
-				self.logger.Errord(map[string]interface{}{
+				bbs.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
 				}, "task.converge.failed-to-compare-and-swap")
 			}

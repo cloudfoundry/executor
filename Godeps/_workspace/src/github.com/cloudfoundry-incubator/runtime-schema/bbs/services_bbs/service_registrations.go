@@ -49,8 +49,8 @@ func (bbs *ServicesBBS) registrationsForServiceName(name string) (models.Service
 	return registrations, nil
 }
 
-func (self *ServicesBBS) GetAllExecutors() ([]string, error) {
-	nodes, err := self.store.ListRecursively(shared.ExecutorSchemaRoot)
+func (bbs *ServicesBBS) GetAllExecutors() ([]string, error) {
+	nodes, err := bbs.store.ListRecursively(shared.ExecutorSchemaRoot)
 	if err == storeadapter.ErrorKeyNotFound {
 		return []string{}, nil
 	} else if err != nil {

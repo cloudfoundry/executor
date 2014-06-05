@@ -29,23 +29,23 @@ func (bbs *TaskBBS) GetAllTasks() ([]models.Task, error) {
 	return tasks, nil
 }
 
-func (self *TaskBBS) GetAllPendingTasks() ([]models.Task, error) {
-	all, err := self.GetAllTasks()
+func (bbs *TaskBBS) GetAllPendingTasks() ([]models.Task, error) {
+	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStatePending), err
 }
 
-func (self *TaskBBS) GetAllClaimedTasks() ([]models.Task, error) {
-	all, err := self.GetAllTasks()
+func (bbs *TaskBBS) GetAllClaimedTasks() ([]models.Task, error) {
+	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStateClaimed), err
 }
 
-func (self *TaskBBS) GetAllStartingTasks() ([]models.Task, error) {
-	all, err := self.GetAllTasks()
+func (bbs *TaskBBS) GetAllStartingTasks() ([]models.Task, error) {
+	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStateRunning), err
 }
 
-func (self *TaskBBS) GetAllCompletedTasks() ([]models.Task, error) {
-	all, err := self.GetAllTasks()
+func (bbs *TaskBBS) GetAllCompletedTasks() ([]models.Task, error) {
+	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStateCompleted), err
 }
 

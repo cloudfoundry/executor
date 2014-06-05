@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("StopInstance", func() {
+var _ = Describe("StopLRPInstance", func() {
 	var stopInstance models.StopLRPInstance
 
 	BeforeEach(func() {
@@ -26,6 +26,7 @@ var _ = Describe("StopInstance", func() {
 			node, err := etcdClient.Get("/v1/stop-instance/some-instance-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 
+			Ω(node.TTL).Should(BeNumerically(">", 0))
 			Ω(node.Value).Should(Equal(stopInstance.ToJSON()))
 		})
 
@@ -60,11 +61,13 @@ var _ = Describe("StopInstance", func() {
 			node, err := etcdClient.Get("/v1/stop-instance/some-instance-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 
+			Ω(node.TTL).Should(BeNumerically(">", 0))
 			Ω(node.Value).Should(Equal(stopInstance.ToJSON()))
 
 			anotherNode, err := etcdClient.Get("/v1/stop-instance/some-other-instance-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 
+			Ω(anotherNode.TTL).Should(BeNumerically(">", 0))
 			Ω(anotherNode.Value).Should(Equal(anotherStopInstance.ToJSON()))
 		})
 

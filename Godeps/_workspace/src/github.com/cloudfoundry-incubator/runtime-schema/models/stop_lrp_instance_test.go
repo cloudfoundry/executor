@@ -40,7 +40,7 @@ var _ = Describe("StopLrpInstance", func() {
 
 		Context("with an invalid payload", func() {
 			It("returns the error", func() {
-				decodedStopInstance, err := NewStopLRPInstanceFromJSON([]byte("butts lol"))
+				decodedStopInstance, err := NewStopLRPInstanceFromJSON([]byte("aliens lol"))
 				Ω(err).Should(HaveOccurred())
 
 				Ω(decodedStopInstance).Should(BeZero())

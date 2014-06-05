@@ -39,6 +39,9 @@ func (bbs *LRPBBS) ConvergeLRPs() {
 		desiredLRP, err := models.NewDesiredLRPFromJSON(node.Value)
 
 		if err != nil {
+			bbs.logger.Infod(map[string]interface{}{
+				"error": err.Error(),
+			}, "lrp-converger.pruning-unparseable-desired-lrp-json")
 			keysToDelete = append(keysToDelete, node.Key)
 			continue
 		}
