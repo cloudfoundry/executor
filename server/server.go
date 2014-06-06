@@ -33,35 +33,34 @@ type Config struct {
 
 func New(c *Config) (http.Handler, error) {
 	handlers := map[string]http.Handler{
-		api.AllocateContainer: allocate_container.New(c.Registry, c.WaitGroup, c.Logger),
+		api.AllocateContainer: LogAndWaitWrap(allocate_container.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
-		api.GetContainer: get_container.New(c.Registry, c.WaitGroup, c.Logger),
+		api.GetContainer: LogAndWaitWrap(get_container.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
-		api.ListContainers: list_containers.New(c.Registry, c.WaitGroup),
+		api.ListContainers: LogAndWaitWrap(list_containers.New(c.Registry), c.WaitGroup, c.Logger),
 
-		api.InitializeContainer: initialize_container.New(
+		api.InitializeContainer: LogAndWaitWrap(initialize_container.New(
 			c.ContainerOwnerName,
 			c.ContainerMaxCPUShares,
 			c.WardenClient,
 			c.Registry,
-			c.WaitGroup,
 			c.Logger,
-		),
+		), c.WaitGroup, c.Logger),
 
-		api.RunActions: run_actions.New(
+		api.RunActions: LogAndWaitWrap(run_actions.New(
 			c.WardenClient,
 			c.Registry,
 			c.Transformer,
 			c.WaitGroup,
 			c.Cancel,
 			c.Logger,
-		),
+		), c.WaitGroup, c.Logger),
 
-		api.DeleteContainer: delete_container.New(c.WardenClient, c.Registry, c.WaitGroup, c.Logger),
+		api.DeleteContainer: LogAndWaitWrap(delete_container.New(c.WardenClient, c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
-		api.GetRemainingResources: remaining_resources.New(c.Registry, c.WaitGroup, c.Logger),
+		api.GetRemainingResources: LogAndWaitWrap(remaining_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
-		api.GetTotalResources: total_resources.New(c.Registry, c.WaitGroup, c.Logger),
+		api.GetTotalResources: LogAndWaitWrap(total_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 	}
 
 	return router.NewRouter(api.Routes, handlers)

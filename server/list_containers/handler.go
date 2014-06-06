@@ -3,27 +3,21 @@ package list_containers
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
 )
 
 type handler struct {
-	registry  registry.Registry
-	waitGroup *sync.WaitGroup
+	registry registry.Registry
 }
 
-func New(registry registry.Registry, waitGroup *sync.WaitGroup) http.Handler {
+func New(registry registry.Registry) http.Handler {
 	return &handler{
-		registry:  registry,
-		waitGroup: waitGroup,
+		registry: registry,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.waitGroup.Add(1)
-	defer h.waitGroup.Done()
-
 	resources := h.registry.GetAllContainers()
 
 	w.Header().Set("Content-Type", "application/json")

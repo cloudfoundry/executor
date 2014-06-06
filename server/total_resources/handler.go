@@ -3,7 +3,6 @@ package total_resources
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
@@ -11,23 +10,18 @@ import (
 )
 
 type Handler struct {
-	registry  registry.Registry
-	waitGroup *sync.WaitGroup
-	logger    *gosteno.Logger
+	registry registry.Registry
+	logger   *gosteno.Logger
 }
 
-func New(registry registry.Registry, waitGroup *sync.WaitGroup, logger *gosteno.Logger) *Handler {
+func New(registry registry.Registry, logger *gosteno.Logger) *Handler {
 	return &Handler{
-		registry:  registry,
-		waitGroup: waitGroup,
-		logger:    logger,
+		registry: registry,
+		logger:   logger,
 	}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.waitGroup.Add(1)
-	defer h.waitGroup.Done()
-
 	totalCapacity := h.registry.TotalCapacity()
 
 	resources := api.ExecutorResources{

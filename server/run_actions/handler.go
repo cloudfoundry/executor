@@ -46,9 +46,6 @@ func New(
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.waitGroup.Add(1)
-	defer h.waitGroup.Done()
-
 	guid := r.FormValue(":guid")
 
 	var request api.ContainerRunRequest

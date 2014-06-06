@@ -95,8 +95,8 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
 			"-drainTimeout", fmt.Sprintf("%s", configToUse.DrainTimeout),
 		),
-		ginkgo.GinkgoWriter,
-		ginkgo.GinkgoWriter,
+		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
+		gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
 	)
 	Ω(err).ShouldNot(HaveOccurred())
 	r.Config = configToUse
