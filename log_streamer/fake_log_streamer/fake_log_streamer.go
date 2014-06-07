@@ -10,13 +10,13 @@ type FakeLogStreamer struct {
 	StdoutStub        func() io.Writer
 	stdoutMutex       sync.RWMutex
 	stdoutArgsForCall []struct{}
-	stdoutReturns struct {
+	stdoutReturns     struct {
 		result1 io.Writer
 	}
 	StderrStub        func() io.Writer
 	stderrMutex       sync.RWMutex
 	stderrArgsForCall []struct{}
-	stderrReturns struct {
+	stderrReturns     struct {
 		result1 io.Writer
 	}
 	FlushStub        func()
