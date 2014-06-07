@@ -133,7 +133,11 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 			args = append(args, "-peers", etcd.serverUrl(0))
 		}
 
-		session, err := gexec.Start(exec.Command("etcd", args...), ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
+		session, err := gexec.Start(
+			exec.Command("etcd", args...),
+			gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[33m[etcd_cluster]\x1b[0m ", ginkgo.GinkgoWriter),
+			gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[33m[etcd_cluster]\x1b[0m ", ginkgo.GinkgoWriter),
+		)
 		Ω(err).ShouldNot(HaveOccurred(), "Make sure etcd is compiled and on your $PATH.")
 
 		etcd.etcdSessions[i] = session

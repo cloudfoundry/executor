@@ -1,7 +1,7 @@
 package delta_force_test
 
 import (
-	. "github.com/cloudfoundry-incubator/delta_force"
+	. "github.com/cloudfoundry-incubator/delta_force/delta_force"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

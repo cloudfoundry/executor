@@ -42,6 +42,10 @@ type RepBBS interface {
 }
 
 type ConvergerBBS interface {
+	//lrp
+	ConvergeLRPs()
+	ConvergeLRPStartAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration)
+
 	//task
 	ConvergeTask(timeToClaim time.Duration, converganceInterval time.Duration)
 

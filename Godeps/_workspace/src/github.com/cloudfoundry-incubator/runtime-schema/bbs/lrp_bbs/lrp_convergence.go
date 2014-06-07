@@ -3,7 +3,7 @@ package lrp_bbs
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/delta_force"
+	"github.com/cloudfoundry-incubator/delta_force/delta_force"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/storeadapter"
