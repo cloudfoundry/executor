@@ -117,11 +117,11 @@ func (bbs *LRPBBS) needsReconciliation(desiredLRP models.DesiredLRP, actualLRPsF
 			"extra-guids":       result.GuidsToStop,
 		}, "lrp-converger.detected-extra-instance")
 	}
-	if len(result.IndicesToStopOneGuid) > 0 {
+	if len(result.IndicesToStopAllButOne) > 0 {
 		bbs.logger.Infod(map[string]interface{}{
 			"process-guid":       desiredLRP.ProcessGuid,
 			"desired-instances":  desiredLRP.Instances,
-			"duplicated-indices": result.IndicesToStopOneGuid,
+			"duplicated-indices": result.IndicesToStopAllButOne,
 		}, "lrp-converger.detected-duplicate-instance")
 	}
 

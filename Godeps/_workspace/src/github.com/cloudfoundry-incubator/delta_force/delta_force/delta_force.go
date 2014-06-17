@@ -6,13 +6,13 @@ type ActualInstance struct {
 }
 
 type Result struct {
-	IndicesToStart       []int
-	GuidsToStop          []string
-	IndicesToStopOneGuid []int
+	IndicesToStart         []int
+	GuidsToStop            []string
+	IndicesToStopAllButOne []int
 }
 
 func (r Result) Empty() bool {
-	return len(r.IndicesToStart) == 0 && len(r.GuidsToStop) == 0 && len(r.IndicesToStopOneGuid) == 0
+	return len(r.IndicesToStart) == 0 && len(r.GuidsToStop) == 0 && len(r.IndicesToStopAllButOne) == 0
 }
 
 type ActualInstances []ActualInstance
@@ -59,7 +59,7 @@ func Reconcile(numDesired int, actuals ActualInstances) Result {
 
 	for i := 0; i < numDesired; i++ {
 		if actuals.numAtIndex(i) > 1 {
-			result.IndicesToStopOneGuid = append(result.IndicesToStopOneGuid, i)
+			result.IndicesToStopAllButOne = append(result.IndicesToStopAllButOne, i)
 		}
 	}
 

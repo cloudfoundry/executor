@@ -14,6 +14,10 @@ type FakeAuctioneerBBS struct {
 	LRPStartAuctionStopChan  chan bool
 	LRPStartAuctionErrorChan chan error
 
+	LRPStopAuctionChan      chan models.LRPStopAuction
+	LRPStopAuctionStopChan  chan bool
+	LRPStopAuctionErrorChan chan error
+
 	LockChannel        chan bool
 	ReleaseLockChannel chan chan bool
 	LockError          error
@@ -24,6 +28,12 @@ type FakeAuctioneerBBS struct {
 	ResolvedLRPStartAuction     models.LRPStartAuction
 	ResolveLRPStartAuctionError error
 
+	ClaimedLRPStopAuctions   []models.LRPStopAuction
+	ClaimLRPStopAuctionError error
+
+	ResolvedLRPStopAuction     models.LRPStopAuction
+	ResolveLRPStopAuctionError error
+
 	Reps []models.RepPresence
 }
 
@@ -33,6 +43,9 @@ func NewFakeAuctioneerBBS() *FakeAuctioneerBBS {
 		LRPStartAuctionChan:      make(chan models.LRPStartAuction),
 		LRPStartAuctionStopChan:  make(chan bool),
 		LRPStartAuctionErrorChan: make(chan error),
+		LRPStopAuctionChan:       make(chan models.LRPStopAuction),
+		LRPStopAuctionStopChan:   make(chan bool),
+		LRPStopAuctionErrorChan:  make(chan error),
 		LockChannel:              make(chan bool),
 		ReleaseLockChannel:       make(chan chan bool),
 	}
@@ -81,4 +94,39 @@ func (bbs *FakeAuctioneerBBS) GetResolvedLRPStartAuction() models.LRPStartAuctio
 	bbs.Lock()
 	defer bbs.Unlock()
 	return bbs.ResolvedLRPStartAuction
+}
+
+func (bbs *FakeAuctioneerBBS) WatchForLRPStopAuction() (<-chan models.LRPStopAuction, chan<- bool, <-chan error) {
+	bbs.Lock()
+	defer bbs.Unlock()
+
+	return bbs.LRPStopAuctionChan, bbs.LRPStopAuctionStopChan, bbs.LRPStopAuctionErrorChan
+}
+
+func (bbs *FakeAuctioneerBBS) ClaimLRPStopAuction(auction models.LRPStopAuction) error {
+	bbs.Lock()
+	defer bbs.Unlock()
+
+	bbs.ClaimedLRPStopAuctions = append(bbs.ClaimedLRPStopAuctions, auction)
+	return bbs.ClaimLRPStopAuctionError
+}
+
+func (bbs *FakeAuctioneerBBS) ResolveLRPStopAuction(auction models.LRPStopAuction) error {
+	bbs.Lock()
+	defer bbs.Unlock()
+
+	bbs.ResolvedLRPStopAuction = auction
+	return bbs.ResolveLRPStopAuctionError
+}
+
+func (bbs *FakeAuctioneerBBS) GetClaimedLRPStopAuctions() []models.LRPStopAuction {
+	bbs.Lock()
+	defer bbs.Unlock()
+	return bbs.ClaimedLRPStopAuctions
+}
+
+func (bbs *FakeAuctioneerBBS) GetResolvedLRPStopAuction() models.LRPStopAuction {
+	bbs.Lock()
+	defer bbs.Unlock()
+	return bbs.ResolvedLRPStopAuction
 }

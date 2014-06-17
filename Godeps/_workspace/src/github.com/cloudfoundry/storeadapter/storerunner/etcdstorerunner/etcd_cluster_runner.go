@@ -115,6 +115,7 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 	}
 
 	etcd.mutex.Lock()
+	defer etcd.mutex.Unlock()
 
 	etcd.etcdSessions = make([]*gexec.Session, etcd.numNodes)
 
@@ -149,8 +150,6 @@ func (etcd *ETCDClusterRunner) start(nuke bool) {
 
 	etcd.client = etcdclient.NewClient(etcd.NodeURLS())
 	etcd.running = true
-
-	etcd.mutex.Unlock()
 }
 
 func (etcd *ETCDClusterRunner) stop(nuke bool) {

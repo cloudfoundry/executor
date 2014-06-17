@@ -45,6 +45,7 @@ type ConvergerBBS interface {
 	//lrp
 	ConvergeLRPs()
 	ConvergeLRPStartAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration)
+	ConvergeLRPStopAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration)
 
 	//task
 	ConvergeTask(timeToClaim time.Duration, converganceInterval time.Duration)
@@ -60,15 +61,22 @@ type TPSBBS interface {
 
 type AppManagerBBS interface {
 	//lrp
-	DesireLRP(models.DesiredLRP) error
-	RemoveDesiredLRPByProcessGuid(guid string) error
 	GetActualLRPsByProcessGuid(string) ([]models.ActualLRP, error)
 	RequestLRPStartAuction(models.LRPStartAuction) error
+	RequestLRPStopAuction(models.LRPStopAuction) error
 	RequestStopLRPInstance(stopInstance models.StopLRPInstance) error
 	WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error)
 
 	//services
 	GetAvailableFileServer() (string, error)
+}
+
+type NsyncBBS interface {
+	// lrp
+	DesireLRP(models.DesiredLRP) error
+	RemoveDesiredLRPByProcessGuid(guid string) error
+	GetAllDesiredLRPs() ([]models.DesiredLRP, error)
+	ChangeDesiredLRP(change models.DesiredLRPChange) error
 }
 
 type AuctioneerBBS interface {
@@ -79,6 +87,9 @@ type AuctioneerBBS interface {
 	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
 	ClaimLRPStartAuction(models.LRPStartAuction) error
 	ResolveLRPStartAuction(models.LRPStartAuction) error
+	WatchForLRPStopAuction() (<-chan models.LRPStopAuction, chan<- bool, <-chan error)
+	ClaimLRPStopAuction(models.LRPStopAuction) error
+	ResolveLRPStopAuction(models.LRPStopAuction) error
 
 	//lock
 	MaintainAuctioneerLock(interval time.Duration, auctioneerID string) (<-chan bool, chan<- chan bool, error)
@@ -135,6 +146,10 @@ func NewConvergerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.
 }
 
 func NewAppManagerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) AppManagerBBS {
+	return NewBBS(store, timeProvider, logger)
+}
+
+func NewNsyncBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) NsyncBBS {
 	return NewBBS(store, timeProvider, logger)
 }
 

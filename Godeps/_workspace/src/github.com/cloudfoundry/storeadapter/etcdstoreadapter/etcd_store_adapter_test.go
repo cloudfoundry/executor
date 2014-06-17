@@ -3,6 +3,7 @@ package etcdstoreadapter_test
 import (
 	"fmt"
 	"time"
+
 	. "github.com/cloudfoundry/storeadapter"
 	. "github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	. "github.com/cloudfoundry/storeadapter/storenodematchers"
@@ -350,6 +351,62 @@ var _ = Describe("ETCD Store Adapter", func() {
 		})
 	})
 
+	Describe("Comparing-and-deleting", func() {
+		var node StoreNode
+
+		BeforeEach(func() {
+			node = StoreNode{Key: "/foo", Value: []byte("some value")}
+		})
+
+		Context("when a node exists at the key", func() {
+			BeforeEach(func() {
+				err := adapter.Create(node)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("deletes the existing node at the given key", func() {
+				err := adapter.CompareAndDelete(node)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = adapter.Get(node.Key)
+				Ω(err).Should(Equal(ErrorKeyNotFound))
+			})
+
+			Context("but the comparison fails", func() {
+				BeforeEach(func() {
+					node.Value = []byte("some mismatched value")
+				})
+
+				It("returns an error", func() {
+					err := adapter.CompareAndDelete(node)
+					Ω(err).Should(Equal(ErrorKeyComparisonFailed))
+
+					_, err = adapter.Get(node.Key)
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when a node does not exist at the key", func() {
+			It("returns an error", func() {
+				err := adapter.CompareAndDelete(node)
+				Ω(err).Should(Equal(ErrorKeyNotFound))
+			})
+		})
+
+		Context("when a directory exists at the given key", func() {
+			It("returns an error", func() {
+				err := adapter.Create(StoreNode{Key: "/dir/foo", Value: []byte("some value")})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				newNode := StoreNode{Key: "/dir", Value: []byte("some value")}
+
+				err = adapter.CompareAndSwap(newNode, newNode)
+				Ω(err).Should(Equal(ErrorNodeIsDirectory))
+			})
+		})
+	})
+
 	Context("When setting a key with a non-zero TTL", func() {
 		It("should stay in the store for the duration of its TTL and then disappear", func() {
 			breakfastNode.TTL = 1
@@ -643,7 +700,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 		})
 	})
 
-	Describe("Comparing as well as swapping", func() {
+	Describe("Comparing-and-swapping", func() {
 		var node StoreNode
 
 		BeforeEach(func() {
@@ -705,7 +762,7 @@ var _ = Describe("ETCD Store Adapter", func() {
 		})
 	})
 
-	Describe("Comparing as well as swapping by index", func() {
+	Describe("Comparing-and-swapping by index", func() {
 		var node StoreNode
 
 		BeforeEach(func() {

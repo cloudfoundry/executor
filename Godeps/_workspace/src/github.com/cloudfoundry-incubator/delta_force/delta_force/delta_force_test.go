@@ -27,7 +27,7 @@ var _ = Describe("DeltaForce", func() {
 			result := Reconcile(numDesired, actual)
 			Ω(result.IndicesToStart).Should(BeEmpty())
 			Ω(result.GuidsToStop).Should(BeEmpty())
-			Ω(result.IndicesToStopOneGuid).Should(BeEmpty())
+			Ω(result.IndicesToStopAllButOne).Should(BeEmpty())
 		})
 	})
 
@@ -46,7 +46,7 @@ var _ = Describe("DeltaForce", func() {
 			result := Reconcile(numDesired, actual)
 			Ω(result.IndicesToStart).Should(BeEmpty())
 			Ω(result.GuidsToStop).Should(Equal([]string{"b", "c", "d"}))
-			Ω(result.IndicesToStopOneGuid).Should(BeEmpty())
+			Ω(result.IndicesToStopAllButOne).Should(BeEmpty())
 		})
 	})
 
@@ -64,7 +64,7 @@ var _ = Describe("DeltaForce", func() {
 			result := Reconcile(numDesired, actual)
 			Ω(result.IndicesToStart).Should(Equal([]int{3, 4}))
 			Ω(result.GuidsToStop).Should(BeEmpty())
-			Ω(result.IndicesToStopOneGuid).Should(BeEmpty())
+			Ω(result.IndicesToStopAllButOne).Should(BeEmpty())
 		})
 	})
 
@@ -84,7 +84,7 @@ var _ = Describe("DeltaForce", func() {
 			result := Reconcile(numDesired, actual)
 			Ω(result.IndicesToStart).Should(Equal([]int{3}))
 			Ω(result.GuidsToStop).Should(BeEmpty())
-			Ω(result.IndicesToStopOneGuid).Should(BeEmpty())
+			Ω(result.IndicesToStopAllButOne).Should(BeEmpty())
 		})
 	})
 
@@ -107,7 +107,7 @@ var _ = Describe("DeltaForce", func() {
 			result := Reconcile(numDesired, actual)
 			Ω(result.IndicesToStart).Should(BeEmpty())
 			Ω(result.GuidsToStop).Should(Equal([]string{"g", "h"}))
-			Ω(result.IndicesToStopOneGuid).Should(Equal([]int{0, 2}))
+			Ω(result.IndicesToStopAllButOne).Should(Equal([]int{0, 2}))
 		})
 	})
 
@@ -118,30 +118,30 @@ var _ = Describe("DeltaForce", func() {
 				Ω(result.Empty()).Should(BeTrue())
 
 				result = Result{
-					IndicesToStart:       []int{},
-					GuidsToStop:          []string{},
-					IndicesToStopOneGuid: []int{},
+					IndicesToStart:         []int{},
+					GuidsToStop:            []string{},
+					IndicesToStopAllButOne: []int{},
 				}
 				Ω(result.Empty()).Should(BeTrue())
 
 				result = Result{
-					IndicesToStart:       []int{1},
-					GuidsToStop:          []string{},
-					IndicesToStopOneGuid: []int{},
+					IndicesToStart:         []int{1},
+					GuidsToStop:            []string{},
+					IndicesToStopAllButOne: []int{},
 				}
 				Ω(result.Empty()).Should(BeFalse())
 
 				result = Result{
-					IndicesToStart:       []int{},
-					GuidsToStop:          []string{"foo"},
-					IndicesToStopOneGuid: []int{},
+					IndicesToStart:         []int{},
+					GuidsToStop:            []string{"foo"},
+					IndicesToStopAllButOne: []int{},
 				}
 				Ω(result.Empty()).Should(BeFalse())
 
 				result = Result{
-					IndicesToStart:       []int{},
-					GuidsToStop:          []string{},
-					IndicesToStopOneGuid: []int{1},
+					IndicesToStart:         []int{},
+					GuidsToStop:            []string{},
+					IndicesToStopAllButOne: []int{1},
 				}
 				Ω(result.Empty()).Should(BeFalse())
 			})

@@ -257,6 +257,10 @@ func (adapter *FakeStoreAdapter) Delete(keys ...string) error {
 	return nil
 }
 
+func (adapter *FakeStoreAdapter) CompareAndDelete(node storeadapter.StoreNode) error {
+	panic("not implemented")
+}
+
 func (adapter *FakeStoreAdapter) UpdateDirTTL(key string, ttl uint64) error {
 	panic("not implemented")
 }

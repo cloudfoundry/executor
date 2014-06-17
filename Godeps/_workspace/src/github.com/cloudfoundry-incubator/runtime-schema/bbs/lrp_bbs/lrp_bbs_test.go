@@ -144,4 +144,147 @@ var _ = Describe("LRP", func() {
 		})
 	})
 
+	Describe("Changing desired LRPs", func() {
+		var changeErr error
+
+		prevValue := models.DesiredLRP{
+			ProcessGuid: "some-guid",
+			Instances:   1,
+		}
+
+		Context("with a before and after", func() {
+			var before models.DesiredLRP
+			var after models.DesiredLRP
+
+			JustBeforeEach(func() {
+				changeErr = bbs.ChangeDesiredLRP(models.DesiredLRPChange{
+					Before: &before,
+					After:  &after,
+				})
+			})
+
+			BeforeEach(func() {
+				err := bbs.DesireLRP(prevValue)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				before = prevValue
+				after = prevValue
+
+				after.MemoryMB = 1024
+			})
+
+			Context("when the current value matches", func() {
+				It("does not return an error", func() {
+					Ω(changeErr).ShouldNot(HaveOccurred())
+				})
+
+				It("updates the value in the store", func() {
+					current, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(current).Should(Equal(after))
+				})
+			})
+
+			Context("when the current value does not match", func() {
+				BeforeEach(func() {
+					before.Instances++
+				})
+
+				It("returns an error", func() {
+					Ω(changeErr).Should(HaveOccurred())
+				})
+
+				It("does not update the value in the store", func() {
+					current, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(current).Should(Equal(prevValue))
+				})
+			})
+		})
+
+		Context("with a before but no after", func() {
+			var before models.DesiredLRP
+
+			JustBeforeEach(func() {
+				changeErr = bbs.ChangeDesiredLRP(models.DesiredLRPChange{
+					Before: &before,
+				})
+			})
+
+			BeforeEach(func() {
+				before = prevValue
+
+				err := bbs.DesireLRP(before)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			Context("when the current value matches", func() {
+				It("deletes the desired state", func() {
+					_, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
+				})
+			})
+
+			Context("when the current value does not match", func() {
+				BeforeEach(func() {
+					before.Instances++
+				})
+
+				It("returns an error", func() {
+					Ω(changeErr).Should(HaveOccurred())
+				})
+
+				It("does not remove the value from the store", func() {
+					current, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(current).Should(Equal(prevValue))
+				})
+			})
+		})
+
+		Context("with no before, but an after", func() {
+			var after models.DesiredLRP
+
+			JustBeforeEach(func() {
+				changeErr = bbs.ChangeDesiredLRP(models.DesiredLRPChange{
+					After: &after,
+				})
+			})
+
+			BeforeEach(func() {
+				after = prevValue
+				after.MemoryMB = 1024
+			})
+
+			Context("when the current value does not exist", func() {
+				It("creates the value at the given key", func() {
+					current, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(current).Should(Equal(after))
+				})
+			})
+
+			Context("when a value already exists at the key", func() {
+				BeforeEach(func() {
+					err := bbs.DesireLRP(prevValue)
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("returns an error", func() {
+					Ω(changeErr).Should(HaveOccurred())
+				})
+
+				It("does not change the value in the store", func() {
+					current, err := bbs.GetDesiredLRPByProcessGuid("some-guid")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(current).Should(Equal(prevValue))
+				})
+			})
+		})
+	})
 })

@@ -30,6 +30,9 @@ type StoreAdapter interface {
 	// deleted or don't actually exist, an error is returned.
 	Delete(keys ...string) error
 
+	// CompareAndDelete and don't delete if the compare fails.
+	CompareAndDelete(StoreNode) error
+
 	// Set the ttl on a directory
 	UpdateDirTTL(key string, ttl uint64) error
 

@@ -44,6 +44,43 @@ func (bbs *LRPBBS) RemoveDesiredLRPByProcessGuid(processGuid string) error {
 	return nil
 }
 
+func (bbs *LRPBBS) ChangeDesiredLRP(change models.DesiredLRPChange) error {
+	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
+		if change.Before != nil && change.After != nil {
+			return bbs.store.CompareAndSwap(
+				storeadapter.StoreNode{
+					Key:   shared.DesiredLRPSchemaPath(*change.Before),
+					Value: (*change.Before).ToJSON(),
+				},
+				storeadapter.StoreNode{
+					Key:   shared.DesiredLRPSchemaPath(*change.After),
+					Value: (*change.After).ToJSON(),
+				},
+			)
+		}
+
+		if change.Before != nil {
+			return bbs.store.CompareAndDelete(
+				storeadapter.StoreNode{
+					Key:   shared.DesiredLRPSchemaPath(*change.Before),
+					Value: (*change.Before).ToJSON(),
+				},
+			)
+		}
+
+		if change.After != nil {
+			return bbs.store.Create(
+				storeadapter.StoreNode{
+					Key:   shared.DesiredLRPSchemaPath(*change.After),
+					Value: (*change.After).ToJSON(),
+				},
+			)
+		}
+
+		return nil
+	})
+}
+
 func (bbs *LRPBBS) RemoveActualLRP(lrp models.ActualLRP) error {
 	return shared.RetryIndefinitelyOnStoreTimeout(func() error {
 		return bbs.store.Delete(shared.ActualLRPSchemaPath(lrp))

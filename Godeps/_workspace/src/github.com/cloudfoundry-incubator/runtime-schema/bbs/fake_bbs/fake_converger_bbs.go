@@ -9,6 +9,7 @@ type FakeConvergerBBS struct {
 	callsToConvergeTasks            int
 	callsToConvergeLRPs             int
 	callsToConvergeLRPStartAuctions int
+	callsToConvergeLRPStopAuctions  int
 
 	ConvergeLockStatusChan chan bool
 	ConvergeLockStopChan   chan chan bool
@@ -59,6 +60,20 @@ func (fakeBBS *FakeConvergerBBS) CallsToConvergeLRPStartAuctions() int {
 	defer fakeBBS.RUnlock()
 
 	return fakeBBS.callsToConvergeLRPStartAuctions
+}
+
+func (fakeBBS *FakeConvergerBBS) ConvergeLRPStopAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration) {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+
+	fakeBBS.callsToConvergeLRPStopAuctions++
+}
+
+func (fakeBBS *FakeConvergerBBS) CallsToConvergeLRPStopAuctions() int {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+
+	return fakeBBS.callsToConvergeLRPStopAuctions
 }
 
 func (fakeBBS *FakeConvergerBBS) ConvergeTask(timeToClaim time.Duration, taskConvergenceInterval time.Duration) {

@@ -13,9 +13,6 @@ type FakeAppManagerBBS struct {
 	DesiredLRPStopChan   chan bool
 	DesiredLRPErrChan    chan error
 
-	lrpStartAuctions   []models.LRPStartAuction
-	LRPStartAuctionErr error
-
 	stopLRPInstances   []models.StopLRPInstance
 	StopLRPInstanceErr error
 
@@ -28,7 +25,13 @@ type FakeAppManagerBBS struct {
 	ActualLRPs    []models.ActualLRP
 	ActualLRPsErr error
 
+	lrpStartAuctions               []models.LRPStartAuction
+	LRPStartAuctionErr             error
 	WhenRequestingLRPStartAuctions func(lrp models.LRPStartAuction) error
+
+	lrpStopAuctions               []models.LRPStopAuction
+	LRPStopAuctionErr             error
+	WhenRequestingLRPStopAuctions func(lrp models.LRPStopAuction) error
 
 	sync.RWMutex
 }
@@ -40,6 +43,7 @@ func NewFakeAppManagerBBS() *FakeAppManagerBBS {
 		DesiredLRPErrChan:    make(chan error),
 
 		WhenRequestingLRPStartAuctions: nil,
+		WhenRequestingLRPStopAuctions:  nil,
 	}
 }
 
@@ -75,6 +79,22 @@ func (fakeBBS *FakeAppManagerBBS) GetLRPStartAuctions() []models.LRPStartAuction
 	fakeBBS.RLock()
 	defer fakeBBS.RUnlock()
 	return fakeBBS.lrpStartAuctions
+}
+
+func (fakeBBS *FakeAppManagerBBS) RequestLRPStopAuction(lrp models.LRPStopAuction) error {
+	fakeBBS.Lock()
+	defer fakeBBS.Unlock()
+	if fakeBBS.WhenRequestingLRPStopAuctions != nil {
+		return fakeBBS.WhenRequestingLRPStopAuctions(lrp)
+	}
+	fakeBBS.lrpStopAuctions = append(fakeBBS.lrpStopAuctions, lrp)
+	return fakeBBS.LRPStopAuctionErr
+}
+
+func (fakeBBS *FakeAppManagerBBS) GetLRPStopAuctions() []models.LRPStopAuction {
+	fakeBBS.RLock()
+	defer fakeBBS.RUnlock()
+	return fakeBBS.lrpStopAuctions
 }
 
 func (fakeBBS *FakeAppManagerBBS) RequestStopLRPInstance(lrp models.StopLRPInstance) error {
