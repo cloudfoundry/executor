@@ -87,7 +87,11 @@ func (e *Executor) ID() string {
 
 func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	err := e.init()
+
 	if err != nil {
+		e.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.start.failed")
 		return err
 	}
 

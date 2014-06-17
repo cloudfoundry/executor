@@ -43,7 +43,9 @@ func (m *Maintainer) Run(sigChan <-chan os.Signal, ready chan<- struct{}) error 
 		case sig := <-sigChan:
 			if sig != syscall.SIGUSR1 {
 				go func() {
-					m.logger.Info("executor.maintain_presence.will-stop-maintaining-presence")
+					m.logger.Infod(map[string]interface{}{
+						"signal": sig.String(),
+					}, "executor.maintain_presence.shutdown-signal-received")
 					presence.Remove()
 				}()
 			}
