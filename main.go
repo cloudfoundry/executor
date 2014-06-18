@@ -12,7 +12,7 @@ import (
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/grouper/0.2"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/maintain"
@@ -175,30 +175,26 @@ func main() {
 
 	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
 
-	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
-		"executor":   executor,
-		"maintainer": maintainer,
+	processGroup := ifrit.Envoke(grouper.Members{
+		{"executor", executor, grouper.StopGroupPolicy()},
+		{"maintainer", maintainer, grouper.StopGroupPolicy()},
 	})
 
 	logger.Info("executor.started")
 
 	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
-	exitChan := processGroup.Exits()
 
-	for {
-		select {
-		case member := <-exitChan:
-			if member.Error != nil || member.Name == "executor" {
-				monitor.Signal(syscall.SIGTERM)
-			}
+	logger.Info("monitor.started")
 
-		case err := <-monitor.Wait():
-			if err != nil {
-				os.Exit(1)
-			}
-			os.Exit(0)
-		}
+	err := <-monitor.Wait()
+	if err != nil {
+		logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.exited")
+		os.Exit(1)
 	}
+
+	logger.Info("executor.exited")
 }
 
 func initializeLogger() *steno.Logger {
