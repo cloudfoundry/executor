@@ -72,6 +72,7 @@ var _ = Describe("Main", func() {
 		fakeBackend *fake_backend.FakeBackend
 	)
 
+	stopTimeout := 2 * time.Second
 	drainTimeout := 5 * time.Second
 	aBit := drainTimeout / 5
 
@@ -288,7 +289,7 @@ var _ = Describe("Main", func() {
 						Eventually(runner.Session, time.Second).Should(gbytes.Say("executor.draining"))
 
 						runner.Session.Signal(syscall.SIGUSR1)
-						Eventually(runner.Session, 5*time.Second).Should(gbytes.Say("executor.signal.ignored"))
+						Eventually(runner.Session, drainTimeout).Should(gbytes.Say("executor.signal.ignored"))
 					})
 				})
 
@@ -325,7 +326,7 @@ var _ = Describe("Main", func() {
 			Context("when there are no tasks running", func() {
 				It("exits successfully", func() {
 					sendDrainSignal()
-					Eventually(runner.Session).Should(gexec.Exit(0))
+					Eventually(runner.Session, stopTimeout).Should(gexec.Exit(0))
 				})
 			})
 		})
