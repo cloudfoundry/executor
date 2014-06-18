@@ -2,4 +2,6 @@
 [![Coverage Status](https://coveralls.io/repos/cloudfoundry-incubator/executor/badge.png?branch=HEAD)](https://coveralls.io/r/cloudfoundry-incubator/executor?branch=HEAD)
 
 #Executor
-it's time to play the game
+Let me run that for you
+
+####Learn more about Diego and its components at [diego-design-notes](https://github.com/cloudfoundry-incubator/diego-design-notes)
