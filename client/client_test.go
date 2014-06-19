@@ -48,8 +48,7 @@ var _ = Describe("Client", func() {
 					ghttp.VerifyJSON(`
           {
             "memory_mb": 64,
-            "disk_mb": 1024,
-            "metadata": null
+            "disk_mb": 1024
           }`),
 					ghttp.RespondWithJSONEncoded(http.StatusCreated, validResponse)),
 				)
@@ -108,7 +107,6 @@ var _ = Describe("Client", func() {
 							{ "container_port": 8080, "host_port": 1234 },
 							{ "container_port": 8081, "host_port": 1235 }
 						],
-            "metadata": null,
             "log": {
               "guid":"some-guid",
               "source_name":"XYZ",
@@ -201,7 +199,6 @@ var _ = Describe("Client", func() {
 							{ "container_port": 8080, "host_port": 1234 },
 							{ "container_port": 8081, "host_port": 1235 }
 						],
-            "metadata": null,
             "log": {
               "guid":"some-guid",
               "source_name":"XYZ",

@@ -134,7 +134,6 @@ var _ = Describe("Registry", func() {
 			container, err = registry.Reserve("a-container", api.ContainerAllocationRequest{
 				MemoryMB: 50,
 				DiskMB:   100,
-				Metadata: map[string]string{"some": "metadata", "is": "nice"},
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 		})
@@ -144,7 +143,6 @@ var _ = Describe("Registry", func() {
 			Ω(container.MemoryMB).Should(Equal(50))
 			Ω(container.DiskMB).Should(Equal(100))
 			Ω(container.State).Should(Equal(api.StateReserved))
-			Ω(container.Metadata).Should(Equal(map[string]string{"some": "metadata", "is": "nice"}))
 			Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
 		})
 
