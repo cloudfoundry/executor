@@ -38,8 +38,8 @@ var _ = Describe("RunAction", func() {
 		runAction = models.RunAction{
 			Script: "sudo reboot",
 			Env: []models.EnvironmentVariable{
-				{"A", "1"},
-				{"B", "2"},
+				{Name: "A", Value: "1"},
+				{Name: "B", Value: "2"},
 			},
 			ResourceLimits: models.ResourceLimits{
 				Nofile: &fileDescriptorLimit,

@@ -37,7 +37,7 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 	convertedEnvironmentVariables := []warden.EnvironmentVariable{}
 
 	for _, env := range environmentVariables {
-		convertedEnvironmentVariables = append(convertedEnvironmentVariables, warden.EnvironmentVariable{env.Key, env.Value})
+		convertedEnvironmentVariables = append(convertedEnvironmentVariables, warden.EnvironmentVariable{env.Name, env.Value})
 	}
 
 	return convertedEnvironmentVariables
