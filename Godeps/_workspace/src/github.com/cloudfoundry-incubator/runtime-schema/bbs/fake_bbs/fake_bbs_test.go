@@ -15,7 +15,7 @@ var _ = Describe("FakeBbs", func() {
 		Ω(executorBBS).ShouldNot(BeNil())
 
 		var repBBS bbs.RepBBS
-		repBBS = NewFakeRepBBS()
+		repBBS = &FakeRepBBS{}
 		Ω(repBBS).ShouldNot(BeNil())
 
 		var convergerBBS bbs.ConvergerBBS
@@ -31,15 +31,19 @@ var _ = Describe("FakeBbs", func() {
 		Ω(auctioneerBBS).ShouldNot(BeNil())
 
 		var stagerBBS bbs.StagerBBS
-		stagerBBS = NewFakeStagerBBS()
+		stagerBBS = &FakeStagerBBS{}
 		Ω(stagerBBS).ShouldNot(BeNil())
 
 		var metricsBBS bbs.MetricsBBS
 		metricsBBS = NewFakeMetricsBBS()
 		Ω(metricsBBS).ShouldNot(BeNil())
 
-		var lrpRouterBBS bbs.LRPRouterBBS
-		lrpRouterBBS = NewFakeLRPRouterBBS()
-		Ω(lrpRouterBBS).ShouldNot(BeNil())
+		var routeEmitterBBS bbs.RouteEmitterBBS
+		routeEmitterBBS = NewFakeRouteEmitterBBS()
+		Ω(routeEmitterBBS).ShouldNot(BeNil())
+
+		var nsyncBBS bbs.NsyncBBS
+		nsyncBBS = &FakeNsyncBBS{}
+		Ω(nsyncBBS).ShouldNot(BeNil())
 	})
 })

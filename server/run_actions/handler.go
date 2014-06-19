@@ -119,12 +119,12 @@ func (h *handler) performRunActions(guid string, container warden.Container, req
 
 	var payload api.ContainerRunResult
 
+	payload.Guid = guid
+	payload.Result = *result
 	if seqErr != nil {
 		payload.Failed = true
 		payload.FailureReason = seqErr.Error()
 	}
-	payload.Metadata = request.Metadata
-	payload.Result = *result
 
 	resultPayload, err := json.Marshal(payload)
 	if err != nil {

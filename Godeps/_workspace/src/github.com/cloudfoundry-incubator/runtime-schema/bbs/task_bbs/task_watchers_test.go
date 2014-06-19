@@ -51,49 +51,51 @@ var _ = Describe("Task BBS", func() {
 			stop <- true
 		})
 
-		It("should send an event down the pipe for creates", func(done Done) {
-			task, err = bbs.DesireTask(task)
+		It("should send an event down the pipe for creates", func() {
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(task))
+			var receivedTask models.Task
+			Eventually(events).Should(Receive(&receivedTask))
 
-			close(done)
+			Ω(receivedTask.Guid).Should(Equal(task.Guid))
+			Ω(receivedTask.State).Should(Equal(models.TaskStatePending))
 		})
 
-		It("should send an event down the pipe when the converge is run", func(done Done) {
-			task, err = bbs.DesireTask(task)
+		It("should send an event down the pipe when the converge is run", func() {
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			e := <-events
-
-			Expect(e).To(Equal(task))
+			Eventually(events).Should(Receive())
 
 			timeProvider.IncrementBySeconds(2)
 			bbs.ConvergeTask(5*time.Second, time.Second)
 
 			Eventually(events).Should(Receive())
-
-			close(done)
 		})
 
-		It("should not send an event down the pipe for deletes", func(done Done) {
-			task, err = bbs.DesireTask(task)
+		It("should not send an event down the pipe for deletes", func() {
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(task))
+			Eventually(events).Should(Receive())
 
-			task, err = bbs.ResolveTask(task)
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			otherTask := task
-			otherTask.Guid = task.Guid + "1"
-
-			otherTask, err = bbs.DesireTask(otherTask)
+			err = bbs.StartTask(task.Guid, "executor-ID", "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(otherTask))
+			err = bbs.CompleteTask(task.Guid, true, "a reason", "a result")
+			Ω(err).ShouldNot(HaveOccurred())
 
-			close(done)
+			err = bbs.ResolvingTask(task.Guid)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = bbs.ResolveTask(task.Guid)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Consistently(events).ShouldNot(Receive())
 		})
 	})
 
@@ -107,13 +109,13 @@ var _ = Describe("Task BBS", func() {
 		BeforeEach(func() {
 			events, stop, errors = bbs.WatchForCompletedTask()
 
-			task, err = bbs.DesireTask(task)
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.ClaimTask(task, "executor-ID")
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.StartTask(task, "container-handle")
+			err = bbs.StartTask(task.Guid, "executor-ID", "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -125,30 +127,30 @@ var _ = Describe("Task BBS", func() {
 			Consistently(events).ShouldNot(Receive())
 		})
 
-		It("should send an event down the pipe for completed run onces", func(done Done) {
-			task, err = bbs.CompleteTask(task, true, "a reason", "a result")
+		It("should send an event down the pipe for completed run onces", func() {
+			err = bbs.CompleteTask(task.Guid, true, "a reason", "a result")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(task))
-
-			close(done)
+			var receivedTask models.Task
+			Eventually(events).Should(Receive(&receivedTask))
+			Ω(receivedTask.Guid).Should(Equal(task.Guid))
+			Ω(receivedTask.State).Should(Equal(models.TaskStateCompleted))
+			Ω(receivedTask.FailureReason).Should(Equal("a reason"))
 		})
 
-		It("should not send an event down the pipe when resolved", func(done Done) {
-			task, err = bbs.CompleteTask(task, true, "a reason", "a result")
+		It("should not send an event down the pipe when resolved", func() {
+			err = bbs.CompleteTask(task.Guid, true, "a reason", "a result")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(<-events).To(Equal(task))
+			Eventually(events).Should(Receive())
 
-			task, err = bbs.ResolvingTask(task)
+			err = bbs.ResolvingTask(task.Guid)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.ResolveTask(task)
+			err = bbs.ResolveTask(task.Guid)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Consistently(events).ShouldNot(Receive())
-
-			close(done)
 		})
 	})
 })

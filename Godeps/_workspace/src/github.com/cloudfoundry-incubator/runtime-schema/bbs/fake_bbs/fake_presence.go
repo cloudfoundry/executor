@@ -39,7 +39,9 @@ func (p *FakePresence) Maintain(interval time.Duration) (<-chan bool, error) {
 }
 
 func (p *FakePresence) Remove() {
-	close(p.done)
+	if p.done != nil {
+		close(p.done)
+	}
 
 	p.Removed = true
 }

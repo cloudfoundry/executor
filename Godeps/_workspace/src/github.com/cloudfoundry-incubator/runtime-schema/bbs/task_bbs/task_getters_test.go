@@ -37,7 +37,7 @@ var _ = Describe("Task BBS", func() {
 
 	Describe("GetAllPendingTasks", func() {
 		BeforeEach(func() {
-			task, err = bbs.DesireTask(task)
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -45,16 +45,16 @@ var _ = Describe("Task BBS", func() {
 			tasks, err := bbs.GetAllPendingTasks()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(tasks).Should(HaveLen(1))
-			Ω(tasks).Should(ContainElement(task))
+			Ω(tasks[0].Guid).Should(Equal(task.Guid))
 		})
 	})
 
 	Describe("GetAllClaimedTasks", func() {
 		BeforeEach(func() {
-			task, err = bbs.DesireTask(task)
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.ClaimTask(task, "executor-ID")
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -62,42 +62,42 @@ var _ = Describe("Task BBS", func() {
 			tasks, err := bbs.GetAllClaimedTasks()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(tasks).Should(HaveLen(1))
-			Ω(tasks).Should(ContainElement(task))
+			Ω(tasks[0].Guid).Should(Equal(task.Guid))
 		})
 	})
 
-	Describe("GetAllStartingTasks", func() {
+	Describe("GetAllRunningTasks", func() {
 		BeforeEach(func() {
-			task, err = bbs.DesireTask(task)
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.ClaimTask(task, "executor-ID")
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.StartTask(task, "container-handle")
+			err = bbs.StartTask(task.Guid, "executor-ID", "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("returns all Tasks in 'running' state", func() {
-			tasks, err := bbs.GetAllStartingTasks()
+			tasks, err := bbs.GetAllRunningTasks()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(tasks).Should(HaveLen(1))
-			Ω(tasks).Should(ContainElement(task))
+			Ω(tasks[0].Guid).Should(Equal(task.Guid))
 		})
 	})
 
 	Describe("GetAllCompletedTasks", func() {
 		BeforeEach(func() {
-			task, err = bbs.DesireTask(task)
+			err = bbs.DesireTask(task)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.ClaimTask(task, "executor-ID")
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.StartTask(task, "container-handle")
+			err = bbs.StartTask(task.Guid, "executor-ID", "container-handle")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			task, err = bbs.CompleteTask(task, true, "a reason", "a result")
+			err = bbs.CompleteTask(task.Guid, true, "a reason", "a result")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -105,7 +105,33 @@ var _ = Describe("Task BBS", func() {
 			tasks, err := bbs.GetAllCompletedTasks()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(tasks).Should(HaveLen(1))
-			Ω(tasks).Should(ContainElement(task))
+			Ω(tasks[0].Guid).Should(Equal(task.Guid))
+		})
+	})
+
+	Describe("GetAllResolvingTasks", func() {
+		BeforeEach(func() {
+			err = bbs.DesireTask(task)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = bbs.ClaimTask(task.Guid, "executor-ID")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = bbs.StartTask(task.Guid, "executor-ID", "container-handle")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = bbs.CompleteTask(task.Guid, true, "a reason", "a result")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = bbs.ResolvingTask(task.Guid)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		It("returns all Tasks in 'completed' state", func() {
+			tasks, err := bbs.GetAllResolvingTasks()
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(tasks).Should(HaveLen(1))
+			Ω(tasks[0].Guid).Should(Equal(task.Guid))
 		})
 	})
 })

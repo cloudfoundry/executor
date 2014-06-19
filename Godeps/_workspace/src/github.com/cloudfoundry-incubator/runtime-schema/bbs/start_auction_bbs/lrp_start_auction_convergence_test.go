@@ -1,4 +1,4 @@
-package lrp_bbs_test
+package start_auction_bbs_test
 
 import (
 	"path"
@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("LrpAuctionConvergence", func() {
+var _ = Describe("LRPStartAuction Convergence", func() {
 	var pendingKickDuration time.Duration
 	var claimedExpirationDuration time.Duration
 	BeforeEach(func() {
@@ -21,7 +21,7 @@ var _ = Describe("LrpAuctionConvergence", func() {
 	})
 
 	Context("when the LRPAuction has invalid JSON", func() {
-		key := path.Join(shared.LRPStopAuctionSchemaRoot, "process-guid", "1")
+		key := path.Join(shared.LRPStartAuctionSchemaRoot, "process-guid", "1")
 		BeforeEach(func() {
 			etcdClient.Create(storeadapter.StoreNode{
 				Key:   key,
@@ -30,26 +30,27 @@ var _ = Describe("LrpAuctionConvergence", func() {
 		})
 
 		It("should be removed", func() {
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
 			_, err := etcdClient.Get(key)
 			Ω(err).Should(MatchError(storeadapter.ErrorKeyNotFound))
 		})
 	})
 
 	Describe("Kicking pending auctions", func() {
-		var startAuctionEvents <-chan models.LRPStopAuction
-		var auction models.LRPStopAuction
+		var startAuctionEvents <-chan models.LRPStartAuction
+		var auction models.LRPStartAuction
 
 		commenceWatching := func() {
-			startAuctionEvents, _, _ = bbs.WatchForLRPStopAuction()
+			startAuctionEvents, _, _ = bbs.WatchForLRPStartAuction()
 		}
 
 		BeforeEach(func() {
-			auction = models.LRPStopAuction{
-				Index:       1,
-				ProcessGuid: "process-guid",
+			auction = models.LRPStartAuction{
+				Index:        1,
+				ProcessGuid:  "process-guid",
+				InstanceGuid: "instance-guid",
 			}
-			err := bbs.RequestLRPStopAuction(auction)
+			err := bbs.RequestLRPStartAuction(auction)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -57,12 +58,12 @@ var _ = Describe("LrpAuctionConvergence", func() {
 			commenceWatching()
 
 			timeProvider.Increment(pendingKickDuration)
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
 			Consistently(startAuctionEvents).ShouldNot(Receive())
 
-			var noticedOnce models.LRPStopAuction
+			var noticedOnce models.LRPStartAuction
 			timeProvider.Increment(time.Second)
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
 			Eventually(startAuctionEvents).Should(Receive(&noticedOnce))
 			Ω(noticedOnce.Index).Should(Equal(auction.Index))
 		})
@@ -70,31 +71,32 @@ var _ = Describe("LrpAuctionConvergence", func() {
 
 	Describe("Deleting very old claimed events", func() {
 		BeforeEach(func() {
-			auction := models.LRPStopAuction{
-				Index:       1,
-				ProcessGuid: "process-guid",
+			auction := models.LRPStartAuction{
+				Index:        1,
+				ProcessGuid:  "process-guid",
+				InstanceGuid: "instance-guid",
 			}
-			err := bbs.RequestLRPStopAuction(auction)
+			err := bbs.RequestLRPStartAuction(auction)
 			Ω(err).ShouldNot(HaveOccurred())
-			auction.State = models.LRPStopAuctionStatePending
+			auction.State = models.LRPStartAuctionStatePending
 			auction.UpdatedAt = timeProvider.Time().UnixNano()
 
-			err = bbs.ClaimLRPStopAuction(auction)
+			err = bbs.ClaimLRPStartAuction(auction)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		It("should delete claimed events that have expired", func() {
 			timeProvider.Increment(pendingKickDuration)
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
-			Ω(bbs.GetAllLRPStopAuctions()).Should(HaveLen(1))
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
+			Ω(bbs.GetAllLRPStartAuctions()).Should(HaveLen(1))
 
 			timeProvider.Increment(claimedExpirationDuration - pendingKickDuration)
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
-			Ω(bbs.GetAllLRPStopAuctions()).Should(HaveLen(1))
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
+			Ω(bbs.GetAllLRPStartAuctions()).Should(HaveLen(1))
 
 			timeProvider.Increment(time.Second)
-			bbs.ConvergeLRPStopAuctions(pendingKickDuration, claimedExpirationDuration)
-			Ω(bbs.GetAllLRPStopAuctions()).Should(BeEmpty())
+			bbs.ConvergeLRPStartAuctions(pendingKickDuration, claimedExpirationDuration)
+			Ω(bbs.GetAllLRPStartAuctions()).Should(BeEmpty())
 		})
 	})
 })

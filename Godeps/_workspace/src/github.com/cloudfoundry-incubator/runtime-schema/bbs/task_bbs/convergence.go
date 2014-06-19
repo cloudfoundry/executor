@@ -128,7 +128,7 @@ func (bbs *TaskBBS) batchCompareAndSwapTasks(tasksToCAS []compareAndSwappableTas
 		task := taskToCAS.NewTask
 		task.UpdatedAt = bbs.timeProvider.Time().UnixNano()
 		newStoreNode := storeadapter.StoreNode{
-			Key:   shared.TaskSchemaPath(task),
+			Key:   shared.TaskSchemaPath(task.Guid),
 			Value: task.ToJSON(),
 		}
 

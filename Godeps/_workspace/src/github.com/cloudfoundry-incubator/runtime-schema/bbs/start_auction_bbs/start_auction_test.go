@@ -1,4 +1,4 @@
-package lrp_bbs_test
+package start_auction_bbs_test
 
 import (
 	"time"
@@ -11,60 +11,88 @@ import (
 	. "github.com/cloudfoundry/storeadapter/storenodematchers"
 )
 
-var _ = Describe("Stop Auction", func() {
-	Describe("RequestLRPStopAuction", func() {
-		var auctionLRP models.LRPStopAuction
+var _ = Describe("Start Auction", func() {
+	Describe("RequestLRPStartAuction", func() {
+		var auctionLRP models.LRPStartAuction
 
 		BeforeEach(func() {
-			auctionLRP = models.LRPStopAuction{
+			auctionLRP = models.LRPStartAuction{
 				ProcessGuid: "some-guid",
 				Index:       1,
+				Actions: []models.ExecutorAction{
+					{
+						Action: models.RunAction{
+							Script: "cat /tmp/file",
+							Env: []models.EnvironmentVariable{
+								{
+									Key:   "PATH",
+									Value: "the-path",
+								},
+							},
+							Timeout: time.Second,
+						},
+					},
+				},
 			}
 		})
 
-		It("creates /v1/stop/<guid>/index", func() {
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+		It("creates /v1/start/<guid>/index", func() {
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			node, err := etcdClient.Get("/v1/stop/some-guid/1")
+			node, err := etcdClient.Get("/v1/start/some-guid/1")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Ω(node.Value).Should(Equal(auctionLRP.ToJSON()))
 		})
 
 		Context("when the key already exists", func() {
 			It("should error", func() {
-				err := bbs.RequestLRPStopAuction(auctionLRP)
+				err := bbs.RequestLRPStartAuction(auctionLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				err = bbs.RequestLRPStopAuction(auctionLRP)
+				err = bbs.RequestLRPStartAuction(auctionLRP)
 				Ω(err).Should(MatchError(storeadapter.ErrorKeyExists))
 			})
 		})
 
 		Context("when the store is out of commission", func() {
 			itRetriesUntilStoreComesBack(func() error {
-				return bbs.RequestLRPStopAuction(auctionLRP)
+				return bbs.RequestLRPStartAuction(auctionLRP)
 			})
 		})
 	})
 
-	Describe("WatchForLRPStopAuction", func() {
+	Describe("WatchForLRPStartAuction", func() {
 		var (
-			events     <-chan models.LRPStopAuction
+			events     <-chan models.LRPStartAuction
 			stop       chan<- bool
 			errors     <-chan error
-			auctionLRP models.LRPStopAuction
+			auctionLRP models.LRPStartAuction
 		)
 
 		BeforeEach(func() {
-			auctionLRP = models.LRPStopAuction{
+			auctionLRP = models.LRPStartAuction{
 				ProcessGuid: "some-guid",
 				Index:       1,
+				Actions: []models.ExecutorAction{
+					{
+						Action: models.RunAction{
+							Script: "cat /tmp/file",
+							Env: []models.EnvironmentVariable{
+								{
+									Key:   "PATH",
+									Value: "the-path",
+								},
+							},
+							Timeout: time.Second,
+						},
+					},
+				},
 			}
-			events, stop, errors = bbs.WatchForLRPStopAuction()
+			events, stop, errors = bbs.WatchForLRPStartAuction()
 		})
 
 		AfterEach(func() {
@@ -72,25 +100,25 @@ var _ = Describe("Stop Auction", func() {
 		})
 
 		It("sends an event down the pipe for creates", func() {
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Eventually(events).Should(Receive(Equal(auctionLRP)))
 		})
 
 		It("sends an event down the pipe for updates", func() {
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Eventually(events).Should(Receive(Equal(auctionLRP)))
 
 			err = etcdClient.SetMulti([]storeadapter.StoreNode{
 				{
-					Key:   shared.LRPStopAuctionSchemaPath(auctionLRP),
+					Key:   shared.LRPStartAuctionSchemaPath(auctionLRP),
 					Value: auctionLRP.ToJSON(),
 				},
 			})
@@ -100,32 +128,46 @@ var _ = Describe("Stop Auction", func() {
 		})
 
 		It("does not send an event down the pipe for deletes", func() {
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Eventually(events).Should(Receive(Equal(auctionLRP)))
 
-			err = bbs.ResolveLRPStopAuction(auctionLRP)
+			err = bbs.ResolveLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Consistently(events).ShouldNot(Receive())
 		})
 	})
 
-	Describe("ClaimLRPStopAuction", func() {
-		var auctionLRP models.LRPStopAuction
+	Describe("ClaimLRPStartAuction", func() {
+		var auctionLRP models.LRPStartAuction
 
 		BeforeEach(func() {
-			auctionLRP = models.LRPStopAuction{
+			auctionLRP = models.LRPStartAuction{
 				ProcessGuid: "some-guid",
 				Index:       1,
+				Actions: []models.ExecutorAction{
+					{
+						Action: models.RunAction{
+							Script: "cat /tmp/file",
+							Env: []models.EnvironmentVariable{
+								{
+									Key:   "PATH",
+									Value: "the-path",
+								},
+							},
+							Timeout: time.Second,
+						},
+					},
+				},
 			}
 
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Ω(err).ShouldNot(HaveOccurred())
 		})
@@ -134,71 +176,85 @@ var _ = Describe("Stop Auction", func() {
 			It("sets the state to claimed", func() {
 				timeProvider.Increment(time.Minute)
 
-				err := bbs.ClaimLRPStopAuction(auctionLRP)
+				err := bbs.ClaimLRPStartAuction(auctionLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				expectedAuctionLRP := auctionLRP
-				expectedAuctionLRP.State = models.LRPStopAuctionStateClaimed
+				expectedAuctionLRP.State = models.LRPStartAuctionStateClaimed
 				expectedAuctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 
-				node, err := etcdClient.Get("/v1/stop/some-guid/1")
+				node, err := etcdClient.Get("/v1/start/some-guid/1")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(node).Should(MatchStoreNode(storeadapter.StoreNode{
-					Key:   "/v1/stop/some-guid/1",
+					Key:   "/v1/start/some-guid/1",
 					Value: expectedAuctionLRP.ToJSON(),
 				}))
 			})
 
 			Context("when the store is out of commission", func() {
 				itRetriesUntilStoreComesBack(func() error {
-					return bbs.ClaimLRPStopAuction(auctionLRP)
+					return bbs.ClaimLRPStartAuction(auctionLRP)
 				})
 			})
 		})
 
 		Context("When claiming an LRP auction that is not in the pending state", func() {
 			BeforeEach(func() {
-				err := bbs.ClaimLRPStopAuction(auctionLRP)
+				err := bbs.ClaimLRPStartAuction(auctionLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("returns an error", func() {
-				err := bbs.ClaimLRPStopAuction(auctionLRP)
+				err := bbs.ClaimLRPStartAuction(auctionLRP)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})
 
-	Describe("ResolveLRPStopAuction", func() {
-		var auctionLRP models.LRPStopAuction
+	Describe("ResolveLRPStartAuction", func() {
+		var auctionLRP models.LRPStartAuction
 
 		BeforeEach(func() {
-			auctionLRP = models.LRPStopAuction{
+			auctionLRP = models.LRPStartAuction{
 				ProcessGuid: "some-guid",
 				Index:       1,
+				Actions: []models.ExecutorAction{
+					{
+						Action: models.RunAction{
+							Script: "cat /tmp/file",
+							Env: []models.EnvironmentVariable{
+								{
+									Key:   "PATH",
+									Value: "the-path",
+								},
+							},
+							Timeout: time.Second,
+						},
+					},
+				},
 			}
 
-			err := bbs.RequestLRPStopAuction(auctionLRP)
+			err := bbs.RequestLRPStartAuction(auctionLRP)
 
-			auctionLRP.State = models.LRPStopAuctionStatePending
+			auctionLRP.State = models.LRPStartAuctionStatePending
 			auctionLRP.UpdatedAt = timeProvider.Time().UnixNano()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ClaimLRPStopAuction(auctionLRP)
+			err = bbs.ClaimLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		It("should remove /v1/stop/<guid>/<index>", func() {
-			err := bbs.ResolveLRPStopAuction(auctionLRP)
+		It("should remove /v1/start/<guid>/<index>", func() {
+			err := bbs.ResolveLRPStartAuction(auctionLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, err = etcdClient.Get("/v1/stop/some-guid/1")
+			_, err = etcdClient.Get("/v1/start/some-guid/1")
 			Ω(err).Should(Equal(storeadapter.ErrorKeyNotFound))
 		})
 
 		Context("when the store is out of commission", func() {
 			itRetriesUntilStoreComesBack(func() error {
-				err := bbs.ResolveLRPStopAuction(auctionLRP)
+				err := bbs.ResolveLRPStartAuction(auctionLRP)
 				return err
 			})
 		})

@@ -2,7 +2,7 @@ package fake_bbs
 
 import "github.com/cloudfoundry-incubator/runtime-schema/models"
 
-type FakeLRPRouterBBS struct {
+type FakeRouteEmitterBBS struct {
 	DesiredLRPChangeChan chan models.DesiredLRPChange
 	desiredLRPStopChan   chan bool
 	desiredLRPErrChan    chan error
@@ -24,8 +24,8 @@ type FakeLRPRouterBBS struct {
 	WhenGettingDesiredLRPByProcessGuid func(string) (models.DesiredLRP, error)
 }
 
-func NewFakeLRPRouterBBS() *FakeLRPRouterBBS {
-	return &FakeLRPRouterBBS{
+func NewFakeRouteEmitterBBS() *FakeRouteEmitterBBS {
+	return &FakeRouteEmitterBBS{
 		DesiredLRPChangeChan: make(chan models.DesiredLRPChange, 1),
 		desiredLRPStopChan:   make(chan bool),
 		desiredLRPErrChan:    make(chan error),
@@ -36,23 +36,23 @@ func NewFakeLRPRouterBBS() *FakeLRPRouterBBS {
 	}
 }
 
-func (fakeBBS *FakeLRPRouterBBS) WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error) {
+func (fakeBBS *FakeRouteEmitterBBS) WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error) {
 	return fakeBBS.DesiredLRPChangeChan, fakeBBS.desiredLRPStopChan, fakeBBS.desiredLRPErrChan
 }
 
-func (fakeBBS *FakeLRPRouterBBS) SendWatchForDesiredLRPChangesError(err error) {
+func (fakeBBS *FakeRouteEmitterBBS) SendWatchForDesiredLRPChangesError(err error) {
 	fakeBBS.desiredLRPErrChan <- err
 }
 
-func (fakeBBS *FakeLRPRouterBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error) {
+func (fakeBBS *FakeRouteEmitterBBS) WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error) {
 	return fakeBBS.ActualLRPChangeChan, fakeBBS.actualLRPStopChan, fakeBBS.actualLRPErrChan
 }
 
-func (fakeBBS *FakeLRPRouterBBS) SendWatchForActualLRPChangesError(err error) {
+func (fakeBBS *FakeRouteEmitterBBS) SendWatchForActualLRPChangesError(err error) {
 	fakeBBS.actualLRPErrChan <- err
 }
 
-func (fakeBBS *FakeLRPRouterBBS) GetAllDesiredLRPs() ([]models.DesiredLRP, error) {
+func (fakeBBS *FakeRouteEmitterBBS) GetAllDesiredLRPs() ([]models.DesiredLRP, error) {
 	if fakeBBS.WhenGettingAllDesiredLRPs != nil {
 		return fakeBBS.WhenGettingAllDesiredLRPs()
 	}
@@ -60,7 +60,7 @@ func (fakeBBS *FakeLRPRouterBBS) GetAllDesiredLRPs() ([]models.DesiredLRP, error
 	return fakeBBS.AllDesiredLRPs, nil
 }
 
-func (fakeBBS *FakeLRPRouterBBS) GetRunningActualLRPs() ([]models.ActualLRP, error) {
+func (fakeBBS *FakeRouteEmitterBBS) GetRunningActualLRPs() ([]models.ActualLRP, error) {
 	if fakeBBS.WhenGettingRunningActualLRPs != nil {
 		return fakeBBS.WhenGettingRunningActualLRPs()
 	}
@@ -68,7 +68,7 @@ func (fakeBBS *FakeLRPRouterBBS) GetRunningActualLRPs() ([]models.ActualLRP, err
 	return fakeBBS.AllActualLRPs, nil
 }
 
-func (fakeBBS *FakeLRPRouterBBS) GetDesiredLRPByProcessGuid(processGuid string) (models.DesiredLRP, error) {
+func (fakeBBS *FakeRouteEmitterBBS) GetDesiredLRPByProcessGuid(processGuid string) (models.DesiredLRP, error) {
 	if fakeBBS.WhenGettingDesiredLRPByProcessGuid != nil {
 		return fakeBBS.WhenGettingDesiredLRPByProcessGuid(processGuid)
 	}
@@ -76,7 +76,7 @@ func (fakeBBS *FakeLRPRouterBBS) GetDesiredLRPByProcessGuid(processGuid string) 
 	return fakeBBS.DesiredLRP, nil
 }
 
-func (fakeBBS *FakeLRPRouterBBS) GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.ActualLRP, error) {
+func (fakeBBS *FakeRouteEmitterBBS) GetRunningActualLRPsByProcessGuid(processGuid string) ([]models.ActualLRP, error) {
 	if fakeBBS.WhenGettingActualLRPsByProcessGuid != nil {
 		return fakeBBS.WhenGettingActualLRPsByProcessGuid(processGuid)
 	}

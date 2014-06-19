@@ -83,7 +83,7 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		Context("when a Task is pending", func() {
 			BeforeEach(func() {
-				task, err = bbs.DesireTask(task)
+				err = bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -106,8 +106,9 @@ var _ = Describe("Convergence of Tasks", func() {
 					var noticedOnce models.Task
 					Eventually(desiredEvents).Should(Receive(&noticedOnce))
 
-					task.UpdatedAt = timeProvider.Time().UnixNano()
-					Ω(noticedOnce).Should(Equal(task))
+					Ω(noticedOnce.Guid).Should(Equal(task.Guid))
+					Ω(noticedOnce.State).Should(Equal(models.TaskStatePending))
+					Ω(noticedOnce.UpdatedAt).Should(Equal(timeProvider.Time().UnixNano()))
 				})
 			})
 
@@ -130,10 +131,10 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		Context("when a Task is claimed", func() {
 			BeforeEach(func() {
-				task, err = bbs.DesireTask(task)
+				err = bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.ClaimTask(task, "executor-id")
+				err = bbs.ClaimTask(task.Guid, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				var status <-chan bool
@@ -167,10 +168,10 @@ var _ = Describe("Convergence of Tasks", func() {
 					var noticedOnce models.Task
 					Eventually(desiredEvents).Should(Receive(&noticedOnce))
 
-					task.State = models.TaskStatePending
-					task.UpdatedAt = timeProvider.Time().UnixNano()
-					task.ExecutorID = ""
-					Ω(noticedOnce).Should(Equal(task))
+					Ω(noticedOnce.Guid).Should(Equal(task.Guid))
+					Ω(noticedOnce.State).Should(Equal(models.TaskStatePending))
+					Ω(noticedOnce.UpdatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+					Ω(noticedOnce.ExecutorID).Should(BeEmpty())
 				})
 			})
 
@@ -199,13 +200,13 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		Context("when a Task is running", func() {
 			BeforeEach(func() {
-				task, err = bbs.DesireTask(task)
+				err = bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.ClaimTask(task, "executor-id")
+				err = bbs.ClaimTask(task.Guid, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.StartTask(task, "container-handle")
+				err = bbs.StartTask(task.Guid, "executor-id", "container-handle")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				var status <-chan bool
@@ -252,16 +253,16 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		Context("when a Task is completed", func() {
 			BeforeEach(func() {
-				task, err = bbs.DesireTask(task)
+				err = bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.ClaimTask(task, "executor-id")
+				err = bbs.ClaimTask(task.Guid, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.StartTask(task, "container-handle")
+				err = bbs.StartTask(task.Guid, "executor-id", "container-handle")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.CompleteTask(task, true, "'cause I said so", "a magical result")
+				err = bbs.CompleteTask(task.Guid, true, "'cause I said so", "a magical result")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -299,19 +300,19 @@ var _ = Describe("Convergence of Tasks", func() {
 
 		Context("when a Task is resolving", func() {
 			BeforeEach(func() {
-				task, err = bbs.DesireTask(task)
+				err = bbs.DesireTask(task)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.ClaimTask(task, "executor-id")
+				err = bbs.ClaimTask(task.Guid, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.StartTask(task, "container-handle")
+				err = bbs.StartTask(task.Guid, "executor-id", "container-handle")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.CompleteTask(task, true, "'cause I said so", "a result")
+				err = bbs.CompleteTask(task.Guid, true, "'cause I said so", "a result")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				task, err = bbs.ResolvingTask(task)
+				err = bbs.ResolvingTask(task.Guid)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -334,9 +335,9 @@ var _ = Describe("Convergence of Tasks", func() {
 					var noticedOnce models.Task
 					Eventually(completedEvents).Should(Receive(&noticedOnce))
 
-					task.State = models.TaskStateCompleted
-					task.UpdatedAt = timeProvider.Time().UnixNano()
-					Ω(noticedOnce).Should(Equal(task))
+					Ω(noticedOnce.Guid).Should(Equal(task.Guid))
+					Ω(noticedOnce.State).Should(Equal(models.TaskStateCompleted))
+					Ω(noticedOnce.UpdatedAt).Should(Equal(timeProvider.Time().UnixNano()))
 				})
 			})
 		})

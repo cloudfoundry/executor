@@ -240,7 +240,6 @@ var _ = Describe("Client", func() {
 
 		BeforeEach(func() {
 			validRequest = api.ContainerRunRequest{
-				Metadata:    []byte("abc"), // base64-encoded in JSON
 				CompleteURL: "the-completion-url",
 				Actions: []models.ExecutorAction{
 					{
@@ -270,7 +269,6 @@ var _ = Describe("Client", func() {
                   }
                 }
               ],
-              "metadata":"YWJj",
               "complete_url":"the-completion-url"
             }
           `),

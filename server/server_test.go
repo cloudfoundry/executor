@@ -580,7 +580,6 @@ var _ = Describe("Api", func() {
 
 					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
 						CompleteURL: callbackHandler.URL() + "/result",
-						Metadata:    []byte("some metadata"),
 						Actions: []models.ExecutorAction{
 							{
 								models.RunAction{
@@ -601,7 +600,7 @@ var _ = Describe("Api", func() {
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("PUT", "/result"),
 								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
-									Metadata:      []byte("some metadata"),
+									Guid:          containerGuid,
 									Failed:        false,
 									FailureReason: "",
 									Result:        "",
@@ -663,6 +662,7 @@ var _ = Describe("Api", func() {
 							ghttp.CombineHandlers(
 								ghttp.VerifyRequest("PUT", "/result"),
 								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
+									Guid:          containerGuid,
 									Failed:        true,
 									FailureReason: "because i said so",
 									Result:        "",

@@ -59,8 +59,8 @@ func DesiredLRPSchemaPathByProcessGuid(processGuid string) string {
 	return path.Join(DesiredLRPSchemaRoot, processGuid)
 }
 
-func TaskSchemaPath(task models.Task) string {
-	return path.Join(TaskSchemaRoot, task.Guid)
+func TaskSchemaPath(taskGuid string) string {
+	return path.Join(TaskSchemaRoot, taskGuid)
 }
 
 func LockSchemaPath(lockName string) string {

@@ -39,7 +39,7 @@ func (bbs *TaskBBS) GetAllClaimedTasks() ([]models.Task, error) {
 	return filterTasks(all, models.TaskStateClaimed), err
 }
 
-func (bbs *TaskBBS) GetAllStartingTasks() ([]models.Task, error) {
+func (bbs *TaskBBS) GetAllRunningTasks() ([]models.Task, error) {
 	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStateRunning), err
 }
@@ -47,6 +47,11 @@ func (bbs *TaskBBS) GetAllStartingTasks() ([]models.Task, error) {
 func (bbs *TaskBBS) GetAllCompletedTasks() ([]models.Task, error) {
 	all, err := bbs.GetAllTasks()
 	return filterTasks(all, models.TaskStateCompleted), err
+}
+
+func (bbs *TaskBBS) GetAllResolvingTasks() ([]models.Task, error) {
+	all, err := bbs.GetAllTasks()
+	return filterTasks(all, models.TaskStateResolving), err
 }
 
 func filterTasks(tasks []models.Task, state models.TaskState) []models.Task {

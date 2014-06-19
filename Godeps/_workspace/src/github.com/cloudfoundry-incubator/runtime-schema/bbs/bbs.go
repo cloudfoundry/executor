@@ -6,6 +6,8 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/services_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/start_auction_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/stop_auction_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/task_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
@@ -29,9 +31,9 @@ type RepBBS interface {
 
 	//task
 	WatchForDesiredTask() (<-chan models.Task, chan<- bool, <-chan error)
-	ClaimTask(task models.Task, executorID string) (models.Task, error)
-	StartTask(task models.Task, containerHandle string) (models.Task, error)
-	CompleteTask(task models.Task, failed bool, failureReason string, result string) (models.Task, error)
+	ClaimTask(taskGuid string, executorID string) error
+	StartTask(taskGuid string, executorID string, containerHandle string) error
+	CompleteTask(taskGuid string, failed bool, failureReason string, result string) error
 
 	///lrp
 	ReportActualLRPAsStarting(lrp models.ActualLRP, executorID string) error
@@ -44,7 +46,11 @@ type RepBBS interface {
 type ConvergerBBS interface {
 	//lrp
 	ConvergeLRPs()
+
+	//start auction
 	ConvergeLRPStartAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration)
+
+	//stop auction
 	ConvergeLRPStopAuctions(kickPendingDuration time.Duration, expireClaimedDuration time.Duration)
 
 	//task
@@ -62,10 +68,14 @@ type TPSBBS interface {
 type AppManagerBBS interface {
 	//lrp
 	GetActualLRPsByProcessGuid(string) ([]models.ActualLRP, error)
-	RequestLRPStartAuction(models.LRPStartAuction) error
-	RequestLRPStopAuction(models.LRPStopAuction) error
 	RequestStopLRPInstance(stopInstance models.StopLRPInstance) error
 	WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error)
+
+	//start auction
+	RequestLRPStartAuction(models.LRPStartAuction) error
+
+	//stop auction
+	RequestLRPStopAuction(models.LRPStopAuction) error
 
 	//services
 	GetAvailableFileServer() (string, error)
@@ -83,10 +93,12 @@ type AuctioneerBBS interface {
 	//services
 	GetAllReps() ([]models.RepPresence, error)
 
-	//lrp
+	//start auction
 	WatchForLRPStartAuction() (<-chan models.LRPStartAuction, chan<- bool, <-chan error)
 	ClaimLRPStartAuction(models.LRPStartAuction) error
 	ResolveLRPStartAuction(models.LRPStartAuction) error
+
+	//stop auction
 	WatchForLRPStopAuction() (<-chan models.LRPStopAuction, chan<- bool, <-chan error)
 	ClaimLRPStopAuction(models.LRPStopAuction) error
 	ResolveLRPStopAuction(models.LRPStopAuction) error
@@ -98,9 +110,9 @@ type AuctioneerBBS interface {
 type StagerBBS interface {
 	//task
 	WatchForCompletedTask() (<-chan models.Task, chan<- bool, <-chan error)
-	DesireTask(models.Task) (models.Task, error)
-	ResolvingTask(models.Task) (models.Task, error)
-	ResolveTask(models.Task) (models.Task, error)
+	DesireTask(models.Task) error
+	ResolvingTask(taskGuid string) error
+	ResolveTask(taskGuid string) error
 
 	//services
 	GetAvailableFileServer() (string, error)
@@ -123,7 +135,7 @@ type FileServerBBS interface {
 	) (presence services_bbs.Presence, disappeared <-chan bool, err error)
 }
 
-type LRPRouterBBS interface {
+type RouteEmitterBBS interface {
 	// lrp
 	WatchForDesiredLRPChanges() (<-chan models.DesiredLRPChange, chan<- bool, <-chan error)
 	WatchForActualLRPChanges() (<-chan models.ActualLRPChange, chan<- bool, <-chan error)
@@ -169,7 +181,7 @@ func NewFileServerBBS(store storeadapter.StoreAdapter, timeProvider timeprovider
 	return NewBBS(store, timeProvider, logger)
 }
 
-func NewLRPRouterBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) LRPRouterBBS {
+func NewRouteEmitterBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) RouteEmitterBBS {
 	return NewBBS(store, timeProvider, logger)
 }
 
@@ -179,16 +191,20 @@ func NewTPSBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimePr
 
 func NewBBS(store storeadapter.StoreAdapter, timeProvider timeprovider.TimeProvider, logger *steno.Logger) *BBS {
 	return &BBS{
-		LockBBS:     lock_bbs.New(store),
-		LRPBBS:      lrp_bbs.New(store, timeProvider, logger),
-		ServicesBBS: services_bbs.New(store, logger),
-		TaskBBS:     task_bbs.New(store, timeProvider, logger),
+		LockBBS:         lock_bbs.New(store),
+		LRPBBS:          lrp_bbs.New(store, timeProvider, logger),
+		StartAuctionBBS: start_auction_bbs.New(store, timeProvider, logger),
+		StopAuctionBBS:  stop_auction_bbs.New(store, timeProvider, logger),
+		ServicesBBS:     services_bbs.New(store, logger),
+		TaskBBS:         task_bbs.New(store, timeProvider, logger),
 	}
 }
 
 type BBS struct {
 	*lock_bbs.LockBBS
 	*lrp_bbs.LRPBBS
+	*start_auction_bbs.StartAuctionBBS
+	*stop_auction_bbs.StopAuctionBBS
 	*services_bbs.ServicesBBS
 	*task_bbs.TaskBBS
 }
