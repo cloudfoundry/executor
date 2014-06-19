@@ -7,12 +7,12 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "7fd1620f09261338b6b1ca1289ace83aee0ec946"
+			"Rev": "86d28beb3f2bc5fe92a519b7231379e587399470"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
-			"Comment": "go.r60-142",
-			"Rev": "556b9de4249f50f311584f75324a45e426324a19"
+			"Comment": "go.r60-143",
+			"Rev": "cbd7916e5dceea418a5c75273aa0f8e20aef6c9e"
 		},
 		{
 			"ImportPath": "github.com/bmizerany/pat",
@@ -48,11 +48,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "b88f28c4f2c83302e014a6cb58629e1b89ab3aff"
+			"Rev": "cce188b6c789ac208f23f851014654a4b63b8ecc"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "b88f28c4f2c83302e014a6cb58629e1b89ab3aff"
+			"Rev": "cce188b6c789ac208f23f851014654a4b63b8ecc"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -89,7 +89,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "6798458485919c837534d805fd56d76d5ab172da"
+			"Rev": "1a43788769c69f92f6f1eaa41cd6366df2c3b5ed"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -127,7 +127,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "258629c650db33cf95a642651d051ded4ccb2e05"
+			"Rev": "f5c8edd2e5e404742ad194b0979ed4c95214d569"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/router",

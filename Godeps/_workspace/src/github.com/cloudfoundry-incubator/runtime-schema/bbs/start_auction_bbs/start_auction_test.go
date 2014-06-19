@@ -2,6 +2,7 @@ package start_auction_bbs_test
 
 import (
 	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -25,7 +26,7 @@ var _ = Describe("Start Auction", func() {
 							Script: "cat /tmp/file",
 							Env: []models.EnvironmentVariable{
 								{
-									Key:   "PATH",
+									Name:  "PATH",
 									Value: "the-path",
 								},
 							},
@@ -83,7 +84,7 @@ var _ = Describe("Start Auction", func() {
 							Script: "cat /tmp/file",
 							Env: []models.EnvironmentVariable{
 								{
-									Key:   "PATH",
+									Name:  "PATH",
 									Value: "the-path",
 								},
 							},
@@ -155,7 +156,7 @@ var _ = Describe("Start Auction", func() {
 							Script: "cat /tmp/file",
 							Env: []models.EnvironmentVariable{
 								{
-									Key:   "PATH",
+									Name:  "PATH",
 									Value: "the-path",
 								},
 							},
@@ -224,7 +225,7 @@ var _ = Describe("Start Auction", func() {
 							Script: "cat /tmp/file",
 							Env: []models.EnvironmentVariable{
 								{
-									Key:   "PATH",
+									Name:  "PATH",
 									Value: "the-path",
 								},
 							},
