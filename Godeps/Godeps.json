@@ -7,12 +7,12 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "86d28beb3f2bc5fe92a519b7231379e587399470"
+			"Rev": "7fd1620f09261338b6b1ca1289ace83aee0ec946"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
-			"Comment": "go.r60-143",
-			"Rev": "cbd7916e5dceea418a5c75273aa0f8e20aef6c9e"
+			"Comment": "go.r60-142",
+			"Rev": "556b9de4249f50f311584f75324a45e426324a19"
 		},
 		{
 			"ImportPath": "github.com/bmizerany/pat",
@@ -20,7 +20,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/delta_force/delta_force",
-			"Rev": "de3c425f8ad5e6897c70aaf7b21c1170731fb60e"
+			"Rev": "19e060954176a3924079cc0ccafabe1307f27343"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
@@ -89,7 +89,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "1a43788769c69f92f6f1eaa41cd6366df2c3b5ed"
+			"Rev": "6798458485919c837534d805fd56d76d5ab172da"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -127,7 +127,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "f5c8edd2e5e404742ad194b0979ed4c95214d569"
+			"Rev": "439138de94ac33aebc7dad33cada3796318845ea"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/router",
