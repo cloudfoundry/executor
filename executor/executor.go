@@ -160,6 +160,12 @@ func (e *Executor) drain(drainTimeout time.Duration) {
 
 	time.AfterFunc(drainTimeout, func() {
 		close(e.cancelChan)
+
+		// This whole thing should be done better.
+		// Stop-gap solution so deploys don't hang.
+		// See: https://www.pivotaltracker.com/story/show/73640912
+		time.Sleep(10 * time.Second)
+		e.logger.Fatal("executor.shutting-down.failed-to-drain.shutting-down-violently")
 	})
 
 	go func() {
