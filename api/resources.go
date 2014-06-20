@@ -37,10 +37,6 @@ type ContainerInitializationRequest struct {
 	Log        models.LogConfig `json:"log"`
 }
 
-type ContainerInitializeResult struct {
-	Ports []PortMapping `json:"ports"`
-}
-
 type ContainerRunRequest struct {
 	Actions     []models.ExecutorAction `json:"actions"`
 	CompleteURL string                  `json:"complete_url"`
