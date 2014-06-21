@@ -15,7 +15,8 @@ go get github.com/dustin/goveralls
 go get code.google.com/p/go.tools/cmd/cover
 go install github.com/onsi/ginkgo/ginkgo
 
-ginkgo -cover -r -failOnPending -randomizeAllSpecs -race -nodes=4
+ginkgo -cover -r -failOnPending -randomizeAllSpecs -race -trace -skipPackage=integration
+ginkgo -failOnPending -randomizeAllSpecs -trace -race integration
 
 # don't leak coveralls token
 set +x
