@@ -1,22 +1,17 @@
 package server_test
 
 import (
-	"bufio"
 	"errors"
-	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"path"
 	"time"
 
-	"code.google.com/p/gogoprotobuf/proto"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry-incubator/garden/transport"
-	protocol "github.com/cloudfoundry-incubator/garden/protocol"
+	"github.com/cloudfoundry-incubator/garden/client"
+	"github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
@@ -26,38 +21,38 @@ var _ = Describe("The Warden server", func() {
 	Context("when passed a socket", func() {
 		It("listens on the given socket path and chmods it to 0777", func() {
 			tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			socketPath := path.Join(tmpdir, "warden.sock")
 
 			wardenServer := server.New("unix", socketPath, 0, fake_backend.New())
 
 			err = wardenServer.Start()
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(ErrorDialing("unix", socketPath)).ShouldNot(HaveOccurred())
 
 			stat, err := os.Stat(socketPath)
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(int(stat.Mode() & 0777)).To(Equal(0777))
+			Ω(int(stat.Mode() & 0777)).Should(Equal(0777))
 		})
 
 		It("deletes the socket file if it is already there", func() {
 			tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			socketPath := path.Join(tmpdir, "warden.sock")
 
 			socket, err := os.Create(socketPath)
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 			socket.WriteString("oops")
 			socket.Close()
 
 			wardenServer := server.New("unix", socketPath, 0, fake_backend.New())
 
 			err = wardenServer.Start()
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
 
@@ -66,7 +61,7 @@ var _ = Describe("The Warden server", func() {
 			wardenServer := server.New("tcp", ":60123", 0, fake_backend.New())
 
 			err := wardenServer.Start()
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(ErrorDialing("tcp", ":60123")).ShouldNot(HaveOccurred())
 		})
@@ -74,7 +69,7 @@ var _ = Describe("The Warden server", func() {
 
 	It("starts the backend", func() {
 		tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
 		socketPath := path.Join(tmpdir, "warden.sock")
 
@@ -83,14 +78,14 @@ var _ = Describe("The Warden server", func() {
 		wardenServer := server.New("unix", socketPath, 0, fakeBackend)
 
 		err = wardenServer.Start()
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
-		Expect(fakeBackend.Started).To(BeTrue())
+		Ω(fakeBackend.Started).Should(BeTrue())
 	})
 
 	It("destroys containers that have been idle for their grace time", func() {
 		tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
 		socketPath := path.Join(tmpdir, "warden.sock")
 
@@ -100,24 +95,24 @@ var _ = Describe("The Warden server", func() {
 			Handle:    "doomed",
 			GraceTime: 100 * time.Millisecond,
 		})
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
 		wardenServer := server.New("unix", socketPath, 0, fakeBackend)
 
 		before := time.Now()
 
 		err = wardenServer.Start()
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
 		_, err = fakeBackend.Lookup("doomed")
-		Expect(err).ToNot(HaveOccurred())
+		Ω(err).ShouldNot(HaveOccurred())
 
 		Eventually(func() error {
 			_, err := fakeBackend.Lookup("doomed")
 			return err
 		}).Should(HaveOccurred())
 
-		Expect(time.Since(before)).To(BeNumerically(">", 100*time.Millisecond))
+		Ω(time.Since(before)).Should(BeNumerically(">", 100*time.Millisecond))
 	})
 
 	Context("when starting the backend fails", func() {
@@ -125,7 +120,7 @@ var _ = Describe("The Warden server", func() {
 
 		It("fails to start", func() {
 			tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			socketPath := path.Join(tmpdir, "warden.sock")
 
@@ -135,14 +130,14 @@ var _ = Describe("The Warden server", func() {
 			wardenServer := server.New("unix", socketPath, 0, fakeBackend)
 
 			err = wardenServer.Start()
-			Expect(err).To(Equal(disaster))
+			Ω(err).Should(Equal(disaster))
 		})
 	})
 
 	Context("when listening on the socket fails", func() {
 		It("fails to start", func() {
 			tmpfile, err := ioutil.TempFile(os.TempDir(), "warden-server-test")
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			wardenServer := server.New(
 				"unix",
@@ -153,7 +148,7 @@ var _ = Describe("The Warden server", func() {
 			)
 
 			err = wardenServer.Start()
-			Expect(err).To(HaveOccurred())
+			Ω(err).Should(HaveOccurred())
 		})
 	})
 
@@ -164,144 +159,78 @@ var _ = Describe("The Warden server", func() {
 		var fakeBackend *fake_backend.FakeBackend
 
 		var wardenServer *server.WardenServer
-
-		var serverConnection net.Conn
-		var responses *bufio.Reader
+		var wardenClient warden.Client
 
 		BeforeEach(func() {
 			tmpdir, err := ioutil.TempDir(os.TempDir(), "warden-server-test")
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			socketPath = path.Join(tmpdir, "warden.sock")
 			fakeBackend = fake_backend.New()
 
 			serverBackend = fakeBackend
+
+			wardenClient = client.New(connection.New("unix", socketPath))
 		})
 
 		JustBeforeEach(func() {
 			wardenServer = server.New("unix", socketPath, 0, serverBackend)
 
 			err := wardenServer.Start()
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(ErrorDialing("unix", socketPath)).ShouldNot(HaveOccurred())
-
-			serverConnection, err = net.Dial("unix", socketPath)
-			Expect(err).ToNot(HaveOccurred())
-
-			responses = bufio.NewReader(serverConnection)
 		})
-
-		writeMessages := func(message proto.Message) {
-			num, err := protocol.Messages(message).WriteTo(serverConnection)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(num).ToNot(Equal(0))
-		}
-
-		readResponse := func(response proto.Message) {
-			err := transport.ReadMessage(responses, response)
-			Expect(err).ToNot(HaveOccurred())
-		}
 
 		It("stops accepting new connections", func() {
 			go wardenServer.Stop()
+
 			Eventually(ErrorDialing("unix", socketPath)).Should(HaveOccurred())
-		})
-
-		It("stops handling requests on existing connections", func() {
-			writeMessages(&protocol.PingRequest{})
-			readResponse(&protocol.PingResponse{})
-
-			go wardenServer.Stop()
-
-			// server was already reading a request
-			_, err := protocol.Messages(&protocol.PingRequest{}).WriteTo(serverConnection)
-			Expect(err).ToNot(HaveOccurred())
-
-			// server will not actually handle it
-			err = transport.ReadMessage(responses, &protocol.PingResponse{})
-			Expect(err).To(HaveOccurred())
 		})
 
 		It("stops the backend", func() {
 			wardenServer.Stop()
 
-			Expect(fakeBackend.Stopped).To(BeTrue())
+			Ω(fakeBackend.Stopped).Should(BeTrue())
 		})
 
 		Context("when a Create request is in-flight", func() {
+			var creating chan struct{}
+
 			BeforeEach(func() {
-				serverBackend = fake_backend.NewSlow(100 * time.Millisecond)
+				creating = make(chan struct{})
+
+				fakeBackend.WhenCreating = func() {
+					close(creating)
+					time.Sleep(500 * time.Millisecond)
+				}
 			})
 
 			It("waits for it to complete and stops accepting requests", func() {
-				writeMessages(&protocol.CreateRequest{})
+				created := make(chan warden.Container, 1)
 
-				time.Sleep(10 * time.Millisecond)
+				go func() {
+					defer GinkgoRecover()
+
+					container, err := wardenClient.Create(warden.ContainerSpec{})
+					Ω(err).ShouldNot(HaveOccurred())
+
+					created <- container
+				}()
+
+				Eventually(creating).Should(BeClosed())
 
 				before := time.Now()
 
 				wardenServer.Stop()
 
-				Expect(time.Since(before)).To(BeNumerically(">", 50*time.Millisecond))
+				Ω(time.Since(before)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
 
-				readResponse(&protocol.CreateResponse{})
+				Eventually(created).Should(Receive())
 
-				_, err := protocol.Messages(&protocol.PingRequest{}).WriteTo(serverConnection)
-				Expect(err).To(HaveOccurred())
+				err := wardenClient.Ping()
+				Ω(err).Should(HaveOccurred())
 			})
 		})
-
-		dontWaitRequests := []proto.Message{
-			&protocol.RunRequest{
-				Handle: proto.String("some-handle"),
-				Script: proto.String("some-script"),
-			},
-			&protocol.AttachRequest{
-				Handle:    proto.String("some-handle"),
-				ProcessId: proto.Uint32(1),
-			},
-		}
-
-		for _, req := range dontWaitRequests {
-			request := req
-
-			Context(fmt.Sprintf("when a %T request is in-flight", request), func() {
-				BeforeEach(func() {
-					serverBackend = fake_backend.NewSlow(100 * time.Millisecond)
-
-					container, err := serverBackend.Create(warden.ContainerSpec{Handle: "some-handle"})
-					Expect(err).ToNot(HaveOccurred())
-
-					exitStatus := uint32(42)
-
-					fakeContainer := container.(*fake_backend.FakeContainer)
-
-					fakeContainer.StreamedProcessChunks = []warden.ProcessStream{
-						{
-							ExitStatus: &exitStatus,
-						},
-					}
-				})
-
-				It("does not wait for it to complete", func() {
-					writeMessages(request)
-
-					time.Sleep(10 * time.Millisecond)
-
-					before := time.Now()
-
-					wardenServer.Stop()
-
-					Expect(time.Since(before)).To(BeNumerically("<", 50*time.Millisecond))
-
-					response := protocol.ResponseMessageForType(protocol.TypeForMessage(request))
-					readResponse(response)
-
-					_, err := protocol.Messages(&protocol.PingRequest{}).WriteTo(serverConnection)
-					Expect(err).To(HaveOccurred())
-				})
-			})
-		}
 	})
 })

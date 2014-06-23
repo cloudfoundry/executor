@@ -45,6 +45,7 @@ type FakeStoreAdapter struct {
 
 	MaintainedNodeName string
 	MaintainNodeError  error
+	MaintainNodeStatus chan bool
 	ReleaseNodeChannel chan chan bool
 
 	createLock *sync.Mutex
@@ -70,6 +71,7 @@ func (adapter *FakeStoreAdapter) Reset() {
 	adapter.ListErrInjector = nil
 	adapter.DeleteErrInjector = nil
 	adapter.CreateErrInjector = nil
+	adapter.MaintainNodeStatus = make(chan bool, 1)
 
 	adapter.rootNode = &containerNode{
 		dir:   true,
@@ -296,9 +298,9 @@ func (adapter *FakeStoreAdapter) keyComponents(key string) (components []string)
 	return components
 }
 
-func (adapter *FakeStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (lostNodeChannel <-chan bool, releaseNode chan chan bool, err error) {
+func (adapter *FakeStoreAdapter) MaintainNode(storeNode storeadapter.StoreNode) (status <-chan bool, releaseNode chan chan bool, err error) {
 	adapter.MaintainedNodeName = storeNode.Key
 	adapter.ReleaseNodeChannel = make(chan chan bool, 1)
 
-	return nil, adapter.ReleaseNodeChannel, adapter.MaintainNodeError
+	return adapter.MaintainNodeStatus, adapter.ReleaseNodeChannel, adapter.MaintainNodeError
 }

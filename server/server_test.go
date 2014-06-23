@@ -261,7 +261,7 @@ var _ = Describe("Api", func() {
 						Ω(limitedCPU).Should(HaveLen(1))
 
 						Ω(limitedMemory[0].LimitInBytes).Should(Equal(uint64(64 * 1024 * 1024)))
-						Ω(limitedDisk[0].ByteLimit).Should(Equal(uint64(512 * 1024 * 1024)))
+						Ω(limitedDisk[0].ByteHard).Should(Equal(uint64(512 * 1024 * 1024)))
 						Ω(limitedCPU[0].LimitInShares).Should(Equal(uint64(512)))
 					})
 

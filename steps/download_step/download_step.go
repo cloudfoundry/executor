@@ -86,11 +86,8 @@ func (step *DownloadStep) Perform() error {
 
 		return err
 	} else {
-		// TODO - get rid of this file
-		streamIn, err := step.container.StreamIn(filepath.Dir(step.model.To))
-		if err != nil {
-			return err
-		}
+		reader, writer := io.Pipe()
+		defer reader.Close()
 
 		downloadedFile, err := os.Open(downloadedPath)
 		if err != nil {
@@ -99,7 +96,9 @@ func (step *DownloadStep) Perform() error {
 
 		defer downloadedFile.Close()
 
-		err = writeTarTo(filepath.Base(step.model.To), downloadedFile, streamIn)
+		go writeTarTo(filepath.Base(step.model.To), downloadedFile, writer)
+
+		err = step.container.StreamIn(filepath.Dir(step.model.To), reader)
 		if err != nil {
 			return emittable_error.New(err, "Copying into the container failed")
 		}
@@ -161,17 +160,15 @@ func (step *DownloadStep) Cancel() {}
 func (step *DownloadStep) Cleanup() {}
 
 func (step *DownloadStep) copyExtractedFiles(source string, destination string) error {
-	streamIn, err := step.container.StreamIn(destination)
-	if err != nil {
-		return err
-	}
+	reader, writer := io.Pipe()
 
-	err = compressor.WriteTar(source+string(filepath.Separator), streamIn)
-	if err != nil {
-		return err
-	}
+	go func() {
+		compressor.WriteTar(source+string(filepath.Separator), writer)
+		writer.Close()
+	}()
+	defer reader.Close()
 
-	return streamIn.Close()
+	return step.container.StreamIn(destination, reader)
 }
 
 func writeTarTo(name string, source *os.File, destination io.WriteCloser) error {

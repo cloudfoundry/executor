@@ -11,8 +11,8 @@ type Container interface {
 
 	Info() (ContainerInfo, error)
 
-	StreamIn(dstPath string) (io.WriteCloser, error)
-	StreamOut(srcPath string) (io.Reader, error)
+	StreamIn(dstPath string, tarStream io.Reader) error
+	StreamOut(srcPath string) (io.ReadCloser, error)
 
 	LimitBandwidth(limits BandwidthLimits) error
 	CurrentBandwidthLimits() (BandwidthLimits, error)
@@ -130,20 +130,14 @@ type BandwidthLimits struct {
 }
 
 type DiskLimits struct {
-	BlockLimit uint64
-	Block      uint64
-	BlockSoft  uint64
-	BlockHard  uint64
+	BlockSoft uint64
+	BlockHard uint64
 
-	InodeLimit uint64
-	Inode      uint64
-	InodeSoft  uint64
-	InodeHard  uint64
+	InodeSoft uint64
+	InodeHard uint64
 
-	ByteLimit uint64
-	Byte      uint64
-	ByteSoft  uint64
-	ByteHard  uint64
+	ByteSoft uint64
+	ByteHard uint64
 }
 
 type MemoryLimits struct {

@@ -2,12 +2,13 @@ package fake_connection
 
 import (
 	"bytes"
-	"code.google.com/p/goprotobuf/proto"
 	"io"
+	"io/ioutil"
 	"sync"
 
+	"code.google.com/p/goprotobuf/proto"
+
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/onsi/gomega/gbytes"
 )
 
 type FakeConnection struct {
@@ -16,6 +17,8 @@ type FakeConnection struct {
 	closed bool
 
 	disconnected chan struct{}
+
+	WhenPinging func() error
 
 	WhenGettingCapacity func() (warden.Capacity, error)
 
@@ -29,15 +32,15 @@ type FakeConnection struct {
 	WhenDestroying func(handle string) error
 
 	stopped      map[string][]StopSpec
-	WhenStopping func(handle string, background, kill bool) error
+	WhenStopping func(handle string, kill bool) error
 
 	WhenGettingInfo func(handle string) (warden.ContainerInfo, error)
 
 	streamedIn      map[string][]StreamInSpec
-	WhenStreamingIn func(handle string, dst string) (io.WriteCloser, error)
+	WhenStreamingIn func(string, string, io.Reader) error
 
 	streamedOut      map[string][]StreamOutSpec
-	WhenStreamingOut func(handle string, src string) (io.Reader, error)
+	WhenStreamingOut func(handle string, src string) (io.ReadCloser, error)
 
 	limitedBandwidth      map[string][]warden.BandwidthLimits
 	WhenLimitingBandwidth func(handle string, limits warden.BandwidthLimits) (warden.BandwidthLimits, error)
@@ -50,6 +53,11 @@ type FakeConnection struct {
 
 	limitedMemory      map[string][]warden.MemoryLimits
 	WhenLimitingMemory func(handle string, limit warden.MemoryLimits) (warden.MemoryLimits, error)
+
+	WhenGettingCurrentBandwidthLimits func(handle string) (warden.BandwidthLimits, error)
+	WhenGettingCurrentCPULimits       func(handle string) (warden.CPULimits, error)
+	WhenGettingCurrentDiskLimits      func(handle string) (warden.DiskLimits, error)
+	WhenGettingCurrentMemoryLimits    func(handle string) (warden.MemoryLimits, error)
 
 	spawnedProcesses map[string][]warden.ProcessSpec
 	WhenRunning      func(handle string, spec warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error)
@@ -65,13 +73,12 @@ type FakeConnection struct {
 }
 
 type StopSpec struct {
-	Background bool
-	Kill       bool
+	Kill bool
 }
 
 type StreamInSpec struct {
 	Destination string
-	WriteBuffer *gbytes.Buffer
+	Reader      io.Reader
 }
 
 type StreamOutSpec struct {
@@ -132,6 +139,14 @@ func (connection *FakeConnection) Disconnected() <-chan struct{} {
 
 func (connection *FakeConnection) NotifyDisconnected() {
 	close(connection.disconnected)
+}
+
+func (connection *FakeConnection) Ping() error {
+	if connection.WhenPinging != nil {
+		return connection.WhenPinging()
+	}
+
+	return nil
 }
 
 func (connection *FakeConnection) Capacity() (warden.Capacity, error) {
@@ -199,16 +214,15 @@ func (connection *FakeConnection) Destroyed() []string {
 	return connection.destroyed
 }
 
-func (connection *FakeConnection) Stop(handle string, background, kill bool) error {
+func (connection *FakeConnection) Stop(handle string, kill bool) error {
 	connection.lock.Lock()
 	connection.stopped[handle] = append(connection.stopped[handle], StopSpec{
-		Background: background,
-		Kill:       kill,
+		Kill: kill,
 	})
 	connection.lock.Unlock()
 
 	if connection.WhenStopping != nil {
-		return connection.WhenStopping(handle, background, kill)
+		return connection.WhenStopping(handle, kill)
 	}
 
 	return nil
@@ -229,21 +243,19 @@ func (connection *FakeConnection) Info(handle string) (warden.ContainerInfo, err
 	return warden.ContainerInfo{}, nil
 }
 
-func (connection *FakeConnection) StreamIn(handle string, dstPath string) (io.WriteCloser, error) {
-	buffer := gbytes.NewBuffer()
-
+func (connection *FakeConnection) StreamIn(handle string, dstPath string, tarStream io.Reader) error {
 	connection.lock.Lock()
 	connection.streamedIn[handle] = append(connection.streamedIn[handle], StreamInSpec{
 		Destination: dstPath,
-		WriteBuffer: buffer,
+		Reader:      tarStream,
 	})
 	connection.lock.Unlock()
 
 	if connection.WhenStreamingIn != nil {
-		return connection.WhenStreamingIn(handle, dstPath)
+		return connection.WhenStreamingIn(handle, dstPath, tarStream)
 	}
 
-	return buffer, nil
+	return nil
 }
 
 func (connection *FakeConnection) StreamedIn(handle string) []StreamInSpec {
@@ -253,7 +265,7 @@ func (connection *FakeConnection) StreamedIn(handle string) []StreamInSpec {
 	return connection.streamedIn[handle]
 }
 
-func (connection *FakeConnection) StreamOut(handle string, srcPath string) (io.Reader, error) {
+func (connection *FakeConnection) StreamOut(handle string, srcPath string) (io.ReadCloser, error) {
 	buffer := new(bytes.Buffer)
 	connection.lock.Lock()
 	connection.streamedOut[handle] = append(connection.streamedOut[handle], StreamOutSpec{
@@ -266,7 +278,7 @@ func (connection *FakeConnection) StreamOut(handle string, srcPath string) (io.R
 		return connection.WhenStreamingOut(handle, srcPath)
 	}
 
-	return buffer, nil
+	return ioutil.NopCloser(buffer), nil
 }
 
 func (connection *FakeConnection) StreamedOut(handle string) []StreamOutSpec {
@@ -288,6 +300,14 @@ func (connection *FakeConnection) LimitBandwidth(handle string, limits warden.Ba
 	return limits, nil
 }
 
+func (connection *FakeConnection) CurrentBandwidthLimits(handle string) (warden.BandwidthLimits, error) {
+	if connection.WhenGettingCurrentBandwidthLimits != nil {
+		return connection.WhenGettingCurrentBandwidthLimits(handle)
+	}
+
+	return warden.BandwidthLimits{}, nil
+}
+
 func (connection *FakeConnection) LimitedBandwidth(handle string) []warden.BandwidthLimits {
 	connection.lock.RLock()
 	defer connection.lock.RUnlock()
@@ -305,6 +325,14 @@ func (connection *FakeConnection) LimitCPU(handle string, limits warden.CPULimit
 	}
 
 	return limits, nil
+}
+
+func (connection *FakeConnection) CurrentCPULimits(handle string) (warden.CPULimits, error) {
+	if connection.WhenGettingCurrentCPULimits != nil {
+		return connection.WhenGettingCurrentCPULimits(handle)
+	}
+
+	return warden.CPULimits{}, nil
 }
 
 func (connection *FakeConnection) LimitedCPU(handle string) []warden.CPULimits {
@@ -326,6 +354,14 @@ func (connection *FakeConnection) LimitDisk(handle string, limits warden.DiskLim
 	return limits, nil
 }
 
+func (connection *FakeConnection) CurrentDiskLimits(handle string) (warden.DiskLimits, error) {
+	if connection.WhenGettingCurrentDiskLimits != nil {
+		return connection.WhenGettingCurrentDiskLimits(handle)
+	}
+
+	return warden.DiskLimits{}, nil
+}
+
 func (connection *FakeConnection) LimitedDisk(handle string) []warden.DiskLimits {
 	connection.lock.RLock()
 	defer connection.lock.RUnlock()
@@ -343,6 +379,14 @@ func (connection *FakeConnection) LimitMemory(handle string, limits warden.Memor
 	}
 
 	return limits, nil
+}
+
+func (connection *FakeConnection) CurrentMemoryLimits(handle string) (warden.MemoryLimits, error) {
+	if connection.WhenGettingCurrentMemoryLimits != nil {
+		return connection.WhenGettingCurrentMemoryLimits(handle)
+	}
+
+	return warden.MemoryLimits{}, nil
 }
 
 func (connection *FakeConnection) LimitedMemory(handle string) []warden.MemoryLimits {

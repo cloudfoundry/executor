@@ -129,7 +129,7 @@ func (h *handler) limitContainerDiskAndMemory(reg api.Container, containerClient
 
 	if reg.DiskMB != 0 {
 		err := containerClient.LimitDisk(warden.DiskLimits{
-			ByteLimit: uint64(reg.DiskMB * 1024 * 1024),
+			ByteHard: uint64(reg.DiskMB * 1024 * 1024),
 		})
 		if err != nil {
 			return err

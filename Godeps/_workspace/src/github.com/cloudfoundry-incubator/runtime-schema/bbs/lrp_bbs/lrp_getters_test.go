@@ -58,7 +58,10 @@ var _ = Describe("LrpGetters", func() {
 			all, err := bbs.GetAllDesiredLRPs()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(all).Should(Equal([]models.DesiredLRP{desiredLrp1, desiredLrp2, desiredLrp3}))
+			Ω(all).Should(HaveLen(3))
+			Ω(all).Should(ContainElement(desiredLrp1))
+			Ω(all).Should(ContainElement(desiredLrp2))
+			Ω(all).Should(ContainElement(desiredLrp3))
 		})
 	})
 
@@ -98,7 +101,10 @@ var _ = Describe("LrpGetters", func() {
 			all, err := bbs.GetAllActualLRPs()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(all).Should(Equal([]models.ActualLRP{lrp1, lrp2, lrp3}))
+			Ω(all).Should(HaveLen(3))
+			Ω(all).Should(ContainElement(lrp1))
+			Ω(all).Should(ContainElement(lrp2))
+			Ω(all).Should(ContainElement(lrp3))
 		})
 	})
 

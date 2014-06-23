@@ -19,32 +19,10 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	. "github.com/cloudfoundry-incubator/executor/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/pivotal-golang/archiver/extractor"
 	archiveHelper "github.com/pivotal-golang/archiver/extractor/test_helper"
 )
-
-type ClosableBuffer struct {
-	bytes.Buffer
-	closed chan struct{}
-}
-
-func NewClosableBuffer() *ClosableBuffer {
-	return &ClosableBuffer{closed: make(chan struct{})}
-}
-
-func (b *ClosableBuffer) Close() error {
-	close(b.closed)
-	return nil
-}
-
-func (b *ClosableBuffer) IsClosed() bool {
-	select {
-	case <-b.closed:
-		return true
-	default:
-		return false
-	}
-}
 
 var _ = Describe("DownloadAction", func() {
 	var step sequence.Step
@@ -104,18 +82,21 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		Context("when extract is false", func() {
-			var buffer *ClosableBuffer
 			var tarReader *tar.Reader
 
 			BeforeEach(func() {
 				cache.FetchedContent = []byte(strings.Repeat("7", 1024))
 
-				buffer = NewClosableBuffer()
+				buffer := &bytes.Buffer{}
 				tarReader = tar.NewReader(buffer)
 
-				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string) (io.WriteCloser, error) {
+				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string, tarStream io.Reader) error {
 					Ω(dest).Should(Equal("/tmp"))
-					return buffer, nil
+
+					_, err := io.Copy(buffer, tarStream)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return nil
 				}
 			})
 
@@ -138,8 +119,6 @@ var _ = Describe("DownloadAction", func() {
 				fileBody, err := ioutil.ReadAll(tarReader)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(fileBody).Should(Equal(cache.FetchedContent))
-
-				Ω(buffer.IsClosed()).Should(BeTrue())
 			})
 
 			It("does not return an error", func() {
@@ -170,19 +149,18 @@ var _ = Describe("DownloadAction", func() {
 				var expectedErr = errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.Connection.WhenStreamingIn = func(string, string) (io.WriteCloser, error) {
-						return NewClosableBuffer(), expectedErr
+					wardenClient.Connection.WhenStreamingIn = func(string, string, io.Reader) error {
+						return expectedErr
 					}
 				})
 
 				It("returns an error", func() {
-					Ω(stepErr).Should(MatchError(expectedErr))
+					Ω(stepErr).Should(MatchError(emittable_error.New(expectedErr, "Copying into the container failed")))
 				})
 			})
 		})
 
 		Context("when extract is true", func() {
-			var buffer *ClosableBuffer
 			var tarReader *tar.Reader
 
 			BeforeEach(func() {
@@ -204,12 +182,16 @@ var _ = Describe("DownloadAction", func() {
 
 				cache.FetchedContent = fetchedContent
 
-				buffer = NewClosableBuffer()
+				buffer := &bytes.Buffer{}
 				tarReader = tar.NewReader(buffer)
 
-				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string) (io.WriteCloser, error) {
+				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string, tarStream io.Reader) error {
 					Ω(dest).Should(Equal("/tmp/Antarctica"))
-					return buffer, nil
+
+					_, err := io.Copy(buffer, tarStream)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return nil
 				}
 			})
 
@@ -227,10 +209,6 @@ var _ = Describe("DownloadAction", func() {
 				Ω(header.Name).Should(Equal("file1"))
 			})
 
-			It("closes the write stream", func() {
-				Ω(buffer.IsClosed()).Should(BeTrue())
-			})
-
 			Context("when there is an error extracting the file", func() {
 				BeforeEach(func() {
 					cache.FetchedContent = []byte("not-a-tgz")
@@ -245,8 +223,8 @@ var _ = Describe("DownloadAction", func() {
 				var expectedErr = errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.Connection.WhenStreamingIn = func(string, string) (io.WriteCloser, error) {
-						return nil, expectedErr
+					wardenClient.Connection.WhenStreamingIn = func(string, string, io.Reader) error {
+						return expectedErr
 					}
 				})
 

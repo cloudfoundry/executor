@@ -73,6 +73,7 @@ func (step *UploadStep) Perform() (err error) {
 	if err != nil {
 		return emittable_error.New(err, "Copying out of the container failed")
 	}
+	defer streamOut.Close()
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
 	if err != nil {

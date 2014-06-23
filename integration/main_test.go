@@ -125,17 +125,20 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	runTask := func(duration time.Duration) {
-		exitStatus := uint32(0)
-
+	runTask := func(block bool) {
 		fakeContainer := fake_backend.NewFakeContainer(warden.ContainerSpec{
 			Properties: warden.Properties{
 				"owner": runner.Config.ContainerOwnerName,
 			},
 		})
-		fakeContainer.StreamDelay = duration
-		fakeContainer.StreamedProcessChunks = []warden.ProcessStream{
-			{ExitStatus: &exitStatus},
+
+		streamChannel := make(chan warden.ProcessStream, 1)
+		fakeContainer.StreamChannel = streamChannel
+		if !block {
+			exitStatus := uint32(0)
+			streamChannel <- warden.ProcessStream{
+				ExitStatus: &exitStatus,
+			}
 		}
 
 		fakeBackend.CreateResult = fakeContainer
@@ -217,7 +220,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor fails to maintain its presence", func() {
 			It("stops all running tasks", func() {
-				runTask(time.Hour)
+				runTask(true)
 				Eventually(pollContainers(fakeBackend), 10).Should(HaveLen(1))
 
 				// delete the executor's key (and everything else lol)
@@ -229,7 +232,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the TERM signal", func() {
 			It("stops all running tasks", func() {
-				runTask(time.Hour)
+				runTask(true)
 				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 				runner.Session.Terminate()
@@ -248,7 +251,7 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the INT signal", func() {
 			It("stops all running tasks", func() {
-				runTask(time.Hour)
+				runTask(true)
 				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 				runner.Session.Interrupt()
@@ -281,7 +284,7 @@ var _ = Describe("Main", func() {
 
 				Context("and USR1 is received again", func() {
 					It("does not die", func() {
-						runTask(time.Hour)
+						runTask(true)
 						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						runner.Session.Signal(syscall.SIGUSR1)
@@ -294,7 +297,7 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks complete before the drain timeout", func() {
 					It("exits successfully", func() {
-						runTask(1 * time.Second)
+						runTask(false)
 						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						sendDrainSignal()
@@ -305,7 +308,7 @@ var _ = Describe("Main", func() {
 
 				Context("when the tasks do not complete before the drain timeout", func() {
 					BeforeEach(func() {
-						runTask(time.Hour)
+						runTask(true)
 						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 					})
 

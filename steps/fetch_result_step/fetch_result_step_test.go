@@ -19,6 +19,29 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 )
 
+type ClosableBuffer struct {
+	bytes.Buffer
+	closed chan struct{}
+}
+
+func NewClosableBuffer() *ClosableBuffer {
+	return &ClosableBuffer{closed: make(chan struct{})}
+}
+
+func (b *ClosableBuffer) Close() error {
+	close(b.closed)
+	return nil
+}
+
+func (b *ClosableBuffer) IsClosed() bool {
+	select {
+	case <-b.closed:
+		return true
+	default:
+		return false
+	}
+}
+
 var _ = Describe("FetchResultStep", func() {
 	var (
 		step              sequence.Step
@@ -58,11 +81,12 @@ var _ = Describe("FetchResultStep", func() {
 	})
 
 	Context("when the file exists", func() {
+		var buffer *ClosableBuffer
 		BeforeEach(func() {
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
 				Ω(src).Should(Equal("/var/some-dir/foo"))
 
-				buffer := new(bytes.Buffer)
+				buffer = NewClosableBuffer()
 				tarWriter := tar.NewWriter(buffer)
 
 				content := []byte("result content")
@@ -85,14 +109,16 @@ var _ = Describe("FetchResultStep", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(result).Should(Equal("result content"))
+			Ω(buffer.IsClosed()).Should(BeTrue())
 		})
 	})
 
 	Context("when the file exists but is too large", func() {
+		var buffer *ClosableBuffer
 		BeforeEach(func() {
 			// overflow the (hard-coded) file content limit of 10KB by 1 byte:
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
-				buffer := new(bytes.Buffer)
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
+				buffer = NewClosableBuffer()
 				tarWriter := tar.NewWriter(buffer)
 
 				tooBig := int64(1024*10 + 1)
@@ -107,6 +133,7 @@ var _ = Describe("FetchResultStep", func() {
 
 				return buffer, nil
 			}
+
 		})
 
 		It("should error", func() {
@@ -115,6 +142,7 @@ var _ = Describe("FetchResultStep", func() {
 			Ω(err.Error()).Should(ContainSubstring("result file size exceeds limit"))
 
 			Ω(result).Should(BeZero())
+			Ω(buffer.IsClosed()).Should(BeTrue())
 		})
 	})
 
@@ -122,7 +150,7 @@ var _ = Describe("FetchResultStep", func() {
 		disaster := errors.New("kaboom")
 
 		BeforeEach(func() {
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
 				return nil, disaster
 			}
 		})

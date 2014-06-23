@@ -238,10 +238,7 @@ func initializeBbs(logger *steno.Logger) Bbs.ExecutorBBS {
 }
 
 func initializeWardenClient(logger *steno.Logger) (WardenClient.Client, registry.Capacity) {
-	wardenClient := WardenClient.New(&WardenConnection.Info{
-		Network: *wardenNetwork,
-		Addr:    *wardenAddr,
-	})
+	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
 
 	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
 	if err != nil {

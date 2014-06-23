@@ -61,6 +61,7 @@ func (step *FetchResultStep) copyAndReadResult() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer reader.Close()
 
 	tarReader := tar.NewReader(reader)
 

@@ -72,8 +72,8 @@ var _ = Describe("Fetching all Reps", func() {
 				repPresences, err := bbs.GetAllReps()
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(repPresences).Should(HaveLen(2))
-				Ω(repPresences[0]).Should(Equal(firstRepPresence))
-				Ω(repPresences[1]).Should(Equal(secondRepPresence))
+				Ω(repPresences).Should(ContainElement(firstRepPresence))
+				Ω(repPresences).Should(ContainElement(secondRepPresence))
 			})
 
 			Context("when there is unparsable JSON in there...", func() {
@@ -88,8 +88,8 @@ var _ = Describe("Fetching all Reps", func() {
 					repPresences, err := bbs.GetAllReps()
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(repPresences).Should(HaveLen(2))
-					Ω(repPresences[0]).Should(Equal(firstRepPresence))
-					Ω(repPresences[1]).Should(Equal(secondRepPresence))
+					Ω(repPresences).Should(ContainElement(firstRepPresence))
+					Ω(repPresences).Should(ContainElement(secondRepPresence))
 				})
 			})
 		})

@@ -10,7 +10,6 @@ It is generated from these files:
 	capacity.proto
 	create.proto
 	destroy.proto
-	echo.proto
 	environment_variable.proto
 	error.proto
 	info.proto
@@ -28,7 +27,6 @@ It is generated from these files:
 	resource_limits.proto
 	run.proto
 	stop.proto
-	stream_chunk.proto
 	stream_in.proto
 	stream_out.proto
 

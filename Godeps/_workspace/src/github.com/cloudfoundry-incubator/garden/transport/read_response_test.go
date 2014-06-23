@@ -16,18 +16,16 @@ import (
 var _ = Describe("Reading response messages over the wire", func() {
 	Context("when a message of the expected type is received", func() {
 		It("populates the response object and returns no error", func() {
-			var echoResponse protocol.EchoResponse
+			var pingResponse protocol.PingResponse
 
 			err := transport.ReadMessage(
-				bufio.NewReader(protocol.Messages(&protocol.EchoRequest{
-					Message: proto.String("some message"),
-				})),
-				&echoResponse,
+				bufio.NewReader(protocol.Messages(&protocol.PingRequest{})),
+				&pingResponse,
 			)
 
-			Expect(err).ToNot(HaveOccurred())
+			Ω(err).ShouldNot(HaveOccurred())
 
-			Expect(echoResponse.GetMessage()).To(Equal("some message"))
+			Ω(pingResponse).Should(Equal(protocol.PingResponse{}))
 		})
 	})
 
@@ -42,7 +40,7 @@ var _ = Describe("Reading response messages over the wire", func() {
 			)
 
 			err := transport.ReadMessage(bogusPayload, &dummyResponse)
-			Expect(err).To(HaveOccurred())
+			Ω(err).Should(HaveOccurred())
 		})
 	})
 
@@ -62,7 +60,7 @@ var _ = Describe("Reading response messages over the wire", func() {
 				&dummyResponse,
 			)
 
-			Expect(err).To(Equal(
+			Ω(err).Should(Equal(
 				&transport.WardenError{
 					Message: "some message",
 					Data:    "some data",
@@ -72,6 +70,7 @@ var _ = Describe("Reading response messages over the wire", func() {
 					},
 				},
 			))
+
 		})
 	})
 
@@ -79,21 +78,20 @@ var _ = Describe("Reading response messages over the wire", func() {
 		It("returns a TypeMismatchError", func() {
 			var dummyResponse protocol.PingResponse
 
-			actualResponse := &protocol.EchoResponse{
-				Message: proto.String("some message"),
-			}
+			actualResponse := &protocol.StopResponse{}
 
 			err := transport.ReadMessage(
 				bufio.NewReader(protocol.Messages(actualResponse)),
 				&dummyResponse,
 			)
 
-			Expect(err).To(Equal(
+			Ω(err).Should(Equal(
 				&transport.TypeMismatchError{
 					Expected: protocol.TypeForMessage(&dummyResponse),
 					Received: protocol.TypeForMessage(actualResponse),
 				},
 			))
+
 		})
 	})
 })

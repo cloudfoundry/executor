@@ -28,6 +28,29 @@ import (
 	Compressor "github.com/pivotal-golang/archiver/compressor"
 )
 
+type ClosableBuffer struct {
+	bytes.Buffer
+	closed chan struct{}
+}
+
+func NewClosableBuffer() *ClosableBuffer {
+	return &ClosableBuffer{closed: make(chan struct{})}
+}
+
+func (b *ClosableBuffer) Close() error {
+	close(b.closed)
+	return nil
+}
+
+func (b *ClosableBuffer) IsClosed() bool {
+	select {
+	case <-b.closed:
+		return true
+	default:
+		return false
+	}
+}
+
 var _ = Describe("UploadStep", func() {
 	var step sequence.Step
 	var result chan error
@@ -110,13 +133,15 @@ var _ = Describe("UploadStep", func() {
 
 	Describe("Perform", func() {
 		It("uploads a .tgz to the destination", func() {
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.Reader, error) {
+			var buffer *ClosableBuffer
+
+			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
 				Ω(handle).Should(Equal("some-container-handle"))
 
 				if src == "/Antarctica" {
-					tarBuf := new(bytes.Buffer)
+					buffer = NewClosableBuffer()
 
-					tarWriter := tar.NewWriter(tarBuf)
+					tarWriter := tar.NewWriter(buffer)
 
 					contents1 := "some-file-contents"
 
@@ -132,7 +157,7 @@ var _ = Describe("UploadStep", func() {
 					err = tarWriter.Flush()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					return tarBuf, nil
+					return buffer, nil
 				}
 
 				return nil, nil
@@ -142,6 +167,8 @@ var _ = Describe("UploadStep", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(uploadedPayload).ShouldNot(BeZero())
+
+			Ω(buffer.IsClosed()).Should(BeTrue())
 
 			ungzip, err := gzip.NewReader(bytes.NewReader(uploadedPayload))
 			Ω(err).ShouldNot(HaveOccurred())
@@ -169,7 +196,6 @@ var _ = Describe("UploadStep", func() {
 		})
 
 		Describe("streaming logs for uploads", func() {
-
 			BeforeEach(func() {
 				fakeUploader := new(fake_uploader.FakeUploader)
 				fakeUploader.UploadReturns(1024, nil)
@@ -207,7 +233,7 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.Reader, error) {
+				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.ReadCloser, error) {
 					return nil, disaster
 				}
 			})
@@ -222,7 +248,7 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.Reader, error) {
+				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.ReadCloser, error) {
 					return &errorReader{err: disaster}, nil
 				}
 			})
@@ -254,4 +280,8 @@ type errorReader struct {
 
 func (r *errorReader) Read([]byte) (int, error) {
 	return 0, r.err
+}
+
+func (r *errorReader) Close() error {
+	return nil
 }
