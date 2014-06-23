@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type LinuxCircusTailorConfig struct {
+type CircusTailorConfig struct {
 	*flag.FlagSet
 
 	values map[string]*string
@@ -24,62 +24,62 @@ type LinuxCircusTailorConfig struct {
 }
 
 const (
-	LinuxCircusTailorAppDirFlag                 = "appDir"
-	LinuxCircusTailorOutputDropletDirFlag       = "outputDropletDir"
-	LinuxCircusTailorOutputMetadataDirFlag      = "outputMetadataDir"
-	LinuxCircusTailorBuildpacksDirFlag          = "buildpacksDir"
-	LinuxCircusTailorBuildArtifactsCacheDirFlag = "buildArtifactsCacheDir"
-	LinuxCircusTailorBuildpackOrderFlag         = "buildpackOrder"
+	circusTailorAppDirFlag                 = "appDir"
+	circusTailorOutputDropletDirFlag       = "outputDropletDir"
+	circusTailorOutputMetadataDirFlag      = "outputMetadataDir"
+	circusTailorBuildpacksDirFlag          = "buildpacksDir"
+	circusTailorBuildArtifactsCacheDirFlag = "buildArtifactsCacheDir"
+	circusTailorBuildpackOrderFlag         = "buildpackOrder"
 )
 
-var LinuxCircusTailorDefaults = map[string]string{
-	LinuxCircusTailorAppDirFlag:                 "/app",
-	LinuxCircusTailorOutputDropletDirFlag:       "/tmp/droplet",
-	LinuxCircusTailorOutputMetadataDirFlag:      "/tmp/result",
-	LinuxCircusTailorBuildpacksDirFlag:          "/tmp/buildpacks",
-	LinuxCircusTailorBuildArtifactsCacheDirFlag: "/tmp/cache",
+var circusTailorDefaults = map[string]string{
+	circusTailorAppDirFlag:                 "/app",
+	circusTailorOutputDropletDirFlag:       "/tmp/droplet",
+	circusTailorOutputMetadataDirFlag:      "/tmp/result",
+	circusTailorBuildpacksDirFlag:          "/tmp/buildpacks",
+	circusTailorBuildArtifactsCacheDirFlag: "/tmp/cache",
 }
 
-func NewLinuxCircusTailorConfig(buildpacks []string) LinuxCircusTailorConfig {
+func NewCircusTailorConfig(buildpacks []string) CircusTailorConfig {
 	flagSet := flag.NewFlagSet("tailor", flag.ExitOnError)
 
 	appDir := flagSet.String(
-		LinuxCircusTailorAppDirFlag,
-		LinuxCircusTailorDefaults[LinuxCircusTailorAppDirFlag],
+		circusTailorAppDirFlag,
+		circusTailorDefaults[circusTailorAppDirFlag],
 		"directory containing raw app bits",
 	)
 
 	outputDropletDir := flagSet.String(
-		LinuxCircusTailorOutputDropletDirFlag,
-		LinuxCircusTailorDefaults[LinuxCircusTailorOutputDropletDirFlag],
+		circusTailorOutputDropletDirFlag,
+		circusTailorDefaults[circusTailorOutputDropletDirFlag],
 		"directory in which to write the droplet",
 	)
 
 	outputMetadataDir := flagSet.String(
-		LinuxCircusTailorOutputMetadataDirFlag,
-		LinuxCircusTailorDefaults[LinuxCircusTailorOutputMetadataDirFlag],
+		circusTailorOutputMetadataDirFlag,
+		circusTailorDefaults[circusTailorOutputMetadataDirFlag],
 		"directory in which to write the app metadata",
 	)
 
 	buildpacksDir := flagSet.String(
-		LinuxCircusTailorBuildpacksDirFlag,
-		LinuxCircusTailorDefaults[LinuxCircusTailorBuildpacksDirFlag],
+		circusTailorBuildpacksDirFlag,
+		circusTailorDefaults[circusTailorBuildpacksDirFlag],
 		"directory containing the buildpacks to try",
 	)
 
 	buildArtifactsCacheDir := flagSet.String(
-		LinuxCircusTailorBuildArtifactsCacheDirFlag,
-		LinuxCircusTailorDefaults[LinuxCircusTailorBuildArtifactsCacheDirFlag],
+		circusTailorBuildArtifactsCacheDirFlag,
+		circusTailorDefaults[circusTailorBuildArtifactsCacheDirFlag],
 		"directory to store cached artifacts to buildpacks",
 	)
 
 	buildpackOrder := flagSet.String(
-		LinuxCircusTailorBuildpackOrderFlag,
+		circusTailorBuildpackOrderFlag,
 		strings.Join(buildpacks, ","),
 		"comma-separated list of buildpacks, to be tried in order",
 	)
 
-	return LinuxCircusTailorConfig{
+	return CircusTailorConfig{
 		FlagSet: flagSet,
 
 		ExecutablePath:         "/tmp/circus/tailor",
@@ -91,17 +91,17 @@ func NewLinuxCircusTailorConfig(buildpacks []string) LinuxCircusTailorConfig {
 		buildpackOrder:         buildpackOrder,
 
 		values: map[string]*string{
-			LinuxCircusTailorAppDirFlag:                 appDir,
-			LinuxCircusTailorOutputDropletDirFlag:       outputDropletDir,
-			LinuxCircusTailorOutputMetadataDirFlag:      outputMetadataDir,
-			LinuxCircusTailorBuildpacksDirFlag:          buildpacksDir,
-			LinuxCircusTailorBuildArtifactsCacheDirFlag: buildArtifactsCacheDir,
-			LinuxCircusTailorBuildpackOrderFlag:         buildpackOrder,
+			circusTailorAppDirFlag:                 appDir,
+			circusTailorOutputDropletDirFlag:       outputDropletDir,
+			circusTailorOutputMetadataDirFlag:      outputMetadataDir,
+			circusTailorBuildpacksDirFlag:          buildpacksDir,
+			circusTailorBuildArtifactsCacheDirFlag: buildArtifactsCacheDir,
+			circusTailorBuildpackOrderFlag:         buildpackOrder,
 		},
 	}
 }
 
-func (s LinuxCircusTailorConfig) Script() string {
+func (s CircusTailorConfig) Script() string {
 	argv := []string{s.ExecutablePath}
 
 	s.FlagSet.VisitAll(func(flag *flag.Flag) {
@@ -111,7 +111,7 @@ func (s LinuxCircusTailorConfig) Script() string {
 	return strings.Join(argv, " ")
 }
 
-func (s LinuxCircusTailorConfig) Validate() error {
+func (s CircusTailorConfig) Validate() error {
 	var missingFlags []string
 
 	s.FlagSet.VisitAll(func(flag *flag.Flag) {
@@ -133,34 +133,34 @@ func (s LinuxCircusTailorConfig) Validate() error {
 	return nil
 }
 
-func (s LinuxCircusTailorConfig) AppDir() string {
+func (s CircusTailorConfig) AppDir() string {
 	return *s.appDir
 }
 
-func (s LinuxCircusTailorConfig) BuildpackPath(buildpackName string) string {
+func (s CircusTailorConfig) BuildpackPath(buildpackName string) string {
 	return path.Join(s.BuildpacksDir(), fmt.Sprintf("%x", md5.Sum([]byte(buildpackName))))
 }
 
-func (s LinuxCircusTailorConfig) BuildpackOrder() []string {
+func (s CircusTailorConfig) BuildpackOrder() []string {
 	return strings.Split(*s.buildpackOrder, ",")
 }
 
-func (s LinuxCircusTailorConfig) BuildpacksDir() string {
+func (s CircusTailorConfig) BuildpacksDir() string {
 	return *s.buildpacksDir
 }
 
-func (s LinuxCircusTailorConfig) BuildArtifactsCacheDir() string {
+func (s CircusTailorConfig) BuildArtifactsCacheDir() string {
 	return *s.buildArtifactsCacheDir
 }
 
-func (s LinuxCircusTailorConfig) OutputDropletDir() string {
+func (s CircusTailorConfig) OutputDropletDir() string {
 	return *s.outputDropletDir
 }
 
-func (s LinuxCircusTailorConfig) OutputMetadataDir() string {
+func (s CircusTailorConfig) OutputMetadataDir() string {
 	return *s.outputMetadataDir
 }
 
-func (s LinuxCircusTailorConfig) OutputMetadataPath() string {
+func (s CircusTailorConfig) OutputMetadataPath() string {
 	return path.Join(s.OutputMetadataDir(), "result.json")
 }

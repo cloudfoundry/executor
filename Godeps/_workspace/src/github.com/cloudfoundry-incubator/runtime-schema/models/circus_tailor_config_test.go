@@ -6,11 +6,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("LinuxCircusTailorConfig", func() {
-	var tailorConfig LinuxCircusTailorConfig
+var _ = Describe("CircusTailorConfig", func() {
+	var tailorConfig CircusTailorConfig
 
 	BeforeEach(func() {
-		tailorConfig = NewLinuxCircusTailorConfig([]string{"ocaml-buildpack", "haskell-buildpack", "bash-buildpack"})
+		tailorConfig = NewCircusTailorConfig([]string{"ocaml-buildpack", "haskell-buildpack", "bash-buildpack"})
 	})
 
 	Context("with defaults", func() {
@@ -33,11 +33,11 @@ var _ = Describe("LinuxCircusTailorConfig", func() {
 
 	Context("with overrides", func() {
 		BeforeEach(func() {
-			tailorConfig.Set(LinuxCircusTailorAppDirFlag, "/some/app/dir")
-			tailorConfig.Set(LinuxCircusTailorOutputDropletDirFlag, "/some/droplet/dir")
-			tailorConfig.Set(LinuxCircusTailorOutputMetadataDirFlag, "/some/result/dir")
-			tailorConfig.Set(LinuxCircusTailorBuildpacksDirFlag, "/some/buildpacks/dir")
-			tailorConfig.Set(LinuxCircusTailorBuildArtifactsCacheDirFlag, "/some/cache/dir")
+			tailorConfig.Set("appDir", "/some/app/dir")
+			tailorConfig.Set("outputDropletDir", "/some/droplet/dir")
+			tailorConfig.Set("outputMetadataDir", "/some/result/dir")
+			tailorConfig.Set("buildpacksDir", "/some/buildpacks/dir")
+			tailorConfig.Set("buildArtifactsCacheDir", "/some/cache/dir")
 		})
 
 		It("generates a script for running its tailor", func() {

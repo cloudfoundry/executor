@@ -196,7 +196,7 @@ var _ = Describe("Main", func() {
 
 			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
-					fakeBackend.DestroyError = errors.New("i tried to delete the thing but i failed. sorry.")
+					fakeBackend.SetDestroyError(errors.New("i tried to delete the thing but i failed. sorry."))
 				})
 
 				It("should exit sadly", func() {
