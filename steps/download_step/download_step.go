@@ -89,14 +89,7 @@ func (step *DownloadStep) Perform() error {
 		reader, writer := io.Pipe()
 		defer reader.Close()
 
-		downloadedFile, err := os.Open(downloadedPath)
-		if err != nil {
-			return err
-		}
-
-		defer downloadedFile.Close()
-
-		go writeTarTo(filepath.Base(step.model.To), downloadedFile, writer)
+		go writeTarTo(filepath.Base(step.model.To), downloadedPath, writer)
 
 		err = step.container.StreamIn(filepath.Dir(step.model.To), reader)
 		if err != nil {
@@ -171,7 +164,13 @@ func (step *DownloadStep) copyExtractedFiles(source string, destination string) 
 	return step.container.StreamIn(destination, reader)
 }
 
-func writeTarTo(name string, source *os.File, destination io.WriteCloser) error {
+func writeTarTo(name string, sourcePath string, destination io.WriteCloser) error {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
 	tarWriter := tar.NewWriter(destination)
 
 	fileInfo, err := source.Stat()
