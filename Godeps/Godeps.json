@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "86d28beb3f2bc5fe92a519b7231379e587399470"
+			"Rev": "7fd1620f09261338b6b1ca1289ace83aee0ec946"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
@@ -17,10 +17,6 @@
 		{
 			"ImportPath": "github.com/bmizerany/pat",
 			"Rev": "48be7df2c27e1cec821a3284a683ce6ef90d9052"
-		},
-		{
-			"ImportPath": "github.com/cloudfoundry-incubator/delta_force/delta_force",
-			"Rev": "8300c5546d32d8533295f666c1cd0941113fd7bb"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
@@ -47,12 +43,8 @@
 			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
 		},
 		{
-			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "012c337a96a2bdb48605fcb81d17b1e14ebc06dc"
-		},
-		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "012c337a96a2bdb48605fcb81d17b1e14ebc06dc"
+			"Rev": "0905c77385bfd000abd0ab681c6286448c441fb4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -61,7 +53,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "64cdd7421c0413dc87e5fca2b254efbb4e7dd9d0"
+			"Rev": "f81faeae3c1e229f1e3f0ad9d0dab98ba8daa242"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
@@ -88,26 +80,17 @@
 			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
 		},
 		{
-			"ImportPath": "github.com/cloudfoundry/storeadapter",
-			"Rev": "6798458485919c837534d805fd56d76d5ab172da"
-		},
-		{
-			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-114-g7745cfd",
-			"Rev": "7745cfd7f8e619cc9e6be450238e6253a57a227f"
-		},
-		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
 			"Rev": "179d4d0c4d8d407a32af483c2354df1d2c91e6c3"
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Comment": "v1.0.0-16-g12446bb",
+			"Comment": "v1.0.0-18-g12446bb",
 			"Rev": "12446bbcc74950944c897e32ea99cc8d058f9c92"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "036273e6f643552b16fe7a6464afd2ae0324992e"
+			"Rev": "1d0e3e0a4e04ad1bc22b275068f4667738b43a02"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
