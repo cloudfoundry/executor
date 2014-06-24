@@ -87,7 +87,6 @@ func (step *DownloadStep) Perform() error {
 		return err
 	} else {
 		reader, writer := io.Pipe()
-		defer reader.Close()
 
 		go writeTarTo(filepath.Base(step.model.To), downloadedPath, writer)
 
@@ -156,18 +155,22 @@ func (step *DownloadStep) copyExtractedFiles(source string, destination string) 
 	reader, writer := io.Pipe()
 
 	go func() {
-		compressor.WriteTar(source+string(filepath.Separator), writer)
-		writer.Close()
+		err := compressor.WriteTar(source+string(filepath.Separator), writer)
+		if err == nil {
+			writer.Close()
+		} else {
+			writer.CloseWithError(err)
+		}
 	}()
-	defer reader.Close()
 
 	return step.container.StreamIn(destination, reader)
 }
 
-func writeTarTo(name string, sourcePath string, destination io.WriteCloser) error {
+func writeTarTo(name string, sourcePath string, destination *io.PipeWriter) {
 	source, err := os.Open(sourcePath)
 	if err != nil {
-		return err
+		destination.CloseWithError(err)
+		return
 	}
 	defer source.Close()
 
@@ -175,7 +178,8 @@ func writeTarTo(name string, sourcePath string, destination io.WriteCloser) erro
 
 	fileInfo, err := source.Stat()
 	if err != nil {
-		return err
+		destination.CloseWithError(err)
+		return
 	}
 
 	err = tarWriter.WriteHeader(&tar.Header{
@@ -186,21 +190,20 @@ func writeTarTo(name string, sourcePath string, destination io.WriteCloser) erro
 		ChangeTime: time.Now(),
 	})
 	if err != nil {
-		return err
+		destination.CloseWithError(err)
+		return
 	}
 
 	_, err = io.Copy(tarWriter, source)
 	if err != nil {
-		return err
+		destination.CloseWithError(err)
+		return
 	}
 
 	if err := tarWriter.Flush(); err != nil {
-		return err
+		destination.CloseWithError(err)
+		return
 	}
 
-	if err := destination.Close(); err != nil {
-		return err
-	}
-
-	return nil
+	destination.Close()
 }
