@@ -10,13 +10,13 @@ import (
 	"time"
 
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 	"github.com/tedsuo/router"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/client"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/registry"
@@ -30,14 +30,13 @@ import (
 
 var _ = Describe("Executor", func() {
 	var (
-		executor        *Executor
-		wardenClient    *fake_warden_client.FakeClient
-		logger          *steno.Logger
-		trans           *transformer.Transformer
-		executorURL     string
-		reqGen          *router.RequestGenerator
-		capacity        registry.Capacity
-		pruningInterval time.Duration
+		executor     *Executor
+		wardenClient *fake_warden_client.FakeClient
+		logger       *steno.Logger
+		trans        *transformer.Transformer
+		executorURL  string
+		reqGen       *router.RequestGenerator
+		reg          registry.Registry
 	)
 
 	BeforeEach(func() {
@@ -55,21 +54,10 @@ var _ = Describe("Executor", func() {
 		)
 		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
 		reqGen = router.NewRequestGenerator("http://"+executorURL, api.Routes)
-		capacity = registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
-		pruningInterval = 200 * time.Millisecond
+		capacity := registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
+		reg = registry.New(capacity, timeprovider.NewTimeProvider())
 
-		executor = New(executorURL, "executor", 100, capacity, wardenClient, trans, time.Second, pruningInterval, logger)
-	})
-
-	Describe("Executor IDs", func() {
-		It("should generate a random ID when created", func() {
-			executor2 := New(executorURL, "executor2", 100, capacity, wardenClient, trans, time.Second, pruningInterval, logger)
-
-			Ω(executor.ID()).ShouldNot(BeZero())
-			Ω(executor2.ID()).ShouldNot(BeZero())
-
-			Ω(executor.ID()).ShouldNot(Equal(executor2.ID()))
-		})
+		executor = New(executorURL, "executor", 100, reg, wardenClient, trans, time.Second, logger)
 	})
 
 	Describe("Run", func() {
@@ -106,17 +94,6 @@ var _ = Describe("Executor", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(res.StatusCode).Should(Equal(http.StatusCreated))
-			})
-
-			It("continually prunes the registry", func() {
-				client := client.New(http.DefaultClient, "http://"+executorURL)
-				_, err := client.AllocateContainer("foo", api.ContainerAllocationRequest{
-					MemoryMB: 10,
-					DiskMB:   10,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(client.ListContainers()).Should(HaveLen(1))
-				Eventually(client.ListContainers, 2*pruningInterval).Should(BeEmpty())
 			})
 		})
 

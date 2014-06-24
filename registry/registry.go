@@ -25,7 +25,6 @@ type Registry interface {
 }
 
 type registry struct {
-	executorGuid         string
 	totalCapacity        Capacity
 	currentCapacity      *Capacity
 	timeProvider         timeprovider.TimeProvider
@@ -33,9 +32,8 @@ type registry struct {
 	containersMutex      *sync.RWMutex
 }
 
-func New(executorGuid string, capacity Capacity, timeProvider timeprovider.TimeProvider) Registry {
+func New(capacity Capacity, timeProvider timeprovider.TimeProvider) Registry {
 	return &registry{
-		executorGuid:         executorGuid,
 		totalCapacity:        capacity,
 		currentCapacity:      &capacity,
 		registeredContainers: make(map[string]api.Container),
@@ -81,12 +79,11 @@ func (r *registry) FindByGuid(guid string) (api.Container, error) {
 
 func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error) {
 	res := api.Container{
-		Guid:         guid,
-		ExecutorGuid: r.executorGuid,
-		MemoryMB:     req.MemoryMB,
-		DiskMB:       req.DiskMB,
-		State:        api.StateReserved,
-		AllocatedAt:  r.timeProvider.Time().UnixNano(),
+		Guid:        guid,
+		MemoryMB:    req.MemoryMB,
+		DiskMB:      req.DiskMB,
+		State:       api.StateReserved,
+		AllocatedAt: r.timeProvider.Time().UnixNano(),
 	}
 
 	r.containersMutex.Lock()

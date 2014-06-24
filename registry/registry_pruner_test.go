@@ -1,35 +1,40 @@
 package registry_test
 
 import (
+	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("RegistryPruner", func() {
-
 	Describe("Prunes the registry", func() {
 		var timeProvider *faketimeprovider.FakeTimeProvider
 		var registry Registry
-		var registryPruner *RegistryPruner
+		var process ifrit.Process
 		var interval time.Duration
 
 		BeforeEach(func() {
 			timeProvider = faketimeprovider.New(time.Now())
 			timeProvider.ProvideFakeChannels = true
-			registry = New("executor-guid", Capacity{
+			registry = New(Capacity{
 				MemoryMB:   1024,
 				DiskMB:     2048,
 				Containers: 5,
 			}, timeProvider)
 			interval = 10 * time.Second
-			registryPruner = NewPruner(registry, timeProvider, interval)
-			registryPruner.Start()
+			process = ifrit.Envoke(NewPruner(registry, timeProvider, interval))
+		})
+
+		AfterEach(func() {
+			process.Signal(syscall.SIGTERM)
+			Eventually(process.Wait()).Should(Receive(BeNil()))
 		})
 
 		JustBeforeEach(func(done Done) {

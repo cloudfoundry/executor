@@ -4,23 +4,17 @@ import (
 	"flag"
 	"log"
 	"os"
-	"strings"
 	"syscall"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
-
-	"github.com/cloudfoundry-incubator/executor/maintain"
-	"github.com/cloudfoundry-incubator/executor/registry"
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
-	"github.com/cloudfoundry/storeadapter/workerpool"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/executor"
@@ -55,12 +49,6 @@ var wardenAddr = flag.String(
 	"network address for warden server",
 )
 
-var etcdCluster = flag.String(
-	"etcdCluster",
-	"http://127.0.0.1:4001",
-	"comma-separated list of etcd addresses (http://ip:port)",
-)
-
 var logLevel = flag.String(
 	"logLevel",
 	"info",
@@ -83,12 +71,6 @@ var diskMBFlag = flag.String(
 	"diskMB",
 	configuration.Automatic,
 	"the amount of disk the executor has available in megabytes",
-)
-
-var heartbeatInterval = flag.Duration(
-	"heartbeatInterval",
-	60*time.Second,
-	"the interval, in seconds, between heartbeats for maintaining presence",
 )
 
 var tempDir = flag.String(
@@ -155,9 +137,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	bbs := initializeBbs(logger)
 	wardenClient, capacity := initializeWardenClient(logger)
 	transformer := initializeTransformer(logger)
+	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
 	logger.Info("executor.starting")
 
@@ -165,19 +147,18 @@ func main() {
 		*listenAddr,
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
-		capacity,
+		reg,
 		wardenClient,
 		transformer,
 		*drainTimeout,
-		*registryPruningInterval,
 		logger,
 	)
 
-	maintainer := maintain.New(executor.ID(), bbs, logger, *heartbeatInterval)
+	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
 
 	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
-		"executor":   executor,
-		"maintainer": maintainer,
+		"executor":        executor,
+		"registry-pruner": pruner,
 	})
 
 	logger.Info("executor.started")
@@ -218,23 +199,6 @@ func initializeLogger() *steno.Logger {
 
 	steno.Init(&stenoConfig)
 	return steno.NewLogger("executor")
-}
-
-func initializeBbs(logger *steno.Logger) Bbs.ExecutorBBS {
-	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
-		strings.Split(*etcdCluster, ","),
-		workerpool.NewWorkerPool(10),
-	)
-
-	err := etcdAdapter.Connect()
-	if err != nil {
-		logger.Errord(map[string]interface{}{
-			"error": err,
-		}, "failed to get etcdAdapter to connect")
-		os.Exit(1)
-	}
-
-	return Bbs.NewExecutorBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
 }
 
 func initializeWardenClient(logger *steno.Logger) (WardenClient.Client, registry.Capacity) {

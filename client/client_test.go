@@ -34,10 +34,9 @@ var _ = Describe("Client", func() {
 				DiskMB:   1024,
 			}
 			validResponse = api.Container{
-				Guid:         "guid-123",
-				ExecutorGuid: "executor-guid",
-				MemoryMB:     64,
-				DiskMB:       1024,
+				Guid:     "guid-123",
+				MemoryMB: 64,
+				DiskMB:   1024,
 			}
 		})
 
@@ -137,8 +136,6 @@ var _ = Describe("Client", func() {
 						SourceName: "XYZ",
 						Index:      &zero,
 					},
-
-					ExecutorGuid: "executor-guid",
 				}))
 			})
 		})

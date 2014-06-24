@@ -10,7 +10,6 @@ const (
 type Container struct {
 	Guid string `json:"guid"`
 
-	ExecutorGuid    string           `json:"executor_guid"`
 	MemoryMB        int              `json:"memory_mb"`
 	DiskMB          int              `json:"disk_mb"`
 	CpuPercent      float64          `json:"cpu_percent"`

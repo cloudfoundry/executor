@@ -3,7 +3,6 @@ package executor_runner
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -18,7 +17,6 @@ type ExecutorRunner struct {
 	listenAddr    string
 	wardenNetwork string
 	wardenAddr    string
-	etcdCluster   []string
 
 	loggregatorServer string
 	loggregatorSecret string
@@ -28,36 +26,31 @@ type ExecutorRunner struct {
 }
 
 type Config struct {
-	MemoryMB              string
-	DiskMB                string
-	ConvergenceInterval   time.Duration
-	HeartbeatInterval     time.Duration
-	TempDir               string
-	TimeToClaim           time.Duration
-	ContainerOwnerName    string
-	ContainerMaxCpuShares int
-	DrainTimeout          time.Duration
+	MemoryMB                string
+	DiskMB                  string
+	TempDir                 string
+	ContainerOwnerName      string
+	ContainerMaxCpuShares   int
+	DrainTimeout            time.Duration
+	RegistryPruningInterval time.Duration
 }
 
 var defaultConfig = Config{
-	MemoryMB:              "1024",
-	DiskMB:                "1024",
-	ConvergenceInterval:   30 * time.Second,
-	HeartbeatInterval:     60 * time.Second,
-	TempDir:               "/tmp",
-	TimeToClaim:           30 * 60 * time.Second,
-	ContainerOwnerName:    "",
-	ContainerMaxCpuShares: 1024,
-	DrainTimeout:          5 * time.Second,
+	MemoryMB:                "1024",
+	DiskMB:                  "1024",
+	TempDir:                 "/tmp",
+	ContainerOwnerName:      "",
+	ContainerMaxCpuShares:   1024,
+	DrainTimeout:            5 * time.Second,
+	RegistryPruningInterval: time.Minute,
 }
 
-func New(executorBin, listenAddr, wardenNetwork, wardenAddr string, etcdCluster []string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
+func New(executorBin, listenAddr, wardenNetwork, wardenAddr string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
 	return &ExecutorRunner{
 		executorBin:   executorBin,
 		listenAddr:    listenAddr,
 		wardenNetwork: wardenNetwork,
 		wardenAddr:    wardenAddr,
-		etcdCluster:   etcdCluster,
 
 		loggregatorServer: loggregatorServer,
 		loggregatorSecret: loggregatorSecret,
@@ -84,16 +77,15 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-listenAddr", r.listenAddr,
 			"-wardenNetwork", r.wardenNetwork,
 			"-wardenAddr", r.wardenAddr,
-			"-etcdCluster", strings.Join(r.etcdCluster, ","),
 			"-memoryMB", configToUse.MemoryMB,
 			"-diskMB", configToUse.DiskMB,
-			"-heartbeatInterval", fmt.Sprintf("%s", configToUse.HeartbeatInterval),
 			"-loggregatorServer", r.loggregatorServer,
 			"-loggregatorSecret", r.loggregatorSecret,
 			"-tempDir", configToUse.TempDir,
 			"-containerOwnerName", configToUse.ContainerOwnerName,
 			"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
 			"-drainTimeout", fmt.Sprintf("%s", configToUse.DrainTimeout),
+			"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
 		),
 		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
 		gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
@@ -133,20 +125,20 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	if givenConfig.DiskMB != "" {
 		configToReturn.DiskMB = givenConfig.DiskMB
 	}
-	if givenConfig.ConvergenceInterval != 0 {
-		configToReturn.ConvergenceInterval = givenConfig.ConvergenceInterval
-	}
-	if givenConfig.HeartbeatInterval != 0 {
-		configToReturn.HeartbeatInterval = givenConfig.HeartbeatInterval
-	}
 	if givenConfig.TempDir != "" {
 		configToReturn.TempDir = givenConfig.TempDir
 	}
-	if givenConfig.TimeToClaim != 0 {
-		configToReturn.TimeToClaim = givenConfig.TimeToClaim
-	}
 	if givenConfig.ContainerOwnerName != "" {
 		configToReturn.ContainerOwnerName = givenConfig.ContainerOwnerName
+	}
+	if givenConfig.ContainerMaxCpuShares != 0 {
+		configToReturn.ContainerMaxCpuShares = givenConfig.ContainerMaxCpuShares
+	}
+	if givenConfig.DrainTimeout != 0 {
+		configToReturn.DrainTimeout = givenConfig.DrainTimeout
+	}
+	if givenConfig.RegistryPruningInterval != 0 {
+		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval
 	}
 
 	return configToReturn

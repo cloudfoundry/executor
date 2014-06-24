@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"os"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -21,21 +22,27 @@ func NewPruner(registry Registry, timeProvider timeprovider.TimeProvider, interv
 	}
 }
 
-func (p *RegistryPruner) Start() {
-	go p.Prune(p.timeProvider.NewTickerChannel("pruner", p.interval))
+func (p *RegistryPruner) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
+	ticker := p.timeProvider.NewTickerChannel("pruner", p.interval)
+	close(readyChan)
+
+	for {
+		select {
+		case <-ticker:
+			p.prune()
+		case <-sigChan:
+			return nil
+		}
+	}
 }
 
-func (p *RegistryPruner) Prune(ticker <-chan time.Time) {
-	for {
-		<-ticker
-
-		for _, container := range p.registry.GetAllContainers() {
-			if container.State != api.StateReserved {
-				continue
-			}
-			if p.timeSinceContainerAllocated(container) >= p.interval {
-				p.registry.Delete(container.Guid)
-			}
+func (p *RegistryPruner) prune() {
+	for _, container := range p.registry.GetAllContainers() {
+		if container.State != api.StateReserved {
+			continue
+		}
+		if p.timeSinceContainerAllocated(container) >= p.interval {
+			p.registry.Delete(container.Guid)
 		}
 	}
 }

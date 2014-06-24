@@ -2,7 +2,6 @@ package executor
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -13,8 +12,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/garden/warden"
 	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/nu7hatch/gouuid"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/server"
@@ -24,21 +21,19 @@ import (
 const ServerCloseErrMsg = "use of closed network connection"
 
 type Executor struct {
-	id                      string
-	apiURL                  string
-	containerOwnerName      string
-	containerMaxCPUShares   uint64
-	registry                registry.Registry
-	wardenClient            warden.Client
-	transformer             *transformer.Transformer
-	drainTimeout            time.Duration
-	logger                  *steno.Logger
-	listener                net.Listener
-	waitGroup               *sync.WaitGroup
-	cancelChan              chan struct{}
-	stoppedChan             chan error
-	serverErrChan           chan error
-	registryPruningInterval time.Duration
+	apiURL                string
+	containerOwnerName    string
+	containerMaxCPUShares uint64
+	registry              registry.Registry
+	wardenClient          warden.Client
+	transformer           *transformer.Transformer
+	drainTimeout          time.Duration
+	logger                *steno.Logger
+	listener              net.Listener
+	waitGroup             *sync.WaitGroup
+	cancelChan            chan struct{}
+	stoppedChan           chan error
+	serverErrChan         chan error
 }
 
 var ErrDrainTimeout = errors.New("tasks did not complete within timeout")
@@ -47,42 +42,26 @@ func New(
 	apiURL string,
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
-	capacity registry.Capacity,
+	registry registry.Registry,
 	wardenClient warden.Client,
 	transformer *transformer.Transformer,
 	drainTimeout time.Duration,
-	registryPruningInterval time.Duration,
 	logger *steno.Logger,
 ) *Executor {
-
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		panic("Failed to generate a random guid....:" + err.Error())
-	}
-
-	executorID := uuid.String()
-	reg := registry.New(executorID, capacity, timeprovider.NewTimeProvider())
-
 	return &Executor{
-		id:                      executorID,
-		apiURL:                  apiURL,
-		containerOwnerName:      containerOwnerName,
-		containerMaxCPUShares:   containerMaxCPUShares,
-		registry:                reg,
-		registryPruningInterval: registryPruningInterval,
-		wardenClient:            wardenClient,
-		transformer:             transformer,
-		drainTimeout:            drainTimeout,
-		logger:                  logger,
-		waitGroup:               &sync.WaitGroup{},
-		cancelChan:              make(chan struct{}),
-		stoppedChan:             make(chan error, 1),
-		serverErrChan:           make(chan error),
+		apiURL:                apiURL,
+		containerOwnerName:    containerOwnerName,
+		containerMaxCPUShares: containerMaxCPUShares,
+		registry:              registry,
+		wardenClient:          wardenClient,
+		transformer:           transformer,
+		drainTimeout:          drainTimeout,
+		logger:                logger,
+		waitGroup:             &sync.WaitGroup{},
+		cancelChan:            make(chan struct{}),
+		stoppedChan:           make(chan error, 1),
+		serverErrChan:         make(chan error),
 	}
-}
-
-func (e *Executor) ID() string {
-	return e.id
 }
 
 func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
@@ -136,12 +115,10 @@ func (e *Executor) init() error {
 		return err
 	}
 
-	registry.NewPruner(e.registry, timeprovider.NewTimeProvider(), e.registryPruningInterval).Start()
-
 	router, err := server.New(&server.Config{
 		Registry:              e.registry,
 		WardenClient:          e.wardenClient,
-		ContainerOwnerName:    fmt.Sprintf("executor-%s", e.ID()),
+		ContainerOwnerName:    e.containerOwnerName,
 		ContainerMaxCPUShares: e.containerMaxCPUShares,
 		Transformer:           e.transformer,
 		WaitGroup:             e.waitGroup,

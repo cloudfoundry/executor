@@ -25,7 +25,7 @@ var _ = Describe("Registry", func() {
 		}
 
 		timeProvider = faketimeprovider.New(time.Now())
-		registry = New("executor-guid", initialCapacity, timeProvider)
+		registry = New(initialCapacity, timeProvider)
 	})
 
 	Describe("TotalCapacity", func() {
@@ -82,7 +82,6 @@ var _ = Describe("Registry", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(container).ShouldNot(BeZero())
 				Ω(container.Guid).Should(Equal("a-container"))
-				Ω(container.ExecutorGuid).Should(Equal("executor-guid"))
 				Ω(container.MemoryMB).Should(Equal(10))
 				Ω(container.DiskMB).Should(Equal(20))
 			})

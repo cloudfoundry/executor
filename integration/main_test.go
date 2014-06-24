@@ -1,31 +1,23 @@
 package integration_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"syscall"
 	"testing"
 	"time"
-
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
-	"github.com/tedsuo/router"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/client"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
@@ -37,10 +29,9 @@ func TestExecutorMain(t *testing.T) {
 }
 
 var executorPath string
-var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var gardenServer *GardenServer.WardenServer
 var runner *executor_runner.ExecutorRunner
-var reqGen *router.RequestGenerator
+var executorClient client.Client
 
 var _ = BeforeSuite(func() {
 	var err error
@@ -50,10 +41,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	gexec.CleanupBuildArtifacts()
-	if etcdRunner != nil {
-		etcdRunner.Stop()
-	}
-
 	if gardenServer != nil {
 		gardenServer.Stop()
 	}
@@ -65,40 +52,22 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Main", func() {
 	var (
-		etcdCluster []string
-		wardenAddr  string
+		wardenAddr string
 
-		bbs         Bbs.ExecutorBBS
 		fakeBackend *fake_backend.FakeBackend
 	)
 
 	drainTimeout := 5 * time.Second
 	aBit := drainTimeout / 5
+	pruningInterval := time.Second
 
 	BeforeEach(func() {
 		var err error
 
-		etcdPort := 5001 + GinkgoParallelNode()
 		wardenPort := 9001 + GinkgoParallelNode()
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
-		reqGen = router.NewRequestGenerator("http://"+executorAddr, api.Routes)
-
-		etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
-		etcdRunner.Start()
-
-		etcdCluster = []string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)}
-
-		logSink := steno.NewTestingSink()
-
-		steno.Init(&steno.Config{
-			Sinks: []steno.Sink{logSink},
-		})
-
-		logger := steno.NewLogger("the-logger")
-		steno.EnterTestMode()
-
-		bbs = Bbs.NewExecutorBBS(etcdRunner.Adapter(), timeprovider.NewTimeProvider(), logger)
+		executorClient = client.New(http.DefaultClient, "http://"+executorAddr)
 
 		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
 
@@ -113,7 +82,6 @@ var _ = Describe("Main", func() {
 			executorAddr,
 			"tcp",
 			wardenAddr,
-			etcdCluster,
 			"",
 			"",
 		)
@@ -121,7 +89,6 @@ var _ = Describe("Main", func() {
 
 	AfterEach(func() {
 		runner.KillWithFire()
-		etcdRunner.Stop()
 		gardenServer.Stop()
 	})
 
@@ -143,26 +110,24 @@ var _ = Describe("Main", func() {
 
 		fakeBackend.CreateResult = fakeContainer
 
-		req := api.ContainerAllocationRequest{
-			MemoryMB: 1024,
-			DiskMB:   1024,
-		}
-
 		guid, err := uuid.NewV4()
 		Ω(err).ShouldNot(HaveOccurred())
 
-		container := api.Container{}
-		PerformRequest(reqGen, api.AllocateContainer, router.Params{"guid": guid.String()}, req, &container)
+		_, err = executorClient.AllocateContainer(guid.String(), api.ContainerAllocationRequest{
+			MemoryMB: 1024,
+			DiskMB:   1024,
+		})
+		Ω(err).ShouldNot(HaveOccurred())
 
-		params := router.Params{"guid": guid.String()}
-		PerformRequest(reqGen, api.InitializeContainer, params, nil, nil)
+		_, err = executorClient.InitializeContainer(guid.String(), api.ContainerInitializationRequest{})
+		Ω(err).ShouldNot(HaveOccurred())
 
-		actions := api.ContainerRunRequest{
+		err = executorClient.Run(guid.String(), api.ContainerRunRequest{
 			Actions: []models.ExecutorAction{
 				{Action: models.RunAction{Script: "ls"}},
 			},
-		}
-		PerformRequest(reqGen, api.RunActions, params, actions, nil)
+		})
+		Ω(err).ShouldNot(HaveOccurred())
 	}
 
 	Describe("starting up", func() {
@@ -213,20 +178,26 @@ var _ = Describe("Main", func() {
 	Context("when started", func() {
 		BeforeEach(func() {
 			runner.Start(executor_runner.Config{
-				HeartbeatInterval: 3 * time.Second,
-				DrainTimeout:      drainTimeout,
+				DrainTimeout:            drainTimeout,
+				RegistryPruningInterval: pruningInterval,
 			})
 		})
 
-		Describe("when the executor fails to maintain its presence", func() {
-			It("stops all running tasks", func() {
-				runTask(true)
-				Eventually(pollContainers(fakeBackend), 10).Should(HaveLen(1))
+		Describe("pruning the registry", func() {
+			It("should prune the registry periodically", func() {
+				It("continually prunes the registry", func() {
+					guid, err := uuid.NewV4()
+					Ω(err).ShouldNot(HaveOccurred())
 
-				// delete the executor's key (and everything else lol)
-				etcdRunner.Reset()
+					_, err = executorClient.AllocateContainer(guid.String(), api.ContainerAllocationRequest{
+						MemoryMB: 1024,
+						DiskMB:   1024,
+					})
+					Ω(err).ShouldNot(HaveOccurred())
 
-				Eventually(pollContainers(fakeBackend), 5.0).Should(BeEmpty())
+					Ω(executorClient.ListContainers).Should(HaveLen(1))
+					Eventually(executorClient.ListContainers, pruningInterval*2).Should(BeEmpty())
+				})
 			})
 		})
 
@@ -245,6 +216,7 @@ var _ = Describe("Main", func() {
 
 			It("exits successfully", func() {
 				runner.Session.Terminate()
+
 				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
 			})
 		})
@@ -274,11 +246,7 @@ var _ = Describe("Main", func() {
 				It("stops accepting requests", func() {
 					sendDrainSignal()
 
-					body := MarshalledPayload(api.ContainerAllocationRequest{})
-					req, err := reqGen.RequestForHandler(api.AllocateContainer, router.Params{"guid": "container-123"}, body)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					_, err = http.DefaultClient.Do(req)
+					_, err := executorClient.AllocateContainer("container-123", api.ContainerAllocationRequest{})
 					Ω(err).Should(HaveOccurred())
 				})
 
@@ -339,29 +307,4 @@ func pollContainers(fakeBackend *fake_backend.FakeBackend) func() ([]warden.Cont
 	return func() ([]warden.Container, error) {
 		return fakeBackend.Containers(nil)
 	}
-}
-
-func PerformRequest(reqGen *router.RequestGenerator, handler string, params router.Params, reqBody interface{}, resBody interface{}) {
-	body := MarshalledPayload(reqBody)
-
-	req, err := reqGen.RequestForHandler(handler, params, body)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	client := &http.Client{
-		Transport: &http.Transport{},
-	}
-
-	resp, err := client.Do(req)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	Ω(resp.StatusCode).Should(BeNumerically("<", 400))
-
-	json.NewDecoder(resp.Body).Decode(resBody)
-}
-
-func MarshalledPayload(payload interface{}) io.Reader {
-	reqBody, err := json.Marshal(payload)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return bytes.NewBuffer(reqBody)
 }

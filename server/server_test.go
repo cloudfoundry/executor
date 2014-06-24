@@ -53,7 +53,7 @@ var _ = Describe("Api", func() {
 		wardenClient = fake_warden_client.New()
 
 		timeProvider = faketimeprovider.New(time.Now())
-		registry = Registry.New("executor-guid-123", Registry.Capacity{
+		registry = Registry.New(Registry.Capacity{
 			MemoryMB:   1024,
 			DiskMB:     1024,
 			Containers: 1024,
@@ -138,12 +138,11 @@ var _ = Describe("Api", func() {
 
 			It("returns a container", func() {
 				Ω(reservedContainer).Should(Equal(api.Container{
-					ExecutorGuid: "executor-guid-123",
-					Guid:         containerGuid,
-					MemoryMB:     64,
-					DiskMB:       512,
-					State:        "reserved",
-					AllocatedAt:  timeProvider.Time().UnixNano(),
+					Guid:        containerGuid,
+					MemoryMB:    64,
+					DiskMB:      512,
+					State:       "reserved",
+					AllocatedAt: timeProvider.Time().UnixNano(),
 				}))
 			})
 
@@ -172,12 +171,11 @@ var _ = Describe("Api", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 
 					Ω(returnedContainer).Should(Equal(api.Container{
-						ExecutorGuid: "executor-guid-123",
-						Guid:         containerGuid,
-						MemoryMB:     64,
-						DiskMB:       512,
-						State:        "reserved",
-						AllocatedAt:  timeProvider.Time().UnixNano(),
+						Guid:        containerGuid,
+						MemoryMB:    64,
+						DiskMB:      512,
+						State:       "reserved",
+						AllocatedAt: timeProvider.Time().UnixNano(),
 					}))
 				})
 
