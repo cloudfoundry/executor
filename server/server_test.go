@@ -897,4 +897,32 @@ var _ = Describe("Api", func() {
 			Ω(resources.Containers).Should(Equal(1024))
 		})
 	})
+
+	Describe("GET /ping", func() {
+		Context("when garden succeeds", func() {
+			BeforeEach(func() {
+				wardenClient.Connection.WhenPinging = func() error {
+					return nil
+				}
+			})
+
+			It("should 200", func() {
+				response := DoRequest(generator.RequestForHandler(api.Ping, nil, nil))
+				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+			})
+		})
+
+		Context("when garden returns an error", func() {
+			BeforeEach(func() {
+				wardenClient.Connection.WhenPinging = func() error {
+					return errors.New("out")
+				}
+			})
+
+			It("should 502", func() {
+				response := DoRequest(generator.RequestForHandler(api.Ping, nil, nil))
+				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
+			})
+		})
+	})
 })

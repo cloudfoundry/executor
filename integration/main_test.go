@@ -64,7 +64,9 @@ var _ = Describe("Main", func() {
 	BeforeEach(func() {
 		var err error
 
-		wardenPort := 9001 + GinkgoParallelNode()
+		//gardenServer.Stop calls listener.Close()
+		//apparently listener.Close() returns before the port is *actually* closed...?
+		wardenPort := 9001 + CurrentGinkgoTestDescription().LineNumber
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
 		executorClient = client.New(http.DefaultClient, "http://"+executorAddr)

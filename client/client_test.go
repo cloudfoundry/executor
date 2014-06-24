@@ -388,4 +388,33 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("Ping", func() {
+		Context("when the ping succeeds", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/ping"),
+					ghttp.RespondWith(http.StatusOK, nil),
+				))
+			})
+
+			It("should succeed", func() {
+				err := client.Ping()
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("when the ping fails", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/ping"),
+					ghttp.RespondWith(http.StatusBadGateway, nil),
+				))
+			})
+
+			It("should fail", func() {
+				err := client.Ping()
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+	})
 })

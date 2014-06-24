@@ -3,6 +3,7 @@ package api
 import "github.com/tedsuo/router"
 
 const (
+	Ping                  = "Ping"
 	GetContainer          = "GetContainer"
 	AllocateContainer     = "AllocateContainer"
 	InitializeContainer   = "InitializeContainer"
@@ -14,6 +15,7 @@ const (
 )
 
 var Routes = router.Routes{
+	{Path: "/ping", Method: "GET", Handler: Ping},
 	{Path: "/containers", Method: "GET", Handler: ListContainers},
 	{Path: "/containers/:guid", Method: "GET", Handler: GetContainer},
 	{Path: "/containers/:guid", Method: "POST", Handler: AllocateContainer},

@@ -11,6 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/server/initialize_container"
 	"github.com/cloudfoundry-incubator/executor/server/list_containers"
+	"github.com/cloudfoundry-incubator/executor/server/ping"
 	"github.com/cloudfoundry-incubator/executor/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/server/total_resources"
@@ -61,6 +62,8 @@ func New(c *Config) (http.Handler, error) {
 		api.GetRemainingResources: LogAndWaitWrap(remaining_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
 		api.GetTotalResources: LogAndWaitWrap(total_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
+
+		api.Ping: LogAndWaitWrap(ping.New(c.WardenClient), c.WaitGroup, c.Logger),
 	}
 
 	return router.NewRouter(api.Routes, handlers)

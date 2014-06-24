@@ -11,6 +11,7 @@ type FakeClient struct {
 	WhenListingContainers          func() ([]api.Container, error)
 	WhenFetchingRemainingResources func() (api.ExecutorResources, error)
 	WhenFetchingTotalResources     func() (api.ExecutorResources, error)
+	WhenPinging                    func() error
 }
 
 func New() *FakeClient {
@@ -38,6 +39,9 @@ func New() *FakeClient {
 		},
 		WhenFetchingTotalResources: func() (api.ExecutorResources, error) {
 			return api.ExecutorResources{}, nil
+		},
+		WhenPinging: func() error {
+			return nil
 		},
 	}
 }
@@ -72,4 +76,8 @@ func (c *FakeClient) RemainingResources() (api.ExecutorResources, error) {
 
 func (c *FakeClient) TotalResources() (api.ExecutorResources, error) {
 	return c.WhenFetchingTotalResources()
+}
+
+func (c *FakeClient) Ping() error {
+	return c.WhenPinging()
 }

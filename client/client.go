@@ -11,6 +11,7 @@ import (
 )
 
 type Client interface {
+	Ping() error
 	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
 	GetContainer(allocationGuid string) (api.Container, error)
 	InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error)
@@ -115,6 +116,15 @@ func (c client) RemainingResources() (api.ExecutorResources, error) {
 
 func (c client) TotalResources() (api.ExecutorResources, error) {
 	return c.getResources(api.GetTotalResources)
+}
+
+func (c client) Ping() error {
+	response, err := c.makeRequest(api.Ping, nil, nil)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	return nil
 }
 
 func (c client) buildContainerFromApiResponse(response *http.Response) (api.Container, error) {
