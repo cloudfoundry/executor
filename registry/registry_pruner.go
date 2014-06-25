@@ -2,6 +2,7 @@ package registry
 
 import (
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -30,8 +31,11 @@ func (p *RegistryPruner) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}
 		select {
 		case <-ticker:
 			p.prune()
-		case <-sigChan:
-			return nil
+		case sig := <-sigChan:
+			switch sig {
+			case syscall.SIGINT, syscall.SIGTERM:
+				return nil
+			}
 		}
 	}
 }
