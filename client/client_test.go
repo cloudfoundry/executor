@@ -238,7 +238,7 @@ var _ = Describe("Client", func() {
 				Actions: []models.ExecutorAction{
 					{
 						Action: models.RunAction{
-							Script:  "the-script",
+							Path:    "the-script",
 							Env:     []models.EnvironmentVariable{{Name: "PATH", Value: "the-path"}},
 							Timeout: time.Second,
 						},
@@ -256,7 +256,8 @@ var _ = Describe("Client", func() {
                 {
                   "action":"run",
                   "args":{
-                    "script":"the-script",
+                    "path":"the-script",
+                    "args":null,
                     "env":[{"name":"PATH","value":"the-path"}],
                     "timeout":1000000000,
                     "resource_limits":{}

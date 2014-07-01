@@ -1,6 +1,6 @@
 package api
 
-import "github.com/tedsuo/router"
+import "github.com/tedsuo/rata"
 
 const (
 	Ping                  = "Ping"
@@ -14,14 +14,14 @@ const (
 	GetTotalResources     = "GetTotalResources"
 )
 
-var Routes = router.Routes{
-	{Path: "/ping", Method: "GET", Handler: Ping},
-	{Path: "/containers", Method: "GET", Handler: ListContainers},
-	{Path: "/containers/:guid", Method: "GET", Handler: GetContainer},
-	{Path: "/containers/:guid", Method: "POST", Handler: AllocateContainer},
-	{Path: "/containers/:guid/initialize", Method: "POST", Handler: InitializeContainer},
-	{Path: "/containers/:guid/run", Method: "POST", Handler: RunActions},
-	{Path: "/containers/:guid", Method: "DELETE", Handler: DeleteContainer},
-	{Path: "/resources/remaining", Method: "GET", Handler: GetRemainingResources},
-	{Path: "/resources/total", Method: "GET", Handler: GetTotalResources},
+var Routes = rata.Routes{
+	{Path: "/ping", Method: "GET", Name: Ping},
+	{Path: "/containers", Method: "GET", Name: ListContainers},
+	{Path: "/containers/:guid", Method: "GET", Name: GetContainer},
+	{Path: "/containers/:guid", Method: "POST", Name: AllocateContainer},
+	{Path: "/containers/:guid/initialize", Method: "POST", Name: InitializeContainer},
+	{Path: "/containers/:guid/run", Method: "POST", Name: RunActions},
+	{Path: "/containers/:guid", Method: "DELETE", Name: DeleteContainer},
+	{Path: "/resources/remaining", Method: "GET", Name: GetRemainingResources},
+	{Path: "/resources/total", Method: "GET", Name: GetTotalResources},
 }

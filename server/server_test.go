@@ -24,7 +24,7 @@ import (
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
-	"github.com/tedsuo/router"
+	"github.com/tedsuo/rata"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -44,7 +44,7 @@ var _ = Describe("Api", func() {
 	var containerGuid string
 
 	var server *httptest.Server
-	var generator *router.RequestGenerator
+	var generator *rata.RequestGenerator
 	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	BeforeEach(func() {
@@ -84,7 +84,7 @@ var _ = Describe("Api", func() {
 
 		server = httptest.NewServer(handler)
 
-		generator = router.NewRequestGenerator("http://"+server.Listener.Addr().String(), api.Routes)
+		generator = rata.NewRequestGenerator("http://"+server.Listener.Addr().String(), api.Routes)
 	})
 
 	AfterEach(func() {
@@ -110,9 +110,9 @@ var _ = Describe("Api", func() {
 		})
 
 		JustBeforeEach(func() {
-			reserveResponse = DoRequest(generator.RequestForHandler(
+			reserveResponse = DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				reserveRequestBody,
 			))
 		})
@@ -150,9 +150,9 @@ var _ = Describe("Api", func() {
 				var getResponse *http.Response
 
 				JustBeforeEach(func() {
-					getResponse = DoRequest(generator.RequestForHandler(
+					getResponse = DoRequest(generator.CreateRequest(
 						api.GetContainer,
-						router.Params{"guid": containerGuid},
+						rata.Params{"guid": containerGuid},
 						nil,
 					))
 				})
@@ -193,9 +193,9 @@ var _ = Describe("Api", func() {
 				var createRequestBody io.Reader
 
 				JustBeforeEach(func() {
-					createResponse = DoRequest(generator.RequestForHandler(
+					createResponse = DoRequest(generator.CreateRequest(
 						api.InitializeContainer,
-						router.Params{"guid": containerGuid},
+						rata.Params{"guid": containerGuid},
 						createRequestBody,
 					))
 				})
@@ -474,9 +474,9 @@ var _ = Describe("Api", func() {
 				DiskMB:   512,
 			})
 
-			allocResponse := DoRequest(generator.RequestForHandler(
+			allocResponse := DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				allocRequestBody,
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -489,9 +489,9 @@ var _ = Describe("Api", func() {
 				return []string{"some-handle"}, nil
 			}
 
-			initResponse := DoRequest(generator.RequestForHandler(
+			initResponse := DoRequest(generator.CreateRequest(
 				api.InitializeContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				MarshalledPayload(api.ContainerInitializationRequest{
 					CpuPercent: 50.0,
 				}),
@@ -500,9 +500,9 @@ var _ = Describe("Api", func() {
 		})
 
 		JustBeforeEach(func() {
-			runResponse = DoRequest(generator.RequestForHandler(
+			runResponse = DoRequest(generator.CreateRequest(
 				api.RunActions,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				runRequestBody,
 			))
 		})
@@ -522,7 +522,8 @@ var _ = Describe("Api", func() {
 					Actions: []models.ExecutorAction{
 						{
 							models.RunAction{
-								Script: "ls -al",
+								Path: "ls",
+								Args: []string{"-al"},
 							},
 						},
 					},
@@ -542,7 +543,8 @@ var _ = Describe("Api", func() {
 					return spawned
 				}).Should(HaveLen(1))
 
-				Ω(spawned[0].Script).Should(Equal("ls -al"))
+				Ω(spawned[0].Path).Should(Equal("ls"))
+				Ω(spawned[0].Args).Should(Equal([]string{"-al"}))
 			})
 
 			Context("when the actions are invalid", func() {
@@ -556,7 +558,8 @@ var _ = Describe("Api", func() {
 									},
 									Action: models.ExecutorAction{
 										models.RunAction{
-											Script: "ls -al",
+											Path: "ls",
+											Args: []string{"-al"},
 										},
 									},
 								},
@@ -581,7 +584,8 @@ var _ = Describe("Api", func() {
 						Actions: []models.ExecutorAction{
 							{
 								models.RunAction{
-									Script: "ls -al",
+									Path: "ls",
+									Args: []string{"-al"},
 								},
 							},
 						},
@@ -673,7 +677,8 @@ var _ = Describe("Api", func() {
 							Actions: []models.ExecutorAction{
 								{
 									models.RunAction{
-										Script: "ls -al",
+										Path: "ls",
+										Args: []string{"-al"},
 									},
 								},
 							},
@@ -704,9 +709,9 @@ var _ = Describe("Api", func() {
 
 	Describe("GET /containers", func() {
 		BeforeEach(func() {
-			allocResponse := DoRequest(generator.RequestForHandler(
+			allocResponse := DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": "first-container"},
+				rata.Params{"guid": "first-container"},
 				MarshalledPayload(api.ContainerAllocationRequest{
 					MemoryMB: 64,
 					DiskMB:   512,
@@ -714,9 +719,9 @@ var _ = Describe("Api", func() {
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-			allocResponse = DoRequest(generator.RequestForHandler(
+			allocResponse = DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": "second-container"},
+				rata.Params{"guid": "second-container"},
 				MarshalledPayload(api.ContainerAllocationRequest{
 					MemoryMB: 64,
 					DiskMB:   512,
@@ -726,7 +731,7 @@ var _ = Describe("Api", func() {
 		})
 
 		It("should return all reserved containers", func() {
-			listResponse := DoRequest(generator.RequestForHandler(
+			listResponse := DoRequest(generator.CreateRequest(
 				api.ListContainers,
 				nil,
 				nil,
@@ -745,9 +750,9 @@ var _ = Describe("Api", func() {
 		var deleteResponse *http.Response
 
 		JustBeforeEach(func() {
-			deleteResponse = DoRequest(generator.RequestForHandler(
+			deleteResponse = DoRequest(generator.CreateRequest(
 				api.DeleteContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				nil,
 			))
 		})
@@ -759,9 +764,9 @@ var _ = Describe("Api", func() {
 					DiskMB:   512,
 				})
 
-				allocResponse := DoRequest(generator.RequestForHandler(
+				allocResponse := DoRequest(generator.CreateRequest(
 					api.AllocateContainer,
-					router.Params{"guid": containerGuid},
+					rata.Params{"guid": containerGuid},
 					allocRequestBody,
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -787,9 +792,9 @@ var _ = Describe("Api", func() {
 					DiskMB:   512,
 				})
 
-				allocResponse := DoRequest(generator.RequestForHandler(
+				allocResponse := DoRequest(generator.CreateRequest(
 					api.AllocateContainer,
-					router.Params{"guid": containerGuid},
+					rata.Params{"guid": containerGuid},
 					allocRequestBody,
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
@@ -802,9 +807,9 @@ var _ = Describe("Api", func() {
 					return []string{"some-handle"}, nil
 				}
 
-				initResponse := DoRequest(generator.RequestForHandler(
+				initResponse := DoRequest(generator.CreateRequest(
 					api.InitializeContainer,
-					router.Params{"guid": containerGuid},
+					rata.Params{"guid": containerGuid},
 					MarshalledPayload(api.ContainerInitializationRequest{
 						CpuPercent: 50.0,
 					}),
@@ -833,14 +838,14 @@ var _ = Describe("Api", func() {
 				DiskMB:   512,
 			})
 
-			allocResponse := DoRequest(generator.RequestForHandler(
+			allocResponse := DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				allocRequestBody,
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-			resourcesResponse = DoRequest(generator.RequestForHandler(
+			resourcesResponse = DoRequest(generator.CreateRequest(
 				api.GetRemainingResources,
 				nil,
 				nil,
@@ -871,14 +876,14 @@ var _ = Describe("Api", func() {
 				DiskMB:   512,
 			})
 
-			allocResponse := DoRequest(generator.RequestForHandler(
+			allocResponse := DoRequest(generator.CreateRequest(
 				api.AllocateContainer,
-				router.Params{"guid": containerGuid},
+				rata.Params{"guid": containerGuid},
 				allocRequestBody,
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-			resourcesResponse = DoRequest(generator.RequestForHandler(
+			resourcesResponse = DoRequest(generator.CreateRequest(
 				api.GetTotalResources,
 				nil,
 				nil,
@@ -907,7 +912,7 @@ var _ = Describe("Api", func() {
 			})
 
 			It("should 200", func() {
-				response := DoRequest(generator.RequestForHandler(api.Ping, nil, nil))
+				response := DoRequest(generator.CreateRequest(api.Ping, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 			})
 		})
@@ -920,7 +925,7 @@ var _ = Describe("Api", func() {
 			})
 
 			It("should 502", func() {
-				response := DoRequest(generator.RequestForHandler(api.Ping, nil, nil))
+				response := DoRequest(generator.CreateRequest(api.Ping, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
 			})
 		})

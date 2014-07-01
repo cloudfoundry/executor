@@ -14,7 +14,7 @@ import (
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
-	"github.com/tedsuo/router"
+	"github.com/tedsuo/rata"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
@@ -35,7 +35,7 @@ var _ = Describe("Executor", func() {
 		logger       *steno.Logger
 		trans        *transformer.Transformer
 		executorURL  string
-		reqGen       *router.RequestGenerator
+		reqGen       *rata.RequestGenerator
 		reg          registry.Registry
 	)
 
@@ -53,7 +53,7 @@ var _ = Describe("Executor", func() {
 			"/tmp",
 		)
 		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
-		reqGen = router.NewRequestGenerator("http://"+executorURL, api.Routes)
+		reqGen = rata.NewRequestGenerator("http://"+executorURL, api.Routes)
 		capacity := registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
 		reg = registry.New(capacity, timeprovider.NewTimeProvider())
 
@@ -87,7 +87,7 @@ var _ = Describe("Executor", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				req, err := reqGen.RequestForHandler(api.AllocateContainer, router.Params{"guid": "container-123"}, bytes.NewBuffer(payload))
+				req, err := reqGen.CreateRequest(api.AllocateContainer, rata.Params{"guid": "container-123"}, bytes.NewBuffer(payload))
 				Ω(err).ShouldNot(HaveOccurred())
 
 				res, err := http.DefaultClient.Do(req)
@@ -109,7 +109,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("shuts down the API server", func() {
-				req, err := reqGen.RequestForHandler(api.GetContainer, router.Params{"guid": "123"}, nil)
+				req, err := reqGen.CreateRequest(api.GetContainer, rata.Params{"guid": "123"}, nil)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				_, err = http.DefaultClient.Do(req)

@@ -64,7 +64,8 @@ func (step *RunStep) Perform() error {
 
 	go func() {
 		_, stream, err := step.container.Run(warden.ProcessSpec{
-			Script: step.model.Script,
+			Path:   step.model.Path,
+			Args:   step.model.Args,
 			Limits: warden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
 
 			EnvironmentVariables: convertEnvironmentVariables(step.model.Env),

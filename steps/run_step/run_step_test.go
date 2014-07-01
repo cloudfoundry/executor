@@ -36,7 +36,8 @@ var _ = Describe("RunAction", func() {
 		fileDescriptorLimit = 17
 
 		runAction = models.RunAction{
-			Script: "sudo reboot",
+			Path: "sudo",
+			Args: []string{"reboot"},
 			Env: []models.EnvironmentVariable{
 				{Name: "A", Value: "1"},
 				{Name: "B", Value: "2"},
@@ -103,7 +104,8 @@ var _ = Describe("RunAction", func() {
 				Ω(runningScripts).Should(HaveLen(1))
 
 				runningScript := runningScripts[0]
-				Ω(runningScript.Script).Should(Equal("sudo reboot"))
+				Ω(runningScript.Path).Should(Equal("sudo"))
+				Ω(runningScript.Args).Should(Equal([]string{"reboot"}))
 				Ω(*runningScript.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
 				Ω(runningScript.EnvironmentVariables).Should(Equal([]warden.EnvironmentVariable{
 					{"A", "1"},

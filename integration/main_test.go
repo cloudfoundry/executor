@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -126,7 +127,7 @@ var _ = Describe("Main", func() {
 
 		err = executorClient.Run(guid.String(), api.ContainerRunRequest{
 			Actions: []models.ExecutorAction{
-				{Action: models.RunAction{Script: "ls"}},
+				{Action: models.RunAction{Path: "ls"}},
 			},
 		})
 		Ω(err).ShouldNot(HaveOccurred())

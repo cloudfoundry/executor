@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/tedsuo/router"
+	"github.com/tedsuo/rata"
 )
 
 type Client interface {
@@ -25,19 +25,19 @@ type Client interface {
 func New(httpClient *http.Client, baseUrl string) Client {
 	return &client{
 		httpClient: httpClient,
-		reqGen:     router.NewRequestGenerator(baseUrl, api.Routes),
+		reqGen:     rata.NewRequestGenerator(baseUrl, api.Routes),
 	}
 }
 
 type client struct {
-	reqGen     *router.RequestGenerator
+	reqGen     *rata.RequestGenerator
 	httpClient *http.Client
 }
 
 func (c client) AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error) {
 	container := api.Container{}
 
-	response, err := c.makeRequest(api.AllocateContainer, router.Params{"guid": allocationGuid}, request)
+	response, err := c.makeRequest(api.AllocateContainer, rata.Params{"guid": allocationGuid}, request)
 	if err != nil {
 		return container, err
 	}
@@ -56,7 +56,7 @@ func (c client) AllocateContainer(allocationGuid string, request api.ContainerAl
 }
 
 func (c client) GetContainer(allocationGuid string) (api.Container, error) {
-	response, err := c.makeRequest(api.GetContainer, router.Params{"guid": allocationGuid}, nil)
+	response, err := c.makeRequest(api.GetContainer, rata.Params{"guid": allocationGuid}, nil)
 	if response != nil && response.StatusCode == http.StatusNotFound {
 		return api.Container{}, fmt.Errorf("Container not found: %s", allocationGuid)
 	}
@@ -71,7 +71,7 @@ func (c client) GetContainer(allocationGuid string) (api.Container, error) {
 }
 
 func (c client) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error) {
-	response, err := c.makeRequest(api.InitializeContainer, router.Params{"guid": allocationGuid}, request)
+	response, err := c.makeRequest(api.InitializeContainer, rata.Params{"guid": allocationGuid}, request)
 
 	if err != nil {
 		// do some logging
@@ -83,13 +83,13 @@ func (c client) InitializeContainer(allocationGuid string, request api.Container
 }
 
 func (c client) Run(allocationGuid string, request api.ContainerRunRequest) error {
-	_, err := c.makeRequest(api.RunActions, router.Params{"guid": allocationGuid}, request)
+	_, err := c.makeRequest(api.RunActions, rata.Params{"guid": allocationGuid}, request)
 
 	return err
 }
 
 func (c client) DeleteContainer(allocationGuid string) error {
-	_, err := c.makeRequest(api.DeleteContainer, router.Params{"guid": allocationGuid}, nil)
+	_, err := c.makeRequest(api.DeleteContainer, rata.Params{"guid": allocationGuid}, nil)
 	return err
 }
 
@@ -155,13 +155,13 @@ func (c client) getResources(apiEndpoint string) (api.ExecutorResources, error) 
 	return resources, nil
 }
 
-func (c client) makeRequest(handlerName string, params router.Params, payload interface{}) (*http.Response, error) {
+func (c client) makeRequest(handlerName string, params rata.Params, payload interface{}) (*http.Response, error) {
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := c.reqGen.RequestForHandler(handlerName, params, bytes.NewReader(jsonBody))
+	req, err := c.reqGen.CreateRequest(handlerName, params, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
 	}

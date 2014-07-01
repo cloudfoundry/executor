@@ -18,7 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
-	"github.com/tedsuo/router"
+	"github.com/tedsuo/rata"
 )
 
 type Config struct {
@@ -66,5 +66,5 @@ func New(c *Config) (http.Handler, error) {
 		api.Ping: LogAndWaitWrap(ping.New(c.WardenClient), c.WaitGroup, c.Logger),
 	}
 
-	return router.NewRouter(api.Routes, handlers)
+	return rata.NewRouter(api.Routes, handlers)
 }
