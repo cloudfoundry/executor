@@ -22,7 +22,8 @@ type UploadAction struct {
 }
 
 type RunAction struct {
-	Script         string                `json:"script"`
+	Path           string                `json:"path"`
+	Args           []string              `json:"args"`
 	Env            []EnvironmentVariable `json:"env"`
 	Timeout        time.Duration         `json:"timeout"`
 	ResourceLimits ResourceLimits        `json:"resource_limits"`

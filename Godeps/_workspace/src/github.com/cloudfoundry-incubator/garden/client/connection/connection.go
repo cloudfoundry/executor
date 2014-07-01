@@ -16,7 +16,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/routes"
 	"github.com/cloudfoundry-incubator/garden/transport"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/tedsuo/router"
+	"github.com/tedsuo/rata"
 )
 
 var ErrDisconnected = errors.New("disconnected")
@@ -59,7 +59,7 @@ type connection struct {
 	httpClient        *http.Client
 	noKeepaliveClient *http.Client
 
-	req *router.RequestGenerator
+	req *rata.RequestGenerator
 }
 
 type WardenError struct {
@@ -78,7 +78,7 @@ func New(network, address string) Connection {
 	}
 
 	return &connection{
-		req: router.NewRequestGenerator("http://warden", routes.Routes),
+		req: rata.NewRequestGenerator("http://warden", routes.Routes),
 
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -185,7 +185,7 @@ func (c *connection) Stop(handle string, kill bool) error {
 			Kill:   proto.Bool(kill),
 		},
 		&protocol.StopResponse{},
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -197,7 +197,7 @@ func (c *connection) Destroy(handle string) error {
 		routes.Destroy,
 		nil,
 		&protocol.DestroyResponse{},
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -209,7 +209,8 @@ func (c *connection) Run(handle string, spec warden.ProcessSpec) (uint32, <-chan
 
 	err := transport.WriteMessage(reqBody, &protocol.RunRequest{
 		Handle:     proto.String(handle),
-		Script:     proto.String(spec.Script),
+		Path:       proto.String(spec.Path),
+		Args:       spec.Args,
 		Privileged: proto.Bool(spec.Privileged),
 		Rlimits: &protocol.ResourceLimits{
 			As:         spec.Limits.As,
@@ -237,7 +238,7 @@ func (c *connection) Run(handle string, spec warden.ProcessSpec) (uint32, <-chan
 	respBody, err := c.doStream(
 		routes.Run,
 		reqBody,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -276,7 +277,7 @@ func (c *connection) Attach(handle string, processID uint32) (<-chan warden.Proc
 	respBody, err := c.doStream(
 		routes.Attach,
 		reqBody,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 			"pid":    fmt.Sprintf("%d", processID),
 		},
@@ -308,7 +309,7 @@ func (c *connection) NetIn(handle string, hostPort, containerPort uint32) (uint3
 			ContainerPort: proto.Uint32(containerPort),
 		},
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -330,7 +331,7 @@ func (c *connection) NetOut(handle string, network string, port uint32) error {
 			Port:    proto.Uint32(port),
 		},
 		&protocol.NetOutResponse{},
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -348,7 +349,7 @@ func (c *connection) LimitBandwidth(handle string, limits warden.BandwidthLimits
 			Burst:  proto.Uint64(limits.BurstRateInBytesPerSecond),
 		},
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -371,7 +372,7 @@ func (c *connection) CurrentBandwidthLimits(handle string) (warden.BandwidthLimi
 		routes.CurrentBandwidthLimits,
 		nil,
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -397,7 +398,7 @@ func (c *connection) LimitCPU(handle string, limits warden.CPULimits) (warden.CP
 			LimitInShares: proto.Uint64(limits.LimitInShares),
 		},
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -419,7 +420,7 @@ func (c *connection) CurrentCPULimits(handle string) (warden.CPULimits, error) {
 		routes.CurrentCPULimits,
 		nil,
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -452,7 +453,7 @@ func (c *connection) LimitDisk(handle string, limits warden.DiskLimits) (warden.
 			ByteHard: proto.Uint64(limits.ByteHard),
 		},
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -481,7 +482,7 @@ func (c *connection) CurrentDiskLimits(handle string) (warden.DiskLimits, error)
 		routes.CurrentDiskLimits,
 		nil,
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -513,7 +514,7 @@ func (c *connection) LimitMemory(handle string, limits warden.MemoryLimits) (war
 			LimitInBytes: proto.Uint64(limits.LimitInBytes),
 		},
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -535,7 +536,7 @@ func (c *connection) CurrentMemoryLimits(handle string) (warden.MemoryLimits, er
 		routes.CurrentMemoryLimits,
 		nil,
 		res,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		nil,
@@ -554,7 +555,7 @@ func (c *connection) StreamIn(handle string, dstPath string, reader io.Reader) e
 	body, err := c.doStream(
 		routes.StreamIn,
 		reader,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		url.Values{
@@ -573,7 +574,7 @@ func (c *connection) StreamOut(handle string, srcPath string) (io.ReadCloser, er
 	return c.doStream(
 		routes.StreamOut,
 		nil,
-		router.Params{
+		rata.Params{
 			"handle": handle,
 		},
 		url.Values{
@@ -608,7 +609,7 @@ func (c *connection) List(filterProperties warden.Properties) ([]string, error) 
 func (c *connection) Info(handle string) (warden.ContainerInfo, error) {
 	res := &protocol.InfoResponse{}
 
-	err := c.do(routes.Info, nil, res, router.Params{"handle": handle}, nil)
+	err := c.do(routes.Info, nil, res, rata.Params{"handle": handle}, nil)
 	if err != nil {
 		return warden.ContainerInfo{}, err
 	}
@@ -761,7 +762,7 @@ func (c *connection) streamPayloads(closer io.Closer, decoder *json.Decoder, str
 func (c *connection) do(
 	handler string,
 	req, res proto.Message,
-	params router.Params,
+	params rata.Params,
 	query url.Values,
 ) error {
 	var body io.Reader
@@ -801,11 +802,11 @@ func (c *connection) do(
 func (c *connection) doStream(
 	handler string,
 	body io.Reader,
-	params router.Params,
+	params rata.Params,
 	query url.Values,
 	contentType string,
 ) (io.ReadCloser, error) {
-	request, err := c.req.RequestForHandler(handler, params, body)
+	request, err := c.req.CreateRequest(handler, params, body)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "7fd1620f09261338b6b1ca1289ace83aee0ec946"
+			"Rev": "d228c1a206c3a756d7ec6cc3579d92d00c35a161"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
@@ -16,35 +16,35 @@
 		},
 		{
 			"ImportPath": "github.com/bmizerany/pat",
-			"Rev": "48be7df2c27e1cec821a3284a683ce6ef90d9052"
+			"Rev": "b8a35001b773c267eb260a691f4e5499a3531600"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/routes",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/transport",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Rev": "40518e0a2f29de6492562c2b2ff9bd04c147aef3"
+			"Rev": "42e6a875d52f2acf921b56531d9f10f63cd65136"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "0905c77385bfd000abd0ab681c6286448c441fb4"
+			"Rev": "815b44467bfda0222bb6bf68ac8e1b3e73460ef4"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -53,31 +53,31 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "f81faeae3c1e229f1e3f0ad9d0dab98ba8daa242"
+			"Rev": "64cdd7421c0413dc87e5fca2b254efbb4e7dd9d0"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "b2f1c6577e09b5727076c72f4096e3cc5cfd737d"
+			"Rev": "da9f8b85c0175500cbb836bdb9c5488939e20c43"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -85,12 +85,12 @@
 		},
 		{
 			"ImportPath": "github.com/onsi/ginkgo",
-			"Comment": "v1.0.0-18-g12446bb",
+			"Comment": "v1.0.0-16-g12446bb",
 			"Rev": "12446bbcc74950944c897e32ea99cc8d058f9c92"
 		},
 		{
 			"ImportPath": "github.com/onsi/gomega",
-			"Rev": "1d0e3e0a4e04ad1bc22b275068f4667738b43a02"
+			"Rev": "7ec350c6bff61a8e3f999e1164f11e5c133605d0"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
@@ -110,11 +110,11 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "439138de94ac33aebc7dad33cada3796318845ea"
+			"Rev": "fee34ad3d56f161c5fba8508befe05169d5e5ece"
 		},
 		{
-			"ImportPath": "github.com/tedsuo/router",
-			"Rev": "e148496de27fab9f10ef07f3be00471fa59f58b9"
+			"ImportPath": "github.com/tedsuo/rata",
+			"Rev": "ffbc6810b2dff37aade33e5bf1ee8deadafe867d"
 		}
 	]
 }
