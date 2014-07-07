@@ -824,6 +824,18 @@ var _ = Describe("Api", func() {
 			It("destroys the warden container", func() {
 				Ω(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
 			})
+
+			Describe("when deleting the container fails", func() {
+				BeforeEach(func() {
+					wardenClient.Connection.WhenDestroying = func(handle string) error {
+						return errors.New("Destroy failed")
+					}
+				})
+
+				It("returns a 500", func() {
+					Ω(deleteResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				})
+			})
 		})
 	})
 

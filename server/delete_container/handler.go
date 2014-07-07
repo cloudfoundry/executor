@@ -34,7 +34,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//TODO once wardenClient has an ErrNotFound error code, use it
 	//to determine if we should delete from registry
 	if container.ContainerHandle != "" {
-		h.wardenClient.Destroy(container.ContainerHandle)
+		err = h.wardenClient.Destroy(container.ContainerHandle)
+		if err != nil {
+			handleError(err, w, h.logger)
+			return
+		}
 	}
 
 	err = h.registry.Delete(guid)
@@ -43,6 +47,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("executor.delete-container.ok")
 	w.WriteHeader(http.StatusOK)
 }
 

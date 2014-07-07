@@ -25,7 +25,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := api.ContainerAllocationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
+		h.logger.Errord(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.allocate-container.bad-request")
 		w.WriteHeader(http.StatusBadRequest)
@@ -36,15 +36,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	container, err := h.registry.Reserve(guid, req)
 	if err == registry.ErrContainerAlreadyExists {
-		h.logger.Infod(map[string]interface{}{
+		h.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 			"guid":  guid,
 		}, "executor.allocate-container.container-already-exists")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
+		h.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.allocate-container.full")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -53,5 +54,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(container)
+
+	err = json.NewEncoder(w).Encode(container)
+	if err != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.allocate-container.writing-body-failed")
+		return
+	}
+
+	h.logger.Info("executor.allocate-container.ok")
 }

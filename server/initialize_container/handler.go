@@ -114,7 +114,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(reg)
+	err = json.NewEncoder(w).Encode(reg)
+	if err != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.init-container.writing-body-failed")
+		return
+	}
+
+	h.logger.Info("executor.init-container.ok")
 }
 
 func (h *handler) limitContainerDiskAndMemory(reg api.Container, containerClient warden.Container) error {

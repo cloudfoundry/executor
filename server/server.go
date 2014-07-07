@@ -38,7 +38,7 @@ func New(c *Config) (http.Handler, error) {
 
 		api.GetContainer: LogAndWaitWrap(get_container.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
-		api.ListContainers: LogAndWaitWrap(list_containers.New(c.Registry), c.WaitGroup, c.Logger),
+		api.ListContainers: LogAndWaitWrap(list_containers.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
 
 		api.InitializeContainer: LogAndWaitWrap(initialize_container.New(
 			c.ContainerOwnerName,

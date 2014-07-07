@@ -23,6 +23,5 @@ func LogAndWaitWrap(handler http.Handler, waitGroup *sync.WaitGroup, logger *gos
 			"method":  r.Method,
 			"request": r.URL.String(),
 		}, "executor.api.done-serving-request")
-
 	}
 }

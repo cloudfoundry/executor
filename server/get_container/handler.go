@@ -33,6 +33,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resource)
+	err = json.NewEncoder(w).Encode(resource)
+	if err != nil {
+		h.logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.get-container.writing-body-failed")
+		return
+	}
+
+	h.logger.Info("executor.get-container.ok")
 }
