@@ -3,6 +3,7 @@ package integration_test
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"syscall"
 	"testing"
@@ -20,6 +21,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/loggregatorlib/logmessage"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
@@ -56,6 +58,8 @@ var _ = Describe("Main", func() {
 		wardenAddr string
 
 		fakeBackend *fake_backend.FakeBackend
+
+		logMessages <-chan *logmessage.LogMessage
 	)
 
 	drainTimeout := 5 * time.Second
@@ -80,13 +84,16 @@ var _ = Describe("Main", func() {
 		err = gardenServer.Start()
 		Ω(err).ShouldNot(HaveOccurred())
 
+		var loggregatorAddr string
+		loggregatorAddr, logMessages = startFakeLoggregatorServer()
+
 		runner = executor_runner.New(
 			executorPath,
 			executorAddr,
 			"tcp",
 			wardenAddr,
-			"",
-			"",
+			loggregatorAddr,
+			"the-loggregator-secret",
 		)
 	})
 
@@ -102,9 +109,13 @@ var _ = Describe("Main", func() {
 			},
 		})
 
-		streamChannel := make(chan warden.ProcessStream, 1)
+		streamChannel := make(chan warden.ProcessStream, 2)
 		fakeContainer.StreamChannel = streamChannel
 		if !block {
+			streamChannel <- warden.ProcessStream{
+				Source: warden.ProcessStreamSourceStdout,
+				Data:   []byte("some-output"),
+			}
 			exitStatus := uint32(0)
 			streamChannel <- warden.ProcessStream{
 				ExitStatus: &exitStatus,
@@ -122,7 +133,14 @@ var _ = Describe("Main", func() {
 		})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		_, err = executorClient.InitializeContainer(guid.String(), api.ContainerInitializationRequest{})
+		index := 13
+		_, err = executorClient.InitializeContainer(guid.String(), api.ContainerInitializationRequest{
+			Log: models.LogConfig{
+				Guid:       "the-app-guid",
+				SourceName: "EXE",
+				Index:      &index,
+			},
+		})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		err = executorClient.Run(guid.String(), api.ContainerRunRequest{
@@ -183,6 +201,19 @@ var _ = Describe("Main", func() {
 			runner.Start(executor_runner.Config{
 				DrainTimeout:            drainTimeout,
 				RegistryPruningInterval: pruningInterval,
+			})
+		})
+
+		Describe("running something", func() {
+			It("streams log output", func() {
+				runTask(false)
+
+				message := &logmessage.LogMessage{}
+				Eventually(logMessages).Should(Receive(&message))
+
+				Ω(message.GetAppId()).Should(Equal("the-app-guid"))
+				Ω(message.GetSourceName()).Should(Equal("EXE"))
+				Ω(string(message.GetMessage())).Should(Equal("some-output"))
 			})
 		})
 
@@ -310,4 +341,31 @@ func pollContainers(fakeBackend *fake_backend.FakeBackend) func() ([]warden.Cont
 	return func() ([]warden.Container, error) {
 		return fakeBackend.Containers(nil)
 	}
+}
+
+func startFakeLoggregatorServer() (string, <-chan *logmessage.LogMessage) {
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	Ω(err).ShouldNot(HaveOccurred())
+
+	conn, err := net.ListenUDP("udp", addr)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	logMessages := make(chan *logmessage.LogMessage, 10)
+
+	go func() {
+		defer GinkgoRecover()
+
+		for {
+			buf := make([]byte, 1024)
+			rlen, _, err := conn.ReadFromUDP(buf)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			message, err := logmessage.ParseEnvelope(buf[0:rlen], "the-loggregator-secret")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			logMessages <- message.GetLogMessage()
+		}
+	}()
+
+	return conn.LocalAddr().String(), logMessages
 }
