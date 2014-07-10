@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
@@ -20,6 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -28,18 +29,18 @@ import (
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
-	logStreamerFactory log_streamer_factory.LogStreamerFactory
-	cachedDownloader   cacheddownloader.CachedDownloader
-	uploader           uploader.Uploader
-	extractor          extractor.Extractor
-	compressor         compressor.Compressor
-	logger             *steno.Logger
-	tempDir            string
-	result             *string
+	logEmitter       emitter.Emitter
+	cachedDownloader cacheddownloader.CachedDownloader
+	uploader         uploader.Uploader
+	extractor        extractor.Extractor
+	compressor       compressor.Compressor
+	logger           *steno.Logger
+	tempDir          string
+	result           *string
 }
 
 func NewTransformer(
-	logStreamerFactory log_streamer_factory.LogStreamerFactory,
+	logEmitter emitter.Emitter,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
@@ -48,13 +49,13 @@ func NewTransformer(
 	tempDir string,
 ) *Transformer {
 	return &Transformer{
-		logStreamerFactory: logStreamerFactory,
-		cachedDownloader:   cachedDownloader,
-		uploader:           uploader,
-		extractor:          extractor,
-		compressor:         compressor,
-		logger:             logger,
-		tempDir:            tempDir,
+		logEmitter:       logEmitter,
+		cachedDownloader: cachedDownloader,
+		uploader:         uploader,
+		extractor:        extractor,
+		compressor:       compressor,
+		logger:           logger,
+		tempDir:          tempDir,
 	}
 }
 
@@ -84,7 +85,7 @@ func (transformer *Transformer) convertAction(
 	container warden.Container,
 	result *string,
 ) (sequence.Step, error) {
-	logStreamer := transformer.logStreamerFactory(logConfig)
+	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, transformer.logEmitter)
 
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:

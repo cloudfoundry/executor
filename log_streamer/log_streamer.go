@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"github.com/cloudfoundry/loggregatorlib/logmessage"
 )
 
 const MAX_MESSAGE_SIZE = 4096
@@ -20,19 +21,27 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, loggregatorEmitter emitter.Emitter) *logStreamer {
-	return &logStreamer{
-		stdout: &streamDestination{
-			guid:    guid,
-			emitter: loggregatorEmitter.Emit,
-			buffer:  make([]byte, 0, MAX_MESSAGE_SIZE),
-		},
+func New(guid string, sourceName string, loggregatorEmitter emitter.Emitter) LogStreamer {
+	if guid == "" {
+		return noopStreamer{}
+	}
 
-		stderr: &streamDestination{
-			guid:    guid,
-			emitter: loggregatorEmitter.EmitError,
-			buffer:  make([]byte, 0, MAX_MESSAGE_SIZE),
-		},
+	return &logStreamer{
+		stdout: newStreamDestination(
+			guid,
+			sourceName,
+			"1",
+			logmessage.LogMessage_OUT,
+			loggregatorEmitter,
+		),
+
+		stderr: newStreamDestination(
+			guid,
+			sourceName,
+			"1",
+			logmessage.LogMessage_ERR,
+			loggregatorEmitter,
+		),
 	}
 }
 

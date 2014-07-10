@@ -137,7 +137,7 @@ var _ = Describe("Main", func() {
 		_, err = executorClient.InitializeContainer(guid.String(), api.ContainerInitializationRequest{
 			Log: models.LogConfig{
 				Guid:       "the-app-guid",
-				SourceName: "EXE",
+				SourceName: "STG",
 				Index:      &index,
 			},
 		})
@@ -212,7 +212,8 @@ var _ = Describe("Main", func() {
 				Eventually(logMessages).Should(Receive(&message))
 
 				Ω(message.GetAppId()).Should(Equal("the-app-guid"))
-				Ω(message.GetSourceName()).Should(Equal("EXE"))
+				Ω(message.GetSourceName()).Should(Equal("STG"))
+				Ω(message.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
 				Ω(string(message.GetMessage())).Should(Equal("some-output"))
 			})
 		})

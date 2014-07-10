@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
 	. "github.com/cloudfoundry-incubator/executor/server"
 	"github.com/cloudfoundry-incubator/executor/transformer"
@@ -21,6 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
@@ -61,11 +61,13 @@ var _ = Describe("Api", func() {
 
 		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
 		logger := gosteno.NewLogger("api-test-logger")
+		logEmitter, err := emitter.NewEmitter("", "", "", "", nil)
+		Ω(err).ShouldNot(HaveOccurred())
 
 		handler, err := New(&Config{
 			Registry: registry,
 			Transformer: transformer.NewTransformer(
-				log_streamer_factory.New("", ""),
+				logEmitter,
 				fakecacheddownloader.New(),
 				new(fake_uploader.FakeUploader),
 				&fake_extractor.FakeExtractor{},

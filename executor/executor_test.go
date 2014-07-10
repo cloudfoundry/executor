@@ -11,6 +11,7 @@ import (
 
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
@@ -40,11 +40,14 @@ var _ = Describe("Executor", func() {
 	)
 
 	BeforeEach(func() {
+		logEmitter, err := emitter.NewEmitter("", "", "", "", nil)
+		Ω(err).ShouldNot(HaveOccurred())
+
 		steno.EnterTestMode()
 		logger = steno.NewLogger("test-logger")
 		wardenClient = fake_warden_client.New()
 		trans = transformer.NewTransformer(
-			log_streamer_factory.New("", ""),
+			logEmitter,
 			fakecacheddownloader.New(),
 			new(fake_uploader.FakeUploader),
 			&fake_extractor.FakeExtractor{},

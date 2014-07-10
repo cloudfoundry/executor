@@ -12,13 +12,13 @@ import (
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/log_streamer_factory"
 	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -220,13 +220,17 @@ func initializeTransformer(logger *steno.Logger) *Transformer.Transformer {
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
-	logStreamerFactory := log_streamer_factory.New(
+
+	logEmitter, _ := emitter.NewEmitter(
 		*loggregatorServer,
+		"",
+		"",
 		*loggregatorSecret,
+		nil,
 	)
 
 	return Transformer.NewTransformer(
-		logStreamerFactory,
+		logEmitter,
 		cache,
 		uploader,
 		extractor,

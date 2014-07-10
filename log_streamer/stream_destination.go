@@ -1,13 +1,33 @@
 package log_streamer
 
-import "unicode/utf8"
+import (
+	"time"
+	"unicode/utf8"
+
+	"code.google.com/p/goprotobuf/proto"
+
+	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"github.com/cloudfoundry/loggregatorlib/logmessage"
+)
 
 type streamDestination struct {
-	guid string
+	guid        string
+	sourceName  string
+	sourceId    string
+	messageType logmessage.LogMessage_MessageType
+	emitter     emitter.Emitter
+	buffer      []byte
+}
 
-	emitter func(string, string)
-
-	buffer []byte
+func newStreamDestination(guid, sourceName, sourceId string, messageType logmessage.LogMessage_MessageType, em emitter.Emitter) *streamDestination {
+	return &streamDestination{
+		guid:        guid,
+		sourceName:  sourceName,
+		sourceId:    sourceId,
+		messageType: messageType,
+		emitter:     em,
+		buffer:      make([]byte, 0, MAX_MESSAGE_SIZE),
+	}
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
@@ -17,7 +37,17 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 
 func (destination *streamDestination) flush() {
 	if len(destination.buffer) > 0 {
-		destination.emitter(destination.guid, string(destination.buffer))
+		msg := make([]byte, len(destination.buffer))
+		copy(msg, destination.buffer)
+
+		destination.emitter.EmitLogMessage(&logmessage.LogMessage{
+			AppId:       &destination.guid,
+			SourceName:  &destination.sourceName,
+			SourceId:    &destination.sourceId,
+			Message:     msg,
+			MessageType: &destination.messageType,
+			Timestamp:   proto.Int64(time.Now().UnixNano()),
+		})
 		destination.buffer = destination.buffer[:0]
 	}
 }

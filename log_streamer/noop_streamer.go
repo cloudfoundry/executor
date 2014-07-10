@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 )
 
-type NoopStreamer struct{}
+type noopStreamer struct{}
 
-func (NoopStreamer) Stdout() io.Writer { return ioutil.Discard }
-func (NoopStreamer) Stderr() io.Writer { return ioutil.Discard }
-func (NoopStreamer) Flush()            {}
+func (noopStreamer) Stdout() io.Writer { return ioutil.Discard }
+func (noopStreamer) Stderr() io.Writer { return ioutil.Discard }
+func (noopStreamer) Flush()            {}
