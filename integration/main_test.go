@@ -214,6 +214,7 @@ var _ = Describe("Main", func() {
 				Ω(message.GetAppId()).Should(Equal("the-app-guid"))
 				Ω(message.GetSourceName()).Should(Equal("STG"))
 				Ω(message.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
+				Ω(message.GetSourceId()).Should(Equal("13"))
 				Ω(string(message.GetMessage())).Should(Equal("some-output"))
 			})
 		})

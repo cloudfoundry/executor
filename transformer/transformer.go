@@ -85,7 +85,7 @@ func (transformer *Transformer) convertAction(
 	container warden.Container,
 	result *string,
 ) (sequence.Step, error) {
-	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, transformer.logEmitter)
+	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, logConfig.Index, transformer.logEmitter)
 
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:

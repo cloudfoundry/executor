@@ -17,10 +17,11 @@ var _ = Describe("LogStreamer", func() {
 	var streamer LogStreamer
 	guid := "the-guid"
 	sourceName := "the-source-name"
+	index := 11
 
 	BeforeEach(func() {
 		loggregatorEmitter = NewFakeLoggregatorEmmitter()
-		streamer = New(guid, sourceName, loggregatorEmitter)
+		streamer = New(guid, sourceName, &index, loggregatorEmitter)
 	})
 
 	Context("when told to emit", func() {
@@ -37,10 +38,12 @@ var _ = Describe("LogStreamer", func() {
 				Ω(emission.GetAppId()).Should(Equal(guid))
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
 				Ω(emission.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
+				Ω(emission.GetSourceId()).Should(Equal("11"))
 
 				emission = loggregatorEmitter.Emissions[1]
 				Ω(emission.GetAppId()).Should(Equal(guid))
 				Ω(emission.GetSourceName()).Should(Equal(sourceName))
+				Ω(emission.GetSourceId()).Should(Equal("11"))
 				Ω(string(emission.GetMessage())).Should(Equal("this is another log"))
 				Ω(emission.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
 				Ω(*emission.Timestamp).Should(BeNumerically("~", time.Now().UnixNano(), 10*time.Millisecond))
@@ -200,13 +203,24 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = New("", "the-source-name", loggregatorEmitter)
+			streamer = New("", sourceName, &index, loggregatorEmitter)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
 			streamer.Flush()
 
 			Ω(loggregatorEmitter.Emissions).Should(BeEmpty())
+		})
+	})
+
+	Context("when there is no source index", func() {
+		It("defaults to 0", func() {
+			streamer = New(guid, sourceName, nil, loggregatorEmitter)
+
+			streamer.Stdout().Write([]byte("hi"))
+			streamer.Flush()
+
+			Ω(loggregatorEmitter.Emissions[0].GetSourceId()).Should(Equal("0"))
 		})
 	})
 })

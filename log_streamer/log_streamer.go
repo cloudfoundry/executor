@@ -2,6 +2,7 @@ package log_streamer
 
 import (
 	"io"
+	"strconv"
 
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/cloudfoundry/loggregatorlib/logmessage"
@@ -21,16 +22,21 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, loggregatorEmitter emitter.Emitter) LogStreamer {
+func New(guid string, sourceName string, index *int, loggregatorEmitter emitter.Emitter) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
+	}
+
+	sourceIndex := "0"
+	if index != nil {
+		sourceIndex = strconv.Itoa(*index)
 	}
 
 	return &logStreamer{
 		stdout: newStreamDestination(
 			guid,
 			sourceName,
-			"1",
+			sourceIndex,
 			logmessage.LogMessage_OUT,
 			loggregatorEmitter,
 		),
@@ -38,7 +44,7 @@ func New(guid string, sourceName string, loggregatorEmitter emitter.Emitter) Log
 		stderr: newStreamDestination(
 			guid,
 			sourceName,
-			"1",
+			sourceIndex,
 			logmessage.LogMessage_ERR,
 			loggregatorEmitter,
 		),
