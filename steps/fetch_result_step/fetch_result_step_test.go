@@ -83,7 +83,7 @@ var _ = Describe("FetchResultStep", func() {
 	Context("when the file exists", func() {
 		var buffer *ClosableBuffer
 		BeforeEach(func() {
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
+			wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 				Ω(src).Should(Equal("/var/some-dir/foo"))
 
 				buffer = NewClosableBuffer()
@@ -117,7 +117,7 @@ var _ = Describe("FetchResultStep", func() {
 		var buffer *ClosableBuffer
 		BeforeEach(func() {
 			// overflow the (hard-coded) file content limit of 10KB by 1 byte:
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
+			wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 				buffer = NewClosableBuffer()
 				tarWriter := tar.NewWriter(buffer)
 
@@ -150,9 +150,7 @@ var _ = Describe("FetchResultStep", func() {
 		disaster := errors.New("kaboom")
 
 		BeforeEach(func() {
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
-				return nil, disaster
-			}
+			wardenClient.Connection.StreamOutReturns(nil, disaster)
 		})
 
 		It("should return an error and an empty result", func() {

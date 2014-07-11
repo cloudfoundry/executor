@@ -84,45 +84,47 @@ var _ = Describe("DownloadAction", func() {
 		Context("when extract is false", func() {
 			var tarReader *tar.Reader
 
-			BeforeEach(func() {
-				cache.FetchedContent = []byte(strings.Repeat("7", 1024))
+			Context("when streaming in succeeds", func() {
+				BeforeEach(func() {
+					cache.FetchedContent = []byte(strings.Repeat("7", 1024))
 
-				buffer := &bytes.Buffer{}
-				tarReader = tar.NewReader(buffer)
+					buffer := &bytes.Buffer{}
+					tarReader = tar.NewReader(buffer)
 
-				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string, tarStream io.Reader) error {
-					Ω(dest).Should(Equal("/tmp"))
+					wardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+						Ω(dest).Should(Equal("/tmp"))
 
-					_, err := io.Copy(buffer, tarStream)
+						_, err := io.Copy(buffer, tarStream)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						return nil
+					}
+				})
+
+				It("asks the cache for the file", func() {
+					Ω(cache.FetchedURL.Host).Should(ContainSubstring("mr_jones"))
+					Ω(cache.FetchedCacheKey).Should(Equal("the-cache-key"))
+				})
+
+				It("places the file in the container", func() {
+					Ω(wardenClient.Connection.StreamInCallCount()).Should(Equal(1))
+
+					header, err := tarReader.Next()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					return nil
-				}
-			})
+					Ω(header.Name).Should(Equal("Antarctica"))
+					Ω(header.Mode).Should(Equal(int64(0644)))
+					Ω(header.AccessTime.UnixNano()).ShouldNot(BeZero())
+					Ω(header.ChangeTime.UnixNano()).ShouldNot(BeZero())
 
-			It("asks the cache for the file", func() {
-				Ω(cache.FetchedURL.Host).Should(ContainSubstring("mr_jones"))
-				Ω(cache.FetchedCacheKey).Should(Equal("the-cache-key"))
-			})
+					fileBody, err := ioutil.ReadAll(tarReader)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(fileBody).Should(Equal(cache.FetchedContent))
+				})
 
-			It("places the file in the container", func() {
-				Ω(wardenClient.Connection.StreamedIn(handle)).ShouldNot(BeEmpty())
-
-				header, err := tarReader.Next()
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(header.Name).Should(Equal("Antarctica"))
-				Ω(header.Mode).Should(Equal(int64(0644)))
-				Ω(header.AccessTime.UnixNano()).ShouldNot(BeZero())
-				Ω(header.ChangeTime.UnixNano()).ShouldNot(BeZero())
-
-				fileBody, err := ioutil.ReadAll(tarReader)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(fileBody).Should(Equal(cache.FetchedContent))
-			})
-
-			It("does not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
+				It("does not return an error", func() {
+					Ω(stepErr).ShouldNot(HaveOccurred())
+				})
 			})
 
 			Context("when there is an error parsing the download url", func() {
@@ -149,9 +151,7 @@ var _ = Describe("DownloadAction", func() {
 				var expectedErr = errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.Connection.WhenStreamingIn = func(string, string, io.Reader) error {
-						return expectedErr
-					}
+					wardenClient.Connection.StreamInReturns(expectedErr)
 				})
 
 				It("returns an error", func() {
@@ -165,48 +165,68 @@ var _ = Describe("DownloadAction", func() {
 
 			BeforeEach(func() {
 				downloadAction.Extract = true
+			})
 
-				tmpFile, err := ioutil.TempFile("", "some-zip")
-				Ω(err).ShouldNot(HaveOccurred())
-
-				archiveHelper.CreateZipArchive(tmpFile.Name(), []archiveHelper.ArchiveFile{
-					{
-						Name: "file1",
-					},
-				})
-
-				tmpFile.Seek(0, 0)
-
-				fetchedContent, err := ioutil.ReadAll(tmpFile)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				cache.FetchedContent = fetchedContent
-
-				buffer := &bytes.Buffer{}
-				tarReader = tar.NewReader(buffer)
-
-				wardenClient.Connection.WhenStreamingIn = func(handle string, dest string, tarStream io.Reader) error {
-					Ω(dest).Should(Equal("/tmp/Antarctica"))
-
-					_, err := io.Copy(buffer, tarStream)
+			Context("and the fetched bits are a valid tarball", func() {
+				BeforeEach(func() {
+					tmpFile, err := ioutil.TempFile("", "some-zip")
 					Ω(err).ShouldNot(HaveOccurred())
 
-					return nil
-				}
-			})
+					archiveHelper.CreateZipArchive(tmpFile.Name(), []archiveHelper.ArchiveFile{
+						{
+							Name: "file1",
+						},
+					})
 
-			It("does not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
-			})
+					tmpFile.Seek(0, 0)
 
-			It("places the file in the container under the destination", func() {
-				header, err := tarReader.Next()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(header.Name).Should(Equal("./"))
+					fetchedContent, err := ioutil.ReadAll(tmpFile)
+					Ω(err).ShouldNot(HaveOccurred())
 
-				header, err = tarReader.Next()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(header.Name).Should(Equal("file1"))
+					cache.FetchedContent = fetchedContent
+				})
+
+				Context("and streaming in succeeds", func() {
+					BeforeEach(func() {
+						buffer := &bytes.Buffer{}
+						tarReader = tar.NewReader(buffer)
+
+						wardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+							Ω(dest).Should(Equal("/tmp/Antarctica"))
+
+							_, err := io.Copy(buffer, tarStream)
+							Ω(err).ShouldNot(HaveOccurred())
+
+							return nil
+						}
+					})
+
+					It("does not return an error", func() {
+						Ω(stepErr).ShouldNot(HaveOccurred())
+					})
+
+					It("places the file in the container under the destination", func() {
+						header, err := tarReader.Next()
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(header.Name).Should(Equal("./"))
+
+						header, err = tarReader.Next()
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(header.Name).Should(Equal("file1"))
+					})
+				})
+
+				Context("when there is an error copying the extracted files into the container", func() {
+					var expectedErr = errors.New("oh no!")
+
+					BeforeEach(func() {
+						wardenClient.Connection.StreamInReturns(expectedErr)
+					})
+
+					It("returns an error", func() {
+						Ω(stepErr.Error()).Should(ContainSubstring("Copying into the container failed"))
+					})
+				})
 			})
 
 			Context("when there is an error extracting the file", func() {
@@ -216,20 +236,6 @@ var _ = Describe("DownloadAction", func() {
 
 				It("returns an error", func() {
 					Ω(stepErr.Error()).Should(ContainSubstring("Extraction failed"))
-				})
-			})
-
-			Context("when there is an error copying the extracted files into the container", func() {
-				var expectedErr = errors.New("oh no!")
-
-				BeforeEach(func() {
-					wardenClient.Connection.WhenStreamingIn = func(string, string, io.Reader) error {
-						return expectedErr
-					}
-				})
-
-				It("returns an error", func() {
-					Ω(stepErr.Error()).Should(ContainSubstring("Copying into the container failed"))
 				})
 			})
 		})

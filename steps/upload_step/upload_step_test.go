@@ -115,9 +115,9 @@ var _ = Describe("UploadStep", func() {
 	handle := "some-container-handle"
 
 	JustBeforeEach(func() {
-		container, err := wardenClient.Create(warden.ContainerSpec{
-			Handle: handle,
-		})
+		wardenClient.Connection.CreateReturns(handle, nil)
+
+		container, err := wardenClient.Create(warden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = New(
@@ -132,89 +132,106 @@ var _ = Describe("UploadStep", func() {
 	})
 
 	Describe("Perform", func() {
-		It("uploads a .tgz to the destination", func() {
+		Context("when streaming out works", func() {
 			var buffer *ClosableBuffer
 
-			wardenClient.Connection.WhenStreamingOut = func(handle, src string) (io.ReadCloser, error) {
-				Ω(handle).Should(Equal("some-container-handle"))
-
-				if src == "/Antarctica" {
-					buffer = NewClosableBuffer()
-
-					tarWriter := tar.NewWriter(buffer)
-
-					contents1 := "some-file-contents"
-
-					err := tarWriter.WriteHeader(&tar.Header{
-						Name: "some-file",
-						Size: int64(len(contents1)),
-					})
-					Ω(err).ShouldNot(HaveOccurred())
-
-					_, err = tarWriter.Write([]byte(contents1))
-					Ω(err).ShouldNot(HaveOccurred())
-
-					err = tarWriter.Flush()
-					Ω(err).ShouldNot(HaveOccurred())
-
-					return buffer, nil
-				}
-
-				return nil, nil
-			}
-
-			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(uploadedPayload).ShouldNot(BeZero())
-
-			Ω(buffer.IsClosed()).Should(BeTrue())
-
-			ungzip, err := gzip.NewReader(bytes.NewReader(uploadedPayload))
-			Ω(err).ShouldNot(HaveOccurred())
-
-			untar := tar.NewReader(ungzip)
-
-			tarContents := map[string][]byte{}
-			for {
-				hdr, err := untar.Next()
-				if err == io.EOF {
-					break
-				}
-
-				Ω(err).ShouldNot(HaveOccurred())
-
-				content, err := ioutil.ReadAll(untar)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				tarContents[hdr.Name] = content
-			}
-
-			Ω(tarContents).Should(HaveKey("some-file"))
-
-			Ω(string(tarContents["some-file"])).Should(Equal("some-file-contents"))
-		})
-
-		Describe("streaming logs for uploads", func() {
 			BeforeEach(func() {
-				fakeUploader := new(fake_uploader.FakeUploader)
-				fakeUploader.UploadReturns(1024, nil)
-				uploader = fakeUploader
-
+				buffer = NewClosableBuffer()
+				wardenClient.Connection.StreamOutReturns(buffer, nil)
 			})
 
-			It("streams the upload filesize", func() {
+			It("uploads a .tgz to the destination", func() {
+				wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+					Ω(handle).Should(Equal("some-container-handle"))
+
+					if src == "/Antarctica" {
+						tarWriter := tar.NewWriter(buffer)
+
+						contents1 := "some-file-contents"
+
+						err := tarWriter.WriteHeader(&tar.Header{
+							Name: "some-file",
+							Size: int64(len(contents1)),
+						})
+						Ω(err).ShouldNot(HaveOccurred())
+
+						_, err = tarWriter.Write([]byte(contents1))
+						Ω(err).ShouldNot(HaveOccurred())
+
+						err = tarWriter.Flush()
+						Ω(err).ShouldNot(HaveOccurred())
+
+						return buffer, nil
+					}
+
+					return NewClosableBuffer(), nil
+				}
+
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(stdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
-			})
+				Ω(uploadedPayload).ShouldNot(BeZero())
 
-			It("does not stream an error", func() {
-				err := step.Perform()
+				Ω(buffer.IsClosed()).Should(BeTrue())
+
+				ungzip, err := gzip.NewReader(bytes.NewReader(uploadedPayload))
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(stderrBuffer.String()).Should(Equal(""))
+				untar := tar.NewReader(ungzip)
+
+				tarContents := map[string][]byte{}
+				for {
+					hdr, err := untar.Next()
+					if err == io.EOF {
+						break
+					}
+
+					Ω(err).ShouldNot(HaveOccurred())
+
+					content, err := ioutil.ReadAll(untar)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					tarContents[hdr.Name] = content
+				}
+
+				Ω(tarContents).Should(HaveKey("some-file"))
+
+				Ω(string(tarContents["some-file"])).Should(Equal("some-file-contents"))
+			})
+
+			Describe("streaming logs for uploads", func() {
+				BeforeEach(func() {
+					fakeUploader := new(fake_uploader.FakeUploader)
+					fakeUploader.UploadReturns(1024, nil)
+					uploader = fakeUploader
+				})
+
+				It("streams the upload filesize", func() {
+					err := step.Perform()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(stdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
+				})
+
+				It("does not stream an error", func() {
+					err := step.Perform()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(stderrBuffer.String()).Should(Equal(""))
+				})
+			})
+
+			Context("when there is an error uploading", func() {
+				BeforeEach(func() {
+					fakeUploader := new(fake_uploader.FakeUploader)
+					fakeUploader.UploadReturns(0, errors.New("Upload failed!"))
+					uploader = fakeUploader
+				})
+
+				It("returns the error", func() {
+					err := step.Perform()
+					Ω(err).Should(HaveOccurred())
+				})
 			})
 		})
 
@@ -233,9 +250,7 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.ReadCloser, error) {
-					return nil, disaster
-				}
+				wardenClient.Connection.StreamOutReturns(nil, disaster)
 			})
 
 			It("returns the error ", func() {
@@ -248,27 +263,12 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenStreamingOut = func(string, string) (io.ReadCloser, error) {
-					return &errorReader{err: disaster}, nil
-				}
+				wardenClient.Connection.StreamOutReturns(&errorReader{err: disaster}, nil)
 			})
 
 			It("returns the error ", func() {
 				err := step.Perform()
 				Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
-			})
-		})
-
-		Context("when there is an error uploading", func() {
-			BeforeEach(func() {
-				fakeUploader := new(fake_uploader.FakeUploader)
-				fakeUploader.UploadReturns(0, errors.New("Upload failed!"))
-				uploader = fakeUploader
-			})
-
-			It("returns the error", func() {
-				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

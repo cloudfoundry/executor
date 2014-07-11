@@ -1,7 +1,6 @@
 package run_step_test
 
 import (
-	"bytes"
 	"errors"
 	"time"
 
@@ -9,10 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
-	"github.com/cloudfoundry-incubator/garden/client/connection/fake_connection"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	steno "github.com/cloudfoundry/gosteno"
 
@@ -30,7 +30,8 @@ var _ = Describe("RunAction", func() {
 	var logger *steno.Logger
 	var fileDescriptorLimit uint64
 
-	var processPayloadStream chan warden.ProcessStream
+	var spawnedProcess *wfakes.FakeProcess
+	var runError error
 
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
@@ -53,26 +54,20 @@ var _ = Describe("RunAction", func() {
 
 		logger = steno.NewLogger("test-logger")
 
-		stream := make(chan warden.ProcessStream, 1000)
-		processPayloadStream = stream
+		spawnedProcess = new(wfakes.FakeProcess)
+		runError = nil
 
-		wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
-			return 0, stream, nil
+		wardenClient.Connection.RunStub = func(string, warden.ProcessSpec, warden.ProcessIO) (warden.Process, error) {
+			return spawnedProcess, runError
 		}
 	})
-
-	exit0 := uint32(0)
-	exit19 := uint32(19)
-
-	successfulExit := warden.ProcessStream{ExitStatus: &exit0}
-	failedExit := warden.ProcessStream{ExitStatus: &exit19}
 
 	handle := "some-container-handle"
 
 	JustBeforeEach(func() {
-		container, err := wardenClient.Create(warden.ContainerSpec{
-			Handle: handle,
-		})
+		wardenClient.Connection.CreateReturns(handle, nil)
+
+		container, err := wardenClient.Create(warden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = New(
@@ -92,7 +87,7 @@ var _ = Describe("RunAction", func() {
 
 		Context("when the script succeeds", func() {
 			BeforeEach(func() {
-				processPayloadStream <- successfulExit
+				spawnedProcess.WaitReturns(0, nil)
 			})
 
 			It("does not return an error", func() {
@@ -100,38 +95,30 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("executes the command in the passed-in container", func() {
-				runningScripts := wardenClient.Connection.SpawnedProcesses(handle)
-				Ω(runningScripts).Should(HaveLen(1))
-
-				runningScript := runningScripts[0]
-				Ω(runningScript.Path).Should(Equal("sudo"))
-				Ω(runningScript.Args).Should(Equal([]string{"reboot"}))
-				Ω(*runningScript.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
-				Ω(runningScript.EnvironmentVariables).Should(Equal([]warden.EnvironmentVariable{
-					{"A", "1"},
-					{"B", "2"},
-				}))
+				ranHandle, spec, _ := wardenClient.Connection.RunArgsForCall(0)
+				Ω(ranHandle).Should(Equal(handle))
+				Ω(spec.Path).Should(Equal("sudo"))
+				Ω(spec.Args).Should(Equal([]string{"reboot"}))
+				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
+				Ω(spec.Env).Should(Equal([]string{"A=1", "B=2"}))
 			})
 		})
 
 		Context("when a file descriptor limit is not configured", func() {
 			BeforeEach(func() {
 				runAction.ResourceLimits.Nofile = nil
-				processPayloadStream <- successfulExit
+				spawnedProcess.WaitReturns(0, nil)
 			})
 
 			It("does not enforce it on the process", func() {
-				runningScripts := wardenClient.Connection.SpawnedProcesses(handle)
-				Ω(runningScripts).Should(HaveLen(1))
-
-				runningScript := runningScripts[0]
-				Ω(runningScript.Limits.Nofile).Should(BeNil())
+				_, spec, _ := wardenClient.Connection.RunArgsForCall(0)
+				Ω(spec.Limits.Nofile).Should(BeNil())
 			})
 		})
 
 		Context("when the script has a non-zero exit code", func() {
 			BeforeEach(func() {
-				processPayloadStream <- failedExit
+				spawnedProcess.WaitReturns(19, nil)
 			})
 
 			It("should return an emittable error with the exit code", func() {
@@ -143,9 +130,7 @@ var _ = Describe("RunAction", func() {
 			disaster := errors.New("I, like, tried but failed")
 
 			BeforeEach(func() {
-				wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
-					return 0, nil, disaster
-				}
+				runError = disaster
 			})
 
 			It("returns the error", func() {
@@ -155,10 +140,10 @@ var _ = Describe("RunAction", func() {
 
 		Context("when the step does not have a timeout", func() {
 			BeforeEach(func() {
-				go func() {
+				spawnedProcess.WaitStub = func() (int, error) {
 					time.Sleep(100 * time.Millisecond)
-					processPayloadStream <- successfulExit
-				}()
+					return 0, nil
+				}
 			})
 
 			It("does not enforce one (i.e. zero-value time.Duration)", func() {
@@ -175,7 +160,7 @@ var _ = Describe("RunAction", func() {
 
 			Context("and the script completes in time", func() {
 				BeforeEach(func() {
-					processPayloadStream <- successfulExit
+					spawnedProcess.WaitReturns(0, nil)
 				})
 
 				It("succeeds", func() {
@@ -185,11 +170,12 @@ var _ = Describe("RunAction", func() {
 
 			Context("and the script takes longer than the timeout", func() {
 				BeforeEach(func() {
-					go func() {
+					spawnedProcess.WaitStub = func() (int, error) {
 						time.Sleep(1 * time.Second)
-						processPayloadStream <- successfulExit
-					}()
+						return 0, nil
+					}
 				})
+
 				It("returns an emittable error", func() {
 					Ω(stepErr).Should(MatchError(emittable_error.New(nil, "Timed out after 100ms")))
 				})
@@ -198,13 +184,14 @@ var _ = Describe("RunAction", func() {
 
 		Context("regardless of status code, when an out of memory event has occured", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.WhenGettingInfo = func(string) (warden.ContainerInfo, error) {
-					return warden.ContainerInfo{
+				wardenClient.Connection.InfoReturns(
+					warden.ContainerInfo{
 						Events: []string{"happy land", "out of memory", "another event"},
-					}, nil
-				}
+					},
+					nil,
+				)
 
-				processPayloadStream <- failedExit
+				spawnedProcess.WaitReturns(19, nil)
 			})
 
 			It("returns an emittable error", func() {
@@ -213,34 +200,31 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Describe("emitting logs", func() {
-			var (
-				stdoutBuffer *bytes.Buffer
-				stderrBuffer *bytes.Buffer
-			)
+			var stdoutBuffer, stderrBuffer *gbytes.Buffer
 
 			BeforeEach(func() {
-				stdoutBuffer = new(bytes.Buffer)
-				stderrBuffer = new(bytes.Buffer)
+				stdoutBuffer = gbytes.NewBuffer()
+				stderrBuffer = gbytes.NewBuffer()
 
 				fakeStreamer.StdoutReturns(stdoutBuffer)
 				fakeStreamer.StderrReturns(stderrBuffer)
 
-				processPayloadStream <- warden.ProcessStream{
-					Source: warden.ProcessStreamSourceStdout,
-					Data:   []byte("hi out"),
-				}
+				spawnedProcess.WaitStub = func() (int, error) {
+					_, _, io := wardenClient.Connection.RunArgsForCall(0)
 
-				processPayloadStream <- warden.ProcessStream{
-					Source: warden.ProcessStreamSourceStderr,
-					Data:   []byte("hi err"),
-				}
+					_, err := io.Stdout.Write([]byte("hi out"))
+					Ω(err).ShouldNot(HaveOccurred())
 
-				processPayloadStream <- successfulExit
+					_, err = io.Stderr.Write([]byte("hi err"))
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return 0, nil
+				}
 			})
 
 			It("emits the output chunks as they come in", func() {
-				Ω(stdoutBuffer.String()).Should(ContainSubstring("hi out"))
-				Ω(stderrBuffer.String()).Should(ContainSubstring("hi err"))
+				Ω(stdoutBuffer).Should(gbytes.Say("hi out"))
+				Ω(stderrBuffer).Should(gbytes.Say("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {
@@ -255,8 +239,11 @@ var _ = Describe("RunAction", func() {
 		})
 
 		It("stops the container", func() {
-			step.Cancel()
-			Ω(wardenClient.Connection.Stopped(handle)).Should(ContainElement(fake_connection.StopSpec{}))
+			Ω(wardenClient.Connection.StopCallCount()).Should(Equal(1))
+
+			stoppedHandle, kill := wardenClient.Connection.StopArgsForCall(0)
+			Ω(stoppedHandle).Should(Equal(handle))
+			Ω(kill).Should(BeFalse())
 		})
 	})
 })

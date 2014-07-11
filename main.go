@@ -161,10 +161,10 @@ func main() {
 		"registry-pruner": pruner,
 	})
 
-	logger.Info("executor.started")
-
 	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
 	exitChan := processGroup.Exits()
+
+	logger.Info("executor.started")
 
 	for {
 		select {

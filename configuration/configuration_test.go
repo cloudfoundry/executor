@@ -30,9 +30,7 @@ var _ = Describe("configuration", func() {
 
 		Context("when getting the capacity fails", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.WhenGettingCapacity = func() (warden.Capacity, error) {
-					return warden.Capacity{}, errors.New("uh oh")
-				}
+				wardenClient.Connection.CapacityReturns(warden.Capacity{}, errors.New("uh oh"))
 			})
 
 			It("returns an error", func() {
@@ -44,13 +42,14 @@ var _ = Describe("configuration", func() {
 			BeforeEach(func() {
 				memLimit = "99"
 				diskLimit = "99"
-				wardenClient.Connection.WhenGettingCapacity = func() (warden.Capacity, error) {
-					return warden.Capacity{
+				wardenClient.Connection.CapacityReturns(
+					warden.Capacity{
 						MemoryInBytes: 1024 * 1024 * 3,
 						DiskInBytes:   1024 * 1024 * 4,
 						MaxContainers: 5,
-					}, nil
-				}
+					},
+					nil,
+				)
 			})
 
 			Describe("Memory Limit", func() {

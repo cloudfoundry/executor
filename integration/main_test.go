@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/client"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/garden/warden/fake_backend"
+	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/loggregatorlib/logmessage"
 
@@ -38,33 +39,34 @@ var executorClient client.Client
 
 var _ = BeforeSuite(func() {
 	var err error
+
 	executorPath, err = gexec.Build("github.com/cloudfoundry-incubator/executor", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
 	gexec.CleanupBuildArtifacts()
-	if gardenServer != nil {
-		gardenServer.Stop()
-	}
-
-	if runner != nil {
-		runner.KillWithFire()
-	}
 })
 
 var _ = Describe("Main", func() {
 	var (
 		wardenAddr string
 
-		fakeBackend *fake_backend.FakeBackend
+		fakeBackend *wfakes.FakeBackend
 
-		logMessages <-chan *logmessage.LogMessage
+		logMessages      <-chan *logmessage.LogMessage
+		logConfirmations <-chan struct{}
 	)
 
 	drainTimeout := 5 * time.Second
 	aBit := drainTimeout / 5
 	pruningInterval := time.Second
+
+	eventuallyContainerShouldBeDestroyed := func(args ...interface{}) {
+		Eventually(fakeBackend.DestroyCallCount, args...).Should(Equal(1))
+		handle := fakeBackend.DestroyArgsForCall(0)
+		Ω(handle).Should(Equal("some-handle"))
+	}
 
 	BeforeEach(func() {
 		var err error
@@ -78,14 +80,23 @@ var _ = Describe("Main", func() {
 
 		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
 
-		fakeBackend = fake_backend.New()
+		fakeBackend = new(wfakes.FakeBackend)
+		fakeBackend.CapacityReturns(warden.Capacity{
+			MemoryInBytes: 1024 * 1024 * 1024,
+			DiskInBytes:   1024 * 1024 * 1024,
+			MaxContainers: 1024,
+		}, nil)
+
 		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend)
 
 		err = gardenServer.Start()
 		Ω(err).ShouldNot(HaveOccurred())
 
 		var loggregatorAddr string
-		loggregatorAddr, logMessages = startFakeLoggregatorServer()
+
+		bidirectionalLogConfs := make(chan struct{})
+		logConfirmations = bidirectionalLogConfs
+		loggregatorAddr, logMessages = startFakeLoggregatorServer(bidirectionalLogConfs)
 
 		runner = executor_runner.New(
 			executorPath,
@@ -103,26 +114,34 @@ var _ = Describe("Main", func() {
 	})
 
 	runTask := func(block bool) {
-		fakeContainer := fake_backend.NewFakeContainer(warden.ContainerSpec{
-			Properties: warden.Properties{
-				"owner": runner.Config.ContainerOwnerName,
-			},
-		})
+		fakeContainer := new(wfakes.FakeContainer)
+		fakeBackend.CreateReturns(fakeContainer, nil)
+		fakeBackend.LookupReturns(fakeContainer, nil)
+		fakeBackend.ContainersReturns([]warden.Container{fakeContainer}, nil)
 
-		streamChannel := make(chan warden.ProcessStream, 2)
-		fakeContainer.StreamChannel = streamChannel
-		if !block {
-			streamChannel <- warden.ProcessStream{
-				Source: warden.ProcessStreamSourceStdout,
-				Data:   []byte("some-output"),
+		process := new(wfakes.FakeProcess)
+
+		process.WaitStub = func() (int, error) {
+			time.Sleep(time.Second)
+
+			if block {
+				select {}
+			} else {
+				_, io := fakeContainer.RunArgsForCall(0)
+
+				Eventually(func() interface{} {
+					_, err := io.Stdout.Write([]byte("some-output\n"))
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return logConfirmations
+				}).Should(Receive())
 			}
-			exitStatus := uint32(0)
-			streamChannel <- warden.ProcessStream{
-				ExitStatus: &exitStatus,
-			}
+
+			return 0, nil
 		}
 
-		fakeBackend.CreateResult = fakeContainer
+		fakeContainer.RunReturns(process, nil)
+		fakeContainer.HandleReturns("some-handle")
 
 		guid, err := uuid.NewV4()
 		Ω(err).ShouldNot(HaveOccurred())
@@ -153,23 +172,22 @@ var _ = Describe("Main", func() {
 
 	Describe("starting up", func() {
 		Context("when there are containers that are owned by the executor", func() {
-			var handleThatShouldDie string
+			var fakeContainer1, fakeContainer2 *wfakes.FakeContainer
 
 			BeforeEach(func() {
-				container, err := fakeBackend.Create(warden.ContainerSpec{
-					Handle: "container-that-should-die",
-					Properties: warden.Properties{
-						"owner": "executor-name",
-					},
-				})
-				Ω(err).ShouldNot(HaveOccurred())
+				fakeContainer1 = new(wfakes.FakeContainer)
+				fakeContainer1.HandleReturns("handle-1")
 
-				handleThatShouldDie = container.Handle()
+				fakeContainer2 = new(wfakes.FakeContainer)
+				fakeContainer2.HandleReturns("handle-2")
 
-				_, err = fakeBackend.Create(warden.ContainerSpec{
-					Handle: "container-that-should-live",
-				})
-				Ω(err).ShouldNot(HaveOccurred())
+				fakeBackend.ContainersStub = func(ps warden.Properties) ([]warden.Container, error) {
+					if reflect.DeepEqual(ps, warden.Properties{"owner": "executor-name"}) {
+						return []warden.Container{fakeContainer1, fakeContainer2}, nil
+					} else {
+						return nil, nil
+					}
+				}
 			})
 
 			It("should delete those containers (and only those containers)", func() {
@@ -177,12 +195,14 @@ var _ = Describe("Main", func() {
 					ContainerOwnerName: "executor-name",
 				})
 
-				Ω(fakeBackend.DestroyedContainers).Should(Equal([]string{handleThatShouldDie}))
+				Eventually(fakeBackend.DestroyCallCount).Should(Equal(2))
+				Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("handle-1"))
+				Ω(fakeBackend.DestroyArgsForCall(1)).Should(Equal("handle-2"))
 			})
 
 			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
-					fakeBackend.SetDestroyError(errors.New("i tried to delete the thing but i failed. sorry."))
+					fakeBackend.DestroyReturns(errors.New("i tried to delete the thing but i failed. sorry."))
 				})
 
 				It("should exit sadly", func() {
@@ -209,7 +229,7 @@ var _ = Describe("Main", func() {
 				runTask(false)
 
 				message := &logmessage.LogMessage{}
-				Eventually(logMessages).Should(Receive(&message))
+				Eventually(logMessages, 5).Should(Receive(&message))
 
 				Ω(message.GetAppId()).Should(Equal("the-app-guid"))
 				Ω(message.GetSourceName()).Should(Equal("STG"))
@@ -240,19 +260,12 @@ var _ = Describe("Main", func() {
 		Describe("when the executor receives the TERM signal", func() {
 			It("stops all running tasks", func() {
 				runTask(true)
-				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
-
 				runner.Session.Terminate()
-
-				Eventually(func() ([]warden.Container, error) {
-					return fakeBackend.Containers(nil)
-				}).Should(BeEmpty())
-
+				eventuallyContainerShouldBeDestroyed()
 			})
 
 			It("exits successfully", func() {
 				runner.Session.Terminate()
-
 				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
 			})
 		})
@@ -260,10 +273,8 @@ var _ = Describe("Main", func() {
 		Describe("when the executor receives the INT signal", func() {
 			It("stops all running tasks", func() {
 				runTask(true)
-				Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
-
 				runner.Session.Interrupt()
-				Eventually(pollContainers(fakeBackend)).Should(BeEmpty())
+				eventuallyContainerShouldBeDestroyed()
 			})
 
 			It("exits successfully", func() {
@@ -289,7 +300,6 @@ var _ = Describe("Main", func() {
 				Context("and USR1 is received again", func() {
 					It("does not die", func() {
 						runTask(true)
-						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						runner.Session.Signal(syscall.SIGUSR1)
 						Eventually(runner.Session, time.Second).Should(gbytes.Say("executor.draining"))
@@ -302,7 +312,6 @@ var _ = Describe("Main", func() {
 				Context("when the tasks complete before the drain timeout", func() {
 					It("exits successfully", func() {
 						runTask(false)
-						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 
 						sendDrainSignal()
 
@@ -313,13 +322,11 @@ var _ = Describe("Main", func() {
 				Context("when the tasks do not complete before the drain timeout", func() {
 					BeforeEach(func() {
 						runTask(true)
-						Eventually(pollContainers(fakeBackend)).Should(HaveLen(1))
 					})
 
 					It("cancels all running tasks", func() {
 						sendDrainSignal()
-
-						Eventually(pollContainers(fakeBackend), drainTimeout+aBit).Should(BeEmpty())
+						eventuallyContainerShouldBeDestroyed(drainTimeout + aBit)
 					})
 
 					It("exits successfully", func() {
@@ -339,13 +346,7 @@ var _ = Describe("Main", func() {
 	})
 })
 
-func pollContainers(fakeBackend *fake_backend.FakeBackend) func() ([]warden.Container, error) {
-	return func() ([]warden.Container, error) {
-		return fakeBackend.Containers(nil)
-	}
-}
-
-func startFakeLoggregatorServer() (string, <-chan *logmessage.LogMessage) {
+func startFakeLoggregatorServer(logConfirmations chan<- struct{}) (string, <-chan *logmessage.LogMessage) {
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	Ω(err).ShouldNot(HaveOccurred())
 
@@ -359,7 +360,9 @@ func startFakeLoggregatorServer() (string, <-chan *logmessage.LogMessage) {
 
 		for {
 			buf := make([]byte, 1024)
+
 			rlen, _, err := conn.ReadFromUDP(buf)
+			logConfirmations <- struct{}{}
 			Ω(err).ShouldNot(HaveOccurred())
 
 			message, err := logmessage.ParseEnvelope(buf[0:rlen], "the-loggregator-secret")

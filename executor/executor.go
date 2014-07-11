@@ -149,9 +149,6 @@ func (e *Executor) drain(drainTimeout time.Duration) {
 		e.logger.Info("executor.shutting-down.waiting-on-requests")
 		e.waitGroup.Wait()
 		e.logger.Info("executor.shutting-down.done-waiting-on-requests")
-		e.logger.Info("executor.shutting-down.deleting-containers")
-		e.destroyContainers()
-		e.logger.Info("executor.shutting-down.done-deleting-containers")
 		e.stoppedChan <- nil
 	}()
 }

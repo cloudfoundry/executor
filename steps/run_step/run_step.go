@@ -1,7 +1,6 @@
 package run_step
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/cloudfoundry-incubator/garden/warden"
@@ -33,14 +32,14 @@ func New(
 	}
 }
 
-func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []warden.EnvironmentVariable {
-	convertedEnvironmentVariables := []warden.EnvironmentVariable{}
+func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {
+	converted := []string{}
 
 	for _, env := range environmentVariables {
-		convertedEnvironmentVariables = append(convertedEnvironmentVariables, warden.EnvironmentVariable{env.Name, env.Value})
+		converted = append(converted, env.Name+"="+env.Value)
 	}
 
-	return convertedEnvironmentVariables
+	return converted
 }
 
 func (step *RunStep) Perform() error {
@@ -51,7 +50,7 @@ func (step *RunStep) Perform() error {
 		"run-step.perform",
 	)
 
-	exitStatusChan := make(chan uint32, 1)
+	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
 
 	var timeoutChan <-chan time.Time
@@ -62,39 +61,33 @@ func (step *RunStep) Perform() error {
 		defer timer.Stop()
 	}
 
+	process, err := step.container.Run(warden.ProcessSpec{
+		Path: step.model.Path,
+		Args: step.model.Args,
+		Env:  convertEnvironmentVariables(step.model.Env),
+
+		Limits: warden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
+	}, warden.ProcessIO{
+		Stdout: step.streamer.Stdout(),
+		Stderr: step.streamer.Stderr(),
+	})
+	if err != nil {
+		return err
+	}
+
 	go func() {
-		_, stream, err := step.container.Run(warden.ProcessSpec{
-			Path:   step.model.Path,
-			Args:   step.model.Args,
-			Limits: warden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
-
-			EnvironmentVariables: convertEnvironmentVariables(step.model.Env),
-		})
-
+		exitStatus, err := process.Wait()
 		if err != nil {
 			errChan <- err
-			return
-		}
-
-		for payload := range stream {
-			if payload.ExitStatus != nil {
-				step.streamer.Flush()
-
-				exitStatusChan <- *payload.ExitStatus
-				break
-			}
-
-			switch payload.Source {
-			case warden.ProcessStreamSourceStdout:
-				fmt.Fprint(step.streamer.Stdout(), string(payload.Data))
-			case warden.ProcessStreamSourceStderr:
-				fmt.Fprint(step.streamer.Stderr(), string(payload.Data))
-			}
+		} else {
+			exitStatusChan <- exitStatus
 		}
 	}()
 
 	select {
 	case exitStatus := <-exitStatusChan:
+		step.streamer.Flush()
+
 		info, err := step.container.Info()
 		if err != nil {
 			step.logger.Errord(

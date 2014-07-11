@@ -17,6 +17,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
@@ -234,9 +235,7 @@ var _ = Describe("Api", func() {
 
 				Context("when the container can be created", func() {
 					BeforeEach(func() {
-						wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
-							return "some-handle", nil
-						}
+						wardenClient.Connection.CreateReturns("some-handle", nil)
 					})
 
 					It("returns 201", func() {
@@ -244,25 +243,22 @@ var _ = Describe("Api", func() {
 					})
 
 					It("creates it with the configured owner", func() {
-						created := wardenClient.Connection.Created()
-						Ω(created).Should(HaveLen(1))
-
-						Ω(created[0].Properties["owner"]).Should(Equal("some-container-owner-name"))
+						created := wardenClient.Connection.CreateArgsForCall(0)
+						Ω(created.Properties["owner"]).Should(Equal("some-container-owner-name"))
 					})
 
 					It("applies the memory, disk, and cpu limits", func() {
-						limitedMemory := wardenClient.Connection.LimitedMemory("some-handle")
-						Ω(limitedMemory).Should(HaveLen(1))
+						handle, limitedMemory := wardenClient.Connection.LimitMemoryArgsForCall(0)
+						Ω(handle).Should(Equal("some-handle"))
+						Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(64 * 1024 * 1024)))
 
-						limitedDisk := wardenClient.Connection.LimitedDisk("some-handle")
-						Ω(limitedDisk).Should(HaveLen(1))
+						handle, limitedDisk := wardenClient.Connection.LimitDiskArgsForCall(0)
+						Ω(handle).Should(Equal("some-handle"))
+						Ω(limitedDisk.ByteHard).Should(Equal(uint64(512 * 1024 * 1024)))
 
-						limitedCPU := wardenClient.Connection.LimitedCPU("some-handle")
-						Ω(limitedCPU).Should(HaveLen(1))
-
-						Ω(limitedMemory[0].LimitInBytes).Should(Equal(uint64(64 * 1024 * 1024)))
-						Ω(limitedDisk[0].ByteHard).Should(Equal(uint64(512 * 1024 * 1024)))
-						Ω(limitedCPU[0].LimitInShares).Should(Equal(uint64(512)))
+						handle, limitedCPU := wardenClient.Connection.LimitCPUArgsForCall(0)
+						Ω(handle).Should(Equal("some-handle"))
+						Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
 					})
 
 					Context("when ports are exposed", func() {
@@ -277,19 +273,21 @@ var _ = Describe("Api", func() {
 						})
 
 						It("exposes the configured ports", func() {
-							netInned := wardenClient.Connection.NetInned("some-handle")
-							Ω(netInned).Should(HaveLen(2))
+							handle, netInH, netInC := wardenClient.Connection.NetInArgsForCall(0)
+							Ω(handle).Should(Equal("some-handle"))
+							Ω(netInH).Should(Equal(uint32(0)))
+							Ω(netInC).Should(Equal(uint32(8080)))
 
-							Ω(netInned[0].ContainerPort).Should(Equal(uint32(8080)))
-							Ω(netInned[0].HostPort).Should(Equal(uint32(0)))
-							Ω(netInned[1].ContainerPort).Should(Equal(uint32(8081)))
-							Ω(netInned[1].HostPort).Should(Equal(uint32(1234)))
+							handle, netInH, netInC = wardenClient.Connection.NetInArgsForCall(1)
+							Ω(handle).Should(Equal("some-handle"))
+							Ω(netInH).Should(Equal(uint32(1234)))
+							Ω(netInC).Should(Equal(uint32(8081)))
 						})
 
 						Context("when net-in succeeds", func() {
 							BeforeEach(func() {
 								calls := uint32(0)
-								wardenClient.Connection.WhenNetInning = func(string, uint32, uint32) (uint32, uint32, error) {
+								wardenClient.Connection.NetInStub = func(string, uint32, uint32) (uint32, uint32, error) {
 									calls++
 									return 1234 * calls, 4567 * calls, nil
 								}
@@ -312,9 +310,7 @@ var _ = Describe("Api", func() {
 							disaster := errors.New("oh no!")
 
 							BeforeEach(func() {
-								wardenClient.Connection.WhenNetInning = func(string, uint32, uint32) (uint32, uint32, error) {
-									return 0, 0, disaster
-								}
+								wardenClient.Connection.NetInReturns(0, 0, disaster)
 							})
 
 							It("returns 500", func() {
@@ -332,8 +328,7 @@ var _ = Describe("Api", func() {
 						})
 
 						It("does not apply it", func() {
-							limitedMemory := wardenClient.Connection.LimitedMemory("some-handle")
-							Ω(limitedMemory).Should(BeEmpty())
+							Ω(wardenClient.Connection.LimitMemoryCallCount()).Should(BeZero())
 						})
 					})
 
@@ -346,8 +341,7 @@ var _ = Describe("Api", func() {
 						})
 
 						It("does not apply it", func() {
-							limitedDisk := wardenClient.Connection.LimitedDisk("some-handle")
-							Ω(limitedDisk).Should(BeEmpty())
+							Ω(wardenClient.Connection.LimitDiskCallCount()).Should(BeZero())
 						})
 					})
 
@@ -359,8 +353,7 @@ var _ = Describe("Api", func() {
 						})
 
 						It("does not apply it", func() {
-							limitedCPU := wardenClient.Connection.LimitedCPU("some-handle")
-							Ω(limitedCPU).Should(BeEmpty())
+							Ω(wardenClient.Connection.LimitCPUCallCount()).Should(BeZero())
 						})
 					})
 
@@ -368,9 +361,7 @@ var _ = Describe("Api", func() {
 						disaster := errors.New("oh no!")
 
 						BeforeEach(func() {
-							wardenClient.Connection.WhenLimitingMemory = func(string, warden.MemoryLimits) (warden.MemoryLimits, error) {
-								return warden.MemoryLimits{}, disaster
-							}
+							wardenClient.Connection.LimitMemoryReturns(warden.MemoryLimits{}, disaster)
 						})
 
 						It("returns 500", func() {
@@ -382,9 +373,7 @@ var _ = Describe("Api", func() {
 						disaster := errors.New("oh no!")
 
 						BeforeEach(func() {
-							wardenClient.Connection.WhenLimitingDisk = func(string, warden.DiskLimits) (warden.DiskLimits, error) {
-								return warden.DiskLimits{}, disaster
-							}
+							wardenClient.Connection.LimitDiskReturns(warden.DiskLimits{}, disaster)
 						})
 
 						It("returns 500", func() {
@@ -396,9 +385,7 @@ var _ = Describe("Api", func() {
 						disaster := errors.New("oh no!")
 
 						BeforeEach(func() {
-							wardenClient.Connection.WhenLimitingCPU = func(string, warden.CPULimits) (warden.CPULimits, error) {
-								return warden.CPULimits{}, disaster
-							}
+							wardenClient.Connection.LimitCPUReturns(warden.CPULimits{}, disaster)
 						})
 
 						It("returns 500", func() {
@@ -411,16 +398,13 @@ var _ = Describe("Api", func() {
 					disaster := errors.New("oh no!")
 
 					BeforeEach(func() {
-						wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
-							return "", disaster
-						}
+						wardenClient.Connection.CreateReturns("", disaster)
 					})
 
 					It("returns 500", func() {
 						Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
 					})
 				})
-
 			})
 		})
 
@@ -483,13 +467,8 @@ var _ = Describe("Api", func() {
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-			wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
-				return "some-handle", nil
-			}
-
-			wardenClient.Connection.WhenListing = func(warden.Properties) ([]string, error) {
-				return []string{"some-handle"}, nil
-			}
+			wardenClient.Connection.CreateReturns("some-handle", nil)
+			wardenClient.Connection.ListReturns([]string{"some-handle"}, nil)
 
 			initResponse := DoRequest(generator.CreateRequest(
 				api.InitializeContainer,
@@ -511,14 +490,7 @@ var _ = Describe("Api", func() {
 
 		Context("with a set of actions as the body", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
-					successfulStream := make(chan warden.ProcessStream, 1)
-
-					exitStatus := uint32(0)
-					successfulStream <- warden.ProcessStream{ExitStatus: &exitStatus}
-
-					return 0, successfulStream, nil
-				}
+				wardenClient.Connection.RunReturns(new(wfakes.FakeProcess), nil)
 
 				runRequestBody = MarshalledPayload(api.ContainerRunRequest{
 					Actions: []models.ExecutorAction{
@@ -538,15 +510,12 @@ var _ = Describe("Api", func() {
 			})
 
 			It("performs the transformed actions", func() {
-				spawned := []warden.ProcessSpec{}
+				Eventually(wardenClient.Connection.RunCallCount).ShouldNot(BeZero())
 
-				Eventually(func() []warden.ProcessSpec {
-					spawned = wardenClient.Connection.SpawnedProcesses("some-handle")
-					return spawned
-				}).Should(HaveLen(1))
-
-				Ω(spawned[0].Path).Should(Equal("ls"))
-				Ω(spawned[0].Args).Should(Equal([]string{"-al"}))
+				handle, spec, _ := wardenClient.Connection.RunArgsForCall(0)
+				Ω(handle).Should(Equal("some-handle"))
+				Ω(spec.Path).Should(Equal("ls"))
+				Ω(spec.Args).Should(Equal([]string{"-al"}))
 			})
 
 			Context("when the actions are invalid", func() {
@@ -618,7 +587,8 @@ var _ = Describe("Api", func() {
 					})
 
 					It("destroys the container and removes it from the registry", func() {
-						Eventually(wardenClient.Connection.Destroyed).Should(ContainElement("some-handle"))
+						Eventually(wardenClient.Connection.DestroyCallCount).Should(Equal(1))
+						Ω(wardenClient.Connection.DestroyArgsForCall(0)).Should(Equal("some-handle"))
 					})
 
 					It("frees the container's reserved resources", func() {
@@ -651,9 +621,7 @@ var _ = Describe("Api", func() {
 				disaster := errors.New("because i said so")
 
 				BeforeEach(func() {
-					wardenClient.Connection.WhenRunning = func(string, warden.ProcessSpec) (uint32, <-chan warden.ProcessStream, error) {
-						return 0, nil, disaster
-					}
+					wardenClient.Connection.RunReturns(nil, disaster)
 				})
 
 				Context("and there is a completeURL", func() {
@@ -801,13 +769,8 @@ var _ = Describe("Api", func() {
 				))
 				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-				wardenClient.Connection.WhenCreating = func(warden.ContainerSpec) (string, error) {
-					return "some-handle", nil
-				}
-
-				wardenClient.Connection.WhenListing = func(warden.Properties) ([]string, error) {
-					return []string{"some-handle"}, nil
-				}
+				wardenClient.Connection.CreateReturns("some-handle", nil)
+				wardenClient.Connection.ListReturns([]string{"some-handle"}, nil)
 
 				initResponse := DoRequest(generator.CreateRequest(
 					api.InitializeContainer,
@@ -824,14 +787,13 @@ var _ = Describe("Api", func() {
 			})
 
 			It("destroys the warden container", func() {
-				Ω(wardenClient.Connection.Destroyed()).Should(ContainElement("some-handle"))
+				Eventually(wardenClient.Connection.DestroyCallCount).Should(Equal(1))
+				Ω(wardenClient.Connection.DestroyArgsForCall(0)).Should(Equal("some-handle"))
 			})
 
 			Describe("when deleting the container fails", func() {
 				BeforeEach(func() {
-					wardenClient.Connection.WhenDestroying = func(handle string) error {
-						return errors.New("Destroy failed")
-					}
+					wardenClient.Connection.DestroyReturns(errors.New("oh no!"))
 				})
 
 				It("returns a 500", func() {
@@ -918,11 +880,9 @@ var _ = Describe("Api", func() {
 	})
 
 	Describe("GET /ping", func() {
-		Context("when garden succeeds", func() {
+		Context("when Warden responds to ping", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.WhenPinging = func() error {
-					return nil
-				}
+				wardenClient.Connection.PingReturns(nil)
 			})
 
 			It("should 200", func() {
@@ -931,11 +891,9 @@ var _ = Describe("Api", func() {
 			})
 		})
 
-		Context("when garden returns an error", func() {
+		Context("when Warden returns an error", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.WhenPinging = func() error {
-					return errors.New("out")
-				}
+				wardenClient.Connection.PingReturns(errors.New("oh no!"))
 			})
 
 			It("should 502", func() {
