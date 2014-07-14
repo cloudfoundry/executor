@@ -69,8 +69,6 @@ var _ = Describe("Main", func() {
 	}
 
 	BeforeEach(func() {
-		var err error
-
 		//gardenServer.Stop calls listener.Close()
 		//apparently listener.Close() returns before the port is *actually* closed...?
 		wardenPort := 9001 + CurrentGinkgoTestDescription().LineNumber
@@ -88,9 +86,6 @@ var _ = Describe("Main", func() {
 		}, nil)
 
 		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend)
-
-		err = gardenServer.Start()
-		Ω(err).ShouldNot(HaveOccurred())
 
 		var loggregatorAddr string
 
@@ -171,6 +166,15 @@ var _ = Describe("Main", func() {
 	}
 
 	Describe("starting up", func() {
+		JustBeforeEach(func() {
+			err := gardenServer.Start()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			runner.StartWithoutCheck(executor_runner.Config{
+				ContainerOwnerName: "executor-name",
+			})
+		})
+
 		Context("when there are containers that are owned by the executor", func() {
 			var fakeContainer1, fakeContainer2 *wfakes.FakeContainer
 
@@ -190,14 +194,14 @@ var _ = Describe("Main", func() {
 				}
 			})
 
-			It("should delete those containers (and only those containers)", func() {
-				runner.Start(executor_runner.Config{
-					ContainerOwnerName: "executor-name",
-				})
-
+			It("deletes those containers (and only those containers)", func() {
 				Eventually(fakeBackend.DestroyCallCount).Should(Equal(2))
 				Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("handle-1"))
 				Ω(fakeBackend.DestroyArgsForCall(1)).Should(Equal("handle-2"))
+			})
+
+			It("reports itself as started via logs", func() {
+				Eventually(runner.Session).Should(gbytes.Say("executor.started"))
 			})
 
 			Context("when deleting the container fails", func() {
@@ -206,10 +210,6 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
-					runner.StartWithoutCheck(executor_runner.Config{
-						ContainerOwnerName: "executor-name",
-					})
-
 					Eventually(runner.Session).Should(gexec.Exit(1))
 				})
 			})
@@ -218,6 +218,9 @@ var _ = Describe("Main", func() {
 
 	Context("when started", func() {
 		BeforeEach(func() {
+			err := gardenServer.Start()
+			Ω(err).ShouldNot(HaveOccurred())
+
 			runner.Start(executor_runner.Config{
 				DrainTimeout:            drainTimeout,
 				RegistryPruningInterval: pruningInterval,
