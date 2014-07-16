@@ -17,31 +17,50 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
-func RunSequence(
-	completeURL string,
+type Client interface {
+	RunSequence(completeURL string, registration api.Container, sequence sequence.Step, result *string)
+}
+
+type client struct {
+	runWaitGroup  *sync.WaitGroup
+	runCancelChan <-chan struct{}
+	wardenClient  warden.Client
+	registry      registry.Registry
+	logger        *gosteno.Logger
+}
+
+func NewClient(
 	runWaitGroup *sync.WaitGroup,
-	runCancelChan chan struct{},
+	runCancelChan <-chan struct{},
 	wardenClient warden.Client,
-	Registry registry.Registry,
-	registration api.Container,
+	registry registry.Registry,
 	logger *gosteno.Logger,
-	seq sequence.Step,
-	result *string,
-) {
-	defer runWaitGroup.Done()
+) Client {
+	return &client{
+		runWaitGroup:  runWaitGroup,
+		runCancelChan: runCancelChan,
+		wardenClient:  wardenClient,
+		registry:      registry,
+		logger:        logger,
+	}
+}
+
+func (c *client) RunSequence(completeURL string, registration api.Container, sequence sequence.Step, result *string) {
+	c.runWaitGroup.Add(1)
+	defer c.runWaitGroup.Done()
 
 	run := ifrit.Envoke(&Run{
-		WardenClient: wardenClient,
-		Registry:     Registry,
+		WardenClient: c.wardenClient,
+		Registry:     c.registry,
 		Registration: registration,
-		Sequence:     seq,
+		Sequence:     sequence,
 		Result:       result,
-		Logger:       logger,
+		Logger:       c.logger,
 	})
 
 	var err error
 	select {
-	case <-runCancelChan:
+	case <-c.runCancelChan:
 		run.Signal(os.Interrupt)
 		err = <-run.Wait()
 	case err = <-run.Wait():
@@ -63,11 +82,10 @@ func RunSequence(
 	callback := ifrit.Envoke(&Callback{
 		URL:     completeURL,
 		Payload: payload,
-		Logger:  logger,
+		Logger:  c.logger,
 	})
 
 	<-callback.Wait()
-
 }
 
 type Run struct {

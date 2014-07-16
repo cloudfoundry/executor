@@ -3,7 +3,6 @@ package run_actions
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/executor"
@@ -15,28 +14,25 @@ import (
 )
 
 type handler struct {
+	depotClient  executor.Client
 	wardenClient warden.Client
 	registry     registry.Registry
 	transformer  *transformer.Transformer
-	runWaitGroup *sync.WaitGroup
-	cancelChan   chan struct{}
 	logger       *gosteno.Logger
 }
 
 func New(
+	depotClient executor.Client,
 	wardenClient warden.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
-	runWaitGroup *sync.WaitGroup,
-	cancelChan chan struct{},
 	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{
+		depotClient:  depotClient,
 		wardenClient: wardenClient,
 		registry:     registry,
 		transformer:  transformer,
-		runWaitGroup: runWaitGroup,
-		cancelChan:   cancelChan,
 		logger:       logger,
 	}
 }
@@ -54,7 +50,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reg, err := h.registry.FindByGuid(guid)
+	registration, err := h.registry.FindByGuid(guid)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
@@ -63,7 +59,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	container, err := h.wardenClient.Lookup(reg.ContainerHandle)
+	container, err := h.wardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
@@ -73,7 +69,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result string
-	steps, err := h.transformer.StepsFor(reg.Log, request.Actions, container, &result)
+	steps, err := h.transformer.StepsFor(registration.Log, request.Actions, container, &result)
 	if err != nil {
 		h.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
@@ -82,8 +78,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.runWaitGroup.Add(1)
-	go executor.RunSequence(request.CompleteURL, h.runWaitGroup, h.cancelChan, h.wardenClient, h.registry, reg, h.logger, sequence.New(steps), &result)
+	go h.depotClient.RunSequence(request.CompleteURL, registration, sequence.New(steps), &result)
 
 	w.WriteHeader(http.StatusCreated)
 }

@@ -148,6 +148,8 @@ func main() {
 	runWaitGroup := new(sync.WaitGroup)
 	runCanceller := make(chan struct{})
 
+	depotClient := executor.NewClient(runWaitGroup, runCanceller, wardenClient, reg, logger)
+
 	executor := executor.New(
 		*containerOwnerName,
 		wardenClient,
@@ -165,8 +167,7 @@ func main() {
 		ContainerMaxCPUShares: uint64(*containerMaxCpuShares),
 		Transformer:           transformer,
 		Logger:                logger,
-		RunWaitGroup:          runWaitGroup,
-		RunCanceller:          runCanceller,
+		DepotClient:           depotClient,
 	}
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)

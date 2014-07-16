@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/executor"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
 	. "github.com/cloudfoundry-incubator/executor/server"
 	"github.com/cloudfoundry-incubator/executor/transformer"
@@ -73,6 +74,10 @@ var _ = Describe("Api", func() {
 		address := fmt.Sprintf("127.0.0.1:%d", 3150+i+(config.GinkgoConfig.ParallelNode*100))
 		i++
 
+		runWaitGroup := new(sync.WaitGroup)
+		runCanceller := make(chan struct{})
+		depotClient := executor.NewClient(runWaitGroup, runCanceller, wardenClient, registry, logger)
+
 		server = ifrit.Envoke(&Server{
 			Transformer: transformer.NewTransformer(
 				logEmitter,
@@ -89,8 +94,7 @@ var _ = Describe("Api", func() {
 			ContainerOwnerName:    "some-container-owner-name",
 			ContainerMaxCPUShares: 1024,
 			Logger:                logger,
-			RunWaitGroup:          new(sync.WaitGroup),
-			RunCanceller:          make(chan struct{}),
+			DepotClient:           depotClient,
 		})
 
 		generator = rata.NewRequestGenerator("http://"+address, api.Routes)

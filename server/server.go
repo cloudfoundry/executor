@@ -2,9 +2,9 @@ package server
 
 import (
 	"os"
-	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
@@ -27,17 +27,15 @@ type Server struct {
 	Address               string
 	Registry              registry.Registry
 	WardenClient          warden.Client
+	DepotClient           executor.Client
 	ContainerOwnerName    string
 	ContainerMaxCPUShares uint64
 	Transformer           *transformer.Transformer
 	Logger                *gosteno.Logger
-	RunWaitGroup          *sync.WaitGroup
-	RunCanceller          chan struct{}
 }
 
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
-
-	handlers := s.NewHandlers(s.RunWaitGroup, s.RunCanceller)
+	handlers := s.NewHandlers()
 	for key, handler := range handlers {
 		handlers[key] = LogWrap(handler, s.Logger)
 	}
@@ -68,7 +66,7 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 	}
 }
 
-func (s *Server) NewHandlers(runWaitGroup *sync.WaitGroup, runCanceller chan struct{}) rata.Handlers {
+func (s *Server) NewHandlers() rata.Handlers {
 	return rata.Handlers{
 		api.AllocateContainer:     allocate_container.New(s.Registry, s.Logger),
 		api.GetContainer:          get_container.New(s.Registry, s.Logger),
@@ -85,11 +83,10 @@ func (s *Server) NewHandlers(runWaitGroup *sync.WaitGroup, runCanceller chan str
 			s.Logger,
 		),
 		api.RunActions: run_actions.New(
+			s.DepotClient,
 			s.WardenClient,
 			s.Registry,
 			s.Transformer,
-			runWaitGroup,
-			runCanceller,
 			s.Logger,
 		),
 	}
