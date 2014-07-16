@@ -4,9 +4,11 @@ import (
 	"flag"
 	"log"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -18,7 +20,7 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
-	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/server"
 	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -143,22 +145,36 @@ func main() {
 
 	logger.Info("executor.starting")
 
+	runWaitGroup := new(sync.WaitGroup)
+	runCanceller := make(chan struct{})
+
 	executor := executor.New(
-		*listenAddr,
 		*containerOwnerName,
-		uint64(*containerMaxCpuShares),
-		reg,
 		wardenClient,
-		transformer,
 		*drainTimeout,
+		runWaitGroup,
+		runCanceller,
 		logger,
 	)
+
+	apiServer := &server.Server{
+		Address:               *listenAddr,
+		Registry:              reg,
+		WardenClient:          wardenClient,
+		ContainerOwnerName:    *containerOwnerName,
+		ContainerMaxCPUShares: uint64(*containerMaxCpuShares),
+		Transformer:           transformer,
+		Logger:                logger,
+		RunWaitGroup:          runWaitGroup,
+		RunCanceller:          runCanceller,
+	}
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
 
 	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
 		"executor":        executor,
 		"registry-pruner": pruner,
+		"api-server":      apiServer,
 	})
 
 	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
@@ -170,6 +186,7 @@ func main() {
 		select {
 		case member := <-exitChan:
 			if member.Error != nil || member.Name == "executor" {
+				logger.Infof("executor.member.%s.exited", member.Name)
 				monitor.Signal(syscall.SIGTERM)
 			}
 

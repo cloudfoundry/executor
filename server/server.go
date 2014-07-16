@@ -1,7 +1,7 @@
 package server
 
 import (
-	"net/http"
+	"os"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -18,53 +18,79 @@ import (
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/rata"
 )
 
-type Config struct {
+type Server struct {
+	Address               string
 	Registry              registry.Registry
 	WardenClient          warden.Client
 	ContainerOwnerName    string
 	ContainerMaxCPUShares uint64
 	Transformer           *transformer.Transformer
 	Logger                *gosteno.Logger
-	WaitGroup             *sync.WaitGroup
-	Cancel                chan struct{}
+	RunWaitGroup          *sync.WaitGroup
+	RunCanceller          chan struct{}
 }
 
-func New(c *Config) (http.Handler, error) {
-	handlers := map[string]http.Handler{
-		api.AllocateContainer: LogAndWaitWrap(allocate_container.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
+func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 
-		api.GetContainer: LogAndWaitWrap(get_container.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
-
-		api.ListContainers: LogAndWaitWrap(list_containers.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
-
-		api.InitializeContainer: LogAndWaitWrap(initialize_container.New(
-			c.ContainerOwnerName,
-			c.ContainerMaxCPUShares,
-			c.WardenClient,
-			c.Registry,
-			c.Logger,
-		), c.WaitGroup, c.Logger),
-
-		api.RunActions: LogAndWaitWrap(run_actions.New(
-			c.WardenClient,
-			c.Registry,
-			c.Transformer,
-			c.WaitGroup,
-			c.Cancel,
-			c.Logger,
-		), c.WaitGroup, c.Logger),
-
-		api.DeleteContainer: LogAndWaitWrap(delete_container.New(c.WardenClient, c.Registry, c.Logger), c.WaitGroup, c.Logger),
-
-		api.GetRemainingResources: LogAndWaitWrap(remaining_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
-
-		api.GetTotalResources: LogAndWaitWrap(total_resources.New(c.Registry, c.Logger), c.WaitGroup, c.Logger),
-
-		api.Ping: LogAndWaitWrap(ping.New(c.WardenClient), c.WaitGroup, c.Logger),
+	handlers := s.NewHandlers(s.RunWaitGroup, s.RunCanceller)
+	for key, handler := range handlers {
+		handlers[key] = LogWrap(handler, s.Logger)
 	}
 
-	return rata.NewRouter(api.Routes, handlers)
+	router, err := rata.NewRouter(api.Routes, handlers)
+	if err != nil {
+		return err
+	}
+
+	server := ifrit.Envoke(http_server.New(s.Address, router))
+
+	close(readyChan)
+
+	for {
+		select {
+		case sig := <-sigChan:
+			server.Signal(sig)
+			s.Logger.Info("executor.server.signaled-to-stop")
+		case err := <-server.Wait():
+			if err != nil {
+				s.Logger.Errord(map[string]interface{}{
+					"error": err.Error(),
+				}, "executor.server.failed")
+			}
+			s.Logger.Info("executor.server.stopped")
+			return err
+		}
+	}
+}
+
+func (s *Server) NewHandlers(runWaitGroup *sync.WaitGroup, runCanceller chan struct{}) rata.Handlers {
+	return rata.Handlers{
+		api.AllocateContainer:     allocate_container.New(s.Registry, s.Logger),
+		api.GetContainer:          get_container.New(s.Registry, s.Logger),
+		api.ListContainers:        list_containers.New(s.Registry, s.Logger),
+		api.DeleteContainer:       delete_container.New(s.WardenClient, s.Registry, s.Logger),
+		api.GetRemainingResources: remaining_resources.New(s.Registry, s.Logger),
+		api.GetTotalResources:     total_resources.New(s.Registry, s.Logger),
+		api.Ping:                  ping.New(s.WardenClient),
+		api.InitializeContainer: initialize_container.New(
+			s.ContainerOwnerName,
+			s.ContainerMaxCPUShares,
+			s.WardenClient,
+			s.Registry,
+			s.Logger,
+		),
+		api.RunActions: run_actions.New(
+			s.WardenClient,
+			s.Registry,
+			s.Transformer,
+			runWaitGroup,
+			runCanceller,
+			s.Logger,
+		),
+	}
 }

@@ -1,31 +1,24 @@
 package executor_test
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 
-	steno "github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
-	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
-	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
-	"github.com/tedsuo/rata"
-
-	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
+	steno "github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/cloudfoundry/loggregatorlib/emitter"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
+	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 )
 
 var _ = Describe("Executor", func() {
@@ -34,8 +27,6 @@ var _ = Describe("Executor", func() {
 		wardenClient *fake_warden_client.FakeClient
 		logger       *steno.Logger
 		trans        *transformer.Transformer
-		executorURL  string
-		reqGen       *rata.RequestGenerator
 		reg          registry.Registry
 	)
 
@@ -43,8 +34,6 @@ var _ = Describe("Executor", func() {
 		logEmitter, err := emitter.NewEmitter("", "", "", "", nil)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		steno.EnterTestMode()
-		logger = steno.NewLogger("test-logger")
 		wardenClient = fake_warden_client.New()
 		trans = transformer.NewTransformer(
 			logEmitter,
@@ -55,12 +44,14 @@ var _ = Describe("Executor", func() {
 			logger,
 			"/tmp",
 		)
-		executorURL = fmt.Sprintf("127.0.0.1:%d", 5001+config.GinkgoConfig.ParallelNode)
-		reqGen = rata.NewRequestGenerator("http://"+executorURL, api.Routes)
 		capacity := registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
 		reg = registry.New(capacity, timeprovider.NewTimeProvider())
+		runWaitGroup := new(sync.WaitGroup)
+		runCanceller := make(chan struct{})
+		steno.EnterTestMode()
+		logger = steno.NewLogger("test-logger")
 
-		executor = New(executorURL, "executor", 100, reg, wardenClient, trans, time.Second, logger)
+		executor = New("executor", wardenClient, time.Second, runWaitGroup, runCanceller, logger)
 	})
 
 	Describe("Run", func() {
@@ -77,29 +68,6 @@ var _ = Describe("Executor", func() {
 			Eventually(ready).Should(BeClosed())
 		})
 
-		Context("while running", func() {
-			AfterEach(func() {
-				sigChan <- syscall.SIGTERM
-				Eventually(errChan).Should(Receive(BeNil()))
-			})
-
-			It("spins up an API server", func() {
-				payload, err := json.Marshal(api.ContainerAllocationRequest{
-					MemoryMB: 32,
-					DiskMB:   512,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				req, err := reqGen.CreateRequest(api.AllocateContainer, rata.Params{"guid": "container-123"}, bytes.NewBuffer(payload))
-				Ω(err).ShouldNot(HaveOccurred())
-
-				res, err := http.DefaultClient.Do(req)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(res.StatusCode).Should(Equal(http.StatusCreated))
-			})
-		})
-
 		Context("after receiving SIGINT", func() {
 			var err error
 			BeforeEach(func() {
@@ -109,14 +77,6 @@ var _ = Describe("Executor", func() {
 
 			It("completes without error", func() {
 				Ω(err).Should(BeNil())
-			})
-
-			It("shuts down the API server", func() {
-				req, err := reqGen.CreateRequest(api.GetContainer, rata.Params{"guid": "123"}, nil)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = http.DefaultClient.Do(req)
-				Ω(err).Should(HaveOccurred())
 			})
 		})
 	})

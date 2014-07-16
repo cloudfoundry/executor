@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
+	"os"
 	"sync"
 	"time"
 
@@ -25,9 +26,11 @@ import (
 	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
 	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/rata"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 )
@@ -44,9 +47,11 @@ var _ = Describe("Api", func() {
 	var wardenClient *fake_warden_client.FakeClient
 	var containerGuid string
 
-	var server *httptest.Server
+	var server ifrit.Process
 	var generator *rata.RequestGenerator
 	var timeProvider *faketimeprovider.FakeTimeProvider
+
+	var i = 0
 
 	BeforeEach(func() {
 		containerGuid = "container-guid"
@@ -65,8 +70,10 @@ var _ = Describe("Api", func() {
 		logEmitter, err := emitter.NewEmitter("", "", "", "", nil)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		handler, err := New(&Config{
-			Registry: registry,
+		address := fmt.Sprintf("127.0.0.1:%d", 3150+i+(config.GinkgoConfig.ParallelNode*100))
+		i++
+
+		server = ifrit.Envoke(&Server{
 			Transformer: transformer.NewTransformer(
 				logEmitter,
 				fakecacheddownloader.New(),
@@ -76,28 +83,28 @@ var _ = Describe("Api", func() {
 				logger,
 				"/tmp",
 			),
+			Address:               address,
+			Registry:              registry,
 			WardenClient:          wardenClient,
 			ContainerOwnerName:    "some-container-owner-name",
 			ContainerMaxCPUShares: 1024,
-			WaitGroup:             &sync.WaitGroup{},
 			Logger:                logger,
+			RunWaitGroup:          new(sync.WaitGroup),
+			RunCanceller:          make(chan struct{}),
 		})
 
-		Ω(err).ShouldNot(HaveOccurred())
-
-		server = httptest.NewServer(handler)
-
-		generator = rata.NewRequestGenerator("http://"+server.Listener.Addr().String(), api.Routes)
+		generator = rata.NewRequestGenerator("http://"+address, api.Routes)
 	})
 
 	AfterEach(func() {
-		server.Close()
+		server.Signal(os.Kill)
+		Eventually(server.Wait(), 3).Should(Receive())
 	})
 
 	DoRequest := func(req *http.Request, err error) *http.Response {
 		Ω(err).ShouldNot(HaveOccurred())
-
-		resp, err := http.DefaultClient.Do(req)
+		client := http.Client{}
+		resp, err := client.Do(req)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		return resp
@@ -549,7 +556,6 @@ var _ = Describe("Api", func() {
 
 				BeforeEach(func() {
 					callbackHandler = ghttp.NewServer()
-
 					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
 						CompleteURL: callbackHandler.URL() + "/result",
 						Actions: []models.ExecutorAction{
