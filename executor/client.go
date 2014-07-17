@@ -8,7 +8,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -20,7 +19,7 @@ var (
 
 type Client interface {
 	InitializeContainer(guid string, request api.ContainerInitializationRequest) (api.Container, error)
-	RunContainer(guid string, actions []models.ExecutorAction, completeURL string) error
+	Run(allocationGuid string, request api.ContainerRunRequest) error
 	DeleteContainer(guid string) error
 	Ping() error
 }
@@ -169,8 +168,8 @@ func (c *client) mapPorts(request api.ContainerInitializationRequest, containerC
 	return result, nil
 }
 
-func (c *client) RunContainer(guid string, actions []models.ExecutorAction, completeURL string) error {
-	registration, err := c.registry.FindByGuid(guid)
+func (c *client) Run(allocationGuid string, request api.ContainerRunRequest) error {
+	registration, err := c.registry.FindByGuid(allocationGuid)
 	if err != nil {
 		c.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
@@ -187,7 +186,7 @@ func (c *client) RunContainer(guid string, actions []models.ExecutorAction, comp
 	}
 
 	var result string
-	steps, err := c.transformer.StepsFor(registration.Log, actions, container, &result)
+	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, container, &result)
 	if err != nil {
 		c.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
@@ -196,7 +195,7 @@ func (c *client) RunContainer(guid string, actions []models.ExecutorAction, comp
 	}
 
 	c.runActions <- DepotRunAction{
-		CompleteURL:  completeURL,
+		CompleteURL:  request.CompleteURL,
 		Registration: registration,
 		Sequence:     sequence.New(steps),
 		Result:       &result,

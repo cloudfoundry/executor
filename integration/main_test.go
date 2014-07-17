@@ -270,6 +270,10 @@ var _ = Describe("Main", func() {
 			})
 		})
 
+		Describe("allocating the container", func() {
+
+		})
+
 		Describe("initializing the container", func() {
 			var initializeContainerRequest api.ContainerInitializationRequest
 			var err error

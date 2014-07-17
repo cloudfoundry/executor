@@ -179,105 +179,6 @@ var _ = Describe("Api", func() {
 					}))
 				})
 			})
-
-			Describe("POST /containers/:guid/initialize", func() {
-				Context("when the container can be created", func() {
-					var expectedRequest api.ContainerInitializationRequest
-					var createResponse *http.Response
-					var expectedContainer api.Container
-
-					BeforeEach(func() {
-						expectedRequest = api.ContainerInitializationRequest{
-							CpuPercent: 50.0,
-							Ports: []api.PortMapping{
-								{ContainerPort: 8080, HostPort: 0},
-								{ContainerPort: 8081, HostPort: 1234},
-							},
-						}
-
-						expectedContainer = api.Container{
-							Ports: []api.PortMapping{
-								{HostPort: 1234, ContainerPort: 4567},
-								{HostPort: 2468, ContainerPort: 9134},
-							},
-						}
-						depotClient.InitializeContainerReturns(expectedContainer, nil)
-
-						createResponse = DoRequest(generator.CreateRequest(
-							api.InitializeContainer,
-							rata.Params{"guid": containerGuid},
-							MarshalledPayload(expectedRequest),
-						))
-					})
-
-					It("returns 201", func() {
-						Ω(reserveResponse.StatusCode).Should(Equal(http.StatusCreated))
-					})
-
-					It("creates the container", func() {
-						Ω(depotClient.InitializeContainerCallCount()).Should(Equal(1))
-						guid, containerInitReq := depotClient.InitializeContainerArgsForCall(0)
-						Ω(guid).Should(Equal(containerGuid))
-						Ω(containerInitReq).Should(Equal(expectedRequest))
-					})
-
-					It("returns the serialized initialized container", func() {
-						var initializedContainer api.Container
-
-						err := json.NewDecoder(createResponse.Body).Decode(&initializedContainer)
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(initializedContainer).Should(Equal(expectedContainer))
-					})
-				})
-
-				Context("when the request is invalid json", func() {
-					var createResponse *http.Response
-					BeforeEach(func() {
-						createResponse = DoRequest(generator.CreateRequest(
-							api.InitializeContainer,
-							rata.Params{"guid": containerGuid},
-							MarshalledPayload("asdasdasdasdasdadsads"),
-						))
-					})
-
-					It("returns 400", func() {
-						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-					})
-				})
-
-				Context("when the container cannot be created", func() {
-					var createResponse *http.Response
-					JustBeforeEach(func() {
-						createResponse = DoRequest(generator.CreateRequest(
-							api.InitializeContainer,
-							rata.Params{"guid": containerGuid},
-							MarshalledPayload(api.ContainerInitializationRequest{}),
-						))
-					})
-
-					Context("when the requested limits are invalid", func() {
-						BeforeEach(func() {
-							depotClient.InitializeContainerReturns(api.Container{}, executor.LimitsInvalid)
-						})
-
-						It("returns 400", func() {
-							Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-						})
-					})
-
-					Context("when for some reason the container fails to create", func() {
-						disaster := errors.New("oh no!")
-
-						BeforeEach(func() {
-							depotClient.InitializeContainerReturns(api.Container{}, disaster)
-						})
-
-						It("returns 500", func() {
-							Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-						})
-					})
-				})
-			})
 		})
 
 		Context("when the container cannot be reserved because the guid is already taken", func() {
@@ -315,6 +216,105 @@ var _ = Describe("Api", func() {
 
 			It("returns 503", func() {
 				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusServiceUnavailable))
+			})
+		})
+	})
+
+	Describe("POST /containers/:guid/initialize", func() {
+		Context("when the container can be created", func() {
+			var expectedRequest api.ContainerInitializationRequest
+			var createResponse *http.Response
+			var expectedContainer api.Container
+
+			BeforeEach(func() {
+				expectedRequest = api.ContainerInitializationRequest{
+					CpuPercent: 50.0,
+					Ports: []api.PortMapping{
+						{ContainerPort: 8080, HostPort: 0},
+						{ContainerPort: 8081, HostPort: 1234},
+					},
+				}
+
+				expectedContainer = api.Container{
+					Ports: []api.PortMapping{
+						{HostPort: 1234, ContainerPort: 4567},
+						{HostPort: 2468, ContainerPort: 9134},
+					},
+				}
+				depotClient.InitializeContainerReturns(expectedContainer, nil)
+
+				createResponse = DoRequest(generator.CreateRequest(
+					api.InitializeContainer,
+					rata.Params{"guid": containerGuid},
+					MarshalledPayload(expectedRequest),
+				))
+			})
+
+			It("returns 201", func() {
+				Ω(createResponse.StatusCode).Should(Equal(http.StatusCreated))
+			})
+
+			It("creates the container", func() {
+				Ω(depotClient.InitializeContainerCallCount()).Should(Equal(1))
+				guid, containerInitReq := depotClient.InitializeContainerArgsForCall(0)
+				Ω(guid).Should(Equal(containerGuid))
+				Ω(containerInitReq).Should(Equal(expectedRequest))
+			})
+
+			It("returns the serialized initialized container", func() {
+				var initializedContainer api.Container
+
+				err := json.NewDecoder(createResponse.Body).Decode(&initializedContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(initializedContainer).Should(Equal(expectedContainer))
+			})
+		})
+
+		Context("when the request is invalid json", func() {
+			var createResponse *http.Response
+			BeforeEach(func() {
+				createResponse = DoRequest(generator.CreateRequest(
+					api.InitializeContainer,
+					rata.Params{"guid": containerGuid},
+					MarshalledPayload("asdasdasdasdasdadsads"),
+				))
+			})
+
+			It("returns 400", func() {
+				Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+			})
+		})
+
+		Context("when the container cannot be created", func() {
+			var createResponse *http.Response
+			JustBeforeEach(func() {
+				createResponse = DoRequest(generator.CreateRequest(
+					api.InitializeContainer,
+					rata.Params{"guid": containerGuid},
+					MarshalledPayload(api.ContainerInitializationRequest{}),
+				))
+			})
+
+			Context("when the requested limits are invalid", func() {
+				BeforeEach(func() {
+					depotClient.InitializeContainerReturns(api.Container{}, executor.LimitsInvalid)
+				})
+
+				It("returns 400", func() {
+					Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+				})
+			})
+
+			Context("when for some reason the container fails to create", func() {
+				disaster := errors.New("oh no!")
+
+				BeforeEach(func() {
+					depotClient.InitializeContainerReturns(api.Container{}, disaster)
+				})
+
+				It("returns 500", func() {
+					Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				})
 			})
 		})
 	})
@@ -359,6 +359,7 @@ var _ = Describe("Api", func() {
 
 		Context("with a set of actions as the body", func() {
 			var expectedActions []models.ExecutorAction
+			var runRequest api.ContainerRunRequest
 
 			BeforeEach(func() {
 				expectedActions = []models.ExecutorAction{
@@ -369,10 +370,12 @@ var _ = Describe("Api", func() {
 						},
 					},
 				}
-				runRequestBody = MarshalledPayload(api.ContainerRunRequest{
+
+				runRequest = api.ContainerRunRequest{
 					Actions:     expectedActions,
 					CompleteURL: "http://example.com",
-				})
+				}
+				runRequestBody = MarshalledPayload(runRequest)
 			})
 
 			It("returns 201", func() {
@@ -381,17 +384,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("runs the actions", func() {
-				Eventually(depotClient.RunContainerCallCount).Should(Equal(1))
+				Eventually(depotClient.RunCallCount).Should(Equal(1))
 
-				guid, actions, completeURL := depotClient.RunContainerArgsForCall(0)
+				guid, req := depotClient.RunArgsForCall(0)
 				Ω(guid).Should(Equal(containerGuid))
-				Ω(actions).Should(Equal(expectedActions))
-				Ω(completeURL).Should(Equal("http://example.com"))
+				Ω(req).Should(Equal(runRequest))
 			})
 
 			Context("when the actions are invalid", func() {
 				BeforeEach(func() {
-					depotClient.RunContainerStub = func(guid string, actions []models.ExecutorAction, completeURL string) error {
+					depotClient.RunStub = func(guid string, runRequest api.ContainerRunRequest) error {
 						return executor.StepsInvalid
 					}
 

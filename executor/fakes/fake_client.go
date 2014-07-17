@@ -6,7 +6,6 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/executor"
 
 	"sync"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 type FakeClient struct {
@@ -20,14 +19,13 @@ type FakeClient struct {
 		result1 api.Container
 		result2 error
 	}
-	RunContainerStub        func(guid string, actions []models.ExecutorAction, completeURL string) error
-	runContainerMutex       sync.RWMutex
-	runContainerArgsForCall []struct {
+	RunStub        func(allocationGuid string, request api.ContainerRunRequest) error
+	runMutex       sync.RWMutex
+	runArgsForCall []struct {
 		arg1 string
-		arg2 []models.ExecutorAction
-		arg3 string
+		arg2 api.ContainerRunRequest
 	}
-	runContainerReturns struct {
+	runReturns struct {
 		result1 error
 	}
 	DeleteContainerStub        func(guid string) error
@@ -79,35 +77,34 @@ func (fake *FakeClient) InitializeContainerReturns(result1 api.Container, result
 	}{result1, result2}
 }
 
-func (fake *FakeClient) RunContainer(arg1 string, arg2 []models.ExecutorAction, arg3 string) error {
-	fake.runContainerMutex.Lock()
-	defer fake.runContainerMutex.Unlock()
-	fake.runContainerArgsForCall = append(fake.runContainerArgsForCall, struct {
+func (fake *FakeClient) Run(arg1 string, arg2 api.ContainerRunRequest) error {
+	fake.runMutex.Lock()
+	defer fake.runMutex.Unlock()
+	fake.runArgsForCall = append(fake.runArgsForCall, struct {
 		arg1 string
-		arg2 []models.ExecutorAction
-		arg3 string
-	}{arg1, arg2, arg3})
-	if fake.RunContainerStub != nil {
-		return fake.RunContainerStub(arg1, arg2, arg3)
+		arg2 api.ContainerRunRequest
+	}{arg1, arg2})
+	if fake.RunStub != nil {
+		return fake.RunStub(arg1, arg2)
 	} else {
-		return fake.runContainerReturns.result1
+		return fake.runReturns.result1
 	}
 }
 
-func (fake *FakeClient) RunContainerCallCount() int {
-	fake.runContainerMutex.RLock()
-	defer fake.runContainerMutex.RUnlock()
-	return len(fake.runContainerArgsForCall)
+func (fake *FakeClient) RunCallCount() int {
+	fake.runMutex.RLock()
+	defer fake.runMutex.RUnlock()
+	return len(fake.runArgsForCall)
 }
 
-func (fake *FakeClient) RunContainerArgsForCall(i int) (string, []models.ExecutorAction, string) {
-	fake.runContainerMutex.RLock()
-	defer fake.runContainerMutex.RUnlock()
-	return fake.runContainerArgsForCall[i].arg1, fake.runContainerArgsForCall[i].arg2, fake.runContainerArgsForCall[i].arg3
+func (fake *FakeClient) RunArgsForCall(i int) (string, api.ContainerRunRequest) {
+	fake.runMutex.RLock()
+	defer fake.runMutex.RUnlock()
+	return fake.runArgsForCall[i].arg1, fake.runArgsForCall[i].arg2
 }
 
-func (fake *FakeClient) RunContainerReturns(result1 error) {
-	fake.runContainerReturns = struct {
+func (fake *FakeClient) RunReturns(result1 error) {
+	fake.runReturns = struct {
 		result1 error
 	}{result1}
 }

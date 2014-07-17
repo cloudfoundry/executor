@@ -38,7 +38,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	guid := r.FormValue(":guid")
 
-	err = h.depotClient.RunContainer(guid, request.Actions, request.CompleteURL)
+	err = h.depotClient.Run(guid, request)
 	if err != nil {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
