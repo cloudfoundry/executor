@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/server/total_resources"
-	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/tedsuo/ifrit"
@@ -30,7 +29,6 @@ type Server struct {
 	DepotClient           executor.Client
 	ContainerOwnerName    string
 	ContainerMaxCPUShares uint64
-	Transformer           *transformer.Transformer
 	Logger                *gosteno.Logger
 }
 
@@ -82,12 +80,6 @@ func (s *Server) NewHandlers() rata.Handlers {
 			s.Registry,
 			s.Logger,
 		),
-		api.RunActions: run_actions.New(
-			s.DepotClient,
-			s.WardenClient,
-			s.Registry,
-			s.Transformer,
-			s.Logger,
-		),
+		api.RunActions: run_actions.New(s.DepotClient, s.Logger),
 	}
 }

@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/ghttp"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/client"
@@ -108,14 +109,41 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	runTask := func(block bool) {
-		fakeContainer := new(wfakes.FakeContainer)
+	initNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
+		fakeContainer = new(wfakes.FakeContainer)
 		fakeBackend.CreateReturns(fakeContainer, nil)
 		fakeBackend.LookupReturns(fakeContainer, nil)
 		fakeBackend.ContainersReturns([]warden.Container{fakeContainer}, nil)
+		fakeContainer.HandleReturns("some-handle")
+
+		id, err := uuid.NewV4()
+		Ω(err).ShouldNot(HaveOccurred())
+
+		guid = id.String()
+
+		_, err = executorClient.AllocateContainer(guid, api.ContainerAllocationRequest{
+			MemoryMB: 1024,
+			DiskMB:   1024,
+		})
+		Ω(err).ShouldNot(HaveOccurred())
+
+		index := 13
+		_, err = executorClient.InitializeContainer(guid, api.ContainerInitializationRequest{
+			Log: models.LogConfig{
+				Guid:       "the-app-guid",
+				SourceName: "STG",
+				Index:      &index,
+			},
+		})
+		Ω(err).ShouldNot(HaveOccurred())
+
+		return guid, fakeContainer
+	}
+
+	runTask := func(block bool) {
+		guid, fakeContainer := initNewContainer()
 
 		process := new(wfakes.FakeProcess)
-
 		process.WaitStub = func() (int, error) {
 			time.Sleep(time.Second)
 
@@ -136,28 +164,8 @@ var _ = Describe("Main", func() {
 		}
 
 		fakeContainer.RunReturns(process, nil)
-		fakeContainer.HandleReturns("some-handle")
 
-		guid, err := uuid.NewV4()
-		Ω(err).ShouldNot(HaveOccurred())
-
-		_, err = executorClient.AllocateContainer(guid.String(), api.ContainerAllocationRequest{
-			MemoryMB: 1024,
-			DiskMB:   1024,
-		})
-		Ω(err).ShouldNot(HaveOccurred())
-
-		index := 13
-		_, err = executorClient.InitializeContainer(guid.String(), api.ContainerInitializationRequest{
-			Log: models.LogConfig{
-				Guid:       "the-app-guid",
-				SourceName: "STG",
-				Index:      &index,
-			},
-		})
-		Ω(err).ShouldNot(HaveOccurred())
-
-		err = executorClient.Run(guid.String(), api.ContainerRunRequest{
+		err := executorClient.Run(guid, api.ContainerRunRequest{
 			Actions: []models.ExecutorAction{
 				{Action: models.RunAction{Path: "ls"}},
 			},
@@ -239,6 +247,176 @@ var _ = Describe("Main", func() {
 				Ω(message.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
 				Ω(message.GetSourceId()).Should(Equal("13"))
 				Ω(string(message.GetMessage())).Should(Equal("some-output"))
+			})
+
+			It("fails when the actions are invalid", func() {
+				guid, _ := initNewContainer()
+				err := executorClient.Run(
+					guid,
+					api.ContainerRunRequest{
+						Actions: []models.ExecutorAction{
+							{
+								models.MonitorAction{
+									HealthyHook: models.HealthRequest{
+										URL: "some/bogus/url",
+									},
+									Action: models.ExecutorAction{
+										models.RunAction{
+											Path: "ls",
+											Args: []string{"-al"},
+										},
+									},
+								},
+							},
+						},
+					},
+				)
+				Ω(err).Should(HaveOccurred())
+			})
+
+			Context("when there is a completeURL and metadata", func() {
+				var callbackHandler *ghttp.Server
+				var containerGuid string
+				var fakeContainer *wfakes.FakeContainer
+
+				BeforeEach(func() {
+					callbackHandler = ghttp.NewServer()
+
+					containerGuid, fakeContainer = initNewContainer()
+
+					process := new(wfakes.FakeProcess)
+					fakeContainer.RunReturns(process, nil)
+
+					err := executorClient.Run(
+						containerGuid,
+						api.ContainerRunRequest{
+							Actions: []models.ExecutorAction{
+								{
+									models.RunAction{
+										Path: "ls",
+										Args: []string{"-al"},
+									},
+								},
+							},
+							CompleteURL: callbackHandler.URL() + "/result",
+						},
+					)
+
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				AfterEach(func() {
+					callbackHandler.Close()
+				})
+
+				Context("and the completeURL succeeds", func() {
+					BeforeEach(func() {
+						callbackHandler.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("PUT", "/result"),
+								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
+									Guid:          containerGuid,
+									Failed:        false,
+									FailureReason: "",
+									Result:        "",
+								}),
+							),
+						)
+					})
+
+					It("invokes the callback with failed false", func() {
+						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					})
+
+					It("destroys the container and removes it from the registry", func() {
+						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+					})
+
+					It("frees the container's reserved resources", func() {
+						Eventually(executorClient.RemainingResources).Should(Equal(api.ExecutorResources{
+							MemoryMB:   1024,
+							DiskMB:     1024,
+							Containers: 1024,
+						}))
+					})
+				})
+
+				Context("and the completeURL fails", func() {
+					BeforeEach(func() {
+						callbackHandler.AppendHandlers(
+							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								callbackHandler.HTTPTestServer.CloseClientConnections()
+							}),
+							ghttp.RespondWith(http.StatusInternalServerError, ""),
+							ghttp.RespondWith(http.StatusOK, ""),
+						)
+					})
+
+					It("invokes the callback repeatedly", func() {
+						Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
+					})
+				})
+			})
+
+			Context("when the actions fail", func() {
+				var disaster = errors.New("because i said so")
+				var fakeContainer *wfakes.FakeContainer
+				var containerGuid string
+
+				BeforeEach(func() {
+					containerGuid, fakeContainer = initNewContainer()
+					process := new(wfakes.FakeProcess)
+					fakeContainer.RunReturns(process, nil)
+					process.WaitStub = func() (int, error) {
+						return 1, disaster
+					}
+				})
+
+				Context("and there is a completeURL", func() {
+					var callbackHandler *ghttp.Server
+
+					BeforeEach(func() {
+						callbackHandler = ghttp.NewServer()
+
+						callbackHandler.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("PUT", "/result"),
+								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
+									Guid:          containerGuid,
+									Failed:        true,
+									FailureReason: "process error: because i said so",
+									Result:        "",
+								}),
+							),
+						)
+
+						err := executorClient.Run(
+							containerGuid,
+							api.ContainerRunRequest{
+								Actions: []models.ExecutorAction{
+									{
+										models.RunAction{
+											Path: "ls",
+											Args: []string{"-al"},
+										},
+									},
+								},
+								CompleteURL: callbackHandler.URL() + "/result",
+							},
+						)
+
+						Ω(err).ShouldNot(HaveOccurred())
+					})
+
+					AfterEach(func() {
+						callbackHandler.Close()
+					})
+
+					It("invokes the callback with failed true and a reason", func() {
+						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					})
+				})
 			})
 		})
 

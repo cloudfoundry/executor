@@ -8,32 +8,26 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/executor/fakes"
 	Registry "github.com/cloudfoundry-incubator/executor/registry"
 	. "github.com/cloudfoundry-incubator/executor/server"
-	"github.com/cloudfoundry-incubator/executor/transformer"
-	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
+
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"github.com/pivotal-golang/archiver/compressor/fake_compressor"
-	"github.com/pivotal-golang/archiver/extractor/fake_extractor"
-	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/rata"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/ghttp"
 )
 
 func MarshalledPayload(payload interface{}) io.Reader {
@@ -46,6 +40,7 @@ func MarshalledPayload(payload interface{}) io.Reader {
 var _ = Describe("Api", func() {
 	var registry Registry.Registry
 	var wardenClient *fake_warden_client.FakeClient
+	var depotClient *fakes.FakeClient
 	var containerGuid string
 
 	var server ifrit.Process
@@ -68,26 +63,13 @@ var _ = Describe("Api", func() {
 
 		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
 		logger := gosteno.NewLogger("api-test-logger")
-		logEmitter, err := emitter.NewEmitter("", "", "", "", nil)
-		Ω(err).ShouldNot(HaveOccurred())
 
 		address := fmt.Sprintf("127.0.0.1:%d", 3150+i+(config.GinkgoConfig.ParallelNode*100))
 		i++
 
-		runWaitGroup := new(sync.WaitGroup)
-		runCanceller := make(chan struct{})
-		depotClient := executor.NewClient(runWaitGroup, runCanceller, wardenClient, registry, logger)
+		depotClient = new(fakes.FakeClient)
 
 		server = ifrit.Envoke(&Server{
-			Transformer: transformer.NewTransformer(
-				logEmitter,
-				fakecacheddownloader.New(),
-				new(fake_uploader.FakeUploader),
-				&fake_extractor.FakeExtractor{},
-				&fake_compressor.FakeCompressor{},
-				logger,
-				"/tmp",
-			),
 			Address:               address,
 			Registry:              registry,
 			WardenClient:          wardenClient,
@@ -478,9 +460,6 @@ var _ = Describe("Api", func() {
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 
-			wardenClient.Connection.CreateReturns("some-handle", nil)
-			wardenClient.Connection.ListReturns([]string{"some-handle"}, nil)
-
 			initResponse := DoRequest(generator.CreateRequest(
 				api.InitializeContainer,
 				rata.Params{"guid": containerGuid},
@@ -500,18 +479,20 @@ var _ = Describe("Api", func() {
 		})
 
 		Context("with a set of actions as the body", func() {
-			BeforeEach(func() {
-				wardenClient.Connection.RunReturns(new(wfakes.FakeProcess), nil)
+			var expectedActions []models.ExecutorAction
 
-				runRequestBody = MarshalledPayload(api.ContainerRunRequest{
-					Actions: []models.ExecutorAction{
-						{
-							models.RunAction{
-								Path: "ls",
-								Args: []string{"-al"},
-							},
+			BeforeEach(func() {
+				expectedActions = []models.ExecutorAction{
+					{
+						models.RunAction{
+							Path: "ls",
+							Args: []string{"-al"},
 						},
 					},
+				}
+				runRequestBody = MarshalledPayload(api.ContainerRunRequest{
+					Actions:     expectedActions,
+					CompleteURL: "http://example.com",
 				})
 			})
 
@@ -520,158 +501,28 @@ var _ = Describe("Api", func() {
 				time.Sleep(time.Second)
 			})
 
-			It("performs the transformed actions", func() {
-				Eventually(wardenClient.Connection.RunCallCount).ShouldNot(BeZero())
+			It("runs the actions", func() {
+				Eventually(depotClient.RunContainerCallCount).Should(Equal(1))
 
-				handle, spec, _ := wardenClient.Connection.RunArgsForCall(0)
-				Ω(handle).Should(Equal("some-handle"))
-				Ω(spec.Path).Should(Equal("ls"))
-				Ω(spec.Args).Should(Equal([]string{"-al"}))
+				guid, actions, completeURL := depotClient.RunContainerArgsForCall(0)
+				Ω(guid).Should(Equal(containerGuid))
+				Ω(actions).Should(Equal(expectedActions))
+				Ω(completeURL).Should(Equal("http://example.com"))
 			})
 
 			Context("when the actions are invalid", func() {
 				BeforeEach(func() {
+					depotClient.RunContainerStub = func(guid string, actions []models.ExecutorAction, completeURL string) error {
+						return executor.StepsInvalid
+					}
+
 					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
-						Actions: []models.ExecutorAction{
-							{
-								models.MonitorAction{
-									HealthyHook: models.HealthRequest{
-										URL: "some/bogus/url",
-									},
-									Action: models.ExecutorAction{
-										models.RunAction{
-											Path: "ls",
-											Args: []string{"-al"},
-										},
-									},
-								},
-							},
-						},
+						Actions: []models.ExecutorAction{},
 					})
 				})
 
 				It("returns 400", func() {
 					Ω(runResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-				})
-			})
-
-			Context("when there is a completeURL and metadata", func() {
-				var callbackHandler *ghttp.Server
-
-				BeforeEach(func() {
-					callbackHandler = ghttp.NewServer()
-					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
-						CompleteURL: callbackHandler.URL() + "/result",
-						Actions: []models.ExecutorAction{
-							{
-								models.RunAction{
-									Path: "ls",
-									Args: []string{"-al"},
-								},
-							},
-						},
-					})
-				})
-
-				AfterEach(func() {
-					callbackHandler.Close()
-				})
-
-				Context("and the completeURL succeeds", func() {
-					BeforeEach(func() {
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
-									Guid:          containerGuid,
-									Failed:        false,
-									FailureReason: "",
-									Result:        "",
-								}),
-							),
-						)
-					})
-
-					It("invokes the callback with failed false", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-					})
-
-					It("destroys the container and removes it from the registry", func() {
-						Eventually(wardenClient.Connection.DestroyCallCount).Should(Equal(1))
-						Ω(wardenClient.Connection.DestroyArgsForCall(0)).Should(Equal("some-handle"))
-					})
-
-					It("frees the container's reserved resources", func() {
-						Eventually(registry.CurrentCapacity).Should(Equal(Registry.Capacity{
-							MemoryMB:   1024,
-							DiskMB:     1024,
-							Containers: 1024,
-						}))
-					})
-				})
-
-				Context("and the completeURL fails", func() {
-					BeforeEach(func() {
-						callbackHandler.AppendHandlers(
-							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								callbackHandler.HTTPTestServer.CloseClientConnections()
-							}),
-							ghttp.RespondWith(http.StatusInternalServerError, ""),
-							ghttp.RespondWith(http.StatusOK, ""),
-						)
-					})
-
-					It("invokes the callback repeatedly", func() {
-						Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
-					})
-				})
-			})
-
-			Context("when the actions fail", func() {
-				disaster := errors.New("because i said so")
-
-				BeforeEach(func() {
-					wardenClient.Connection.RunReturns(nil, disaster)
-				})
-
-				Context("and there is a completeURL", func() {
-					var callbackHandler *ghttp.Server
-
-					BeforeEach(func() {
-						callbackHandler = ghttp.NewServer()
-
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(api.ContainerRunResult{
-									Guid:          containerGuid,
-									Failed:        true,
-									FailureReason: "because i said so",
-									Result:        "",
-								}),
-							),
-						)
-
-						runRequestBody = MarshalledPayload(api.ContainerRunRequest{
-							CompleteURL: callbackHandler.URL() + "/result",
-							Actions: []models.ExecutorAction{
-								{
-									models.RunAction{
-										Path: "ls",
-										Args: []string{"-al"},
-									},
-								},
-							},
-						})
-					})
-
-					AfterEach(func() {
-						callbackHandler.Close()
-					})
-
-					It("invokes the callback with failed true and a reason", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-					})
 				})
 			})
 		})

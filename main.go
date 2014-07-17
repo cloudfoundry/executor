@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"sync"
 	"syscall"
 	"time"
 
@@ -145,17 +144,22 @@ func main() {
 
 	logger.Info("executor.starting")
 
-	runWaitGroup := new(sync.WaitGroup)
-	runCanceller := make(chan struct{})
+	runActions := make(chan executor.DepotRunAction)
 
-	depotClient := executor.NewClient(runWaitGroup, runCanceller, wardenClient, reg, logger)
+	depotClient := executor.NewClient(
+		wardenClient,
+		reg,
+		transformer,
+		runActions,
+		logger,
+	)
 
 	executor := executor.New(
 		*containerOwnerName,
+		reg,
 		wardenClient,
 		*drainTimeout,
-		runWaitGroup,
-		runCanceller,
+		runActions,
 		logger,
 	)
 
@@ -165,7 +169,6 @@ func main() {
 		WardenClient:          wardenClient,
 		ContainerOwnerName:    *containerOwnerName,
 		ContainerMaxCPUShares: uint64(*containerMaxCpuShares),
-		Transformer:           transformer,
 		Logger:                logger,
 		DepotClient:           depotClient,
 	}

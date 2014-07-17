@@ -2,7 +2,6 @@ package executor_test
 
 import (
 	"os"
-	"sync"
 	"syscall"
 	"time"
 
@@ -46,12 +45,11 @@ var _ = Describe("Executor", func() {
 		)
 		capacity := registry.Capacity{MemoryMB: 1024, DiskMB: 1024, Containers: 42}
 		reg = registry.New(capacity, timeprovider.NewTimeProvider())
-		runWaitGroup := new(sync.WaitGroup)
-		runCanceller := make(chan struct{})
+		runActions := make(chan DepotRunAction)
 		steno.EnterTestMode()
 		logger = steno.NewLogger("test-logger")
 
-		executor = New("executor", wardenClient, time.Second, runWaitGroup, runCanceller, logger)
+		executor = New("executor", reg, wardenClient, time.Second, runActions, logger)
 	})
 
 	Describe("Run", func() {

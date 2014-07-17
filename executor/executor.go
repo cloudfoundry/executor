@@ -7,40 +7,55 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	steno "github.com/cloudfoundry/gosteno"
+	"github.com/tedsuo/ifrit"
 )
 
 const ServerCloseErrMsg = "use of closed network connection"
 
+type DepotRunAction struct {
+	CompleteURL  string
+	Registration api.Container
+	Sequence     sequence.Step
+	Result       *string
+}
+
 type Executor struct {
 	containerOwnerName string
+	registry           registry.Registry
 	wardenClient       warden.Client
 	drainTimeout       time.Duration
 	logger             *steno.Logger
 	stoppedChan        chan error
 	runWaitGroup       *sync.WaitGroup
 	runCanceller       chan struct{}
+	runActions         <-chan DepotRunAction
 }
 
 var ErrDrainTimeout = errors.New("tasks did not complete within timeout")
 
 func New(
 	containerOwnerName string,
+	registry registry.Registry,
 	wardenClient warden.Client,
 	drainTimeout time.Duration,
-	runWaitGroup *sync.WaitGroup,
-	runCanceller chan struct{},
+	runActions <-chan DepotRunAction,
 	logger *steno.Logger,
 ) *Executor {
 	return &Executor{
 		containerOwnerName: containerOwnerName,
+		registry:           registry,
 		wardenClient:       wardenClient,
 		drainTimeout:       drainTimeout,
 		logger:             logger,
 		stoppedChan:        make(chan error, 1),
-		runWaitGroup:       runWaitGroup,
-		runCanceller:       runCanceller,
+		runWaitGroup:       new(sync.WaitGroup),
+		runCanceller:       make(chan struct{}),
+		runActions:         runActions,
 	}
 }
 
@@ -56,6 +71,10 @@ func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) erro
 
 	for {
 		select {
+		case runAction := <-e.runActions:
+			e.runWaitGroup.Add(1)
+			go e.runSequence(runAction)
+
 		case signal := <-sigChan:
 			if stopping {
 				e.logger.Info("executor.signal.ignored")
@@ -120,4 +139,44 @@ func (e *Executor) destroyContainers() error {
 	}
 
 	return nil
+}
+
+func (e *Executor) runSequence(runAction DepotRunAction) {
+	defer e.runWaitGroup.Done()
+
+	run := ifrit.Envoke(&Run{
+		WardenClient: e.wardenClient,
+		Registry:     e.registry,
+		RunAction:    runAction,
+		Logger:       e.logger,
+	})
+
+	var err error
+	select {
+	case <-e.runCanceller:
+		run.Signal(os.Interrupt)
+		err = <-run.Wait()
+	case err = <-run.Wait():
+	}
+
+	if runAction.CompleteURL == "" {
+		return
+	}
+
+	payload := api.ContainerRunResult{
+		Guid:   runAction.Registration.Guid,
+		Result: *runAction.Result,
+	}
+	if err != nil {
+		payload.Failed = true
+		payload.FailureReason = err.Error()
+	}
+
+	callback := ifrit.Envoke(&Callback{
+		URL:     runAction.CompleteURL,
+		Payload: payload,
+		Logger:  e.logger,
+	})
+
+	<-callback.Wait()
 }
