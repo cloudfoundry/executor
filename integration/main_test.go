@@ -12,6 +12,7 @@ import (
 
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
@@ -265,6 +266,179 @@ var _ = Describe("Main", func() {
 
 				It("should return an error", func() {
 					Ω(err.Error()).Should(ContainSubstring("status: 502"))
+				})
+			})
+		})
+
+		Describe("initializing the container", func() {
+			var initializeContainerRequest api.ContainerInitializationRequest
+			var err error
+			var initializedContainer api.Container
+			var container *wfakes.FakeContainer
+			var guid string
+
+			JustBeforeEach(func() {
+				initializedContainer, err = executorClient.InitializeContainer(guid, initializeContainerRequest)
+			})
+
+			BeforeEach(func() {
+				guid, container = allocNewContainer()
+				initializeContainerRequest = api.ContainerInitializationRequest{
+					CpuPercent: 50.0,
+				}
+			})
+
+			Context("when the requested CPU percent is > 100", func() {
+				BeforeEach(func() {
+					initializeContainerRequest = api.ContainerInitializationRequest{
+						CpuPercent: 101.0,
+					}
+				})
+
+				It("returns an error", func() {
+					Ω(err).Should(HaveOccurred())
+					Ω(err.Error()).Should(ContainSubstring("status: 400"))
+				})
+			})
+
+			Context("when the requested CPU percent is < 0", func() {
+				BeforeEach(func() {
+					initializeContainerRequest = api.ContainerInitializationRequest{
+						CpuPercent: -14.0,
+					}
+				})
+
+				It("returns an error", func() {
+					Ω(err).Should(HaveOccurred())
+					Ω(err.Error()).Should(ContainSubstring("status: 400"))
+				})
+			})
+
+			Context("when the container can be created", func() {
+				BeforeEach(func() {
+					fakeBackend.CreateReturns(container, nil)
+				})
+
+				It("doesn't return an error", func() {
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("creates it with the configured owner", func() {
+					created := fakeBackend.CreateArgsForCall(0)
+					ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
+					Ω(created.Properties["owner"]).Should(Equal(ownerName))
+				})
+
+				It("applies the memory, disk, and cpu limits", func() {
+					limitedMemory := container.LimitMemoryArgsForCall(0)
+					Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(1024 * 1024 * 1024)))
+
+					limitedDisk := container.LimitDiskArgsForCall(0)
+					Ω(limitedDisk.ByteHard).Should(Equal(uint64(1024 * 1024 * 1024)))
+
+					limitedCPU := container.LimitCPUArgsForCall(0)
+					Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
+				})
+
+				Context("when ports are exposed", func() {
+					BeforeEach(func() {
+						initializeContainerRequest = api.ContainerInitializationRequest{
+							CpuPercent: 0.5,
+							Ports: []api.PortMapping{
+								{ContainerPort: 8080, HostPort: 0},
+								{ContainerPort: 8081, HostPort: 1234},
+							},
+						}
+					})
+
+					It("exposes the configured ports", func() {
+						netInH, netInC := container.NetInArgsForCall(0)
+						Ω(netInH).Should(Equal(uint32(0)))
+						Ω(netInC).Should(Equal(uint32(8080)))
+
+						netInH, netInC = container.NetInArgsForCall(1)
+						Ω(netInH).Should(Equal(uint32(1234)))
+						Ω(netInC).Should(Equal(uint32(8081)))
+					})
+
+					Context("when net-in succeeds", func() {
+						BeforeEach(func() {
+							calls := uint32(0)
+							container.NetInStub = func(uint32, uint32) (uint32, uint32, error) {
+								calls++
+								return 1234 * calls, 4567 * calls, nil
+							}
+						})
+
+						It("returns the container with mapped ports", func() {
+							Ω(initializedContainer.Ports).Should(Equal([]api.PortMapping{
+								{HostPort: 1234, ContainerPort: 4567},
+								{HostPort: 2468, ContainerPort: 9134},
+							}))
+						})
+					})
+
+					Context("when mapping the ports fails", func() {
+						BeforeEach(func() {
+							container.NetInReturns(0, 0, errors.New("oh no!"))
+						})
+
+						It("returns an error", func() {
+							Ω(err.Error()).Should(ContainSubstring("status: 500"))
+						})
+					})
+				})
+
+				Context("when a zero-value CPU percentage is specified", func() {
+					BeforeEach(func() {
+						initializeContainerRequest = api.ContainerInitializationRequest{
+							CpuPercent: 0,
+						}
+					})
+
+					It("does not apply it", func() {
+						Ω(container.LimitCPUCallCount()).Should(BeZero())
+					})
+				})
+
+				Context("when limiting memory fails", func() {
+					BeforeEach(func() {
+						container.LimitMemoryReturns(errors.New("oh no!"))
+					})
+
+					It("returns an error", func() {
+						Ω(err.Error()).Should(ContainSubstring("status: 500"))
+					})
+				})
+
+				Context("when limiting disk fails", func() {
+					BeforeEach(func() {
+						container.LimitDiskReturns(errors.New("oh no!"))
+					})
+
+					It("returns an error", func() {
+						Ω(err.Error()).Should(ContainSubstring("status: 500"))
+					})
+				})
+
+				Context("when limiting CPU fails", func() {
+					BeforeEach(func() {
+						container.LimitCPUReturns(errors.New("oh no!"))
+					})
+
+					It("returns an error", func() {
+						Ω(err.Error()).Should(ContainSubstring("status: 500"))
+					})
+				})
+			})
+
+			Context("when for some reason the container fails to create", func() {
+				BeforeEach(func() {
+					fakeBackend.CreateReturns(nil, errors.New("oh no!"))
+				})
+
+				It("returns an error", func() {
+					Ω(err.Error()).Should(ContainSubstring("status: 500"))
 				})
 			})
 		})

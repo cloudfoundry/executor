@@ -156,6 +156,8 @@ func main() {
 	runActions := make(chan executor.DepotRunAction)
 
 	depotClient := executor.NewClient(
+		*containerOwnerName,
+		uint64(*containerMaxCpuShares),
 		wardenClient,
 		reg,
 		transformer,
@@ -173,13 +175,10 @@ func main() {
 	)
 
 	apiServer := &server.Server{
-		Address:               *listenAddr,
-		Registry:              reg,
-		WardenClient:          wardenClient,
-		ContainerOwnerName:    *containerOwnerName,
-		ContainerMaxCPUShares: uint64(*containerMaxCpuShares),
-		Logger:                logger,
-		DepotClient:           depotClient,
+		Address:     *listenAddr,
+		Registry:    reg,
+		Logger:      logger,
+		DepotClient: depotClient,
 	}
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)

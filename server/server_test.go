@@ -17,7 +17,6 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/server"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
@@ -70,13 +69,10 @@ var _ = Describe("Api", func() {
 		depotClient = new(fakes.FakeClient)
 
 		server = ifrit.Envoke(&Server{
-			Address:               address,
-			Registry:              registry,
-			WardenClient:          wardenClient,
-			ContainerOwnerName:    "some-container-owner-name",
-			ContainerMaxCPUShares: 1024,
-			Logger:                logger,
-			DepotClient:           depotClient,
+			Address:     address,
+			Registry:    registry,
+			Logger:      logger,
+			DepotClient: depotClient,
 		})
 
 		generator = rata.NewRequestGenerator("http://"+address, api.Routes)
@@ -185,217 +181,100 @@ var _ = Describe("Api", func() {
 			})
 
 			Describe("POST /containers/:guid/initialize", func() {
-				var createResponse *http.Response
-				var createRequestBody io.Reader
-
-				JustBeforeEach(func() {
-					createResponse = DoRequest(generator.CreateRequest(
-						api.InitializeContainer,
-						rata.Params{"guid": containerGuid},
-						createRequestBody,
-					))
-				})
-
-				BeforeEach(func() {
-					createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
-						CpuPercent: 50.0,
-					})
-				})
-
-				Context("when the requested CPU percent is > 100", func() {
-					BeforeEach(func() {
-						createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
-							CpuPercent: 101.0,
-						})
-					})
-
-					It("returns 400", func() {
-						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-					})
-				})
-
-				Context("when the requested CPU percent is < 0", func() {
-					BeforeEach(func() {
-						createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
-							CpuPercent: -14.0,
-						})
-					})
-
-					It("returns 400", func() {
-						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-					})
-				})
-
 				Context("when the container can be created", func() {
+					var expectedRequest api.ContainerInitializationRequest
+					var createResponse *http.Response
+					var expectedContainer api.Container
+
 					BeforeEach(func() {
-						wardenClient.Connection.CreateReturns("some-handle", nil)
+						expectedRequest = api.ContainerInitializationRequest{
+							CpuPercent: 50.0,
+							Ports: []api.PortMapping{
+								{ContainerPort: 8080, HostPort: 0},
+								{ContainerPort: 8081, HostPort: 1234},
+							},
+						}
+
+						expectedContainer = api.Container{
+							Ports: []api.PortMapping{
+								{HostPort: 1234, ContainerPort: 4567},
+								{HostPort: 2468, ContainerPort: 9134},
+							},
+						}
+						depotClient.InitializeContainerReturns(expectedContainer, nil)
+
+						createResponse = DoRequest(generator.CreateRequest(
+							api.InitializeContainer,
+							rata.Params{"guid": containerGuid},
+							MarshalledPayload(expectedRequest),
+						))
 					})
 
 					It("returns 201", func() {
 						Ω(reserveResponse.StatusCode).Should(Equal(http.StatusCreated))
 					})
 
-					It("creates it with the configured owner", func() {
-						created := wardenClient.Connection.CreateArgsForCall(0)
-						Ω(created.Properties["owner"]).Should(Equal("some-container-owner-name"))
+					It("creates the container", func() {
+						Ω(depotClient.InitializeContainerCallCount()).Should(Equal(1))
+						guid, containerInitReq := depotClient.InitializeContainerArgsForCall(0)
+						Ω(guid).Should(Equal(containerGuid))
+						Ω(containerInitReq).Should(Equal(expectedRequest))
 					})
 
-					It("applies the memory, disk, and cpu limits", func() {
-						handle, limitedMemory := wardenClient.Connection.LimitMemoryArgsForCall(0)
-						Ω(handle).Should(Equal("some-handle"))
-						Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(64 * 1024 * 1024)))
+					It("returns the serialized initialized container", func() {
+						var initializedContainer api.Container
 
-						handle, limitedDisk := wardenClient.Connection.LimitDiskArgsForCall(0)
-						Ω(handle).Should(Equal("some-handle"))
-						Ω(limitedDisk.ByteHard).Should(Equal(uint64(512 * 1024 * 1024)))
-
-						handle, limitedCPU := wardenClient.Connection.LimitCPUArgsForCall(0)
-						Ω(handle).Should(Equal("some-handle"))
-						Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
-					})
-
-					Context("when ports are exposed", func() {
-						BeforeEach(func() {
-							createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
-								CpuPercent: 0.5,
-								Ports: []api.PortMapping{
-									{ContainerPort: 8080, HostPort: 0},
-									{ContainerPort: 8081, HostPort: 1234},
-								},
-							})
-						})
-
-						It("exposes the configured ports", func() {
-							handle, netInH, netInC := wardenClient.Connection.NetInArgsForCall(0)
-							Ω(handle).Should(Equal("some-handle"))
-							Ω(netInH).Should(Equal(uint32(0)))
-							Ω(netInC).Should(Equal(uint32(8080)))
-
-							handle, netInH, netInC = wardenClient.Connection.NetInArgsForCall(1)
-							Ω(handle).Should(Equal("some-handle"))
-							Ω(netInH).Should(Equal(uint32(1234)))
-							Ω(netInC).Should(Equal(uint32(8081)))
-						})
-
-						Context("when net-in succeeds", func() {
-							BeforeEach(func() {
-								calls := uint32(0)
-								wardenClient.Connection.NetInStub = func(string, uint32, uint32) (uint32, uint32, error) {
-									calls++
-									return 1234 * calls, 4567 * calls, nil
-								}
-							})
-
-							It("returns the mapped ports in the response", func() {
-								var initialized api.Container
-
-								err := json.NewDecoder(createResponse.Body).Decode(&initialized)
-								Ω(err).ShouldNot(HaveOccurred())
-
-								Ω(initialized.Ports).Should(Equal([]api.PortMapping{
-									{HostPort: 1234, ContainerPort: 4567},
-									{HostPort: 2468, ContainerPort: 9134},
-								}))
-							})
-						})
-
-						Context("when mapping the ports fails", func() {
-							disaster := errors.New("oh no!")
-
-							BeforeEach(func() {
-								wardenClient.Connection.NetInReturns(0, 0, disaster)
-							})
-
-							It("returns 500", func() {
-								Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-							})
-						})
-					})
-
-					Context("when a zero-value memory limit is specified", func() {
-						BeforeEach(func() {
-							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB: 0,
-								DiskMB:   512,
-							})
-						})
-
-						It("does not apply it", func() {
-							Ω(wardenClient.Connection.LimitMemoryCallCount()).Should(BeZero())
-						})
-					})
-
-					Context("when a zero-value disk limit is specified", func() {
-						BeforeEach(func() {
-							reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-								MemoryMB: 64,
-								DiskMB:   0,
-							})
-						})
-
-						It("does not apply it", func() {
-							Ω(wardenClient.Connection.LimitDiskCallCount()).Should(BeZero())
-						})
-					})
-
-					Context("when a zero-value CPU percentage is specified", func() {
-						BeforeEach(func() {
-							createRequestBody = MarshalledPayload(api.ContainerInitializationRequest{
-								CpuPercent: 0,
-							})
-						})
-
-						It("does not apply it", func() {
-							Ω(wardenClient.Connection.LimitCPUCallCount()).Should(BeZero())
-						})
-					})
-
-					Context("when limiting memory fails", func() {
-						disaster := errors.New("oh no!")
-
-						BeforeEach(func() {
-							wardenClient.Connection.LimitMemoryReturns(warden.MemoryLimits{}, disaster)
-						})
-
-						It("returns 500", func() {
-							Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-						})
-					})
-
-					Context("when limiting disk fails", func() {
-						disaster := errors.New("oh no!")
-
-						BeforeEach(func() {
-							wardenClient.Connection.LimitDiskReturns(warden.DiskLimits{}, disaster)
-						})
-
-						It("returns 500", func() {
-							Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-						})
-					})
-
-					Context("when limiting CPU fails", func() {
-						disaster := errors.New("oh no!")
-
-						BeforeEach(func() {
-							wardenClient.Connection.LimitCPUReturns(warden.CPULimits{}, disaster)
-						})
-
-						It("returns 500", func() {
-							Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-						})
+						err := json.NewDecoder(createResponse.Body).Decode(&initializedContainer)
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(initializedContainer).Should(Equal(expectedContainer))
 					})
 				})
 
-				Context("when for some reason the container fails to create", func() {
-					disaster := errors.New("oh no!")
-
+				Context("when the request is invalid json", func() {
+					var createResponse *http.Response
 					BeforeEach(func() {
-						wardenClient.Connection.CreateReturns("", disaster)
+						createResponse = DoRequest(generator.CreateRequest(
+							api.InitializeContainer,
+							rata.Params{"guid": containerGuid},
+							MarshalledPayload("asdasdasdasdasdadsads"),
+						))
 					})
 
-					It("returns 500", func() {
-						Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+					It("returns 400", func() {
+						Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+					})
+				})
+
+				Context("when the container cannot be created", func() {
+					var createResponse *http.Response
+					JustBeforeEach(func() {
+						createResponse = DoRequest(generator.CreateRequest(
+							api.InitializeContainer,
+							rata.Params{"guid": containerGuid},
+							MarshalledPayload(api.ContainerInitializationRequest{}),
+						))
+					})
+
+					Context("when the requested limits are invalid", func() {
+						BeforeEach(func() {
+							depotClient.InitializeContainerReturns(api.Container{}, executor.LimitsInvalid)
+						})
+
+						It("returns 400", func() {
+							Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+						})
+					})
+
+					Context("when for some reason the container fails to create", func() {
+						disaster := errors.New("oh no!")
+
+						BeforeEach(func() {
+							depotClient.InitializeContainerReturns(api.Container{}, disaster)
+						})
+
+						It("returns 500", func() {
+							Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+						})
 					})
 				})
 			})

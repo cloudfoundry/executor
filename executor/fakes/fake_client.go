@@ -2,6 +2,7 @@
 package fakes
 
 import (
+	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/executor"
 
 	"sync"
@@ -9,6 +10,16 @@ import (
 )
 
 type FakeClient struct {
+	InitializeContainerStub        func(guid string, request api.ContainerInitializationRequest) (api.Container, error)
+	initializeContainerMutex       sync.RWMutex
+	initializeContainerArgsForCall []struct {
+		arg1 string
+		arg2 api.ContainerInitializationRequest
+	}
+	initializeContainerReturns struct {
+		result1 api.Container
+		result2 error
+	}
 	RunContainerStub        func(guid string, actions []models.ExecutorAction, completeURL string) error
 	runContainerMutex       sync.RWMutex
 	runContainerArgsForCall []struct {
@@ -33,6 +44,39 @@ type FakeClient struct {
 	pingReturns struct {
 		result1 error
 	}
+}
+
+func (fake *FakeClient) InitializeContainer(arg1 string, arg2 api.ContainerInitializationRequest) (api.Container, error) {
+	fake.initializeContainerMutex.Lock()
+	defer fake.initializeContainerMutex.Unlock()
+	fake.initializeContainerArgsForCall = append(fake.initializeContainerArgsForCall, struct {
+		arg1 string
+		arg2 api.ContainerInitializationRequest
+	}{arg1, arg2})
+	if fake.InitializeContainerStub != nil {
+		return fake.InitializeContainerStub(arg1, arg2)
+	} else {
+		return fake.initializeContainerReturns.result1, fake.initializeContainerReturns.result2
+	}
+}
+
+func (fake *FakeClient) InitializeContainerCallCount() int {
+	fake.initializeContainerMutex.RLock()
+	defer fake.initializeContainerMutex.RUnlock()
+	return len(fake.initializeContainerArgsForCall)
+}
+
+func (fake *FakeClient) InitializeContainerArgsForCall(i int) (string, api.ContainerInitializationRequest) {
+	fake.initializeContainerMutex.RLock()
+	defer fake.initializeContainerMutex.RUnlock()
+	return fake.initializeContainerArgsForCall[i].arg1, fake.initializeContainerArgsForCall[i].arg2
+}
+
+func (fake *FakeClient) InitializeContainerReturns(result1 api.Container, result2 error) {
+	fake.initializeContainerReturns = struct {
+		result1 api.Container
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeClient) RunContainer(arg1 string, arg2 []models.ExecutorAction, arg3 string) error {

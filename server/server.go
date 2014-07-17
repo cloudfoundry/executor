@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/server/total_resources"
-	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/http_server"
@@ -23,13 +22,10 @@ import (
 )
 
 type Server struct {
-	Address               string
-	Registry              registry.Registry
-	WardenClient          warden.Client
-	DepotClient           executor.Client
-	ContainerOwnerName    string
-	ContainerMaxCPUShares uint64
-	Logger                *gosteno.Logger
+	Address     string
+	Registry    registry.Registry
+	DepotClient executor.Client
+	Logger      *gosteno.Logger
 }
 
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
@@ -73,13 +69,7 @@ func (s *Server) NewHandlers() rata.Handlers {
 		api.GetRemainingResources: remaining_resources.New(s.Registry, s.Logger),
 		api.GetTotalResources:     total_resources.New(s.Registry, s.Logger),
 		api.Ping:                  ping.New(s.DepotClient),
-		api.InitializeContainer: initialize_container.New(
-			s.ContainerOwnerName,
-			s.ContainerMaxCPUShares,
-			s.WardenClient,
-			s.Registry,
-			s.Logger,
-		),
-		api.RunActions: run_actions.New(s.DepotClient, s.Logger),
+		api.InitializeContainer:   initialize_container.New(s.DepotClient, s.Logger),
+		api.RunActions:            run_actions.New(s.DepotClient, s.Logger),
 	}
 }
