@@ -73,7 +73,10 @@ func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) erro
 		select {
 		case runAction := <-e.runActions:
 			e.runWaitGroup.Add(1)
-			go e.runSequence(runAction)
+			go func() {
+				defer e.runWaitGroup.Done()
+				e.runSequence(runAction)
+			}()
 
 		case signal := <-sigChan:
 			if stopping {
@@ -142,8 +145,6 @@ func (e *Executor) destroyContainers() error {
 }
 
 func (e *Executor) runSequence(runAction DepotRunAction) {
-	defer e.runWaitGroup.Done()
-
 	run := ifrit.Envoke(&Run{
 		WardenClient: e.wardenClient,
 		Registry:     e.registry,

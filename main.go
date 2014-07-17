@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"syscall"
@@ -129,6 +130,14 @@ var maxCacheSizeInBytes = flag.Int64(
 )
 
 func main() {
+	defer func() {
+		msg := recover()
+		if msg != nil {
+			fmt.Printf("PAINC RESULT: %s", msg)
+		}
+		println("****************** EXITING ********************************")
+	}()
+
 	flag.Parse()
 
 	logger := initializeLogger()

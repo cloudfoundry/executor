@@ -18,6 +18,8 @@ var (
 
 type Client interface {
 	RunContainer(guid string, actions []models.ExecutorAction, completeURL string) error
+	DeleteContainer(guid string) error
+	Ping() error
 }
 
 type client struct {
@@ -78,4 +80,45 @@ func (c *client) RunContainer(guid string, actions []models.ExecutorAction, comp
 	}
 
 	return nil
+}
+
+func (c *client) DeleteContainer(guid string) error {
+	registration, err := c.registry.FindByGuid(guid)
+	if err != nil {
+		return handleDeleteError(err, c.logger)
+	}
+
+	//TODO once wardenClient has an ErrNotFound error code, use it
+	//to determine if we should delete from registry
+	if registration.ContainerHandle != "" {
+		err = c.wardenClient.Destroy(registration.ContainerHandle)
+		if err != nil {
+			return handleDeleteError(err, c.logger)
+		}
+	}
+
+	err = c.registry.Delete(guid)
+	if err != nil {
+		return handleDeleteError(err, c.logger)
+	}
+
+	return nil
+}
+
+func (c *client) Ping() error {
+	return c.wardenClient.Ping()
+}
+
+func handleDeleteError(err error, logger *gosteno.Logger) error {
+	if err == registry.ErrContainerNotFound {
+		logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.delete-container.not-found")
+		return ContainerNotFound
+	}
+
+	logger.Errord(map[string]interface{}{
+		"error": err.Error(),
+	}, "executor.delete-container.failed")
+	return err
 }

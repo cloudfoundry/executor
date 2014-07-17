@@ -4,9 +4,8 @@ package fakes
 import (
 	. "github.com/cloudfoundry-incubator/executor/executor"
 
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-
 	"sync"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 type FakeClient struct {
@@ -18,6 +17,20 @@ type FakeClient struct {
 		arg3 string
 	}
 	runContainerReturns struct {
+		result1 error
+	}
+	DeleteContainerStub        func(guid string) error
+	deleteContainerMutex       sync.RWMutex
+	deleteContainerArgsForCall []struct {
+		arg1 string
+	}
+	deleteContainerReturns struct {
+		result1 error
+	}
+	PingStub        func() error
+	pingMutex       sync.RWMutex
+	pingArgsForCall []struct{}
+	pingReturns struct {
 		result1 error
 	}
 }
@@ -51,6 +64,60 @@ func (fake *FakeClient) RunContainerArgsForCall(i int) (string, []models.Executo
 
 func (fake *FakeClient) RunContainerReturns(result1 error) {
 	fake.runContainerReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) DeleteContainer(arg1 string) error {
+	fake.deleteContainerMutex.Lock()
+	defer fake.deleteContainerMutex.Unlock()
+	fake.deleteContainerArgsForCall = append(fake.deleteContainerArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	if fake.DeleteContainerStub != nil {
+		return fake.DeleteContainerStub(arg1)
+	} else {
+		return fake.deleteContainerReturns.result1
+	}
+}
+
+func (fake *FakeClient) DeleteContainerCallCount() int {
+	fake.deleteContainerMutex.RLock()
+	defer fake.deleteContainerMutex.RUnlock()
+	return len(fake.deleteContainerArgsForCall)
+}
+
+func (fake *FakeClient) DeleteContainerArgsForCall(i int) string {
+	fake.deleteContainerMutex.RLock()
+	defer fake.deleteContainerMutex.RUnlock()
+	return fake.deleteContainerArgsForCall[i].arg1
+}
+
+func (fake *FakeClient) DeleteContainerReturns(result1 error) {
+	fake.deleteContainerReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) Ping() error {
+	fake.pingMutex.Lock()
+	defer fake.pingMutex.Unlock()
+	fake.pingArgsForCall = append(fake.pingArgsForCall, struct{}{})
+	if fake.PingStub != nil {
+		return fake.PingStub()
+	} else {
+		return fake.pingReturns.result1
+	}
+}
+
+func (fake *FakeClient) PingCallCount() int {
+	fake.pingMutex.RLock()
+	defer fake.pingMutex.RUnlock()
+	return len(fake.pingArgsForCall)
+}
+
+func (fake *FakeClient) PingReturns(result1 error) {
+	fake.pingReturns = struct {
 		result1 error
 	}{result1}
 }

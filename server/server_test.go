@@ -588,7 +588,7 @@ var _ = Describe("Api", func() {
 			))
 		})
 
-		Context("when the container has been allocated", func() {
+		Context("when the container exists", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
 					MemoryMB: 64,
@@ -607,59 +607,29 @@ var _ = Describe("Api", func() {
 				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
 			})
 
-			It("the previously allocated resources become available", func() {
-				Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
-					MemoryMB:   1024,
-					DiskMB:     1024,
-					Containers: 1024,
-				}))
-			})
-		})
-
-		Context("when the container has been initalized", func() {
-			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 64,
-					DiskMB:   512,
-				})
-
-				allocResponse := DoRequest(generator.CreateRequest(
-					api.AllocateContainer,
-					rata.Params{"guid": containerGuid},
-					allocRequestBody,
-				))
-				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-
-				wardenClient.Connection.CreateReturns("some-handle", nil)
-				wardenClient.Connection.ListReturns([]string{"some-handle"}, nil)
-
-				initResponse := DoRequest(generator.CreateRequest(
-					api.InitializeContainer,
-					rata.Params{"guid": containerGuid},
-					MarshalledPayload(api.ContainerInitializationRequest{
-						CpuPercent: 50.0,
-					}),
-				))
-				Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
+			It("deletes the container", func() {
+				Ω(depotClient.DeleteContainerCallCount()).Should(Equal(1))
+				Ω(depotClient.DeleteContainerArgsForCall(0)).Should(Equal(containerGuid))
 			})
 
-			It("returns 200 OK", func() {
-				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
-			})
-
-			It("destroys the warden container", func() {
-				Eventually(wardenClient.Connection.DestroyCallCount).Should(Equal(1))
-				Ω(wardenClient.Connection.DestroyArgsForCall(0)).Should(Equal("some-handle"))
-			})
-
-			Describe("when deleting the container fails", func() {
+			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
-					wardenClient.Connection.DestroyReturns(errors.New("oh no!"))
+					depotClient.DeleteContainerReturns(errors.New("oh no!"))
 				})
 
 				It("returns a 500", func() {
 					Ω(deleteResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
 				})
+			})
+		})
+
+		Context("when the container doesn't exist", func() {
+			BeforeEach(func() {
+				depotClient.DeleteContainerReturns(executor.ContainerNotFound)
+			})
+
+			It("returns a 404", func() {
+				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusNotFound))
 			})
 		})
 	})
@@ -743,7 +713,7 @@ var _ = Describe("Api", func() {
 	Describe("GET /ping", func() {
 		Context("when Warden responds to ping", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.PingReturns(nil)
+				depotClient.PingReturns(nil)
 			})
 
 			It("should 200", func() {
@@ -754,7 +724,7 @@ var _ = Describe("Api", func() {
 
 		Context("when Warden returns an error", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.PingReturns(errors.New("oh no!"))
+				depotClient.PingReturns(errors.New("oh no!"))
 			})
 
 			It("should 502", func() {

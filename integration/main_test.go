@@ -109,7 +109,7 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	initNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
+	allocNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
 		fakeContainer = new(wfakes.FakeContainer)
 		fakeBackend.CreateReturns(fakeContainer, nil)
 		fakeBackend.LookupReturns(fakeContainer, nil)
@@ -127,8 +127,14 @@ var _ = Describe("Main", func() {
 		})
 		Ω(err).ShouldNot(HaveOccurred())
 
+		return guid, fakeContainer
+	}
+
+	initNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
+		guid, fakeContainer = allocNewContainer()
+
 		index := 13
-		_, err = executorClient.InitializeContainer(guid, api.ContainerInitializationRequest{
+		_, err := executorClient.InitializeContainer(guid, api.ContainerInitializationRequest{
 			Log: models.LogConfig{
 				Guid:       "the-app-guid",
 				SourceName: "STG",
@@ -232,6 +238,34 @@ var _ = Describe("Main", func() {
 			runner.Start(executor_runner.Config{
 				DrainTimeout:            drainTimeout,
 				RegistryPruningInterval: pruningInterval,
+			})
+		})
+
+		Describe("pinging the server", func() {
+			var err error
+
+			JustBeforeEach(func() {
+				err = executorClient.Ping()
+			})
+
+			Context("when Warden responds to ping", func() {
+				BeforeEach(func() {
+					fakeBackend.PingReturns(nil)
+				})
+
+				It("not return an error", func() {
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("when Warden returns an error", func() {
+				BeforeEach(func() {
+					fakeBackend.PingReturns(errors.New("oh no!"))
+				})
+
+				It("should return an error", func() {
+					Ω(err.Error()).Should(ContainSubstring("status: 502"))
+				})
 			})
 		})
 
@@ -368,9 +402,7 @@ var _ = Describe("Main", func() {
 					containerGuid, fakeContainer = initNewContainer()
 					process := new(wfakes.FakeProcess)
 					fakeContainer.RunReturns(process, nil)
-					process.WaitStub = func() (int, error) {
-						return 1, disaster
-					}
+					process.WaitReturns(1, disaster)
 				})
 
 				Context("and there is a completeURL", func() {
@@ -415,6 +447,50 @@ var _ = Describe("Main", func() {
 
 					It("invokes the callback with failed true and a reason", func() {
 						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					})
+				})
+			})
+		})
+
+		Describe("deleting a container", func() {
+			var err error
+			var guid string
+
+			JustBeforeEach(func() {
+				err = executorClient.DeleteContainer(guid)
+			})
+
+			Context("when the container has been allocated", func() {
+				BeforeEach(func() {
+					guid, _ = allocNewContainer()
+				})
+
+				It("the previously allocated resources become available", func() {
+					Eventually(executorClient.RemainingResources).Should(Equal(api.ExecutorResources{
+						MemoryMB:   1024,
+						DiskMB:     1024,
+						Containers: 1024,
+					}))
+				})
+			})
+
+			Context("when the container has been initialized", func() {
+				BeforeEach(func() {
+					guid, _ = initNewContainer()
+				})
+
+				It("destroys the warden container", func() {
+					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+				})
+
+				Describe("when deleting the container fails", func() {
+					BeforeEach(func() {
+						fakeBackend.DestroyReturns(errors.New("oh no!"))
+					})
+
+					It("returns an error", func() {
+						Ω(err.Error()).Should(ContainSubstring("status: 500"))
 					})
 				})
 			})

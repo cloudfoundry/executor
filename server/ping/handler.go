@@ -3,21 +3,21 @@ package ping
 import (
 	"net/http"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/executor/executor"
 )
 
 type handler struct {
-	wardenClient warden.Client
+	depotClient executor.Client
 }
 
-func New(wardenClient warden.Client) http.Handler {
+func New(depotClient executor.Client) http.Handler {
 	return &handler{
-		wardenClient: wardenClient,
+		depotClient: depotClient,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := h.wardenClient.Ping()
+	err := h.depotClient.Ping()
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		return

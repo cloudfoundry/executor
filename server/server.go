@@ -69,10 +69,10 @@ func (s *Server) NewHandlers() rata.Handlers {
 		api.AllocateContainer:     allocate_container.New(s.Registry, s.Logger),
 		api.GetContainer:          get_container.New(s.Registry, s.Logger),
 		api.ListContainers:        list_containers.New(s.Registry, s.Logger),
-		api.DeleteContainer:       delete_container.New(s.WardenClient, s.Registry, s.Logger),
+		api.DeleteContainer:       delete_container.New(s.DepotClient, s.Logger),
 		api.GetRemainingResources: remaining_resources.New(s.Registry, s.Logger),
 		api.GetTotalResources:     total_resources.New(s.Registry, s.Logger),
-		api.Ping:                  ping.New(s.WardenClient),
+		api.Ping:                  ping.New(s.DepotClient),
 		api.InitializeContainer: initialize_container.New(
 			s.ContainerOwnerName,
 			s.ContainerMaxCPUShares,
