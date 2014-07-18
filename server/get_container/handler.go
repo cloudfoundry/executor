@@ -4,31 +4,33 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry/gosteno"
 )
 
 type handler struct {
-	registry registry.Registry
-	logger   *gosteno.Logger
+	depotClient executor.Client
+	logger      *gosteno.Logger
 }
 
-func New(registry registry.Registry, logger *gosteno.Logger) http.Handler {
+func New(depotClient executor.Client, logger *gosteno.Logger) http.Handler {
 	return &handler{
-		registry: registry,
-		logger:   logger,
+		depotClient: depotClient,
+		logger:      logger,
 	}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	guid := r.FormValue(":guid")
 
-	resource, err := h.registry.FindByGuid(guid)
+	resource, err := h.depotClient.GetContainer(guid)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.get-container.not-found")
-		w.WriteHeader(http.StatusNotFound)
+		switch err {
+		case executor.ContainerNotFound:
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 

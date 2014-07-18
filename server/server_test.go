@@ -92,6 +92,64 @@ var _ = Describe("Api", func() {
 		return resp
 	}
 
+	Describe("GET /containers/:guid", func() {
+		var getResponse *http.Response
+
+		JustBeforeEach(func() {
+			getResponse = DoRequest(generator.CreateRequest(
+				api.GetContainer,
+				rata.Params{"guid": containerGuid},
+				nil,
+			))
+		})
+
+		Context("when the container exists", func() {
+			var expectedContainer api.Container
+
+			BeforeEach(func() {
+				expectedContainer = api.Container{
+					Guid:     containerGuid,
+					MemoryMB: 123,
+					DiskMB:   456,
+				}
+				depotClient.GetContainerReturns(expectedContainer, nil)
+			})
+
+			It("returns 200 OK", func() {
+				Ω(getResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("returns the correct container", func() {
+				container := api.Container{}
+
+				err := json.NewDecoder(getResponse.Body).Decode(&container)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(container).Should(Equal(expectedContainer))
+			})
+		})
+
+		Context("when the container does not exist", func() {
+			BeforeEach(func() {
+				depotClient.GetContainerReturns(api.Container{}, executor.ContainerNotFound)
+			})
+
+			It("returns 404 Not Found", func() {
+				Ω(getResponse.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+		})
+
+		Context("when the container's existence cannot be determined", func() {
+			BeforeEach(func() {
+				depotClient.GetContainerReturns(api.Container{}, errors.New("KaBoom"))
+			})
+
+			It("returns 500 Internal Error", func() {
+				Ω(getResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+		})
+	})
+
 	Describe("POST /containers/:guid", func() {
 		var reserveRequestBody io.Reader
 		var reserveResponse *http.Response

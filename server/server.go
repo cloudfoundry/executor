@@ -63,7 +63,7 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 func (s *Server) NewHandlers() rata.Handlers {
 	return rata.Handlers{
 		api.AllocateContainer:     allocate_container.New(s.DepotClient, s.Logger),
-		api.GetContainer:          get_container.New(s.Registry, s.Logger),
+		api.GetContainer:          get_container.New(s.DepotClient, s.Logger),
 		api.ListContainers:        list_containers.New(s.DepotClient, s.Logger),
 		api.DeleteContainer:       delete_container.New(s.DepotClient, s.Logger),
 		api.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
