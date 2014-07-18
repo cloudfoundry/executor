@@ -243,10 +243,10 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("pinging the server", func() {
-			var err error
+			var pingErr error
 
 			JustBeforeEach(func() {
-				err = executorClient.Ping()
+				pingErr = executorClient.Ping()
 			})
 
 			Context("when Warden responds to ping", func() {
@@ -255,7 +255,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("not return an error", func() {
-					Ω(err).ShouldNot(HaveOccurred())
+					Ω(pingErr).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -265,8 +265,29 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should return an error", func() {
-					Ω(err.Error()).Should(ContainSubstring("status: 502"))
+					Ω(pingErr.Error()).Should(ContainSubstring("status: 502"))
 				})
+			})
+		})
+
+		Describe("getting the total resources", func() {
+			var resources api.ExecutorResources
+			var resourceErr error
+			JustBeforeEach(func() {
+				resources, resourceErr = executorClient.TotalResources()
+			})
+
+			It("not return an error", func() {
+				Ω(resourceErr).ShouldNot(HaveOccurred())
+			})
+
+			It("returns the preset capacity", func() {
+				expectedResources := api.ExecutorResources{
+					MemoryMB:   1024,
+					DiskMB:     1024,
+					Containers: 1024,
+				}
+				Ω(resources).Should(Equal(expectedResources))
 			})
 		})
 

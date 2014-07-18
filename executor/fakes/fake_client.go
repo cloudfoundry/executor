@@ -69,6 +69,13 @@ type FakeClient struct {
 		result1 api.ExecutorResources
 		result2 error
 	}
+	TotalResourcesStub        func() (api.ExecutorResources, error)
+	totalResourcesMutex       sync.RWMutex
+	totalResourcesArgsForCall []struct{}
+	totalResourcesReturns struct {
+		result1 api.ExecutorResources
+		result2 error
+	}
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
@@ -281,6 +288,30 @@ func (fake *FakeClient) RemainingResourcesCallCount() int {
 
 func (fake *FakeClient) RemainingResourcesReturns(result1 api.ExecutorResources, result2 error) {
 	fake.remainingResourcesReturns = struct {
+		result1 api.ExecutorResources
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) TotalResources() (api.ExecutorResources, error) {
+	fake.totalResourcesMutex.Lock()
+	defer fake.totalResourcesMutex.Unlock()
+	fake.totalResourcesArgsForCall = append(fake.totalResourcesArgsForCall, struct{}{})
+	if fake.TotalResourcesStub != nil {
+		return fake.TotalResourcesStub()
+	} else {
+		return fake.totalResourcesReturns.result1, fake.totalResourcesReturns.result2
+	}
+}
+
+func (fake *FakeClient) TotalResourcesCallCount() int {
+	fake.totalResourcesMutex.RLock()
+	defer fake.totalResourcesMutex.RUnlock()
+	return len(fake.totalResourcesArgsForCall)
+}
+
+func (fake *FakeClient) TotalResourcesReturns(result1 api.ExecutorResources, result2 error) {
+	fake.totalResourcesReturns = struct {
 		result1 api.ExecutorResources
 		result2 error
 	}{result1, result2}

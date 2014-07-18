@@ -13,13 +13,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/executor"
 	"github.com/cloudfoundry-incubator/executor/executor/fakes"
-	Registry "github.com/cloudfoundry-incubator/executor/registry"
 	. "github.com/cloudfoundry-incubator/executor/server"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/rata"
@@ -37,28 +34,16 @@ func MarshalledPayload(payload interface{}) io.Reader {
 }
 
 var _ = Describe("Api", func() {
-	var registry Registry.Registry
-	var wardenClient *fake_warden_client.FakeClient
 	var depotClient *fakes.FakeClient
 	var containerGuid string
 
 	var server ifrit.Process
 	var generator *rata.RequestGenerator
-	var timeProvider *faketimeprovider.FakeTimeProvider
 
 	var i = 0
 
 	BeforeEach(func() {
 		containerGuid = "container-guid"
-
-		wardenClient = fake_warden_client.New()
-
-		timeProvider = faketimeprovider.New(time.Now())
-		registry = Registry.New(Registry.Capacity{
-			MemoryMB:   1024,
-			DiskMB:     1024,
-			Containers: 1024,
-		}, timeProvider)
 
 		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
 		logger := gosteno.NewLogger("api-test-logger")
@@ -70,7 +55,6 @@ var _ = Describe("Api", func() {
 
 		server = ifrit.Envoke(&Server{
 			Address:     address,
-			Registry:    registry,
 			Logger:      logger,
 			DepotClient: depotClient,
 		})
@@ -181,7 +165,7 @@ var _ = Describe("Api", func() {
 					MemoryMB:    64,
 					DiskMB:      512,
 					State:       "reserved",
-					AllocatedAt: timeProvider.Time().UnixNano(),
+					AllocatedAt: time.Now().UnixNano(),
 				}
 
 				depotClient.AllocateContainerReturns(expectedContainer, nil)
@@ -580,22 +564,9 @@ var _ = Describe("Api", func() {
 
 	Describe("GET /resources/total", func() {
 		var resourcesResponse *http.Response
+		var expectedTotalResources api.ExecutorResources
 
-		BeforeEach(func() {
-			resourcesResponse = nil
-
-			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-				MemoryMB: 64,
-				DiskMB:   512,
-			})
-
-			allocResponse := DoRequest(generator.CreateRequest(
-				api.AllocateContainer,
-				rata.Params{"guid": containerGuid},
-				allocRequestBody,
-			))
-			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-
+		JustBeforeEach(func() {
 			resourcesResponse = DoRequest(generator.CreateRequest(
 				api.GetTotalResources,
 				nil,
@@ -603,16 +574,37 @@ var _ = Describe("Api", func() {
 			))
 		})
 
-		It("should return the total resources", func() {
-			var resources api.ExecutorResources
-			err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
-			Ω(err).ShouldNot(HaveOccurred())
+		Context("when total resources are available", func() {
+			BeforeEach(func() {
+				expectedTotalResources = api.ExecutorResources{
+					MemoryMB:   64,
+					DiskMB:     512,
+					Containers: 10,
+				}
+				depotClient.TotalResourcesReturns(expectedTotalResources, nil)
+			})
 
-			Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+			It("returns 200 ok", func() {
+				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
 
-			Ω(resources.MemoryMB).Should(Equal(1024))
-			Ω(resources.DiskMB).Should(Equal(1024))
-			Ω(resources.Containers).Should(Equal(1024))
+			It("returns the total resources", func() {
+				var resources api.ExecutorResources
+				err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(resources).Should(Equal(expectedTotalResources))
+			})
+		})
+
+		Context("when we cannot determine the total resources", func() {
+			BeforeEach(func() {
+				depotClient.TotalResourcesReturns(api.ExecutorResources{}, errors.New("BOOM"))
+			})
+
+			It("returns 500", func() {
+				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
 		})
 	})
 

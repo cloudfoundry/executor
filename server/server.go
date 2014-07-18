@@ -5,7 +5,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
@@ -23,7 +22,6 @@ import (
 
 type Server struct {
 	Address     string
-	Registry    registry.Registry
 	DepotClient executor.Client
 	Logger      *gosteno.Logger
 }
@@ -67,7 +65,7 @@ func (s *Server) NewHandlers() rata.Handlers {
 		api.ListContainers:        list_containers.New(s.DepotClient, s.Logger),
 		api.DeleteContainer:       delete_container.New(s.DepotClient, s.Logger),
 		api.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
-		api.GetTotalResources:     total_resources.New(s.Registry, s.Logger),
+		api.GetTotalResources:     total_resources.New(s.DepotClient, s.Logger),
 		api.Ping:                  ping.New(s.DepotClient),
 		api.InitializeContainer:   initialize_container.New(s.DepotClient, s.Logger),
 		api.RunActions:            run_actions.New(s.DepotClient, s.Logger),

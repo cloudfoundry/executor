@@ -27,6 +27,7 @@ type Client interface {
 	ListContainers() ([]api.Container, error)
 	DeleteContainer(guid string) error
 	RemainingResources() (api.ExecutorResources, error)
+	TotalResources() (api.ExecutorResources, error)
 	Ping() error
 }
 
@@ -280,6 +281,17 @@ func (c *client) RemainingResources() (api.ExecutorResources, error) {
 
 func (c *client) Ping() error {
 	return c.wardenClient.Ping()
+}
+
+func (c *client) TotalResources() (api.ExecutorResources, error) {
+	totalCapacity := c.registry.TotalCapacity()
+
+	resources := api.ExecutorResources{
+		MemoryMB:   totalCapacity.MemoryMB,
+		DiskMB:     totalCapacity.DiskMB,
+		Containers: totalCapacity.Containers,
+	}
+	return resources, nil
 }
 
 func handleDeleteError(err error, logger *gosteno.Logger) error {

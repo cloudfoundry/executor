@@ -176,7 +176,6 @@ func main() {
 
 	apiServer := &server.Server{
 		Address:     *listenAddr,
-		Registry:    reg,
 		Logger:      logger,
 		DepotClient: depotClient,
 	}
