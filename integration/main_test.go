@@ -62,7 +62,7 @@ var _ = Describe("Main", func() {
 
 	drainTimeout := 5 * time.Second
 	aBit := drainTimeout / 5
-	pruningInterval := time.Second
+	pruningInterval := 500 * time.Millisecond
 
 	eventuallyContainerShouldBeDestroyed := func(args ...interface{}) {
 		Eventually(fakeBackend.DestroyCallCount, args...).Should(Equal(1))
@@ -271,7 +271,92 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("allocating the container", func() {
+			var guid string
+			var allocatedContainer api.Container
+			var allocErr error
 
+			BeforeEach(func() {
+				id, err := uuid.NewV4()
+				Ω(err).ShouldNot(HaveOccurred())
+				guid = id.String()
+			})
+
+			JustBeforeEach(func() {
+				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, api.ContainerAllocationRequest{
+					MemoryMB: 256,
+					DiskMB:   256,
+				})
+			})
+
+			Context("when there are containers available", func() {
+				It("does not return an error", func() {
+					Ω(allocErr).ShouldNot(HaveOccurred())
+				})
+
+				It("returns a container", func() {
+					Ω(allocatedContainer.Guid).Should(Equal(guid))
+					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
+					Ω(allocatedContainer.DiskMB).Should(Equal(256))
+					Ω(allocatedContainer.State).Should(Equal("reserved"))
+					Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+				})
+
+				Context("and we get the container", func() {
+					var container api.Container
+					var getErr error
+					JustBeforeEach(func() {
+						container, getErr = executorClient.GetContainer(guid)
+					})
+
+					It("does not return an error", func() {
+						Ω(getErr).ShouldNot(HaveOccurred())
+					})
+
+					It("retains the reserved containers", func() {
+						Ω(container.Guid).Should(Equal(guid))
+						Ω(container.MemoryMB).Should(Equal(256))
+						Ω(container.DiskMB).Should(Equal(256))
+						Ω(container.State).Should(Equal("reserved"))
+						Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+					})
+
+					It("reduces the capacity by the amount reserved", func() {
+						Ω(executorClient.RemainingResources()).Should(Equal(api.ExecutorResources{
+							MemoryMB:   768,
+							DiskMB:     768,
+							Containers: 1023,
+						}))
+					})
+				})
+			})
+
+			Context("when the container cannot be reserved because the guid is already taken", func() {
+				BeforeEach(func() {
+					_, err := executorClient.AllocateContainer(guid, api.ContainerAllocationRequest{
+						MemoryMB: 1,
+						DiskMB:   1,
+					})
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("returns an error", func() {
+					Ω(allocErr.Error()).Should(ContainSubstring("status: 400"))
+				})
+			})
+
+			Context("when the container cannot be reserved because there is no room", func() {
+				BeforeEach(func() {
+					_, err := executorClient.AllocateContainer("another-container-guid", api.ContainerAllocationRequest{
+						MemoryMB: 1024,
+						DiskMB:   1024,
+					})
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("returns an error", func() {
+					Ω(allocErr.Error()).Should(ContainSubstring("status: 503"))
+				})
+			})
 		})
 
 		Describe("initializing the container", func() {
@@ -675,20 +760,18 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("pruning the registry", func() {
-			It("should prune the registry periodically", func() {
-				It("continually prunes the registry", func() {
-					guid, err := uuid.NewV4()
-					Ω(err).ShouldNot(HaveOccurred())
+			It("continually prunes the registry", func() {
+				guid, err := uuid.NewV4()
+				Ω(err).ShouldNot(HaveOccurred())
 
-					_, err = executorClient.AllocateContainer(guid.String(), api.ContainerAllocationRequest{
-						MemoryMB: 1024,
-						DiskMB:   1024,
-					})
-					Ω(err).ShouldNot(HaveOccurred())
-
-					Ω(executorClient.ListContainers).Should(HaveLen(1))
-					Eventually(executorClient.ListContainers, pruningInterval*2).Should(BeEmpty())
+				_, err = executorClient.AllocateContainer(guid.String(), api.ContainerAllocationRequest{
+					MemoryMB: 1024,
+					DiskMB:   1024,
 				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(executorClient.ListContainers()).Should(HaveLen(1))
+				Eventually(executorClient.ListContainers, pruningInterval*3).Should(BeEmpty())
 			})
 		})
 

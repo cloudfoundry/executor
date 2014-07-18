@@ -97,7 +97,11 @@ var _ = Describe("Api", func() {
 		var reserveResponse *http.Response
 
 		BeforeEach(func() {
-			reserveRequestBody = nil
+			reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
+				MemoryMB: 64,
+				DiskMB:   512,
+			})
+
 			reserveResponse = nil
 		})
 
@@ -111,12 +115,18 @@ var _ = Describe("Api", func() {
 
 		Context("when there are containers available", func() {
 			var reservedContainer api.Container
+			var expectedContainer api.Container
 
 			BeforeEach(func() {
-				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 64,
-					DiskMB:   512,
-				})
+				expectedContainer = api.Container{
+					Guid:        containerGuid,
+					MemoryMB:    64,
+					DiskMB:      512,
+					State:       "reserved",
+					AllocatedAt: timeProvider.Time().UnixNano(),
+				}
+
+				depotClient.AllocateContainerReturns(expectedContainer, nil)
 			})
 
 			JustBeforeEach(func() {
@@ -129,70 +139,13 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a container", func() {
-				Ω(reservedContainer).Should(Equal(api.Container{
-					Guid:        containerGuid,
-					MemoryMB:    64,
-					DiskMB:      512,
-					State:       "reserved",
-					AllocatedAt: timeProvider.Time().UnixNano(),
-				}))
-			})
-
-			Context("and we request an available container", func() {
-				var getResponse *http.Response
-
-				JustBeforeEach(func() {
-					getResponse = DoRequest(generator.CreateRequest(
-						api.GetContainer,
-						rata.Params{"guid": containerGuid},
-						nil,
-					))
-				})
-
-				AfterEach(func() {
-					getResponse.Body.Close()
-				})
-
-				It("returns 200 OK", func() {
-					Ω(getResponse.StatusCode).Should(Equal(http.StatusOK))
-				})
-
-				It("retains the reserved containers", func() {
-					var returnedContainer api.Container
-					err := json.NewDecoder(getResponse.Body).Decode(&returnedContainer)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					Ω(returnedContainer).Should(Equal(api.Container{
-						Guid:        containerGuid,
-						MemoryMB:    64,
-						DiskMB:      512,
-						State:       "reserved",
-						AllocatedAt: timeProvider.Time().UnixNano(),
-					}))
-				})
-
-				It("reduces the capacity by the amount reserved", func() {
-					Ω(registry.CurrentCapacity()).Should(Equal(Registry.Capacity{
-						MemoryMB:   960,
-						DiskMB:     512,
-						Containers: 1023,
-					}))
-				})
+				Ω(reservedContainer).Should(Equal(expectedContainer))
 			})
 		})
 
 		Context("when the container cannot be reserved because the guid is already taken", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve(containerGuid, api.ContainerAllocationRequest{
-					MemoryMB: 1,
-					DiskMB:   1,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 1,
-					DiskMB:   1,
-				})
+				depotClient.AllocateContainerReturns(api.Container{}, executor.ContainerGuidNotAvailable)
 			})
 
 			It("returns 400", func() {
@@ -202,16 +155,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container cannot be reserved because there is no room", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve("another-container-guid", api.ContainerAllocationRequest{
-					MemoryMB: 680,
-					DiskMB:   680,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				reserveRequestBody = MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 64,
-					DiskMB:   512,
-				})
+				depotClient.AllocateContainerReturns(api.Container{}, executor.InsufficientResourcesAvailable)
 			})
 
 			It("returns 503", func() {
@@ -420,41 +364,54 @@ var _ = Describe("Api", func() {
 	})
 
 	Describe("GET /containers", func() {
-		BeforeEach(func() {
-			allocResponse := DoRequest(generator.CreateRequest(
-				api.AllocateContainer,
-				rata.Params{"guid": "first-container"},
-				MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 64,
-					DiskMB:   512,
-				}),
-			))
-			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+		var expectedContainers []api.Container
 
-			allocResponse = DoRequest(generator.CreateRequest(
-				api.AllocateContainer,
-				rata.Params{"guid": "second-container"},
-				MarshalledPayload(api.ContainerAllocationRequest{
-					MemoryMB: 64,
-					DiskMB:   512,
-				}),
-			))
-			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+		Context("when we can succesfully get containers ", func() {
+			var listResponse *http.Response
+
+			BeforeEach(func() {
+				expectedContainers = []api.Container{
+					api.Container{Guid: "first-container"},
+					api.Container{Guid: "second-container"},
+				}
+
+				depotClient.ListContainersReturns(expectedContainers, nil)
+
+				listResponse = DoRequest(generator.CreateRequest(
+					api.ListContainers,
+					nil,
+					nil,
+				))
+			})
+
+			It("returns 200", func() {
+				Ω(listResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("should return all reserved containers", func() {
+				containers := []api.Container{}
+				err := json.NewDecoder(listResponse.Body).Decode(&containers)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(containers).Should(Equal(expectedContainers))
+			})
 		})
 
-		It("should return all reserved containers", func() {
-			listResponse := DoRequest(generator.CreateRequest(
-				api.ListContainers,
-				nil,
-				nil,
-			))
+		Context("when we cannot get containers", func() {
+			var listResponse *http.Response
 
-			containers := []api.Container{}
-			err := json.NewDecoder(listResponse.Body).Decode(&containers)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(containers).Should(HaveLen(2))
-			Ω([]string{containers[0].Guid, containers[1].Guid}).Should(ContainElement("first-container"))
-			Ω([]string{containers[0].Guid, containers[1].Guid}).Should(ContainElement("second-container"))
+			BeforeEach(func() {
+				depotClient.ListContainersReturns([]api.Container{}, errors.New("ahh!"))
+
+				listResponse = DoRequest(generator.CreateRequest(
+					api.ListContainers,
+					nil,
+					nil,
+				))
+			})
+
+			It("returns 500", func() {
+				Ω(listResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
 		})
 	})
 
@@ -518,21 +475,7 @@ var _ = Describe("Api", func() {
 	Describe("GET /resources/remaining", func() {
 		var resourcesResponse *http.Response
 
-		BeforeEach(func() {
-			resourcesResponse = nil
-
-			allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
-				MemoryMB: 64,
-				DiskMB:   512,
-			})
-
-			allocResponse := DoRequest(generator.CreateRequest(
-				api.AllocateContainer,
-				rata.Params{"guid": containerGuid},
-				allocRequestBody,
-			))
-			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-
+		JustBeforeEach(func() {
 			resourcesResponse = DoRequest(generator.CreateRequest(
 				api.GetRemainingResources,
 				nil,
@@ -540,16 +483,40 @@ var _ = Describe("Api", func() {
 			))
 		})
 
-		It("should return the remaining resources", func() {
-			var resources api.ExecutorResources
-			err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
-			Ω(err).ShouldNot(HaveOccurred())
+		Context("when we can determine remaining resources", func() {
+			var expectedExecutorResources api.ExecutorResources
 
-			Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+			BeforeEach(func() {
+				expectedExecutorResources = api.ExecutorResources{
+					MemoryMB:   512,
+					DiskMB:     128,
+					Containers: 10,
+				}
+				depotClient.RemainingResourcesReturns(expectedExecutorResources, nil)
+			})
 
-			Ω(resources.MemoryMB).Should(Equal(1024 - 64))
-			Ω(resources.DiskMB).Should(Equal(1024 - 512))
-			Ω(resources.Containers).Should(Equal(1024 - 1))
+			It("returns 200", func() {
+				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("should return the remaining resources", func() {
+				var resources api.ExecutorResources
+				err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+				Ω(resources).Should(Equal(expectedExecutorResources))
+			})
+		})
+
+		Context("when we cannot determine remaining resources", func() {
+			BeforeEach(func() {
+				depotClient.RemainingResourcesReturns(api.ExecutorResources{}, errors.New("BOOM"))
+			})
+
+			It("returns 500", func() {
+				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
 		})
 	})
 

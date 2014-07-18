@@ -12,15 +12,21 @@ import (
 )
 
 var (
-	ContainerNotFound = errors.New("container not found")
-	StepsInvalid      = errors.New("steps invalid")
-	LimitsInvalid     = errors.New("container limits invalid")
+	ContainerGuidNotAvailable      = errors.New("container guid not available")
+	InsufficientResourcesAvailable = errors.New("container guid not available")
+	ContainerNotFound              = errors.New("container not found")
+	StepsInvalid                   = errors.New("steps invalid")
+	LimitsInvalid                  = errors.New("container limits invalid")
 )
 
 type Client interface {
 	InitializeContainer(guid string, request api.ContainerInitializationRequest) (api.Container, error)
-	Run(allocationGuid string, request api.ContainerRunRequest) error
+	AllocateContainer(guid string, request api.ContainerAllocationRequest) (api.Container, error)
+	GetContainer(guid string) (api.Container, error)
+	Run(guid string, request api.ContainerRunRequest) error
+	ListContainers() ([]api.Container, error)
 	DeleteContainer(guid string) error
+	RemainingResources() (api.ExecutorResources, error)
 	Ping() error
 }
 
@@ -168,8 +174,39 @@ func (c *client) mapPorts(request api.ContainerInitializationRequest, containerC
 	return result, nil
 }
 
-func (c *client) Run(allocationGuid string, request api.ContainerRunRequest) error {
-	registration, err := c.registry.FindByGuid(allocationGuid)
+func (c *client) AllocateContainer(guid string, request api.ContainerAllocationRequest) (api.Container, error) {
+	container, err := c.registry.Reserve(guid, request)
+	if err == registry.ErrContainerAlreadyExists {
+		c.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+			"guid":  guid,
+		}, "executor.allocate-container.container-already-exists")
+		return api.Container{}, ContainerGuidNotAvailable
+	}
+
+	if err != nil {
+		c.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.allocate-container.full")
+		return api.Container{}, InsufficientResourcesAvailable
+	}
+
+	return container, nil
+}
+
+func (c *client) GetContainer(guid string) (api.Container, error) {
+	container, err := c.registry.FindByGuid(guid)
+	if err != nil {
+		c.logger.Infod(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.get-container.not-found")
+		return api.Container{}, ContainerNotFound
+	}
+	return container, nil
+}
+
+func (c *client) Run(guid string, request api.ContainerRunRequest) error {
+	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		c.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
@@ -204,6 +241,10 @@ func (c *client) Run(allocationGuid string, request api.ContainerRunRequest) err
 	return nil
 }
 
+func (c *client) ListContainers() ([]api.Container, error) {
+	return c.registry.GetAllContainers(), nil
+}
+
 func (c *client) DeleteContainer(guid string) error {
 	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
@@ -225,6 +266,16 @@ func (c *client) DeleteContainer(guid string) error {
 	}
 
 	return nil
+}
+
+func (c *client) RemainingResources() (api.ExecutorResources, error) {
+	cap := c.registry.CurrentCapacity()
+
+	return api.ExecutorResources{
+		MemoryMB:   cap.MemoryMB,
+		DiskMB:     cap.DiskMB,
+		Containers: cap.Containers,
+	}, nil
 }
 
 func (c *client) Ping() error {
