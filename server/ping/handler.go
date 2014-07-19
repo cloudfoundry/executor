@@ -3,14 +3,14 @@ package ping
 import (
 	"net/http"
 
-	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/depot"
 )
 
 type handler struct {
-	depotClient executor.Client
+	depotClient depot.Client
 }
 
-func New(depotClient executor.Client) http.Handler {
+func New(depotClient depot.Client) http.Handler {
 	return &handler{
 		depotClient: depotClient,
 	}

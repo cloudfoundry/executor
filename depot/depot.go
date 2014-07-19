@@ -1,4 +1,4 @@
-package executor
+package depot
 
 import (
 	"errors"
@@ -24,7 +24,7 @@ type DepotRunAction struct {
 	Result       *string
 }
 
-type Executor struct {
+type Depot struct {
 	containerOwnerName string
 	registry           registry.Registry
 	wardenClient       warden.Client
@@ -45,8 +45,8 @@ func New(
 	drainTimeout time.Duration,
 	runActions <-chan DepotRunAction,
 	logger *steno.Logger,
-) *Executor {
-	return &Executor{
+) *Depot {
+	return &Depot{
 		containerOwnerName: containerOwnerName,
 		registry:           registry,
 		wardenClient:       wardenClient,
@@ -59,7 +59,7 @@ func New(
 	}
 }
 
-func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
+func (e *Depot) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	err := e.destroyContainers()
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (e *Executor) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) erro
 	}
 }
 
-func (e *Executor) drain(drainTimeout time.Duration) {
+func (e *Depot) drain(drainTimeout time.Duration) {
 	time.AfterFunc(drainTimeout, func() {
 		close(e.runCanceller)
 		// This whole thing should be done better.
@@ -120,7 +120,7 @@ func (e *Executor) drain(drainTimeout time.Duration) {
 	e.stoppedChan <- nil
 }
 
-func (e *Executor) destroyContainers() error {
+func (e *Depot) destroyContainers() error {
 	containers, err := e.wardenClient.Containers(warden.Properties{
 		"owner": e.containerOwnerName,
 	})
@@ -144,7 +144,7 @@ func (e *Executor) destroyContainers() error {
 	return nil
 }
 
-func (e *Executor) runSequence(runAction DepotRunAction) {
+func (e *Depot) runSequence(runAction DepotRunAction) {
 	run := ifrit.Envoke(&Run{
 		WardenClient: e.wardenClient,
 		Registry:     e.registry,

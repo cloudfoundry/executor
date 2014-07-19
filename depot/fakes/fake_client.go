@@ -3,7 +3,7 @@ package fakes
 
 import (
 	"github.com/cloudfoundry-incubator/executor/api"
-	. "github.com/cloudfoundry-incubator/executor/executor"
+	. "github.com/cloudfoundry-incubator/executor/depot"
 
 	"sync"
 )
@@ -50,7 +50,7 @@ type FakeClient struct {
 	ListContainersStub        func() ([]api.Container, error)
 	listContainersMutex       sync.RWMutex
 	listContainersArgsForCall []struct{}
-	listContainersReturns struct {
+	listContainersReturns     struct {
 		result1 []api.Container
 		result2 error
 	}
@@ -65,21 +65,21 @@ type FakeClient struct {
 	RemainingResourcesStub        func() (api.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns struct {
+	remainingResourcesReturns     struct {
 		result1 api.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (api.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns struct {
+	totalResourcesReturns     struct {
 		result1 api.ExecutorResources
 		result2 error
 	}
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns struct {
+	pingReturns     struct {
 		result1 error
 	}
 }

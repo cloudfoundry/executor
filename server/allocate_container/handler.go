@@ -5,16 +5,16 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry/gosteno"
 )
 
 type Handler struct {
-	depotClient executor.Client
+	depotClient depot.Client
 	logger      *gosteno.Logger
 }
 
-func New(depotClient executor.Client, logger *gosteno.Logger) *Handler {
+func New(depotClient depot.Client, logger *gosteno.Logger) *Handler {
 	return &Handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -40,9 +40,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"error": err.Error(),
 		}, "executor.allocate-container.failed")
 		switch err {
-		case executor.ContainerGuidNotAvailable:
+		case depot.ContainerGuidNotAvailable:
 			w.WriteHeader(http.StatusBadRequest)
-		case executor.InsufficientResourcesAvailable:
+		case depot.InsufficientResourcesAvailable:
 			w.WriteHeader(http.StatusServiceUnavailable)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)

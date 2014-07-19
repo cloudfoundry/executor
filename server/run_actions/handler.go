@@ -5,18 +5,18 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/depot"
 
 	"github.com/cloudfoundry/gosteno"
 )
 
 type handler struct {
-	depotClient executor.Client
+	depotClient depot.Client
 	logger      *gosteno.Logger
 }
 
 func New(
-	depotClient executor.Client,
+	depotClient depot.Client,
 	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{
@@ -44,9 +44,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"error": err.Error(),
 		}, "executor.run-actions.failed")
 		switch err {
-		case executor.ContainerNotFound:
+		case depot.ContainerNotFound:
 			w.WriteHeader(http.StatusNotFound)
-		case executor.StepsInvalid:
+		case depot.StepsInvalid:
 			w.WriteHeader(http.StatusBadRequest)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)

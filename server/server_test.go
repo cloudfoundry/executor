@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/executor"
-	"github.com/cloudfoundry-incubator/executor/executor/fakes"
+	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot/fakes"
 	. "github.com/cloudfoundry-incubator/executor/server"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -115,7 +115,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container does not exist", func() {
 			BeforeEach(func() {
-				depotClient.GetContainerReturns(api.Container{}, executor.ContainerNotFound)
+				depotClient.GetContainerReturns(api.Container{}, depot.ContainerNotFound)
 			})
 
 			It("returns 404 Not Found", func() {
@@ -187,7 +187,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container cannot be reserved because the guid is already taken", func() {
 			BeforeEach(func() {
-				depotClient.AllocateContainerReturns(api.Container{}, executor.ContainerGuidNotAvailable)
+				depotClient.AllocateContainerReturns(api.Container{}, depot.ContainerGuidNotAvailable)
 			})
 
 			It("returns 400", func() {
@@ -197,7 +197,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container cannot be reserved because there is no room", func() {
 			BeforeEach(func() {
-				depotClient.AllocateContainerReturns(api.Container{}, executor.InsufficientResourcesAvailable)
+				depotClient.AllocateContainerReturns(api.Container{}, depot.InsufficientResourcesAvailable)
 			})
 
 			It("returns 503", func() {
@@ -283,7 +283,7 @@ var _ = Describe("Api", func() {
 
 			Context("when the requested limits are invalid", func() {
 				BeforeEach(func() {
-					depotClient.InitializeContainerReturns(api.Container{}, executor.LimitsInvalid)
+					depotClient.InitializeContainerReturns(api.Container{}, depot.LimitsInvalid)
 				})
 
 				It("returns 400", func() {
@@ -380,7 +380,7 @@ var _ = Describe("Api", func() {
 			Context("when the actions are invalid", func() {
 				BeforeEach(func() {
 					depotClient.RunStub = func(guid string, runRequest api.ContainerRunRequest) error {
-						return executor.StepsInvalid
+						return depot.StepsInvalid
 					}
 
 					runRequestBody = MarshalledPayload(api.ContainerRunRequest{
@@ -505,7 +505,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container doesn't exist", func() {
 			BeforeEach(func() {
-				depotClient.DeleteContainerReturns(executor.ContainerNotFound)
+				depotClient.DeleteContainerReturns(depot.ContainerNotFound)
 			})
 
 			It("returns a 404", func() {

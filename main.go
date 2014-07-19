@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/executor"
+	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -153,9 +153,9 @@ func main() {
 
 	logger.Info("executor.starting")
 
-	runActions := make(chan executor.DepotRunAction)
+	runActions := make(chan depot.DepotRunAction)
 
-	depotClient := executor.NewClient(
+	depotClient := depot.NewClient(
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		wardenClient,
@@ -165,7 +165,7 @@ func main() {
 		logger,
 	)
 
-	executor := executor.New(
+	depot := depot.New(
 		*containerOwnerName,
 		reg,
 		wardenClient,
@@ -183,7 +183,7 @@ func main() {
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
 
 	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
-		"executor":        executor,
+		"depot":           depot,
 		"registry-pruner": pruner,
 		"api-server":      apiServer,
 	})
@@ -196,7 +196,7 @@ func main() {
 	for {
 		select {
 		case member := <-exitChan:
-			if member.Error != nil || member.Name == "executor" {
+			if member.Error != nil || member.Name == "depot" {
 				logger.Infof("executor.member.%s.exited", member.Name)
 				monitor.Signal(syscall.SIGTERM)
 			}

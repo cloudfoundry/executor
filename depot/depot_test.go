@@ -1,11 +1,11 @@
-package executor_test
+package depot_test
 
 import (
 	"os"
 	"syscall"
 	"time"
 
-	. "github.com/cloudfoundry-incubator/executor/executor"
+	. "github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
@@ -20,9 +20,9 @@ import (
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 )
 
-var _ = Describe("Executor", func() {
+var _ = Describe("Depot", func() {
 	var (
-		executor     *Executor
+		executor     *Depot
 		wardenClient *fake_warden_client.FakeClient
 		logger       *steno.Logger
 		trans        *transformer.Transformer

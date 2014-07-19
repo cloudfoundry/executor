@@ -1,12 +1,13 @@
-package executor_test
+package depot_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"testing"
 )
 
-func TestExecutor(t *testing.T) {
+func TestDepot(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Executor Suite")
+	RunSpecs(t, "Depot Suite")
 }
