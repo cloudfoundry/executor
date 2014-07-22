@@ -40,11 +40,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.init-container.failed")
-		switch err {
-		case api.ErrContainerNotFound:
-			w.WriteHeader(http.StatusNotFound)
-		case api.ErrLimitsInvalid:
-			w.WriteHeader(http.StatusBadRequest)
+		switch v := err.(type) {
+		case api.Error:
+			w.WriteHeader(v.StatusCode())
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 		}

@@ -38,11 +38,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.allocate-container.failed")
-		switch err {
-		case api.ErrContainerGuidNotAvailable:
-			w.WriteHeader(http.StatusBadRequest)
-		case api.ErrInsufficientResourcesAvailable:
-			w.WriteHeader(http.StatusServiceUnavailable)
+		switch v := err.(type) {
+		case api.Error:
+			w.WriteHeader(v.StatusCode())
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 		}

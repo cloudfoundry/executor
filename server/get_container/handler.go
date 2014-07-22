@@ -25,9 +25,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resource, err := h.depotClient.GetContainer(guid)
 	if err != nil {
-		switch err {
-		case api.ErrContainerNotFound:
-			w.WriteHeader(http.StatusNotFound)
+		switch v := err.(type) {
+		case api.Error:
+			w.WriteHeader(v.StatusCode())
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 		}
