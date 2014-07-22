@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -27,7 +26,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resource, err := h.depotClient.GetContainer(guid)
 	if err != nil {
 		switch err {
-		case depot.ContainerNotFound:
+		case api.ErrContainerNotFound:
 			w.WriteHeader(http.StatusNotFound)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)

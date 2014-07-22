@@ -1,22 +1,12 @@
 package depot
 
 import (
-	"errors"
-
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
-)
-
-var (
-	ContainerGuidNotAvailable      = errors.New("container guid not available")
-	InsufficientResourcesAvailable = errors.New("insufficient resources available")
-	ContainerNotFound              = errors.New("container not found")
-	StepsInvalid                   = errors.New("steps invalid")
-	LimitsInvalid                  = errors.New("container limits invalid")
 )
 
 type client struct {
@@ -51,7 +41,7 @@ func NewClient(
 
 func (c *client) InitializeContainer(guid string, request api.ContainerInitializationRequest) (api.Container, error) {
 	if request.CpuPercent > 100 || request.CpuPercent < 0 {
-		return api.Container{}, LimitsInvalid
+		return api.Container{}, api.ErrLimitsInvalid
 	}
 
 	reg, err := c.registry.FindByGuid(guid)
@@ -59,7 +49,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		c.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.init-container.not-found")
-		return api.Container{}, ContainerNotFound
+		return api.Container{}, api.ErrContainerNotFound
 	}
 
 	containerClient, err := c.wardenClient.Create(warden.ContainerSpec{
@@ -170,14 +160,14 @@ func (c *client) AllocateContainer(guid string, request api.ContainerAllocationR
 			"error": err.Error(),
 			"guid":  guid,
 		}, "executor.allocate-container.container-already-exists")
-		return api.Container{}, ContainerGuidNotAvailable
+		return api.Container{}, api.ErrContainerGuidNotAvailable
 	}
 
 	if err != nil {
 		c.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.allocate-container.full")
-		return api.Container{}, InsufficientResourcesAvailable
+		return api.Container{}, api.ErrInsufficientResourcesAvailable
 	}
 
 	return container, nil
@@ -189,7 +179,7 @@ func (c *client) GetContainer(guid string) (api.Container, error) {
 		c.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.get-container.not-found")
-		return api.Container{}, ContainerNotFound
+		return api.Container{}, api.ErrContainerNotFound
 	}
 	return container, nil
 }
@@ -200,7 +190,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		c.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.run-actions.container-not-found")
-		return ContainerNotFound
+		return api.ErrContainerNotFound
 	}
 
 	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
@@ -217,7 +207,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		c.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.run-actions.steps-invalid")
-		return StepsInvalid
+		return api.ErrStepsInvalid
 	}
 
 	c.runActions <- DepotRunAction{
@@ -287,7 +277,7 @@ func handleDeleteError(err error, logger *gosteno.Logger) error {
 		logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.delete-container.not-found")
-		return ContainerNotFound
+		return api.ErrContainerNotFound
 	}
 
 	logger.Errord(map[string]interface{}{
