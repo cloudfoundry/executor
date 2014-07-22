@@ -10,11 +10,11 @@ import (
 )
 
 type Handler struct {
-	depotClient depot.Client
+	depotClient api.Client
 	logger      *gosteno.Logger
 }
 
-func New(depotClient depot.Client, logger *gosteno.Logger) *Handler {
+func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
 	return &Handler{
 		depotClient: depotClient,
 		logger:      logger,

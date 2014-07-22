@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("Client", func() {
 	var fakeExecutor *ghttp.Server
-	var client Client
+	var client api.Client
 	var containerGuid string
 
 	BeforeEach(func() {

@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry/gosteno"
 )
 
 type Handler struct {
-	depotClient depot.Client
+	depotClient api.Client
 	logger      *gosteno.Logger
 }
 
-func New(depotClient depot.Client, logger *gosteno.Logger) *Handler {
+func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
 	return &Handler{
 		depotClient: depotClient,
 		logger:      logger,

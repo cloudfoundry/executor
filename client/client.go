@@ -10,19 +10,7 @@ import (
 	"github.com/tedsuo/rata"
 )
 
-type Client interface {
-	Ping() error
-	AllocateContainer(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
-	GetContainer(allocationGuid string) (api.Container, error)
-	InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error)
-	Run(allocationGuid string, request api.ContainerRunRequest) error
-	DeleteContainer(allocationGuid string) error
-	ListContainers() ([]api.Container, error)
-	RemainingResources() (api.ExecutorResources, error)
-	TotalResources() (api.ExecutorResources, error)
-}
-
-func New(httpClient *http.Client, baseUrl string) Client {
+func New(httpClient *http.Client, baseUrl string) api.Client {
 	return &client{
 		httpClient: httpClient,
 		reqGen:     rata.NewRequestGenerator(baseUrl, api.Routes),

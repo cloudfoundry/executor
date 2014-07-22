@@ -37,7 +37,7 @@ func TestExecutorMain(t *testing.T) {
 var executorPath string
 var gardenServer *GardenServer.WardenServer
 var runner *executor_runner.ExecutorRunner
-var executorClient client.Client
+var executorClient api.Client
 
 var _ = BeforeSuite(func() {
 	var err error

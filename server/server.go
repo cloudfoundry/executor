@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
@@ -22,7 +21,7 @@ import (
 
 type Server struct {
 	Address     string
-	DepotClient depot.Client
+	DepotClient api.Client
 	Logger      *gosteno.Logger
 }
 

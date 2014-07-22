@@ -19,18 +19,6 @@ var (
 	LimitsInvalid                  = errors.New("container limits invalid")
 )
 
-type Client interface {
-	InitializeContainer(guid string, request api.ContainerInitializationRequest) (api.Container, error)
-	AllocateContainer(guid string, request api.ContainerAllocationRequest) (api.Container, error)
-	GetContainer(guid string) (api.Container, error)
-	Run(guid string, request api.ContainerRunRequest) error
-	ListContainers() ([]api.Container, error)
-	DeleteContainer(guid string) error
-	RemainingResources() (api.ExecutorResources, error)
-	TotalResources() (api.ExecutorResources, error)
-	Ping() error
-}
-
 type client struct {
 	containerOwnerName    string
 	containerMaxCPUShares uint64
@@ -49,7 +37,7 @@ func NewClient(
 	transformer *transformer.Transformer,
 	runActions chan<- DepotRunAction,
 	logger *gosteno.Logger,
-) Client {
+) api.Client {
 	return &client{
 		containerOwnerName:    containerOwnerName,
 		containerMaxCPUShares: containerMaxCPUShares,

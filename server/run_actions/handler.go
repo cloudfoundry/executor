@@ -11,12 +11,12 @@ import (
 )
 
 type handler struct {
-	depotClient depot.Client
+	depotClient api.Client
 	logger      *gosteno.Logger
 }
 
 func New(
-	depotClient depot.Client,
+	depotClient api.Client,
 	logger *gosteno.Logger,
 ) http.Handler {
 	return &handler{

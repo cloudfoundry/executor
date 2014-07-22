@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/api/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot"
-	"github.com/cloudfoundry-incubator/executor/depot/fakes"
 	. "github.com/cloudfoundry-incubator/executor/server"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
