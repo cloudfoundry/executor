@@ -5,34 +5,40 @@ import "net/http"
 type Error interface {
 	error
 
-	StatusCode() int
+	Name() string
+	HttpCode() int
 }
 
 type execError struct {
-	message    string
-	statusCode int
+	name     string
+	message  string
+	httpCode int
+}
+
+func (err execError) Name() string {
+	return err.name
 }
 
 func (err execError) Error() string {
 	return err.message
 }
 
-func (err execError) StatusCode() int {
-	return err.statusCode
+func (err execError) HttpCode() int {
+	return err.httpCode
 }
 
-var Errors = map[int]Error{}
+var Errors = map[string]Error{}
 
-func registerError(message string, status int) Error {
-	err := execError{message, status}
-	Errors[status] = err
+func registerError(name string, message string, status int) Error {
+	err := execError{name, message, status}
+	Errors[name] = err
 	return err
 }
 
 var (
-	ErrContainerGuidNotAvailable      = registerError("container guid not available", http.StatusBadRequest)
-	ErrInsufficientResourcesAvailable = registerError("insufficient resources available", http.StatusServiceUnavailable)
-	ErrContainerNotFound              = registerError("container not found", http.StatusNotFound)
-	ErrStepsInvalid                   = registerError("steps invalid", http.StatusBadRequest)
-	ErrLimitsInvalid                  = registerError("container limits invalid", http.StatusBadRequest)
+	ErrContainerGuidNotAvailable      = registerError("ContainerGuidNotAvailable", "container guid not available", http.StatusBadRequest)
+	ErrInsufficientResourcesAvailable = registerError("InsufficientResourcesAvailable", "insufficient resources available", http.StatusServiceUnavailable)
+	ErrContainerNotFound              = registerError("ContainerNotFound", "container not found", http.StatusNotFound)
+	ErrStepsInvalid                   = registerError("StepsInvalid", "steps invalid", http.StatusBadRequest)
+	ErrLimitsInvalid                  = registerError("LimitsInvalid", "container limits invalid", http.StatusBadRequest)
 )

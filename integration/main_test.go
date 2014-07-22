@@ -361,7 +361,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("returns an error", func() {
-					Ω(allocErr.Error()).Should(ContainSubstring("status: 400"))
+					Ω(allocErr).Should(Equal(api.ErrContainerGuidNotAvailable))
 				})
 			})
 
@@ -375,7 +375,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("returns an error", func() {
-					Ω(allocErr.Error()).Should(ContainSubstring("status: 503"))
+					Ω(allocErr).Should(Equal(api.ErrInsufficientResourcesAvailable))
 				})
 			})
 		})
@@ -407,7 +407,7 @@ var _ = Describe("Main", func() {
 
 				It("returns an error", func() {
 					Ω(err).Should(HaveOccurred())
-					Ω(err.Error()).Should(ContainSubstring("status: 400"))
+					Ω(err).Should(Equal(api.ErrLimitsInvalid))
 				})
 			})
 
@@ -420,7 +420,7 @@ var _ = Describe("Main", func() {
 
 				It("returns an error", func() {
 					Ω(err).Should(HaveOccurred())
-					Ω(err.Error()).Should(ContainSubstring("status: 400"))
+					Ω(err).Should(Equal(api.ErrLimitsInvalid))
 				})
 			})
 

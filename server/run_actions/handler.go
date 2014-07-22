@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-
+	"github.com/cloudfoundry-incubator/executor/server/error_headers"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -42,12 +42,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Infod(map[string]interface{}{
 			"error": err.Error(),
 		}, "executor.run-actions.failed")
-		switch v := err.(type) {
-		case api.Error:
-			w.WriteHeader(v.StatusCode())
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+
+		error_headers.Write(err, w)
+
 		return
 	}
 

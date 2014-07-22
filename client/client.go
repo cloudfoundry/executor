@@ -161,6 +161,16 @@ func (c client) makeRequest(handlerName string, params rata.Params, payload inte
 	}
 
 	if response.StatusCode >= 300 {
+		executorError := response.Header.Get("X-Executor-Error")
+		if len(executorError) > 0 {
+			err, found := api.Errors[executorError]
+			if !found {
+				return response, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
+			}
+
+			return response, err
+		}
+
 		return response, fmt.Errorf("Request failed with status: %d", response.StatusCode)
 	}
 

@@ -27,7 +27,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch v := err.(type) {
 		case api.Error:
-			w.WriteHeader(v.StatusCode())
+			w.WriteHeader(v.HttpCode())
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 		}
