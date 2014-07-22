@@ -13,7 +13,7 @@ import (
 
 var (
 	ContainerGuidNotAvailable      = errors.New("container guid not available")
-	InsufficientResourcesAvailable = errors.New("container guid not available")
+	InsufficientResourcesAvailable = errors.New("insufficient resources available")
 	ContainerNotFound              = errors.New("container not found")
 	StepsInvalid                   = errors.New("steps invalid")
 	LimitsInvalid                  = errors.New("container limits invalid")
