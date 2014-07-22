@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -580,7 +581,7 @@ func (s *WardenServer) handleRun(w http.ResponseWriter, r *http.Request) {
 		Dir:        dir,
 		Privileged: privileged,
 		Env:        convertEnv(env),
-		TTY:        tty,
+		TTY:        ttySpecFrom(tty),
 	}
 
 	if request.Rlimits != nil {
@@ -619,29 +620,38 @@ func (s *WardenServer) handleRun(w http.ResponseWriter, r *http.Request) {
 		ProcessId: proto.Uint32(process.ID()),
 	})
 
-	go s.streamInput(json.NewDecoder(br), stdinW)
+	go s.streamInput(json.NewDecoder(br), stdinW, process)
 
 	s.streamProcess(conn, process, stdout, stderr)
 }
 
-func (s *WardenServer) streamInput(decoder *json.Decoder, in io.WriteCloser) {
+func (s *WardenServer) streamInput(decoder *json.Decoder, in io.WriteCloser, process warden.Process) {
 	for {
 		var payload protocol.ProcessPayload
 		err := decoder.Decode(&payload)
 		if err != nil {
-			break
+			return
 		}
 
-		if payload.Data == nil {
-			err := in.Close()
-			if err != nil {
-				break
+		switch {
+		case payload.Tty != nil:
+			process.SetTTY(*ttySpecFrom(payload.GetTty()))
+
+		case payload.Source != nil:
+			if payload.Data == nil {
+				err := in.Close()
+				if err != nil {
+					return
+				}
+			} else {
+				_, err := in.Write([]byte(payload.GetData()))
+				if err != nil {
+					return
+				}
 			}
-		} else {
-			_, err := in.Write([]byte(payload.GetData()))
-			if err != nil {
-				break
-			}
+		default:
+			log.Println("received unknown process payload:", payload)
+			return
 		}
 	}
 }
@@ -694,7 +704,7 @@ func (s *WardenServer) handleAttach(w http.ResponseWriter, r *http.Request) {
 
 	defer conn.Close()
 
-	go s.streamInput(json.NewDecoder(br), stdinW)
+	go s.streamInput(json.NewDecoder(br), stdinW, process)
 
 	s.streamProcess(conn, process, stdout, stderr)
 }
@@ -909,4 +919,21 @@ func (s *WardenServer) streamProcess(conn net.Conn, process warden.Process, stdo
 			return
 		}
 	}
+}
+
+func ttySpecFrom(tty *protocol.TTY) *warden.TTYSpec {
+	var ttySpec *warden.TTYSpec
+	if tty != nil {
+		ttySpec = &warden.TTYSpec{}
+
+		windowSize := tty.GetWindowSize()
+		if windowSize != nil {
+			ttySpec.WindowSize = &warden.WindowSize{
+				Columns: int(windowSize.GetColumns()),
+				Rows:    int(windowSize.GetRows()),
+			}
+		}
+	}
+
+	return ttySpec
 }

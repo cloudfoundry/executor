@@ -3,7 +3,7 @@ package fakes
 
 import (
 	"sync"
-	. "github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/garden/warden"
 )
 
 type FakeProcess struct {
@@ -19,6 +19,14 @@ type FakeProcess struct {
 	waitReturns struct {
 		result1 int
 		result2 error
+	}
+	SetTTYStub        func(warden.TTYSpec) error
+	setTTYMutex       sync.RWMutex
+	setTTYArgsForCall []struct {
+		arg1 warden.TTYSpec
+	}
+	setTTYReturns struct {
+		result1 error
 	}
 }
 
@@ -40,6 +48,7 @@ func (fake *FakeProcess) IDCallCount() int {
 }
 
 func (fake *FakeProcess) IDReturns(result1 uint32) {
+	fake.IDStub = nil
 	fake.iDReturns = struct {
 		result1 uint32
 	}{result1}
@@ -63,10 +72,43 @@ func (fake *FakeProcess) WaitCallCount() int {
 }
 
 func (fake *FakeProcess) WaitReturns(result1 int, result2 error) {
+	fake.WaitStub = nil
 	fake.waitReturns = struct {
 		result1 int
 		result2 error
 	}{result1, result2}
 }
 
-var _ Process = new(FakeProcess)
+func (fake *FakeProcess) SetTTY(arg1 warden.TTYSpec) error {
+	fake.setTTYMutex.Lock()
+	defer fake.setTTYMutex.Unlock()
+	fake.setTTYArgsForCall = append(fake.setTTYArgsForCall, struct {
+		arg1 warden.TTYSpec
+	}{arg1})
+	if fake.SetTTYStub != nil {
+		return fake.SetTTYStub(arg1)
+	} else {
+		return fake.setTTYReturns.result1
+	}
+}
+
+func (fake *FakeProcess) SetTTYCallCount() int {
+	fake.setTTYMutex.RLock()
+	defer fake.setTTYMutex.RUnlock()
+	return len(fake.setTTYArgsForCall)
+}
+
+func (fake *FakeProcess) SetTTYArgsForCall(i int) warden.TTYSpec {
+	fake.setTTYMutex.RLock()
+	defer fake.setTTYMutex.RUnlock()
+	return fake.setTTYArgsForCall[i].arg1
+}
+
+func (fake *FakeProcess) SetTTYReturns(result1 error) {
+	fake.SetTTYStub = nil
+	fake.setTTYReturns = struct {
+		result1 error
+	}{result1}
+}
+
+var _ warden.Process = new(FakeProcess)

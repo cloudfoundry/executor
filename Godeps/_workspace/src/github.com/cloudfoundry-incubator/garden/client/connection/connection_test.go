@@ -828,7 +828,6 @@ var _ = Describe("Connection", func() {
 							Args:       []string{"arg1", "arg2"},
 							Dir:        proto.String("/some/dir"),
 							Privileged: proto.Bool(true),
-							Tty:        proto.Bool(true),
 							Rlimits: &protocol.ResourceLimits{
 								As:         proto.Uint64(1),
 								Core:       proto.Uint64(2),
@@ -894,7 +893,6 @@ var _ = Describe("Connection", func() {
 					Args:       []string{"arg1", "arg2"},
 					Dir:        "/some/dir",
 					Privileged: true,
-					TTY:        true,
 					Limits:     resourceLimits,
 				}, warden.ProcessIO{
 					Stdin:  bytes.NewBufferString("stdin data"),
@@ -908,6 +906,89 @@ var _ = Describe("Connection", func() {
 				Eventually(stdout).Should(gbytes.Say("stdout data"))
 				Eventually(stdout).Should(gbytes.Say("roundtripped stdin data"))
 				Eventually(stderr).Should(gbytes.Say("stderr data"))
+
+				status, err := process.Wait()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(status).Should(Equal(3))
+			})
+		})
+
+		Context("when the process's window is resized", func() {
+			BeforeEach(func() {
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/containers/foo-handle/processes"),
+						ghttp.VerifyJSONRepresenting(&protocol.RunRequest{
+							Handle:     proto.String("foo-handle"),
+							Path:       proto.String("lol"),
+							Args:       []string{"arg1", "arg2"},
+							Privileged: proto.Bool(false),
+							Tty: &protocol.TTY{
+								WindowSize: &protocol.TTY_WindowSize{
+									Columns: proto.Uint32(100),
+									Rows:    proto.Uint32(200),
+								},
+							},
+							Rlimits: &protocol.ResourceLimits{},
+						}),
+						func(w http.ResponseWriter, r *http.Request) {
+							w.WriteHeader(http.StatusOK)
+
+							conn, br, err := w.(http.Hijacker).Hijack()
+							Ω(err).ShouldNot(HaveOccurred())
+
+							defer conn.Close()
+
+							decoder := json.NewDecoder(br)
+
+							transport.WriteMessage(conn, &protocol.ProcessPayload{ProcessId: proto.Uint32(42)})
+
+							var payload protocol.ProcessPayload
+							err = decoder.Decode(&payload)
+							Ω(err).ShouldNot(HaveOccurred())
+
+							Ω(payload).Should(Equal(protocol.ProcessPayload{
+								ProcessId: proto.Uint32(42),
+								Tty: &protocol.TTY{
+									WindowSize: &protocol.TTY_WindowSize{
+										Columns: proto.Uint32(80),
+										Rows:    proto.Uint32(24),
+									},
+								},
+							}))
+
+							transport.WriteMessage(conn, &protocol.ProcessPayload{ProcessId: proto.Uint32(42), ExitStatus: proto.Uint32(3)})
+						},
+					),
+				)
+			})
+
+			It("sends the appropriate protocol message", func() {
+				process, err := connection.Run("foo-handle", warden.ProcessSpec{
+					Path: "lol",
+					Args: []string{"arg1", "arg2"},
+					TTY: &warden.TTYSpec{
+						WindowSize: &warden.WindowSize{
+							Columns: 100,
+							Rows:    200,
+						},
+					},
+				}, warden.ProcessIO{
+					Stdin:  bytes.NewBufferString("stdin data"),
+					Stdout: gbytes.NewBuffer(),
+					Stderr: gbytes.NewBuffer(),
+				})
+
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(process.ID()).Should(Equal(uint32(42)))
+
+				err = process.SetTTY(warden.TTYSpec{
+					WindowSize: &warden.WindowSize{
+						Columns: 80,
+						Rows:    24,
+					},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 
 				status, err := process.Wait()
 				Ω(err).ShouldNot(HaveOccurred())

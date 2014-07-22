@@ -1060,7 +1060,12 @@ var _ = Describe("When a client connects", func() {
 					Sigpending: uint64ptr(14),
 					Stack:      uint64ptr(15),
 				},
-				TTY: true,
+				TTY: &warden.TTYSpec{
+					WindowSize: &warden.WindowSize{
+						Columns: 80,
+						Rows:    24,
+					},
+				},
 			}
 
 			Context("when running succeeds", func() {
@@ -1133,6 +1138,40 @@ var _ = Describe("When a client connects", func() {
 					status, err := process.Wait()
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(status).Should(Equal(123))
+				})
+			})
+
+			Context("when the process's window size is set", func() {
+				var fakeProcess *fakes.FakeProcess
+
+				BeforeEach(func() {
+					fakeProcess = new(fakes.FakeProcess)
+					fakeProcess.IDReturns(42)
+					fakeProcess.WaitStub = func() (int, error) {
+						select {}
+						return 0, nil
+					}
+
+					fakeContainer.RunReturns(fakeProcess, nil)
+				})
+
+				It("is eventually set in the backend", func() {
+					process, err := container.Run(processSpec, warden.ProcessIO{})
+					Ω(err).ShouldNot(HaveOccurred())
+
+					ttySpec := warden.TTYSpec{
+						WindowSize: &warden.WindowSize{
+							Columns: 80,
+							Rows:    24,
+						},
+					}
+
+					err = process.SetTTY(ttySpec)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(fakeProcess.SetTTYCallCount).Should(Equal(1))
+
+					Ω(fakeProcess.SetTTYArgsForCall(0)).Should(Equal(ttySpec))
 				})
 			})
 
