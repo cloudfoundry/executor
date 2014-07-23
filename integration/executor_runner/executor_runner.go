@@ -31,7 +31,6 @@ type Config struct {
 	TempDir                 string
 	ContainerOwnerName      string
 	ContainerMaxCpuShares   int
-	DrainTimeout            time.Duration
 	RegistryPruningInterval time.Duration
 }
 
@@ -41,7 +40,6 @@ var defaultConfig = Config{
 	TempDir:                 "/tmp",
 	ContainerOwnerName:      "",
 	ContainerMaxCpuShares:   1024,
-	DrainTimeout:            5 * time.Second,
 	RegistryPruningInterval: time.Minute,
 }
 
@@ -84,7 +82,6 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 			"-tempDir", configToUse.TempDir,
 			"-containerOwnerName", configToUse.ContainerOwnerName,
 			"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
-			"-drainTimeout", fmt.Sprintf("%s", configToUse.DrainTimeout),
 			"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
 		),
 		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
@@ -133,9 +130,6 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	}
 	if givenConfig.ContainerMaxCpuShares != 0 {
 		configToReturn.ContainerMaxCpuShares = givenConfig.ContainerMaxCpuShares
-	}
-	if givenConfig.DrainTimeout != 0 {
-		configToReturn.DrainTimeout = givenConfig.DrainTimeout
 	}
 	if givenConfig.RegistryPruningInterval != 0 {
 		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval

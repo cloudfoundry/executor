@@ -60,15 +60,7 @@ var _ = Describe("Main", func() {
 		logConfirmations <-chan struct{}
 	)
 
-	drainTimeout := 5 * time.Second
-	aBit := drainTimeout / 5
 	pruningInterval := 500 * time.Millisecond
-
-	eventuallyContainerShouldBeDestroyed := func(args ...interface{}) {
-		Eventually(fakeBackend.DestroyCallCount, args...).Should(Equal(1))
-		handle := fakeBackend.DestroyArgsForCall(0)
-		Ω(handle).Should(Equal("some-handle"))
-	}
 
 	BeforeEach(func() {
 		//gardenServer.Stop calls listener.Close()
@@ -237,7 +229,6 @@ var _ = Describe("Main", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runner.Start(executor_runner.Config{
-				DrainTimeout:            drainTimeout,
 				RegistryPruningInterval: pruningInterval,
 			})
 		})
@@ -797,89 +788,23 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("when the executor receives the TERM signal", func() {
-			It("stops all running tasks", func() {
-				runTask(true)
-				runner.Session.Terminate()
-				eventuallyContainerShouldBeDestroyed()
-			})
-
 			It("exits successfully", func() {
 				runner.Session.Terminate()
-				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
+				Eventually(runner.Session).Should(gexec.Exit(0))
 			})
 		})
 
 		Describe("when the executor receives the INT signal", func() {
-			It("stops all running tasks", func() {
-				runTask(true)
-				runner.Session.Interrupt()
-				eventuallyContainerShouldBeDestroyed()
-			})
-
 			It("exits successfully", func() {
 				runner.Session.Interrupt()
-				Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
+				Eventually(runner.Session).Should(gexec.Exit(0))
 			})
 		})
 
 		Describe("when the executor receives the USR1 signal", func() {
-			sendDrainSignal := func() {
+			It("exits successfully", func() {
 				runner.Session.Signal(syscall.SIGUSR1)
-				Eventually(runner.Session).Should(gbytes.Say("executor.draining"))
-			}
-
-			Context("when there are tasks running", func() {
-				It("stops accepting requests", func() {
-					sendDrainSignal()
-
-					_, err := executorClient.AllocateContainer("container-123", api.ContainerAllocationRequest{})
-					Ω(err).Should(HaveOccurred())
-				})
-
-				Context("and USR1 is received again", func() {
-					It("does not die", func() {
-						runTask(true)
-
-						runner.Session.Signal(syscall.SIGUSR1)
-						Eventually(runner.Session, time.Second).Should(gbytes.Say("executor.draining"))
-
-						runner.Session.Signal(syscall.SIGUSR1)
-						Eventually(runner.Session, 5*time.Second).Should(gbytes.Say("executor.signal.ignored"))
-					})
-				})
-
-				Context("when the tasks complete before the drain timeout", func() {
-					It("exits successfully", func() {
-						runTask(false)
-
-						sendDrainSignal()
-
-						Eventually(runner.Session, drainTimeout-aBit).Should(gexec.Exit(0))
-					})
-				})
-
-				Context("when the tasks do not complete before the drain timeout", func() {
-					BeforeEach(func() {
-						runTask(true)
-					})
-
-					It("cancels all running tasks", func() {
-						sendDrainSignal()
-						eventuallyContainerShouldBeDestroyed(drainTimeout + aBit)
-					})
-
-					It("exits successfully", func() {
-						sendDrainSignal()
-						Eventually(runner.Session, 2*drainTimeout).Should(gexec.Exit(0))
-					})
-				})
-			})
-
-			Context("when there are no tasks running", func() {
-				It("exits successfully", func() {
-					sendDrainSignal()
-					Eventually(runner.Session).Should(gexec.Exit(0))
-				})
+				Eventually(runner.Session).Should(gexec.Exit(0))
 			})
 		})
 	})

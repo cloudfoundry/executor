@@ -1,10 +1,8 @@
 package depot
 
 import (
-	"errors"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -36,8 +34,6 @@ type Depot struct {
 	runActions         <-chan DepotRunAction
 }
 
-var ErrDrainTimeout = errors.New("tasks did not complete within timeout")
-
 func New(
 	containerOwnerName string,
 	registry registry.Registry,
@@ -67,8 +63,6 @@ func (e *Depot) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 
 	close(readyChan)
 
-	stopping := false
-
 	for {
 		select {
 		case runAction := <-e.runActions:
@@ -78,46 +72,11 @@ func (e *Depot) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 				e.runSequence(runAction)
 			}()
 
-		case signal := <-sigChan:
-			if stopping {
-				e.logger.Info("executor.signal.ignored")
-				break
-			}
-
-			switch signal {
-			case syscall.SIGINT, syscall.SIGTERM:
-				e.logger.Info("executor.stopping")
-				stopping = true
-				go e.drain(0)
-			case syscall.SIGUSR1:
-				e.logger.Info("executor.draining")
-				stopping = true
-				go e.drain(e.drainTimeout)
-			}
-
-		case err := <-e.stoppedChan:
-			e.logger.Info("executor.stopped")
-			return err
+		case <-sigChan:
+			e.logger.Info("executor.stopping")
+			return nil
 		}
 	}
-}
-
-func (e *Depot) drain(drainTimeout time.Duration) {
-	time.AfterFunc(drainTimeout, func() {
-		close(e.runCanceller)
-		// This whole thing should be done better.
-		// Stop-gap solution so deploys don't hang.
-		// See: https://www.pivotaltracker.com/story/show/73640912
-		e.logger.Error("executor.shutting-down.drain-timout-complete.about-to-die")
-		time.Sleep(10 * time.Second)
-		e.logger.Fatal("executor.shutting-down.failed-to-drain.shutting-down-violently")
-	})
-
-	e.logger.Info("executor.shutting-down.waiting-on-requests")
-	// Cancelling running sequences goes here
-	e.runWaitGroup.Wait()
-	e.logger.Info("executor.shutting-down.done-waiting-on-requests")
-	e.stoppedChan <- nil
 }
 
 func (e *Depot) destroyContainers() error {
