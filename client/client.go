@@ -29,6 +29,7 @@ func (c client) AllocateContainer(allocationGuid string, request api.ContainerAl
 	if err != nil {
 		return container, err
 	}
+
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusServiceUnavailable {
@@ -45,10 +46,6 @@ func (c client) AllocateContainer(allocationGuid string, request api.ContainerAl
 
 func (c client) GetContainer(allocationGuid string) (api.Container, error) {
 	response, err := c.makeRequest(api.GetContainer, rata.Params{"guid": allocationGuid}, nil)
-	if response != nil && response.StatusCode == http.StatusNotFound {
-		return api.Container{}, fmt.Errorf("Container not found: %s", allocationGuid)
-	}
-
 	if err != nil {
 		return api.Container{}, err
 	}
@@ -60,11 +57,11 @@ func (c client) GetContainer(allocationGuid string) (api.Container, error) {
 
 func (c client) InitializeContainer(allocationGuid string, request api.ContainerInitializationRequest) (api.Container, error) {
 	response, err := c.makeRequest(api.InitializeContainer, rata.Params{"guid": allocationGuid}, request)
-
 	if err != nil {
 		// do some logging
 		return api.Container{}, err
 	}
+
 	defer response.Body.Close()
 
 	return c.buildContainerFromApiResponse(response)
@@ -88,6 +85,7 @@ func (c client) ListContainers() ([]api.Container, error) {
 	if err != nil {
 		return containers, err
 	}
+
 	defer response.Body.Close()
 
 	err = json.NewDecoder(response.Body).Decode(&containers)
@@ -111,7 +109,9 @@ func (c client) Ping() error {
 	if err != nil {
 		return err
 	}
+
 	response.Body.Close()
+
 	return nil
 }
 
@@ -133,6 +133,7 @@ func (c client) getResources(apiEndpoint string) (api.ExecutorResources, error) 
 	if err != nil {
 		return resources, err
 	}
+
 	defer response.Body.Close()
 
 	err = json.NewDecoder(response.Body).Decode(&resources)
@@ -153,6 +154,7 @@ func (c client) makeRequest(handlerName string, params rata.Params, payload inte
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 
 	response, err := c.httpClient.Do(req)
@@ -161,17 +163,19 @@ func (c client) makeRequest(handlerName string, params rata.Params, payload inte
 	}
 
 	if response.StatusCode >= 300 {
+		response.Body.Close()
+
 		executorError := response.Header.Get("X-Executor-Error")
 		if len(executorError) > 0 {
 			err, found := api.Errors[executorError]
 			if !found {
-				return response, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
+				return nil, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
 			}
 
-			return response, err
+			return nil, err
 		}
 
-		return response, fmt.Errorf("Request failed with status: %d", response.StatusCode)
+		return nil, fmt.Errorf("Request failed with status: %d", response.StatusCode)
 	}
 
 	return response, nil

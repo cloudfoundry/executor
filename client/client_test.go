@@ -140,11 +140,29 @@ var _ = Describe("Client", func() {
 			})
 		})
 
-		Context("when the get fails", func() {
+
+		Context("when the get fails because the container was not found", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/containers/"+containerGuid),
-					ghttp.RespondWith(http.StatusNotFound, "")),
+					ghttp.RespondWith(api.ErrContainerNotFound.HttpCode(), "", http.Header{
+						"X-Executor-Error": []string{api.ErrContainerNotFound.Name()},
+					})),
+				)
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetContainer(containerGuid)
+				Ω(err).Should(Equal(api.ErrContainerNotFound))
+			})
+		})
+
+		Context("when the get fails for some other reason", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid),
+										ghttp.RespondWith(http.StatusInternalServerError, "")),
+
 				)
 			})
 
@@ -217,7 +235,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/containers/guid-123/initialize"),
-					ghttp.RespondWith(http.StatusInternalServerError, "", http.Header{
+					ghttp.RespondWith(api.ErrContainerNotFound.HttpCode(), "", http.Header{
 						"X-Executor-Error": []string{api.ErrContainerNotFound.Name()},
 					})),
 				)
@@ -284,7 +302,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/containers/guid-123/run"),
-					ghttp.RespondWith(http.StatusInternalServerError, "", http.Header{
+					ghttp.RespondWith(api.ErrStepsInvalid.HttpCode(), "", http.Header{
 						"X-Executor-Error": []string{api.ErrStepsInvalid.Name()},
 					})),
 				)
