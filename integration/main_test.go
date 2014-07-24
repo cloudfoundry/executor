@@ -217,6 +217,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
+					defer println("EXIT CODE", runner.Session.ExitCode())
 					Eventually(runner.Session).Should(gexec.Exit(1))
 				})
 			})
@@ -637,16 +638,18 @@ var _ = Describe("Main", func() {
 						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
 					})
 
-					It("destroys the container and removes it from the registry", func() {
-						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+					It("marks the container as completed", func() {
+						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+						container, err := executorClient.GetContainer(containerGuid)
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(container.State).Should(Equal(api.StateCompleted))
 					})
 
-					It("frees the container's reserved resources", func() {
-						Eventually(executorClient.RemainingResources).Should(Equal(api.ExecutorResources{
-							MemoryMB:   1024,
-							DiskMB:     1024,
-							Containers: 1024,
+					It("does not free the container's reserved resources", func() {
+						Consistently(executorClient.RemainingResources).Should(Equal(api.ExecutorResources{
+							MemoryMB:   0,
+							DiskMB:     0,
+							Containers: 1023,
 						}))
 					})
 				})

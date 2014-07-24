@@ -269,7 +269,7 @@ var _ = Describe("Registry", func() {
 		})
 
 		Context("when the container does not exist", func() {
-			It("should erro", func() {
+			It("should error", func() {
 				err := registry.Delete("bam")
 				Ω(err).Should(MatchError(ErrContainerNotFound))
 			})

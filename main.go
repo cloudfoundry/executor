@@ -12,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
@@ -133,9 +134,9 @@ func main() {
 	defer func() {
 		msg := recover()
 		if msg != nil {
-			fmt.Printf("PAINC RESULT: %s", msg)
+			fmt.Printf("PANIC RESULT: %s", msg)
+			os.Exit(1)
 		}
-		println("****************** EXITING ********************************")
 	}()
 
 	flag.Parse()
@@ -153,7 +154,7 @@ func main() {
 
 	logger.Info("executor.starting")
 
-	runActions := make(chan depot.DepotRunAction)
+	destroyContainers(wardenClient, logger)
 
 	depotClient := depot.NewClient(
 		*containerOwnerName,
@@ -161,16 +162,6 @@ func main() {
 		wardenClient,
 		reg,
 		transformer,
-		runActions,
-		logger,
-	)
-
-	depot := depot.New(
-		*containerOwnerName,
-		reg,
-		wardenClient,
-		*drainTimeout,
-		runActions,
 		logger,
 	)
 
@@ -183,7 +174,6 @@ func main() {
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
 
 	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
-		"depot":           depot,
 		"registry-pruner": pruner,
 		"api-server":      apiServer,
 	})
@@ -196,7 +186,7 @@ func main() {
 	for {
 		select {
 		case member := <-exitChan:
-			if member.Error != nil || member.Name == "depot" {
+			if member.Error != nil {
 				logger.Infof("executor.member.%s.exited", member.Name)
 				monitor.Signal(syscall.SIGTERM)
 			}
@@ -266,4 +256,31 @@ func initializeTransformer(logger *steno.Logger) *Transformer.Transformer {
 		logger,
 		*tempDir,
 	)
+}
+
+func destroyContainers(wardenClient warden.Client, logger *steno.Logger) {
+	containers, err := wardenClient.Containers(warden.Properties{
+		"owner": *containerOwnerName,
+	})
+
+	if err != nil {
+		logger.Fatald(map[string]interface{}{
+			"error": err.Error(),
+		}, "executor.destroy-containers-failed")
+		return
+	}
+
+	for _, container := range containers {
+		err := wardenClient.Destroy(container.Handle())
+		if err != nil {
+			logger.Fatald(map[string]interface{}{
+				"handle": container.Handle(),
+				"error":  err.Error(),
+			}, "executor.destroy-container-failed")
+		} else {
+			logger.Infod(map[string]interface{}{
+				"handle": container.Handle(),
+			}, "executor.destroy-container")
+		}
+	}
 }

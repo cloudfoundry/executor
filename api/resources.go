@@ -1,23 +1,31 @@
 package api
 
-import "github.com/cloudfoundry-incubator/runtime-schema/models"
+import (
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/tedsuo/ifrit"
+)
 
 const (
-	StateReserved = "reserved"
-	StateCreated  = "created"
+	StateReserved  = "reserved"
+	StateCreated   = "created"
+	StateCompleted = "completed"
 )
 
 type Container struct {
-	Guid string `json:"guid"`
+	Guid     string                  `json:"guid"`
+	MemoryMB int                     `json:"memory_mb"`
+	DiskMB   int                     `json:"disk_mb"`
+	Actions  []models.ExecutorAction `json:"actions"`
 
-	MemoryMB        int              `json:"memory_mb"`
-	DiskMB          int              `json:"disk_mb"`
-	CpuPercent      float64          `json:"cpu_percent"`
-	Ports           []PortMapping    `json:"ports"`
-	State           string           `json:"state"`
-	ContainerHandle string           `json:"container_handle"`
-	Log             models.LogConfig `json:"log"`
-	AllocatedAt     int64            `json:"allocated_at"`
+	CpuPercent      float64            `json:"cpu_percent"`
+	Ports           []PortMapping      `json:"ports"`
+	State           string             `json:"state"`
+	ContainerHandle string             `json:"container_handle"`
+	Log             models.LogConfig   `json:"log"`
+	AllocatedAt     int64              `json:"allocated_at"`
+	RunResult       ContainerRunResult `json:"run_result"`
+
+	Process ifrit.Process `json:"-"`
 }
 
 type PortMapping struct {

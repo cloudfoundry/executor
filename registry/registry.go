@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/tedsuo/ifrit"
 )
 
 var ErrContainerAlreadyExists = errors.New("container already exists")
@@ -21,6 +22,8 @@ type Registry interface {
 	GetAllContainers() []api.Container
 	Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error)
 	Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error)
+	Start(guid string, process ifrit.Process) error
+	Complete(guid string, result api.ContainerRunResult) error
 	Delete(guid string) error
 }
 
@@ -125,6 +128,37 @@ func (r *registry) Create(guid, containerHandle string, req api.ContainerInitial
 
 	r.registeredContainers[guid] = res
 	return res, nil
+}
+
+func (r *registry) Start(guid string, process ifrit.Process) error {
+	r.containersMutex.Lock()
+	defer r.containersMutex.Unlock()
+
+	res, ok := r.registeredContainers[guid]
+	if !ok {
+		return ErrContainerNotFound
+	}
+
+	res.Process = process
+
+	r.registeredContainers[guid] = res
+	return nil
+}
+
+func (r *registry) Complete(guid string, result api.ContainerRunResult) error {
+	r.containersMutex.Lock()
+	defer r.containersMutex.Unlock()
+
+	res, ok := r.registeredContainers[guid]
+	if !ok {
+		return ErrContainerNotFound
+	}
+
+	res.State = api.StateCompleted
+	res.RunResult = result
+
+	r.registeredContainers[guid] = res
+	return nil
 }
 
 func (r *registry) Delete(guid string) error {

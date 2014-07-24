@@ -1,12 +1,15 @@
 package depot
 
 import (
+	"os"
+
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/gosteno"
+	"github.com/tedsuo/ifrit"
 )
 
 type client struct {
@@ -15,7 +18,6 @@ type client struct {
 	wardenClient          warden.Client
 	registry              registry.Registry
 	transformer           *transformer.Transformer
-	runActions            chan<- DepotRunAction
 	logger                *gosteno.Logger
 }
 
@@ -25,7 +27,6 @@ func NewClient(
 	wardenClient warden.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
-	runActions chan<- DepotRunAction,
 	logger *gosteno.Logger,
 ) api.Client {
 	return &client{
@@ -34,7 +35,6 @@ func NewClient(
 		wardenClient:          wardenClient,
 		registry:              registry,
 		transformer:           transformer,
-		runActions:            runActions,
 		logger:                logger,
 	}
 }
@@ -210,13 +210,21 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		return api.ErrStepsInvalid
 	}
 
-	c.runActions <- DepotRunAction{
+	run := RunSequence{
 		CompleteURL:  request.CompleteURL,
 		Registration: registration,
 		Sequence:     sequence.New(steps),
 		Result:       &result,
+		Registry:     c.registry,
+		Logger:       c.logger,
 	}
+	process := ifrit.Envoke(run)
+	c.registry.Start(run.Registration.Guid, process)
 
+	c.logger.Infod(map[string]interface{}{
+		"guid":   guid,
+		"handle": registration.ContainerHandle,
+	}, "executor.run-actions.started")
 	return nil
 }
 
@@ -225,15 +233,18 @@ func (c *client) ListContainers() ([]api.Container, error) {
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	registration, err := c.registry.FindByGuid(guid)
+	reg, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		return handleDeleteError(err, c.logger)
 	}
 
-	//TODO once wardenClient has an ErrNotFound error code, use it
-	//to determine if we should delete from registry
-	if registration.ContainerHandle != "" {
-		err = c.wardenClient.Destroy(registration.ContainerHandle)
+	if reg.Process != nil {
+		reg.Process.Signal(os.Interrupt)
+		<-reg.Process.Wait()
+	}
+
+	if reg.ContainerHandle != "" {
+		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
 			return handleDeleteError(err, c.logger)
 		}
