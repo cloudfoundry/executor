@@ -54,7 +54,7 @@ var _ = AfterSuite(func() {
 var _ = Describe("Main", func() {
 	var (
 		wardenAddr string
-		debugPort  int
+		debugAddr  string
 
 		fakeBackend *wfakes.FakeBackend
 
@@ -68,7 +68,7 @@ var _ = Describe("Main", func() {
 		//gardenServer.Stop calls listener.Close()
 		//apparently listener.Close() returns before the port is *actually* closed...?
 		wardenPort := 9001 + CurrentGinkgoTestDescription().LineNumber
-		debugPort = 10001 + GinkgoParallelNode()
+		debugAddr = fmt.Sprintf("127.0.0.1:%d", 10001+GinkgoParallelNode())
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
 		executorClient = client.New(http.DefaultClient, "http://"+executorAddr)
@@ -234,7 +234,7 @@ var _ = Describe("Main", func() {
 
 			runner.Start(executor_runner.Config{
 				RegistryPruningInterval: pruningInterval,
-				DebugPort:               debugPort,
+				DebugAddr:               debugAddr,
 			})
 		})
 
@@ -816,7 +816,7 @@ var _ = Describe("Main", func() {
 		})
 
 		It("serves debug information", func() {
-			debugResponse, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/debug/pprof/goroutine", debugPort))
+			debugResponse, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/goroutine", debugAddr))
 			Ω(err).ShouldNot(HaveOccurred())
 
 			debugInfo, err := ioutil.ReadAll(debugResponse.Body)

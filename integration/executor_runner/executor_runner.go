@@ -32,7 +32,7 @@ type Config struct {
 	ContainerOwnerName      string
 	ContainerMaxCpuShares   int
 	RegistryPruningInterval time.Duration
-	DebugPort               int
+	DebugAddr               string
 }
 
 var defaultConfig = Config{
@@ -84,8 +84,8 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 		"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
 	}
 
-	if configToUse.DebugPort != 0 {
-		args = append(args, "-debugPort", fmt.Sprintf("%d", configToUse.DebugPort))
+	if configToUse.DebugAddr != "" {
+		args = append(args, "-debugAddr", configToUse.DebugAddr)
 	}
 
 	executorSession, err := gexec.Start(
@@ -145,7 +145,7 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval
 	}
 
-	configToReturn.DebugPort = givenConfig.DebugPort
+	configToReturn.DebugAddr = givenConfig.DebugAddr
 
 	return configToReturn
 }

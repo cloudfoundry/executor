@@ -55,10 +55,10 @@ var wardenAddr = flag.String(
 	"network address for warden server",
 )
 
-var debugPort = flag.Int(
-	"debugPort",
-	0,
-	"port for serving pprof debugging info")
+var debugAddr = flag.String(
+	"debugAddr",
+	"",
+	"host:port for serving pprof debugging info")
 
 var logLevel = flag.String(
 	"logLevel",
@@ -186,8 +186,8 @@ func main() {
 		"api-server":      apiServer,
 	}
 
-	if *debugPort != 0 {
-		group["debug-server"] = initializeDebugServer(*debugPort)
+	if *debugAddr != "" {
+		group["debug-server"] = initializeDebugServer(*debugAddr)
 	}
 
 	processGroup := grouper.EnvokeGroup(group)
@@ -214,13 +214,13 @@ func main() {
 	}
 }
 
-func initializeDebugServer(port int) ifrit.Runner {
+func initializeDebugServer(addr string) ifrit.Runner {
 	mux := http.NewServeMux()
 	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
 	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
 	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
 	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-	return http_server.New(fmt.Sprintf("127.0.0.1:%d", port), mux)
+	return http_server.New(addr, mux)
 }
 
 func initializeLogger() *steno.Logger {
