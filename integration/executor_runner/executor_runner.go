@@ -32,6 +32,7 @@ type Config struct {
 	ContainerOwnerName      string
 	ContainerMaxCpuShares   int
 	RegistryPruningInterval time.Duration
+	DebugPort               int
 }
 
 var defaultConfig = Config{
@@ -69,24 +70,33 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 	}
 
 	configToUse := r.generateConfig(config...)
+	args := []string{
+		"-listenAddr", r.listenAddr,
+		"-wardenNetwork", r.wardenNetwork,
+		"-wardenAddr", r.wardenAddr,
+		"-memoryMB", configToUse.MemoryMB,
+		"-diskMB", configToUse.DiskMB,
+		"-loggregatorServer", r.loggregatorServer,
+		"-loggregatorSecret", r.loggregatorSecret,
+		"-tempDir", configToUse.TempDir,
+		"-containerOwnerName", configToUse.ContainerOwnerName,
+		"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
+		"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
+	}
+
+	if configToUse.DebugPort != 0 {
+		args = append(args, "-debugPort", fmt.Sprintf("%d", configToUse.DebugPort))
+	}
+
 	executorSession, err := gexec.Start(
 		exec.Command(
 			r.executorBin,
-			"-listenAddr", r.listenAddr,
-			"-wardenNetwork", r.wardenNetwork,
-			"-wardenAddr", r.wardenAddr,
-			"-memoryMB", configToUse.MemoryMB,
-			"-diskMB", configToUse.DiskMB,
-			"-loggregatorServer", r.loggregatorServer,
-			"-loggregatorSecret", r.loggregatorSecret,
-			"-tempDir", configToUse.TempDir,
-			"-containerOwnerName", configToUse.ContainerOwnerName,
-			"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
-			"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
+			args...,
 		),
 		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
 		gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
 	)
+
 	Ω(err).ShouldNot(HaveOccurred())
 	r.Config = configToUse
 	r.Session = executorSession
@@ -134,6 +144,8 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	if givenConfig.RegistryPruningInterval != 0 {
 		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval
 	}
+
+	configToReturn.DebugPort = givenConfig.DebugPort
 
 	return configToReturn
 }

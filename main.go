@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"syscall"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
@@ -51,6 +54,11 @@ var wardenAddr = flag.String(
 	"/tmp/warden.sock",
 	"network address for warden server",
 )
+
+var debugPort = flag.Int(
+	"debugPort",
+	0,
+	"port for serving pprof debugging info")
 
 var logLevel = flag.String(
 	"logLevel",
@@ -173,10 +181,16 @@ func main() {
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
 
-	processGroup := grouper.EnvokeGroup(grouper.RunGroup{
+	group := grouper.RunGroup{
 		"registry-pruner": pruner,
 		"api-server":      apiServer,
-	})
+	}
+
+	if *debugPort != 0 {
+		group["debug-server"] = initializeDebugServer(*debugPort)
+	}
+
+	processGroup := grouper.EnvokeGroup(group)
 
 	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
 	exitChan := processGroup.Exits()
@@ -198,6 +212,15 @@ func main() {
 			os.Exit(0)
 		}
 	}
+}
+
+func initializeDebugServer(port int) ifrit.Runner {
+	mux := http.NewServeMux()
+	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	return http_server.New(fmt.Sprintf("127.0.0.1:%d", port), mux)
 }
 
 func initializeLogger() *steno.Logger {
