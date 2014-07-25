@@ -12,10 +12,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
+	"github.com/pivotal-golang/lager"
 )
 
 type DownloadStep struct {
@@ -24,7 +24,7 @@ type DownloadStep struct {
 	cachedDownloader cacheddownloader.CachedDownloader
 	extractor        extractor.Extractor
 	tempDir          string
-	logger           *steno.Logger
+	logger           lager.Logger
 }
 
 func New(
@@ -33,7 +33,7 @@ func New(
 	cachedDownloader cacheddownloader.CachedDownloader,
 	extractor extractor.Extractor,
 	tempDir string,
-	logger *steno.Logger,
+	logger lager.Logger,
 ) *DownloadStep {
 	return &DownloadStep{
 		container:        container,
@@ -46,25 +46,15 @@ func New(
 }
 
 func (step *DownloadStep) Perform() error {
-	step.logger.Infod(
-		map[string]interface{}{
-			"handle": step.container.Handle(),
-		},
-		"task.handle.download-action",
-	)
+	step.logger.Info("download")
 
 	//Stream this to the extractor + container when we have streaming support!
 	downloadedPath, err := step.download()
 	if err != nil {
-		step.logger.Errord(
-			map[string]interface{}{
-				"handle": step.container.Handle(),
-				"from":   step.model.From,
-				"to":     step.model.To,
-				"error":  err,
-			},
-			"task.handle.download-failed",
-		)
+		step.logger.Error("failed-to-download", err, lager.Data{
+			"from": step.model.From,
+			"to":   step.model.To,
+		})
 
 		return err
 	}
@@ -133,13 +123,9 @@ func (step *DownloadStep) extract(downloadedPath string) (string, error) {
 
 	err = step.extractor.Extract(downloadedPath, extractionDir)
 	if err != nil {
-		step.logger.Warnd(
-			map[string]interface{}{
-				"error": err.Error(),
-				"url":   step.model.From,
-			},
-			"downloader.extract-failed",
-		)
+		step.logger.Error("failed-to-extract", err, lager.Data{
+			"url": step.model.From,
+		})
 
 		return "", err
 	}

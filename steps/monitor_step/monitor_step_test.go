@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/fake_step"
 	. "github.com/cloudfoundry-incubator/executor/steps/monitor_step"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -32,7 +32,7 @@ var _ = Describe("MonitorStep", func() {
 		step sequence.Step
 
 		hookServer *ghttp.Server
-		logger     *steno.Logger
+		logger     *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
@@ -59,7 +59,7 @@ var _ = Describe("MonitorStep", func() {
 			},
 		}
 
-		logger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 
 		hookServer = ghttp.NewServer()
 

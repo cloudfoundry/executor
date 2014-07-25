@@ -2,16 +2,20 @@
 package fake_uploader
 
 import (
+	"github.com/cloudfoundry-incubator/executor/uploader"
+	"github.com/pivotal-golang/lager"
+
 	"net/url"
 	"sync"
 )
 
 type FakeUploader struct {
-	UploadStub        func(fileLocation string, destinationUrl *url.URL) (int64, error)
+	UploadStub        func(fileLocation string, destinationUrl *url.URL, logger lager.Logger) (int64, error)
 	uploadMutex       sync.RWMutex
 	uploadArgsForCall []struct {
-		arg1 string
-		arg2 *url.URL
+		fileLocation   string
+		destinationUrl *url.URL
+		logger         lager.Logger
 	}
 	uploadReturns struct {
 		result1 int64
@@ -19,15 +23,16 @@ type FakeUploader struct {
 	}
 }
 
-func (fake *FakeUploader) Upload(arg1 string, arg2 *url.URL) (int64, error) {
+func (fake *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL, logger lager.Logger) (int64, error) {
 	fake.uploadMutex.Lock()
 	defer fake.uploadMutex.Unlock()
 	fake.uploadArgsForCall = append(fake.uploadArgsForCall, struct {
-		arg1 string
-		arg2 *url.URL
-	}{arg1, arg2})
+		fileLocation   string
+		destinationUrl *url.URL
+		logger         lager.Logger
+	}{fileLocation, destinationUrl, logger})
 	if fake.UploadStub != nil {
-		return fake.UploadStub(arg1, arg2)
+		return fake.UploadStub(fileLocation, destinationUrl, logger)
 	} else {
 		return fake.uploadReturns.result1, fake.uploadReturns.result2
 	}
@@ -39,10 +44,10 @@ func (fake *FakeUploader) UploadCallCount() int {
 	return len(fake.uploadArgsForCall)
 }
 
-func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL) {
+func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL, lager.Logger) {
 	fake.uploadMutex.RLock()
 	defer fake.uploadMutex.RUnlock()
-	return fake.uploadArgsForCall[i].arg1, fake.uploadArgsForCall[i].arg2
+	return fake.uploadArgsForCall[i].fileLocation, fake.uploadArgsForCall[i].destinationUrl, fake.uploadArgsForCall[i].logger
 }
 
 func (fake *FakeUploader) UploadReturns(result1 int64, result2 error) {
@@ -51,3 +56,5 @@ func (fake *FakeUploader) UploadReturns(result1 int64, result2 error) {
 		result2 error
 	}{result1, result2}
 }
+
+var _ uploader.Uploader = new(FakeUploader)

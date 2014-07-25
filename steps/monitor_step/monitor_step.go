@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 const BaseInterval = 500 * time.Millisecond
@@ -20,7 +20,7 @@ type monitorStep struct {
 	healthyHook   *http.Request
 	unhealthyHook *http.Request
 
-	logger *steno.Logger
+	logger lager.Logger
 
 	cancel chan struct{}
 }
@@ -29,7 +29,7 @@ func New(
 	check sequence.Step,
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *http.Request,
-	logger *steno.Logger,
+	logger lager.Logger,
 ) sequence.Step {
 	if healthyThreshold == 0 {
 		healthyThreshold = 1
@@ -72,9 +72,9 @@ func (step *monitorStep) Perform() error {
 					request = step.healthyHook
 				}
 
-				step.logger.Debugd(map[string]interface{}{
+				step.logger.Debug("healthy", lager.Data{
 					"healthy-count": healthyCount,
-				}, "executor.health-monitor.healthy")
+				})
 			} else {
 				unhealthyCount++
 				healthyCount = 0
@@ -83,17 +83,15 @@ func (step *monitorStep) Perform() error {
 					request = step.unhealthyHook
 				}
 
-				step.logger.Debugd(map[string]interface{}{
+				step.logger.Info("unhealthy", lager.Data{
 					"unhealthy-count": unhealthyCount,
-				}, "executor.health-monitor.unhealthy")
+				})
 			}
 
 			if request != nil {
 				resp, err := http.DefaultClient.Do(request)
 				if err != nil {
-					step.logger.Errord(map[string]interface{}{
-						"error": err,
-					}, "executor.health-monitor.request-failed")
+					step.logger.Error("callback-failed", err)
 				} else {
 					resp.Body.Close()
 				}
@@ -106,9 +104,9 @@ func (step *monitorStep) Perform() error {
 				backoff = MaxInterval
 			}
 
-			step.logger.Debugd(map[string]interface{}{
+			step.logger.Debug("sleeping", lager.Data{
 				"duration": backoff,
-			}, "executor.health-monitor.sleeping")
+			})
 
 			timer = time.After(backoff)
 		case <-step.cancel:

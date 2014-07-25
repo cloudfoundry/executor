@@ -6,18 +6,15 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/server/error_headers"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type handler struct {
 	depotClient api.Client
-	logger      *gosteno.Logger
+	logger      lager.Logger
 }
 
-func New(
-	depotClient api.Client,
-	logger *gosteno.Logger,
-) http.Handler {
+func New(depotClient api.Client, logger lager.Logger) http.Handler {
 	return &handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -25,12 +22,12 @@ func New(
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	runLog := h.logger.Session("run-handler")
+
 	var request api.ContainerRunRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.run-actions.invalid-request")
+		runLog.Error("failed-to-unmarshal-payload", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -39,12 +36,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = h.depotClient.Run(guid, request)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.run-actions.failed")
-
+		runLog.Error("run-actions-failed", err)
 		error_headers.Write(err, w)
-
 		return
 	}
 

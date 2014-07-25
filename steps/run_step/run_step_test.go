@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -27,7 +27,7 @@ var _ = Describe("RunAction", func() {
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var wardenClient *fake_warden_client.FakeClient
-	var logger *steno.Logger
+	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
 
 	var spawnedProcess *wfakes.FakeProcess
@@ -52,7 +52,7 @@ var _ = Describe("RunAction", func() {
 
 		wardenClient = fake_warden_client.New()
 
-		logger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 
 		spawnedProcess = new(wfakes.FakeProcess)
 		runError = nil

@@ -5,15 +5,16 @@ import (
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry-incubator/executor/server/error_headers"
+	"github.com/pivotal-golang/lager"
 )
 
 type Handler struct {
 	depotClient api.Client
-	logger      *gosteno.Logger
+	logger      lager.Logger
 }
 
-func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
+func New(depotClient api.Client, logger lager.Logger) *Handler {
 	return &Handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -21,10 +22,12 @@ func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	resources, err := h.depotClient.RemainingResources()
+	rLog := h.logger.Session("remaining-resources-handler")
 
+	resources, err := h.depotClient.RemainingResources()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		rLog.Error("failed-to-get-remaining-resources", err)
+		error_headers.Write(err, w)
 		return
 	}
 
@@ -32,10 +35,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(resources)
 	if err != nil {
-		h.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.remaining-resources.writing-body-failed")
+		rLog.Error("failed-to-marshal-response", err)
 		return
 	}
-	h.logger.Info("executor.remaining-resources.ok")
 }

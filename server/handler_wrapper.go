@@ -3,21 +3,20 @@ package server
 import (
 	"net/http"
 
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
-func LogWrap(handler http.Handler, logger *gosteno.Logger) http.HandlerFunc {
+func LogWrap(handler http.Handler, logger lager.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger.Infod(map[string]interface{}{
+		requestLog := logger.Session("request", lager.Data{
 			"method":  r.Method,
 			"request": r.URL.String(),
-		}, "executor.api.serving-request")
+		})
+
+		requestLog.Debug("serving")
 
 		handler.ServeHTTP(w, r)
 
-		logger.Infod(map[string]interface{}{
-			"method":  r.Method,
-			"request": r.URL.String(),
-		}, "executor.api.done-serving-request")
+		requestLog.Debug("done")
 	}
 }

@@ -5,15 +5,15 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/server/error_headers"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type handler struct {
 	depotClient api.Client
-	logger      *gosteno.Logger
+	logger      lager.Logger
 }
 
-func New(depotClient api.Client, logger *gosteno.Logger) http.Handler {
+func New(depotClient api.Client, logger lager.Logger) http.Handler {
 	return &handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -23,17 +23,15 @@ func New(depotClient api.Client, logger *gosteno.Logger) http.Handler {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	guid := r.FormValue(":guid")
 
+	deleteLog := h.logger.Session("delete-handler")
+
 	err := h.depotClient.DeleteContainer(guid)
 
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.delete-container.failed")
+		deleteLog.Error("failed-to-delete-container", err)
 		error_headers.Write(err, w)
-
 		return
 	}
 
-	h.logger.Info("executor.delete-container.ok")
 	w.WriteHeader(http.StatusOK)
 }

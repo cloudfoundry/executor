@@ -8,7 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -18,7 +18,7 @@ type client struct {
 	wardenClient          warden.Client
 	registry              registry.Registry
 	transformer           *transformer.Transformer
-	logger                *gosteno.Logger
+	logger                lager.Logger
 }
 
 func NewClient(
@@ -27,7 +27,7 @@ func NewClient(
 	wardenClient warden.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
-	logger *gosteno.Logger,
+	logger lager.Logger,
 ) api.Client {
 	return &client{
 		containerOwnerName:    containerOwnerName,
@@ -35,7 +35,7 @@ func NewClient(
 		wardenClient:          wardenClient,
 		registry:              registry,
 		transformer:           transformer,
-		logger:                logger,
+		logger:                logger.Session("depot-client"),
 	}
 }
 
@@ -44,11 +44,13 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		return api.Container{}, api.ErrLimitsInvalid
 	}
 
+	initLog := c.logger.Session("initialize", lager.Data{
+		"guid": guid,
+	})
+
 	reg, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		c.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.not-found")
+		initLog.Error("failed-to-find-container", err)
 		return api.Container{}, api.ErrContainerNotFound
 	}
 
@@ -58,33 +60,25 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		},
 	})
 	if err != nil {
-		c.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.create-failed")
+		initLog.Error("failed-to-create-container", err)
 		return api.Container{}, err
 	}
 
 	err = c.limitContainerDiskAndMemory(reg, containerClient)
 	if err != nil {
-		c.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.limit-disk-and-memory-failed")
+		initLog.Error("failed-to-limit-memory-and-disk", err)
 		return api.Container{}, err
 	}
 
 	err = c.limitContainerCPU(request, containerClient)
 	if err != nil {
-		c.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.limit-cpu-failed")
+		initLog.Error("failed-to-limit-cpu", err)
 		return api.Container{}, err
 	}
 
 	portMapping, err := c.mapPorts(request, containerClient)
 	if err != nil {
-		c.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.port-mapping-failed")
+		initLog.Error("failed-to-map-ports", err)
 		return api.Container{}, err
 	}
 
@@ -92,9 +86,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 
 	reg, err = c.registry.Create(reg.Guid, containerClient.Handle(), request)
 	if err != nil {
-		c.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.registry-failed")
+		initLog.Error("failed-to-register-container", err)
 		return api.Container{}, err
 	}
 
@@ -154,19 +146,18 @@ func (c *client) mapPorts(request api.ContainerInitializationRequest, containerC
 }
 
 func (c *client) AllocateContainer(guid string, request api.ContainerAllocationRequest) (api.Container, error) {
+	allocLog := c.logger.Session("allocate", lager.Data{
+		"guid": guid,
+	})
+
 	container, err := c.registry.Reserve(guid, request)
 	if err == registry.ErrContainerAlreadyExists {
-		c.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-			"guid":  guid,
-		}, "executor.allocate-container.container-already-exists")
+		allocLog.Error("container-already-allocated", err)
 		return api.Container{}, api.ErrContainerGuidNotAvailable
 	}
 
 	if err != nil {
-		c.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.allocate-container.full")
+		allocLog.Error("full", err)
 		return api.Container{}, api.ErrInsufficientResourcesAvailable
 	}
 
@@ -174,39 +165,39 @@ func (c *client) AllocateContainer(guid string, request api.ContainerAllocationR
 }
 
 func (c *client) GetContainer(guid string) (api.Container, error) {
+	getLog := c.logger.Session("get", lager.Data{
+		"guid": guid,
+	})
+
 	container, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		c.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.get-container.not-found")
+		getLog.Error("container-not-found", err)
 		return api.Container{}, api.ErrContainerNotFound
 	}
 	return container, nil
 }
 
 func (c *client) Run(guid string, request api.ContainerRunRequest) error {
+	runLog := c.logger.Session("run", lager.Data{
+		"guid": guid,
+	})
+
 	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		c.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.run-actions.container-not-found")
+		runLog.Error("container-not-found", err)
 		return api.ErrContainerNotFound
 	}
 
 	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
-		c.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.run-actions.lookup-failed")
+		runLog.Error("lookup-failed", err)
 		return err
 	}
 
 	var result string
 	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, container, &result)
 	if err != nil {
-		c.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.run-actions.steps-invalid")
+		runLog.Error("steps-invalid", err)
 		return api.ErrStepsInvalid
 	}
 
@@ -221,10 +212,10 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	process := ifrit.Envoke(run)
 	c.registry.Start(run.Registration.Guid, process)
 
-	c.logger.Infod(map[string]interface{}{
-		"guid":   guid,
+	runLog.Info("started", lager.Data{
 		"handle": registration.ContainerHandle,
-	}, "executor.run-actions.started")
+	})
+
 	return nil
 }
 
@@ -233,9 +224,13 @@ func (c *client) ListContainers() ([]api.Container, error) {
 }
 
 func (c *client) DeleteContainer(guid string) error {
+	deleteLog := c.logger.Session("delete", lager.Data{
+		"guid": guid,
+	})
+
 	reg, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		return handleDeleteError(err, c.logger)
+		return handleDeleteError(err, deleteLog)
 	}
 
 	if reg.Process != nil {
@@ -246,13 +241,13 @@ func (c *client) DeleteContainer(guid string) error {
 	if reg.ContainerHandle != "" {
 		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
-			return handleDeleteError(err, c.logger)
+			return handleDeleteError(err, deleteLog)
 		}
 	}
 
 	err = c.registry.Delete(guid)
 	if err != nil {
-		return handleDeleteError(err, c.logger)
+		return handleDeleteError(err, deleteLog)
 	}
 
 	return nil
@@ -283,16 +278,13 @@ func (c *client) TotalResources() (api.ExecutorResources, error) {
 	return resources, nil
 }
 
-func handleDeleteError(err error, logger *gosteno.Logger) error {
+func handleDeleteError(err error, logger lager.Logger) error {
 	if err == registry.ErrContainerNotFound {
-		logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.delete-container.not-found")
+		logger.Error("container-not-found", err)
 		return api.ErrContainerNotFound
 	}
 
-	logger.Errord(map[string]interface{}{
-		"error": err.Error(),
-	}, "executor.delete-container.failed")
+	logger.Error("failed-to-delete-container", err)
+
 	return err
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/server/run_actions"
 	"github.com/cloudfoundry-incubator/executor/server/total_resources"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/rata"
@@ -22,7 +22,7 @@ import (
 type Server struct {
 	Address     string
 	DepotClient api.Client
-	Logger      *gosteno.Logger
+	Logger      lager.Logger
 }
 
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
@@ -47,10 +47,9 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 			s.Logger.Info("executor.server.signaled-to-stop")
 		case err := <-server.Wait():
 			if err != nil {
-				s.Logger.Errord(map[string]interface{}{
-					"error": err.Error(),
-				}, "executor.server.failed")
+				s.Logger.Error("server-failed", err)
 			}
+
 			s.Logger.Info("executor.server.stopped")
 			return err
 		}

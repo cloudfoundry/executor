@@ -10,26 +10,24 @@ import (
 	"os"
 	"time"
 
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type Uploader interface {
-	Upload(fileLocation string, destinationUrl *url.URL) (int64, error)
+	Upload(fileLocation string, destinationUrl *url.URL, logger lager.Logger) (int64, error)
 }
 
 type URLUploader struct {
 	timeout time.Duration
-	logger  *steno.Logger
 }
 
-func New(timeout time.Duration, logger *steno.Logger) Uploader {
+func New(timeout time.Duration) Uploader {
 	return &URLUploader{
 		timeout: timeout,
-		logger:  logger,
 	}
 }
 
-func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, error) {
+func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, logger lager.Logger) (int64, error) {
 	httpTransport := &http.Transport{
 		ResponseHeaderTimeout: uploader.timeout,
 	}
@@ -46,7 +44,11 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 		var sourceFile *os.File
 		var fileInfo os.FileInfo
 
-		uploader.logger.Infof("uploader.attempt #%d", attempt)
+		if logger != nil {
+			logger.Info("uploader.attempt", lager.Data{
+				"attempt": attempt,
+			})
+		}
 
 		sourceFile, err = os.Open(fileLocation)
 		if err != nil {

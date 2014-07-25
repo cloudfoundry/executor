@@ -10,7 +10,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/fake_step"
 	. "github.com/cloudfoundry-incubator/executor/steps/parallel_step"
-	steno "github.com/cloudfoundry/gosteno"
 )
 
 var _ = Describe("ParallelStep", func() {
@@ -26,8 +25,6 @@ var _ = Describe("ParallelStep", func() {
 		thingHappened = make(chan bool, 2)
 		cleanedUp = make(chan bool, 2)
 		cancelled = make(chan bool, 2)
-
-		steno.EnterTestMode(steno.LOG_DEBUG)
 
 		running := new(sync.WaitGroup)
 		running.Add(2)

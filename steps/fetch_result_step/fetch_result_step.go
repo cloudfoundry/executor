@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 const MAX_RESULT_SIZE = 1024 * 10
@@ -18,7 +18,7 @@ type FetchResultStep struct {
 	container         warden.Container
 	fetchResultAction models.FetchResultAction
 	tempDir           string
-	logger            *steno.Logger
+	logger            lager.Logger
 	result            *string
 }
 
@@ -26,7 +26,7 @@ func New(
 	container warden.Container,
 	fetchResultAction models.FetchResultAction,
 	tempDir string,
-	logger *steno.Logger,
+	logger lager.Logger,
 	result *string,
 ) *FetchResultStep {
 	return &FetchResultStep{
@@ -39,13 +39,6 @@ func New(
 }
 
 func (step *FetchResultStep) Perform() error {
-	step.logger.Infod(
-		map[string]interface{}{
-			"handle": step.container.Handle(),
-		},
-		"task.handle.fetch-result-step",
-	)
-
 	data, err := step.copyAndReadResult()
 	if err != nil {
 		return emittable_error.New(err, "Copying out of the container failed")

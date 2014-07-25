@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -32,7 +32,7 @@ var _ = Describe("DownloadAction", func() {
 	var cache *fakecacheddownloader.FakeCachedDownloader
 	var tempDir string
 	var wardenClient *fake_warden_client.FakeClient
-	var logger *steno.Logger
+	var logger *lagertest.TestLogger
 
 	handle := "some-container-handle"
 
@@ -48,7 +48,7 @@ var _ = Describe("DownloadAction", func() {
 
 		wardenClient = fake_warden_client.New()
 
-		logger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 	})
 
 	Describe("Perform", func() {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -19,11 +20,11 @@ import (
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
+	"github.com/pivotal-golang/lager"
 )
 
 var ErrNoCheck = errors.New("no check configured")
@@ -34,7 +35,7 @@ type Transformer struct {
 	uploader         uploader.Uploader
 	extractor        extractor.Extractor
 	compressor       compressor.Compressor
-	logger           *steno.Logger
+	logger           lager.Logger
 	tempDir          string
 	result           *string
 }
@@ -45,7 +46,7 @@ func NewTransformer(
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
-	logger *steno.Logger,
+	logger lager.Logger,
 	tempDir string,
 ) *Transformer {
 	return &Transformer{
@@ -87,13 +88,18 @@ func (transformer *Transformer) convertAction(
 ) (sequence.Step, error) {
 	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, logConfig.Index, transformer.logEmitter)
 
+	sessionName := reflect.TypeOf(action.Action).Name()
+	stepLogger := transformer.logger.Session(sessionName, lager.Data{
+		"handle": container.Handle(),
+	})
+
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:
 		return run_step.New(
 			container,
 			actionModel,
 			logStreamer,
-			transformer.logger,
+			stepLogger,
 		), nil
 	case models.DownloadAction:
 		return download_step.New(
@@ -102,7 +108,7 @@ func (transformer *Transformer) convertAction(
 			transformer.cachedDownloader,
 			transformer.extractor,
 			transformer.tempDir,
-			transformer.logger,
+			stepLogger,
 		), nil
 	case models.UploadAction:
 		return upload_step.New(
@@ -112,14 +118,14 @@ func (transformer *Transformer) convertAction(
 			transformer.compressor,
 			transformer.tempDir,
 			logStreamer,
-			transformer.logger,
+			stepLogger,
 		), nil
 	case models.FetchResultAction:
 		return fetch_result_step.New(
 			container,
 			actionModel,
 			transformer.tempDir,
-			transformer.logger,
+			stepLogger,
 			result,
 		), nil
 	case models.EmitProgressAction:
@@ -139,7 +145,7 @@ func (transformer *Transformer) convertAction(
 			actionModel.SuccessMessage,
 			actionModel.FailureMessage,
 			logStreamer,
-			transformer.logger,
+			stepLogger,
 		), nil
 	case models.TryAction:
 		subStep, err := transformer.convertAction(
@@ -152,7 +158,7 @@ func (transformer *Transformer) convertAction(
 			return nil, err
 		}
 
-		return try_step.New(subStep, transformer.logger), nil
+		return try_step.New(subStep, stepLogger), nil
 	case models.MonitorAction:
 		var healthyHook *http.Request
 		var unhealthyHook *http.Request
@@ -197,7 +203,7 @@ func (transformer *Transformer) convertAction(
 			actionModel.UnhealthyThreshold,
 			healthyHook,
 			unhealthyHook,
-			transformer.logger,
+			stepLogger,
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))

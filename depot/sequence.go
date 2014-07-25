@@ -6,7 +6,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -16,17 +16,19 @@ type RunSequence struct {
 	Sequence     sequence.Step
 	Result       *string
 	Registry     registry.Registry
-	Logger       *gosteno.Logger
+	Logger       lager.Logger
 }
 
 func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	seqComplete := make(chan error)
 
+	runLog := r.Logger.Session("run", lager.Data{
+		"guid":   r.Registration.Guid,
+		"handle": r.Registration.ContainerHandle,
+	})
+
 	go func() {
-		r.Logger.Infod(map[string]interface{}{
-			"guid":   r.Registration.Guid,
-			"handle": r.Registration.ContainerHandle,
-		}, "depot.sequence.start")
+		runLog.Info("starting")
 		seqComplete <- r.Sequence.Perform()
 	}()
 
@@ -37,16 +39,10 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 		case <-sigChan:
 			sigChan = nil
 			r.Sequence.Cancel()
-			r.Logger.Infod(map[string]interface{}{
-				"guid":   r.Registration.Guid,
-				"handle": r.Registration.ContainerHandle,
-			}, "depot.sequence.cancelled")
+			runLog.Info("cancelled")
 
 		case err := <-seqComplete:
-			r.Logger.Infod(map[string]interface{}{
-				"guid":   r.Registration.Guid,
-				"handle": r.Registration.ContainerHandle,
-			}, "depot.sequence.complete")
+			runLog.Info("completed")
 
 			payload := api.ContainerRunResult{
 				Guid:   r.Registration.Guid,
@@ -60,9 +56,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 
 			err = r.Registry.Complete(r.Registration.Guid, payload)
 			if err != nil {
-				r.Logger.Errord(map[string]interface{}{
-					"error": err.Error(),
-				}, "depot.complete-container.failed")
+				runLog.Error("failed-to-complete", err)
 			}
 
 			if r.CompleteURL == "" {
@@ -74,10 +68,8 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 				Payload: payload,
 			})
 
-			r.Logger.Infod(map[string]interface{}{
-				"guid":   r.Registration.Guid,
-				"handle": r.Registration.ContainerHandle,
-			}, "depot.sequence.callback-started")
+			runLog.Info("callback-started")
+
 			return err
 		}
 	}

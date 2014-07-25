@@ -10,9 +10,9 @@ import (
 
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
+	"github.com/pivotal-golang/lager"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -26,7 +26,7 @@ type UploadStep struct {
 	compressor compressor.Compressor
 	tempDir    string
 	streamer   log_streamer.LogStreamer
-	logger     *steno.Logger
+	logger     lager.Logger
 }
 
 func New(
@@ -36,7 +36,7 @@ func New(
 	compressor compressor.Compressor,
 	tempDir string,
 	streamer log_streamer.LogStreamer,
-	logger *steno.Logger,
+	logger lager.Logger,
 ) *UploadStep {
 	return &UploadStep{
 		container:  container,
@@ -50,13 +50,6 @@ func New(
 }
 
 func (step *UploadStep) Perform() (err error) {
-	step.logger.Infod(
-		map[string]interface{}{
-			"handle": step.container.Handle(),
-		},
-		"task.handle.upload-step",
-	)
-
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
 		return err
@@ -94,7 +87,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.logger)
 	if err != nil {
 		return err
 	}

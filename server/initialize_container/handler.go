@@ -6,18 +6,15 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/server/error_headers"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type handler struct {
 	depotClient api.Client
-	logger      *gosteno.Logger
+	logger      lager.Logger
 }
 
-func New(
-	depotClient api.Client,
-	logger *gosteno.Logger,
-) http.Handler {
+func New(depotClient api.Client, logger lager.Logger) http.Handler {
 	return &handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -25,12 +22,13 @@ func New(
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	req := api.ContainerInitializationRequest{}
+	initLog := h.logger.Session("initialize-handler")
+
+	var req api.ContainerInitializationRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.initialize-container.bad-request")
+		initLog.Error("failed-to-unmarshal-payload", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -38,12 +36,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	guid := r.FormValue(":guid")
 	reg, err := h.depotClient.InitializeContainer(guid, req)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.failed")
-
+		initLog.Error("failed-to-initialize-container", err)
 		error_headers.Write(err, w)
-
 		return
 	}
 
@@ -51,11 +45,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	err = json.NewEncoder(w).Encode(reg)
 	if err != nil {
-		h.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.init-container.writing-body-failed")
+		initLog.Error("failed-to-marshal-response", err)
 		return
 	}
-
-	h.logger.Info("executor.init-container.ok")
 }

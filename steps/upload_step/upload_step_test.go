@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -26,6 +25,7 @@ import (
 	Uploader "github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/executor/uploader/fake_uploader"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
+	"github.com/pivotal-golang/lager/lagertest"
 )
 
 type ClosableBuffer struct {
@@ -59,7 +59,7 @@ var _ = Describe("UploadStep", func() {
 	var uploader Uploader.Uploader
 	var tempDir string
 	var wardenClient *fake_warden_client.FakeClient
-	var logger *steno.Logger
+	var logger *lagertest.TestLogger
 	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var currentUser *user.User
@@ -92,10 +92,10 @@ var _ = Describe("UploadStep", func() {
 
 		wardenClient = fake_warden_client.New()
 
-		logger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 
 		compressor = Compressor.NewTgz()
-		uploader = Uploader.New(5*time.Second, logger)
+		uploader = Uploader.New(5 * time.Second)
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 

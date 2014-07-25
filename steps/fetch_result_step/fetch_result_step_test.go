@@ -8,11 +8,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -46,7 +46,7 @@ var _ = Describe("FetchResultStep", func() {
 	var (
 		step              sequence.Step
 		fetchResultAction models.FetchResultAction
-		logger            *steno.Logger
+		logger            *lagertest.TestLogger
 		wardenClient      *fake_warden_client.FakeClient
 		result            string
 	)
@@ -60,7 +60,7 @@ var _ = Describe("FetchResultStep", func() {
 			File: "/var/some-dir/foo",
 		}
 
-		logger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 
 		wardenClient = fake_warden_client.New()
 	})

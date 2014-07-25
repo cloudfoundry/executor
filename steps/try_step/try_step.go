@@ -2,15 +2,15 @@ package try_step
 
 import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type TryStep struct {
 	substep sequence.Step
-	logger  *steno.Logger
+	logger  lager.Logger
 }
 
-func New(substep sequence.Step, logger *steno.Logger) *TryStep {
+func New(substep sequence.Step, logger lager.Logger) *TryStep {
 	return &TryStep{
 		substep: substep,
 		logger:  logger,
@@ -20,12 +20,9 @@ func New(substep sequence.Step, logger *steno.Logger) *TryStep {
 func (step *TryStep) Perform() error {
 	err := step.substep.Perform()
 	if err != nil {
-		step.logger.Warnd(
-			map[string]interface{}{
-				"error": err.Error(),
-			},
-			"try.failed",
-		)
+		step.logger.Info("failed", lager.Data{
+			"error": err.Error(),
+		})
 	}
 
 	return nil //We never return an error.  That's the point.

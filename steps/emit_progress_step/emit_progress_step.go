@@ -4,19 +4,19 @@ import (
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type EmitProgressStep struct {
 	substep        sequence.Step
-	logger         *steno.Logger
+	logger         lager.Logger
 	startMessage   string
 	successMessage string
 	failureMessage string
 	streamer       log_streamer.LogStreamer
 }
 
-func New(substep sequence.Step, startMessage, successMessage, failureMessage string, streamer log_streamer.LogStreamer, logger *steno.Logger) *EmitProgressStep {
+func New(substep sequence.Step, startMessage, successMessage, failureMessage string, streamer log_streamer.LogStreamer, logger lager.Logger) *EmitProgressStep {
 	return &EmitProgressStep{
 		substep:        substep,
 		logger:         logger,

@@ -13,9 +13,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/api/fakes"
 	. "github.com/cloudfoundry-incubator/executor/server"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gosteno"
 
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/rata"
@@ -44,8 +44,7 @@ var _ = Describe("Api", func() {
 	BeforeEach(func() {
 		containerGuid = "container-guid"
 
-		gosteno.EnterTestMode(gosteno.LOG_DEBUG)
-		logger := gosteno.NewLogger("api-test-logger")
+		logger := lagertest.NewTestLogger("test")
 
 		address := fmt.Sprintf("127.0.0.1:%d", 3150+i+(config.GinkgoConfig.ParallelNode*100))
 		i++

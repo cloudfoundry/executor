@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
@@ -15,14 +15,14 @@ type RunStep struct {
 	container warden.Container
 	model     models.RunAction
 	streamer  log_streamer.LogStreamer
-	logger    *steno.Logger
+	logger    lager.Logger
 }
 
 func New(
 	container warden.Container,
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
-	logger *steno.Logger,
+	logger lager.Logger,
 ) *RunStep {
 	return &RunStep{
 		container: container,
@@ -43,12 +43,7 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 }
 
 func (step *RunStep) Perform() error {
-	step.logger.Debugd(
-		map[string]interface{}{
-			"handle": step.container.Handle(),
-		},
-		"run-step.perform",
-	)
+	step.logger.Debug("running")
 
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
@@ -90,13 +85,7 @@ func (step *RunStep) Perform() error {
 
 		info, err := step.container.Info()
 		if err != nil {
-			step.logger.Errord(
-				map[string]interface{}{
-					"handle": step.container.Handle(),
-					"err":    err.Error(),
-				},
-				"run-step.info.failed",
-			)
+			step.logger.Error("failed-to-get-info", err)
 		} else {
 			for _, ev := range info.Events {
 				if ev == "out of memory" {

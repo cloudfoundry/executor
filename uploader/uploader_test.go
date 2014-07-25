@@ -10,14 +10,14 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/uploader"
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Uploader", func() {
@@ -25,14 +25,13 @@ var _ = Describe("Uploader", func() {
 	var testServer *httptest.Server
 	var serverRequests []*http.Request
 	var serverRequestBody []string
-	var lock *sync.Mutex
 
 	BeforeEach(func() {
 		testServer = nil
 		serverRequestBody = []string{}
 		serverRequests = []*http.Request{}
-		uploader = New(100*time.Millisecond, steno.NewLogger("test-logger"))
-		lock = &sync.Mutex{}
+
+		uploader = New(100 * time.Millisecond)
 	})
 
 	Describe("upload", func() {
@@ -76,7 +75,7 @@ var _ = Describe("Uploader", func() {
 			var err error
 			var numBytes int64
 			JustBeforeEach(func() {
-				numBytes, err = uploader.Upload(file.Name(), url)
+				numBytes, err = uploader.Upload(file.Name(), url, nil)
 			})
 
 			It("uploads the file to the url", func() {
@@ -118,16 +117,23 @@ var _ = Describe("Uploader", func() {
 				url, _ = url.Parse(serverUrl)
 			})
 
-			It("should retry 3 times and return an error", func() {
+			It("should retry and log 3 times and return an error", func() {
 				errs := make(chan error)
 
+				logger := lagertest.NewTestLogger("test")
+
 				go func() {
-					_, err := uploader.Upload(file.Name(), url)
+					_, err := uploader.Upload(file.Name(), url, logger)
 					errs <- err
 				}()
 
+				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("attempt"))
 				Eventually(requestInitiated).Should(Receive())
+
+				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("attempt"))
 				Eventually(requestInitiated).Should(Receive())
+
+				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("attempt"))
 				Eventually(requestInitiated).Should(Receive())
 
 				Ω(<-errs).Should(HaveOccurred())
@@ -143,7 +149,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -157,7 +163,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})

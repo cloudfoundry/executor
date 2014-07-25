@@ -6,15 +6,15 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/server/error_headers"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type Handler struct {
 	depotClient api.Client
-	logger      *gosteno.Logger
+	logger      lager.Logger
 }
 
-func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
+func New(depotClient api.Client, logger lager.Logger) *Handler {
 	return &Handler{
 		depotClient: depotClient,
 		logger:      logger,
@@ -22,12 +22,12 @@ func New(depotClient api.Client, logger *gosteno.Logger) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	allocLog := h.logger.Session("allocate-handler")
+
 	req := api.ContainerAllocationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		h.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.allocate-container.bad-request")
+		allocLog.Error("failed-to-unmarshal-payload", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -36,12 +36,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	container, err := h.depotClient.AllocateContainer(guid, req)
 	if err != nil {
-		h.logger.Infod(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.allocate-container.failed")
-
+		allocLog.Error("failed-to-allocate-container", err)
 		error_headers.Write(err, w)
-
 		return
 	}
 
@@ -50,11 +46,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = json.NewEncoder(w).Encode(container)
 	if err != nil {
-		h.logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.allocate-container.writing-body-failed")
+		allocLog.Error("failed-to-marshal-response", err)
 		return
 	}
-
-	h.logger.Info("executor.allocate-container.ok")
 }

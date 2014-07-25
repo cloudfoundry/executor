@@ -3,19 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"syscall"
 	"time"
 
+	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
@@ -30,6 +29,7 @@ import (
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
+	"github.com/pivotal-golang/lager"
 )
 
 var listenAddr = flag.String(
@@ -58,18 +58,7 @@ var wardenAddr = flag.String(
 var debugAddr = flag.String(
 	"debugAddr",
 	"",
-	"host:port for serving pprof debugging info")
-
-var logLevel = flag.String(
-	"logLevel",
-	"info",
-	"the logging level (none, fatal, error, warn, info, debug, debug1, debug2, all)",
-)
-
-var syslogName = flag.String(
-	"syslogName",
-	"",
-	"syslog name",
+	"host:port for serving pprof debugging info",
 )
 
 var memoryMBFlag = flag.String(
@@ -149,10 +138,10 @@ func main() {
 
 	flag.Parse()
 
-	logger := initializeLogger()
+	logger := cf_lager.New("executor")
 
 	if *containerMaxCpuShares <= 0 {
-		logger.Error("valid maximum container cpu shares must be specified on startup!")
+		logger.Error("max-cpu-shares-invalid", nil)
 		os.Exit(1)
 	}
 
@@ -201,14 +190,19 @@ func main() {
 		select {
 		case member := <-exitChan:
 			if member.Error != nil {
-				logger.Infof("executor.member.%s.exited", member.Name)
+				logger.Info("member-exited", lager.Data{
+					"member": member.Name,
+				})
+
 				monitor.Signal(syscall.SIGTERM)
 			}
 
 		case err := <-monitor.Wait():
 			if err != nil {
+				logger.Error("exited-with-failure", err)
 				os.Exit(1)
 			}
+
 			os.Exit(0)
 		}
 	}
@@ -223,42 +217,25 @@ func initializeDebugServer(addr string) ifrit.Runner {
 	return http_server.New(addr, mux)
 }
 
-func initializeLogger() *steno.Logger {
-	l, err := steno.GetLogLevel(*logLevel)
-	if err != nil {
-		log.Fatalf("Invalid loglevel: %s\n", *logLevel)
-	}
-
-	stenoConfig := steno.Config{
-		Level: l,
-		Sinks: []steno.Sink{steno.NewIOSink(os.Stdout)},
-	}
-
-	if *syslogName != "" {
-		stenoConfig.Sinks = append(stenoConfig.Sinks, steno.NewSyslogSink(*syslogName))
-	}
-
-	steno.Init(&stenoConfig)
-	return steno.NewLogger("executor")
-}
-
-func initializeWardenClient(logger *steno.Logger) (WardenClient.Client, registry.Capacity) {
+func initializeWardenClient(logger lager.Logger) (WardenClient.Client, registry.Capacity) {
 	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
 
 	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error("failed-to-configure-capacity", err)
 		os.Exit(1)
 	}
 
-	logger.Infof("Initial Capacity: %s", capacity.String())
+	logger.Info("initial-capacity", lager.Data{
+		"capacity": capacity,
+	})
 
 	return wardenClient, capacity
 }
 
-func initializeTransformer(logger *steno.Logger) *Transformer.Transformer {
+func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
-	uploader := uploader.New(10*time.Minute, logger)
+	uploader := uploader.New(10 * time.Minute)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 
@@ -281,29 +258,26 @@ func initializeTransformer(logger *steno.Logger) *Transformer.Transformer {
 	)
 }
 
-func destroyContainers(wardenClient warden.Client, logger *steno.Logger) {
+func destroyContainers(wardenClient warden.Client, logger lager.Logger) {
 	containers, err := wardenClient.Containers(warden.Properties{
 		"owner": *containerOwnerName,
 	})
 
 	if err != nil {
-		logger.Fatald(map[string]interface{}{
-			"error": err.Error(),
-		}, "executor.destroy-containers-failed")
+		logger.Fatal("failed-to-get-containers", err)
 		return
 	}
 
 	for _, container := range containers {
 		err := wardenClient.Destroy(container.Handle())
 		if err != nil {
-			logger.Fatald(map[string]interface{}{
+			logger.Fatal("failed-to-destroy-container", err, lager.Data{
 				"handle": container.Handle(),
-				"error":  err.Error(),
-			}, "executor.destroy-container-failed")
+			})
 		} else {
-			logger.Infod(map[string]interface{}{
+			logger.Info("destroyed-stray-container", lager.Data{
 				"handle": container.Handle(),
-			}, "executor.destroy-container")
+			})
 		}
 	}
 }

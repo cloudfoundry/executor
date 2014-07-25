@@ -5,8 +5,7 @@ import (
 	"errors"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-
-	steno "github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -25,7 +24,7 @@ var _ = Describe("EmitProgressStep", func() {
 	var errorToReturn error
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var startMessage, successMessage, failureMessage string
-	var fakeLogger *steno.Logger
+	var logger *lagertest.TestLogger
 	var stderrBuffer *bytes.Buffer
 	var stdoutBuffer *bytes.Buffer
 
@@ -40,8 +39,6 @@ var _ = Describe("EmitProgressStep", func() {
 		fakeStreamer.StderrReturns(stderrBuffer)
 		fakeStreamer.StdoutReturns(stdoutBuffer)
 
-		steno.EnterTestMode(steno.LOG_DEBUG)
-
 		subStep = &fake_step.FakeStep{
 			PerformStub: func() error {
 				fakeStreamer.Stdout().Write([]byte("RUNNING\n"))
@@ -55,11 +52,11 @@ var _ = Describe("EmitProgressStep", func() {
 			},
 		}
 
-		fakeLogger = steno.NewLogger("test-logger")
+		logger = lagertest.NewTestLogger("test")
 	})
 
 	JustBeforeEach(func() {
-		step = New(subStep, startMessage, successMessage, failureMessage, fakeStreamer, fakeLogger)
+		step = New(subStep, startMessage, successMessage, failureMessage, fakeStreamer, logger)
 	})
 
 	Context("running", func() {
