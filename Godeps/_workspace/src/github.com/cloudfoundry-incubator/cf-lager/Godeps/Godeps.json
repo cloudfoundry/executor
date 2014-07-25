@@ -1,0 +1,22 @@
+{
+	"ImportPath": "github.com/cloudfoundry-incubator/cf-lager",
+	"GoVersion": "go1.3",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/onsi/ginkgo",
+			"Comment": "v1.0.0-16-g12446bb",
+			"Rev": "12446bbcc74950944c897e32ea99cc8d058f9c92"
+		},
+		{
+			"ImportPath": "github.com/onsi/gomega",
+			"Rev": "7ec350c6bff61a8e3f999e1164f11e5c133605d0"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/lager",
+			"Rev": "cb90f6fb0421b0c17072b72c6ec93189431a2057"
+		}
+	]
+}

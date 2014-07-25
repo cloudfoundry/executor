@@ -1,7 +1,6 @@
 package models_test
 
 import (
-	. "github.com/amitkgupta/match_array_or_slice"
 	. "github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,7 +25,7 @@ var _ = Describe("CircusTailorConfig", func() {
 			}
 
 			Ω(tailorConfig.Path()).Should(Equal("/tmp/circus/tailor"))
-			Ω(tailorConfig.Args()).Should(MatchArrayOrSlice(commandFlags))
+			Ω(tailorConfig.Args()).Should(ConsistOf(commandFlags))
 		})
 	})
 
@@ -50,7 +49,7 @@ var _ = Describe("CircusTailorConfig", func() {
 			}
 
 			Ω(tailorConfig.Path()).Should(Equal("/tmp/circus/tailor"))
-			Ω(tailorConfig.Args()).Should(MatchArrayOrSlice(commandFlags))
+			Ω(tailorConfig.Args()).Should(ConsistOf(commandFlags))
 		})
 	})
 
