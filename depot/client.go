@@ -55,6 +55,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 	}
 
 	containerClient, err := c.wardenClient.Create(warden.ContainerSpec{
+		RootFSPath: request.RootFSPath,
 		Properties: warden.Properties{
 			"owner": c.containerOwnerName,
 		},

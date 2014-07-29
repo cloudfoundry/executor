@@ -21,6 +21,7 @@ type Container struct {
 	AllocatedAt int64 `json:"allocated_at"`
 
 	// init
+	RootFSPath string `json:"root_fs"`
 	CpuPercent float64       `json:"cpu_percent"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
@@ -62,6 +63,7 @@ type ContainerInitializationRequest struct {
 	CpuPercent float64       `json:"cpu_percent"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
+	RootFSPath string        `json:"root_fs"`
 }
 
 type ContainerRunRequest struct {

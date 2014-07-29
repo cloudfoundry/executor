@@ -125,6 +125,7 @@ func (r *registry) Create(guid, containerHandle string, req api.ContainerInitial
 	res.CpuPercent = req.CpuPercent
 	res.Ports = req.Ports
 	res.Log = req.Log
+	res.RootFSPath = req.RootFSPath
 
 	r.registeredContainers[guid] = res
 	return res, nil

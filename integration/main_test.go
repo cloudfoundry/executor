@@ -420,6 +420,33 @@ var _ = Describe("Main", func() {
 				})
 			})
 
+			Context("when the container specifies a docker root_fs", func() {
+				var expectedRootFS = "docker:///docker.com/my-image"
+
+				BeforeEach(func() {
+					initializeContainerRequest = api.ContainerInitializationRequest{
+						RootFSPath: expectedRootFS,
+					}
+					fakeBackend.CreateReturns(container, nil)
+				})
+
+				It("doesn't return an error", func() {
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("creates it with the configured rootfs", func() {
+					Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
+					created := fakeBackend.CreateArgsForCall(0)
+					Ω(created.RootFSPath).Should(Equal(expectedRootFS))
+				})
+
+				It("records the rootfs on the container", func() {
+					c, err := executorClient.GetContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(c.RootFSPath).Should(Equal(expectedRootFS))
+				})
+			})
+
 			Context("when the container can be created", func() {
 				BeforeEach(func() {
 					fakeBackend.CreateReturns(container, nil)

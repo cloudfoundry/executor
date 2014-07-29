@@ -194,6 +194,7 @@ var _ = Describe("Client", func() {
           {
             "cpu_percent": 0.5,
             "ports": null,
+            "root_fs":"",
             "log": {
               "guid":"some-guid",
               "source_name":"XYZ",
