@@ -5,7 +5,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 
 	. "github.com/onsi/ginkgo"
@@ -205,7 +204,7 @@ var _ = Describe("Registry", func() {
 				container, err = registry.Create("a-container", "handle", api.ContainerInitializationRequest{
 					CpuPercent: 0.5,
 					Ports:      []api.PortMapping{{ContainerPort: 8080}},
-					Log:        models.LogConfig{Guid: "log-guid"},
+					Log:        api.LogConfig{Guid: "log-guid"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})

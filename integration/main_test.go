@@ -131,7 +131,7 @@ var _ = Describe("Main", func() {
 
 		index := 13
 		_, err := executorClient.InitializeContainer(guid, api.ContainerInitializationRequest{
-			Log: models.LogConfig{
+			Log: api.LogConfig{
 				Guid:       "the-app-guid",
 				SourceName: "STG",
 				Index:      &index,

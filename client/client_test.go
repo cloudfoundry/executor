@@ -131,7 +131,7 @@ var _ = Describe("Client", func() {
 						{ContainerPort: 8081, HostPort: 1235},
 					},
 
-					Log: models.LogConfig{
+					Log: api.LogConfig{
 						Guid:       "some-guid",
 						SourceName: "XYZ",
 						Index:      &zero,
@@ -139,7 +139,6 @@ var _ = Describe("Client", func() {
 				}))
 			})
 		})
-
 
 		Context("when the get fails because the container was not found", func() {
 			BeforeEach(func() {
@@ -161,8 +160,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/containers/"+containerGuid),
-										ghttp.RespondWith(http.StatusInternalServerError, "")),
-
+					ghttp.RespondWith(http.StatusInternalServerError, "")),
 				)
 			})
 
@@ -180,7 +178,7 @@ var _ = Describe("Client", func() {
 			zero := 0
 			validRequest = api.ContainerInitializationRequest{
 				CpuPercent: 0.5,
-				Log: models.LogConfig{
+				Log: api.LogConfig{
 					Guid:       "some-guid",
 					SourceName: "XYZ",
 					Index:      &zero,

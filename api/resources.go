@@ -21,11 +21,17 @@ type Container struct {
 	Ports           []PortMapping      `json:"ports"`
 	State           string             `json:"state"`
 	ContainerHandle string             `json:"container_handle"`
-	Log             models.LogConfig   `json:"log"`
+	Log             LogConfig          `json:"log"`
 	AllocatedAt     int64              `json:"allocated_at"`
 	RunResult       ContainerRunResult `json:"run_result"`
 
 	Process ifrit.Process `json:"-"`
+}
+
+type LogConfig struct {
+	Guid       string `json:"guid"`
+	SourceName string `json:"source_name"`
+	Index      *int   `json:"index"`
 }
 
 type PortMapping struct {
@@ -39,9 +45,9 @@ type ContainerAllocationRequest struct {
 }
 
 type ContainerInitializationRequest struct {
-	CpuPercent float64          `json:"cpu_percent"`
-	Ports      []PortMapping    `json:"ports"`
-	Log        models.LogConfig `json:"log"`
+	CpuPercent float64       `json:"cpu_percent"`
+	Ports      []PortMapping `json:"ports"`
+	Log        LogConfig     `json:"log"`
 }
 
 type ContainerRunRequest struct {

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"reflect"
 
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -61,7 +62,7 @@ func NewTransformer(
 }
 
 func (transformer *Transformer) StepsFor(
-	logConfig models.LogConfig,
+	logConfig api.LogConfig,
 	actions []models.ExecutorAction,
 	container warden.Container,
 	result *string,
@@ -81,7 +82,7 @@ func (transformer *Transformer) StepsFor(
 }
 
 func (transformer *Transformer) convertAction(
-	logConfig models.LogConfig,
+	logConfig api.LogConfig,
 	action models.ExecutorAction,
 	container warden.Container,
 	result *string,
