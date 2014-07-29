@@ -588,6 +588,46 @@ var _ = Describe("Main", func() {
 				Ω(err).Should(HaveOccurred())
 			})
 
+			It("propagates global environment variables to each run action", func() {
+				guid, fakeContainer := initNewContainer()
+
+				process := new(wfakes.FakeProcess)
+				fakeContainer.RunReturns(process, nil)
+
+				err := executorClient.Run(
+					guid,
+					api.ContainerRunRequest{
+						Env: []api.EnvironmentVariable{
+							{Name: "ENV1", Value: "val1"},
+							{Name: "ENV2", Value: "val2"},
+						},
+						Actions: []models.ExecutorAction{
+							{
+								models.RunAction{
+									Path: "ls",
+									Env: []models.EnvironmentVariable{
+										{Name: "RUN_ENV1", Value: "run_val1"},
+										{Name: "RUN_ENV2", Value: "run_val2"},
+									},
+								},
+							},
+						},
+					},
+				)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(fakeContainer.RunCallCount, 10).Should(Equal(1))
+
+				spec, _ := fakeContainer.RunArgsForCall(0)
+				Ω(spec.Path).Should(Equal("ls"))
+				Ω(spec.Env).Should(Equal([]string{
+					"ENV1=val1",
+					"ENV2=val2",
+					"RUN_ENV1=run_val1",
+					"RUN_ENV2=run_val2",
+				}))
+			})
+
 			Context("when there is a completeURL and metadata", func() {
 				var callbackHandler *ghttp.Server
 				var containerGuid string

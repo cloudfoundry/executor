@@ -64,13 +64,14 @@ func NewTransformer(
 func (transformer *Transformer) StepsFor(
 	logConfig api.LogConfig,
 	actions []models.ExecutorAction,
+	globalEnv []api.EnvironmentVariable,
 	container warden.Container,
 	result *string,
 ) ([]sequence.Step, error) {
 	subSteps := []sequence.Step{}
 
 	for _, a := range actions {
-		step, err := transformer.convertAction(logConfig, a, container, result)
+		step, err := transformer.convertAction(logConfig, a, globalEnv, container, result)
 		if err != nil {
 			return nil, err
 		}
@@ -84,6 +85,7 @@ func (transformer *Transformer) StepsFor(
 func (transformer *Transformer) convertAction(
 	logConfig api.LogConfig,
 	action models.ExecutorAction,
+	globalEnv []api.EnvironmentVariable,
 	container warden.Container,
 	result *string,
 ) (sequence.Step, error) {
@@ -96,6 +98,16 @@ func (transformer *Transformer) convertAction(
 
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:
+		var runEnv []models.EnvironmentVariable
+		for _, e := range globalEnv {
+			runEnv = append(runEnv, models.EnvironmentVariable{
+				Name:  e.Name,
+				Value: e.Value,
+			})
+		}
+
+		actionModel.Env = append(runEnv, actionModel.Env...)
+
 		return run_step.New(
 			container,
 			actionModel,
@@ -133,6 +145,7 @@ func (transformer *Transformer) convertAction(
 		subStep, err := transformer.convertAction(
 			logConfig,
 			actionModel.Action,
+			globalEnv,
 			container,
 			result,
 		)
@@ -152,6 +165,7 @@ func (transformer *Transformer) convertAction(
 		subStep, err := transformer.convertAction(
 			logConfig,
 			actionModel.Action,
+			globalEnv,
 			container,
 			result,
 		)
@@ -191,6 +205,7 @@ func (transformer *Transformer) convertAction(
 		check, err := transformer.convertAction(
 			logConfig,
 			actionModel.Action,
+			globalEnv,
 			container,
 			result,
 		)
@@ -214,6 +229,7 @@ func (transformer *Transformer) convertAction(
 			steps[i], err = transformer.convertAction(
 				logConfig,
 				action,
+				globalEnv,
 				container,
 				result,
 			)

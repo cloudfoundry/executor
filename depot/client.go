@@ -195,7 +195,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	}
 
 	var result string
-	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, container, &result)
+	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, request.Env, container, &result)
 	if err != nil {
 		runLog.Error("steps-invalid", err)
 		return api.ErrStepsInvalid

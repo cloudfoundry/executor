@@ -343,6 +343,8 @@ var _ = Describe("Api", func() {
 
 		Context("with a set of actions as the body", func() {
 			var expectedActions []models.ExecutorAction
+			var expectedEnv []api.EnvironmentVariable
+
 			var runRequest api.ContainerRunRequest
 
 			BeforeEach(func() {
@@ -355,10 +357,17 @@ var _ = Describe("Api", func() {
 					},
 				}
 
+				expectedEnv = []api.EnvironmentVariable{
+					{Name: "ENV1", Value: "val1"},
+					{Name: "ENV2", Value: "val2"},
+				}
+
 				runRequest = api.ContainerRunRequest{
 					Actions:     expectedActions,
+					Env:         expectedEnv,
 					CompleteURL: "http://example.com",
 				}
+
 				runRequestBody = MarshalledPayload(runRequest)
 			})
 
