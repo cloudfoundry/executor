@@ -15,15 +15,9 @@ const (
 	TaskStateResolving
 )
 
-type TaskType string
-
-const (
-	TaskTypeStaging          TaskType = "Staging"
-	TaskTypeDropletMigration TaskType = "DropletMigration"
-)
-
 type Task struct {
 	Guid       string           `json:"guid"`
+	Domain     string           `json:"domain"`
 	Actions    []ExecutorAction `json:"actions"`
 	Stack      string           `json:"stack"`
 	MemoryMB   int              `json:"memory_mb"`
@@ -32,8 +26,6 @@ type Task struct {
 	Log        LogConfig        `json:"log"`
 	CreatedAt  int64            `json:"created_at"` //  the number of nanoseconds elapsed since January 1, 1970 UTC
 	UpdatedAt  int64            `json:"updated_at"`
-
-	Type TaskType `json:"type"`
 
 	State TaskState `json:"state"`
 
@@ -46,6 +38,20 @@ type Task struct {
 	FailureReason string `json:"failure_reason"`
 
 	Annotation string `json:"annotation,omitempty"`
+}
+
+type StagingInfo struct {
+	// yaml keys matter here! they are used by the old DEA for staging_info.yml
+	BuildpackKey      string `yaml:"-" json:"buildpack_key,omitempty"`
+	DetectedBuildpack string `yaml:"detected_buildpack" json:"detected_buildpack"`
+
+	// do not change to be consistent keys; look up 4 lines
+	DetectedStartCommand string `yaml:"start_command" json:"detected_start_command"`
+}
+
+type StagingTaskAnnotation struct {
+	AppId  string `json:"app_id"`
+	TaskId string `json:"task_id"`
 }
 
 func NewTaskFromJSON(payload []byte) (Task, error) {

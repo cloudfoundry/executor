@@ -29,6 +29,11 @@ type RunAction struct {
 	ResourceLimits ResourceLimits        `json:"resource_limits"`
 }
 
+type EnvironmentVariable struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type ResourceLimits struct {
 	Nofile *uint64 `json:"nofile,omitempty"`
 }
