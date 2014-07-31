@@ -13,10 +13,10 @@ func LogWrap(handler http.Handler, logger lager.Logger) http.HandlerFunc {
 			"request": r.URL.String(),
 		})
 
-		requestLog.Debug("serving")
+		requestLog.Info("serving")
 
 		handler.ServeHTTP(w, r)
 
-		requestLog.Debug("done")
+		requestLog.Info("done")
 	}
 }

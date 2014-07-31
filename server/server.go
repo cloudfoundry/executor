@@ -28,7 +28,9 @@ type Server struct {
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	handlers := s.NewHandlers()
 	for key, handler := range handlers {
-		handlers[key] = LogWrap(handler, s.Logger)
+		if key != api.Ping {
+			handlers[key] = LogWrap(handler, s.Logger)
+		}
 	}
 
 	router, err := rata.NewRouter(api.Routes, handlers)
