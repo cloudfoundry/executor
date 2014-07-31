@@ -68,6 +68,16 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		return api.Container{}, err
 	}
 
+	defer func() {
+		if err != nil {
+			initLog.Error("destroying-container-after-failed-init", err)
+			destroyErr := c.wardenClient.Destroy(containerClient.Handle())
+			if destroyErr != nil {
+				initLog.Error("destroying-container-after-failed-init-also-failed", destroyErr)
+			}
+		}
+	}()
+
 	err = c.limitContainerDiskAndMemory(reg, containerClient)
 	if err != nil {
 		initLog.Error("failed-to-limit-memory-and-disk", err)
@@ -88,7 +98,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 
 	request.Ports = portMapping
 
-	reg, err = c.registry.Create(reg.Guid, containerClient.Handle(), request)
+	reg, err = c.registry.Create(guid, containerClient.Handle(), request)
 	if err != nil {
 		initLog.Error("failed-to-register-container", err)
 		return api.Container{}, err
