@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
-	"net/http/pprof"
 	"os"
 	"syscall"
 	"time"
@@ -19,9 +17,9 @@ import (
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
-	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/ifrit/sigmon"
 
+	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/server"
 	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
@@ -53,12 +51,6 @@ var wardenAddr = flag.String(
 	"wardenAddr",
 	"/tmp/warden.sock",
 	"network address for warden server",
-)
-
-var debugAddr = flag.String(
-	"debugAddr",
-	"",
-	"host:port for serving pprof debugging info",
 )
 
 var memoryMBFlag = flag.String(
@@ -175,9 +167,7 @@ func main() {
 		"api-server":      apiServer,
 	}
 
-	if *debugAddr != "" {
-		group["debug-server"] = initializeDebugServer(*debugAddr)
-	}
+	cf_debug_server.Run()
 
 	processGroup := grouper.EnvokeGroup(group)
 
@@ -206,15 +196,6 @@ func main() {
 			os.Exit(0)
 		}
 	}
-}
-
-func initializeDebugServer(addr string) ifrit.Runner {
-	mux := http.NewServeMux()
-	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-	return http_server.New(addr, mux)
 }
 
 func initializeWardenClient(logger lager.Logger) (WardenClient.Client, registry.Capacity) {
