@@ -26,6 +26,7 @@ import (
 	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/loggregatorlib/logmessage"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
@@ -82,7 +83,7 @@ var _ = Describe("Main", func() {
 			MaxContainers: 1024,
 		}, nil)
 
-		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend)
+		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
 
 		var loggregatorAddr string
 
@@ -220,7 +221,6 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
-					defer println("EXIT CODE", runner.Session.ExitCode())
 					Eventually(runner.Session).Should(gexec.Exit(1))
 				})
 			})

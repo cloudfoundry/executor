@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -13,10 +12,13 @@ import (
 	"github.com/cloudfoundry-incubator/garden/routes"
 	"github.com/cloudfoundry-incubator/garden/server/bomberman"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/rata"
 )
 
 type WardenServer struct {
+	logger lager.Logger
+
 	server        http.Server
 	listenNetwork string
 	listenAddr    string
@@ -47,8 +49,11 @@ func New(
 	listenNetwork, listenAddr string,
 	containerGraceTime time.Duration,
 	backend warden.Backend,
+	logger lager.Logger,
 ) *WardenServer {
 	s := &WardenServer{
+		logger: logger,
+
 		listenNetwork: listenNetwork,
 		listenAddr:    listenAddr,
 
@@ -87,7 +92,7 @@ func New(
 
 	mux, err := rata.NewRouter(routes.Routes, handlers)
 	if err != nil {
-		log.Fatalln("failed to initialize router:", err)
+		logger.Fatal("failed-to-initialize-rata", err)
 	}
 
 	s.server = http.Server{
@@ -173,17 +178,20 @@ func (s *WardenServer) Stop() {
 	s.mu.Unlock()
 
 	for _, c := range conns {
-		log.Println("closing idle connection:", c.RemoteAddr())
+		s.logger.Debug("closing-idle", lager.Data{
+			"addr": c.RemoteAddr(),
+		})
+
 		c.Close()
 	}
 
-	log.Println("waiting for active connections to complete")
+	s.logger.Info("waiting-for-connections")
 	s.handling.Wait()
 
-	log.Println("waiting for backend to stop")
+	s.logger.Info("stopping-backend")
 	s.backend.Stop()
 
-	log.Println("garden server stopped")
+	s.logger.Info("stopped")
 }
 
 func (s *WardenServer) removeExistingSocket() error {
@@ -205,6 +213,10 @@ func (s *WardenServer) removeExistingSocket() error {
 }
 
 func (s *WardenServer) reapContainer(container warden.Container) {
-	log.Printf("reaping %s (idle for %s)\n", container.Handle(), s.backend.GraceTime(container))
+	s.logger.Info("reaping", lager.Data{
+		"handle":     container.Handle(),
+		"grace-time": s.backend.GraceTime(container).String(),
+	})
+
 	s.backend.Destroy(container.Handle())
 }
