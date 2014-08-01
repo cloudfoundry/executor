@@ -100,24 +100,10 @@ func (step *monitorStep) Perform() error {
 				}
 			}
 
-			var backoff time.Duration
-
-			if healthyCount > 32 {
-				backoff = MaxInterval
-			} else {
-				backoff = BaseInterval * time.Duration(uint(1)<<(healthyCount-1))
-			}
-
-			if backoff < BaseInterval {
-				backoff = BaseInterval
-			} else if backoff > MaxInterval {
-				backoff = MaxInterval
-			}
-
+			backoff := backoffForHealthyCount(healthyCount)
 			step.logger.Debug("sleeping", lager.Data{
 				"duration": backoff,
 			})
-
 			timer = step.timer.After(backoff)
 		case <-step.cancel:
 			return nil
@@ -125,6 +111,21 @@ func (step *monitorStep) Perform() error {
 	}
 
 	return nil
+}
+
+func backoffForHealthyCount(healthyCount uint) time.Duration {
+	if healthyCount == 0 {
+		return BaseInterval
+	}
+
+	backoff := BaseInterval * time.Duration(uint(1)<<(healthyCount-1))
+
+	// Guard against integer overflow caused by bitshifting
+	if backoff > MaxInterval || healthyCount > 32 {
+		return MaxInterval
+	} else {
+		return backoff
+	}
 }
 
 func (step *monitorStep) Cancel() {
