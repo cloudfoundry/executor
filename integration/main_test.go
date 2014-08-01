@@ -181,7 +181,8 @@ var _ = Describe("Main", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runner.StartWithoutCheck(executor_runner.Config{
-				ContainerOwnerName: "executor-name",
+				ContainerOwnerName:  "executor-name",
+				ContainerInodeLimit: 245000,
 			})
 		})
 
@@ -462,12 +463,13 @@ var _ = Describe("Main", func() {
 					Ω(created.Properties["owner"]).Should(Equal(ownerName))
 				})
 
-				It("applies the memory, disk, and cpu limits", func() {
+				FIt("applies the memory, disk, cpu and inode limits", func() {
 					limitedMemory := container.LimitMemoryArgsForCall(0)
 					Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(1024 * 1024 * 1024)))
 
 					limitedDisk := container.LimitDiskArgsForCall(0)
 					Ω(limitedDisk.ByteHard).Should(Equal(uint64(1024 * 1024 * 1024)))
+					Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
 
 					limitedCPU := container.LimitCPUArgsForCall(0)
 					Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))

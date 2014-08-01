@@ -33,6 +33,7 @@ type Config struct {
 	ContainerMaxCpuShares   int
 	RegistryPruningInterval time.Duration
 	DebugAddr               string
+	ContainerInodeLimit     uint64
 }
 
 var defaultConfig = Config{
@@ -70,6 +71,7 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 	}
 
 	configToUse := r.generateConfig(config...)
+
 	args := []string{
 		"-listenAddr", r.listenAddr,
 		"-wardenNetwork", r.wardenNetwork,
@@ -82,6 +84,7 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 		"-containerOwnerName", configToUse.ContainerOwnerName,
 		"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
 		"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
+		"-containerInodeLimit", fmt.Sprintf("%d", configToUse.ContainerInodeLimit),
 	}
 
 	if configToUse.DebugAddr != "" {
@@ -143,6 +146,9 @@ func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
 	}
 	if givenConfig.RegistryPruningInterval != 0 {
 		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval
+	}
+	if givenConfig.ContainerInodeLimit != 0 {
+		configToReturn.ContainerInodeLimit = givenConfig.ContainerInodeLimit
 	}
 
 	configToReturn.DebugAddr = givenConfig.DebugAddr
