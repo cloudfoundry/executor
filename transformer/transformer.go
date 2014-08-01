@@ -220,6 +220,7 @@ func (transformer *Transformer) convertAction(
 			healthyHook,
 			unhealthyHook,
 			stepLogger,
+			monitor_step.NewTimer(),
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))

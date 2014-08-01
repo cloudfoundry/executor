@@ -21,6 +21,7 @@ type monitorStep struct {
 	unhealthyHook *http.Request
 
 	logger lager.Logger
+	timer  Timer
 
 	cancel chan struct{}
 }
@@ -30,6 +31,7 @@ func New(
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *http.Request,
 	logger lager.Logger,
+	timer Timer,
 ) sequence.Step {
 	if healthyThreshold == 0 {
 		healthyThreshold = 1
@@ -46,13 +48,14 @@ func New(
 		healthyHook:        healthyHook,
 		unhealthyHook:      unhealthyHook,
 		logger:             logger,
+		timer:              timer,
 
 		cancel: make(chan struct{}),
 	}
 }
 
 func (step *monitorStep) Perform() error {
-	timer := time.After(BaseInterval)
+	timer := step.timer.After(BaseInterval)
 
 	var healthyCount uint
 	var unhealthyCount uint
@@ -97,7 +100,14 @@ func (step *monitorStep) Perform() error {
 				}
 			}
 
-			backoff := BaseInterval * time.Duration(1<<(healthyCount-1))
+			var backoff time.Duration
+
+			if healthyCount > 32 {
+				backoff = MaxInterval
+			} else {
+				backoff = BaseInterval * time.Duration(uint(1)<<(healthyCount-1))
+			}
+
 			if backoff < BaseInterval {
 				backoff = BaseInterval
 			} else if backoff > MaxInterval {
@@ -108,7 +118,7 @@ func (step *monitorStep) Perform() error {
 				"duration": backoff,
 			})
 
-			timer = time.After(backoff)
+			timer = step.timer.After(backoff)
 		case <-step.cancel:
 			return nil
 		}

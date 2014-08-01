@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/fake_step"
 	. "github.com/cloudfoundry-incubator/executor/steps/monitor_step"
+	"github.com/cloudfoundry-incubator/executor/steps/monitor_step/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -18,13 +19,7 @@ import (
 
 var _ = Describe("MonitorStep", func() {
 	var (
-		check          sequence.Step
-		checkResults   []error
-		checkTimes     chan time.Time
-		interruptCheck chan struct{}
-
-		healthyThreshold   uint
-		unhealthyThreshold uint
+		check *fake_step.FakeStep
 
 		healthyHookURL   *url.URL
 		unhealthyHookURL *url.URL
@@ -33,31 +28,12 @@ var _ = Describe("MonitorStep", func() {
 
 		hookServer *ghttp.Server
 		logger     *lagertest.TestLogger
+		timer      *fakes.FakeTimer
 	)
 
 	BeforeEach(func() {
-		stepSequence := 0
-
-		checkResults = []error{}
-		checkTimes = make(chan time.Time, 1024)
-		interruptCheck = make(chan struct{})
-
-		check = &fake_step.FakeStep{
-			PerformStub: func() error {
-				checkTimes <- time.Now()
-
-				if len(checkResults) <= stepSequence {
-					<-interruptCheck
-					return nil
-				}
-
-				result := checkResults[stepSequence]
-
-				stepSequence++
-
-				return result
-			},
-		}
+		timer = fakes.NewFakeTimer(time.Now())
+		check = new(fake_step.FakeStep)
 
 		logger = lagertest.NewTestLogger("test")
 
@@ -76,128 +52,127 @@ var _ = Describe("MonitorStep", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
-		step = New(
-			check,
-			healthyThreshold,
-			unhealthyThreshold,
-			&http.Request{
-				Method: "PUT",
-				URL:    healthyHookURL,
-			},
-			&http.Request{
-				Method: "PUT",
-				URL:    unhealthyHookURL,
-			},
-			logger,
-		)
-	})
-
 	Describe("Perform", func() {
+		expectCheckAfterInterval := func(d time.Duration) {
+			Eventually(timer.ActiveAfterCount).Should(BeNumerically(">", 0))
+			previousCheckCount := check.PerformCallCount()
+
+			timer.Elapse(d - 1*time.Microsecond)
+			Consistently(check.PerformCallCount, 0.1).Should(Equal(previousCheckCount))
+
+			timer.Elapse(1 * time.Microsecond)
+			Eventually(check.PerformCallCount).Should(Equal(previousCheckCount + 1))
+		}
+
 		Context("when the healthy and unhealthy threshold is 2", func() {
 			BeforeEach(func() {
-				healthyThreshold = 2
-				unhealthyThreshold = 2
-			})
-
-			JustBeforeEach(func() {
+				step = New(
+					check,
+					2,
+					2,
+					&http.Request{
+						Method: "PUT",
+						URL:    healthyHookURL,
+					},
+					&http.Request{
+						Method: "PUT",
+						URL:    unhealthyHookURL,
+					},
+					logger,
+					timer,
+				)
 				go step.Perform()
 			})
 
 			AfterEach(func() {
-				// unblocking check sequence; opens the floodgates, so ignore any
-				// requests after this point
-				hookServer.AllowUnhandledRequests = true
-				close(interruptCheck)
-
 				step.Cancel()
 			})
 
 			Context("when the check succeeds", func() {
 				BeforeEach(func() {
-					checkResults = append(checkResults, nil)
+					check.PerformReturns(nil)
+					expectCheckAfterInterval(BaseInterval)
 				})
 
 				It("does not hit any endpoint", func() {
 					Consistently(hookServer.ReceivedRequests()).Should(BeEmpty())
 				})
 
-				Context("and then fails", func() {
+				It("checks again after the same interval", func() {
+					hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/healthy"))
+					expectCheckAfterInterval(BaseInterval)
+				})
+
+				Context("when the next check fails", func() {
 					BeforeEach(func() {
-						checkResults = append(checkResults, errors.New("nope"))
+						check.PerformReturns(errors.New("nope"))
+						hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/unhealthy"))
+						expectCheckAfterInterval(BaseInterval)
 					})
 
-					It("checked again after half a second", func() {
-						time1 := <-checkTimes
-
-						time2 := <-checkTimes
-						Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
-						Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
+					It("checks again after the base interval", func() {
+						expectCheckAfterInterval(BaseInterval)
 					})
 				})
 
-				Context("and succeeds again", func() {
+				Context("when the second check succeeds, but hitting the healthy endpoint fails", func() {
 					BeforeEach(func() {
-						checkResults = append(checkResults, nil)
+						hookServer.AppendHandlers(func(w http.ResponseWriter, r *http.Request) {
+							hookServer.HTTPTestServer.CloseClientConnections()
+						})
+						expectCheckAfterInterval(BaseInterval)
+					})
 
-						hookServer.AppendHandlers(
-							ghttp.VerifyRequest("PUT", "/healthy"),
-						)
+					It("keeps calm and carries on", func() {
+						Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
+					})
+				})
+
+				Context("when the second check succeeds", func() {
+					BeforeEach(func() {
+						check.PerformReturns(nil)
+						hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/healthy"))
+						expectCheckAfterInterval(BaseInterval)
 					})
 
 					It("hits the healthy endpoint", func() {
 						Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 					})
 
-					Context("when hitting the endpoint fails", func() {
-						BeforeEach(func() {
-							hookServer.SetHandler(0, func(w http.ResponseWriter, r *http.Request) {
-								hookServer.HTTPTestServer.CloseClientConnections()
-							})
-						})
-
-						It("keeps calm and carries on", func() {
-							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
-						})
+					It("checks again after double the interval", func() {
+						expectCheckAfterInterval(2 * BaseInterval)
 					})
 
-					Context("and again", func() {
+					Context("when the third request succeeds", func() {
 						BeforeEach(func() {
-							checkResults = append(checkResults, nil)
+							check.PerformReturns(nil)
+							expectCheckAfterInterval(BaseInterval * 2)
 						})
 
-						It("hits the healthy endpoint once and only once", func() {
-							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
+						It("does not make another request to the healthy endpoint", func() {
 							Consistently(hookServer.ReceivedRequests).Should(HaveLen(1))
 						})
 
-						Context("and again", func() {
+						Context("when the fourth request succeeds", func() {
 							BeforeEach(func() {
-								checkResults = append(checkResults, nil)
-
-								hookServer.AppendHandlers(
-									ghttp.VerifyRequest("PUT", "/healthy"),
-								)
+								hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/healthy"))
+								expectCheckAfterInterval(BaseInterval * 4)
 							})
 
 							It("hits the healthy endpoint a total of two times", func() {
-								Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(2))
+								Eventually(hookServer.ReceivedRequests).Should(HaveLen(2))
 							})
 
-							It("had checked on an exponentially increasing backoff", func() {
-								time1 := <-checkTimes
+							It("continues to check with an exponential backoff, and eventually reaches a maximum interval", func() {
+								hookServer.AllowUnhandledRequests = true
+								expectCheckAfterInterval(BaseInterval * 8)
+								expectCheckAfterInterval(BaseInterval * 16)
+								expectCheckAfterInterval(BaseInterval * 32)
+								expectCheckAfterInterval(BaseInterval * 60)
 
-								time2 := <-checkTimes
-								Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
-								Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
-
-								time3 := <-checkTimes
-								Ω(time3.Sub(time2)).Should(BeNumerically(">=", 1*time.Second))
-								Ω(time3.Sub(time2)).Should(BeNumerically("<", 2*time.Second))
-
-								time4 := <-checkTimes
-								Ω(time4.Sub(time3)).Should(BeNumerically(">=", 2*time.Second))
-								Ω(time4.Sub(time3)).Should(BeNumerically("<", 3*time.Second))
+								for i := 0; i < 32; i++ {
+									expectCheckAfterInterval(BaseInterval * 60)
+								}
 							})
 						})
 					})
@@ -206,63 +181,42 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("when the check fails", func() {
 				BeforeEach(func() {
-					checkResults = append(checkResults, errors.New("nope"))
+					check.PerformReturns(errors.New("nope"))
+					expectCheckAfterInterval(BaseInterval)
 				})
 
 				It("does not hit any endpoint", func() {
 					Consistently(hookServer.ReceivedRequests()).Should(BeEmpty())
 				})
 
-				Context("and fails again", func() {
+				Context("and fails a second time", func() {
 					BeforeEach(func() {
-						checkResults = append(checkResults, errors.New("nope"))
-
-						hookServer.AppendHandlers(
-							ghttp.VerifyRequest("PUT", "/unhealthy"),
-						)
+						hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/unhealthy"))
+						expectCheckAfterInterval(BaseInterval)
 					})
 
 					It("hits the unhealthy endpoint", func() {
 						Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 					})
 
-					Context("and again", func() {
+					Context("and fails a third time", func() {
 						BeforeEach(func() {
-							checkResults = append(checkResults, errors.New("nope"))
+							expectCheckAfterInterval(BaseInterval)
 						})
 
-						It("hits the unhealthy endpoint once and only once", func() {
+						It("does not hit the unhealthy endpoint again", func() {
 							Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(1))
 							Consistently(hookServer.ReceivedRequests).Should(HaveLen(1))
 						})
 
-						Context("and again", func() {
+						Context("and fails a fourth time", func() {
 							BeforeEach(func() {
-								checkResults = append(checkResults, errors.New("nope"))
-
-								hookServer.AppendHandlers(
-									ghttp.VerifyRequest("PUT", "/unhealthy"),
-								)
+								hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/unhealthy"))
+								expectCheckAfterInterval(BaseInterval)
 							})
 
-							It("hits the unhealthy endpoint a total of two times", func() {
+							It("hits the unhealthy endpoint a second time", func() {
 								Eventually(hookServer.ReceivedRequests, 10).Should(HaveLen(2))
-							})
-
-							It("had checked again after half a second", func() {
-								time1 := <-checkTimes
-
-								time2 := <-checkTimes
-								Ω(time2.Sub(time1)).Should(BeNumerically(">=", 500*time.Millisecond))
-								Ω(time2.Sub(time1)).Should(BeNumerically("<", 1*time.Second))
-
-								time3 := <-checkTimes
-								Ω(time3.Sub(time2)).Should(BeNumerically(">=", 500*time.Millisecond))
-								Ω(time3.Sub(time2)).Should(BeNumerically("<", 1*time.Second))
-
-								time4 := <-checkTimes
-								Ω(time4.Sub(time3)).Should(BeNumerically(">=", 500*time.Millisecond))
-								Ω(time4.Sub(time3)).Should(BeNumerically("<", 1*time.Second))
 							})
 						})
 					})
@@ -271,7 +225,17 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("when the check succeeds, fails, succeeds, and fails", func() {
 				BeforeEach(func() {
-					checkResults = append(checkResults, nil, errors.New("nope"), nil, errors.New("nope"))
+					check.PerformReturns(nil)
+					expectCheckAfterInterval(BaseInterval)
+
+					check.PerformReturns(errors.New("nope"))
+					expectCheckAfterInterval(BaseInterval)
+
+					check.PerformReturns(nil)
+					expectCheckAfterInterval(BaseInterval)
+
+					check.PerformReturns(errors.New("nope"))
+					expectCheckAfterInterval(BaseInterval)
 				})
 
 				It("does not hit any endpoint", func() {
@@ -282,30 +246,34 @@ var _ = Describe("MonitorStep", func() {
 
 		Context("when the healthy and unhealthy thresholds are not specified", func() {
 			BeforeEach(func() {
-				healthyThreshold = 0
-				unhealthyThreshold = 0
-			})
+				step = New(
+					check,
+					0,
+					0,
+					&http.Request{
+						Method: "PUT",
+						URL:    healthyHookURL,
+					},
+					&http.Request{
+						Method: "PUT",
+						URL:    unhealthyHookURL,
+					},
+					logger,
+					timer,
+				)
 
-			JustBeforeEach(func() {
 				go step.Perform()
 			})
 
 			AfterEach(func() {
-				// unblocking check sequence; opens the floodgates, so ignore any
-				// requests after this point
-				hookServer.AllowUnhandledRequests = true
-				close(interruptCheck)
-
 				step.Cancel()
 			})
 
 			Context("when the check succeeds", func() {
 				BeforeEach(func() {
-					checkResults = append(checkResults, nil)
-
-					hookServer.AppendHandlers(
-						ghttp.VerifyRequest("PUT", "/healthy"),
-					)
+					check.PerformReturns(nil)
+					hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/healthy"))
+					expectCheckAfterInterval(BaseInterval)
 				})
 
 				It("hits the healthy endpoint", func() {
@@ -315,11 +283,9 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("when the check fails", func() {
 				BeforeEach(func() {
-					checkResults = append(checkResults, errors.New("nope"))
-
-					hookServer.AppendHandlers(
-						ghttp.VerifyRequest("PUT", "/unhealthy"),
-					)
+					check.PerformReturns(errors.New("nope"))
+					hookServer.AppendHandlers(ghttp.VerifyRequest("PUT", "/unhealthy"))
+					expectCheckAfterInterval(BaseInterval)
 				})
 
 				It("hits the unhealthy endpoint", func() {
