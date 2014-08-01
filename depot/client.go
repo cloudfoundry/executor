@@ -15,6 +15,7 @@ import (
 type client struct {
 	containerOwnerName    string
 	containerMaxCPUShares uint64
+	containerInodeLimit   uint64
 	wardenClient          warden.Client
 	registry              registry.Registry
 	transformer           *transformer.Transformer
@@ -24,6 +25,7 @@ type client struct {
 func NewClient(
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
+	containerInodeLimit uint64,
 	wardenClient warden.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
@@ -32,6 +34,7 @@ func NewClient(
 	return &client{
 		containerOwnerName:    containerOwnerName,
 		containerMaxCPUShares: containerMaxCPUShares,
+		containerInodeLimit:   containerInodeLimit,
 		wardenClient:          wardenClient,
 		registry:              registry,
 		transformer:           transformer,
@@ -106,7 +109,8 @@ func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient 
 
 	if reg.DiskMB != 0 {
 		err := containerClient.LimitDisk(warden.DiskLimits{
-			ByteHard: uint64(reg.DiskMB * 1024 * 1024),
+			ByteHard:  uint64(reg.DiskMB * 1024 * 1024),
+			InodeHard: c.containerInodeLimit,
 		})
 		if err != nil {
 			return err

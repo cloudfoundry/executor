@@ -95,7 +95,7 @@ var registryPruningInterval = flag.Duration(
 	"amount of time during which a container can remain in the allocated state",
 )
 
-var containerInodeLimit = flag.Int(
+var containerInodeLimit = flag.Uint(
 	"containerInodeLimit",
 	200000,
 	"max number of inodes per container",
@@ -148,6 +148,7 @@ func main() {
 	depotClient := depot.NewClient(
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
+		uint64(*containerInodeLimit),
 		wardenClient,
 		reg,
 		transformer,
