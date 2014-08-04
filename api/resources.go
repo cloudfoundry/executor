@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	StateReserved  = "reserved"
-	StateCreated   = "created"
-	StateCompleted = "completed"
+	StateReserved     = "reserved"
+	StateInitializing = "initializing"
+	StateCreated      = "created"
+	StateCompleted    = "completed"
 )
 
 type Container struct {

@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
@@ -29,7 +30,7 @@ var _ = Describe("RegistryPruner", func() {
 				Containers: 5,
 			}, timeProvider)
 			interval = 10 * time.Second
-			process = ifrit.Envoke(NewPruner(registry, timeProvider, interval))
+			process = ifrit.Envoke(NewPruner(registry, timeProvider, interval, lagertest.NewTestLogger("test")))
 		})
 
 		AfterEach(func() {
@@ -66,7 +67,8 @@ var _ = Describe("RegistryPruner", func() {
 
 			Context("when a container has been initialized and substantial amount of time has passed", func() {
 				BeforeEach(func() {
-					registry.Create("container-guid", "handle", api.ContainerInitializationRequest{})
+					_, err := registry.Initialize("container-guid")
+					Ω(err).ShouldNot(HaveOccurred())
 					timeProvider.Increment(interval)
 				})
 

@@ -161,7 +161,7 @@ func main() {
 		DepotClient: depotClient,
 	}
 
-	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval)
+	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
 
 	group := grouper.RunGroup{
 		"registry-pruner": pruner,

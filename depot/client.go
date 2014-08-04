@@ -51,10 +51,16 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		"guid": guid,
 	})
 
-	reg, err := c.registry.FindByGuid(guid)
+	container, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		initLog.Error("failed-to-find-container", err)
 		return api.Container{}, api.ErrContainerNotFound
+	}
+
+	container, err = c.registry.Initialize(guid)
+	if err != nil {
+		initLog.Error("failed-to-initialize-registry-container", err)
+		return api.Container{}, err
 	}
 
 	containerClient, err := c.wardenClient.Create(warden.ContainerSpec{
@@ -78,7 +84,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		}
 	}()
 
-	err = c.limitContainerDiskAndMemory(reg, containerClient)
+	err = c.limitContainerDiskAndMemory(container, containerClient)
 	if err != nil {
 		initLog.Error("failed-to-limit-memory-and-disk", err)
 		return api.Container{}, err
@@ -98,13 +104,13 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 
 	request.Ports = portMapping
 
-	reg, err = c.registry.Create(guid, containerClient.Handle(), request)
+	container, err = c.registry.Create(guid, containerClient.Handle(), request)
 	if err != nil {
 		initLog.Error("failed-to-register-container", err)
 		return api.Container{}, err
 	}
 
-	return reg, nil
+	return container, nil
 }
 
 func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient warden.Container) error {

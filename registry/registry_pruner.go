@@ -6,19 +6,22 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/lager"
 )
 
 type RegistryPruner struct {
 	registry     Registry
 	timeProvider timeprovider.TimeProvider
 	interval     time.Duration
+	logger       lager.Logger
 }
 
-func NewPruner(registry Registry, timeProvider timeprovider.TimeProvider, interval time.Duration) *RegistryPruner {
+func NewPruner(registry Registry, timeProvider timeprovider.TimeProvider, interval time.Duration, logger lager.Logger) *RegistryPruner {
 	return &RegistryPruner{
 		registry:     registry,
 		timeProvider: timeProvider,
 		interval:     interval,
+		logger:       logger.Session("registry-pruner"),
 	}
 }
 
@@ -41,8 +44,13 @@ func (p *RegistryPruner) prune() {
 		if container.State != api.StateReserved {
 			continue
 		}
-		if p.timeSinceContainerAllocated(container) >= p.interval {
-			p.registry.Delete(container.Guid)
+		lifespan := p.timeSinceContainerAllocated(container)
+		if lifespan >= p.interval {
+			p.logger.Info("pruning-reserved-container", lager.Data{"container-guid": container.Guid, "container-lifespan": lifespan.String()})
+			err := p.registry.Delete(container.Guid)
+			if err != nil {
+				p.logger.Error("pruning-reserved-container-failed", err, lager.Data{"container-guid": container.Guid, "container-lifespan": lifespan.String()})
+			}
 		}
 	}
 }

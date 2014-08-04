@@ -191,14 +191,45 @@ var _ = Describe("Registry", func() {
 		})
 	})
 
+	Describe("initializing a container", func() {
+		Context("when the container is reserved but not initialized", func() {
+			var container api.Container
+
+			BeforeEach(func() {
+				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
+					MemoryMB: 50,
+					DiskMB:   100,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				container, err = registry.Initialize("a-container")
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("should transition the container to the initializing state ", func() {
+				Ω(container.State).Should(Equal(api.StateInitializing))
+			})
+
+			It("should still have the allocation information", func() {
+				Ω(container.Guid).Should(Equal("a-container"))
+				Ω(container.MemoryMB).Should(Equal(50))
+				Ω(container.DiskMB).Should(Equal(100))
+				Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+			})
+		})
+	})
+
 	Describe("creating a container", func() {
-		Context("when the container exists and is reserved", func() {
+		Context("when the container exists and is initializing", func() {
 			var container api.Container
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = registry.Initialize("a-container")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				container, err = registry.Create("a-container", "handle", api.ContainerInitializationRequest{
@@ -225,6 +256,21 @@ var _ = Describe("Registry", func() {
 			})
 		})
 
+		Context("when the container is reserved but not initialized", func() {
+			BeforeEach(func() {
+				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
+					MemoryMB: 50,
+					DiskMB:   100,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("should return an ErrContainerNotInitialized", func() {
+				_, err := registry.Create("a-container", "another-handle", api.ContainerInitializationRequest{})
+				Ω(err).Should(MatchError(ErrContainerNotInitialized))
+			})
+		})
+
 		Context("when the container has already been created", func() {
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
@@ -233,13 +279,16 @@ var _ = Describe("Registry", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
+				_, err = registry.Initialize("a-container")
+				Ω(err).ShouldNot(HaveOccurred())
+
 				_, err = registry.Create("a-container", "handle", api.ContainerInitializationRequest{})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should return an ErrContainerNotFound", func() {
+			It("should return an ErrContainerNotInitialized", func() {
 				_, err := registry.Create("a-container", "another-handle", api.ContainerInitializationRequest{})
-				Ω(err).Should(MatchError(ErrContainerNotReserved))
+				Ω(err).Should(MatchError(ErrContainerNotInitialized))
 			})
 		})
 	})

@@ -11,7 +11,7 @@ import (
 
 var ErrContainerAlreadyExists = errors.New("container already exists")
 var ErrContainerNotFound = errors.New("container not found")
-var ErrContainerNotReserved = errors.New("container not reserved")
+var ErrContainerNotInitialized = errors.New("container not initialized")
 
 var blankContainer = api.Container{}
 
@@ -21,6 +21,7 @@ type Registry interface {
 	FindByGuid(guid string) (api.Container, error)
 	GetAllContainers() []api.Container
 	Reserve(guid string, req api.ContainerAllocationRequest) (api.Container, error)
+	Initialize(guid string) (api.Container, error)
 	Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error)
 	Start(guid string, process ifrit.Process) error
 	Complete(guid string, result api.ContainerRunResult) error
@@ -107,7 +108,7 @@ func (r *registry) Reserve(guid string, req api.ContainerAllocationRequest) (api
 	return res, nil
 }
 
-func (r *registry) Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error) {
+func (r *registry) Initialize(guid string) (api.Container, error) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
@@ -117,7 +118,26 @@ func (r *registry) Create(guid, containerHandle string, req api.ContainerInitial
 	}
 
 	if res.State != api.StateReserved {
-		return blankContainer, ErrContainerNotReserved
+		return blankContainer, ErrContainerNotInitialized
+	}
+
+	res.State = api.StateInitializing
+
+	r.registeredContainers[guid] = res
+	return res, nil
+}
+
+func (r *registry) Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error) {
+	r.containersMutex.Lock()
+	defer r.containersMutex.Unlock()
+
+	res, ok := r.registeredContainers[guid]
+	if !ok {
+		return blankContainer, ErrContainerNotFound
+	}
+
+	if res.State != api.StateInitializing {
+		return blankContainer, ErrContainerNotInitialized
 	}
 
 	res.State = api.StateCreated
