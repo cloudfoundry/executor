@@ -123,14 +123,12 @@ func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient 
 		}
 	}
 
-	if reg.DiskMB != 0 {
-		err := containerClient.LimitDisk(warden.DiskLimits{
-			ByteHard:  uint64(reg.DiskMB * 1024 * 1024),
-			InodeHard: c.containerInodeLimit,
-		})
-		if err != nil {
-			return err
-		}
+	err := containerClient.LimitDisk(warden.DiskLimits{
+		ByteHard:  uint64(reg.DiskMB * 1024 * 1024),
+		InodeHard: c.containerInodeLimit,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

@@ -106,7 +106,7 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 	})
 
-	allocNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
+	allocNewContainer := func(request api.ContainerAllocationRequest) (guid string, fakeContainer *wfakes.FakeContainer) {
 		fakeContainer = new(wfakes.FakeContainer)
 		fakeBackend.CreateReturns(fakeContainer, nil)
 		fakeBackend.LookupReturns(fakeContainer, nil)
@@ -118,17 +118,17 @@ var _ = Describe("Main", func() {
 
 		guid = id.String()
 
-		_, err = executorClient.AllocateContainer(guid, api.ContainerAllocationRequest{
-			MemoryMB: 1024,
-			DiskMB:   1024,
-		})
+		_, err = executorClient.AllocateContainer(guid, request)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		return guid, fakeContainer
 	}
 
 	initNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
-		guid, fakeContainer = allocNewContainer()
+		guid, fakeContainer = allocNewContainer(api.ContainerAllocationRequest{
+			MemoryMB: 1024,
+			DiskMB:   1024,
+		})
 
 		index := 13
 		_, err := executorClient.InitializeContainer(guid, api.ContainerInitializationRequest{
@@ -384,15 +384,19 @@ var _ = Describe("Main", func() {
 			var container *wfakes.FakeContainer
 			var guid string
 
-			JustBeforeEach(func() {
-				initializedContainer, err = executorClient.InitializeContainer(guid, initializeContainerRequest)
-			})
-
 			BeforeEach(func() {
-				guid, container = allocNewContainer()
+				guid, container = allocNewContainer(api.ContainerAllocationRequest{
+					MemoryMB: 1024,
+					DiskMB:   1024,
+				})
+
 				initializeContainerRequest = api.ContainerInitializationRequest{
 					CpuPercent: 50.0,
 				}
+			})
+
+			JustBeforeEach(func() {
+				initializedContainer, err = executorClient.InitializeContainer(guid, initializeContainerRequest)
 			})
 
 			Context("when the requested CPU percent is > 100", func() {
@@ -475,6 +479,35 @@ var _ = Describe("Main", func() {
 					Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
 				})
 
+				Context("when the container has no memory limits requested", func() {
+					BeforeEach(func() {
+						guid, container = allocNewContainer(api.ContainerAllocationRequest{
+							MemoryMB: 0,
+							DiskMB:   0,
+						})
+					})
+
+					It("does not enforce a zero-value memory limit", func() {
+						Ω(container.LimitMemoryCallCount()).Should(Equal(0))
+					})
+
+					It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
+						limitedDisk := container.LimitDiskArgsForCall(0)
+						Ω(limitedDisk.ByteHard).Should(BeZero())
+						Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+					})
+				})
+
+				Context("when the container has no CPU limits requested", func() {
+					BeforeEach(func() {
+						initializeContainerRequest.CpuPercent = 0
+					})
+
+					It("does not enforce a zero-value limit", func() {
+						Ω(container.LimitCPUCallCount()).Should(Equal(0))
+					})
+				})
+
 				Context("when ports are exposed", func() {
 					BeforeEach(func() {
 						initializeContainerRequest = api.ContainerInitializationRequest{
@@ -519,6 +552,7 @@ var _ = Describe("Main", func() {
 						})
 
 						It("returns an error", func() {
+							Ω(err).Should(HaveOccurred())
 							Ω(err.Error()).Should(ContainSubstring("status: 500"))
 						})
 					})
@@ -542,6 +576,7 @@ var _ = Describe("Main", func() {
 					})
 
 					It("returns an error", func() {
+						Ω(err).Should(HaveOccurred())
 						Ω(err.Error()).Should(ContainSubstring("status: 500"))
 					})
 				})
@@ -552,6 +587,7 @@ var _ = Describe("Main", func() {
 					})
 
 					It("returns an error", func() {
+						Ω(err).Should(HaveOccurred())
 						Ω(err.Error()).Should(ContainSubstring("status: 500"))
 					})
 				})
@@ -562,6 +598,7 @@ var _ = Describe("Main", func() {
 					})
 
 					It("returns an error", func() {
+						Ω(err).Should(HaveOccurred())
 						Ω(err.Error()).Should(ContainSubstring("status: 500"))
 					})
 				})
@@ -573,6 +610,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("returns an error", func() {
+					Ω(err).Should(HaveOccurred())
 					Ω(err.Error()).Should(ContainSubstring("status: 500"))
 				})
 			})
@@ -813,7 +851,10 @@ var _ = Describe("Main", func() {
 
 			Context("when the container has been allocated", func() {
 				BeforeEach(func() {
-					guid, _ = allocNewContainer()
+					guid, _ = allocNewContainer(api.ContainerAllocationRequest{
+						MemoryMB: 1024,
+						DiskMB:   1024,
+					})
 				})
 
 				It("the previously allocated resources become available", func() {
