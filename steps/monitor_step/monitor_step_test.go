@@ -296,6 +296,24 @@ var _ = Describe("MonitorStep", func() {
 	})
 
 	Describe("Cancel", func() {
+		BeforeEach(func() {
+			step = New(
+				check,
+				2,
+				2,
+				&http.Request{
+					Method: "PUT",
+					URL:    healthyHookURL,
+				},
+				&http.Request{
+					Method: "PUT",
+					URL:    unhealthyHookURL,
+				},
+				logger,
+				timer,
+			)
+		})
+
 		It("interrupts the monitoring", func() {
 			performResult := make(chan error)
 
