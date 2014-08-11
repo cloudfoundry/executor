@@ -18,23 +18,24 @@ type Uploader interface {
 }
 
 type URLUploader struct {
-	timeout time.Duration
+	httpClient *http.Client
 }
 
 func New(timeout time.Duration) Uploader {
-	return &URLUploader{
-		timeout: timeout,
-	}
-}
-
-func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, logger lager.Logger) (int64, error) {
 	httpTransport := &http.Transport{
-		ResponseHeaderTimeout: uploader.timeout,
+		ResponseHeaderTimeout: timeout,
 	}
+
 	httpClient := &http.Client{
 		Transport: httpTransport,
 	}
 
+	return &URLUploader{
+		httpClient: httpClient,
+	}
+}
+
+func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, logger lager.Logger) (int64, error) {
 	var resp *http.Response
 	var err error
 	var uploadedBytes int64
@@ -78,7 +79,7 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, logger la
 		request.Header.Set("Content-Type", "application/octet-stream")
 		request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(contentHash.Sum(nil)))
 
-		resp, err = httpClient.Do(request)
+		resp, err = uploader.httpClient.Do(request)
 		if err == nil {
 			defer resp.Body.Close()
 			break
