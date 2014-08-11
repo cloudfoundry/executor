@@ -243,31 +243,49 @@ func (c *client) ListContainers() ([]api.Container, error) {
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	deleteLog := c.logger.Session("delete", lager.Data{
+	logData := lager.Data{
 		"guid": guid,
-	})
+	}
+
+	deleteLog := c.logger.Session("delete", logData)
 
 	reg, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		return handleDeleteError(err, deleteLog)
 	}
 
+	logData["handle"] = reg.ContainerHandle
+
+	deleteLog.Debug("deleting")
+
 	if reg.Process != nil {
+		deleteLog.Debug("interrupting")
+
 		reg.Process.Signal(os.Interrupt)
 		<-reg.Process.Wait()
+
+		deleteLog.Info("interrupted")
 	}
 
 	if reg.ContainerHandle != "" {
+		deleteLog.Debug("destroying")
+
 		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
 			return handleDeleteError(err, deleteLog)
 		}
+
+		deleteLog.Info("destroyed")
 	}
+
+	deleteLog.Debug("unregistering")
 
 	err = c.registry.Delete(guid)
 	if err != nil {
 		return handleDeleteError(err, deleteLog)
 	}
+
+	deleteLog.Info("unregistered")
 
 	return nil
 }
