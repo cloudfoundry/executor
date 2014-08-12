@@ -28,37 +28,37 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/routes",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/transport",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Comment": "go-wshd-592-g769eaa8",
-			"Rev": "769eaa8c8888dc993f2d4a8f146fce2a7afdd65f"
+			"Comment": "go-wshd-601-g971022e",
+			"Rev": "971022ee83329d7a1f1a5784e126b96616d79b96"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "b30103f18c98748a527aba9370a070bdcd4ac51b"
+			"Rev": "98ff0a2a8557f7f7137752922c402d7d439b91a9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -129,7 +129,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "07c923dcec9785a983adfa2fd1837ca710f02aef"
+			"Rev": "a1984d06355987f4587cb524918ad5c31c1a3e1d"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/rata",
