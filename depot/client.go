@@ -249,7 +249,7 @@ func (c *client) DeleteContainer(guid string) error {
 
 	deleteLog := c.logger.Session("delete", logData)
 
-	reg, err := c.registry.FindByGuid(guid)
+	reg, err := c.registry.MarkForDelete(guid)
 	if err != nil {
 		return handleDeleteError(err, deleteLog)
 	}

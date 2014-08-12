@@ -40,17 +40,39 @@ func (p *RegistryPruner) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}
 }
 
 func (p *RegistryPruner) prune() {
+	pLog := p.logger.Session("prune")
+
 	for _, container := range p.registry.GetAllContainers() {
 		if container.State != api.StateReserved {
 			continue
 		}
+
 		lifespan := p.timeSinceContainerAllocated(container)
+
 		if lifespan >= p.interval {
-			p.logger.Info("pruning-reserved-container", lager.Data{"container-guid": container.Guid, "container-lifespan": lifespan.String()})
-			err := p.registry.Delete(container.Guid)
+			pLog := pLog.Session("prune", lager.Data{
+				"container-guid": container.Guid,
+				"lifespan":       lifespan.String(),
+			})
+
+			pLog.Debug("pruning-reserved-container")
+
+			container, err := p.registry.MarkForDelete(container.Guid)
 			if err != nil {
-				p.logger.Error("pruning-reserved-container-failed", err, lager.Data{"container-guid": container.Guid, "container-lifespan": lifespan.String()})
+				pLog.Debug("failed-to-mark-for-deleting", lager.Data{
+					"error": err.Error(),
+				})
+
+				return
 			}
+
+			err = p.registry.Delete(container.Guid)
+			if err != nil {
+				pLog.Error("failed-to-delete-container", err)
+				return
+			}
+
+			pLog.Info("done")
 		}
 	}
 }

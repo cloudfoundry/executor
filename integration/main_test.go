@@ -886,6 +886,44 @@ var _ = Describe("Main", func() {
 					})
 				})
 			})
+
+			Context("when another delete is in progress", func() {
+				var destroying, conflicted chan struct{}
+				var errChan chan error
+
+				BeforeEach(func() {
+					guid, _ = initNewContainer()
+
+					destroying = make(chan struct{})
+					conflicted = make(chan struct{})
+					errChan = make(chan error)
+
+					fakeBackend.DestroyStub = func(string) error {
+						close(destroying)
+						<-conflicted
+						return nil
+					}
+
+					go func() {
+						errChan <- executorClient.DeleteContainer(guid)
+					}()
+
+					Eventually(destroying).Should(BeClosed())
+				})
+
+				AfterEach(func() {
+					close(conflicted)
+					Eventually(errChan).Should(Receive(nil))
+				})
+
+				It("returns ErrDeleteInProgress", func() {
+					Ω(err).Should(Equal(api.ErrDeleteInProgress))
+				})
+
+				It("does not delete the container twice", func() {
+					Ω(fakeBackend.DestroyCallCount()).Should(Equal(1))
+				})
+			})
 		})
 
 		Describe("pruning the registry", func() {

@@ -294,6 +294,12 @@ var _ = Describe("Registry", func() {
 	})
 
 	Describe("deleting a container", func() {
+		var deleteErr error
+
+		JustBeforeEach(func() {
+			deleteErr = registry.Delete("a-container")
+		})
+
 		Context("when the container exists", func() {
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
@@ -301,18 +307,33 @@ var _ = Describe("Registry", func() {
 					DiskMB:   100,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
-
-				err = registry.Delete("a-container")
-				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should free its resources", func() {
-				Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
+			Context("and is marked for deletion", func() {
+				BeforeEach(func() {
+					_, err := registry.MarkForDelete("a-container")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("does not error", func() {
+					Ω(deleteErr).ShouldNot(HaveOccurred())
+				})
+
+				It("should free its resources", func() {
+					Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
+				})
+
+				It("should not be able to find it again", func() {
+					_, err := registry.FindByGuid("a-container")
+					Ω(err).Should(MatchError(ErrContainerNotFound))
+				})
 			})
 
-			It("should not be able to find it again", func() {
-				_, err := registry.FindByGuid("a-container")
-				Ω(err).Should(MatchError(ErrContainerNotFound))
+			Context("when the container is not marked for deletion", func() {
+				It("returns an error", func() {
+					Ω(deleteErr).Should(HaveOccurred())
+					Ω(deleteErr.Error()).Should(ContainSubstring("invalid transition"))
+				})
 			})
 		})
 

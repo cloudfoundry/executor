@@ -78,5 +78,4 @@ var _ = Describe("RegistryPruner", func() {
 			})
 		})
 	})
-
 })

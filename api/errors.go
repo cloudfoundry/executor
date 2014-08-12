@@ -39,6 +39,7 @@ var (
 	ErrContainerGuidNotAvailable      = registerError("ContainerGuidNotAvailable", "container guid not available", http.StatusBadRequest)
 	ErrInsufficientResourcesAvailable = registerError("InsufficientResourcesAvailable", "insufficient resources available", http.StatusServiceUnavailable)
 	ErrContainerNotFound              = registerError("ContainerNotFound", "container not found", http.StatusNotFound)
+	ErrDeleteInProgress               = registerError("DeleteInProgress", "delete in progress", http.StatusConflict)
 	ErrStepsInvalid                   = registerError("StepsInvalid", "steps invalid", http.StatusBadRequest)
 	ErrLimitsInvalid                  = registerError("LimitsInvalid", "container limits invalid", http.StatusBadRequest)
 )

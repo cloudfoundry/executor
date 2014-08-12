@@ -499,39 +499,6 @@ var _ = Describe("Api", func() {
 				Ω(depotClient.DeleteContainerArgsForCall(0)).Should(Equal(containerGuid))
 			})
 
-			Context("when another delete is happning concurrently", func() {
-				var destroying, conflicted chan struct{}
-
-				BeforeEach(func() {
-					destroying = make(chan struct{})
-					conflicted = make(chan struct{})
-
-					depotClient.DeleteContainerStub = func(string) error {
-						close(destroying)
-						<-conflicted
-						return nil
-					}
-
-					go DoRequest(generator.CreateRequest(
-						api.DeleteContainer,
-						rata.Params{"guid": containerGuid},
-						nil,
-					))
-
-					Eventually(destroying).Should(BeClosed())
-				})
-
-				It("returns a 500", func() {
-					Ω(deleteResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-					close(conflicted)
-				})
-
-				It("does not delete the container again", func() {
-					close(conflicted)
-					Consistently(depotClient.DeleteContainerCallCount()).Should(Equal(1))
-				})
-			})
-
 			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
 					depotClient.DeleteContainerReturns(errors.New("oh no!"))
