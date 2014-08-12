@@ -842,11 +842,11 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("deleting a container", func() {
-			var err error
+			var deleteErr error
 			var guid string
 
 			JustBeforeEach(func() {
-				err = executorClient.DeleteContainer(guid)
+				deleteErr = executorClient.DeleteContainer(guid)
 			})
 
 			Context("when the container has been allocated", func() {
@@ -871,18 +871,25 @@ var _ = Describe("Main", func() {
 					guid, _ = initNewContainer()
 				})
 
-				It("destroys the warden container", func() {
-					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+				Context("when deleting the container succeeds", func() {
+					It("destroys the warden container", func() {
+						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+					})
+
+					It("removes the container from the registry", func() {
+						_, err := executorClient.GetContainer(guid)
+						Ω(err).Should(Equal(api.ErrContainerNotFound))
+					})
 				})
 
-				Describe("when deleting the container fails", func() {
+				Context("when deleting the container fails", func() {
 					BeforeEach(func() {
 						fakeBackend.DestroyReturns(errors.New("oh no!"))
 					})
 
 					It("returns an error", func() {
-						Ω(err.Error()).Should(ContainSubstring("status: 500"))
+						Ω(deleteErr.Error()).Should(ContainSubstring("status: 500"))
 					})
 				})
 			})
@@ -917,11 +924,59 @@ var _ = Describe("Main", func() {
 				})
 
 				It("returns ErrDeleteInProgress", func() {
-					Ω(err).Should(Equal(api.ErrDeleteInProgress))
+					Ω(deleteErr).Should(Equal(api.ErrDeleteInProgress))
 				})
 
 				It("does not delete the container twice", func() {
 					Ω(fakeBackend.DestroyCallCount()).Should(Equal(1))
+				})
+			})
+
+			Context("while it is running", func() {
+				BeforeEach(func() {
+					var fakeContainer *wfakes.FakeContainer
+
+					guid, fakeContainer = initNewContainer()
+
+					waiting := make(chan struct{})
+					destroying := make(chan struct{})
+
+					process := new(wfakes.FakeProcess)
+					process.WaitStub = func() (int, error) {
+						close(waiting)
+						<-destroying
+						return 123, nil
+					}
+
+					fakeContainer.RunReturns(process, nil)
+
+					fakeBackend.DestroyStub = func(string) error {
+						close(destroying)
+						return nil
+					}
+
+					err := executorClient.Run(guid, api.ContainerRunRequest{
+						Actions: []models.ExecutorAction{
+							{Action: models.RunAction{Path: "ls"}},
+						},
+					})
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(waiting).Should(BeClosed())
+				})
+
+				It("does not return an error (because of funky state transitions)", func() {
+					Ω(deleteErr).ShouldNot(HaveOccurred())
+				})
+
+				It("deletes the container", func() {
+					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+				})
+
+				It("removes the container from the registry", func() {
+					_, err := executorClient.GetContainer(guid)
+					Ω(err).Should(Equal(api.ErrContainerNotFound))
 				})
 			})
 		})

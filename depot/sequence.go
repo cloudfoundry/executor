@@ -42,6 +42,10 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 			runLog.Info("cancelled")
 
 		case err := <-seqComplete:
+			if err == sequence.CancelledError {
+				return err
+			}
+
 			runLog.Info("completed")
 
 			payload := api.ContainerRunResult{
