@@ -172,7 +172,7 @@ func main() {
 
 	processGroup := grouper.EnvokeGroup(group)
 
-	monitor := ifrit.Envoke(sigmon.New(processGroup, syscall.SIGUSR1))
+	monitor := ifrit.Envoke(sigmon.New(processGroup))
 	exitChan := processGroup.Exits()
 
 	logger.Info("executor.started")

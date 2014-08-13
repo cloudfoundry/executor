@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"reflect"
-	"syscall"
 	"testing"
 	"time"
 
@@ -1007,13 +1006,6 @@ var _ = Describe("Main", func() {
 		Describe("when the executor receives the INT signal", func() {
 			It("exits successfully", func() {
 				runner.Session.Interrupt()
-				Eventually(runner.Session).Should(gexec.Exit(0))
-			})
-		})
-
-		Describe("when the executor receives the USR1 signal", func() {
-			It("exits successfully", func() {
-				runner.Session.Signal(syscall.SIGUSR1)
 				Eventually(runner.Session).Should(gexec.Exit(0))
 			})
 		})
