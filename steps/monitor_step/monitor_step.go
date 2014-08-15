@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/pivotal-golang/lager"
+	"github.com/pivotal-golang/timer"
 )
 
 const BaseInterval = 500 * time.Millisecond
@@ -21,7 +22,7 @@ type monitorStep struct {
 	unhealthyHook *http.Request
 
 	logger lager.Logger
-	timer  Timer
+	timer  timer.Timer
 
 	cancel chan struct{}
 }
@@ -31,7 +32,7 @@ func New(
 	healthyThreshold, unhealthyThreshold uint,
 	healthyHook, unhealthyHook *http.Request,
 	logger lager.Logger,
-	timer Timer,
+	timer timer.Timer,
 ) sequence.Step {
 	if healthyThreshold == 0 {
 		healthyThreshold = 1

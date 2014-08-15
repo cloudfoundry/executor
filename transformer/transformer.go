@@ -26,6 +26,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
+	"github.com/pivotal-golang/timer"
 )
 
 var ErrNoCheck = errors.New("no check configured")
@@ -220,7 +221,7 @@ func (transformer *Transformer) convertAction(
 			healthyHook,
 			unhealthyHook,
 			stepLogger,
-			monitor_step.NewTimer(),
+			timer.NewTimer(),
 		), nil
 	case models.ParallelAction:
 		steps := make([]sequence.Step, len(actionModel.Actions))

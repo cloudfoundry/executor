@@ -9,8 +9,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/sequence/fake_step"
 	. "github.com/cloudfoundry-incubator/executor/steps/monitor_step"
-	"github.com/cloudfoundry-incubator/executor/steps/monitor_step/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/pivotal-golang/timer/fake_timer"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -28,11 +28,11 @@ var _ = Describe("MonitorStep", func() {
 
 		hookServer *ghttp.Server
 		logger     *lagertest.TestLogger
-		timer      *fakes.FakeTimer
+		timer      *fake_timer.FakeTimer
 	)
 
 	BeforeEach(func() {
-		timer = fakes.NewFakeTimer(time.Now())
+		timer = fake_timer.NewFakeTimer(time.Now())
 		check = new(fake_step.FakeStep)
 
 		logger = lagertest.NewTestLogger("test")
@@ -54,11 +54,10 @@ var _ = Describe("MonitorStep", func() {
 
 	Describe("Perform", func() {
 		expectCheckAfterInterval := func(d time.Duration) {
-			Eventually(timer.ActiveAfterCount).Should(BeNumerically(">", 0))
 			previousCheckCount := check.PerformCallCount()
 
 			timer.Elapse(d - 1*time.Microsecond)
-			Consistently(check.PerformCallCount, 0.1).Should(Equal(previousCheckCount))
+			Consistently(check.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
 			timer.Elapse(1 * time.Microsecond)
 			Eventually(check.PerformCallCount).Should(Equal(previousCheckCount + 1))
