@@ -1,7 +1,7 @@
 package loggregatorclient
 
 import (
-	"github.com/cloudfoundry/gosteno"
+	"github.com/cloudfoundry/loggregatorlib/cfcomponent/generic_logger"
 	"github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation"
 	"net"
 	"sync/atomic"
@@ -23,7 +23,7 @@ type udpLoggregatorClient struct {
 	loggregatorAddress   string
 }
 
-func NewLoggregatorClient(loggregatorAddress string, logger *gosteno.Logger, bufferSize int) LoggregatorClient {
+func NewLoggregatorClient(loggregatorAddress string, logger generic_logger.GenericLogger, bufferSize int) LoggregatorClient {
 	loggregatorClient := &udpLoggregatorClient{}
 
 	la, err := net.ResolveUDPAddr("udp", loggregatorAddress)
