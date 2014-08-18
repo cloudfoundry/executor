@@ -113,11 +113,11 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/compressor",
-			"Rev": "3854b8dd2b63a157c9bb18417b97d7c3a9907cf1"
+			"Rev": "8313f4fb92fd04f23d3132024ca1cdad3bebec3e"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/archiver/extractor",
-			"Rev": "3854b8dd2b63a157c9bb18417b97d7c3a9907cf1"
+			"Rev": "8313f4fb92fd04f23d3132024ca1cdad3bebec3e"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/bytefmt",
