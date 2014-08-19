@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/cf-lager"
@@ -13,10 +11,10 @@ import (
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry/gunk/group_runner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
@@ -120,14 +118,6 @@ var maxCacheSizeInBytes = flag.Int64(
 )
 
 func main() {
-	defer func() {
-		msg := recover()
-		if msg != nil {
-			fmt.Printf("PANIC RESULT: %s", msg)
-			os.Exit(1)
-		}
-	}()
-
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
@@ -141,7 +131,7 @@ func main() {
 	transformer := initializeTransformer(logger)
 	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
-	logger.Info("executor.starting")
+	logger.Info("starting")
 
 	destroyContainers(wardenClient, logger)
 
@@ -163,40 +153,24 @@ func main() {
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
 
-	group := grouper.RunGroup{
-		"registry-pruner": pruner,
-		"api-server":      apiServer,
-	}
+	group := group_runner.New([]group_runner.Member{
+		{"registry-pruner", pruner},
+		{"api-server", apiServer},
+	})
 
 	cf_debug_server.Run()
 
-	processGroup := grouper.EnvokeGroup(group)
+	monitor := ifrit.Envoke(sigmon.New(group))
 
-	monitor := ifrit.Envoke(sigmon.New(processGroup))
-	exitChan := processGroup.Exits()
+	logger.Info("started")
 
-	logger.Info("executor.started")
-
-	for {
-		select {
-		case member := <-exitChan:
-			if member.Error != nil {
-				logger.Info("member-exited", lager.Data{
-					"member": member.Name,
-				})
-
-				monitor.Signal(syscall.SIGTERM)
-			}
-
-		case err := <-monitor.Wait():
-			if err != nil {
-				logger.Error("exited-with-failure", err)
-				os.Exit(1)
-			}
-
-			os.Exit(0)
-		}
+	err := <-monitor.Wait()
+	if err != nil {
+		logger.Error("exited-with-failure", err)
+		os.Exit(1)
 	}
+
+	logger.Info("exited")
 }
 
 func initializeWardenClient(logger lager.Logger) (WardenClient.Client, registry.Capacity) {

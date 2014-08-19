@@ -28,12 +28,14 @@ func NewPruner(registry Registry, timeProvider timeprovider.TimeProvider, interv
 func (p *RegistryPruner) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	ticker := p.timeProvider.NewTickerChannel("pruner", p.interval)
 	close(readyChan)
+	p.logger.Info("started")
 
 	for {
 		select {
 		case <-ticker:
 			p.prune()
 		case <-sigChan:
+			p.logger.Info("stopped")
 			return nil
 		}
 	}

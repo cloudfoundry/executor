@@ -220,7 +220,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
-					Eventually(runner.Session).Should(gexec.Exit(1))
+					Eventually(runner.Session).Should(gexec.Exit(2))
 				})
 			})
 		})
@@ -999,14 +999,14 @@ var _ = Describe("Main", func() {
 		Describe("when the executor receives the TERM signal", func() {
 			It("exits successfully", func() {
 				runner.Session.Terminate()
-				Eventually(runner.Session).Should(gexec.Exit(0))
+				Eventually(runner.Session, 2).Should(gexec.Exit())
 			})
 		})
 
 		Describe("when the executor receives the INT signal", func() {
 			It("exits successfully", func() {
 				runner.Session.Interrupt()
-				Eventually(runner.Session).Should(gexec.Exit(0))
+				Eventually(runner.Session, 2).Should(gexec.Exit())
 			})
 		})
 
