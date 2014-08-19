@@ -66,6 +66,10 @@
 			"Rev": "5c1406e9ea0ab919f92e1b194169565def41147b"
 		},
 		{
+			"ImportPath": "github.com/cloudfoundry/gunk/group_runner",
+			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
 			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
 		},
