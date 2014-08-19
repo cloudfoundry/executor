@@ -58,7 +58,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "ab0a2903cc6204e2df53c7812bbdaa1d0305f1e2"
+			"Rev": "538875d73b153d53c129dbc7085206853785fdf9"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -67,7 +67,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "2bb7ab04e15bdae68f68e4aa7ef79b43a371e088"
+			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/generic_logger",
@@ -137,7 +137,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "82bc852c28d76c55d89bb16ffa2fe2240e5cc9ad"
+			"Rev": "82dbb8f9b53dba16c9d5c3e0c74fa581d65f8579"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/rata",
