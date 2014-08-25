@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
-			"Rev": "559fad465cf6fb43dbed4cea5f91e06f14c819e6"
+			"Rev": "6c980277330804e94257ac7ef70a3adbe1641059"
 		},
 		{
 			"ImportPath": "code.google.com/p/goprotobuf/proto",
@@ -28,37 +28,41 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/client",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/protocol",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/routes",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/server",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/transport",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/garden/warden",
-			"Comment": "go-wshd-602-g14c2119",
-			"Rev": "14c2119a5cf4ec1ff3025a8398b68bd4cc21a5d5"
+			"Comment": "go-wshd-605-gbd34842",
+			"Rev": "bd3484266133f4a5f4a767f87439df88f7f0d2dd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "538875d73b153d53c129dbc7085206853785fdf9"
+			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/dropsonde",
+			"Rev": "ae03cacfd62b9067da58950527280d62c6e8baac"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gosteno",
@@ -75,31 +79,31 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/generic_logger",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/instrumentation",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/localip",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/emitter",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/loggregatorclient",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/logmessage",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/signature",
-			"Rev": "ce79297bff9f601a0db5d99eb8f4c18b881c5098"
+			"Rev": "b8f5328b834053bf1f29afa2984265ff6867863e"
 		},
 		{
 			"ImportPath": "github.com/nu7hatch/gouuid",
@@ -133,7 +137,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/lager",
-			"Rev": "ada65d2c262ba5474d357bf57bc0f8b8deaa9196"
+			"Rev": "24bc7249ba26ad2f1493363b9dcedf86023f47d7"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/timer",
@@ -141,7 +145,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "82dbb8f9b53dba16c9d5c3e0c74fa581d65f8579"
+			"Rev": "0addc90d7dcebcf87ef0fc89240c58bd1c475d8f"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/rata",
