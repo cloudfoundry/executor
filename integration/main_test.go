@@ -226,7 +226,7 @@ var _ = Describe("Main", func() {
 		})
 	})
 
-	Context("when started", func() {
+	Describe("when started", func() {
 		BeforeEach(func() {
 			err := gardenServer.Start()
 			Ω(err).ShouldNot(HaveOccurred())
@@ -1019,6 +1019,43 @@ var _ = Describe("Main", func() {
 
 			Ω(debugInfo).Should(ContainSubstring("goroutine profile: total"))
 		})
+	})
+
+	Describe("when gardenserver is unavailable", func() {
+		BeforeEach(func() {
+			runner.StartWithoutCheck(executor_runner.Config{
+				ContainerOwnerName: "executor-name",
+			})
+		})
+
+		Context("and gardenserver starts up later", func() {
+			var started chan struct{}
+			BeforeEach(func() {
+				started = make(chan struct{})
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					err := gardenServer.Start()
+					Ω(err).ShouldNot(HaveOccurred())
+					close(started)
+				}()
+			})
+
+			AfterEach(func() {
+				<-started
+			})
+
+			It("should connect", func() {
+				Eventually(runner.Session, 5*time.Second).Should(gbytes.Say("started"))
+			})
+		})
+
+		Context("and never starts", func() {
+			It("should not exit and continue waiting for a connection", func() {
+				Consistently(runner.Session).ShouldNot(gbytes.Say("started"))
+				Ω(runner.Session).ShouldNot(gexec.Exit())
+			})
+		})
+
 	})
 })
 

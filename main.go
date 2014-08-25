@@ -127,13 +127,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	wardenClient, capacity := initializeWardenClient(logger)
-	transformer := initializeTransformer(logger)
-	reg := registry.New(capacity, timeprovider.NewTimeProvider())
-
 	logger.Info("starting")
 
+	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
+	waitForWarden(logger, wardenClient)
 	destroyContainers(wardenClient, logger)
+	capacity := fetchCapacity(logger, wardenClient)
+
+	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
 	depotClient := depot.NewClient(
 		*containerOwnerName,
@@ -141,7 +142,7 @@ func main() {
 		uint64(*containerInodeLimit),
 		wardenClient,
 		reg,
-		transformer,
+		initializeTransformer(logger),
 		logger,
 	)
 
@@ -173,22 +174,6 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeWardenClient(logger lager.Logger) (WardenClient.Client, registry.Capacity) {
-	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
-
-	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
-	if err != nil {
-		logger.Error("failed-to-configure-capacity", err)
-		os.Exit(1)
-	}
-
-	logger.Info("initial-capacity", lager.Data{
-		"capacity": capacity,
-	})
-
-	return wardenClient, capacity
-}
-
 func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
 	uploader := uploader.New(10 * time.Minute)
@@ -212,6 +197,30 @@ func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 		logger,
 		*tempDir,
 	)
+}
+
+func waitForWarden(logger lager.Logger, wardenClient WardenClient.Client) {
+	err := wardenClient.Ping()
+
+	for err != nil {
+		logger.Error("failed-to-make-connection", err)
+		time.Sleep(time.Second)
+		err = wardenClient.Ping()
+	}
+}
+
+func fetchCapacity(logger lager.Logger, wardenClient WardenClient.Client) registry.Capacity {
+	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
+	if err != nil {
+		logger.Error("failed-to-configure-capacity", err)
+		os.Exit(1)
+	}
+
+	logger.Info("initial-capacity", lager.Data{
+		"capacity": capacity,
+	})
+
+	return capacity
 }
 
 func destroyContainers(wardenClient warden.Client, logger lager.Logger) {
