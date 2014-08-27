@@ -1,0 +1,8 @@
+---
+image: docker:///cloudfoundry/diego-ci
+
+paths:
+  executor: gopath/src/github.com/cloudfoundry-incubator/executor
+
+run:
+  path: gopath/src/github.com/cloudfoundry-incubator/executor/scripts/concourse-test
