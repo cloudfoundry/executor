@@ -133,7 +133,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/cacheddownloader",
-			"Rev": "a33a74e98467132a49e65cf0c80026a8e6cfc6b2"
+			"Rev": "c62c2a1c43ecfd594d7b43d28d7ad2074bbf25d1"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/lager",

@@ -198,6 +198,7 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should not store the file", func() {
+					file.Close()
 					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(0))
 					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
 				})
@@ -235,7 +236,8 @@ var _ = Describe("File cache", func() {
 					ghttp.RespondWith(http.StatusOK, string(fileContent), returnedHeader),
 				))
 
-				cache.Fetch(url, cacheKey)
+				f, _ := cache.Fetch(url, cacheKey)
+				defer f.Close()
 
 				downloadContent = "now you don't"
 
@@ -262,8 +264,11 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should redownload the file", func() {
-					cache.Fetch(url, cacheKey)
-					Ω(ioutil.ReadFile(cacheFilePath)).Should(Equal([]byte(downloadContent)))
+					f, _ := cache.Fetch(url, cacheKey)
+					defer f.Close()
+
+					paths, _ := filepath.Glob(cacheFilePath + "*")
+					Ω(ioutil.ReadFile(paths[0])).Should(Equal([]byte(downloadContent)))
 				})
 
 				It("should return a readcloser pointing to the file", func() {
@@ -273,7 +278,8 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should have put the file in the cache", func() {
-					_, err := cache.Fetch(url, cacheKey)
+					f, err := cache.Fetch(url, cacheKey)
+					f.Close()
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(1))
 					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
@@ -293,7 +299,8 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should have removed the file from the cache", func() {
-					_, err := cache.Fetch(url, cacheKey)
+					f, err := cache.Fetch(url, cacheKey)
+					f.Close()
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(0))
 					Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
@@ -306,9 +313,12 @@ var _ = Describe("File cache", func() {
 				})
 
 				It("should not redownload the file", func() {
-					_, err := cache.Fetch(url, cacheKey)
+					f, err := cache.Fetch(url, cacheKey)
 					Ω(err).ShouldNot(HaveOccurred())
-					Ω(ioutil.ReadFile(cacheFilePath)).Should(Equal(fileContent))
+					defer f.Close()
+
+					paths, _ := filepath.Glob(cacheFilePath + "*")
+					Ω(ioutil.ReadFile(paths[0])).Should(Equal(fileContent))
 				})
 
 				It("should return a readcloser pointing to the file", func() {
@@ -346,6 +356,33 @@ var _ = Describe("File cache", func() {
 				Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(0))
 				Ω(ioutil.ReadDir(uncachedPath)).Should(HaveLen(0))
 			})
+
+			Context("when the file is downloaded the second time", func() {
+				BeforeEach(func() {
+					err = file.Close()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					server.AppendHandlers(ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/my_file"),
+						http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+							Ω(req.Header.Get("If-None-Match")).Should(BeEmpty())
+						}),
+						ghttp.RespondWith(http.StatusOK, string(downloadContent), returnedHeader),
+					))
+
+					file, err = cache.Fetch(url, cacheKey)
+				})
+
+				It("should not error", func() {
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("should return a readCloser that streams the file", func() {
+					Ω(file).ShouldNot(BeNil())
+					Ω(ioutil.ReadAll(file)).Should(Equal(downloadContent))
+				})
+			})
+
 		})
 
 		Context("when the cache is full", func() {
@@ -379,15 +416,17 @@ var _ = Describe("File cache", func() {
 				//make sure we removed the least-recently accessed files
 				Ω(ioutil.ReadDir(cachedPath)).Should(HaveLen(2))
 
-				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("A")))
-				Ω(err).Should(HaveOccurred())
-				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("B")))
-				Ω(err).Should(HaveOccurred())
+				paths, _ := filepath.Glob(filepath.Join(cachedPath, computeMd5("A")+"*"))
+				Ω(paths).Should(HaveLen(0))
 
-				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("C")))
-				Ω(err).ShouldNot(HaveOccurred())
-				_, err = os.Stat(filepath.Join(cachedPath, computeMd5("D")))
-				Ω(err).ShouldNot(HaveOccurred())
+				paths, _ = filepath.Glob(filepath.Join(cachedPath, computeMd5("B")+"*"))
+				Ω(paths).Should(HaveLen(0))
+
+				paths, _ = filepath.Glob(filepath.Join(cachedPath, computeMd5("C")+"*"))
+				Ω(paths).Should(HaveLen(1))
+
+				paths, _ = filepath.Glob(filepath.Join(cachedPath, computeMd5("D")+"*"))
+				Ω(paths).Should(HaveLen(1))
 			})
 		})
 	})
