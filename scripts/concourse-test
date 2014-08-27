@@ -4,7 +4,7 @@
 set -e -x
 
 # TODO remove once warden-linux docker env changes land
-export PATH=$GOROOT/bin:/usr/local/go/bin:$PATH
+export PATH=/root/go/bin:/usr/local/go/bin:$PATH
 
 export GOPATH=$PWD/gopath
 export PATH=$GOPATH/bin:$PATH
