@@ -58,7 +58,7 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
+			"Rev": "f3bf350692eaed6efae7ee1074f99d35edc2ff67"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/dropsonde",
