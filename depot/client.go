@@ -106,7 +106,9 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 
 	container, err = c.registry.Create(guid, containerClient.Handle(), request)
 	if err != nil {
-		initLog.Error("failed-to-register-container", err)
+		initLog.Error("failed-to-register-container", err, lager.Data{
+			"container-handle": container.ContainerHandle,
+		})
 		return api.Container{}, err
 	}
 
@@ -197,9 +199,11 @@ func (c *client) GetContainer(guid string) (api.Container, error) {
 }
 
 func (c *client) Run(guid string, request api.ContainerRunRequest) error {
-	runLog := c.logger.Session("run", lager.Data{
+	logData := lager.Data{
 		"guid": guid,
-	})
+	}
+
+	runLog := c.logger.Session("run", logData)
 
 	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
@@ -207,16 +211,20 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		return api.ErrContainerNotFound
 	}
 
+	logData["container-handle"] = registration.ContainerHandle
+
 	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
-		runLog.Error("lookup-failed", err)
+		runLog.Error("lookup-failed", err, lager.Data{
+			"container-handle": registration.ContainerHandle,
+		})
 		return err
 	}
 
 	var result string
 	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, request.Env, container, &result)
 	if err != nil {
-		runLog.Error("steps-invalid", err)
+		runLog.Error("steps-invalid", err, logData)
 		return api.ErrStepsInvalid
 	}
 
@@ -231,9 +239,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	process := ifrit.Envoke(run)
 	c.registry.Start(run.Registration.Guid, process)
 
-	runLog.Info("started", lager.Data{
-		"handle": registration.ContainerHandle,
-	})
+	runLog.Info("started", logData)
 
 	return nil
 }
