@@ -101,6 +101,15 @@ var _ = Describe("Main", func() {
 	AfterEach(func() {
 		runner.KillWithFire()
 		gardenServer.Stop()
+
+		Eventually(func() error {
+			conn, err := net.Dial("tcp", wardenAddr)
+			if err == nil {
+				conn.Close()
+			}
+
+			return err
+		}).Should(HaveOccurred())
 	})
 
 	allocNewContainer := func(request api.ContainerAllocationRequest) (guid string, fakeContainer *wfakes.FakeContainer) {
