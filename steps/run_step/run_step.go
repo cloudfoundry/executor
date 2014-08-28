@@ -83,18 +83,18 @@ func (step *RunStep) Perform() error {
 	case exitStatus := <-exitStatusChan:
 		step.streamer.Flush()
 
-		info, err := step.container.Info()
-		if err != nil {
-			step.logger.Error("failed-to-get-info", err)
-		} else {
-			for _, ev := range info.Events {
-				if ev == "out of memory" {
-					return emittable_error.New(nil, "Exited with status %d (out of memory)", exitStatus)
+		if exitStatus != 0 {
+			info, err := step.container.Info()
+			if err != nil {
+				step.logger.Error("failed-to-get-info", err)
+			} else {
+				for _, ev := range info.Events {
+					if ev == "out of memory" {
+						return emittable_error.New(nil, "Exited with status %d (out of memory)", exitStatus)
+					}
 				}
 			}
-		}
 
-		if exitStatus != 0 {
 			return emittable_error.New(nil, "Exited with status %d", exitStatus)
 		}
 
