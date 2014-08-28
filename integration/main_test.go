@@ -220,7 +220,7 @@ var _ = Describe("Main", func() {
 				})
 
 				It("should exit sadly", func() {
-					Eventually(runner.Session).Should(gexec.Exit(2))
+					Eventually(runner.Session, 5*time.Second).Should(gexec.Exit(2))
 				})
 			})
 		})
