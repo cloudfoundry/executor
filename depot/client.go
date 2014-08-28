@@ -251,41 +251,41 @@ func (c *client) DeleteContainer(guid string) error {
 
 	reg, err := c.registry.MarkForDelete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog)
+		return handleDeleteError(err, deleteLog, logData)
 	}
 
 	logData["handle"] = reg.ContainerHandle
 
-	deleteLog.Debug("deleting")
+	deleteLog.Debug("deleting", logData)
 
 	if reg.Process != nil {
-		deleteLog.Debug("interrupting")
+		deleteLog.Debug("interrupting", logData)
 
 		reg.Process.Signal(os.Interrupt)
 		<-reg.Process.Wait()
 
-		deleteLog.Info("interrupted")
+		deleteLog.Info("interrupted", logData)
 	}
 
 	if reg.ContainerHandle != "" {
-		deleteLog.Debug("destroying")
+		deleteLog.Debug("destroying", logData)
 
 		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
-			return handleDeleteError(err, deleteLog)
+			return handleDeleteError(err, deleteLog, logData)
 		}
 
-		deleteLog.Info("destroyed")
+		deleteLog.Info("destroyed", logData)
 	}
 
-	deleteLog.Debug("unregistering")
+	deleteLog.Debug("unregistering", logData)
 
 	err = c.registry.Delete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog)
+		return handleDeleteError(err, deleteLog, logData)
 	}
 
-	deleteLog.Info("unregistered")
+	deleteLog.Info("unregistered", logData)
 
 	return nil
 }
@@ -315,13 +315,13 @@ func (c *client) TotalResources() (api.ExecutorResources, error) {
 	return resources, nil
 }
 
-func handleDeleteError(err error, logger lager.Logger) error {
+func handleDeleteError(err error, logger lager.Logger, logData lager.Data) error {
 	if err == registry.ErrContainerNotFound {
-		logger.Error("container-not-found", err)
+		logger.Error("container-not-found", err, logData)
 		return api.ErrContainerNotFound
 	}
 
-	logger.Error("failed-to-delete-container", err)
+	logger.Error("failed-to-delete-container", err, logData)
 
 	return err
 }
