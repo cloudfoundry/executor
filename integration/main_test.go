@@ -65,9 +65,7 @@ var _ = Describe("Main", func() {
 	pruningInterval := 500 * time.Millisecond
 
 	BeforeEach(func() {
-		//gardenServer.Stop calls listener.Close()
-		//apparently listener.Close() returns before the port is *actually* closed...?
-		wardenPort := 9001 + CurrentGinkgoTestDescription().LineNumber
+		wardenPort := 9001 + GinkgoParallelNode()
 		debugAddr = fmt.Sprintf("127.0.0.1:%d", 10001+GinkgoParallelNode())
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
