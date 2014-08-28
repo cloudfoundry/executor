@@ -1,7 +1,7 @@
 #!/bin/bash
 # vim: set ft=sh
 
-set -e -x
+set -e
 
 # TODO remove once warden-linux docker env changes land
 export PATH=/root/go/bin:/usr/local/go/bin:$PATH
