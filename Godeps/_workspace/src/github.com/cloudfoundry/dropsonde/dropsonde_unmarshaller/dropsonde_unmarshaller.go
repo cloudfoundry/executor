@@ -30,6 +30,7 @@ import (
 type DropsondeUnmarshaller interface {
 	instrumentation.Instrumentable
 	Run(inputChan <-chan []byte, outputChan chan<- *events.Envelope)
+	UnmarshallMessage([]byte) (*events.Envelope, error)
 }
 
 // NewDropsondeUnmarshaller instantiates a DropsondeUnmarshaller and logs to the
@@ -58,19 +59,27 @@ type dropsondeUnmarshaller struct {
 // will block if outputChan is not read.
 func (u *dropsondeUnmarshaller) Run(inputChan <-chan []byte, outputChan chan<- *events.Envelope) {
 	for message := range inputChan {
-		envelope := &events.Envelope{}
-		err := proto.Unmarshal(message, envelope)
+		envelope, err := u.UnmarshallMessage(message)
 		if err != nil {
-			u.logger.Debugf("dropsondeUnmarshaller: unmarshal error %v for message %v", err, message)
-			incrementCount(&u.unmarshalErrorCount)
 			continue
 		}
-
-		u.logger.Debugf("dropsondeUnmarshaller: received message %v", spew.Sprintf("%v", envelope))
-
-		u.incrementReceiveCount(envelope.GetEventType())
 		outputChan <- envelope
 	}
+}
+
+func (u *dropsondeUnmarshaller) UnmarshallMessage(message []byte) (*events.Envelope, error) {
+	envelope := &events.Envelope{}
+	err := proto.Unmarshal(message, envelope)
+	if err != nil {
+		u.logger.Debugf("dropsondeUnmarshaller: unmarshal error %v for message %v", err, message)
+		incrementCount(&u.unmarshalErrorCount)
+		return nil, err
+	}
+
+	u.logger.Debugf("dropsondeUnmarshaller: received message %v", spew.Sprintf("%v", envelope))
+	u.incrementReceiveCount(envelope.GetEventType())
+
+	return envelope, nil
 }
 
 func (u *dropsondeUnmarshaller) incrementReceiveCount(eventType events.Envelope_EventType) {

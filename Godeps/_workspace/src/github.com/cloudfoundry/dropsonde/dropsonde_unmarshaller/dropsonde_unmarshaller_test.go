@@ -19,37 +19,79 @@ var _ = Describe("DropsondeUnmarshaller", func() {
 		unmarshaller dropsonde_unmarshaller.DropsondeUnmarshaller
 	)
 
-	BeforeEach(func() {
-		inputChan = make(chan []byte, 10)
-		outputChan = make(chan *events.Envelope, 10)
-		runComplete = make(chan struct{})
-		unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+	Context("Unmarshall", func() {
+		BeforeEach(func() {
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+		})
+		It("unmarshalls bytes", func() {
+			input := &events.Envelope{
+				Origin:    proto.String("fake-origin-3"),
+				EventType: events.Envelope_Heartbeat.Enum(),
+				Heartbeat: factories.NewHeartbeat(1, 2, 3),
+			}
+			message, _ := proto.Marshal(input)
 
-		go func() {
-			unmarshaller.Run(inputChan, outputChan)
-			close(runComplete)
-		}()
+			output, _ := unmarshaller.UnmarshallMessage(message)
+
+			Expect(output).To(Equal(input))
+		})
+		It("handles bad input gracefully", func() {
+			output, err := unmarshaller.UnmarshallMessage(make([]byte, 4))
+			Expect(output).To(BeNil())
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
-	AfterEach(func() {
-		close(inputChan)
-		Eventually(runComplete).Should(BeClosed())
-	})
+	Context("Run", func() {
 
-	It("unmarshals bytes into envelopes", func() {
-		envelope := &events.Envelope{
-			Origin:    proto.String("fake-origin-3"),
-			EventType: events.Envelope_Heartbeat.Enum(),
-			Heartbeat: factories.NewHeartbeat(1, 2, 3),
-		}
-		message, _ := proto.Marshal(envelope)
+		BeforeEach(func() {
+			inputChan = make(chan []byte, 10)
+			outputChan = make(chan *events.Envelope, 10)
+			runComplete = make(chan struct{})
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
 
-		inputChan <- message
-		outputEnvelope := <-outputChan
-		Expect(outputEnvelope).To(Equal(envelope))
+			go func() {
+				unmarshaller.Run(inputChan, outputChan)
+				close(runComplete)
+			}()
+		})
+
+		AfterEach(func() {
+			close(inputChan)
+			Eventually(runComplete).Should(BeClosed())
+		})
+
+		It("unmarshals bytes into envelopes", func() {
+			envelope := &events.Envelope{
+				Origin:    proto.String("fake-origin-3"),
+				EventType: events.Envelope_Heartbeat.Enum(),
+				Heartbeat: factories.NewHeartbeat(1, 2, 3),
+			}
+			message, _ := proto.Marshal(envelope)
+
+			inputChan <- message
+			outputEnvelope := <-outputChan
+			Expect(outputEnvelope).To(Equal(envelope))
+		})
 	})
 
 	Context("metrics", func() {
+		BeforeEach(func() {
+			inputChan = make(chan []byte, 10)
+			outputChan = make(chan *events.Envelope, 10)
+			runComplete = make(chan struct{})
+			unmarshaller = dropsonde_unmarshaller.NewDropsondeUnmarshaller(loggertesthelper.Logger())
+
+			go func() {
+				unmarshaller.Run(inputChan, outputChan)
+				close(runComplete)
+			}()
+		})
+
+		AfterEach(func() {
+			close(inputChan)
+			Eventually(runComplete).Should(BeClosed())
+		})
 		It("emits the correct metrics context", func() {
 			Expect(unmarshaller.Emit().Name).To(Equal("dropsondeUnmarshaller"))
 		})

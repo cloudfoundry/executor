@@ -81,4 +81,11 @@ var _ = Describe("FakeTimer", func() {
 			Eventually(timeChan).Should(Receive(Equal(initialTime.Add(30 * time.Second))))
 		})
 	})
+
+	Describe("Now", func() {
+		It("returns the current time, w/o race conditions", func() {
+			go timer.Elapse(time.Minute)
+			Eventually(timer.Now).Should(Equal(initialTime.Add(time.Minute)))
+		})
+	})
 })
