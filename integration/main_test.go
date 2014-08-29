@@ -35,19 +35,22 @@ func TestExecutorMain(t *testing.T) {
 	RunSpecs(t, "Integration Suite")
 }
 
-var executorPath string
+var executor string
 var gardenServer *GardenServer.WardenServer
 var runner *executor_runner.ExecutorRunner
 var executorClient api.Client
 
-var _ = BeforeSuite(func() {
-	var err error
-
-	executorPath, err = gexec.Build("github.com/cloudfoundry-incubator/executor", "-race")
+var _ = SynchronizedBeforeSuite(func() []byte {
+	executorPath, err := gexec.Build("github.com/cloudfoundry-incubator/executor", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
+	return []byte(executorPath)
+}, func(executorPath []byte) {
+	executor = string(executorPath)
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {
+	//noop
+}, func() {
 	gexec.CleanupBuildArtifacts()
 })
 
@@ -89,7 +92,7 @@ var _ = Describe("Main", func() {
 		loggregatorAddr, logMessages = startFakeLoggregatorServer(bidirectionalLogConfs)
 
 		runner = executor_runner.New(
-			executorPath,
+			executor,
 			executorAddr,
 			"tcp",
 			wardenAddr,
