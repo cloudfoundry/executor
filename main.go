@@ -22,6 +22,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server"
 	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
+	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
