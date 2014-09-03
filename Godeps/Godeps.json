@@ -71,11 +71,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/group_runner",
-			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
+			"Rev": "48b03ff5d4d966a0954af043646abe60a04f6934"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
+			"Rev": "48b03ff5d4d966a0954af043646abe60a04f6934"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/loggregatorlib/cfcomponent/generic_logger",
@@ -145,7 +145,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "0addc90d7dcebcf87ef0fc89240c58bd1c475d8f"
+			"Rev": "8084b96f4d9e395019d2208322e062bbf3046378"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/rata",
