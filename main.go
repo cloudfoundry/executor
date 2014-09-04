@@ -11,9 +11,9 @@ import (
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/gunk/group_runner"
 	"github.com/cloudfoundry/gunk/timeprovider"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/sigmon"
 
@@ -181,13 +181,17 @@ func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 
-	logEmitter, _ := emitter.NewEmitter(
+	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
+
+	logEmitter, err := logemitter.NewEmitter(
 		*loggregatorServer,
 		"",
 		"",
-		*loggregatorSecret,
-		nil,
+		false,
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	return Transformer.NewTransformer(
 		logEmitter,

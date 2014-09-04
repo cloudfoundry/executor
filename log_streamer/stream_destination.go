@@ -6,20 +6,20 @@ import (
 
 	"code.google.com/p/goprotobuf/proto"
 
-	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/cloudfoundry/dropsonde/events"
 )
 
 type streamDestination struct {
 	guid        string
 	sourceName  string
 	sourceId    string
-	messageType logmessage.LogMessage_MessageType
-	emitter     emitter.Emitter
+	messageType events.LogMessage_MessageType
+	emitter     logemitter.Emitter
 	buffer      []byte
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType logmessage.LogMessage_MessageType, em emitter.Emitter) *streamDestination {
+func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, em logemitter.Emitter) *streamDestination {
 	return &streamDestination{
 		guid:        guid,
 		sourceName:  sourceName,
@@ -40,13 +40,13 @@ func (destination *streamDestination) flush() {
 		msg := make([]byte, len(destination.buffer))
 		copy(msg, destination.buffer)
 
-		destination.emitter.EmitLogMessage(&logmessage.LogMessage{
-			AppId:       &destination.guid,
-			SourceName:  &destination.sourceName,
-			SourceId:    &destination.sourceId,
-			Message:     msg,
-			MessageType: &destination.messageType,
-			Timestamp:   proto.Int64(time.Now().UnixNano()),
+		destination.emitter.EmitLogMessage(&events.LogMessage{
+			AppId:          &destination.guid,
+			SourceType:     &destination.sourceName,
+			SourceInstance: &destination.sourceId,
+			Message:        msg,
+			MessageType:    &destination.messageType,
+			Timestamp:      proto.Int64(time.Now().UnixNano()),
 		})
 		destination.buffer = destination.buffer[:0]
 	}

@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
+	"github.com/cloudfoundry/dropsonde/events"
 )
 
 var _ = Describe("LogStreamer", func() {
@@ -37,15 +37,15 @@ var _ = Describe("LogStreamer", func() {
 				emission := loggregatorEmitter.Emissions[0]
 				Ω(emission.GetAppId()).Should(Equal(guid))
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
-				Ω(emission.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
-				Ω(emission.GetSourceId()).Should(Equal("11"))
+				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
+				Ω(emission.GetSourceInstance()).Should(Equal("11"))
 
 				emission = loggregatorEmitter.Emissions[1]
 				Ω(emission.GetAppId()).Should(Equal(guid))
-				Ω(emission.GetSourceName()).Should(Equal(sourceName))
-				Ω(emission.GetSourceId()).Should(Equal("11"))
+				Ω(emission.GetSourceType()).Should(Equal(sourceName))
+				Ω(emission.GetSourceInstance()).Should(Equal("11"))
 				Ω(string(emission.GetMessage())).Should(Equal("this is another log"))
-				Ω(emission.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
+				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
 				Ω(*emission.Timestamp).Should(BeNumerically("~", time.Now().UnixNano(), 10*time.Millisecond))
 			})
 		})
@@ -167,8 +167,8 @@ var _ = Describe("LogStreamer", func() {
 
 			emission := loggregatorEmitter.Emissions[0]
 			Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
-			Ω(emission.GetSourceName()).Should(Equal(sourceName))
-			Ω(emission.GetMessageType()).Should(Equal(logmessage.LogMessage_ERR))
+			Ω(emission.GetSourceType()).Should(Equal(sourceName))
+			Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_ERR))
 
 			emission = loggregatorEmitter.Emissions[1]
 			Ω(string(emission.GetMessage())).Should(Equal("and this is another"))
@@ -196,8 +196,8 @@ var _ = Describe("LogStreamer", func() {
 			streamer.Flush()
 
 			Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
-			Ω(loggregatorEmitter.Emissions[0].GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
-			Ω(loggregatorEmitter.Emissions[1].GetMessageType()).Should(Equal(logmessage.LogMessage_ERR))
+			Ω(loggregatorEmitter.Emissions[0].GetMessageType()).Should(Equal(events.LogMessage_OUT))
+			Ω(loggregatorEmitter.Emissions[1].GetMessageType()).Should(Equal(events.LogMessage_ERR))
 		})
 	})
 
@@ -220,13 +220,13 @@ var _ = Describe("LogStreamer", func() {
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions[0].GetSourceId()).Should(Equal("0"))
+			Ω(loggregatorEmitter.Emissions[0].GetSourceInstance()).Should(Equal("0"))
 		})
 	})
 })
 
 type FakeLoggregatorEmitter struct {
-	Emissions []*logmessage.LogMessage
+	Emissions []*events.LogMessage
 }
 
 func NewFakeLoggregatorEmmitter() *FakeLoggregatorEmitter {
@@ -241,6 +241,6 @@ func (e *FakeLoggregatorEmitter) EmitError(appid, message string) {
 	panic("no no no no")
 }
 
-func (e *FakeLoggregatorEmitter) EmitLogMessage(msg *logmessage.LogMessage) {
+func (e *FakeLoggregatorEmitter) EmitLogMessage(msg *events.LogMessage) {
 	e.Emissions = append(e.Emissions, msg)
 }

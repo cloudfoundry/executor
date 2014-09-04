@@ -4,8 +4,8 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/cloudfoundry/loggregatorlib/emitter"
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/cloudfoundry/dropsonde/events"
 )
 
 const MAX_MESSAGE_SIZE = 4096
@@ -22,7 +22,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index *int, loggregatorEmitter emitter.Emitter) LogStreamer {
+func New(guid string, sourceName string, index *int, loggregatorEmitter logemitter.Emitter) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -37,7 +37,7 @@ func New(guid string, sourceName string, index *int, loggregatorEmitter emitter.
 			guid,
 			sourceName,
 			sourceIndex,
-			logmessage.LogMessage_OUT,
+			events.LogMessage_OUT,
 			loggregatorEmitter,
 		),
 
@@ -45,7 +45,7 @@ func New(guid string, sourceName string, index *int, loggregatorEmitter emitter.
 			guid,
 			sourceName,
 			sourceIndex,
-			logmessage.LogMessage_ERR,
+			events.LogMessage_ERR,
 			loggregatorEmitter,
 		),
 	}

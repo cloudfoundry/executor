@@ -21,7 +21,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/loggregatorlib/emitter"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -32,7 +32,7 @@ import (
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
-	logEmitter       emitter.Emitter
+	logEmitter       logemitter.Emitter
 	cachedDownloader cacheddownloader.CachedDownloader
 	uploader         uploader.Uploader
 	extractor        extractor.Extractor
@@ -43,7 +43,7 @@ type Transformer struct {
 }
 
 func NewTransformer(
-	logEmitter emitter.Emitter,
+	logEmitter logemitter.Emitter,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,

@@ -20,15 +20,12 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/client"
+	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry-incubator/warden-linux/linux_backend"
-	"github.com/cloudfoundry/loggregatorlib/logmessage"
 	"github.com/pivotal-golang/lager/lagertest"
-
-	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 )
 
 func TestExecutorMain(t *testing.T) {
@@ -62,9 +59,6 @@ var _ = Describe("Main", func() {
 		containerHandle string = "some-handle"
 
 		fakeBackend *wfakes.FakeBackend
-
-		logMessages      <-chan *logmessage.LogMessage
-		logConfirmations <-chan struct{}
 	)
 
 	pruningInterval := 500 * time.Millisecond
@@ -87,19 +81,13 @@ var _ = Describe("Main", func() {
 
 		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
 
-		var loggregatorAddr string
-
-		bidirectionalLogConfs := make(chan struct{})
-		logConfirmations = bidirectionalLogConfs
-		loggregatorAddr, logMessages = startFakeLoggregatorServer(bidirectionalLogConfs)
-
 		runner = executor_runner.New(
 			executor,
 			executorAddr,
 			"tcp",
 			wardenAddr,
-			loggregatorAddr,
-			"the-loggregator-secret",
+			"",
+			"bogus-loggregator-secret",
 		)
 	})
 
@@ -152,39 +140,6 @@ var _ = Describe("Main", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 
 		return guid, fakeContainer
-	}
-
-	runTask := func(block bool) {
-		guid, fakeContainer := initNewContainer()
-
-		process := new(wfakes.FakeProcess)
-		process.WaitStub = func() (int, error) {
-			time.Sleep(time.Second)
-
-			if block {
-				select {}
-			} else {
-				_, io := fakeContainer.RunArgsForCall(0)
-
-				Eventually(func() interface{} {
-					_, err := io.Stdout.Write([]byte("some-output\n"))
-					Ω(err).ShouldNot(HaveOccurred())
-
-					return logConfirmations
-				}).Should(Receive())
-			}
-
-			return 0, nil
-		}
-
-		fakeContainer.RunReturns(process, nil)
-
-		err := executorClient.Run(guid, api.ContainerRunRequest{
-			Actions: []models.ExecutorAction{
-				{Action: models.RunAction{Path: "ls"}},
-			},
-		})
-		Ω(err).ShouldNot(HaveOccurred())
 	}
 
 	Describe("starting up", func() {
@@ -628,44 +583,6 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("running something", func() {
-			It("streams log output", func() {
-				runTask(false)
-
-				message := &logmessage.LogMessage{}
-				Eventually(logMessages, 5).Should(Receive(&message))
-
-				Ω(message.GetAppId()).Should(Equal("the-app-guid"))
-				Ω(message.GetSourceName()).Should(Equal("STG"))
-				Ω(message.GetMessageType()).Should(Equal(logmessage.LogMessage_OUT))
-				Ω(message.GetSourceId()).Should(Equal("13"))
-				Ω(string(message.GetMessage())).Should(Equal("some-output"))
-			})
-
-			It("fails when the actions are invalid", func() {
-				guid, _ := initNewContainer()
-				err := executorClient.Run(
-					guid,
-					api.ContainerRunRequest{
-						Actions: []models.ExecutorAction{
-							{
-								models.MonitorAction{
-									HealthyHook: models.HealthRequest{
-										URL: "some/bogus/url",
-									},
-									Action: models.ExecutorAction{
-										models.RunAction{
-											Path: "ls",
-											Args: []string{"-al"},
-										},
-									},
-								},
-							},
-						},
-					},
-				)
-				Ω(err).Should(HaveOccurred())
-			})
-
 			It("propagates global environment variables to each run action", func() {
 				guid, fakeContainer := initNewContainer()
 
@@ -999,9 +916,6 @@ var _ = Describe("Main", func() {
 				BeforeEach(func() {
 					guid, _ = initNewContainer()
 
-					fakeBackend.LookupReturns(nil, linux_backend.UnknownHandleError{
-						Handle: containerHandle,
-					})
 					fakeBackend.ContainersReturns([]warden.Container{}, nil)
 				})
 
@@ -1119,32 +1033,3 @@ var _ = Describe("Main", func() {
 		})
 	})
 })
-
-func startFakeLoggregatorServer(logConfirmations chan<- struct{}) (string, <-chan *logmessage.LogMessage) {
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	Ω(err).ShouldNot(HaveOccurred())
-
-	conn, err := net.ListenUDP("udp", addr)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	logMessages := make(chan *logmessage.LogMessage, 10)
-
-	go func() {
-		defer GinkgoRecover()
-
-		for {
-			buf := make([]byte, 1024)
-
-			rlen, _, err := conn.ReadFromUDP(buf)
-			logConfirmations <- struct{}{}
-			Ω(err).ShouldNot(HaveOccurred())
-
-			message, err := logmessage.ParseEnvelope(buf[0:rlen], "the-loggregator-secret")
-			Ω(err).ShouldNot(HaveOccurred())
-
-			logMessages <- message.GetLogMessage()
-		}
-	}()
-
-	return conn.LocalAddr().String(), logMessages
-}
