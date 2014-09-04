@@ -137,7 +137,7 @@
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/lager",
-			"Rev": "24bc7249ba26ad2f1493363b9dcedf86023f47d7"
+			"Rev": "c9b4b9ba624d212b1010dab04c2b4515a9ecc031"
 		},
 		{
 			"ImportPath": "github.com/pivotal-golang/timer",
