@@ -1,6 +1,7 @@
 package registry_test
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -20,7 +21,7 @@ var _ = Describe("Registry", func() {
 		initialCapacity = Capacity{
 			MemoryMB:   100,
 			DiskMB:     200,
-			Containers: 3,
+			Containers: 13,
 		}
 
 		timeProvider = faketimeprovider.New(time.Now())
@@ -62,7 +63,7 @@ var _ = Describe("Registry", func() {
 			Ω(registry.CurrentCapacity()).Should(Equal(Capacity{
 				MemoryMB:   60,
 				DiskMB:     110,
-				Containers: 1,
+				Containers: 11,
 			}))
 		})
 	})
@@ -170,19 +171,15 @@ var _ = Describe("Registry", func() {
 			})
 
 			It("should return an ErrOutOfContainers when out of containers", func() {
-				_, err := registry.Reserve("another-container", api.ContainerAllocationRequest{
-					MemoryMB: 1,
-					DiskMB:   1,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
+				for i := 0; i < 12; i++ {
+					_, err := registry.Reserve(fmt.Sprintf("another-container-%d", i), api.ContainerAllocationRequest{
+						MemoryMB: 1,
+						DiskMB:   1,
+					})
+					Ω(err).ShouldNot(HaveOccurred())
+				}
 
-				_, err = registry.Reserve("yet-another-container", api.ContainerAllocationRequest{
-					MemoryMB: 1,
-					DiskMB:   1,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = registry.Reserve("one-too-many-containers", api.ContainerAllocationRequest{
+				_, err := registry.Reserve("one-too-many-containers", api.ContainerAllocationRequest{
 					MemoryMB: 1,
 					DiskMB:   1,
 				})
@@ -222,6 +219,7 @@ var _ = Describe("Registry", func() {
 	Describe("creating a container", func() {
 		Context("when the container exists and is initializing", func() {
 			var container api.Container
+
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", api.ContainerAllocationRequest{
 					MemoryMB: 50,
@@ -344,4 +342,103 @@ var _ = Describe("Registry", func() {
 			})
 		})
 	})
+
+	Describe("syncing", func() {
+		It("removes created containers whose handles are not in the given set", func() {
+			reservedContainer := reserveContainer(registry, "guid1")
+			initializedContainer := initializeContainer(registry, "guid2")
+			createdContainer1 := createContainer(registry, "guid3")
+			createdContainer2 := createContainer(registry, "guid4")
+			createdContainer3 := createContainer(registry, "guid5")
+			deletingContainer1 := setupDeletingContainer(registry, "guid6")
+			deletingContainer2 := setupDeletingContainer(registry, "guid7")
+			completedContainer1 := setupCompletedContainer(registry, "guid8")
+			completedContainer2 := setupCompletedContainer(registry, "guid9")
+
+			Ω(getAllGuids(registry)).Should(ConsistOf(
+				reservedContainer.Guid,
+				initializedContainer.Guid,
+				createdContainer1.Guid,
+				createdContainer2.Guid,
+				createdContainer3.Guid,
+				deletingContainer1.Guid,
+				deletingContainer2.Guid,
+				completedContainer1.Guid,
+				completedContainer2.Guid,
+			))
+
+			registry.Sync(map[string]struct{}{
+				createdContainer2.ContainerHandle:   struct{}{},
+				deletingContainer1.ContainerHandle:  struct{}{},
+				completedContainer2.ContainerHandle: struct{}{},
+			})
+
+			Ω(getAllGuids(registry)).Should(ConsistOf(
+				reservedContainer.Guid,
+				initializedContainer.Guid,
+				createdContainer2.Guid,
+				deletingContainer1.Guid,
+				completedContainer2.Guid,
+			))
+		})
+	})
+
+	It("frees resources for containers whose handles are not in the given set", func() {
+		container1 := createContainer(registry, "guid1")
+		createContainer(registry, "guid2")
+
+		Ω(registry.CurrentCapacity().Containers).Should(Equal(initialCapacity.Containers - 2))
+
+		registry.Sync(map[string]struct{}{
+			container1.ContainerHandle: struct{}{},
+		})
+
+		Ω(registry.CurrentCapacity().Containers).Should(Equal(initialCapacity.Containers - 1))
+	})
 })
+
+func getAllGuids(registry Registry) []string {
+	result := []string{}
+	for _, container := range registry.GetAllContainers() {
+		result = append(result, container.Guid)
+	}
+	return result
+}
+
+func reserveContainer(registry Registry, guid string) api.Container {
+	container, err := registry.Reserve(guid, api.ContainerAllocationRequest{})
+	Ω(err).ShouldNot(HaveOccurred())
+	return container
+}
+
+func initializeContainer(registry Registry, guid string) api.Container {
+	reserveContainer(registry, guid)
+
+	container, err := registry.Initialize(guid)
+	Ω(err).ShouldNot(HaveOccurred())
+	return container
+}
+
+func createContainer(registry Registry, guid string) api.Container {
+	initializeContainer(registry, guid)
+
+	container, err := registry.Create(guid, guid+"-handle", api.ContainerInitializationRequest{})
+	Ω(err).ShouldNot(HaveOccurred())
+	return container
+}
+
+func setupDeletingContainer(registry Registry, guid string) api.Container {
+	createContainer(registry, guid)
+
+	container, err := registry.MarkForDelete(guid)
+	Ω(err).ShouldNot(HaveOccurred())
+	return container
+}
+
+func setupCompletedContainer(registry Registry, guid string) api.Container {
+	container := createContainer(registry, guid)
+
+	err := registry.Complete(guid, api.ContainerRunResult{})
+	Ω(err).ShouldNot(HaveOccurred())
+	return container
+}

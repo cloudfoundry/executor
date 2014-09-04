@@ -24,6 +24,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/warden"
 	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry-incubator/warden-linux/linux_backend"
 	"github.com/cloudfoundry/loggregatorlib/logmessage"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -56,8 +57,9 @@ var _ = SynchronizedAfterSuite(func() {
 
 var _ = Describe("Main", func() {
 	var (
-		wardenAddr string
-		debugAddr  string
+		wardenAddr      string
+		debugAddr       string
+		containerHandle string = "some-handle"
 
 		fakeBackend *wfakes.FakeBackend
 
@@ -120,7 +122,7 @@ var _ = Describe("Main", func() {
 		fakeBackend.CreateReturns(fakeContainer, nil)
 		fakeBackend.LookupReturns(fakeContainer, nil)
 		fakeBackend.ContainersReturns([]warden.Container{fakeContainer}, nil)
-		fakeContainer.HandleReturns("some-handle")
+		fakeContainer.HandleReturns(containerHandle)
 
 		id, err := uuid.NewV4()
 		Ω(err).ShouldNot(HaveOccurred())
@@ -883,7 +885,7 @@ var _ = Describe("Main", func() {
 				Context("when deleting the container succeeds", func() {
 					It("destroys the warden container", func() {
 						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
 					})
 
 					It("removes the container from the registry", func() {
@@ -980,12 +982,62 @@ var _ = Describe("Main", func() {
 
 				It("deletes the container", func() {
 					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("some-handle"))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
 				})
 
 				It("removes the container from the registry", func() {
 					_, err := executorClient.GetContainer(guid)
 					Ω(err).Should(Equal(api.ErrContainerNotFound))
+				})
+			})
+		})
+
+		Describe("staying in sink with warden", func() {
+			Context("when a created container disappears out from under us", func() {
+				var guid string
+
+				BeforeEach(func() {
+					guid, _ = initNewContainer()
+
+					fakeBackend.LookupReturns(nil, linux_backend.UnknownHandleError{
+						Handle: containerHandle,
+					})
+					fakeBackend.ContainersReturns([]warden.Container{}, nil)
+				})
+
+				It("returns a not-found response when that container is queried", func() {
+					_, err := executorClient.GetContainer(guid)
+					Ω(err).Should(Equal(api.ErrContainerNotFound))
+				})
+
+				It("returns a not-found error when that container is deleted", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).Should(Equal(api.ErrContainerNotFound))
+				})
+
+				It("returns a not-found error when attempting to run something in that container", func() {
+					err := executorClient.Run(guid, api.ContainerRunRequest{})
+					Ω(err).Should(Equal(api.ErrContainerNotFound))
+				})
+
+				It("does not return that container when listing containers", func() {
+					Ω(executorClient.ListContainers()).Should(BeEmpty())
+				})
+
+				It("frees that container's resources from the available resources", func() {
+					Ω(executorClient.RemainingResources()).Should(Equal(api.ExecutorResources{
+						MemoryMB:   1024,
+						DiskMB:     1024,
+						Containers: 1024,
+					}))
+				})
+
+				It("makes that container's resources available for subsequent allocations", func() {
+					_, err := executorClient.AllocateContainer("the-guid", api.ContainerAllocationRequest{
+						MemoryMB: 1024,
+					})
+
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 			})
 		})
@@ -1065,7 +1117,6 @@ var _ = Describe("Main", func() {
 				Ω(runner.Session).ShouldNot(gexec.Exit())
 			})
 		})
-
 	})
 })
 

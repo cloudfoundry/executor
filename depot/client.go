@@ -167,18 +167,23 @@ func (c *client) mapPorts(request api.ContainerInitializationRequest, containerC
 }
 
 func (c *client) AllocateContainer(guid string, request api.ContainerAllocationRequest) (api.Container, error) {
-	allocLog := c.logger.Session("allocate", lager.Data{
+	logger := c.logger.Session("allocate", lager.Data{
 		"guid": guid,
 	})
 
+	err := c.syncRegistry()
+	if err != nil {
+		return api.Container{}, handleSyncErr(err, logger)
+	}
+
 	container, err := c.registry.Reserve(guid, request)
 	if err == registry.ErrContainerAlreadyExists {
-		allocLog.Error("container-already-allocated", err)
+		logger.Error("container-already-allocated", err)
 		return api.Container{}, api.ErrContainerGuidNotAvailable
 	}
 
 	if err != nil {
-		allocLog.Error("full", err)
+		logger.Error("full", err)
 		return api.Container{}, api.ErrInsufficientResourcesAvailable
 	}
 
@@ -186,43 +191,54 @@ func (c *client) AllocateContainer(guid string, request api.ContainerAllocationR
 }
 
 func (c *client) GetContainer(guid string) (api.Container, error) {
-	getLog := c.logger.Session("get", lager.Data{
+	logger := c.logger.Session("get", lager.Data{
 		"guid": guid,
 	})
 
+	err := c.syncRegistry()
+	if err != nil {
+		return api.Container{}, handleSyncErr(err, logger)
+	}
+
 	container, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		getLog.Error("container-not-found", err)
+		logger.Error("container-not-found", err)
 		return api.Container{}, api.ErrContainerNotFound
 	}
+
 	return container, nil
 }
 
 func (c *client) Run(guid string, request api.ContainerRunRequest) error {
-	runLog := c.logger.Session("run", lager.Data{
+	logger := c.logger.Session("run", lager.Data{
 		"guid": guid,
 	})
 
+	err := c.syncRegistry()
+	if err != nil {
+		return handleSyncErr(err, logger)
+	}
+
 	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		runLog.Error("container-not-found", err)
+		logger.Error("container-not-found", err)
 		return api.ErrContainerNotFound
 	}
 
-	runLog = runLog.WithData(lager.Data{
+	logger = logger.WithData(lager.Data{
 		"handle": registration.ContainerHandle,
 	})
 
 	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
-		runLog.Error("lookup-failed", err)
+		logger.Error("lookup-failed", err)
 		return err
 	}
 
 	var result string
 	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, request.Env, container, &result)
 	if err != nil {
-		runLog.Error("steps-invalid", err)
+		logger.Error("steps-invalid", err)
 		return api.ErrStepsInvalid
 	}
 
@@ -237,12 +253,17 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	process := ifrit.Envoke(run)
 	c.registry.Start(run.Registration.Guid, process)
 
-	runLog.Info("started")
+	logger.Info("started")
 
 	return nil
 }
 
 func (c *client) ListContainers() ([]api.Container, error) {
+	logger := c.logger.Session("list")
+	err := c.syncRegistry()
+	if err != nil {
+		return []api.Container{}, handleSyncErr(err, logger)
+	}
 	return c.registry.GetAllContainers(), nil
 }
 
@@ -250,6 +271,11 @@ func (c *client) DeleteContainer(guid string) error {
 	deleteLog := c.logger.Session("delete", lager.Data{
 		"guid": guid,
 	})
+
+	err := c.syncRegistry()
+	if err != nil {
+		return handleSyncErr(err, deleteLog)
+	}
 
 	reg, err := c.registry.MarkForDelete(guid)
 	if err != nil {
@@ -292,6 +318,14 @@ func (c *client) DeleteContainer(guid string) error {
 }
 
 func (c *client) RemainingResources() (api.ExecutorResources, error) {
+	resourceLog := c.logger.Session("remaining-resources")
+
+	err := c.syncRegistry()
+	if err != nil {
+		resourceLog.Error("could-not-sync-registry", err)
+		return api.ExecutorResources{}, err
+	}
+
 	cap := c.registry.CurrentCapacity()
 
 	return api.ExecutorResources{
@@ -324,5 +358,25 @@ func handleDeleteError(err error, logger lager.Logger) error {
 
 	logger.Error("failed-to-delete-container", err)
 
+	return err
+}
+
+func (c *client) syncRegistry() error {
+	containers, err := c.wardenClient.Containers(nil)
+	if err != nil {
+		return err
+	}
+
+	handleSet := make(map[string]struct{})
+	for _, container := range containers {
+		handleSet[container.Handle()] = struct{}{}
+	}
+
+	c.registry.Sync(handleSet)
+	return nil
+}
+
+func handleSyncErr(err error, logger lager.Logger) error {
+	logger.Error("could-not-sync-registry", err)
 	return err
 }

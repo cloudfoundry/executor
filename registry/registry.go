@@ -28,6 +28,7 @@ type Registry interface {
 	Complete(guid string, result api.ContainerRunResult) error
 	MarkForDelete(guid string) (api.Container, error)
 	Delete(guid string) error
+	Sync(map[string]struct{})
 }
 
 type registry struct {
@@ -220,4 +221,18 @@ func (r *registry) Delete(guid string) error {
 	delete(r.registeredContainers, guid)
 
 	return nil
+}
+
+func (r *registry) Sync(handleSet map[string]struct{}) {
+	r.containersMutex.Lock()
+	defer r.containersMutex.Unlock()
+
+	for guid, container := range r.registeredContainers {
+		if container.ContainerHandle != "" {
+			if _, ok := handleSet[container.ContainerHandle]; !ok {
+				delete(r.registeredContainers, guid)
+				r.currentCapacity.free(container)
+			}
+		}
+	}
 }
