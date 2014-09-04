@@ -199,11 +199,9 @@ func (c *client) GetContainer(guid string) (api.Container, error) {
 }
 
 func (c *client) Run(guid string, request api.ContainerRunRequest) error {
-	logData := lager.Data{
+	runLog := c.logger.Session("run", lager.Data{
 		"guid": guid,
-	}
-
-	runLog := c.logger.Session("run", logData)
+	})
 
 	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
@@ -211,20 +209,20 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		return api.ErrContainerNotFound
 	}
 
-	logData["container-handle"] = registration.ContainerHandle
+	runLog = runLog.WithData(lager.Data{
+		"handle": registration.ContainerHandle,
+	})
 
 	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
-		runLog.Error("lookup-failed", err, lager.Data{
-			"container-handle": registration.ContainerHandle,
-		})
+		runLog.Error("lookup-failed", err)
 		return err
 	}
 
 	var result string
 	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, request.Env, container, &result)
 	if err != nil {
-		runLog.Error("steps-invalid", err, logData)
+		runLog.Error("steps-invalid", err)
 		return api.ErrStepsInvalid
 	}
 
@@ -239,7 +237,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	process := ifrit.Envoke(run)
 	c.registry.Start(run.Registration.Guid, process)
 
-	runLog.Info("started", logData)
+	runLog.Info("started")
 
 	return nil
 }
@@ -249,49 +247,46 @@ func (c *client) ListContainers() ([]api.Container, error) {
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	logData := lager.Data{
+	deleteLog := c.logger.Session("delete", lager.Data{
 		"guid": guid,
-	}
-
-	deleteLog := c.logger.Session("delete", logData)
+	})
 
 	reg, err := c.registry.MarkForDelete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog, logData)
+		return handleDeleteError(err, deleteLog)
 	}
 
-	logData["handle"] = reg.ContainerHandle
-
-	deleteLog.Debug("deleting", logData)
+	deleteLog = deleteLog.WithData(lager.Data{"handle": reg.ContainerHandle})
+	deleteLog.Debug("deleting")
 
 	if reg.Process != nil {
-		deleteLog.Debug("interrupting", logData)
+		deleteLog.Debug("interrupting")
 
 		reg.Process.Signal(os.Interrupt)
 		<-reg.Process.Wait()
 
-		deleteLog.Info("interrupted", logData)
+		deleteLog.Info("interrupted")
 	}
 
 	if reg.ContainerHandle != "" {
-		deleteLog.Debug("destroying", logData)
+		deleteLog.Debug("destroying")
 
 		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
-			return handleDeleteError(err, deleteLog, logData)
+			return handleDeleteError(err, deleteLog)
 		}
 
-		deleteLog.Info("destroyed", logData)
+		deleteLog.Info("destroyed")
 	}
 
-	deleteLog.Debug("unregistering", logData)
+	deleteLog.Debug("unregistering")
 
 	err = c.registry.Delete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog, logData)
+		return handleDeleteError(err, deleteLog)
 	}
 
-	deleteLog.Info("unregistered", logData)
+	deleteLog.Info("unregistered")
 
 	return nil
 }
@@ -321,13 +316,13 @@ func (c *client) TotalResources() (api.ExecutorResources, error) {
 	return resources, nil
 }
 
-func handleDeleteError(err error, logger lager.Logger, logData lager.Data) error {
+func handleDeleteError(err error, logger lager.Logger) error {
 	if err == registry.ErrContainerNotFound {
-		logger.Error("container-not-found", err, logData)
+		logger.Error("container-not-found", err)
 		return api.ErrContainerNotFound
 	}
 
-	logger.Error("failed-to-delete-container", err, logData)
+	logger.Error("failed-to-delete-container", err)
 
 	return err
 }
