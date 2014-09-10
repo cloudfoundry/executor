@@ -2,7 +2,6 @@ package registry
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -26,7 +25,6 @@ type Registry interface {
 	Create(guid, containerHandle string, req api.ContainerInitializationRequest) (api.Container, error)
 	Start(guid string, process ifrit.Process) error
 	Complete(guid string, result api.ContainerRunResult) error
-	MarkForDelete(guid string) (api.Container, error)
 	Delete(guid string) error
 	Sync(map[string]struct{})
 }
@@ -185,25 +183,6 @@ func (r *registry) Complete(guid string, result api.ContainerRunResult) error {
 	return nil
 }
 
-func (r *registry) MarkForDelete(guid string) (api.Container, error) {
-	r.containersMutex.Lock()
-	defer r.containersMutex.Unlock()
-
-	res, ok := r.registeredContainers[guid]
-	if !ok {
-		return blankContainer, ErrContainerNotFound
-	}
-
-	if res.State == api.StateDeleting {
-		return blankContainer, api.ErrDeleteInProgress
-	}
-
-	res.State = api.StateDeleting
-	r.registeredContainers[guid] = res
-
-	return res, nil
-}
-
 func (r *registry) Delete(guid string) error {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
@@ -211,10 +190,6 @@ func (r *registry) Delete(guid string) error {
 	res, ok := r.registeredContainers[guid]
 	if !ok {
 		return ErrContainerNotFound
-	}
-
-	if res.State != api.StateDeleting {
-		return fmt.Errorf("invalid transition for container %s: %s -> %s", guid, res.State, api.StateDeleting)
 	}
 
 	r.currentCapacity.free(res)

@@ -10,7 +10,6 @@ const (
 	StateInitializing = "initializing"
 	StateCreated      = "created"
 	StateCompleted    = "completed"
-	StateDeleting     = "deleting"
 )
 
 type Container struct {

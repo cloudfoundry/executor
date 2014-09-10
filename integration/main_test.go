@@ -770,12 +770,7 @@ var _ = Describe("Main", func() {
 		})
 
 		Describe("deleting a container", func() {
-			var deleteErr error
 			var guid string
-
-			JustBeforeEach(func() {
-				deleteErr = executorClient.DeleteContainer(guid)
-			})
 
 			Context("when the container has been allocated", func() {
 				BeforeEach(func() {
@@ -785,7 +780,10 @@ var _ = Describe("Main", func() {
 					})
 				})
 
-				It("the previously allocated resources become available", func() {
+				It("makes the previously allocated resources available again", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
 					Eventually(executorClient.RemainingResources).Should(Equal(api.ExecutorResources{
 						MemoryMB:   1024,
 						DiskMB:     1024,
@@ -801,12 +799,18 @@ var _ = Describe("Main", func() {
 
 				Context("when deleting the container succeeds", func() {
 					It("destroys the warden container", func() {
+						err := executorClient.DeleteContainer(guid)
+						Ω(err).ShouldNot(HaveOccurred())
+
 						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
 						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
 					})
 
 					It("removes the container from the registry", func() {
-						_, err := executorClient.GetContainer(guid)
+						err := executorClient.DeleteContainer(guid)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						_, err = executorClient.GetContainer(guid)
 						Ω(err).Should(Equal(api.ErrContainerNotFound))
 					})
 				})
@@ -817,46 +821,22 @@ var _ = Describe("Main", func() {
 					})
 
 					It("returns an error", func() {
-						Ω(deleteErr.Error()).Should(ContainSubstring("status: 500"))
+						err := executorClient.DeleteContainer(guid)
+						Ω(err.Error()).Should(ContainSubstring("status: 500"))
 					})
-				})
-			})
 
-			Context("when another delete is in progress", func() {
-				var destroying, conflicted chan struct{}
-				var errChan chan error
+					Describe("retrying", func() {
+						BeforeEach(func() {
+							executorClient.DeleteContainer(guid)
+							fakeBackend.DestroyReturns(nil)
+						})
 
-				BeforeEach(func() {
-					guid, _ = initNewContainer()
-
-					destroying = make(chan struct{})
-					conflicted = make(chan struct{})
-					errChan = make(chan error)
-
-					fakeBackend.DestroyStub = func(string) error {
-						close(destroying)
-						<-conflicted
-						return nil
-					}
-
-					go func() {
-						errChan <- executorClient.DeleteContainer(guid)
-					}()
-
-					Eventually(destroying).Should(BeClosed())
-				})
-
-				AfterEach(func() {
-					close(conflicted)
-					Eventually(errChan).Should(Receive(nil))
-				})
-
-				It("returns ErrDeleteInProgress", func() {
-					Ω(deleteErr).Should(Equal(api.ErrDeleteInProgress))
-				})
-
-				It("does not delete the container twice", func() {
-					Ω(fakeBackend.DestroyCallCount()).Should(Equal(1))
+						It("tries to delete the garden container again", func() {
+							err := executorClient.DeleteContainer(guid)
+							Ω(fakeBackend.DestroyCallCount()).Should(Equal(2))
+							Ω(err).ShouldNot(HaveOccurred())
+						})
+					})
 				})
 			})
 
@@ -893,16 +873,21 @@ var _ = Describe("Main", func() {
 					Eventually(waiting).Should(BeClosed())
 				})
 
-				It("does not return an error (because of funky state transitions)", func() {
-					Ω(deleteErr).ShouldNot(HaveOccurred())
+				It("does not return an error", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("deletes the container", func() {
+					executorClient.DeleteContainer(guid)
+
 					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
 					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
 				})
 
 				It("removes the container from the registry", func() {
+					executorClient.DeleteContainer(guid)
+
 					_, err := executorClient.GetContainer(guid)
 					Ω(err).Should(Equal(api.ErrContainerNotFound))
 				})

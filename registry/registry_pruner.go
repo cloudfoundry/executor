@@ -59,16 +59,7 @@ func (p *RegistryPruner) prune() {
 
 			pLog.Debug("pruning-reserved-container")
 
-			container, err := p.registry.MarkForDelete(container.Guid)
-			if err != nil {
-				pLog.Debug("failed-to-mark-for-deleting", lager.Data{
-					"error": err.Error(),
-				})
-
-				return
-			}
-
-			err = p.registry.Delete(container.Guid)
+			err := p.registry.Delete(container.Guid)
 			if err != nil {
 				pLog.Error("failed-to-delete-container", err)
 				return

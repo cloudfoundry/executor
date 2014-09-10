@@ -277,7 +277,7 @@ func (c *client) DeleteContainer(guid string) error {
 		return handleSyncErr(err, logger)
 	}
 
-	reg, err := c.registry.MarkForDelete(guid)
+	reg, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		return handleDeleteError(err, logger)
 	}

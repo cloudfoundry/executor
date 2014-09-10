@@ -307,31 +307,17 @@ var _ = Describe("Registry", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			Context("and is marked for deletion", func() {
-				BeforeEach(func() {
-					_, err := registry.MarkForDelete("a-container")
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("does not error", func() {
-					Ω(deleteErr).ShouldNot(HaveOccurred())
-				})
-
-				It("should free its resources", func() {
-					Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
-				})
-
-				It("should not be able to find it again", func() {
-					_, err := registry.FindByGuid("a-container")
-					Ω(err).Should(MatchError(ErrContainerNotFound))
-				})
+			It("does not error", func() {
+				Ω(deleteErr).ShouldNot(HaveOccurred())
 			})
 
-			Context("when the container is not marked for deletion", func() {
-				It("returns an error", func() {
-					Ω(deleteErr).Should(HaveOccurred())
-					Ω(deleteErr.Error()).Should(ContainSubstring("invalid transition"))
-				})
+			It("should free its resources", func() {
+				Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
+			})
+
+			It("should not be able to find it again", func() {
+				_, err := registry.FindByGuid("a-container")
+				Ω(err).Should(MatchError(ErrContainerNotFound))
 			})
 		})
 
@@ -350,8 +336,6 @@ var _ = Describe("Registry", func() {
 			createdContainer1 := createContainer(registry, "guid3")
 			createdContainer2 := createContainer(registry, "guid4")
 			createdContainer3 := createContainer(registry, "guid5")
-			deletingContainer1 := setupDeletingContainer(registry, "guid6")
-			deletingContainer2 := setupDeletingContainer(registry, "guid7")
 			completedContainer1 := setupCompletedContainer(registry, "guid8")
 			completedContainer2 := setupCompletedContainer(registry, "guid9")
 
@@ -361,15 +345,12 @@ var _ = Describe("Registry", func() {
 				createdContainer1.Guid,
 				createdContainer2.Guid,
 				createdContainer3.Guid,
-				deletingContainer1.Guid,
-				deletingContainer2.Guid,
 				completedContainer1.Guid,
 				completedContainer2.Guid,
 			))
 
 			registry.Sync(map[string]struct{}{
 				createdContainer2.ContainerHandle:   struct{}{},
-				deletingContainer1.ContainerHandle:  struct{}{},
 				completedContainer2.ContainerHandle: struct{}{},
 			})
 
@@ -377,7 +358,6 @@ var _ = Describe("Registry", func() {
 				reservedContainer.Guid,
 				initializedContainer.Guid,
 				createdContainer2.Guid,
-				deletingContainer1.Guid,
 				completedContainer2.Guid,
 			))
 		})
@@ -423,14 +403,6 @@ func createContainer(registry Registry, guid string) api.Container {
 	initializeContainer(registry, guid)
 
 	container, err := registry.Create(guid, guid+"-handle", api.ContainerInitializationRequest{})
-	Ω(err).ShouldNot(HaveOccurred())
-	return container
-}
-
-func setupDeletingContainer(registry Registry, guid string) api.Container {
-	createContainer(registry, guid)
-
-	container, err := registry.MarkForDelete(guid)
 	Ω(err).ShouldNot(HaveOccurred())
 	return container
 }
