@@ -47,19 +47,19 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		return api.Container{}, api.ErrLimitsInvalid
 	}
 
-	initLog := c.logger.Session("initialize", lager.Data{
+	logger := c.logger.Session("initialize", lager.Data{
 		"guid": guid,
 	})
 
 	container, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		initLog.Error("failed-to-find-container", err)
+		logger.Error("failed-to-find-container", err)
 		return api.Container{}, api.ErrContainerNotFound
 	}
 
 	container, err = c.registry.Initialize(guid)
 	if err != nil {
-		initLog.Error("failed-to-initialize-registry-container", err)
+		logger.Error("failed-to-initialize-registry-container", err)
 		return api.Container{}, err
 	}
 
@@ -70,35 +70,35 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		},
 	})
 	if err != nil {
-		initLog.Error("failed-to-create-container", err)
+		logger.Error("failed-to-create-container", err)
 		return api.Container{}, err
 	}
 
 	defer func() {
 		if err != nil {
-			initLog.Error("destroying-container-after-failed-init", err)
+			logger.Error("destroying-container-after-failed-init", err)
 			destroyErr := c.wardenClient.Destroy(containerClient.Handle())
 			if destroyErr != nil {
-				initLog.Error("destroying-container-after-failed-init-also-failed", destroyErr)
+				logger.Error("destroying-container-after-failed-init-also-failed", destroyErr)
 			}
 		}
 	}()
 
 	err = c.limitContainerDiskAndMemory(container, containerClient)
 	if err != nil {
-		initLog.Error("failed-to-limit-memory-and-disk", err)
+		logger.Error("failed-to-limit-memory-and-disk", err)
 		return api.Container{}, err
 	}
 
 	err = c.limitContainerCPU(request, containerClient)
 	if err != nil {
-		initLog.Error("failed-to-limit-cpu", err)
+		logger.Error("failed-to-limit-cpu", err)
 		return api.Container{}, err
 	}
 
 	portMapping, err := c.mapPorts(request, containerClient)
 	if err != nil {
-		initLog.Error("failed-to-map-ports", err)
+		logger.Error("failed-to-map-ports", err)
 		return api.Container{}, err
 	}
 
@@ -106,7 +106,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 
 	container, err = c.registry.Create(guid, containerClient.Handle(), request)
 	if err != nil {
-		initLog.Error("failed-to-register-container", err, lager.Data{
+		logger.Error("failed-to-register-container", err, lager.Data{
 			"container-handle": container.ContainerHandle,
 		})
 		return api.Container{}, err
@@ -268,61 +268,61 @@ func (c *client) ListContainers() ([]api.Container, error) {
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	deleteLog := c.logger.Session("delete", lager.Data{
+	logger := c.logger.Session("delete", lager.Data{
 		"guid": guid,
 	})
 
 	err := c.syncRegistry()
 	if err != nil {
-		return handleSyncErr(err, deleteLog)
+		return handleSyncErr(err, logger)
 	}
 
 	reg, err := c.registry.MarkForDelete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog)
+		return handleDeleteError(err, logger)
 	}
 
-	deleteLog = deleteLog.WithData(lager.Data{"handle": reg.ContainerHandle})
-	deleteLog.Debug("deleting")
+	logger = logger.WithData(lager.Data{"handle": reg.ContainerHandle})
+	logger.Debug("deleting")
 
 	if reg.Process != nil {
-		deleteLog.Debug("interrupting")
+		logger.Debug("interrupting")
 
 		reg.Process.Signal(os.Interrupt)
 		<-reg.Process.Wait()
 
-		deleteLog.Info("interrupted")
+		logger.Info("interrupted")
 	}
 
 	if reg.ContainerHandle != "" {
-		deleteLog.Debug("destroying")
+		logger.Debug("destroying")
 
 		err = c.wardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
-			return handleDeleteError(err, deleteLog)
+			return handleDeleteError(err, logger)
 		}
 
-		deleteLog.Info("destroyed")
+		logger.Info("destroyed")
 	}
 
-	deleteLog.Debug("unregistering")
+	logger.Debug("unregistering")
 
 	err = c.registry.Delete(guid)
 	if err != nil {
-		return handleDeleteError(err, deleteLog)
+		return handleDeleteError(err, logger)
 	}
 
-	deleteLog.Info("unregistered")
+	logger.Info("unregistered")
 
 	return nil
 }
 
 func (c *client) RemainingResources() (api.ExecutorResources, error) {
-	resourceLog := c.logger.Session("remaining-resources")
+	logger := c.logger.Session("remaining-resources")
 
 	err := c.syncRegistry()
 	if err != nil {
-		resourceLog.Error("could-not-sync-registry", err)
+		logger.Error("could-not-sync-registry", err)
 		return api.ExecutorResources{}, err
 	}
 
