@@ -6,18 +6,25 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/dropsonde/autowire/metrics"
 )
 
-type Source interface {
+type ExecutorSource interface {
 	CurrentCapacity() registry.Capacity
 	TotalCapacity() registry.Capacity
 	GetAllContainers() []api.Container
 }
 
+type ActualSource interface {
+	Containers() ([]warden.Container, error)
+}
+
 type Reporter struct {
-	Source   Source
 	Interval time.Duration
+
+	ExecutorSource ExecutorSource
+	ActualSource   ActualSource
 }
 
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -29,9 +36,9 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			return nil
 
 		case <-time.After(reporter.Interval):
-			remainingCapacity := reporter.Source.CurrentCapacity()
-			totalCapacity := reporter.Source.TotalCapacity()
-			containers := reporter.Source.GetAllContainers()
+			remainingCapacity := reporter.ExecutorSource.CurrentCapacity()
+			totalCapacity := reporter.ExecutorSource.TotalCapacity()
+			containers := reporter.ExecutorSource.GetAllContainers()
 
 			metrics.SendValue("capacity.total.memory", float64(totalCapacity.MemoryMB), "Metric")
 			metrics.SendValue("capacity.total.disk", float64(totalCapacity.DiskMB), "Metric")
@@ -41,7 +48,16 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			metrics.SendValue("capacity.remaining.disk", float64(remainingCapacity.DiskMB), "Metric")
 			metrics.SendValue("capacity.remaining.containers", float64(remainingCapacity.Containers), "Metric")
 
-			metrics.SendValue("containers", float64(len(containers)), "Metric")
+			metrics.SendValue("containers.expected", float64(len(containers)), "Metric")
+
+			gardenContainers := -1
+
+			actualContainers, err := reporter.ActualSource.Containers()
+			if err == nil {
+				gardenContainers = len(actualContainers)
+			}
+
+			metrics.SendValue("containers.actual", float64(gardenContainers), "Metric")
 		}
 	}
 }

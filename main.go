@@ -139,7 +139,13 @@ func main() {
 
 	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
 	waitForWarden(logger, wardenClient)
-	destroyContainers(wardenClient, logger)
+
+	containersFetcher := &executorContainers{
+		wardenClient: wardenClient,
+		owner:        *containerOwnerName,
+	}
+
+	destroyContainers(wardenClient, containersFetcher, logger)
 	capacity := fetchCapacity(logger, wardenClient)
 
 	reg := registry.New(capacity, timeprovider.NewTimeProvider())
@@ -161,8 +167,9 @@ func main() {
 	}
 
 	metricsReporter := &metrics.Reporter{
-		Source:   reg,
-		Interval: *metricsReportInterval,
+		ExecutorSource: reg,
+		ActualSource:   containersFetcher,
+		Interval:       *metricsReportInterval,
 	}
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
@@ -241,11 +248,8 @@ func fetchCapacity(logger lager.Logger, wardenClient WardenClient.Client) regist
 	return capacity
 }
 
-func destroyContainers(wardenClient warden.Client, logger lager.Logger) {
-	containers, err := wardenClient.Containers(warden.Properties{
-		"owner": *containerOwnerName,
-	})
-
+func destroyContainers(wardenClient warden.Client, containersFetcher *executorContainers, logger lager.Logger) {
+	containers, err := containersFetcher.Containers()
 	if err != nil {
 		logger.Fatal("failed-to-get-containers", err)
 		return

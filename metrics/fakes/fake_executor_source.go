@@ -7,12 +7,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/registry"
-
-	// see https://github.com/maxbrunsfeld/counterfeiter/issues/8
-	//"github.com/cloudfoundry/dropsonde/autowire/metrics"
 )
 
-type FakeSource struct {
+type FakeExecutorSource struct {
 	CurrentCapacityStub        func() registry.Capacity
 	currentCapacityMutex       sync.RWMutex
 	currentCapacityArgsForCall []struct{}
@@ -33,7 +30,7 @@ type FakeSource struct {
 	}
 }
 
-func (fake *FakeSource) CurrentCapacity() registry.Capacity {
+func (fake *FakeExecutorSource) CurrentCapacity() registry.Capacity {
 	fake.currentCapacityMutex.Lock()
 	defer fake.currentCapacityMutex.Unlock()
 	fake.currentCapacityArgsForCall = append(fake.currentCapacityArgsForCall, struct{}{})
@@ -44,19 +41,19 @@ func (fake *FakeSource) CurrentCapacity() registry.Capacity {
 	}
 }
 
-func (fake *FakeSource) CurrentCapacityCallCount() int {
+func (fake *FakeExecutorSource) CurrentCapacityCallCount() int {
 	fake.currentCapacityMutex.RLock()
 	defer fake.currentCapacityMutex.RUnlock()
 	return len(fake.currentCapacityArgsForCall)
 }
 
-func (fake *FakeSource) CurrentCapacityReturns(result1 registry.Capacity) {
+func (fake *FakeExecutorSource) CurrentCapacityReturns(result1 registry.Capacity) {
 	fake.currentCapacityReturns = struct {
 		result1 registry.Capacity
 	}{result1}
 }
 
-func (fake *FakeSource) TotalCapacity() registry.Capacity {
+func (fake *FakeExecutorSource) TotalCapacity() registry.Capacity {
 	fake.totalCapacityMutex.Lock()
 	defer fake.totalCapacityMutex.Unlock()
 	fake.totalCapacityArgsForCall = append(fake.totalCapacityArgsForCall, struct{}{})
@@ -67,19 +64,19 @@ func (fake *FakeSource) TotalCapacity() registry.Capacity {
 	}
 }
 
-func (fake *FakeSource) TotalCapacityCallCount() int {
+func (fake *FakeExecutorSource) TotalCapacityCallCount() int {
 	fake.totalCapacityMutex.RLock()
 	defer fake.totalCapacityMutex.RUnlock()
 	return len(fake.totalCapacityArgsForCall)
 }
 
-func (fake *FakeSource) TotalCapacityReturns(result1 registry.Capacity) {
+func (fake *FakeExecutorSource) TotalCapacityReturns(result1 registry.Capacity) {
 	fake.totalCapacityReturns = struct {
 		result1 registry.Capacity
 	}{result1}
 }
 
-func (fake *FakeSource) GetAllContainers() []api.Container {
+func (fake *FakeExecutorSource) GetAllContainers() []api.Container {
 	fake.getAllContainersMutex.Lock()
 	defer fake.getAllContainersMutex.Unlock()
 	fake.getAllContainersArgsForCall = append(fake.getAllContainersArgsForCall, struct{}{})
@@ -90,16 +87,16 @@ func (fake *FakeSource) GetAllContainers() []api.Container {
 	}
 }
 
-func (fake *FakeSource) GetAllContainersCallCount() int {
+func (fake *FakeExecutorSource) GetAllContainersCallCount() int {
 	fake.getAllContainersMutex.RLock()
 	defer fake.getAllContainersMutex.RUnlock()
 	return len(fake.getAllContainersArgsForCall)
 }
 
-func (fake *FakeSource) GetAllContainersReturns(result1 []api.Container) {
+func (fake *FakeExecutorSource) GetAllContainersReturns(result1 []api.Container) {
 	fake.getAllContainersReturns = struct {
 		result1 []api.Container
 	}{result1}
 }
 
-var _ metrics.Source = new(FakeSource)
+var _ metrics.ExecutorSource = new(FakeExecutorSource)

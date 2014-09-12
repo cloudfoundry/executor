@@ -1,12 +1,15 @@
 package metrics_test
 
 import (
+	"errors"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	. "github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/metrics/fakes"
 	"github.com/cloudfoundry-incubator/executor/registry"
+	"github.com/cloudfoundry-incubator/garden/warden"
+	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry/dropsonde/autowire/metrics"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/tedsuo/ifrit"
@@ -19,41 +22,50 @@ var _ = Describe("Reporter", func() {
 	var (
 		reportInterval time.Duration
 		sender         *fake.FakeMetricSender
-		source         *fakes.FakeSource
+		executorSource *fakes.FakeExecutorSource
+		actualSource   *fakes.FakeActualSource
 
 		reporter ifrit.Process
 	)
 
 	BeforeEach(func() {
 		reportInterval = 100 * time.Millisecond
-		source = new(fakes.FakeSource)
+		executorSource = new(fakes.FakeExecutorSource)
+		actualSource = new(fakes.FakeActualSource)
 
 		sender = fake.NewFakeMetricSender()
 		metrics.Initialize(sender)
 
-		source.TotalCapacityReturns(registry.Capacity{
+		executorSource.TotalCapacityReturns(registry.Capacity{
 			MemoryMB:   1024,
 			DiskMB:     2048,
 			Containers: 4096,
 		})
 
-		source.CurrentCapacityReturns(registry.Capacity{
+		executorSource.CurrentCapacityReturns(registry.Capacity{
 			MemoryMB:   128,
 			DiskMB:     256,
 			Containers: 512,
 		})
 
-		source.GetAllContainersReturns([]api.Container{
+		executorSource.GetAllContainersReturns([]api.Container{
 			{Guid: "container-1"},
 			{Guid: "container-2"},
 			{Guid: "container-3"},
 		})
+
+		actualSource.ContainersReturns([]warden.Container{
+			new(wfakes.FakeContainer),
+			new(wfakes.FakeContainer),
+			new(wfakes.FakeContainer),
+		}, nil)
 	})
 
 	JustBeforeEach(func() {
 		reporter = ifrit.Envoke(&Reporter{
-			Source:   source,
-			Interval: reportInterval,
+			ExecutorSource: executorSource,
+			ActualSource:   actualSource,
+			Interval:       reportInterval,
 		})
 	})
 
@@ -101,22 +113,34 @@ var _ = Describe("Reporter", func() {
 		}))
 
 		Eventually(func() fake.Metric {
-			return sender.GetValue("containers")
+			return sender.GetValue("containers.expected")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
 			Value: 3,
 			Unit:  "Metric",
 		}))
 
-		source.CurrentCapacityReturns(registry.Capacity{
+		Eventually(func() fake.Metric {
+			return sender.GetValue("containers.actual")
+		}, reportInterval+aBit).Should(Equal(fake.Metric{
+			Value: 3,
+			Unit:  "Metric",
+		}))
+
+		executorSource.CurrentCapacityReturns(registry.Capacity{
 			MemoryMB:   129,
 			DiskMB:     257,
 			Containers: 513,
 		})
 
-		source.GetAllContainersReturns([]api.Container{
+		executorSource.GetAllContainersReturns([]api.Container{
 			{Guid: "container-1"},
 			{Guid: "container-2"},
 		})
+
+		actualSource.ContainersReturns([]warden.Container{
+			new(wfakes.FakeContainer),
+			new(wfakes.FakeContainer),
+		}, nil)
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.remaining.memory")
@@ -140,10 +164,32 @@ var _ = Describe("Reporter", func() {
 		}))
 
 		Eventually(func() fake.Metric {
-			return sender.GetValue("containers")
+			return sender.GetValue("containers.expected")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
 			Value: 2,
 			Unit:  "Metric",
 		}))
+
+		Eventually(func() fake.Metric {
+			return sender.GetValue("containers.actual")
+		}, reportInterval+aBit).Should(Equal(fake.Metric{
+			Value: 2,
+			Unit:  "Metric",
+		}))
+	})
+
+	Context("when getting the actual container count fails", func() {
+		BeforeEach(func() {
+			actualSource.ContainersReturns(nil, errors.New("oh no!"))
+		})
+
+		It("reports garden.containers as -1", func() {
+			Eventually(func() fake.Metric {
+				return sender.GetValue("containers.actual")
+			}, reportInterval+aBit).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "Metric",
+			}))
+		})
 	})
 })
