@@ -7,6 +7,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	WardenClient "github.com/cloudfoundry-incubator/garden/client"
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -118,6 +119,12 @@ var maxCacheSizeInBytes = flag.Int64(
 	"maximum size of the cache (in bytes) - you should include a healthy amount of overhead",
 )
 
+var metricsReportInterval = flag.Duration(
+	"metricsReportInterval",
+	1*time.Minute,
+	"interval on which to report metrics",
+)
+
 func main() {
 	flag.Parse()
 
@@ -153,11 +160,17 @@ func main() {
 		DepotClient: depotClient,
 	}
 
+	metricsReporter := &metrics.Reporter{
+		Source:   reg,
+		Interval: *metricsReportInterval,
+	}
+
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
 
 	group := group_runner.New([]group_runner.Member{
 		{"registry-pruner", pruner},
 		{"api-server", apiServer},
+		{"metrics-reporter", metricsReporter},
 	})
 
 	cf_debug_server.Run()
