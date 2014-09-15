@@ -27,6 +27,8 @@ type Reporter struct {
 	ActualSource   ActualSource
 }
 
+const megabyte = 1024 * 1024
+
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	close(ready)
 
@@ -40,12 +42,12 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			totalCapacity := reporter.ExecutorSource.TotalCapacity()
 			containers := reporter.ExecutorSource.GetAllContainers()
 
-			metrics.SendValue("capacity.total.memory", float64(totalCapacity.MemoryMB), "Metric")
-			metrics.SendValue("capacity.total.disk", float64(totalCapacity.DiskMB), "Metric")
+			metrics.SendValue("capacity.total.memory", float64(totalCapacity.MemoryMB*megabyte), "B")
+			metrics.SendValue("capacity.total.disk", float64(totalCapacity.DiskMB*megabyte), "B")
 			metrics.SendValue("capacity.total.containers", float64(totalCapacity.Containers), "Metric")
 
-			metrics.SendValue("capacity.remaining.memory", float64(remainingCapacity.MemoryMB), "Metric")
-			metrics.SendValue("capacity.remaining.disk", float64(remainingCapacity.DiskMB), "Metric")
+			metrics.SendValue("capacity.remaining.memory", float64(remainingCapacity.MemoryMB*megabyte), "B")
+			metrics.SendValue("capacity.remaining.disk", float64(remainingCapacity.DiskMB*megabyte), "B")
 			metrics.SendValue("capacity.remaining.containers", float64(remainingCapacity.Containers), "Metric")
 
 			metrics.SendValue("containers.expected", float64(len(containers)), "Metric")

@@ -17,6 +17,7 @@ import (
 
 // a bit of grace time for eventuallys
 const aBit = 50 * time.Millisecond
+const megabyte = 1024 * 1024
 
 var _ = Describe("Reporter", func() {
 	var (
@@ -73,15 +74,15 @@ var _ = Describe("Reporter", func() {
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.total.memory")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 1024,
-			Unit:  "Metric",
+			Value: 1024 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.total.disk")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 2048,
-			Unit:  "Metric",
+			Value: 2048 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
@@ -94,15 +95,15 @@ var _ = Describe("Reporter", func() {
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.remaining.memory")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 128,
-			Unit:  "Metric",
+			Value: 128 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.remaining.disk")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 256,
-			Unit:  "Metric",
+			Value: 256 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
@@ -145,15 +146,15 @@ var _ = Describe("Reporter", func() {
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.remaining.memory")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 129,
-			Unit:  "Metric",
+			Value: 129 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("capacity.remaining.disk")
 		}, reportInterval+aBit).Should(Equal(fake.Metric{
-			Value: 257,
-			Unit:  "Metric",
+			Value: 257 * megabyte,
+			Unit:  "B",
 		}))
 
 		Eventually(func() fake.Metric {
