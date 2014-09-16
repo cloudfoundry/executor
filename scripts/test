@@ -17,7 +17,6 @@ popd
 
 go get github.com/dustin/goveralls
 go get code.google.com/p/go.tools/cmd/cover
-go get github.com/apcera/gnatsd
 go install github.com/onsi/ginkgo/ginkgo
 
 for gospace in $(echo $GOPATH | tr ':' ' '); do
