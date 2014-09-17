@@ -7,7 +7,20 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry/dropsonde/autowire/metrics"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+)
+
+const (
+	totalMemory = metric.Mebibytes("capacity.total.memory")
+	totalDisk = metric.Mebibytes("capacity.total.disk")
+	totalContainers = metric.Metric("capacity.total.containers")
+
+	remainingMemory = metric.Mebibytes("capacity.remaining.memory")
+	remainingDisk = metric.Mebibytes("capacity.remaining.disk")
+	remainingContainers = metric.Metric("capacity.remaining.containers")
+
+	containersExpected = metric.Metric("containers.expected")
+	containersActual = metric.Metric("containers.actual")
 )
 
 type ExecutorSource interface {
@@ -27,8 +40,6 @@ type Reporter struct {
 	ActualSource   ActualSource
 }
 
-const megabyte = 1024 * 1024
-
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	close(ready)
 
@@ -42,16 +53,6 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			totalCapacity := reporter.ExecutorSource.TotalCapacity()
 			containers := reporter.ExecutorSource.GetAllContainers()
 
-			metrics.SendValue("capacity.total.memory", float64(totalCapacity.MemoryMB*megabyte), "B")
-			metrics.SendValue("capacity.total.disk", float64(totalCapacity.DiskMB*megabyte), "B")
-			metrics.SendValue("capacity.total.containers", float64(totalCapacity.Containers), "Metric")
-
-			metrics.SendValue("capacity.remaining.memory", float64(remainingCapacity.MemoryMB*megabyte), "B")
-			metrics.SendValue("capacity.remaining.disk", float64(remainingCapacity.DiskMB*megabyte), "B")
-			metrics.SendValue("capacity.remaining.containers", float64(remainingCapacity.Containers), "Metric")
-
-			metrics.SendValue("containers.expected", float64(len(containers)), "Metric")
-
 			gardenContainers := -1
 
 			actualContainers, err := reporter.ActualSource.Containers()
@@ -59,7 +60,16 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				gardenContainers = len(actualContainers)
 			}
 
-			metrics.SendValue("containers.actual", float64(gardenContainers), "Metric")
+			totalMemory.Send(totalCapacity.MemoryMB)
+			totalDisk.Send(totalCapacity.DiskMB)
+			totalContainers.Send(totalCapacity.Containers)
+
+			remainingMemory.Send(remainingCapacity.MemoryMB)
+			remainingDisk.Send(remainingCapacity.DiskMB)
+			remainingContainers.Send(remainingCapacity.Containers)
+
+			containersExpected.Send(len(containers))
+			containersActual.Send(gardenContainers)
 		}
 	}
 }
