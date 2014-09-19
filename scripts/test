@@ -12,6 +12,7 @@ go get -t -v ./...
 
 ## Lock down etcd since latest code is very broken
 ## See: https://github.com/coreos/etcd/issues/986
+mkdir -p $FIRST_GOPATH/src/github.com/coreos/etcd
 pushd $FIRST_GOPATH/src/github.com/coreos/etcd
   git clone https://github.com/coreos/etcd.git . || true
   git checkout 0a2384bf4daec35a814244dc4d885e14f18b5ef1
