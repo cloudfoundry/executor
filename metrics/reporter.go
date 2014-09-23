@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	totalMemory = metric.Mebibytes("capacity.total.memory")
-	totalDisk = metric.Mebibytes("capacity.total.disk")
-	totalContainers = metric.Metric("capacity.total.containers")
+	totalMemory     = metric.Mebibytes("CapacityTotalMemory")
+	totalDisk       = metric.Mebibytes("CapacityTotalDisk")
+	totalContainers = metric.Metric("CapacityTotalContainers")
 
-	remainingMemory = metric.Mebibytes("capacity.remaining.memory")
-	remainingDisk = metric.Mebibytes("capacity.remaining.disk")
-	remainingContainers = metric.Metric("capacity.remaining.containers")
+	remainingMemory     = metric.Mebibytes("CapacityRemainingMemory")
+	remainingDisk       = metric.Mebibytes("CapacityRemainingDisk")
+	remainingContainers = metric.Metric("CapacityRemainingContainers")
 
-	containersExpected = metric.Metric("containers.expected")
-	containersActual = metric.Metric("containers.actual")
+	containersExpected = metric.Metric("ContainersExpected")
+	containersActual   = metric.Metric("ContainersActual")
 )
 
 type ExecutorSource interface {
