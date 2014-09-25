@@ -2,20 +2,18 @@
 package fake_uploader
 
 import (
-	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/pivotal-golang/lager"
-
 	"net/url"
 	"sync"
+
+	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
 type FakeUploader struct {
-	UploadStub        func(fileLocation string, destinationUrl *url.URL, logger lager.Logger) (int64, error)
+	UploadStub        func(fileLocation string, destinationUrl *url.URL) (int64, error)
 	uploadMutex       sync.RWMutex
 	uploadArgsForCall []struct {
 		fileLocation   string
 		destinationUrl *url.URL
-		logger         lager.Logger
 	}
 	uploadReturns struct {
 		result1 int64
@@ -23,16 +21,15 @@ type FakeUploader struct {
 	}
 }
 
-func (fake *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL, logger lager.Logger) (int64, error) {
+func (fake *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int64, error) {
 	fake.uploadMutex.Lock()
-	defer fake.uploadMutex.Unlock()
 	fake.uploadArgsForCall = append(fake.uploadArgsForCall, struct {
 		fileLocation   string
 		destinationUrl *url.URL
-		logger         lager.Logger
-	}{fileLocation, destinationUrl, logger})
+	}{fileLocation, destinationUrl})
+	fake.uploadMutex.Unlock()
 	if fake.UploadStub != nil {
-		return fake.UploadStub(fileLocation, destinationUrl, logger)
+		return fake.UploadStub(fileLocation, destinationUrl)
 	} else {
 		return fake.uploadReturns.result1, fake.uploadReturns.result2
 	}
@@ -44,13 +41,14 @@ func (fake *FakeUploader) UploadCallCount() int {
 	return len(fake.uploadArgsForCall)
 }
 
-func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL, lager.Logger) {
+func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL) {
 	fake.uploadMutex.RLock()
 	defer fake.uploadMutex.RUnlock()
-	return fake.uploadArgsForCall[i].fileLocation, fake.uploadArgsForCall[i].destinationUrl, fake.uploadArgsForCall[i].logger
+	return fake.uploadArgsForCall[i].fileLocation, fake.uploadArgsForCall[i].destinationUrl
 }
 
 func (fake *FakeUploader) UploadReturns(result1 int64, result2 error) {
+	fake.UploadStub = nil
 	fake.uploadReturns = struct {
 		result1 int64
 		result2 error

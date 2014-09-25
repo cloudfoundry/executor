@@ -42,6 +42,7 @@ func New(
 		unhealthyThreshold = 1
 	}
 
+	logger = logger.Session("MonitorAction")
 	return &monitorStep{
 		check:              check,
 		healthyThreshold:   healthyThreshold,

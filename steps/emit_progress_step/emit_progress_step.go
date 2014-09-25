@@ -17,6 +17,7 @@ type EmitProgressStep struct {
 }
 
 func New(substep sequence.Step, startMessage, successMessage, failureMessage string, streamer log_streamer.LogStreamer, logger lager.Logger) *EmitProgressStep {
+	logger = logger.Session("EmitProgressAction")
 	return &EmitProgressStep{
 		substep:        substep,
 		logger:         logger,

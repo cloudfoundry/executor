@@ -29,6 +29,7 @@ func New(
 	logger lager.Logger,
 	result *string,
 ) *FetchResultStep {
+	logger = logger.Session("FetchResultAction")
 	return &FetchResultStep{
 		container:         container,
 		fetchResultAction: fetchResultAction,

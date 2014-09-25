@@ -197,7 +197,7 @@ func main() {
 
 func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
-	uploader := uploader.New(10 * time.Minute)
+	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 

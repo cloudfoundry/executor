@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"reflect"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
@@ -92,8 +91,7 @@ func (transformer *Transformer) convertAction(
 ) (sequence.Step, error) {
 	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, logConfig.Index, transformer.logEmitter)
 
-	sessionName := reflect.TypeOf(action.Action).Name()
-	stepLogger := transformer.logger.Session(sessionName, lager.Data{
+	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
 	})
 
@@ -113,7 +111,7 @@ func (transformer *Transformer) convertAction(
 			container,
 			actionModel,
 			logStreamer,
-			stepLogger,
+			logger,
 		), nil
 	case models.DownloadAction:
 		return download_step.New(
@@ -122,7 +120,7 @@ func (transformer *Transformer) convertAction(
 			transformer.cachedDownloader,
 			transformer.extractor,
 			transformer.tempDir,
-			stepLogger,
+			logger,
 		), nil
 	case models.UploadAction:
 		return upload_step.New(
@@ -132,14 +130,14 @@ func (transformer *Transformer) convertAction(
 			transformer.compressor,
 			transformer.tempDir,
 			logStreamer,
-			stepLogger,
+			logger,
 		), nil
 	case models.FetchResultAction:
 		return fetch_result_step.New(
 			container,
 			actionModel,
 			transformer.tempDir,
-			stepLogger,
+			logger,
 			result,
 		), nil
 	case models.EmitProgressAction:
@@ -160,7 +158,7 @@ func (transformer *Transformer) convertAction(
 			actionModel.SuccessMessage,
 			actionModel.FailureMessage,
 			logStreamer,
-			stepLogger,
+			logger,
 		), nil
 	case models.TryAction:
 		subStep, err := transformer.convertAction(
@@ -174,7 +172,7 @@ func (transformer *Transformer) convertAction(
 			return nil, err
 		}
 
-		return try_step.New(subStep, stepLogger), nil
+		return try_step.New(subStep, logger), nil
 	case models.MonitorAction:
 		var healthyHook *http.Request
 		var unhealthyHook *http.Request
@@ -220,7 +218,7 @@ func (transformer *Transformer) convertAction(
 			actionModel.UnhealthyThreshold,
 			healthyHook,
 			unhealthyHook,
-			stepLogger,
+			logger,
 			timer.NewTimer(),
 		), nil
 	case models.ParallelAction:

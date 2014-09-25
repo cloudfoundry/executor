@@ -25,13 +25,15 @@ var _ = Describe("Uploader", func() {
 	var testServer *httptest.Server
 	var serverRequests []*http.Request
 	var serverRequestBody []string
+	var logger *lagertest.TestLogger
 
 	BeforeEach(func() {
 		testServer = nil
 		serverRequestBody = []string{}
 		serverRequests = []*http.Request{}
+		logger = lagertest.NewTestLogger("test")
 
-		uploader = New(100 * time.Millisecond)
+		uploader = New(100*time.Millisecond, logger)
 	})
 
 	Describe("upload", func() {
@@ -75,7 +77,7 @@ var _ = Describe("Uploader", func() {
 			var err error
 			var numBytes int64
 			JustBeforeEach(func() {
-				numBytes, err = uploader.Upload(file.Name(), url, nil)
+				numBytes, err = uploader.Upload(file.Name(), url)
 			})
 
 			It("uploads the file to the url", func() {
@@ -120,10 +122,8 @@ var _ = Describe("Uploader", func() {
 			It("should retry and log 3 times and return an error", func() {
 				errs := make(chan error)
 
-				logger := lagertest.NewTestLogger("test")
-
 				go func() {
-					_, err := uploader.Upload(file.Name(), url, logger)
+					_, err := uploader.Upload(file.Name(), url)
 					errs <- err
 				}()
 
@@ -149,7 +149,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url, nil)
+				_, err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -163,7 +163,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url, nil)
+				_, err := uploader.Upload(file.Name(), url)
 				Ω(err).NotTo(BeNil())
 			})
 		})

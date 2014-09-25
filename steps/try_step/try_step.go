@@ -11,6 +11,7 @@ type TryStep struct {
 }
 
 func New(substep sequence.Step, logger lager.Logger) *TryStep {
+	logger = logger.Session("TryAction")
 	return &TryStep{
 		substep: substep,
 		logger:  logger,

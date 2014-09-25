@@ -38,6 +38,10 @@ func New(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *UploadStep {
+	logger = logger.Session("UploadAction", lager.Data{
+		"from": model.From,
+		"to":   model.To,
+	})
 	return &UploadStep{
 		container:  container,
 		model:      model,
@@ -50,6 +54,8 @@ func New(
 }
 
 func (step *UploadStep) Perform() (err error) {
+	step.logger.Info("upload-starting")
+
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
 		return err
@@ -87,13 +93,14 @@ func (step *UploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.logger)
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploaded (%s)\n", bytefmt.ByteSize(uint64(uploadedBytes))))
 
+	step.logger.Info("upload-successful")
 	return nil
 }
 

@@ -35,6 +35,10 @@ func New(
 	tempDir string,
 	logger lager.Logger,
 ) *DownloadStep {
+	logger = logger.Session("DownloadAction", lager.Data{
+		"from": model.From,
+		"to":   model.To,
+	})
 	return &DownloadStep{
 		container:        container,
 		model:            model,
@@ -46,91 +50,97 @@ func New(
 }
 
 func (step *DownloadStep) Perform() error {
-	step.logger.Info("download")
+	step.logger.Info("starting")
 
 	//Stream this to the extractor + container when we have streaming support!
 	downloadedPath, err := step.download()
 	if err != nil {
-		step.logger.Error("failed-to-download", err, lager.Data{
-			"from": step.model.From,
-			"to":   step.model.To,
-		})
-
 		return err
 	}
 
 	defer os.Remove(downloadedPath)
 
 	if step.model.Extract {
-		extractionDir, err := step.extract(downloadedPath)
-		if err != nil {
-			return emittable_error.New(err, "Extraction failed")
-		}
-
-		defer os.RemoveAll(extractionDir)
-
-		err = step.copyExtractedFiles(extractionDir, step.model.To)
-		if err != nil {
-			return emittable_error.New(err, "Copying into the container failed")
-		}
-
-		return err
-	} else {
-		reader, writer := io.Pipe()
-
-		go writeTarTo(filepath.Base(step.model.To), downloadedPath, writer)
-
-		err = step.container.StreamIn(filepath.Dir(step.model.To), reader)
-		if err != nil {
-			return emittable_error.New(err, "Copying into the container failed")
-		}
-
-		return nil
+		return step.extract(downloadedPath)
 	}
+
+	return step.streamToContainer(downloadedPath)
 }
 
 func (step *DownloadStep) download() (string, error) {
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
+		step.logger.Error("parse-request-uri-error", err)
 		return "", err
 	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
 	if err != nil {
+		step.logger.Error("tempfile-create-error", err)
 		return "", err
 	}
 	defer tempFile.Close()
 
 	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
 	if err != nil {
+		step.logger.Error("cached-downloader-fetch-error", err)
 		return "", err
 	}
 	defer downloadedFile.Close()
 
 	_, err = io.Copy(tempFile, downloadedFile)
 	if err != nil {
+		step.logger.Error("tempfile-copy-failed", err)
 		return "", err
 	}
 
+	step.logger.Info("download-successful", lager.Data{
+		"tempFile": tempFile.Name(),
+	})
 	return tempFile.Name(), nil
 }
 
-func (step *DownloadStep) extract(downloadedPath string) (string, error) {
+func (step *DownloadStep) extract(downloadedPath string) error {
 	extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")
 	if err != nil {
-		return "", err
+		step.logger.Error("extract-failed-to-create-tempdir", err, lager.Data{
+			"tempDir": step.tempDir,
+		})
+		return err
 	}
 
 	err = step.extractor.Extract(downloadedPath, extractionDir)
 	if err != nil {
 		step.logger.Error("failed-to-extract", err, lager.Data{
-			"url": step.model.From,
+			"extractionDir":  extractionDir,
+			"downloadedPath": downloadedPath,
 		})
-
-		return "", err
+		return emittable_error.New(err, "Extraction failed")
 	}
 
-	return extractionDir, nil
+	defer os.RemoveAll(extractionDir)
+
+	err = step.copyExtractedFiles(extractionDir, step.model.To)
+	if err != nil {
+		return emittable_error.New(err, "Copying into the container failed")
+	}
+
+	step.logger.Info("extract-successful")
+	return nil
+}
+
+func (step *DownloadStep) streamToContainer(downloadedPath string) error {
+	reader, writer := io.Pipe()
+
+	go writeTarTo(filepath.Base(step.model.To), downloadedPath, writer)
+
+	err := step.streamIn(filepath.Dir(step.model.To), reader)
+	if err != nil {
+		return err
+	}
+
+	step.logger.Info("stream-to-container-successful")
+	return nil
 }
 
 func (step *DownloadStep) Cancel() {}
@@ -145,11 +155,27 @@ func (step *DownloadStep) copyExtractedFiles(source string, destination string) 
 		if err == nil {
 			writer.Close()
 		} else {
+			step.logger.Error("wite-tar-failed", err, lager.Data{
+				"source":      source,
+				"destination": destination,
+			})
 			writer.CloseWithError(err)
 		}
 	}()
 
-	return step.container.StreamIn(destination, reader)
+	return step.streamIn(destination, reader)
+}
+
+func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {
+	err := step.container.StreamIn(destination, reader)
+	if err != nil {
+		step.logger.Error("failed-to-stream-in", err, lager.Data{
+			"destination": destination,
+		})
+		return emittable_error.New(err, "Copying into the container failed")
+	}
+
+	return err
 }
 
 func writeTarTo(name string, sourcePath string, destination *io.PipeWriter) {

@@ -24,6 +24,7 @@ func New(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *RunStep {
+	logger = logger.Session("RunAction")
 	return &RunStep{
 		container: container,
 		model:     model,
@@ -43,7 +44,7 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 }
 
 func (step *RunStep) Perform() error {
-	step.logger.Debug("running")
+	step.logger.Info("running")
 
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
@@ -56,6 +57,7 @@ func (step *RunStep) Perform() error {
 		defer timer.Stop()
 	}
 
+	step.logger.Info("creating-process")
 	process, err := step.container.Run(warden.ProcessSpec{
 		Path: step.model.Path,
 		Args: step.model.Args,
@@ -67,8 +69,12 @@ func (step *RunStep) Perform() error {
 		Stderr: step.streamer.Stderr(),
 	})
 	if err != nil {
+		step.logger.Error("failed-creating-process", err)
 		return err
 	}
+
+	logger := step.logger.WithData(lager.Data{"process": process.ID()})
+	logger.Info("successful-process-create")
 
 	go func() {
 		exitStatus, err := process.Wait()
@@ -81,12 +87,13 @@ func (step *RunStep) Perform() error {
 
 	select {
 	case exitStatus := <-exitStatusChan:
+		logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
 		step.streamer.Flush()
 
 		if exitStatus != 0 {
 			info, err := step.container.Info()
 			if err != nil {
-				step.logger.Error("failed-to-get-info", err)
+				logger.Error("failed-to-get-info", err)
 			} else {
 				for _, ev := range info.Events {
 					if ev == "out of memory" {
@@ -101,9 +108,11 @@ func (step *RunStep) Perform() error {
 		return nil
 
 	case err := <-errChan:
+		logger.Error("running-error", err)
 		return err
 
 	case <-timeoutChan:
+		logger.Info("running-timed-out")
 		return emittable_error.New(nil, "Timed out after %s", step.model.Timeout)
 	}
 
