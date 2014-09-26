@@ -13,9 +13,9 @@ import (
 	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
-	"github.com/cloudfoundry/gunk/group_runner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
@@ -174,7 +174,7 @@ func main() {
 
 	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
 
-	group := group_runner.New([]group_runner.Member{
+	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
 		{"registry-pruner", pruner},
 		{"api-server", apiServer},
 		{"metrics-reporter", metricsReporter},
