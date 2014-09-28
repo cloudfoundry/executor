@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	"github.com/cloudfoundry-incubator/garden/warden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -74,13 +74,6 @@ func (step *DownloadStep) download() (string, error) {
 		return "", err
 	}
 
-	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
-	if err != nil {
-		step.logger.Error("tempfile-create-error", err)
-		return "", err
-	}
-	defer tempFile.Close()
-
 	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
 	if err != nil {
 		step.logger.Error("cached-downloader-fetch-error", err)
@@ -88,8 +81,16 @@ func (step *DownloadStep) download() (string, error) {
 	}
 	defer downloadedFile.Close()
 
-	_, err = io.Copy(tempFile, downloadedFile)
+	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
 	if err != nil {
+		step.logger.Error("tempfile-create-error", err)
+		return "", err
+	}
+
+	_, err = io.Copy(tempFile, downloadedFile)
+	tempFile.Close()
+	if err != nil {
+		os.Remove(tempFile.Name())
 		step.logger.Error("tempfile-copy-failed", err)
 		return "", err
 	}
@@ -108,6 +109,7 @@ func (step *DownloadStep) extract(downloadedPath string) error {
 		})
 		return err
 	}
+	defer os.RemoveAll(extractionDir)
 
 	err = step.extractor.Extract(downloadedPath, extractionDir)
 	if err != nil {
@@ -117,8 +119,6 @@ func (step *DownloadStep) extract(downloadedPath string) error {
 		})
 		return emittable_error.New(err, "Extraction failed")
 	}
-
-	defer os.RemoveAll(extractionDir)
 
 	err = step.copyExtractedFiles(extractionDir, step.model.To)
 	if err != nil {

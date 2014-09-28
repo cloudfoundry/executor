@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/user"
 	"time"
 
@@ -109,6 +110,7 @@ var _ = Describe("UploadStep", func() {
 	})
 
 	AfterEach(func() {
+		os.RemoveAll(tempDir)
 		uploadTarget.Close()
 	})
 

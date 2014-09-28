@@ -56,6 +56,7 @@ var _ = Describe("Uploader", func() {
 			if testServer != nil {
 				testServer.Close()
 			}
+			os.Remove(file.Name())
 		})
 
 		Context("when the upload is successful", func() {

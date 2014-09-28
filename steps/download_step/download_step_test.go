@@ -6,9 +6,10 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 
-	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+	"github.com/cloudfoundry-incubator/executor/cacheddownloader/fakecacheddownloader"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
@@ -49,6 +50,10 @@ var _ = Describe("DownloadAction", func() {
 		wardenClient = fake_warden_client.New()
 
 		logger = lagertest.NewTestLogger("test")
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(tempDir)
 	})
 
 	Describe("Perform", func() {
@@ -172,6 +177,7 @@ var _ = Describe("DownloadAction", func() {
 					tmpFile, err := ioutil.TempFile("", "some-zip")
 					Ω(err).ShouldNot(HaveOccurred())
 
+					defer os.Remove(tmpFile.Name())
 					archiveHelper.CreateZipArchive(tmpFile.Name(), []archiveHelper.ArchiveFile{
 						{
 							Name: "file1",
