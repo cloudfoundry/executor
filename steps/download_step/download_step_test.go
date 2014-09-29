@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudfoundry-incubator/executor/cacheddownloader/fakecacheddownloader"
+	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"

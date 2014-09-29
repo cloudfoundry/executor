@@ -7,7 +7,6 @@ import (
 	"net/url"
 
 	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
@@ -24,6 +23,7 @@ import (
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/timer"
 )

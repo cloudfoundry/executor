@@ -19,7 +19,6 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
-	"github.com/cloudfoundry-incubator/executor/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/server"
 	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
@@ -27,6 +26,7 @@ import (
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
+	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
 )
 
