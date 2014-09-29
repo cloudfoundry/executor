@@ -36,8 +36,9 @@ func New(
 	logger lager.Logger,
 ) *DownloadStep {
 	logger = logger.Session("DownloadAction", lager.Data{
-		"from": model.From,
-		"to":   model.To,
+		"from":     model.From,
+		"to":       model.To,
+		"cacheKey": model.CacheKey,
 	})
 	return &DownloadStep{
 		container:        container,
