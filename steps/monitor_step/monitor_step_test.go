@@ -116,9 +116,12 @@ var _ = Describe("MonitorStep", func() {
 
 				Context("when the second check succeeds, but hitting the healthy endpoint fails", func() {
 					BeforeEach(func() {
+						currentServer := hookServer
+
 						hookServer.AppendHandlers(func(w http.ResponseWriter, r *http.Request) {
-							hookServer.HTTPTestServer.CloseClientConnections()
+							currentServer.HTTPTestServer.CloseClientConnections()
 						})
+
 						expectCheckAfterInterval(BaseInterval)
 					})
 
