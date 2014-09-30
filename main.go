@@ -125,6 +125,12 @@ var metricsReportInterval = flag.Duration(
 	"interval on which to report metrics",
 )
 
+var maxConcurrentDownloads = flag.Int(
+	"maxConcurrentDownloads",
+	20,
+	"maximum in-flight downloads",
+)
+
 func main() {
 	flag.Parse()
 
@@ -196,7 +202,7 @@ func main() {
 }
 
 func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
-	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute)
+	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute, *maxConcurrentDownloads)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
