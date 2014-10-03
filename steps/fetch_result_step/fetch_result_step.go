@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
 )
@@ -15,7 +15,7 @@ const MAX_RESULT_SIZE = 1024 * 10
 var ErrResultTooLarge = fmt.Errorf("result file size exceeds limit of %d bytes", MAX_RESULT_SIZE)
 
 type FetchResultStep struct {
-	container         warden.Container
+	container         garden_api.Container
 	fetchResultAction models.FetchResultAction
 	tempDir           string
 	logger            lager.Logger
@@ -23,7 +23,7 @@ type FetchResultStep struct {
 }
 
 func New(
-	container warden.Container,
+	container garden_api.Container,
 	fetchResultAction models.FetchResultAction,
 	tempDir string,
 	logger lager.Logger,

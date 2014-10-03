@@ -616,7 +616,7 @@ var _ = Describe("Api", func() {
 	})
 
 	Describe("GET /ping", func() {
-		Context("when Warden responds to ping", func() {
+		Context("when Garden responds to ping", func() {
 			BeforeEach(func() {
 				depotClient.PingReturns(nil)
 			})
@@ -627,7 +627,7 @@ var _ = Describe("Api", func() {
 			})
 		})
 
-		Context("when Warden returns an error", func() {
+		Context("when Garden returns an error", func() {
 			BeforeEach(func() {
 				depotClient.PingReturns(errors.New("oh no!"))
 			})

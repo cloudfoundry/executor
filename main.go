@@ -9,9 +9,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/registry"
-	WardenClient "github.com/cloudfoundry-incubator/garden/client"
-	WardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	GardenClient "github.com/cloudfoundry-incubator/garden/client"
+	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/tedsuo/ifrit"
@@ -41,16 +41,16 @@ var containerOwnerName = flag.String(
 	"name to track containers created by this executor; they will be reaped on start",
 )
 
-var wardenNetwork = flag.String(
-	"wardenNetwork",
+var gardenNetwork = flag.String(
+	"gardenNetwork",
 	"unix",
-	"network mode for warden server (tcp, unix)",
+	"network mode for garden server (tcp, unix)",
 )
 
-var wardenAddr = flag.String(
-	"wardenAddr",
-	"/tmp/warden.sock",
-	"network address for warden server",
+var gardenAddr = flag.String(
+	"gardenAddr",
+	"/tmp/garden.sock",
+	"network address for garden server",
 )
 
 var memoryMBFlag = flag.String(
@@ -143,16 +143,16 @@ func main() {
 
 	logger.Info("starting")
 
-	wardenClient := WardenClient.New(WardenConnection.New(*wardenNetwork, *wardenAddr))
-	waitForWarden(logger, wardenClient)
+	gardenClient := GardenClient.New(GardenConnection.New(*gardenNetwork, *gardenAddr))
+	waitForGarden(logger, gardenClient)
 
 	containersFetcher := &executorContainers{
-		wardenClient: wardenClient,
+		gardenClient: gardenClient,
 		owner:        *containerOwnerName,
 	}
 
-	destroyContainers(wardenClient, containersFetcher, logger)
-	capacity := fetchCapacity(logger, wardenClient)
+	destroyContainers(gardenClient, containersFetcher, logger)
+	capacity := fetchCapacity(logger, gardenClient)
 
 	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
@@ -160,7 +160,7 @@ func main() {
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		uint64(*containerInodeLimit),
-		wardenClient,
+		gardenClient,
 		reg,
 		initializeTransformer(logger),
 		logger,
@@ -230,18 +230,18 @@ func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 	)
 }
 
-func waitForWarden(logger lager.Logger, wardenClient WardenClient.Client) {
-	err := wardenClient.Ping()
+func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client) {
+	err := gardenClient.Ping()
 
 	for err != nil {
 		logger.Error("failed-to-make-connection", err)
 		time.Sleep(time.Second)
-		err = wardenClient.Ping()
+		err = gardenClient.Ping()
 	}
 }
 
-func fetchCapacity(logger lager.Logger, wardenClient WardenClient.Client) registry.Capacity {
-	capacity, err := configuration.ConfigureCapacity(wardenClient, *memoryMBFlag, *diskMBFlag)
+func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client) registry.Capacity {
+	capacity, err := configuration.ConfigureCapacity(gardenClient, *memoryMBFlag, *diskMBFlag)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)
 		os.Exit(1)
@@ -254,7 +254,7 @@ func fetchCapacity(logger lager.Logger, wardenClient WardenClient.Client) regist
 	return capacity
 }
 
-func destroyContainers(wardenClient warden.Client, containersFetcher *executorContainers, logger lager.Logger) {
+func destroyContainers(gardenClient garden_api.Client, containersFetcher *executorContainers, logger lager.Logger) {
 	containers, err := containersFetcher.Containers()
 	if err != nil {
 		logger.Fatal("failed-to-get-containers", err)
@@ -262,7 +262,7 @@ func destroyContainers(wardenClient warden.Client, containersFetcher *executorCo
 	}
 
 	for _, container := range containers {
-		err := wardenClient.Destroy(container.Handle())
+		err := gardenClient.Destroy(container.Handle())
 		if err != nil {
 			logger.Fatal("failed-to-destroy-container", err, lager.Data{
 				"handle": container.Handle(),

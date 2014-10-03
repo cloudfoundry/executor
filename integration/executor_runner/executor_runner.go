@@ -15,8 +15,8 @@ import (
 type ExecutorRunner struct {
 	executorBin   string
 	listenAddr    string
-	wardenNetwork string
-	wardenAddr    string
+	gardenNetwork string
+	gardenAddr    string
 
 	loggregatorServer string
 	loggregatorSecret string
@@ -45,12 +45,12 @@ var defaultConfig = Config{
 	RegistryPruningInterval: time.Minute,
 }
 
-func New(executorBin, listenAddr, wardenNetwork, wardenAddr string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
+func New(executorBin, listenAddr, gardenNetwork, gardenAddr string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
 	return &ExecutorRunner{
 		executorBin:   executorBin,
 		listenAddr:    listenAddr,
-		wardenNetwork: wardenNetwork,
-		wardenAddr:    wardenAddr,
+		gardenNetwork: gardenNetwork,
+		gardenAddr:    gardenAddr,
 
 		loggregatorServer: loggregatorServer,
 		loggregatorSecret: loggregatorSecret,
@@ -74,8 +74,8 @@ func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
 
 	args := []string{
 		"-listenAddr", r.listenAddr,
-		"-wardenNetwork", r.wardenNetwork,
-		"-wardenAddr", r.wardenAddr,
+		"-gardenNetwork", r.gardenNetwork,
+		"-gardenAddr", r.gardenAddr,
 		"-memoryMB", configToUse.MemoryMB,
 		"-diskMB", configToUse.DiskMB,
 		"-loggregatorServer", r.loggregatorServer,

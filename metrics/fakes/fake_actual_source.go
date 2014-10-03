@@ -5,20 +5,20 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/metrics"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 )
 
 type FakeActualSource struct {
-	ContainersStub        func() ([]warden.Container, error)
+	ContainersStub        func() ([]garden_api.Container, error)
 	containersMutex       sync.RWMutex
 	containersArgsForCall []struct{}
 	containersReturns     struct {
-		result1 []warden.Container
+		result1 []garden_api.Container
 		result2 error
 	}
 }
 
-func (fake *FakeActualSource) Containers() ([]warden.Container, error) {
+func (fake *FakeActualSource) Containers() ([]garden_api.Container, error) {
 	fake.containersMutex.Lock()
 	defer fake.containersMutex.Unlock()
 	fake.containersArgsForCall = append(fake.containersArgsForCall, struct{}{})
@@ -35,9 +35,9 @@ func (fake *FakeActualSource) ContainersCallCount() int {
 	return len(fake.containersArgsForCall)
 }
 
-func (fake *FakeActualSource) ContainersReturns(result1 []warden.Container, result2 error) {
+func (fake *FakeActualSource) ContainersReturns(result1 []garden_api.Container, result2 error) {
 	fake.containersReturns = struct {
-		result1 []warden.Container
+		result1 []garden_api.Container
 		result2 error
 	}{result1, result2}
 }

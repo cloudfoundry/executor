@@ -3,23 +3,22 @@ package run_step
 import (
 	"time"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/pivotal-golang/lager"
-
 	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/lager"
 )
 
 type RunStep struct {
-	container warden.Container
+	container garden_api.Container
 	model     models.RunAction
 	streamer  log_streamer.LogStreamer
 	logger    lager.Logger
 }
 
 func New(
-	container warden.Container,
+	container garden_api.Container,
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
@@ -58,13 +57,13 @@ func (step *RunStep) Perform() error {
 	}
 
 	step.logger.Info("creating-process")
-	process, err := step.container.Run(warden.ProcessSpec{
+	process, err := step.container.Run(garden_api.ProcessSpec{
 		Path: step.model.Path,
 		Args: step.model.Args,
 		Env:  convertEnvironmentVariables(step.model.Env),
 
-		Limits: warden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
-	}, warden.ProcessIO{
+		Limits: garden_api.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
+	}, garden_api.ProcessIO{
 		Stdout: step.streamer.Stdout(),
 		Stderr: step.streamer.Stderr(),
 	})

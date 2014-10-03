@@ -13,8 +13,8 @@ import (
 	"os/user"
 	"time"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -59,7 +59,7 @@ var _ = Describe("UploadStep", func() {
 	var uploadAction *models.UploadAction
 	var uploader Uploader.Uploader
 	var tempDir string
-	var wardenClient *fake_warden_client.FakeClient
+	var gardenClient *fake_api_client.FakeClient
 	var logger *lagertest.TestLogger
 	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -91,7 +91,7 @@ var _ = Describe("UploadStep", func() {
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		wardenClient = fake_warden_client.New()
+		gardenClient = fake_api_client.New()
 
 		logger = lagertest.NewTestLogger("test")
 
@@ -117,9 +117,9 @@ var _ = Describe("UploadStep", func() {
 	handle := "some-container-handle"
 
 	JustBeforeEach(func() {
-		wardenClient.Connection.CreateReturns(handle, nil)
+		gardenClient.Connection.CreateReturns(handle, nil)
 
-		container, err := wardenClient.Create(warden.ContainerSpec{})
+		container, err := gardenClient.Create(garden_api.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = New(
@@ -139,11 +139,11 @@ var _ = Describe("UploadStep", func() {
 
 			BeforeEach(func() {
 				buffer = NewClosableBuffer()
-				wardenClient.Connection.StreamOutReturns(buffer, nil)
+				gardenClient.Connection.StreamOutReturns(buffer, nil)
 			})
 
 			It("uploads a .tgz to the destination", func() {
-				wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 					Ω(handle).Should(Equal("some-container-handle"))
 
 					if src == "/Antarctica" {
@@ -252,7 +252,7 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.StreamOutReturns(nil, disaster)
+				gardenClient.Connection.StreamOutReturns(nil, disaster)
 			})
 
 			It("returns the error ", func() {
@@ -265,7 +265,7 @@ var _ = Describe("UploadStep", func() {
 			disaster := errors.New("no room in the copy inn")
 
 			BeforeEach(func() {
-				wardenClient.Connection.StreamOutReturns(&errorReader{err: disaster}, nil)
+				gardenClient.Connection.StreamOutReturns(&errorReader{err: disaster}, nil)
 			})
 
 			It("returns the error ", func() {

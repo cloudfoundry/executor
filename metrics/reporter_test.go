@@ -8,8 +8,8 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/metrics/fakes"
 	"github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry/dropsonde/autowire/metrics"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/tedsuo/ifrit"
@@ -54,10 +54,10 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-3"},
 		})
 
-		actualSource.ContainersReturns([]warden.Container{
-			new(wfakes.FakeContainer),
-			new(wfakes.FakeContainer),
-			new(wfakes.FakeContainer),
+		actualSource.ContainersReturns([]garden_api.Container{
+			new(gfakes.FakeContainer),
+			new(gfakes.FakeContainer),
+			new(gfakes.FakeContainer),
 		}, nil)
 	})
 
@@ -137,9 +137,9 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-2"},
 		})
 
-		actualSource.ContainersReturns([]warden.Container{
-			new(wfakes.FakeContainer),
-			new(wfakes.FakeContainer),
+		actualSource.ContainersReturns([]garden_api.Container{
+			new(gfakes.FakeContainer),
+			new(gfakes.FakeContainer),
 		}, nil)
 
 		Eventually(func() fake.Metric {

@@ -21,9 +21,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/client"
 	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager/lagertest"
 )
@@ -34,7 +34,7 @@ func TestExecutorMain(t *testing.T) {
 }
 
 var executor string
-var gardenServer *GardenServer.WardenServer
+var gardenServer *GardenServer.GardenServer
 var runner *executor_runner.ExecutorRunner
 var executorClient api.Client
 
@@ -54,38 +54,38 @@ var _ = SynchronizedAfterSuite(func() {
 
 var _ = Describe("Main", func() {
 	var (
-		wardenAddr      string
+		gardenAddr      string
 		debugAddr       string
 		containerHandle string = "some-handle"
 
-		fakeBackend *wfakes.FakeBackend
+		fakeBackend *gfakes.FakeBackend
 	)
 
 	pruningInterval := 500 * time.Millisecond
 
 	BeforeEach(func() {
-		wardenPort := 9001 + GinkgoParallelNode()
+		gardenPort := 9001 + GinkgoParallelNode()
 		debugAddr = fmt.Sprintf("127.0.0.1:%d", 10001+GinkgoParallelNode())
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
 		executorClient = client.New(http.DefaultClient, "http://"+executorAddr)
 
-		wardenAddr = fmt.Sprintf("127.0.0.1:%d", wardenPort)
+		gardenAddr = fmt.Sprintf("127.0.0.1:%d", gardenPort)
 
-		fakeBackend = new(wfakes.FakeBackend)
-		fakeBackend.CapacityReturns(warden.Capacity{
+		fakeBackend = new(gfakes.FakeBackend)
+		fakeBackend.CapacityReturns(garden_api.Capacity{
 			MemoryInBytes: 1024 * 1024 * 1024,
 			DiskInBytes:   1024 * 1024 * 1024,
 			MaxContainers: 1024,
 		}, nil)
 
-		gardenServer = GardenServer.New("tcp", wardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
+		gardenServer = GardenServer.New("tcp", gardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
 
 		runner = executor_runner.New(
 			executor,
 			executorAddr,
 			"tcp",
-			wardenAddr,
+			gardenAddr,
 			"",
 			"bogus-loggregator-secret",
 		)
@@ -96,7 +96,7 @@ var _ = Describe("Main", func() {
 		gardenServer.Stop()
 
 		Eventually(func() error {
-			conn, err := net.Dial("tcp", wardenAddr)
+			conn, err := net.Dial("tcp", gardenAddr)
 			if err == nil {
 				conn.Close()
 			}
@@ -105,11 +105,11 @@ var _ = Describe("Main", func() {
 		}).Should(HaveOccurred())
 	})
 
-	allocNewContainer := func(request api.ContainerAllocationRequest) (guid string, fakeContainer *wfakes.FakeContainer) {
-		fakeContainer = new(wfakes.FakeContainer)
+	allocNewContainer := func(request api.ContainerAllocationRequest) (guid string, fakeContainer *gfakes.FakeContainer) {
+		fakeContainer = new(gfakes.FakeContainer)
 		fakeBackend.CreateReturns(fakeContainer, nil)
 		fakeBackend.LookupReturns(fakeContainer, nil)
-		fakeBackend.ContainersReturns([]warden.Container{fakeContainer}, nil)
+		fakeBackend.ContainersReturns([]garden_api.Container{fakeContainer}, nil)
 		fakeContainer.HandleReturns(containerHandle)
 
 		id, err := uuid.NewV4()
@@ -123,7 +123,7 @@ var _ = Describe("Main", func() {
 		return guid, fakeContainer
 	}
 
-	initNewContainer := func() (guid string, fakeContainer *wfakes.FakeContainer) {
+	initNewContainer := func() (guid string, fakeContainer *gfakes.FakeContainer) {
 		guid, fakeContainer = allocNewContainer(api.ContainerAllocationRequest{
 			MemoryMB: 1024,
 			DiskMB:   1024,
@@ -153,18 +153,18 @@ var _ = Describe("Main", func() {
 		})
 
 		Context("when there are containers that are owned by the executor", func() {
-			var fakeContainer1, fakeContainer2 *wfakes.FakeContainer
+			var fakeContainer1, fakeContainer2 *gfakes.FakeContainer
 
 			BeforeEach(func() {
-				fakeContainer1 = new(wfakes.FakeContainer)
+				fakeContainer1 = new(gfakes.FakeContainer)
 				fakeContainer1.HandleReturns("handle-1")
 
-				fakeContainer2 = new(wfakes.FakeContainer)
+				fakeContainer2 = new(gfakes.FakeContainer)
 				fakeContainer2.HandleReturns("handle-2")
 
-				fakeBackend.ContainersStub = func(ps warden.Properties) ([]warden.Container, error) {
-					if reflect.DeepEqual(ps, warden.Properties{"owner": "executor-name"}) {
-						return []warden.Container{fakeContainer1, fakeContainer2}, nil
+				fakeBackend.ContainersStub = func(ps garden_api.Properties) ([]garden_api.Container, error) {
+					if reflect.DeepEqual(ps, garden_api.Properties{"owner": "executor-name"}) {
+						return []garden_api.Container{fakeContainer1, fakeContainer2}, nil
 					} else {
 						return nil, nil
 					}
@@ -212,7 +212,7 @@ var _ = Describe("Main", func() {
 				pingErr = executorClient.Ping()
 			})
 
-			Context("when Warden responds to ping", func() {
+			Context("when Garden responds to ping", func() {
 				BeforeEach(func() {
 					fakeBackend.PingReturns(nil)
 				})
@@ -222,7 +222,7 @@ var _ = Describe("Main", func() {
 				})
 			})
 
-			Context("when Warden returns an error", func() {
+			Context("when Garden returns an error", func() {
 				BeforeEach(func() {
 					fakeBackend.PingReturns(errors.New("oh no!"))
 				})
@@ -347,7 +347,7 @@ var _ = Describe("Main", func() {
 			var initializeContainerRequest api.ContainerInitializationRequest
 			var err error
 			var initializedContainer api.Container
-			var container *wfakes.FakeContainer
+			var container *gfakes.FakeContainer
 			var guid string
 
 			BeforeEach(func() {
@@ -586,7 +586,7 @@ var _ = Describe("Main", func() {
 			It("propagates global environment variables to each run action", func() {
 				guid, fakeContainer := initNewContainer()
 
-				process := new(wfakes.FakeProcess)
+				process := new(gfakes.FakeProcess)
 				fakeContainer.RunReturns(process, nil)
 
 				err := executorClient.Run(
@@ -626,14 +626,14 @@ var _ = Describe("Main", func() {
 			Context("when there is a completeURL and metadata", func() {
 				var callbackHandler *ghttp.Server
 				var containerGuid string
-				var fakeContainer *wfakes.FakeContainer
+				var fakeContainer *gfakes.FakeContainer
 
 				BeforeEach(func() {
 					callbackHandler = ghttp.NewServer()
 
 					containerGuid, fakeContainer = initNewContainer()
 
-					process := new(wfakes.FakeProcess)
+					process := new(gfakes.FakeProcess)
 					fakeContainer.RunReturns(process, nil)
 
 					err := executorClient.Run(
@@ -712,12 +712,12 @@ var _ = Describe("Main", func() {
 
 			Context("when the actions fail", func() {
 				var disaster = errors.New("because i said so")
-				var fakeContainer *wfakes.FakeContainer
+				var fakeContainer *gfakes.FakeContainer
 				var containerGuid string
 
 				BeforeEach(func() {
 					containerGuid, fakeContainer = initNewContainer()
-					process := new(wfakes.FakeProcess)
+					process := new(gfakes.FakeProcess)
 					fakeContainer.RunReturns(process, nil)
 					process.WaitReturns(1, disaster)
 				})
@@ -798,7 +798,7 @@ var _ = Describe("Main", func() {
 				})
 
 				Context("when deleting the container succeeds", func() {
-					It("destroys the warden container", func() {
+					It("destroys the garden container", func() {
 						err := executorClient.DeleteContainer(guid)
 						Ω(err).ShouldNot(HaveOccurred())
 
@@ -842,14 +842,14 @@ var _ = Describe("Main", func() {
 
 			Context("while it is running", func() {
 				BeforeEach(func() {
-					var fakeContainer *wfakes.FakeContainer
+					var fakeContainer *gfakes.FakeContainer
 
 					guid, fakeContainer = initNewContainer()
 
 					waiting := make(chan struct{})
 					destroying := make(chan struct{})
 
-					process := new(wfakes.FakeProcess)
+					process := new(gfakes.FakeProcess)
 					process.WaitStub = func() (int, error) {
 						close(waiting)
 						<-destroying
@@ -894,14 +894,14 @@ var _ = Describe("Main", func() {
 			})
 		})
 
-		Describe("staying in sink with warden", func() {
+		Describe("staying in sink with garden", func() {
 			Context("when a created container disappears out from under us", func() {
 				var guid string
 
 				BeforeEach(func() {
 					guid, _ = initNewContainer()
 
-					fakeBackend.ContainersReturns([]warden.Container{}, nil)
+					fakeBackend.ContainersReturns([]garden_api.Container{}, nil)
 				})
 
 				It("returns a not-found response when that container is queried", func() {

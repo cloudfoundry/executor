@@ -12,8 +12,8 @@ import (
 	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
 	"github.com/pivotal-golang/lager/lagertest"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -32,7 +32,7 @@ var _ = Describe("DownloadAction", func() {
 	var downloadAction models.DownloadAction
 	var cache *fakecacheddownloader.FakeCachedDownloader
 	var tempDir string
-	var wardenClient *fake_warden_client.FakeClient
+	var gardenClient *fake_api_client.FakeClient
 	var logger *lagertest.TestLogger
 
 	handle := "some-container-handle"
@@ -47,7 +47,7 @@ var _ = Describe("DownloadAction", func() {
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		wardenClient = fake_warden_client.New()
+		gardenClient = fake_api_client.New()
 
 		logger = lagertest.NewTestLogger("test")
 	})
@@ -69,7 +69,7 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		JustBeforeEach(func() {
-			container, err := wardenClient.Create(warden.ContainerSpec{
+			container, err := gardenClient.Create(garden_api.ContainerSpec{
 				Handle: handle,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
@@ -96,7 +96,7 @@ var _ = Describe("DownloadAction", func() {
 					buffer := &bytes.Buffer{}
 					tarReader = tar.NewReader(buffer)
 
-					wardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+					gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
 						Ω(dest).Should(Equal("/tmp"))
 
 						_, err := io.Copy(buffer, tarStream)
@@ -112,7 +112,7 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("places the file in the container", func() {
-					Ω(wardenClient.Connection.StreamInCallCount()).Should(Equal(1))
+					Ω(gardenClient.Connection.StreamInCallCount()).Should(Equal(1))
 
 					header, err := tarReader.Next()
 					Ω(err).ShouldNot(HaveOccurred())
@@ -156,7 +156,7 @@ var _ = Describe("DownloadAction", func() {
 				var expectedErr = errors.New("oh no!")
 
 				BeforeEach(func() {
-					wardenClient.Connection.StreamInReturns(expectedErr)
+					gardenClient.Connection.StreamInReturns(expectedErr)
 				})
 
 				It("returns an error", func() {
@@ -197,7 +197,7 @@ var _ = Describe("DownloadAction", func() {
 						buffer := &bytes.Buffer{}
 						tarReader = tar.NewReader(buffer)
 
-						wardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+						gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
 							Ω(dest).Should(Equal("/tmp/Antarctica"))
 
 							_, err := io.Copy(buffer, tarStream)
@@ -226,7 +226,7 @@ var _ = Describe("DownloadAction", func() {
 					var expectedErr = errors.New("oh no!")
 
 					BeforeEach(func() {
-						wardenClient.Connection.StreamInReturns(expectedErr)
+						gardenClient.Connection.StreamInReturns(expectedErr)
 					})
 
 					It("returns an error", func() {

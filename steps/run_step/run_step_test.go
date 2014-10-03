@@ -11,9 +11,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
-	wfakes "github.com/cloudfoundry-incubator/garden/warden/fakes"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
+	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/log_streamer/fake_log_streamer"
@@ -26,11 +26,11 @@ var _ = Describe("RunAction", func() {
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var wardenClient *fake_warden_client.FakeClient
+	var gardenClient *fake_api_client.FakeClient
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
 
-	var spawnedProcess *wfakes.FakeProcess
+	var spawnedProcess *gfakes.FakeProcess
 	var runError error
 
 	BeforeEach(func() {
@@ -50,14 +50,14 @@ var _ = Describe("RunAction", func() {
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 
-		wardenClient = fake_warden_client.New()
+		gardenClient = fake_api_client.New()
 
 		logger = lagertest.NewTestLogger("test")
 
-		spawnedProcess = new(wfakes.FakeProcess)
+		spawnedProcess = new(gfakes.FakeProcess)
 		runError = nil
 
-		wardenClient.Connection.RunStub = func(string, warden.ProcessSpec, warden.ProcessIO) (warden.Process, error) {
+		gardenClient.Connection.RunStub = func(string, garden_api.ProcessSpec, garden_api.ProcessIO) (garden_api.Process, error) {
 			return spawnedProcess, runError
 		}
 	})
@@ -65,9 +65,9 @@ var _ = Describe("RunAction", func() {
 	handle := "some-container-handle"
 
 	JustBeforeEach(func() {
-		wardenClient.Connection.CreateReturns(handle, nil)
+		gardenClient.Connection.CreateReturns(handle, nil)
 
-		container, err := wardenClient.Create(warden.ContainerSpec{})
+		container, err := gardenClient.Create(garden_api.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = New(
@@ -95,7 +95,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("executes the command in the passed-in container", func() {
-				ranHandle, spec, _ := wardenClient.Connection.RunArgsForCall(0)
+				ranHandle, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Ω(ranHandle).Should(Equal(handle))
 				Ω(spec.Path).Should(Equal("sudo"))
 				Ω(spec.Args).Should(Equal([]string{"reboot"}))
@@ -111,7 +111,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("does not enforce it on the process", func() {
-				_, spec, _ := wardenClient.Connection.RunArgsForCall(0)
+				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Ω(spec.Limits.Nofile).Should(BeNil())
 			})
 		})
@@ -126,7 +126,7 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when Warden errors", func() {
+		Context("when Garden errors", func() {
 			disaster := errors.New("I, like, tried but failed")
 
 			BeforeEach(func() {
@@ -184,8 +184,8 @@ var _ = Describe("RunAction", func() {
 
 		Context("regardless of status code, when an out of memory event has occured", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.InfoReturns(
-					warden.ContainerInfo{
+				gardenClient.Connection.InfoReturns(
+					garden_api.ContainerInfo{
 						Events: []string{"happy land", "out of memory", "another event"},
 					},
 					nil,
@@ -210,7 +210,7 @@ var _ = Describe("RunAction", func() {
 				fakeStreamer.StderrReturns(stderrBuffer)
 
 				spawnedProcess.WaitStub = func() (int, error) {
-					_, _, io := wardenClient.Connection.RunArgsForCall(0)
+					_, _, io := gardenClient.Connection.RunArgsForCall(0)
 
 					_, err := io.Stdout.Write([]byte("hi out"))
 					Ω(err).ShouldNot(HaveOccurred())
@@ -239,9 +239,9 @@ var _ = Describe("RunAction", func() {
 		})
 
 		It("stops the container", func() {
-			Ω(wardenClient.Connection.StopCallCount()).Should(Equal(1))
+			Ω(gardenClient.Connection.StopCallCount()).Should(Equal(1))
 
-			stoppedHandle, kill := wardenClient.Connection.StopArgsForCall(0)
+			stoppedHandle, kill := gardenClient.Connection.StopArgsForCall(0)
 			Ω(stoppedHandle).Should(Equal(handle))
 			Ω(kill).Should(BeFalse())
 		})

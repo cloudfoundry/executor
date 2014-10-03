@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
@@ -19,7 +19,7 @@ import (
 )
 
 type DownloadStep struct {
-	container        warden.Container
+	container        garden_api.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
 	extractor        extractor.Extractor
@@ -28,7 +28,7 @@ type DownloadStep struct {
 }
 
 func New(
-	container warden.Container,
+	container garden_api.Container,
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	extractor extractor.Extractor,

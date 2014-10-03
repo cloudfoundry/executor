@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
@@ -16,7 +16,7 @@ type client struct {
 	containerOwnerName    string
 	containerMaxCPUShares uint64
 	containerInodeLimit   uint64
-	wardenClient          warden.Client
+	gardenClient          garden_api.Client
 	registry              registry.Registry
 	transformer           *transformer.Transformer
 	logger                lager.Logger
@@ -26,7 +26,7 @@ func NewClient(
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
 	containerInodeLimit uint64,
-	wardenClient warden.Client,
+	gardenClient garden_api.Client,
 	registry registry.Registry,
 	transformer *transformer.Transformer,
 	logger lager.Logger,
@@ -35,7 +35,7 @@ func NewClient(
 		containerOwnerName:    containerOwnerName,
 		containerMaxCPUShares: containerMaxCPUShares,
 		containerInodeLimit:   containerInodeLimit,
-		wardenClient:          wardenClient,
+		gardenClient:          gardenClient,
 		registry:              registry,
 		transformer:           transformer,
 		logger:                logger.Session("depot-client"),
@@ -63,9 +63,9 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 		return api.Container{}, err
 	}
 
-	containerClient, err := c.wardenClient.Create(warden.ContainerSpec{
+	containerClient, err := c.gardenClient.Create(garden_api.ContainerSpec{
 		RootFSPath: request.RootFSPath,
-		Properties: warden.Properties{
+		Properties: garden_api.Properties{
 			"owner": c.containerOwnerName,
 		},
 	})
@@ -77,7 +77,7 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 	defer func() {
 		if err != nil {
 			logger.Error("destroying-container-after-failed-init", err)
-			destroyErr := c.wardenClient.Destroy(containerClient.Handle())
+			destroyErr := c.gardenClient.Destroy(containerClient.Handle())
 			if destroyErr != nil {
 				logger.Error("destroying-container-after-failed-init-also-failed", destroyErr)
 			}
@@ -115,9 +115,9 @@ func (c *client) InitializeContainer(guid string, request api.ContainerInitializ
 	return container, nil
 }
 
-func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient warden.Container) error {
+func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient garden_api.Container) error {
 	if reg.MemoryMB != 0 {
-		err := containerClient.LimitMemory(warden.MemoryLimits{
+		err := containerClient.LimitMemory(garden_api.MemoryLimits{
 			LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
@@ -125,7 +125,7 @@ func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient 
 		}
 	}
 
-	err := containerClient.LimitDisk(warden.DiskLimits{
+	err := containerClient.LimitDisk(garden_api.DiskLimits{
 		ByteHard:  uint64(reg.DiskMB * 1024 * 1024),
 		InodeHard: c.containerInodeLimit,
 	})
@@ -136,9 +136,9 @@ func (c *client) limitContainerDiskAndMemory(reg api.Container, containerClient 
 	return nil
 }
 
-func (c *client) limitContainerCPU(request api.ContainerInitializationRequest, containerClient warden.Container) error {
+func (c *client) limitContainerCPU(request api.ContainerInitializationRequest, containerClient garden_api.Container) error {
 	if request.CpuPercent != 0 {
-		err := containerClient.LimitCPU(warden.CPULimits{
+		err := containerClient.LimitCPU(garden_api.CPULimits{
 			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(request.CpuPercent) / 100.0),
 		})
 		if err != nil {
@@ -149,7 +149,7 @@ func (c *client) limitContainerCPU(request api.ContainerInitializationRequest, c
 	return nil
 }
 
-func (c *client) mapPorts(request api.ContainerInitializationRequest, containerClient warden.Container) ([]api.PortMapping, error) {
+func (c *client) mapPorts(request api.ContainerInitializationRequest, containerClient garden_api.Container) ([]api.PortMapping, error) {
 	var result []api.PortMapping
 	for _, mapping := range request.Ports {
 		hostPort, containerPort, err := containerClient.NetIn(mapping.HostPort, mapping.ContainerPort)
@@ -229,7 +229,7 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 		"handle": registration.ContainerHandle,
 	})
 
-	container, err := c.wardenClient.Lookup(registration.ContainerHandle)
+	container, err := c.gardenClient.Lookup(registration.ContainerHandle)
 	if err != nil {
 		logger.Error("lookup-failed", err)
 		return err
@@ -297,7 +297,7 @@ func (c *client) DeleteContainer(guid string) error {
 	if reg.ContainerHandle != "" {
 		logger.Debug("destroying")
 
-		err = c.wardenClient.Destroy(reg.ContainerHandle)
+		err = c.gardenClient.Destroy(reg.ContainerHandle)
 		if err != nil {
 			return handleDeleteError(err, logger)
 		}
@@ -336,7 +336,7 @@ func (c *client) RemainingResources() (api.ExecutorResources, error) {
 }
 
 func (c *client) Ping() error {
-	return c.wardenClient.Ping()
+	return c.gardenClient.Ping()
 }
 
 func (c *client) TotalResources() (api.ExecutorResources, error) {
@@ -362,7 +362,7 @@ func handleDeleteError(err error, logger lager.Logger) error {
 }
 
 func (c *client) syncRegistry() error {
-	containers, err := c.wardenClient.Containers(nil)
+	containers, err := c.gardenClient.Containers(nil)
 	if err != nil {
 		return err
 	}

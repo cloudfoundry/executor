@@ -8,19 +8,18 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/cloudfoundry-incubator/garden/warden"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
+	"github.com/cloudfoundry-incubator/executor/uploader"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"
-
-	"github.com/cloudfoundry-incubator/executor/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
-	"github.com/cloudfoundry-incubator/executor/uploader"
 )
 
 type UploadStep struct {
-	container  warden.Container
+	container  garden_api.Container
 	model      models.UploadAction
 	uploader   uploader.Uploader
 	compressor compressor.Compressor
@@ -30,7 +29,7 @@ type UploadStep struct {
 }
 
 func New(
-	container warden.Container,
+	container garden_api.Container,
 	model models.UploadAction,
 	uploader uploader.Uploader,
 	compressor compressor.Compressor,

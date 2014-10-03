@@ -5,17 +5,17 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("configuration", func() {
-	var wardenClient *fake_warden_client.FakeClient
+	var gardenClient *fake_api_client.FakeClient
 
 	BeforeEach(func() {
-		wardenClient = fake_warden_client.New()
+		gardenClient = fake_api_client.New()
 	})
 
 	Describe("ConfigureCapacity", func() {
@@ -25,12 +25,12 @@ var _ = Describe("configuration", func() {
 		var diskLimit string
 
 		JustBeforeEach(func() {
-			capacity, err = configuration.ConfigureCapacity(wardenClient, memLimit, diskLimit)
+			capacity, err = configuration.ConfigureCapacity(gardenClient, memLimit, diskLimit)
 		})
 
 		Context("when getting the capacity fails", func() {
 			BeforeEach(func() {
-				wardenClient.Connection.CapacityReturns(warden.Capacity{}, errors.New("uh oh"))
+				gardenClient.Connection.CapacityReturns(garden_api.Capacity{}, errors.New("uh oh"))
 			})
 
 			It("returns an error", func() {
@@ -42,8 +42,8 @@ var _ = Describe("configuration", func() {
 			BeforeEach(func() {
 				memLimit = "99"
 				diskLimit = "99"
-				wardenClient.Connection.CapacityReturns(
-					warden.Capacity{
+				gardenClient.Connection.CapacityReturns(
+					garden_api.Capacity{
 						MemoryInBytes: 1024 * 1024 * 3,
 						DiskInBytes:   1024 * 1024 * 4,
 						MaxContainers: 5,
@@ -62,7 +62,7 @@ var _ = Describe("configuration", func() {
 						Ω(err).ShouldNot(HaveOccurred())
 					})
 
-					It("uses the warden server's memory capacity", func() {
+					It("uses the garden server's memory capacity", func() {
 						Ω(capacity.MemoryMB).Should(Equal(3))
 					})
 				})
@@ -112,7 +112,7 @@ var _ = Describe("configuration", func() {
 						Ω(err).ShouldNot(HaveOccurred())
 					})
 
-					It("uses the warden server's memory capacity", func() {
+					It("uses the garden server's memory capacity", func() {
 						Ω(capacity.DiskMB).Should(Equal(4))
 					})
 				})
@@ -153,7 +153,7 @@ var _ = Describe("configuration", func() {
 			})
 
 			Describe("Containers Limit", func() {
-				It("uses the warden server's max containers", func() {
+				It("uses the garden server's max containers", func() {
 					Ω(capacity.Containers).Should(Equal(5))
 				})
 			})

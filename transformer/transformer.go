@@ -18,7 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/try_step"
 	"github.com/cloudfoundry-incubator/executor/steps/upload_step"
 	"github.com/cloudfoundry-incubator/executor/uploader"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -65,7 +65,7 @@ func (transformer *Transformer) StepsFor(
 	logConfig api.LogConfig,
 	actions []models.ExecutorAction,
 	globalEnv []api.EnvironmentVariable,
-	container warden.Container,
+	container garden_api.Container,
 	result *string,
 ) ([]sequence.Step, error) {
 	subSteps := []sequence.Step{}
@@ -86,7 +86,7 @@ func (transformer *Transformer) convertAction(
 	logConfig api.LogConfig,
 	action models.ExecutorAction,
 	globalEnv []api.EnvironmentVariable,
-	container warden.Container,
+	container garden_api.Container,
 	result *string,
 ) (sequence.Step, error) {
 	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, logConfig.Index, transformer.logEmitter)

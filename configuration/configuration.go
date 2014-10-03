@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/cloudfoundry-incubator/executor/registry"
-	WardenClient "github.com/cloudfoundry-incubator/garden/client"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	garden_client "github.com/cloudfoundry-incubator/garden/client"
 )
 
 const Automatic = "auto"
@@ -18,22 +18,22 @@ var (
 )
 
 func ConfigureCapacity(
-	wardenClient WardenClient.Client,
+	gardenClient garden_client.Client,
 	memoryMBFlag string,
 	diskMBFlag string,
 ) (registry.Capacity, error) {
 
-	wardenCapacity, err := wardenClient.Capacity()
+	gardenCapacity, err := gardenClient.Capacity()
 	if err != nil {
 		return EmptyCapacity, err
 	}
 
-	memory, err := memoryInMB(wardenCapacity, memoryMBFlag)
+	memory, err := memoryInMB(gardenCapacity, memoryMBFlag)
 	if err != nil {
 		return EmptyCapacity, err
 	}
 
-	disk, err := diskInMB(wardenCapacity, diskMBFlag)
+	disk, err := diskInMB(gardenCapacity, diskMBFlag)
 	if err != nil {
 		return EmptyCapacity, err
 	}
@@ -41,11 +41,11 @@ func ConfigureCapacity(
 	return registry.Capacity{
 		MemoryMB:   memory,
 		DiskMB:     disk,
-		Containers: int(wardenCapacity.MaxContainers),
+		Containers: int(gardenCapacity.MaxContainers),
 	}, nil
 }
 
-func memoryInMB(capacity warden.Capacity, memoryMBFlag string) (int, error) {
+func memoryInMB(capacity garden_api.Capacity, memoryMBFlag string) (int, error) {
 	if memoryMBFlag == Automatic {
 		return int(capacity.MemoryInBytes / (1024 * 1024)), nil
 	} else {
@@ -57,7 +57,7 @@ func memoryInMB(capacity warden.Capacity, memoryMBFlag string) (int, error) {
 	}
 }
 
-func diskInMB(capacity warden.Capacity, diskMBFlag string) (int, error) {
+func diskInMB(capacity garden_api.Capacity, diskMBFlag string) (int, error) {
 	if diskMBFlag == Automatic {
 		return int(capacity.DiskInBytes / (1024 * 1024)), nil
 	} else {

@@ -10,8 +10,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"
 
-	"github.com/cloudfoundry-incubator/garden/client/fake_warden_client"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/sequence"
@@ -47,7 +47,7 @@ var _ = Describe("FetchResultStep", func() {
 		step              sequence.Step
 		fetchResultAction models.FetchResultAction
 		logger            *lagertest.TestLogger
-		wardenClient      *fake_warden_client.FakeClient
+		gardenClient      *fake_api_client.FakeClient
 		result            string
 	)
 
@@ -62,11 +62,11 @@ var _ = Describe("FetchResultStep", func() {
 
 		logger = lagertest.NewTestLogger("test")
 
-		wardenClient = fake_warden_client.New()
+		gardenClient = fake_api_client.New()
 	})
 
 	JustBeforeEach(func() {
-		container, err := wardenClient.Create(warden.ContainerSpec{
+		container, err := gardenClient.Create(garden_api.ContainerSpec{
 			Handle: handle,
 		})
 		Ω(err).ShouldNot(HaveOccurred())
@@ -83,7 +83,7 @@ var _ = Describe("FetchResultStep", func() {
 	Context("when the file exists", func() {
 		var buffer *ClosableBuffer
 		BeforeEach(func() {
-			wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 				Ω(src).Should(Equal("/var/some-dir/foo"))
 
 				buffer = NewClosableBuffer()
@@ -117,7 +117,7 @@ var _ = Describe("FetchResultStep", func() {
 		var buffer *ClosableBuffer
 		BeforeEach(func() {
 			// overflow the (hard-coded) file content limit of 10KB by 1 byte:
-			wardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 				buffer = NewClosableBuffer()
 				tarWriter := tar.NewWriter(buffer)
 
@@ -150,7 +150,7 @@ var _ = Describe("FetchResultStep", func() {
 		disaster := errors.New("kaboom")
 
 		BeforeEach(func() {
-			wardenClient.Connection.StreamOutReturns(nil, disaster)
+			gardenClient.Connection.StreamOutReturns(nil, disaster)
 		})
 
 		It("should return an error and an empty result", func() {

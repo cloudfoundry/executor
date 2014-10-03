@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/garden/warden"
+	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 )
 
@@ -30,7 +30,7 @@ type ExecutorSource interface {
 }
 
 type ActualSource interface {
-	Containers() ([]warden.Container, error)
+	Containers() ([]garden_api.Container, error)
 }
 
 type Reporter struct {
