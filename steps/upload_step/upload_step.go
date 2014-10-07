@@ -52,42 +52,51 @@ func New(
 	}
 }
 
+const (
+	ErrCreateTmpDir    = "Failed to create temp dir"
+	ErrEstablishStream = "Failed to establish stream from container"
+	ErrReadTar         = "Failed to find first item in tar stream"
+	ErrCreateTmpFile   = "Failed to create temp file"
+	ErrCopyStreamToTmp = "Failed to copy stream contents into temp file"
+)
+
 func (step *UploadStep) Perform() (err error) {
 	step.logger.Info("upload-starting")
 
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
+		// Do not emit error in case it leaks sensitive data in URL
 		return err
 	}
 
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
 	if err != nil {
-		return err
+		return emittable_error.New(err, ErrCreateTmpDir)
 	}
 
 	defer os.RemoveAll(tempDir)
 
 	outStream, err := step.container.StreamOut(step.model.From)
 	if err != nil {
-		return emittable_error.New(err, "Copying out of the container failed")
+		return emittable_error.New(err, ErrEstablishStream)
 	}
 	defer outStream.Close()
 
 	tarStream := tar.NewReader(outStream)
 	_, err = tarStream.Next()
 	if err != nil {
-		return emittable_error.New(err, "Copying out of the container failed")
+		return emittable_error.New(err, ErrReadTar)
 	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
 	if err != nil {
-		return emittable_error.New(err, "Compression failed")
+		return emittable_error.New(err, ErrCreateTmpFile)
 	}
 	defer tempFile.Close()
 
 	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
-		return emittable_error.New(err, "Copying out of the container failed")
+		return emittable_error.New(err, ErrCopyStreamToTmp)
 	}
 	finalFileLocation := tempFile.Name()
 
@@ -95,6 +104,7 @@ func (step *UploadStep) Perform() (err error) {
 
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
 	if err != nil {
+		// Do not emit error in case it leaks sensitive data in URL
 		return err
 	}
 

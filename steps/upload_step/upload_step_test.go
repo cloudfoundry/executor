@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/user"
 	"time"
@@ -84,7 +85,7 @@ var _ = Describe("UploadStep", func() {
 
 		uploadAction = &models.UploadAction{
 			To:   uploadTarget.URL,
-			From: "/expected-src.txt",
+			From: "./expected-src.txt",
 		}
 
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
@@ -139,29 +140,26 @@ var _ = Describe("UploadStep", func() {
 			BeforeEach(func() {
 				buffer = NewClosableBuffer()
 				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+					Ω(src).Should(Equal("./expected-src.txt"))
 					Ω(handle).Should(Equal("some-container-handle"))
 
-					if src == "/expected-src.txt" {
-						tarWriter := tar.NewWriter(buffer)
+					tarWriter := tar.NewWriter(buffer)
 
-						dropletContents := "expected-contents"
+					dropletContents := "expected-contents"
 
-						err := tarWriter.WriteHeader(&tar.Header{
-							Name: "expected-src.txt",
-							Size: int64(len(dropletContents)),
-						})
-						Ω(err).ShouldNot(HaveOccurred())
+					err := tarWriter.WriteHeader(&tar.Header{
+						Name: "./expected-src.txt",
+						Size: int64(len(dropletContents)),
+					})
+					Ω(err).ShouldNot(HaveOccurred())
 
-						_, err = tarWriter.Write([]byte(dropletContents))
-						Ω(err).ShouldNot(HaveOccurred())
+					_, err = tarWriter.Write([]byte(dropletContents))
+					Ω(err).ShouldNot(HaveOccurred())
 
-						err = tarWriter.Flush()
-						Ω(err).ShouldNot(HaveOccurred())
+					err = tarWriter.Flush()
+					Ω(err).ShouldNot(HaveOccurred())
 
-						return buffer, nil
-					}
-
-					return NewClosableBuffer(), nil
+					return buffer, nil
 				}
 			})
 
@@ -199,15 +197,17 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			Context("when there is an error uploading", func() {
+				errUploadFailed := errors.New("Upload failed!")
+
 				BeforeEach(func() {
 					fakeUploader := new(fake_uploader.FakeUploader)
-					fakeUploader.UploadReturns(0, errors.New("Upload failed!"))
+					fakeUploader.UploadReturns(0, errUploadFailed)
 					uploader = fakeUploader
 				})
 
-				It("returns the error", func() {
+				It("returns the appropriate error", func() {
 					err := step.Perform()
-					Ω(err).Should(HaveOccurred())
+					Ω(err).Should(MatchError(errUploadFailed))
 				})
 			})
 		})
@@ -217,35 +217,35 @@ var _ = Describe("UploadStep", func() {
 				uploadAction.To = "foo/bar"
 			})
 
-			It("returns the error and loggregates a message to STDERR", func() {
+			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
+				Ω(err).Should(BeAssignableToTypeOf(&url.Error{}))
 			})
 		})
 
 		Context("when there is an error initiating the stream", func() {
-			disaster := errors.New("no room in the copy inn")
+			errStream := errors.New("stream error")
 
 			BeforeEach(func() {
-				gardenClient.Connection.StreamOutReturns(nil, disaster)
+				gardenClient.Connection.StreamOutReturns(nil, errStream)
 			})
 
-			It("returns the error ", func() {
+			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
+				Ω(err).Should(MatchError(emittable_error.New(errStream, ErrEstablishStream)))
 			})
 		})
 
-		Context("when there is an error in the middle of streaming the data", func() {
-			disaster := errors.New("no room in the copy inn")
+		Context("when there is an error in reading the data from the stream", func() {
+			errStream := errors.New("stream error")
 
 			BeforeEach(func() {
-				gardenClient.Connection.StreamOutReturns(&errorReader{err: disaster}, nil)
+				gardenClient.Connection.StreamOutReturns(&errorReader{err: errStream}, nil)
 			})
 
-			It("returns the error ", func() {
+			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(emittable_error.New(disaster, "Copying out of the container failed")))
+				Ω(err).Should(MatchError(emittable_error.New(errStream, ErrReadTar)))
 			})
 		})
 	})
