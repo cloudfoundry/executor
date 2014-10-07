@@ -11,7 +11,7 @@ type FakeClient struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns struct {
+	pingReturns     struct {
 		result1 error
 	}
 	AllocateContainerStub        func(allocationGuid string, request api.ContainerAllocationRequest) (api.Container, error)
@@ -63,21 +63,21 @@ type FakeClient struct {
 	ListContainersStub        func() ([]api.Container, error)
 	listContainersMutex       sync.RWMutex
 	listContainersArgsForCall []struct{}
-	listContainersReturns struct {
+	listContainersReturns     struct {
 		result1 []api.Container
 		result2 error
 	}
 	RemainingResourcesStub        func() (api.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns struct {
+	remainingResourcesReturns     struct {
 		result1 api.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (api.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns struct {
+	totalResourcesReturns     struct {
 		result1 api.ExecutorResources
 		result2 error
 	}
