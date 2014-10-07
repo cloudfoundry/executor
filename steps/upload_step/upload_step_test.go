@@ -3,7 +3,6 @@ package upload_step_test
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -85,7 +84,7 @@ var _ = Describe("UploadStep", func() {
 
 		uploadAction = &models.UploadAction{
 			To:   uploadTarget.URL,
-			From: "/Antarctica",
+			From: "/expected-src.txt",
 		}
 
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
@@ -139,25 +138,21 @@ var _ = Describe("UploadStep", func() {
 
 			BeforeEach(func() {
 				buffer = NewClosableBuffer()
-				gardenClient.Connection.StreamOutReturns(buffer, nil)
-			})
-
-			It("uploads a .tgz to the destination", func() {
 				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 					Ω(handle).Should(Equal("some-container-handle"))
 
-					if src == "/Antarctica" {
+					if src == "/expected-src.txt" {
 						tarWriter := tar.NewWriter(buffer)
 
-						contents1 := "some-file-contents"
+						dropletContents := "expected-contents"
 
 						err := tarWriter.WriteHeader(&tar.Header{
-							Name: "some-file",
-							Size: int64(len(contents1)),
+							Name: "expected-src.txt",
+							Size: int64(len(dropletContents)),
 						})
 						Ω(err).ShouldNot(HaveOccurred())
 
-						_, err = tarWriter.Write([]byte(contents1))
+						_, err = tarWriter.Write([]byte(dropletContents))
 						Ω(err).ShouldNot(HaveOccurred())
 
 						err = tarWriter.Flush()
@@ -168,7 +163,9 @@ var _ = Describe("UploadStep", func() {
 
 					return NewClosableBuffer(), nil
 				}
+			})
 
+			It("uploads the specified file to the destination", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -176,29 +173,7 @@ var _ = Describe("UploadStep", func() {
 
 				Ω(buffer.IsClosed()).Should(BeTrue())
 
-				ungzip, err := gzip.NewReader(bytes.NewReader(uploadedPayload))
-				Ω(err).ShouldNot(HaveOccurred())
-
-				untar := tar.NewReader(ungzip)
-
-				tarContents := map[string][]byte{}
-				for {
-					hdr, err := untar.Next()
-					if err == io.EOF {
-						break
-					}
-
-					Ω(err).ShouldNot(HaveOccurred())
-
-					content, err := ioutil.ReadAll(untar)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					tarContents[hdr.Name] = content
-				}
-
-				Ω(tarContents).Should(HaveKey("some-file"))
-
-				Ω(string(tarContents["some-file"])).Should(Equal("some-file-contents"))
+				Ω(string(uploadedPayload)).Should(Equal("expected-contents"))
 			})
 
 			Describe("streaming logs for uploads", func() {

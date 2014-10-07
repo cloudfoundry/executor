@@ -1,7 +1,7 @@
 package upload_step
 
 import (
-	"compress/gzip"
+	"archive/tar"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -67,27 +67,28 @@ func (step *UploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(tempDir)
 
-	streamOut, err := step.container.StreamOut(step.model.From)
+	outStream, err := step.container.StreamOut(step.model.From)
 	if err != nil {
 		return emittable_error.New(err, "Copying out of the container failed")
 	}
-	defer streamOut.Close()
+	defer outStream.Close()
+
+	tarStream := tar.NewReader(outStream)
+	_, err = tarStream.Next()
+	if err != nil {
+		return emittable_error.New(err, "Copying out of the container failed")
+	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
 	if err != nil {
 		return emittable_error.New(err, "Compression failed")
 	}
+	defer tempFile.Close()
 
-	gzipWriter := gzip.NewWriter(tempFile)
-
-	_, err = io.Copy(gzipWriter, streamOut)
+	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
 		return emittable_error.New(err, "Copying out of the container failed")
 	}
-
-	gzipWriter.Close()
-	tempFile.Close()
-
 	finalFileLocation := tempFile.Name()
 
 	defer os.RemoveAll(finalFileLocation)
