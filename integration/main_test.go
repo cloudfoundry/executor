@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -143,12 +145,52 @@ var _ = Describe("Main", func() {
 	}
 
 	Describe("starting up", func() {
+		var workingDir string
+
 		JustBeforeEach(func() {
 			err := gardenServer.Start()
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runner.StartWithoutCheck(executor_runner.Config{
 				ContainerOwnerName: "executor-name",
+			})
+		})
+
+		BeforeEach(func() {
+			workingDir = filepath.Join(runner.Config.TempDir, "executor-work")
+			os.RemoveAll(workingDir)
+		})
+
+		Context("when the working directory exists and contains files", func() {
+			BeforeEach(func() {
+				err := os.MkdirAll(workingDir, 0755)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = ioutil.WriteFile(filepath.Join(workingDir, "should-get-deleted"), []byte("some-contents"), 0755)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("cleans up its working directory", func() {
+				Eventually(func() bool {
+					files, err := ioutil.ReadDir(workingDir)
+					if err != nil {
+						return false
+					}
+					return len(files) == 0
+				}).Should(BeTrue())
+			})
+		})
+
+		Context("when the working directory doesn't exist", func() {
+			It("creates a new working directory", func() {
+				Eventually(func() bool {
+					workingDirInfo, err := os.Stat(workingDir)
+					if err != nil {
+						return false
+					}
+
+					return workingDirInfo.IsDir()
+				}).Should(BeTrue())
 			})
 		})
 

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/cloudfoundry-incubator/cf-lager"
@@ -132,6 +133,8 @@ var maxConcurrentDownloads = flag.Int(
 )
 
 func main() {
+	var err error
+
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
@@ -156,13 +159,24 @@ func main() {
 
 	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
+	workDir := filepath.Join(*tempDir, "executor-work")
+	logger.Error(workDir, nil)
+
+	os.RemoveAll(workDir)
+
+	err = os.MkdirAll(workDir, 0755)
+	if err != nil {
+		logger.Error("working-dir.create-failed", err)
+		os.Exit(1)
+	}
+
 	depotClient := depot.NewClient(
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		uint64(*containerInodeLimit),
 		gardenClient,
 		reg,
-		initializeTransformer(logger),
+		initializeTransformer(workDir, logger),
 		logger,
 	)
 
@@ -192,7 +206,7 @@ func main() {
 
 	logger.Info("started")
 
-	err := <-monitor.Wait()
+	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -201,8 +215,8 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
-	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute, *maxConcurrentDownloads)
+func initializeTransformer(workDir string, logger lager.Logger) *Transformer.Transformer {
+	cache := cacheddownloader.New(*cachePath, workDir, *maxCacheSizeInBytes, 10*time.Minute, *maxConcurrentDownloads)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -226,7 +240,7 @@ func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 		extractor,
 		compressor,
 		logger,
-		*tempDir,
+		workDir,
 	)
 }
 
