@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/client"
@@ -37,7 +41,7 @@ func TestExecutorMain(t *testing.T) {
 
 var executor string
 var gardenServer *GardenServer.GardenServer
-var runner *executor_runner.ExecutorRunner
+var runner *ginkgomon.Runner
 var executorClient api.Client
 
 var _ = SynchronizedBeforeSuite(func() []byte {
@@ -59,6 +63,10 @@ var _ = Describe("Main", func() {
 		gardenAddr      string
 		debugAddr       string
 		containerHandle string = "some-handle"
+		process         ifrit.Process
+		cachePath       string
+		tmpDir          string
+		ownerName       string
 
 		fakeBackend *gfakes.FakeBackend
 	)
@@ -82,6 +90,9 @@ var _ = Describe("Main", func() {
 		}, nil)
 
 		gardenServer = GardenServer.New("tcp", gardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
+		tmpDir = path.Join(os.TempDir(), fmt.Sprintf("executor_%d", GinkgoParallelNode()))
+		cachePath = path.Join(tmpDir, "cache")
+		ownerName = fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
 
 		runner = executor_runner.New(
 			executor,
@@ -90,11 +101,19 @@ var _ = Describe("Main", func() {
 			gardenAddr,
 			"",
 			"bogus-loggregator-secret",
+			cachePath,
+			tmpDir,
+			debugAddr,
+			ownerName,
+			pruningInterval,
 		)
 	})
 
 	AfterEach(func() {
-		runner.KillWithFire()
+		if process != nil {
+			process.Signal(os.Kill)
+			Eventually(process.Wait()).Should(Receive())
+		}
 		gardenServer.Stop()
 
 		Eventually(func() error {
@@ -151,13 +170,12 @@ var _ = Describe("Main", func() {
 			err := gardenServer.Start()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			runner.StartWithoutCheck(executor_runner.Config{
-				ContainerOwnerName: "executor-name",
-			})
+			runner.StartCheck = ""
+			process = ifrit.Invoke(runner)
 		})
 
 		BeforeEach(func() {
-			workingDir = filepath.Join(runner.Config.TempDir, "executor-work")
+			workingDir = filepath.Join(tmpDir, "executor-work")
 			os.RemoveAll(workingDir)
 		})
 
@@ -205,7 +223,7 @@ var _ = Describe("Main", func() {
 				fakeContainer2.HandleReturns("handle-2")
 
 				fakeBackend.ContainersStub = func(ps garden_api.Properties) ([]garden_api.Container, error) {
-					if reflect.DeepEqual(ps, garden_api.Properties{"owner": "executor-name"}) {
+					if reflect.DeepEqual(ps, garden_api.Properties{"owner": ownerName}) {
 						return []garden_api.Container{fakeContainer1, fakeContainer2}, nil
 					} else {
 						return nil, nil
@@ -219,17 +237,13 @@ var _ = Describe("Main", func() {
 				Ω(fakeBackend.DestroyArgsForCall(1)).Should(Equal("handle-2"))
 			})
 
-			It("reports itself as started via logs", func() {
-				Eventually(runner.Session).Should(gbytes.Say("executor.started"))
-			})
-
 			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
 					fakeBackend.DestroyReturns(errors.New("i tried to delete the thing but i failed. sorry."))
 				})
 
 				It("should exit sadly", func() {
-					Eventually(runner.Session, 5*time.Second).Should(gexec.Exit(2))
+					Eventually(runner, 5*time.Second).Should(gexec.Exit(2))
 				})
 			})
 		})
@@ -240,11 +254,7 @@ var _ = Describe("Main", func() {
 			err := gardenServer.Start()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			runner.Start(executor_runner.Config{
-				RegistryPruningInterval: pruningInterval,
-				DebugAddr:               debugAddr,
-				ContainerInodeLimit:     245000,
-			})
+			process = ifrit.Invoke(runner)
 		})
 
 		Describe("pinging the server", func() {
@@ -1001,15 +1011,15 @@ var _ = Describe("Main", func() {
 
 		Describe("when the executor receives the TERM signal", func() {
 			It("exits successfully", func() {
-				runner.Session.Terminate()
-				Eventually(runner.Session, 2).Should(gexec.Exit())
+				process.Signal(syscall.SIGTERM)
+				Eventually(runner, 2).Should(gexec.Exit())
 			})
 		})
 
 		Describe("when the executor receives the INT signal", func() {
 			It("exits successfully", func() {
-				runner.Session.Interrupt()
-				Eventually(runner.Session, 2).Should(gexec.Exit())
+				process.Signal(syscall.SIGINT)
+				Eventually(runner, 2).Should(gexec.Exit())
 			})
 		})
 
@@ -1026,9 +1036,8 @@ var _ = Describe("Main", func() {
 
 	Describe("when gardenserver is unavailable", func() {
 		BeforeEach(func() {
-			runner.StartWithoutCheck(executor_runner.Config{
-				ContainerOwnerName: "executor-name",
-			})
+			runner.StartCheck = ""
+			process = ifrit.Envoke(runner)
 		})
 
 		Context("and gardenserver starts up later", func() {
@@ -1048,14 +1057,14 @@ var _ = Describe("Main", func() {
 			})
 
 			It("should connect", func() {
-				Eventually(runner.Session, 5*time.Second).Should(gbytes.Say("started"))
+				Eventually(runner.Buffer(), 5*time.Second).Should(gbytes.Say("started"))
 			})
 		})
 
 		Context("and never starts", func() {
 			It("should not exit and continue waiting for a connection", func() {
-				Consistently(runner.Session).ShouldNot(gbytes.Say("started"))
-				Ω(runner.Session).ShouldNot(gexec.Exit())
+				Consistently(runner.Buffer()).ShouldNot(gbytes.Say("started"))
+				Ω(runner).ShouldNot(gexec.Exit())
 			})
 		})
 	})

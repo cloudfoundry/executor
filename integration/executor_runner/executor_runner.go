@@ -1,157 +1,47 @@
 package executor_runner
 
 import (
-	"fmt"
 	"os/exec"
+	"strconv"
 	"time"
 
-	"github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
+	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
-type ExecutorRunner struct {
-	executorBin   string
-	listenAddr    string
-	gardenNetwork string
-	gardenAddr    string
+func New(
+	executorBin,
+	listenAddr,
+	gardenNetwork,
+	gardenAddr,
+	loggregatorServer,
+	loggregatorSecret,
+	cachePath,
+	tmpDir,
+	debugAddr,
+	containerOwnerName string,
+	pruneInterval time.Duration,
+) *ginkgomon.Runner {
 
-	loggregatorServer string
-	loggregatorSecret string
-
-	Session *gexec.Session
-	Config  Config
-}
-
-type Config struct {
-	MemoryMB                string
-	DiskMB                  string
-	TempDir                 string
-	ContainerOwnerName      string
-	ContainerMaxCpuShares   int
-	RegistryPruningInterval time.Duration
-	DebugAddr               string
-	ContainerInodeLimit     uint64
-}
-
-var defaultConfig = Config{
-	MemoryMB:                "1024",
-	DiskMB:                  "1024",
-	TempDir:                 "/tmp",
-	ContainerOwnerName:      "",
-	ContainerMaxCpuShares:   1024,
-	RegistryPruningInterval: time.Minute,
-}
-
-func New(executorBin, listenAddr, gardenNetwork, gardenAddr string, loggregatorServer string, loggregatorSecret string) *ExecutorRunner {
-	return &ExecutorRunner{
-		executorBin:   executorBin,
-		listenAddr:    listenAddr,
-		gardenNetwork: gardenNetwork,
-		gardenAddr:    gardenAddr,
-
-		loggregatorServer: loggregatorServer,
-		loggregatorSecret: loggregatorSecret,
-
-		Config: defaultConfig,
-	}
-}
-
-func (r *ExecutorRunner) Start(config ...Config) {
-	r.StartWithoutCheck(config...)
-
-	Eventually(r.Session, 5*time.Second).Should(gbytes.Say("executor.started"))
-}
-
-func (r *ExecutorRunner) StartWithoutCheck(config ...Config) {
-	if r.Session != nil {
-		panic("starting more than one executor!!!")
-	}
-
-	configToUse := r.generateConfig(config...)
-
-	args := []string{
-		"-listenAddr", r.listenAddr,
-		"-gardenNetwork", r.gardenNetwork,
-		"-gardenAddr", r.gardenAddr,
-		"-memoryMB", configToUse.MemoryMB,
-		"-diskMB", configToUse.DiskMB,
-		"-loggregatorServer", r.loggregatorServer,
-		"-loggregatorSecret", r.loggregatorSecret,
-		"-tempDir", configToUse.TempDir,
-		"-containerOwnerName", configToUse.ContainerOwnerName,
-		"-containerMaxCpuShares", fmt.Sprintf("%d", configToUse.ContainerMaxCpuShares),
-		"-pruneInterval", fmt.Sprintf("%s", configToUse.RegistryPruningInterval),
-		"-containerInodeLimit", fmt.Sprintf("%d", configToUse.ContainerInodeLimit),
-	}
-
-	if configToUse.DebugAddr != "" {
-		args = append(args, "-debugAddr", configToUse.DebugAddr)
-	}
-
-	executorSession, err := gexec.Start(
-		exec.Command(
-			r.executorBin,
-			args...,
+	return ginkgomon.New(ginkgomon.Config{
+		Name:          "executor",
+		AnsiColorCode: "91m",
+		StartCheck:    "executor.started",
+		// executor may destroy containers on start, which can take a bit
+		StartCheckTimeout: 30 * time.Second,
+		Command: exec.Command(
+			executorBin,
+			"-listenAddr", listenAddr,
+			"-gardenNetwork", gardenNetwork,
+			"-gardenAddr", gardenAddr,
+			"-loggregatorServer", loggregatorServer,
+			"-loggregatorSecret", loggregatorSecret,
+			"-containerMaxCpuShares", "1024",
+			"-cachePath", cachePath,
+			"-tempDir", tmpDir,
+			"-containerOwnerName", containerOwnerName,
+			"-containerInodeLimit", strconv.Itoa(245000),
+			"-pruneInterval", pruneInterval.String(),
+			"-debugAddr", debugAddr,
 		),
-		gexec.NewPrefixedWriter("\x1b[32m[o]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
-		gexec.NewPrefixedWriter("\x1b[91m[e]\x1b[36m[executor]\x1b[0m ", ginkgo.GinkgoWriter),
-	)
-
-	Ω(err).ShouldNot(HaveOccurred())
-	r.Config = configToUse
-	r.Session = executorSession
-}
-
-func (r *ExecutorRunner) Stop() {
-	r.Config = defaultConfig
-	if r.Session != nil {
-		r.Session.Terminate().Wait(5 * time.Second)
-		r.Session = nil
-	}
-}
-
-func (r *ExecutorRunner) KillWithFire() {
-	if r.Session != nil {
-		r.Session.Kill().Wait(5 * time.Second)
-		r.Session = nil
-	}
-}
-
-func (r *ExecutorRunner) generateConfig(configs ...Config) Config {
-	configToReturn := defaultConfig
-	configToReturn.ContainerOwnerName = fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-
-	if len(configs) == 0 {
-		return configToReturn
-	}
-
-	givenConfig := configs[0]
-	if givenConfig.MemoryMB != "" {
-		configToReturn.MemoryMB = givenConfig.MemoryMB
-	}
-	if givenConfig.DiskMB != "" {
-		configToReturn.DiskMB = givenConfig.DiskMB
-	}
-	if givenConfig.TempDir != "" {
-		configToReturn.TempDir = givenConfig.TempDir
-	}
-	if givenConfig.ContainerOwnerName != "" {
-		configToReturn.ContainerOwnerName = givenConfig.ContainerOwnerName
-	}
-	if givenConfig.ContainerMaxCpuShares != 0 {
-		configToReturn.ContainerMaxCpuShares = givenConfig.ContainerMaxCpuShares
-	}
-	if givenConfig.RegistryPruningInterval != 0 {
-		configToReturn.RegistryPruningInterval = givenConfig.RegistryPruningInterval
-	}
-	if givenConfig.ContainerInodeLimit != 0 {
-		configToReturn.ContainerInodeLimit = givenConfig.ContainerInodeLimit
-	}
-
-	configToReturn.DebugAddr = givenConfig.DebugAddr
-
-	return configToReturn
+	})
 }
