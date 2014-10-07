@@ -3,7 +3,6 @@ package download_step
 import (
 	"archive/tar"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
@@ -54,86 +52,44 @@ func (step *DownloadStep) Perform() error {
 	step.logger.Info("starting")
 
 	//Stream this to the extractor + container when we have streaming support!
-	downloadedPath, err := step.download()
+	downloadedFile, err := step.download()
 	if err != nil {
 		return err
 	}
 
-	defer os.Remove(downloadedPath)
+	defer downloadedFile.Close()
 
 	if step.model.Extract {
-		return step.extract(downloadedPath)
+		return step.copyExtractedFiles(downloadedFile.File, step.model.To)
 	}
 
-	return step.streamToContainer(downloadedPath)
+	return step.streamToContainer(downloadedFile)
 }
 
-func (step *DownloadStep) download() (string, error) {
+func (step *DownloadStep) download() (*cacheddownloader.CachedFile, error) {
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		step.logger.Error("parse-request-uri-error", err)
-		return "", err
+		return nil, err
 	}
 
 	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
 	if err != nil {
 		step.logger.Error("cached-downloader-fetch-error", err)
-		return "", err
-	}
-	defer downloadedFile.Close()
-
-	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")
-	if err != nil {
-		step.logger.Error("tempfile-create-error", err)
-		return "", err
+		return nil, err
 	}
 
-	_, err = io.Copy(tempFile, downloadedFile)
-	tempFile.Close()
-	if err != nil {
-		os.Remove(tempFile.Name())
-		step.logger.Error("tempfile-copy-failed", err)
-		return "", err
-	}
-
-	step.logger.Info("download-successful", lager.Data{
-		"tempFile": tempFile.Name(),
+	step.logger.Info("fetch-successful", lager.Data{
+		"cache-key": step.model.CacheKey,
 	})
-	return tempFile.Name(), nil
+
+	return downloadedFile, nil
 }
 
-func (step *DownloadStep) extract(downloadedPath string) error {
-	extractionDir, err := ioutil.TempDir(step.tempDir, "extracted")
-	if err != nil {
-		step.logger.Error("extract-failed-to-create-tempdir", err, lager.Data{
-			"tempDir": step.tempDir,
-		})
-		return err
-	}
-	defer os.RemoveAll(extractionDir)
-
-	err = step.extractor.Extract(downloadedPath, extractionDir)
-	if err != nil {
-		step.logger.Error("failed-to-extract", err, lager.Data{
-			"extractionDir":  extractionDir,
-			"downloadedPath": downloadedPath,
-		})
-		return emittable_error.New(err, "Extraction failed")
-	}
-
-	err = step.copyExtractedFiles(extractionDir, step.model.To)
-	if err != nil {
-		return emittable_error.New(err, "Copying into the container failed")
-	}
-
-	step.logger.Info("extract-successful")
-	return nil
-}
-
-func (step *DownloadStep) streamToContainer(downloadedPath string) error {
+func (step *DownloadStep) streamToContainer(downloadedFile *cacheddownloader.CachedFile) error {
 	reader, writer := io.Pipe()
 
-	go writeTarTo(filepath.Base(step.model.To), downloadedPath, writer)
+	go writeTarTo(filepath.Base(step.model.To), downloadedFile, writer)
 
 	err := step.streamIn(filepath.Dir(step.model.To), reader)
 	if err != nil {
@@ -148,23 +104,53 @@ func (step *DownloadStep) Cancel() {}
 
 func (step *DownloadStep) Cleanup() {}
 
-func (step *DownloadStep) copyExtractedFiles(source string, destination string) error {
+func (step *DownloadStep) copyExtractedFiles(source *os.File, destination string) error {
 	reader, writer := io.Pipe()
 
+	extractErrCh := make(chan error, 1)
+
 	go func() {
-		err := compressor.WriteTar(source+string(filepath.Separator), writer)
-		if err == nil {
-			writer.Close()
-		} else {
-			step.logger.Error("wite-tar-failed", err, lager.Data{
-				"source":      source,
-				"destination": destination,
-			})
-			writer.CloseWithError(err)
-		}
+		step.logger.Info("extracting", lager.Data{
+			"source": source.Name(),
+		})
+
+		extractErrCh <- step.extractor.Extract(source, writer)
+
+		writer.Close()
+
+		step.logger.Info("extracted", lager.Data{
+			"source": source.Name(),
+		})
 	}()
 
-	return step.streamIn(destination, reader)
+	step.logger.Info("streaming-in", lager.Data{
+		"source": source.Name(),
+	})
+
+	streamErr := step.streamIn(destination, reader)
+
+	step.logger.Info("streamed-in", lager.Data{
+		"source": source.Name(),
+	})
+
+	extractErr := <-extractErrCh
+	if extractErr != nil {
+		step.logger.Error("failed-to-extract", extractErr, lager.Data{
+			"source":      source,
+			"destination": destination,
+		})
+
+		return emittable_error.New(extractErr, "Extraction failed")
+	} else if streamErr != nil {
+		step.logger.Error("failed-to-stream", streamErr, lager.Data{
+			"source":      source,
+			"destination": destination,
+		})
+
+		return emittable_error.New(extractErr, "Streaming in failed")
+	}
+
+	return nil
 }
 
 func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {
@@ -179,17 +165,10 @@ func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {
 	return err
 }
 
-func writeTarTo(name string, sourcePath string, destination *io.PipeWriter) {
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		destination.CloseWithError(err)
-		return
-	}
-	defer source.Close()
-
+func writeTarTo(name string, sourceFile *cacheddownloader.CachedFile, destination *io.PipeWriter) {
 	tarWriter := tar.NewWriter(destination)
 
-	fileInfo, err := source.Stat()
+	fileInfo, err := sourceFile.Stat()
 	if err != nil {
 		destination.CloseWithError(err)
 		return
@@ -207,7 +186,7 @@ func writeTarTo(name string, sourcePath string, destination *io.PipeWriter) {
 		return
 	}
 
-	_, err = io.Copy(tarWriter, source)
+	_, err = io.Copy(tarWriter, sourceFile)
 	if err != nil {
 		destination.CloseWithError(err)
 		return
