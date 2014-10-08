@@ -160,10 +160,7 @@ func main() {
 	reg := registry.New(capacity, timeprovider.NewTimeProvider())
 
 	workDir := filepath.Join(*tempDir, "executor-work")
-	logger.Error(workDir, nil)
-
 	os.RemoveAll(workDir)
-
 	err = os.MkdirAll(workDir, 0755)
 	if err != nil {
 		logger.Error("working-dir.create-failed", err)
