@@ -1,4 +1,4 @@
-package integration_test
+package main_test
 
 import (
 	"errors"
@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"syscall"
-	"testing"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/testrunner"
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -26,7 +26,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/client"
-	"github.com/cloudfoundry-incubator/executor/integration/executor_runner"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
@@ -34,31 +33,11 @@ import (
 	"github.com/pivotal-golang/lager/lagertest"
 )
 
-func TestExecutorMain(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Suite")
-}
-
-var executor string
 var gardenServer *GardenServer.GardenServer
 var runner *ginkgomon.Runner
 var executorClient api.Client
 
-var _ = SynchronizedBeforeSuite(func() []byte {
-	executorPath, err := gexec.Build("github.com/cloudfoundry-incubator/executor", "-race")
-	Ω(err).ShouldNot(HaveOccurred())
-	return []byte(executorPath)
-}, func(executorPath []byte) {
-	executor = string(executorPath)
-})
-
-var _ = SynchronizedAfterSuite(func() {
-	//noop
-}, func() {
-	gexec.CleanupBuildArtifacts()
-})
-
-var _ = Describe("Main", func() {
+var _ = Describe("Executor", func() {
 	var (
 		gardenAddr      string
 		debugAddr       string
@@ -94,7 +73,7 @@ var _ = Describe("Main", func() {
 		cachePath = path.Join(tmpDir, "cache")
 		ownerName = fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
 
-		runner = executor_runner.New(
+		runner = testrunner.New(
 			executor,
 			executorAddr,
 			"tcp",

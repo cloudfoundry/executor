@@ -1,4 +1,4 @@
-package executor_runner
+package testrunner
 
 import (
 	"os/exec"
