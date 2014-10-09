@@ -39,8 +39,8 @@ func New(
 ) *UploadStep {
 	logger = logger.Session("UploadAction", lager.Data{
 		"from": model.From,
-		"to":   model.To,
 	})
+
 	return &UploadStep{
 		container:  container,
 		model:      model,

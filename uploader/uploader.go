@@ -44,7 +44,6 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 
 	logger := uploader.logger.WithData(lager.Data{
 		"fileLocation": fileLocation,
-		"url":          url.String(),
 	})
 
 	for attempt := 0; attempt < 3; attempt++ {
