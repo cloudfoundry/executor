@@ -171,7 +171,7 @@ var _ = Describe("Main", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runner.StartCheck = ""
-			process = ifrit.Invoke(runner)
+			process = ginkgomon.Invoke(runner)
 		})
 
 		BeforeEach(func() {
@@ -254,7 +254,7 @@ var _ = Describe("Main", func() {
 			err := gardenServer.Start()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			process = ifrit.Invoke(runner)
+			process = ginkgomon.Invoke(runner)
 		})
 
 		Describe("pinging the server", func() {
@@ -1037,7 +1037,7 @@ var _ = Describe("Main", func() {
 	Describe("when gardenserver is unavailable", func() {
 		BeforeEach(func() {
 			runner.StartCheck = ""
-			process = ifrit.Envoke(runner)
+			process = ginkgomon.Invoke(runner)
 		})
 
 		Context("and gardenserver starts up later", func() {
