@@ -162,7 +162,7 @@ func main() {
 		uint64(*containerInodeLimit),
 		gardenClient,
 		reg,
-		initializeTransformer(logger),
+		initializeTransformer(logger, gardenClient),
 		logger,
 	)
 
@@ -201,7 +201,7 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
+func initializeTransformer(logger lager.Logger, gardenClient garden_api.Client) *Transformer.Transformer {
 	cache := cacheddownloader.New(*cachePath, *tempDir, *maxCacheSizeInBytes, 10*time.Minute, *maxConcurrentDownloads)
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
@@ -221,6 +221,7 @@ func initializeTransformer(logger lager.Logger) *Transformer.Transformer {
 
 	return Transformer.NewTransformer(
 		logEmitter,
+		gardenClient,
 		cache,
 		uploader,
 		extractor,

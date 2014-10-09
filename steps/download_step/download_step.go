@@ -11,21 +11,28 @@ import (
 	"github.com/cloudfoundry-incubator/executor/steps/emittable_error"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
 )
 
 type DownloadStep struct {
+	gardenClient     garden_api.Client
 	container        garden_api.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
 	extractor        extractor.Extractor
 	tempDir          string
 	logger           lager.Logger
+
+	// volume created for bind-mount
+	// NB: an ephemeral volume makes more sense once that exists
+	volume garden_api.Volume
 }
 
 func New(
+	gardenClient garden_api.Client,
 	container garden_api.Container,
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
@@ -39,6 +46,7 @@ func New(
 		"cacheKey": model.CacheKey,
 	})
 	return &DownloadStep{
+		gardenClient:     gardenClient,
 		container:        container,
 		model:            model,
 		cachedDownloader: cachedDownloader,
@@ -102,55 +110,58 @@ func (step *DownloadStep) streamToContainer(downloadedFile *cacheddownloader.Cac
 
 func (step *DownloadStep) Cancel() {}
 
-func (step *DownloadStep) Cleanup() {}
+func (step *DownloadStep) Cleanup() {
+	if step.volume != nil {
+		err := step.gardenClient.DestroyVolume(step.volume.Handle())
+		if err != nil {
+			step.logger.Error("failed-to-clean-up-volume", err)
+		}
+	}
+}
 
 func (step *DownloadStep) copyExtractedFiles(source *os.File, destination string) error {
-	reader, writer := io.Pipe()
+	cachedDir := filepath.Join("/tmp/gross/global/dir", source.Name())
 
-	extractErrCh := make(chan error, 1)
-
-	go func() {
-		step.logger.Info("extracting", lager.Data{
-			"source": source.Name(),
-		})
-
-		extractErrCh <- step.extractor.Extract(source, writer)
-
-		writer.Close()
-
-		step.logger.Info("extracted", lager.Data{
-			"source": source.Name(),
-		})
-	}()
-
-	step.logger.Info("streaming-in", lager.Data{
-		"source": source.Name(),
-	})
-
-	streamErr := step.streamIn(destination, reader)
-
-	step.logger.Info("streamed-in", lager.Data{
-		"source": source.Name(),
-	})
-
-	extractErr := <-extractErrCh
-	if extractErr != nil {
-		step.logger.Error("failed-to-extract", extractErr, lager.Data{
-			"source":      source,
-			"destination": destination,
-		})
-
-		return emittable_error.New(extractErr, "Extraction failed")
-	} else if streamErr != nil {
-		step.logger.Error("failed-to-stream", streamErr, lager.Data{
-			"source":      source,
-			"destination": destination,
-		})
-
-		return emittable_error.New(extractErr, "Streaming in failed")
+	_, err := os.Stat(cachedDir)
+	if err != nil {
+		err := step.extractor.Extract(source.Name(), cachedDir)
+		if err != nil {
+			return err
+		}
 	}
 
-	return nil
+	if step.model.CacheKey != "" {
+		volume, err := step.gardenClient.CreateVolume(garden_api.VolumeSpec{
+			HostPath: cachedDir,
+		})
+		if err != nil {
+			return err
+		}
+
+		step.volume = volume
+
+		return step.container.BindVolume(volume, garden_api.VolumeBinding{
+			Mode:        garden_api.VolumeBindingModeRO,
+			Destination: destination,
+		})
+	} else {
+		reader, writer := io.Pipe()
+
+		go func() {
+			err := compressor.WriteTar(cachedDir+"/", writer)
+			if err == nil {
+				writer.Close()
+			} else {
+				step.logger.Error("wite-tar-failed", err, lager.Data{
+					"source":      source,
+					"destination": destination,
+				})
+				writer.CloseWithError(err)
+			}
+		}()
+
+		return step.streamIn(destination, reader)
+	}
 }
 
 func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {

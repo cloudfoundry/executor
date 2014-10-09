@@ -32,6 +32,7 @@ var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
 	logEmitter       logemitter.Emitter
+	gardenClient     garden_api.Client
 	cachedDownloader cacheddownloader.CachedDownloader
 	uploader         uploader.Uploader
 	extractor        extractor.Extractor
@@ -43,6 +44,7 @@ type Transformer struct {
 
 func NewTransformer(
 	logEmitter logemitter.Emitter,
+	gardenClient garden_api.Client,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
@@ -52,6 +54,7 @@ func NewTransformer(
 ) *Transformer {
 	return &Transformer{
 		logEmitter:       logEmitter,
+		gardenClient:     gardenClient,
 		cachedDownloader: cachedDownloader,
 		uploader:         uploader,
 		extractor:        extractor,
@@ -115,6 +118,7 @@ func (transformer *Transformer) convertAction(
 		), nil
 	case models.DownloadAction:
 		return download_step.New(
+			transformer.gardenClient,
 			container,
 			actionModel,
 			transformer.cachedDownloader,

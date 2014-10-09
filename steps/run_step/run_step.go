@@ -86,6 +86,19 @@ func (step *RunStep) Perform() error {
 
 	select {
 	case exitStatus := <-exitStatusChan:
+		if exitStatus == 255 {
+			for {
+				time.Sleep(10 * time.Second)
+
+				logger.Info("STAYIN-ALIVE", lager.Data{"exitStatus": exitStatus})
+
+				_, err := step.container.Info()
+				if err != nil {
+					break
+				}
+			}
+		}
+
 		logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
 		step.streamer.Flush()
 
