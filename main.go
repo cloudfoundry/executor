@@ -167,12 +167,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
+	logEmitter, err := logemitter.NewEmitter(*loggregatorServer, "", "", false)
+	if err != nil {
+		panic(err)
+	}
+
 	depotClient := depot.NewClient(
 		*containerOwnerName,
 		uint64(*containerMaxCpuShares),
 		uint64(*containerInodeLimit),
 		gardenClient,
 		reg,
+		logEmitter,
 		initializeTransformer(workDir, logger),
 		logger,
 	)
@@ -218,20 +225,7 @@ func initializeTransformer(workDir string, logger lager.Logger) *Transformer.Tra
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 
-	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
-
-	logEmitter, err := logemitter.NewEmitter(
-		*loggregatorServer,
-		"",
-		"",
-		false,
-	)
-	if err != nil {
-		panic(err)
-	}
-
 	return Transformer.NewTransformer(
-		logEmitter,
 		cache,
 		uploader,
 		extractor,

@@ -4,10 +4,12 @@ import (
 	"os"
 
 	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/registry"
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/transformer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
@@ -18,6 +20,7 @@ type client struct {
 	containerInodeLimit   uint64
 	gardenClient          garden_api.Client
 	registry              registry.Registry
+	logEmitter            logemitter.Emitter
 	transformer           *transformer.Transformer
 	logger                lager.Logger
 }
@@ -28,6 +31,7 @@ func NewClient(
 	containerInodeLimit uint64,
 	gardenClient garden_api.Client,
 	registry registry.Registry,
+	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
 	logger lager.Logger,
 ) api.Client {
@@ -37,6 +41,7 @@ func NewClient(
 		containerInodeLimit:   containerInodeLimit,
 		gardenClient:          gardenClient,
 		registry:              registry,
+		logEmitter:            logEmitter,
 		transformer:           transformer,
 		logger:                logger.Session("depot-client"),
 	}
@@ -236,7 +241,8 @@ func (c *client) Run(guid string, request api.ContainerRunRequest) error {
 	}
 
 	var result string
-	steps, err := c.transformer.StepsFor(registration.Log, request.Actions, request.Env, container, &result)
+	logStreamer := log_streamer.New(registration.Log.Guid, registration.Log.SourceName, registration.Log.Index, c.logEmitter)
+	steps, err := c.transformer.StepsFor(logStreamer, request.Actions, request.Env, container, &result)
 	if err != nil {
 		logger.Error("steps-invalid", err)
 		return api.ErrStepsInvalid

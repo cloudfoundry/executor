@@ -20,7 +20,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -31,7 +30,6 @@ import (
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
-	logEmitter       logemitter.Emitter
 	cachedDownloader cacheddownloader.CachedDownloader
 	uploader         uploader.Uploader
 	extractor        extractor.Extractor
@@ -42,7 +40,6 @@ type Transformer struct {
 }
 
 func NewTransformer(
-	logEmitter logemitter.Emitter,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
@@ -51,7 +48,6 @@ func NewTransformer(
 	tempDir string,
 ) *Transformer {
 	return &Transformer{
-		logEmitter:       logEmitter,
 		cachedDownloader: cachedDownloader,
 		uploader:         uploader,
 		extractor:        extractor,
@@ -62,7 +58,7 @@ func NewTransformer(
 }
 
 func (transformer *Transformer) StepsFor(
-	logConfig api.LogConfig,
+	logStreamer log_streamer.LogStreamer,
 	actions []models.ExecutorAction,
 	globalEnv []api.EnvironmentVariable,
 	container garden_api.Container,
@@ -71,7 +67,7 @@ func (transformer *Transformer) StepsFor(
 	subSteps := []sequence.Step{}
 
 	for _, a := range actions {
-		step, err := transformer.convertAction(logConfig, a, globalEnv, container, result)
+		step, err := transformer.convertAction(logStreamer, a, globalEnv, container, result)
 		if err != nil {
 			return nil, err
 		}
@@ -83,14 +79,12 @@ func (transformer *Transformer) StepsFor(
 }
 
 func (transformer *Transformer) convertAction(
-	logConfig api.LogConfig,
+	logStreamer log_streamer.LogStreamer,
 	action models.ExecutorAction,
 	globalEnv []api.EnvironmentVariable,
 	container garden_api.Container,
 	result *string,
 ) (sequence.Step, error) {
-	logStreamer := log_streamer.New(logConfig.Guid, logConfig.SourceName, logConfig.Index, transformer.logEmitter)
-
 	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
 	})
@@ -140,7 +134,7 @@ func (transformer *Transformer) convertAction(
 		), nil
 	case models.EmitProgressAction:
 		subStep, err := transformer.convertAction(
-			logConfig,
+			logStreamer,
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -160,7 +154,7 @@ func (transformer *Transformer) convertAction(
 		), nil
 	case models.TryAction:
 		subStep, err := transformer.convertAction(
-			logConfig,
+			logStreamer,
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -200,7 +194,7 @@ func (transformer *Transformer) convertAction(
 		}
 
 		check, err := transformer.convertAction(
-			logConfig,
+			logStreamer,
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -225,7 +219,7 @@ func (transformer *Transformer) convertAction(
 			var err error
 
 			steps[i], err = transformer.convertAction(
-				logConfig,
+				logStreamer,
 				action,
 				globalEnv,
 				container,
