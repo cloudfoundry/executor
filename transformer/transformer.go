@@ -118,8 +118,6 @@ func (transformer *Transformer) convertAction(
 			container,
 			actionModel,
 			transformer.cachedDownloader,
-			transformer.extractor,
-			transformer.tempDir,
 			logger,
 		), nil
 	case models.UploadAction:
