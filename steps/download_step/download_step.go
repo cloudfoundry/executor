@@ -75,11 +75,12 @@ func (step *DownloadStep) download() (string, error) {
 		return "", err
 	}
 
-	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey)
+	downloadedFile, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.NoopTransform)
 	if err != nil {
 		step.logger.Error("cached-downloader-fetch-error", err)
 		return "", err
 	}
+
 	defer downloadedFile.Close()
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "downloaded")

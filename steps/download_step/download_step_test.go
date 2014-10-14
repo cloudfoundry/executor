@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pivotal-golang/cacheddownloader/fakecacheddownloader"
+	cdfakes "github.com/pivotal-golang/cacheddownloader/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -30,7 +30,7 @@ var _ = Describe("DownloadAction", func() {
 	var result chan error
 
 	var downloadAction models.DownloadAction
-	var cache *fakecacheddownloader.FakeCachedDownloader
+	var cache *cdfakes.FakeCachedDownloader
 	var tempDir string
 	var gardenClient *fake_api_client.FakeClient
 	var logger *lagertest.TestLogger
@@ -42,7 +42,8 @@ var _ = Describe("DownloadAction", func() {
 
 		result = make(chan error)
 
-		cache = &fakecacheddownloader.FakeCachedDownloader{}
+		cache = &cdfakes.FakeCachedDownloader{}
+		cache.FetchReturns(ioutil.NopCloser(new(bytes.Buffer)), nil)
 
 		tempDir, err = ioutil.TempDir("", "download-action-tmpdir")
 		Ω(err).ShouldNot(HaveOccurred())
@@ -90,8 +91,10 @@ var _ = Describe("DownloadAction", func() {
 			var tarReader *tar.Reader
 
 			Context("when streaming in succeeds", func() {
+				fetchedContent := strings.Repeat("7", 1024)
+
 				BeforeEach(func() {
-					cache.FetchedContent = []byte(strings.Repeat("7", 1024))
+					cache.FetchReturns(ioutil.NopCloser(bytes.NewBufferString(fetchedContent)), nil)
 
 					buffer := &bytes.Buffer{}
 					tarReader = tar.NewReader(buffer)
@@ -107,8 +110,11 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("asks the cache for the file", func() {
-					Ω(cache.FetchedURL.Host).Should(ContainSubstring("mr_jones"))
-					Ω(cache.FetchedCacheKey).Should(Equal("the-cache-key"))
+					Ω(cache.FetchCallCount()).Should(Equal(1))
+
+					url, cacheKey, _ := cache.FetchArgsForCall(0)
+					Ω(url.Host).Should(ContainSubstring("mr_jones"))
+					Ω(cacheKey).Should(Equal("the-cache-key"))
 				})
 
 				It("places the file in the container", func() {
@@ -124,7 +130,7 @@ var _ = Describe("DownloadAction", func() {
 
 					fileBody, err := ioutil.ReadAll(tarReader)
 					Ω(err).ShouldNot(HaveOccurred())
-					Ω(fileBody).Should(Equal(cache.FetchedContent))
+					Ω(string(fileBody)).Should(Equal(fetchedContent))
 				})
 
 				It("does not return an error", func() {
@@ -143,12 +149,14 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			Context("when there is an error fetching the file", func() {
+				disaster := errors.New("oh no!")
+
 				BeforeEach(func() {
-					cache.FetchError = errors.New("bam")
+					cache.FetchReturns(nil, disaster)
 				})
 
 				It("returns an error", func() {
-					Ω(stepErr).Should(MatchError(cache.FetchError))
+					Ω(stepErr).Should(Equal(disaster))
 				})
 			})
 
@@ -186,10 +194,7 @@ var _ = Describe("DownloadAction", func() {
 
 					tmpFile.Seek(0, 0)
 
-					fetchedContent, err := ioutil.ReadAll(tmpFile)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					cache.FetchedContent = fetchedContent
+					cache.FetchReturns(tmpFile, nil)
 				})
 
 				Context("and streaming in succeeds", func() {
@@ -237,7 +242,7 @@ var _ = Describe("DownloadAction", func() {
 
 			Context("when there is an error extracting the file", func() {
 				BeforeEach(func() {
-					cache.FetchedContent = []byte("not-a-tgz")
+					cache.FetchReturns(ioutil.NopCloser(bytes.NewBufferString("not-a-tgz")), nil)
 				})
 
 				It("returns an error", func() {
