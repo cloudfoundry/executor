@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/cf-lager"
+	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/metrics"
 	"github.com/cloudfoundry-incubator/executor/registry"
@@ -22,7 +23,7 @@ import (
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/server"
-	Transformer "github.com/cloudfoundry-incubator/executor/transformer"
+	"github.com/cloudfoundry-incubator/executor/transformer"
 	"github.com/cloudfoundry-incubator/executor/uploader"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -34,7 +35,8 @@ import (
 var listenAddr = flag.String(
 	"listenAddr",
 	"0.0.0.0:1700",
-	"host:port to serve API requests on")
+	"host:port to serve API requests on",
+)
 
 var containerOwnerName = flag.String(
 	"containerOwnerName",
@@ -96,13 +98,13 @@ var registryPruningInterval = flag.Duration(
 	"amount of time during which a container can remain in the allocated state",
 )
 
-var containerInodeLimit = flag.Uint(
+var containerInodeLimit = flag.Uint64(
 	"containerInodeLimit",
 	200000,
 	"max number of inodes per container",
 )
 
-var containerMaxCpuShares = flag.Int(
+var containerMaxCpuShares = flag.Uint64(
 	"containerMaxCpuShares",
 	0,
 	"cpu shares allocatable to a container",
@@ -114,7 +116,7 @@ var cachePath = flag.String(
 	"location to cache assets",
 )
 
-var maxCacheSizeInBytes = flag.Int64(
+var maxCacheSizeInBytes = flag.Uint64(
 	"maxCacheSizeInBytes",
 	10*1024*1024*1024,
 	"maximum size of the cache (in bytes) - you should include a healthy amount of overhead",
@@ -126,25 +128,25 @@ var metricsReportInterval = flag.Duration(
 	"interval on which to report metrics",
 )
 
-var maxConcurrentDownloads = flag.Int(
+var maxConcurrentDownloads = flag.Uint(
 	"maxConcurrentDownloads",
 	20,
 	"maximum in-flight downloads",
 )
 
 func main() {
-	var err error
-
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
 
-	if *containerMaxCpuShares <= 0 {
+	if *containerMaxCpuShares == 0 {
 		logger.Error("max-cpu-shares-invalid", nil)
 		os.Exit(1)
 	}
 
 	logger.Info("starting")
+
+	cf_debug_server.Run()
 
 	gardenClient := GardenClient.New(GardenConnection.New(*gardenNetwork, *gardenAddr))
 	waitForGarden(logger, gardenClient)
@@ -153,64 +155,54 @@ func main() {
 		gardenClient: gardenClient,
 		owner:        *containerOwnerName,
 	}
-
 	destroyContainers(gardenClient, containersFetcher, logger)
-	capacity := fetchCapacity(logger, gardenClient)
 
-	reg := registry.New(capacity, timeprovider.NewTimeProvider())
-
-	workDir := filepath.Join(*tempDir, "executor-work")
-	os.RemoveAll(workDir)
-	err = os.MkdirAll(workDir, 0755)
-	if err != nil {
-		logger.Error("working-dir.create-failed", err)
-		os.Exit(1)
-	}
-
-	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
-	logEmitter, err := logemitter.NewEmitter(*loggregatorServer, "", "", false)
-	if err != nil {
-		panic(err)
-	}
-
-	depotClient := depot.NewClient(
-		*containerOwnerName,
-		uint64(*containerMaxCpuShares),
-		uint64(*containerInodeLimit),
-		gardenClient,
-		reg,
-		logEmitter,
-		initializeTransformer(workDir, logger),
+	workDir := setupWorkDir(logger, *tempDir)
+	transformer := initializeTransformer(
 		logger,
+		*cachePath,
+		workDir,
+		*maxCacheSizeInBytes,
+		*maxConcurrentDownloads,
 	)
 
-	apiServer := &server.Server{
-		Address:     *listenAddr,
-		Logger:      logger,
-		DepotClient: depotClient,
-	}
-
-	metricsReporter := &metrics.Reporter{
-		ExecutorSource: reg,
-		ActualSource:   containersFetcher,
-		Interval:       *metricsReportInterval,
-	}
-
-	pruner := registry.NewPruner(reg, timeprovider.NewTimeProvider(), *registryPruningInterval, logger)
+	reg := registry.New(fetchCapacity(logger, gardenClient), timeprovider.NewTimeProvider())
+	depotClient := initializeDepotClient(
+		logger,
+		*loggregatorSecret,
+		*loggregatorServer,
+		*containerOwnerName,
+		*containerMaxCpuShares,
+		*containerInodeLimit,
+		gardenClient,
+		reg,
+		transformer,
+	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
-		{"registry-pruner", pruner},
-		{"api-server", apiServer},
-		{"metrics-reporter", metricsReporter},
+		{"registry-pruner", registry.NewPruner(
+			reg,
+			timeprovider.NewTimeProvider(),
+			*registryPruningInterval,
+			logger,
+		)},
+		{"api-server", &server.Server{
+			Address:     *listenAddr,
+			Logger:      logger,
+			DepotClient: depotClient,
+		}},
+		{"metrics-reporter", &metrics.Reporter{
+			ExecutorSource: reg,
+			ActualSource:   containersFetcher,
+			Interval:       *metricsReportInterval,
+		}},
 	})
-
-	cf_debug_server.Run()
 
 	monitor := ifrit.Envoke(sigmon.New(group))
 
 	logger.Info("started")
 
-	err = <-monitor.Wait()
+	err := <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -219,13 +211,62 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeTransformer(workDir string, logger lager.Logger) *Transformer.Transformer {
-	cache := cacheddownloader.New(*cachePath, workDir, *maxCacheSizeInBytes, 10*time.Minute, *maxConcurrentDownloads)
+func setupWorkDir(logger lager.Logger, tempDir string) string {
+	workDir := filepath.Join(tempDir, "executor-work")
+
+	err := os.RemoveAll(workDir)
+	if err != nil {
+		logger.Error("working-dir.cleanup-failed", err)
+		os.Exit(1)
+	}
+
+	err = os.MkdirAll(workDir, 0755)
+	if err != nil {
+		logger.Error("working-dir.create-failed", err)
+		os.Exit(1)
+	}
+
+	return workDir
+}
+
+func initializeDepotClient(
+	logger lager.Logger,
+	loggregatorSecret, loggregatorServer, containerOwnerName string,
+	containerMaxCpuShares, containerInodeLimit uint64,
+	gardenClient garden_api.Client,
+	reg registry.Registry,
+	transformer *transformer.Transformer,
+) api.Client {
+	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
+	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
+	if err != nil {
+		panic(err)
+	}
+
+	return depot.NewClient(
+		containerOwnerName,
+		containerMaxCpuShares,
+		containerInodeLimit,
+		gardenClient,
+		reg,
+		logEmitter,
+		transformer,
+		logger,
+	)
+}
+
+func initializeTransformer(
+	logger lager.Logger,
+	cachePath, workDir string,
+	maxCacheSizeInBytes uint64,
+	maxConcurrentDownloads uint,
+) *transformer.Transformer {
+	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(maxConcurrentDownloads))
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 
-	return Transformer.NewTransformer(
+	return transformer.NewTransformer(
 		cache,
 		uploader,
 		extractor,
