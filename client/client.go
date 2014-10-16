@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/cloudfoundry-incubator/executor/api"
 	"github.com/tedsuo/rata"
@@ -94,6 +96,37 @@ func (c client) ListContainers() ([]api.Container, error) {
 	}
 
 	return containers, nil
+}
+
+func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
+	req, err := c.reqGen.CreateRequest(api.GetFiles, rata.Params{"guid": guid}, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.RawQuery = url.Values{"source": []string{sourcePath}}.Encode()
+
+	response, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.StatusCode >= 300 {
+		response.Body.Close()
+
+		executorError := response.Header.Get("X-Executor-Error")
+		if len(executorError) > 0 {
+			err, found := api.Errors[executorError]
+			if !found {
+				return nil, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
+			}
+
+			return nil, err
+		}
+
+		return nil, fmt.Errorf("Request failed with status: %d", response.StatusCode)
+	}
+
+	return response.Body, nil
 }
 
 func (c client) RemainingResources() (api.ExecutorResources, error) {

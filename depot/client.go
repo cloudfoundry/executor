@@ -1,6 +1,7 @@
 package depot
 
 import (
+	"io"
 	"os"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -354,6 +355,36 @@ func (c *client) TotalResources() (api.ExecutorResources, error) {
 		Containers: totalCapacity.Containers,
 	}
 	return resources, nil
+}
+
+func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
+	logger := c.logger.Session("get-files", lager.Data{
+		"guid":        guid,
+		"source-path": sourcePath,
+	})
+
+	err := c.syncRegistry()
+	if err != nil {
+		return nil, handleSyncErr(err, logger)
+	}
+
+	registration, err := c.registry.FindByGuid(guid)
+	if err != nil {
+		logger.Error("container-not-found", err)
+		return nil, api.ErrContainerNotFound
+	}
+
+	logger = logger.WithData(lager.Data{
+		"handle": registration.ContainerHandle,
+	})
+
+	container, err := c.gardenClient.Lookup(registration.ContainerHandle)
+	if err != nil {
+		logger.Error("lookup-failed", err)
+		return nil, err
+	}
+
+	return container.StreamOut(sourcePath)
 }
 
 func handleDeleteError(err error, logger lager.Logger) error {

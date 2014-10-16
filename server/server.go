@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/server/get_container"
+	"github.com/cloudfoundry-incubator/executor/server/get_files"
 	"github.com/cloudfoundry-incubator/executor/server/initialize_container"
 	"github.com/cloudfoundry-incubator/executor/server/list_containers"
 	"github.com/cloudfoundry-incubator/executor/server/ping"
@@ -69,5 +70,6 @@ func (s *Server) NewHandlers() rata.Handlers {
 		api.Ping:                  ping.New(s.DepotClient),
 		api.InitializeContainer:   initialize_container.New(s.DepotClient, s.Logger),
 		api.RunActions:            run_actions.New(s.DepotClient, s.Logger),
+		api.GetFiles:              get_files.New(s.DepotClient, s.Logger),
 	}
 }

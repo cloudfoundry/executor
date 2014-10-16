@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -18,11 +20,13 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 	"github.com/tedsuo/rata"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 func MarshalledPayload(payload interface{}) io.Reader {
@@ -51,7 +55,7 @@ var _ = Describe("Api", func() {
 
 		depotClient = new(fakes.FakeClient)
 
-		server = ifrit.Envoke(&Server{
+		server = ginkgomon.Invoke(&Server{
 			Address:     address,
 			Logger:      logger,
 			DepotClient: depotClient,
@@ -517,6 +521,114 @@ var _ = Describe("Api", func() {
 
 			It("returns a 404", func() {
 				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+		})
+	})
+
+	Describe("GET /containers/:guid/files", func() {
+		var request *http.Request
+		var response *http.Response
+
+		BeforeEach(func() {
+			var err error
+
+			request, err = generator.CreateRequest(
+				api.GetFiles,
+				rata.Params{"guid": containerGuid},
+				nil,
+			)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		JustBeforeEach(func() {
+			response = DoRequest(request, nil)
+		})
+
+		Context("when the container exists", func() {
+			BeforeEach(func() {
+				allocRequestBody := MarshalledPayload(api.ContainerAllocationRequest{
+					MemoryMB: 64,
+					DiskMB:   512,
+				})
+
+				allocResponse := DoRequest(generator.CreateRequest(
+					api.AllocateContainer,
+					rata.Params{"guid": containerGuid},
+					allocRequestBody,
+				))
+				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
+			})
+
+			Context("when streaming out of the container succeeds", func() {
+				var responseStream *gbytes.Buffer
+
+				BeforeEach(func() {
+					responseStream = gbytes.BufferWithBytes([]byte("some-stream"))
+					depotClient.GetFilesReturns(responseStream, nil)
+				})
+
+				It("returns 200 OK", func() {
+					Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				})
+
+				It("streams the files to the request", func() {
+					streamedOut, err := ioutil.ReadAll(response.Body)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(streamedOut)).Should(Equal("some-stream"))
+				})
+
+				It("gets the files out of the container's working directory", func() {
+					Ω(depotClient.GetFilesCallCount()).Should(Equal(1))
+
+					guid, source := depotClient.GetFilesArgsForCall(0)
+					Ω(guid).Should(Equal(containerGuid))
+					Ω(source).Should(Equal(""))
+				})
+
+				It("returns application/tar content-type", func() {
+					Ω(response.Header.Get("content-type")).Should(Equal("application/x-tar"))
+				})
+
+				It("closes the stream after the request completes", func() {
+					Ω(responseStream.Closed()).Should(BeTrue())
+				})
+
+				Context("when a source query param is specified", func() {
+					BeforeEach(func() {
+						request.URL.RawQuery = url.Values{
+							"source": []string{"path/to/file"},
+						}.Encode()
+					})
+
+					It("gets the files out of the given path in the container", func() {
+						Ω(depotClient.GetFilesCallCount()).Should(Equal(1))
+
+						guid, source := depotClient.GetFilesArgsForCall(0)
+						Ω(guid).Should(Equal(containerGuid))
+						Ω(source).Should(Equal("path/to/file"))
+					})
+				})
+			})
+
+			Context("when streaming out of the container fails", func() {
+				BeforeEach(func() {
+					depotClient.GetFilesReturns(nil, errors.New("oh no!"))
+				})
+
+				It("returns a 500", func() {
+					Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
+				})
+			})
+		})
+
+		Context("when the container doesn't exist", func() {
+			BeforeEach(func() {
+				depotClient.GetFilesReturns(nil, api.ErrContainerNotFound)
+			})
+
+			It("returns a 404", func() {
+				Ω(response.StatusCode).Should(Equal(http.StatusNotFound))
 			})
 		})
 	})

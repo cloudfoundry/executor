@@ -3,6 +3,7 @@ package main_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -925,7 +926,79 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Describe("staying in sink with garden", func() {
+		Describe("getting files from a container", func() {
+			var (
+				guid string
+
+				stream    io.ReadCloser
+				streamErr error
+			)
+
+			JustBeforeEach(func() {
+				stream, streamErr = executorClient.GetFiles(guid, "some/path")
+			})
+
+			Context("when the container hasn't been initialized", func() {
+				BeforeEach(func() {
+					guid, _ = allocNewContainer(api.ContainerAllocationRequest{
+						MemoryMB: 1024,
+						DiskMB:   1024,
+					})
+				})
+
+				It("returns an error", func() {
+					Ω(streamErr).Should(HaveOccurred())
+				})
+			})
+
+			Context("when the container has been initialized", func() {
+				var fakeContainer *gfakes.FakeContainer
+
+				BeforeEach(func() {
+					guid, fakeContainer = initNewContainer()
+				})
+
+				Context("when streaming out the file succeeds", func() {
+					var (
+						streamedOut *gbytes.Buffer
+					)
+
+					BeforeEach(func() {
+						streamedOut = gbytes.BufferWithBytes([]byte{1, 2, 3})
+
+						fakeContainer.StreamOutReturns(streamedOut, nil)
+					})
+
+					It("does not error", func() {
+						Ω(streamErr).ShouldNot(HaveOccurred())
+					})
+
+					It("streams out the requested path", func() {
+						requestedPath := fakeContainer.StreamOutArgsForCall(0)
+						Ω(requestedPath).Should(Equal("some/path"))
+					})
+
+					It("returns a stream of the contents of the file", func() {
+						contents, err := ioutil.ReadAll(stream)
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(contents).Should(Equal(streamedOut.Contents()))
+					})
+				})
+
+				Context("when streaming out the file fails", func() {
+					BeforeEach(func() {
+						fakeContainer.StreamOutReturns(nil, errors.New("oh no!"))
+					})
+
+					It("returns an error", func() {
+						Ω(streamErr).Should(HaveOccurred())
+						Ω(streamErr.Error()).Should(ContainSubstring("status: 500"))
+					})
+				})
+			})
+		})
+
+		Describe("staying in sync with garden", func() {
 			Context("when a created container disappears out from under us", func() {
 				var guid string
 

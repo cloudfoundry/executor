@@ -2,6 +2,7 @@
 package fakes
 
 import (
+	"io"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/api"
@@ -79,6 +80,16 @@ type FakeClient struct {
 	totalResourcesArgsForCall []struct{}
 	totalResourcesReturns     struct {
 		result1 api.ExecutorResources
+		result2 error
+	}
+	GetFilesStub        func(allocationGuid string, path string) (io.ReadCloser, error)
+	getFilesMutex       sync.RWMutex
+	getFilesArgsForCall []struct {
+		allocationGuid string
+		path           string
+	}
+	getFilesReturns struct {
+		result1 io.ReadCloser
 		result2 error
 	}
 }
@@ -344,6 +355,40 @@ func (fake *FakeClient) TotalResourcesReturns(result1 api.ExecutorResources, res
 	fake.TotalResourcesStub = nil
 	fake.totalResourcesReturns = struct {
 		result1 api.ExecutorResources
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) GetFiles(allocationGuid string, path string) (io.ReadCloser, error) {
+	fake.getFilesMutex.Lock()
+	fake.getFilesArgsForCall = append(fake.getFilesArgsForCall, struct {
+		allocationGuid string
+		path           string
+	}{allocationGuid, path})
+	fake.getFilesMutex.Unlock()
+	if fake.GetFilesStub != nil {
+		return fake.GetFilesStub(allocationGuid, path)
+	} else {
+		return fake.getFilesReturns.result1, fake.getFilesReturns.result2
+	}
+}
+
+func (fake *FakeClient) GetFilesCallCount() int {
+	fake.getFilesMutex.RLock()
+	defer fake.getFilesMutex.RUnlock()
+	return len(fake.getFilesArgsForCall)
+}
+
+func (fake *FakeClient) GetFilesArgsForCall(i int) (string, string) {
+	fake.getFilesMutex.RLock()
+	defer fake.getFilesMutex.RUnlock()
+	return fake.getFilesArgsForCall[i].allocationGuid, fake.getFilesArgsForCall[i].path
+}
+
+func (fake *FakeClient) GetFilesReturns(result1 io.ReadCloser, result2 error) {
+	fake.GetFilesStub = nil
+	fake.getFilesReturns = struct {
+		result1 io.ReadCloser
 		result2 error
 	}{result1, result2}
 }

@@ -1,5 +1,7 @@
 package api
 
+import "io"
+
 type Client interface {
 	Ping() error
 	AllocateContainer(allocationGuid string, request ContainerAllocationRequest) (Container, error)
@@ -10,4 +12,5 @@ type Client interface {
 	ListContainers() ([]Container, error)
 	RemainingResources() (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
+	GetFiles(allocationGuid string, path string) (io.ReadCloser, error)
 }
