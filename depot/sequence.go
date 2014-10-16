@@ -49,8 +49,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 			runLog.Info("completed")
 
 			payload := api.ContainerRunResult{
-				Guid:   r.Registration.Guid,
-				Result: *r.Result,
+				Guid: r.Registration.Guid,
 			}
 
 			if err != nil {
@@ -67,7 +66,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 				return err
 			}
 
-			ifrit.Envoke(&Callback{
+			ifrit.Invoke(&Callback{
 				URL:     r.CompleteURL,
 				Payload: payload,
 			})

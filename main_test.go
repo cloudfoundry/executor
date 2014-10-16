@@ -699,7 +699,6 @@ var _ = Describe("Executor", func() {
 									Guid:          containerGuid,
 									Failed:        false,
 									FailureReason: "",
-									Result:        "",
 								}),
 							),
 						)
@@ -767,7 +766,6 @@ var _ = Describe("Executor", func() {
 									Guid:          containerGuid,
 									Failed:        true,
 									FailureReason: "process error: because i said so",
-									Result:        "",
 								}),
 							),
 						)

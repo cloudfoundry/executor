@@ -11,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/sequence"
 	"github.com/cloudfoundry-incubator/executor/steps/download_step"
 	"github.com/cloudfoundry-incubator/executor/steps/emit_progress_step"
-	"github.com/cloudfoundry-incubator/executor/steps/fetch_result_step"
 	"github.com/cloudfoundry-incubator/executor/steps/monitor_step"
 	"github.com/cloudfoundry-incubator/executor/steps/parallel_step"
 	"github.com/cloudfoundry-incubator/executor/steps/run_step"
@@ -123,14 +122,6 @@ func (transformer *Transformer) convertAction(
 			transformer.tempDir,
 			logStreamer,
 			logger,
-		), nil
-	case models.FetchResultAction:
-		return fetch_result_step.New(
-			container,
-			actionModel,
-			transformer.tempDir,
-			logger,
-			result,
 		), nil
 	case models.EmitProgressAction:
 		subStep, err := transformer.convertAction(

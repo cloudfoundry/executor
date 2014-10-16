@@ -78,7 +78,6 @@ type ContainerRunResult struct {
 
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
-	Result        string `json:"result"`
 }
 
 type ExecutorResources struct {
