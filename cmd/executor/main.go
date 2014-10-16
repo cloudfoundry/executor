@@ -23,8 +23,8 @@ import (
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
-	"github.com/cloudfoundry-incubator/executor/http/server"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
+	"github.com/cloudfoundry-incubator/executor/http/server"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
@@ -134,6 +134,18 @@ var maxConcurrentDownloads = flag.Uint(
 	"maximum in-flight downloads",
 )
 
+var maxConcurrentUploads = flag.Uint(
+	"maxConcurrentUploads",
+	10,
+	"maximum in-flight downloads",
+)
+
+var maxPendingUploads = flag.Uint(
+	"maxConcurrentUploads",
+	10000,
+	"maximum in-flight downloads",
+)
+
 func main() {
 	flag.Parse()
 
@@ -198,7 +210,7 @@ func main() {
 		}},
 	})
 
-	monitor := ifrit.Envoke(sigmon.New(group))
+	monitor := ifrit.Invoke(sigmon.New(group))
 
 	logger.Info("started")
 
@@ -271,6 +283,7 @@ func initializeTransformer(
 		uploader,
 		extractor,
 		compressor,
+		uploadSempahore,
 		logger,
 		workDir,
 	)

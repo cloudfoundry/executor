@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/emittable_error"
@@ -16,6 +17,7 @@ import (
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"
+	"github.com/pivotal-golang/semaphore"
 )
 
 type UploadStep struct {
@@ -24,6 +26,7 @@ type UploadStep struct {
 	uploader   uploader.Uploader
 	compressor compressor.Compressor
 	tempDir    string
+	semaphore  semaphore.Semaphore
 	streamer   log_streamer.LogStreamer
 	logger     lager.Logger
 }
@@ -34,6 +37,7 @@ func New(
 	uploader uploader.Uploader,
 	compressor compressor.Compressor,
 	tempDir string,
+	semaphore semaphore.Semaphore,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *UploadStep {
@@ -49,6 +53,7 @@ func New(
 		tempDir:    tempDir,
 		streamer:   streamer,
 		logger:     logger,
+		semaphore:  semaphore,
 	}
 }
 
@@ -61,8 +66,21 @@ const (
 )
 
 func (step *UploadStep) Perform() (err error) {
-	step.logger.Info("upload-starting")
+	startWaiting := time.Now()
+	resource, err := step.semaphore.Acquire()
+	if err != nil {
+		return err
+	}
 
+	step.logger.Info(fmt.Sprintf("upload-wait-time=%v", time.Since(startWaiting).Seconds()))
+	startUploading := time.Now()
+
+	defer func() {
+		resource.Release()
+		step.logger.Info(fmt.Sprintf("upload-time=%v", time.Since(startUploading).Seconds()))
+	}()
+
+	step.logger.Info("upload-starting")
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
 		// Do not emit error in case it leaks sensitive data in URL

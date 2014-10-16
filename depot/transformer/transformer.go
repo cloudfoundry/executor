@@ -23,6 +23,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
+	"github.com/pivotal-golang/semaphore"
 	"github.com/pivotal-golang/timer"
 )
 
@@ -33,6 +34,7 @@ type Transformer struct {
 	uploader         uploader.Uploader
 	extractor        extractor.Extractor
 	compressor       compressor.Compressor
+	uploadSemapahore semaphore.Semaphore
 	logger           lager.Logger
 	tempDir          string
 	result           *string
@@ -43,6 +45,7 @@ func NewTransformer(
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
+	uploadSemapahore semaphore.Semaphore,
 	logger lager.Logger,
 	tempDir string,
 ) *Transformer {
@@ -120,6 +123,7 @@ func (transformer *Transformer) convertAction(
 			transformer.uploader,
 			transformer.compressor,
 			transformer.tempDir,
+			transformer.uploadSemapahore,
 			logStreamer,
 			logger,
 		), nil
