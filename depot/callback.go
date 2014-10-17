@@ -8,14 +8,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/api"
+	"github.com/cloudfoundry-incubator/executor"
 )
 
 const MAX_CALLBACK_ATTEMPTS = 42
 
 type Callback struct {
 	URL     string
-	Payload api.ContainerRunResult
+	Payload executor.ContainerRunResult
 }
 
 func (c *Callback) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {

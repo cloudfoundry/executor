@@ -3,16 +3,16 @@ package depot
 import (
 	"os"
 
-	"github.com/cloudfoundry-incubator/executor/api"
-	"github.com/cloudfoundry-incubator/executor/registry"
-	"github.com/cloudfoundry-incubator/executor/sequence"
+	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/registry"
+	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
 type RunSequence struct {
 	CompleteURL  string
-	Registration api.Container
+	Registration executor.Container
 	Sequence     sequence.Step
 	Result       *string
 	Registry     registry.Registry
@@ -48,7 +48,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 
 			runLog.Info("completed")
 
-			payload := api.ContainerRunResult{
+			payload := executor.ContainerRunResult{
 				Guid: r.Registration.Guid,
 			}
 
