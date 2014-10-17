@@ -1,7 +1,0 @@
-#!/bin/bash
-
-go get github.com/maxbrunsfeld/counterfeiter
-
-counterfeiter -o log_streamer/fake_log_streamer/fake_log_streamer.go log_streamer LogStreamer
-counterfeiter -o uploader/fake_uploader/fake_uploader.go uploader Uploader
-counterfeiter -o sequence/fake_step/fake_step.go sequence Step
