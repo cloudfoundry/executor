@@ -122,12 +122,15 @@ var _ = Describe("UploadStep", func() {
 		container, err := gardenClient.Create(garden_api.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
+		semaphore := make(chan struct{}, 1)
+
 		step = New(
 			container,
 			*uploadAction,
 			uploader,
 			compressor,
 			tempDir,
+			semaphore,
 			fakeStreamer,
 			logger,
 		)

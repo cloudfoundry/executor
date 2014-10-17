@@ -130,20 +130,14 @@ var metricsReportInterval = flag.Duration(
 
 var maxConcurrentDownloads = flag.Uint(
 	"maxConcurrentDownloads",
-	20,
+	1,
 	"maximum in-flight downloads",
 )
 
 var maxConcurrentUploads = flag.Uint(
 	"maxConcurrentUploads",
-	10,
-	"maximum in-flight downloads",
-)
-
-var maxPendingUploads = flag.Uint(
-	"maxConcurrentUploads",
-	10000,
-	"maximum in-flight downloads",
+	1,
+	"maximum in-flight uploads",
 )
 
 func main() {
@@ -176,6 +170,7 @@ func main() {
 		workDir,
 		*maxCacheSizeInBytes,
 		*maxConcurrentDownloads,
+		*maxConcurrentUploads,
 	)
 
 	reg := registry.New(fetchCapacity(logger, gardenClient), timeprovider.NewTimeProvider())
@@ -272,7 +267,11 @@ func initializeTransformer(
 	cachePath, workDir string,
 	maxCacheSizeInBytes uint64,
 	maxConcurrentDownloads uint,
+	maxConcurrentUploads uint,
 ) *transformer.Transformer {
+	uploadSemaphore := make(chan struct{}, maxConcurrentUploads)
+	downloadSemaphore := make(chan struct{}, maxConcurrentDownloads)
+
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(maxConcurrentDownloads))
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
@@ -283,7 +282,8 @@ func initializeTransformer(
 		uploader,
 		extractor,
 		compressor,
-		uploadSempahore,
+		uploadSemaphore,
+		downloadSemaphore,
 		logger,
 		workDir,
 	)

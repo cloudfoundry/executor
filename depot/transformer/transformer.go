@@ -23,21 +23,21 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/semaphore"
 	"github.com/pivotal-golang/timer"
 )
 
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
-	cachedDownloader cacheddownloader.CachedDownloader
-	uploader         uploader.Uploader
-	extractor        extractor.Extractor
-	compressor       compressor.Compressor
-	uploadSemapahore semaphore.Semaphore
-	logger           lager.Logger
-	tempDir          string
-	result           *string
+	cachedDownloader   cacheddownloader.CachedDownloader
+	uploader           uploader.Uploader
+	extractor          extractor.Extractor
+	compressor         compressor.Compressor
+	uploadSemapahore   chan struct{}
+	downloadSemapahore chan struct{}
+	logger             lager.Logger
+	tempDir            string
+	result             *string
 }
 
 func NewTransformer(
@@ -45,17 +45,22 @@ func NewTransformer(
 	uploader uploader.Uploader,
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
-	uploadSemapahore semaphore.Semaphore,
+	uploadSemapahore chan struct{},
+	downloadSemapahore chan struct{},
 	logger lager.Logger,
 	tempDir string,
 ) *Transformer {
+	logger.Info(fmt.Sprintf("upload-semaphore (NewTransformer): %#v", uploadSemapahore))
+
 	return &Transformer{
-		cachedDownloader: cachedDownloader,
-		uploader:         uploader,
-		extractor:        extractor,
-		compressor:       compressor,
-		logger:           logger,
-		tempDir:          tempDir,
+		cachedDownloader:   cachedDownloader,
+		uploader:           uploader,
+		extractor:          extractor,
+		compressor:         compressor,
+		uploadSemapahore:   uploadSemapahore,
+		downloadSemapahore: downloadSemapahore,
+		logger:             logger,
+		tempDir:            tempDir,
 	}
 }
 
@@ -114,9 +119,12 @@ func (transformer *Transformer) convertAction(
 			container,
 			actionModel,
 			transformer.cachedDownloader,
+			transformer.downloadSemapahore,
 			logger,
 		), nil
 	case models.UploadAction:
+		logger.Info(fmt.Sprintf("upload-semaphore (Transformer.convertAction): %#v", transformer.uploadSemapahore))
+
 		return upload_step.New(
 			container,
 			actionModel,

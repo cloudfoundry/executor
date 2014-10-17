@@ -17,7 +17,6 @@ import (
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/semaphore"
 )
 
 type UploadStep struct {
@@ -26,7 +25,7 @@ type UploadStep struct {
 	uploader   uploader.Uploader
 	compressor compressor.Compressor
 	tempDir    string
-	semaphore  semaphore.Semaphore
+	semaphore  chan struct{}
 	streamer   log_streamer.LogStreamer
 	logger     lager.Logger
 }
@@ -37,13 +36,15 @@ func New(
 	uploader uploader.Uploader,
 	compressor compressor.Compressor,
 	tempDir string,
-	semaphore semaphore.Semaphore,
+	semaphore chan struct{},
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *UploadStep {
 	logger = logger.Session("UploadAction", lager.Data{
 		"from": model.From,
 	})
+
+	logger.Info(fmt.Sprintf("upload-semaphore (New): %#v", semaphore))
 
 	return &UploadStep{
 		container:  container,
@@ -66,17 +67,18 @@ const (
 )
 
 func (step *UploadStep) Perform() (err error) {
+	step.logger.Info("upload-waiting")
+	step.logger.Info(fmt.Sprintf("upload-semaphore: %#v", step.semaphore))
+
 	startWaiting := time.Now()
-	resource, err := step.semaphore.Acquire()
-	if err != nil {
-		return err
-	}
+
+	step.semaphore <- struct{}{}
 
 	step.logger.Info(fmt.Sprintf("upload-wait-time=%v", time.Since(startWaiting).Seconds()))
 	startUploading := time.Now()
 
 	defer func() {
-		resource.Release()
+		<-step.semaphore
 		step.logger.Info(fmt.Sprintf("upload-time=%v", time.Since(startUploading).Seconds()))
 	}()
 

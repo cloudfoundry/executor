@@ -63,10 +63,13 @@ var _ = Describe("DownloadAction", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
+			semaphore := make(chan struct{}, 1)
+
 			step = New(
 				container,
 				downloadAction,
 				cache,
+				semaphore,
 				logger,
 			)
 
