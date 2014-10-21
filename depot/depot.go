@@ -218,7 +218,6 @@ func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
 
 	run := RunSequence{
 		Container:    container,
-		CompleteURL:  request.CompleteURL,
 		Registration: registration,
 		Sequence:     sequence.New(steps),
 		Result:       &result,

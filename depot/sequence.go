@@ -8,12 +8,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	gapi "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/pivotal-golang/lager"
-	"github.com/tedsuo/ifrit"
 )
 
 type RunSequence struct {
 	Container    gapi.Container
-	CompleteURL  string
 	Registration executor.Container
 	Sequence     sequence.Step
 	Result       *string
@@ -81,17 +79,6 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 			if err != nil {
 				runLog.Error("failed-to-complete", err)
 			}
-
-			if r.CompleteURL == "" {
-				return err
-			}
-
-			ifrit.Invoke(&Callback{
-				URL:     r.CompleteURL,
-				Payload: payload,
-			})
-
-			runLog.Info("callback-started")
 
 			return err
 		}
