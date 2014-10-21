@@ -13,19 +13,19 @@ type FakeExecutorSource struct {
 	CurrentCapacityStub        func() registry.Capacity
 	currentCapacityMutex       sync.RWMutex
 	currentCapacityArgsForCall []struct{}
-	currentCapacityReturns struct {
+	currentCapacityReturns     struct {
 		result1 registry.Capacity
 	}
 	TotalCapacityStub        func() registry.Capacity
 	totalCapacityMutex       sync.RWMutex
 	totalCapacityArgsForCall []struct{}
-	totalCapacityReturns struct {
+	totalCapacityReturns     struct {
 		result1 registry.Capacity
 	}
 	GetAllContainersStub        func() []executor.Container
 	getAllContainersMutex       sync.RWMutex
 	getAllContainersArgsForCall []struct{}
-	getAllContainersReturns struct {
+	getAllContainersReturns     struct {
 		result1 []executor.Container
 	}
 }

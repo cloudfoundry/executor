@@ -6,9 +6,9 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
+	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	gapi "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/lager"
@@ -155,13 +155,31 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		return executor.Container{}, handleSyncErr(err, logger)
 	}
 
-	container, err := c.registry.FindByGuid(guid)
+	registration, err := c.registry.FindByGuid(guid)
 	if err != nil {
 		logger.Error("container-not-found", err)
 		return executor.Container{}, executor.ErrContainerNotFound
 	}
 
-	return container, nil
+	if registration.ContainerHandle != "" {
+		container, err := c.gardenClient.Lookup(registration.ContainerHandle)
+		if err != nil {
+			logger.Error("lookup-failed", err)
+			return executor.Container{}, err
+		}
+
+		if value, err := container.GetProperty(runResultFailedProperty); err == nil {
+			registration.RunResult.Failed = value == runResultTrueValue
+
+			if registration.RunResult.Failed {
+				if value, err := container.GetProperty(runResultFailureReasonProperty); err == nil {
+					registration.RunResult.FailureReason = value
+				}
+			}
+		}
+	}
+
+	return registration, nil
 }
 
 func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
@@ -199,6 +217,7 @@ func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
 	}
 
 	run := RunSequence{
+		Container:    container,
 		CompleteURL:  request.CompleteURL,
 		Registration: registration,
 		Sequence:     sequence.New(steps),
@@ -206,7 +225,9 @@ func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
 		Registry:     c.registry,
 		Logger:       c.logger,
 	}
-	process := ifrit.Envoke(run)
+
+	process := ifrit.Invoke(run)
+
 	c.registry.Start(run.Registration.Guid, process)
 
 	logger.Info("started")

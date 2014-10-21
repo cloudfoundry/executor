@@ -615,44 +615,88 @@ var _ = Describe("Executor", func() {
 		})
 
 		Describe("running something", func() {
-			It("propagates global environment variables to each run action", func() {
-				guid, fakeContainer := initNewContainer()
+			Context("without a callback", func() {
+				var guid string
+				var fakeContainer *gfakes.FakeContainer
 
-				process := new(gfakes.FakeProcess)
-				fakeContainer.RunReturns(process, nil)
+				BeforeEach(func() {
+					guid, fakeContainer = initNewContainer()
+				})
 
-				err := executorClient.Run(
-					guid,
-					executor.ContainerRunRequest{
-						Env: []executor.EnvironmentVariable{
-							{Name: "ENV1", Value: "val1"},
-							{Name: "ENV2", Value: "val2"},
-						},
-						Actions: []models.ExecutorAction{
-							{
-								models.RunAction{
-									Path: "ls",
-									Env: []models.EnvironmentVariable{
-										{Name: "RUN_ENV1", Value: "run_val1"},
-										{Name: "RUN_ENV2", Value: "run_val2"},
+				JustBeforeEach(func() {
+					err := executorClient.Run(
+						guid,
+						executor.ContainerRunRequest{
+							Env: []executor.EnvironmentVariable{
+								{Name: "ENV1", Value: "val1"},
+								{Name: "ENV2", Value: "val2"},
+							},
+							Actions: []models.ExecutorAction{
+								{
+									models.RunAction{
+										Path: "ls",
+										Env: []models.EnvironmentVariable{
+											{Name: "RUN_ENV1", Value: "run_val1"},
+											{Name: "RUN_ENV2", Value: "run_val2"},
+										},
 									},
 								},
 							},
 						},
-					},
-				)
-				Ω(err).ShouldNot(HaveOccurred())
+					)
+					Ω(err).ShouldNot(HaveOccurred())
+				})
 
-				Eventually(fakeContainer.RunCallCount, 10).Should(Equal(1))
+				Context("when running succeeds", func() {
+					BeforeEach(func() {
+						process := new(gfakes.FakeProcess)
+						process.WaitReturns(0, nil)
 
-				spec, _ := fakeContainer.RunArgsForCall(0)
-				Ω(spec.Path).Should(Equal("ls"))
-				Ω(spec.Env).Should(Equal([]string{
-					"ENV1=val1",
-					"ENV2=val2",
-					"RUN_ENV1=run_val1",
-					"RUN_ENV2=run_val2",
-				}))
+						fakeContainer.RunReturns(process, nil)
+					})
+
+					It("propagates global environment variables to each run action", func() {
+						Eventually(fakeContainer.RunCallCount, 10).Should(Equal(1))
+
+						spec, _ := fakeContainer.RunArgsForCall(0)
+						Ω(spec.Path).Should(Equal("ls"))
+						Ω(spec.Env).Should(Equal([]string{
+							"ENV1=val1",
+							"ENV2=val2",
+							"RUN_ENV1=run_val1",
+							"RUN_ENV2=run_val2",
+						}))
+					})
+
+					It("saves the failed result in the container's properties", func() {
+						Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(1))
+
+						name, value := fakeContainer.SetPropertyArgsForCall(0)
+						Ω(name).Should(Equal("failed"))
+						Ω(value).Should(Equal("false"))
+					})
+				})
+
+				Context("when running fails", func() {
+					BeforeEach(func() {
+						process := new(gfakes.FakeProcess)
+						process.WaitReturns(1, nil)
+
+						fakeContainer.RunReturns(process, nil)
+					})
+
+					It("saves the failed result in the container's properties", func() {
+						Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(2))
+
+						name, value := fakeContainer.SetPropertyArgsForCall(0)
+						Ω(name).Should(Equal("failed"))
+						Ω(value).Should(Equal("true"))
+
+						name, value = fakeContainer.SetPropertyArgsForCall(1)
+						Ω(name).Should(Equal("failure_reason"))
+						Ω(value).Should(Equal("Exited with status 1"))
+					})
+				})
 			})
 
 			Context("when there is a completeURL and metadata", func() {
@@ -664,10 +708,13 @@ var _ = Describe("Executor", func() {
 					callbackHandler = ghttp.NewServer()
 
 					containerGuid, fakeContainer = initNewContainer()
+				})
 
-					process := new(gfakes.FakeProcess)
-					fakeContainer.RunReturns(process, nil)
+				AfterEach(func() {
+					callbackHandler.Close()
+				})
 
+				JustBeforeEach(func() {
 					err := executorClient.Run(
 						containerGuid,
 						executor.ContainerRunRequest{
@@ -682,119 +729,159 @@ var _ = Describe("Executor", func() {
 							CompleteURL: callbackHandler.URL() + "/result",
 						},
 					)
-
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				AfterEach(func() {
-					callbackHandler.Close()
-				})
-
-				Context("and the completeURL succeeds", func() {
+				Context("when the actions succeed", func() {
 					BeforeEach(func() {
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
-									Guid:          containerGuid,
-									Failed:        false,
-									FailureReason: "",
+						process := new(gfakes.FakeProcess)
+						fakeContainer.RunReturns(process, nil)
+					})
+
+					Context("and the completeURL succeeds", func() {
+						BeforeEach(func() {
+							callbackHandler.AppendHandlers(
+								ghttp.CombineHandlers(
+									ghttp.VerifyRequest("PUT", "/result"),
+									ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+										Guid:          containerGuid,
+										Failed:        false,
+										FailureReason: "",
+									}),
+								),
+							)
+						})
+
+						It("invokes the callback with failed false", func() {
+							Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+						})
+
+						It("marks the container as completed", func() {
+							Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+							container, err := executorClient.GetContainer(containerGuid)
+							Ω(err).ShouldNot(HaveOccurred())
+							Ω(container.State).Should(Equal(executor.StateCompleted))
+						})
+
+						It("does not free the container's reserved resources", func() {
+							Consistently(executorClient.RemainingResources).Should(Equal(executor.ExecutorResources{
+								MemoryMB:   0,
+								DiskMB:     0,
+								Containers: 1023,
+							}))
+						})
+					})
+
+					Context("and the completeURL fails", func() {
+						BeforeEach(func() {
+							callbackHandler.AppendHandlers(
+								http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+									callbackHandler.HTTPTestServer.CloseClientConnections()
 								}),
-							),
-						)
-					})
+								ghttp.RespondWith(http.StatusInternalServerError, ""),
+								ghttp.RespondWith(http.StatusOK, ""),
+							)
+						})
 
-					It("invokes the callback with failed false", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-					})
-
-					It("marks the container as completed", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-						container, err := executorClient.GetContainer(containerGuid)
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(container.State).Should(Equal(executor.StateCompleted))
-					})
-
-					It("does not free the container's reserved resources", func() {
-						Consistently(executorClient.RemainingResources).Should(Equal(executor.ExecutorResources{
-							MemoryMB:   0,
-							DiskMB:     0,
-							Containers: 1023,
-						}))
+						It("invokes the callback repeatedly", func() {
+							Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
+						})
 					})
 				})
 
-				Context("and the completeURL fails", func() {
+				Context("when the actions fail", func() {
 					BeforeEach(func() {
-						callbackHandler.AppendHandlers(
-							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								callbackHandler.HTTPTestServer.CloseClientConnections()
-							}),
-							ghttp.RespondWith(http.StatusInternalServerError, ""),
-							ghttp.RespondWith(http.StatusOK, ""),
-						)
+						disaster := errors.New("because i said so")
+						process := new(gfakes.FakeProcess)
+						process.WaitReturns(1, disaster)
+						fakeContainer.RunReturns(process, nil)
 					})
 
-					It("invokes the callback repeatedly", func() {
-						Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
+					Context("and there is a completeURL", func() {
+						BeforeEach(func() {
+							callbackHandler.AppendHandlers(
+								ghttp.CombineHandlers(
+									ghttp.VerifyRequest("PUT", "/result"),
+									ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+										Guid:          containerGuid,
+										Failed:        true,
+										FailureReason: "process error: because i said so",
+									}),
+								),
+							)
+						})
+
+						It("invokes the callback with failed true and a reason", func() {
+							Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+						})
 					})
 				})
 			})
+		})
 
-			Context("when the actions fail", func() {
-				var disaster = errors.New("because i said so")
-				var fakeContainer *gfakes.FakeContainer
-				var containerGuid string
+		Describe("getting a container", func() {
+			var (
+				guid          string
+				fakeContainer *gfakes.FakeContainer
 
+				container executor.Container
+			)
+
+			BeforeEach(func() {
+				guid, fakeContainer = initNewContainer()
+			})
+
+			JustBeforeEach(func() {
+				var err error
+
+				container, err = executorClient.GetContainer(guid)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			Context("when the container has not finished", func() {
 				BeforeEach(func() {
-					containerGuid, fakeContainer = initNewContainer()
-					process := new(gfakes.FakeProcess)
-					fakeContainer.RunReturns(process, nil)
-					process.WaitReturns(1, disaster)
+					fakeContainer.GetPropertyReturns("", errors.New("oh no!"))
 				})
 
-				Context("and there is a completeURL", func() {
-					var callbackHandler *ghttp.Server
+				It("returns a zero-value for the run result", func() {
+					Ω(container.RunResult).Should(BeZero())
+				})
+			})
 
-					BeforeEach(func() {
-						callbackHandler = ghttp.NewServer()
+			Context("when the container is failed", func() {
+				BeforeEach(func() {
+					fakeContainer.GetPropertyStub = func(name string) (string, error) {
+						switch name {
+						case "failed":
+							return "true", nil
+						case "failure_reason":
+							return "obama", nil
+						default:
+							panic("unknown property access: " + name)
+						}
+					}
+				})
 
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
-									Guid:          containerGuid,
-									Failed:        true,
-									FailureReason: "process error: because i said so",
-								}),
-							),
-						)
+				It("returns its run result as not failed", func() {
+					Ω(container.RunResult.Failed).Should(BeTrue())
+					Ω(container.RunResult.FailureReason).Should(Equal("obama"))
+				})
+			})
 
-						err := executorClient.Run(
-							containerGuid,
-							executor.ContainerRunRequest{
-								Actions: []models.ExecutorAction{
-									{
-										models.RunAction{
-											Path: "ls",
-											Args: []string{"-al"},
-										},
-									},
-								},
-								CompleteURL: callbackHandler.URL() + "/result",
-							},
-						)
+			Context("when the container is not failed", func() {
+				BeforeEach(func() {
+					fakeContainer.GetPropertyStub = func(name string) (string, error) {
+						switch name {
+						case "failed":
+							return "failed", nil
+						default:
+							panic("unknown property access: " + name)
+						}
+					}
+				})
 
-						Ω(err).ShouldNot(HaveOccurred())
-					})
-
-					AfterEach(func() {
-						callbackHandler.Close()
-					})
-
-					It("invokes the callback with failed true and a reason", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-					})
+				It("returns its run result as not failed", func() {
+					Ω(container.RunResult.Failed).Should(BeFalse())
 				})
 			})
 		})

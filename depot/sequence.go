@@ -6,11 +6,13 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
+	gapi "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
 type RunSequence struct {
+	Container    gapi.Container
 	CompleteURL  string
 	Registration executor.Container
 	Sequence     sequence.Step
@@ -41,9 +43,9 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 			r.Sequence.Cancel()
 			runLog.Info("cancelled")
 
-		case err := <-seqComplete:
-			if err == sequence.CancelledError {
-				return err
+		case seqErr := <-seqComplete:
+			if seqErr == sequence.CancelledError {
+				return seqErr
 			}
 
 			runLog.Info("completed")
@@ -52,12 +54,30 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 				Guid: r.Registration.Guid,
 			}
 
-			if err != nil {
+			// there's not a whole lot we can do about these errors.
+			if seqErr == nil {
+				payload.Failed = false
+
+				err := r.Container.SetProperty(runResultFailedProperty, runResultFalseValue)
+				if err != nil {
+					runLog.Error("failed-to-succeed", err)
+				}
+			} else {
 				payload.Failed = true
-				payload.FailureReason = err.Error()
+				payload.FailureReason = seqErr.Error()
+
+				err := r.Container.SetProperty(runResultFailedProperty, runResultTrueValue)
+				if err != nil {
+					runLog.Error("failed-to-fail", err)
+				}
+
+				err = r.Container.SetProperty(runResultFailureReasonProperty, seqErr.Error())
+				if err != nil {
+					runLog.Error("failed-to-fail-for-a-reason", err)
+				}
 			}
 
-			err = r.Registry.Complete(r.Registration.Guid, payload)
+			err := r.Registry.Complete(r.Registration.Guid, payload)
 			if err != nil {
 				runLog.Error("failed-to-complete", err)
 			}
