@@ -1,7 +1,7 @@
 package depot
 
-const runResultFailedProperty = "failed"
-const runResultFailureReasonProperty = "failure_reason"
+const runResultFailedProperty = "executor:failed"
+const runResultFailureReasonProperty = "executor:failure_reason"
 
 const runResultTrueValue = "true"
 const runResultFalseValue = "false"

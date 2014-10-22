@@ -72,7 +72,7 @@ func (c *client) InitializeContainer(guid string, request executor.ContainerInit
 	containerClient, err := c.gardenClient.Create(gapi.ContainerSpec{
 		RootFSPath: request.RootFSPath,
 		Properties: gapi.Properties{
-			"owner": c.containerOwnerName,
+			"executor:owner": c.containerOwnerName,
 		},
 	})
 	if err != nil {

@@ -11,6 +11,6 @@ type executorContainers struct {
 
 func (containers *executorContainers) Containers() ([]garden_api.Container, error) {
 	return containers.gardenClient.Containers(garden_api.Properties{
-		"owner": containers.owner,
+		"executor:owner": containers.owner,
 	})
 }

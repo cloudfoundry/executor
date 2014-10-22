@@ -202,7 +202,7 @@ var _ = Describe("Executor", func() {
 				fakeContainer2.HandleReturns("handle-2")
 
 				fakeBackend.ContainersStub = func(ps gapi.Properties) ([]gapi.Container, error) {
-					if reflect.DeepEqual(ps, gapi.Properties{"owner": ownerName}) {
+					if reflect.DeepEqual(ps, gapi.Properties{"executor:owner": ownerName}) {
 						return []gapi.Container{fakeContainer1, fakeContainer2}, nil
 					} else {
 						return nil, nil
@@ -461,7 +461,7 @@ var _ = Describe("Executor", func() {
 				It("creates it with the configured owner", func() {
 					created := fakeBackend.CreateArgsForCall(0)
 					ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-					Ω(created.Properties["owner"]).Should(Equal(ownerName))
+					Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
 				})
 
 				It("applies the memory, disk, cpu and inode limits", func() {
@@ -670,7 +670,7 @@ var _ = Describe("Executor", func() {
 					Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(1))
 
 					name, value := fakeContainer.SetPropertyArgsForCall(0)
-					Ω(name).Should(Equal("failed"))
+					Ω(name).Should(Equal("executor:failed"))
 					Ω(value).Should(Equal("false"))
 				})
 			})
@@ -687,11 +687,11 @@ var _ = Describe("Executor", func() {
 					Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(2))
 
 					name, value := fakeContainer.SetPropertyArgsForCall(0)
-					Ω(name).Should(Equal("failed"))
+					Ω(name).Should(Equal("executor:failed"))
 					Ω(value).Should(Equal("true"))
 
 					name, value = fakeContainer.SetPropertyArgsForCall(1)
-					Ω(name).Should(Equal("failure_reason"))
+					Ω(name).Should(Equal("executor:failure_reason"))
 					Ω(value).Should(Equal("Exited with status 1"))
 				})
 			})
@@ -730,9 +730,9 @@ var _ = Describe("Executor", func() {
 				BeforeEach(func() {
 					fakeContainer.GetPropertyStub = func(name string) (string, error) {
 						switch name {
-						case "failed":
+						case "executor:failed":
 							return "true", nil
-						case "failure_reason":
+						case "executor:failure_reason":
 							return "obama", nil
 						default:
 							panic("unknown property access: " + name)
@@ -750,8 +750,8 @@ var _ = Describe("Executor", func() {
 				BeforeEach(func() {
 					fakeContainer.GetPropertyStub = func(name string) (string, error) {
 						switch name {
-						case "failed":
-							return "failed", nil
+						case "executor:failed":
+							return "false", nil
 						default:
 							panic("unknown property access: " + name)
 						}
