@@ -87,6 +87,7 @@ func (r *registry) Reserve(guid string, req executor.ContainerAllocationRequest)
 		Guid:        guid,
 		MemoryMB:    req.MemoryMB,
 		DiskMB:      req.DiskMB,
+		Tags:        req.Tags,
 		State:       executor.StateReserved,
 		AllocatedAt: r.timeProvider.Time().UnixNano(),
 	}

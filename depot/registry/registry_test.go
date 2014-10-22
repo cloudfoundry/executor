@@ -133,6 +133,8 @@ var _ = Describe("Registry", func() {
 			container, err = registry.Reserve("a-container", executor.ContainerAllocationRequest{
 				MemoryMB: 50,
 				DiskMB:   100,
+
+				Tags: executor.Tags{"a": "b"},
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 		})
@@ -141,6 +143,7 @@ var _ = Describe("Registry", func() {
 			Ω(container.Guid).Should(Equal("a-container"))
 			Ω(container.MemoryMB).Should(Equal(50))
 			Ω(container.DiskMB).Should(Equal(100))
+			Ω(container.Tags).Should(Equal(executor.Tags{"a": "b"}))
 			Ω(container.State).Should(Equal(executor.StateReserved))
 			Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
 		})

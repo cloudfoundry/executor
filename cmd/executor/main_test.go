@@ -300,6 +300,8 @@ var _ = Describe("Executor", func() {
 				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, executor.ContainerAllocationRequest{
 					MemoryMB: 256,
 					DiskMB:   256,
+
+					Tags: executor.Tags{"some-tag": "some-value"},
 				})
 			})
 
@@ -312,6 +314,7 @@ var _ = Describe("Executor", func() {
 					Ω(allocatedContainer.Guid).Should(Equal(guid))
 					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
 					Ω(allocatedContainer.DiskMB).Should(Equal(256))
+					Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
 					Ω(allocatedContainer.State).Should(Equal("reserved"))
 					Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
 				})
@@ -331,6 +334,7 @@ var _ = Describe("Executor", func() {
 						Ω(container.Guid).Should(Equal(guid))
 						Ω(container.MemoryMB).Should(Equal(256))
 						Ω(container.DiskMB).Should(Equal(256))
+						Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
 						Ω(container.State).Should(Equal("reserved"))
 						Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
 					})
@@ -385,6 +389,8 @@ var _ = Describe("Executor", func() {
 				guid, container = allocNewContainer(executor.ContainerAllocationRequest{
 					MemoryMB: 1024,
 					DiskMB:   1024,
+
+					Tags: executor.Tags{"some-tag": "some-value"},
 				})
 
 				initializeContainerRequest = executor.ContainerInitializationRequest{
@@ -446,6 +452,12 @@ var _ = Describe("Executor", func() {
 					c, err := executorClient.GetContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(c.RootFSPath).Should(Equal(expectedRootFS))
+				})
+
+				It("creates it with the tags as namespaced properties", func() {
+					Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
+					created := fakeBackend.CreateArgsForCall(0)
+					Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
 				})
 			})
 
@@ -760,6 +772,25 @@ var _ = Describe("Executor", func() {
 
 				It("returns its run result as not failed", func() {
 					Ω(container.RunResult.Failed).Should(BeFalse())
+				})
+			})
+
+			Context("when the container has tag-namespaced properties", func() {
+				BeforeEach(func() {
+					fakeContainer.InfoReturns(gapi.ContainerInfo{
+						Properties: gapi.Properties{
+							"executor:failed": "false",
+							"tag:tag-1":       "tag-1-value",
+							"tag:tag-2":       "tag-2-value",
+						},
+					}, nil)
+				})
+
+				It("returns the properties", func() {
+					Ω(container.Tags).Should(Equal(executor.Tags{
+						"tag-1": "tag-1-value",
+						"tag-2": "tag-2-value",
+					}))
 				})
 			})
 		})

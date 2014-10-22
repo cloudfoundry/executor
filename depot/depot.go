@@ -3,6 +3,7 @@ package depot
 import (
 	"io"
 	"os"
+	"strings"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
@@ -48,6 +49,30 @@ func NewClient(
 	}
 }
 
+func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
+	logger := c.logger.Session("allocate", lager.Data{
+		"guid": guid,
+	})
+
+	err := c.syncRegistry()
+	if err != nil {
+		return executor.Container{}, handleSyncErr(err, logger)
+	}
+
+	container, err := c.registry.Reserve(guid, request)
+	if err == registry.ErrContainerAlreadyExists {
+		logger.Error("container-already-allocated", err)
+		return executor.Container{}, executor.ErrContainerGuidNotAvailable
+	}
+
+	if err != nil {
+		logger.Error("full", err)
+		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
+	}
+
+	return container, nil
+}
+
 func (c *client) InitializeContainer(guid string, request executor.ContainerInitializationRequest) (executor.Container, error) {
 	if request.CpuPercent > 100 || request.CpuPercent < 0 {
 		return executor.Container{}, executor.ErrLimitsInvalid
@@ -69,11 +94,17 @@ func (c *client) InitializeContainer(guid string, request executor.ContainerInit
 		return executor.Container{}, err
 	}
 
+	properties := gapi.Properties{
+		"executor:owner": c.containerOwnerName,
+	}
+
+	for k, v := range container.Tags {
+		properties[tagPropertyPrefix+k] = v
+	}
+
 	containerClient, err := c.gardenClient.Create(gapi.ContainerSpec{
 		RootFSPath: request.RootFSPath,
-		Properties: gapi.Properties{
-			"executor:owner": c.containerOwnerName,
-		},
+		Properties: properties,
 	})
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
@@ -121,30 +152,6 @@ func (c *client) InitializeContainer(guid string, request executor.ContainerInit
 	return container, nil
 }
 
-func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
-	logger := c.logger.Session("allocate", lager.Data{
-		"guid": guid,
-	})
-
-	err := c.syncRegistry()
-	if err != nil {
-		return executor.Container{}, handleSyncErr(err, logger)
-	}
-
-	container, err := c.registry.Reserve(guid, request)
-	if err == registry.ErrContainerAlreadyExists {
-		logger.Error("container-already-allocated", err)
-		return executor.Container{}, executor.ErrContainerGuidNotAvailable
-	}
-
-	if err != nil {
-		logger.Error("full", err)
-		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
-	}
-
-	return container, nil
-}
-
 func (c *client) GetContainer(guid string) (executor.Container, error) {
 	logger := c.logger.Session("get", lager.Data{
 		"guid": guid,
@@ -177,6 +184,24 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 				}
 			}
 		}
+
+		info, err := container.Info()
+		if err != nil {
+			panic("TESTME")
+			logger.Error("info-failed", err)
+			return executor.Container{}, err
+		}
+
+		tags := executor.Tags{}
+		for k, v := range info.Properties {
+			if !strings.HasPrefix(k, tagPropertyPrefix) {
+				continue
+			}
+
+			tags[k[len(tagPropertyPrefix):]] = v
+		}
+
+		registration.Tags = tags
 	}
 
 	return registration, nil

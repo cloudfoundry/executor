@@ -19,6 +19,8 @@ type Container struct {
 	MemoryMB int `json:"memory_mb"`
 	DiskMB   int `json:"disk_mb"`
 
+	Tags Tags `json:"tags,omitempty"`
+
 	AllocatedAt int64 `json:"allocated_at"`
 
 	// init
@@ -58,6 +60,8 @@ type PortMapping struct {
 type ContainerAllocationRequest struct {
 	MemoryMB int `json:"memory_mb"`
 	DiskMB   int `json:"disk_mb"`
+
+	Tags Tags `json:"tags,omitempty"`
 }
 
 type ContainerInitializationRequest struct {
@@ -85,3 +89,5 @@ type ExecutorResources struct {
 	DiskMB     int `json:"disk_mb"`
 	Containers int `json:"containers"`
 }
+
+type Tags map[string]string
