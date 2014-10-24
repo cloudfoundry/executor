@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/ghttp"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -637,34 +638,35 @@ var _ = Describe("Executor", func() {
 		})
 
 		Describe("running something", func() {
+			var runRequest executor.ContainerRunRequest
+
 			var guid string
 			var fakeContainer *gfakes.FakeContainer
 
 			BeforeEach(func() {
 				guid, fakeContainer = initNewContainer()
-			})
 
-			JustBeforeEach(func() {
-				err := executorClient.Run(
-					guid,
-					executor.ContainerRunRequest{
-						Env: []executor.EnvironmentVariable{
-							{Name: "ENV1", Value: "val1"},
-							{Name: "ENV2", Value: "val2"},
-						},
-						Actions: []models.ExecutorAction{
-							{
-								models.RunAction{
-									Path: "ls",
-									Env: []models.EnvironmentVariable{
-										{Name: "RUN_ENV1", Value: "run_val1"},
-										{Name: "RUN_ENV2", Value: "run_val2"},
-									},
+				runRequest = executor.ContainerRunRequest{
+					Env: []executor.EnvironmentVariable{
+						{Name: "ENV1", Value: "val1"},
+						{Name: "ENV2", Value: "val2"},
+					},
+					Actions: []models.ExecutorAction{
+						{
+							models.RunAction{
+								Path: "ls",
+								Env: []models.EnvironmentVariable{
+									{Name: "RUN_ENV1", Value: "run_val1"},
+									{Name: "RUN_ENV2", Value: "run_val2"},
 								},
 							},
 						},
 					},
-				)
+				}
+			})
+
+			JustBeforeEach(func() {
+				err := executorClient.Run(guid, runRequest)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -696,6 +698,49 @@ var _ = Describe("Executor", func() {
 					Ω(name).Should(Equal("executor:failed"))
 					Ω(value).Should(Equal("false"))
 				})
+
+				Context("and there is a complete callback", func() {
+					var callbackHandler *ghttp.Server
+
+					BeforeEach(func() {
+						callbackHandler = ghttp.NewServer()
+						runRequest.CompleteURL = callbackHandler.URL() + "/result"
+
+						callbackHandler.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("PUT", "/result"),
+								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+									Guid:   guid,
+									Failed: false,
+								}),
+							),
+						)
+					})
+
+					It("invokes the callback with failed false", func() {
+						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					})
+
+					Context("and the callback fails", func() {
+						BeforeEach(func() {
+							callbackHandler.SetHandler(
+								0,
+								http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+									callbackHandler.HTTPTestServer.CloseClientConnections()
+								}),
+							)
+
+							callbackHandler.AppendHandlers(
+								ghttp.RespondWith(http.StatusInternalServerError, ""),
+								ghttp.RespondWith(http.StatusOK, ""),
+							)
+						})
+
+						It("invokes the callback repeatedly", func() {
+							Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
+						})
+					})
+				})
 			})
 
 			Context("when running fails", func() {
@@ -716,6 +761,30 @@ var _ = Describe("Executor", func() {
 					name, value = fakeContainer.SetPropertyArgsForCall(1)
 					Ω(name).Should(Equal("executor:failure_reason"))
 					Ω(value).Should(Equal("Exited with status 1"))
+				})
+
+				Context("and there is a complete callback", func() {
+					var callbackHandler *ghttp.Server
+
+					BeforeEach(func() {
+						callbackHandler = ghttp.NewServer()
+						runRequest.CompleteURL = callbackHandler.URL() + "/result"
+
+						callbackHandler.AppendHandlers(
+							ghttp.CombineHandlers(
+								ghttp.VerifyRequest("PUT", "/result"),
+								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+									Guid:          guid,
+									Failed:        true,
+									FailureReason: "Exited with status 1",
+								}),
+							),
+						)
+					})
+
+					It("invokes the callback with failed true and a reason", func() {
+						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					})
 				})
 			})
 		})
