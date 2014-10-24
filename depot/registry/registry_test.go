@@ -131,8 +131,19 @@ var _ = Describe("Registry", func() {
 		BeforeEach(func() {
 			var err error
 			container, err = registry.Reserve("a-container", executor.ContainerAllocationRequest{
-				MemoryMB: 50,
-				DiskMB:   100,
+				RootFSPath: "some-rootfs-path",
+
+				MemoryMB:   50,
+				DiskMB:     100,
+				CpuPercent: 50.5,
+
+				Ports: []executor.PortMapping{
+					{ContainerPort: 8080, HostPort: 1234},
+				},
+
+				Log: executor.LogConfig{
+					Guid: "some-log-guid",
+				},
 
 				Tags: executor.Tags{"a": "b"},
 			})
@@ -141,8 +152,16 @@ var _ = Describe("Registry", func() {
 
 		It("should return a correctly configured container in the reserved state", func() {
 			Ω(container.Guid).Should(Equal("a-container"))
+			Ω(container.RootFSPath).Should(Equal("some-rootfs-path"))
 			Ω(container.MemoryMB).Should(Equal(50))
 			Ω(container.DiskMB).Should(Equal(100))
+			Ω(container.CpuPercent).Should(Equal(50.5))
+			Ω(container.Ports).Should(Equal([]executor.PortMapping{
+				{ContainerPort: 8080, HostPort: 1234},
+			}))
+			Ω(container.Log).Should(Equal(executor.LogConfig{
+				Guid: "some-log-guid",
+			}))
 			Ω(container.Tags).Should(Equal(executor.Tags{"a": "b"}))
 			Ω(container.State).Should(Equal(executor.StateReserved))
 			Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
@@ -225,18 +244,19 @@ var _ = Describe("Registry", func() {
 
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
-					MemoryMB: 50,
-					DiskMB:   100,
+					MemoryMB:   50,
+					DiskMB:     100,
+					CpuPercent: 0.5,
+					Ports:      []executor.PortMapping{{ContainerPort: 8080}},
+					Log:        executor.LogConfig{Guid: "log-guid"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
 				_, err = registry.Initialize("a-container")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				container, err = registry.Create("a-container", "handle", executor.ContainerInitializationRequest{
-					CpuPercent: 0.5,
-					Ports:      []executor.PortMapping{{ContainerPort: 8080}},
-					Log:        executor.LogConfig{Guid: "log-guid"},
+				container, err = registry.Create("a-container", "handle", []executor.PortMapping{
+					{ContainerPort: 8080, HostPort: 1234},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
@@ -244,15 +264,18 @@ var _ = Describe("Registry", func() {
 			It("should transition the container to the created state and attach the passed in handle", func() {
 				Ω(container.State).Should(Equal(executor.StateCreated))
 				Ω(container.ContainerHandle).Should(Equal("handle"))
-				Ω(container.CpuPercent).Should(Equal(0.5))
-				Ω(container.Ports[0].ContainerPort).Should(Equal(uint32(8080)))
-				Ω(container.Log.Guid).Should(Equal("log-guid"))
+			})
+
+			It("updates the container's port mappings", func() {
+				Ω(container.Ports).Should(Equal([]executor.PortMapping{
+					{ContainerPort: 8080, HostPort: 1234},
+				}))
 			})
 		})
 
 		Context("when the container does not exist", func() {
 			It("should return an ErrContainerNotFound", func() {
-				_, err := registry.Create("a-container", "handle", executor.ContainerInitializationRequest{})
+				_, err := registry.Create("a-container", "handle", nil)
 				Ω(err).Should(MatchError(ErrContainerNotFound))
 			})
 		})
@@ -267,7 +290,7 @@ var _ = Describe("Registry", func() {
 			})
 
 			It("should return an ErrContainerNotInitialized", func() {
-				_, err := registry.Create("a-container", "another-handle", executor.ContainerInitializationRequest{})
+				_, err := registry.Create("a-container", "another-handle", nil)
 				Ω(err).Should(MatchError(ErrContainerNotInitialized))
 			})
 		})
@@ -283,12 +306,12 @@ var _ = Describe("Registry", func() {
 				_, err = registry.Initialize("a-container")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = registry.Create("a-container", "handle", executor.ContainerInitializationRequest{})
+				_, err = registry.Create("a-container", "handle", nil)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("should return an ErrContainerNotInitialized", func() {
-				_, err := registry.Create("a-container", "another-handle", executor.ContainerInitializationRequest{})
+				_, err := registry.Create("a-container", "another-handle", nil)
 				Ω(err).Should(MatchError(ErrContainerNotInitialized))
 			})
 		})
@@ -405,7 +428,7 @@ func initializeContainer(registry Registry, guid string) executor.Container {
 func createContainer(registry Registry, guid string) executor.Container {
 	initializeContainer(registry, guid)
 
-	container, err := registry.Create(guid, guid+"-handle", executor.ContainerInitializationRequest{})
+	container, err := registry.Create(guid, guid+"-handle", nil)
 	Ω(err).ShouldNot(HaveOccurred())
 	return container
 }

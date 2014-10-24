@@ -124,19 +124,20 @@ var _ = Describe("Executor", func() {
 	}
 
 	initNewContainer := func() (guid string, fakeContainer *gfakes.FakeContainer) {
+		index := 13
+
 		guid, fakeContainer = allocNewContainer(executor.ContainerAllocationRequest{
 			MemoryMB: 1024,
 			DiskMB:   1024,
-		})
 
-		index := 13
-		_, err := executorClient.InitializeContainer(guid, executor.ContainerInitializationRequest{
 			Log: executor.LogConfig{
 				Guid:       "the-app-guid",
 				SourceName: "STG",
 				Index:      &index,
 			},
 		})
+
+		_, err := executorClient.InitializeContainer(guid)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		return guid, fakeContainer
@@ -287,74 +288,83 @@ var _ = Describe("Executor", func() {
 
 		Describe("allocating the container", func() {
 			var guid string
+			var allocRequest executor.ContainerAllocationRequest
 			var allocatedContainer executor.Container
 			var allocErr error
 
 			BeforeEach(func() {
 				id, err := uuid.NewV4()
 				Ω(err).ShouldNot(HaveOccurred())
+
 				guid = id.String()
+
+				allocRequest = executor.ContainerAllocationRequest{
+					Tags: executor.Tags{"some-tag": "some-value"},
+				}
 			})
 
 			JustBeforeEach(func() {
-				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, executor.ContainerAllocationRequest{
-					MemoryMB: 256,
-					DiskMB:   256,
+				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, allocRequest)
+			})
 
-					Tags: executor.Tags{"some-tag": "some-value"},
+			It("does not return an error", func() {
+				Ω(allocErr).ShouldNot(HaveOccurred())
+			})
+
+			It("returns a container", func() {
+				Ω(allocatedContainer.Guid).Should(Equal(guid))
+				Ω(allocatedContainer.MemoryMB).Should(Equal(0))
+				Ω(allocatedContainer.DiskMB).Should(Equal(0))
+				Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
+				Ω(allocatedContainer.State).Should(Equal("reserved"))
+				Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+			})
+
+			Context("when allocated with memory and disk limits", func() {
+				BeforeEach(func() {
+					allocRequest.MemoryMB = 256
+					allocRequest.DiskMB = 256
+				})
+
+				It("returns the limits on the container", func() {
+					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
+					Ω(allocatedContainer.DiskMB).Should(Equal(256))
+				})
+
+				It("reduces the capacity by the amount reserved", func() {
+					Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
+						MemoryMB:   768,
+						DiskMB:     768,
+						Containers: 1023,
+					}))
 				})
 			})
 
-			Context("when there are containers available", func() {
-				It("does not return an error", func() {
-					Ω(allocErr).ShouldNot(HaveOccurred())
+			Context("when the requested CPU percent is > 100", func() {
+				BeforeEach(func() {
+					allocRequest.CpuPercent = 101.0
 				})
 
-				It("returns a container", func() {
-					Ω(allocatedContainer.Guid).Should(Equal(guid))
-					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
-					Ω(allocatedContainer.DiskMB).Should(Equal(256))
-					Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
-					Ω(allocatedContainer.State).Should(Equal("reserved"))
-					Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+				It("returns an error", func() {
+					Ω(allocErr).Should(HaveOccurred())
+					Ω(allocErr).Should(Equal(executor.ErrLimitsInvalid))
+				})
+			})
+
+			Context("when the requested CPU percent is < 0", func() {
+				BeforeEach(func() {
+					allocRequest.CpuPercent = -14.0
 				})
 
-				Context("and we get the container", func() {
-					var container executor.Container
-					var getErr error
-					JustBeforeEach(func() {
-						container, getErr = executorClient.GetContainer(guid)
-					})
-
-					It("does not return an error", func() {
-						Ω(getErr).ShouldNot(HaveOccurred())
-					})
-
-					It("retains the reserved containers", func() {
-						Ω(container.Guid).Should(Equal(guid))
-						Ω(container.MemoryMB).Should(Equal(256))
-						Ω(container.DiskMB).Should(Equal(256))
-						Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
-						Ω(container.State).Should(Equal("reserved"))
-						Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
-					})
-
-					It("reduces the capacity by the amount reserved", func() {
-						Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
-							MemoryMB:   768,
-							DiskMB:     768,
-							Containers: 1023,
-						}))
-					})
+				It("returns an error", func() {
+					Ω(allocErr).Should(HaveOccurred())
+					Ω(allocErr).Should(Equal(executor.ErrLimitsInvalid))
 				})
 			})
 
 			Context("when the container cannot be reserved because the guid is already taken", func() {
 				BeforeEach(func() {
-					_, err := executorClient.AllocateContainer(guid, executor.ContainerAllocationRequest{
-						MemoryMB: 1,
-						DiskMB:   1,
-					})
+					_, err := executorClient.AllocateContainer(guid, allocRequest)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -365,262 +375,263 @@ var _ = Describe("Executor", func() {
 
 			Context("when the container cannot be reserved because there is no room", func() {
 				BeforeEach(func() {
-					_, err := executorClient.AllocateContainer("another-container-guid", executor.ContainerAllocationRequest{
-						MemoryMB: 1024,
-						DiskMB:   1024,
-					})
-					Ω(err).ShouldNot(HaveOccurred())
+					allocRequest.MemoryMB = 999999999999999
+					allocRequest.DiskMB = 999999999999999
 				})
 
 				It("returns an error", func() {
 					Ω(allocErr).Should(Equal(executor.ErrInsufficientResourcesAvailable))
 				})
 			})
-		})
 
-		Describe("initializing the container", func() {
-			var initializeContainerRequest executor.ContainerInitializationRequest
-			var err error
-			var initializedContainer executor.Container
-			var container *gfakes.FakeContainer
-			var guid string
+			Describe("getting", func() {
+				var container executor.Container
+				var getErr error
 
-			BeforeEach(func() {
-				guid, container = allocNewContainer(executor.ContainerAllocationRequest{
-					MemoryMB: 1024,
-					DiskMB:   1024,
-
-					Tags: executor.Tags{"some-tag": "some-value"},
+				JustBeforeEach(func() {
+					container, getErr = executorClient.GetContainer(guid)
 				})
 
-				initializeContainerRequest = executor.ContainerInitializationRequest{
-					CpuPercent: 50.0,
-				}
-			})
-
-			JustBeforeEach(func() {
-				initializedContainer, err = executorClient.InitializeContainer(guid, initializeContainerRequest)
-			})
-
-			Context("when the requested CPU percent is > 100", func() {
-				BeforeEach(func() {
-					initializeContainerRequest = executor.ContainerInitializationRequest{
-						CpuPercent: 101.0,
-					}
+				It("does not return an error", func() {
+					Ω(getErr).ShouldNot(HaveOccurred())
 				})
 
-				It("returns an error", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(Equal(executor.ErrLimitsInvalid))
-				})
-			})
-
-			Context("when the requested CPU percent is < 0", func() {
-				BeforeEach(func() {
-					initializeContainerRequest = executor.ContainerInitializationRequest{
-						CpuPercent: -14.0,
-					}
+				It("retains the reserved containers", func() {
+					Ω(container.Guid).Should(Equal(guid))
+					Ω(container.MemoryMB).Should(Equal(0))
+					Ω(container.DiskMB).Should(Equal(0))
+					Ω(container.CpuPercent).Should(Equal(0.0))
+					Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
+					Ω(container.State).Should(Equal("reserved"))
+					Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
 				})
 
-				It("returns an error", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(Equal(executor.ErrLimitsInvalid))
-				})
-			})
-
-			Context("when the container specifies a docker root_fs", func() {
-				var expectedRootFS = "docker:///docker.com/my-image"
-
-				BeforeEach(func() {
-					initializeContainerRequest = executor.ContainerInitializationRequest{
-						RootFSPath: expectedRootFS,
-					}
-					fakeBackend.CreateReturns(container, nil)
-				})
-
-				It("doesn't return an error", func() {
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("creates it with the configured rootfs", func() {
-					Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
-					created := fakeBackend.CreateArgsForCall(0)
-					Ω(created.RootFSPath).Should(Equal(expectedRootFS))
-				})
-
-				It("records the rootfs on the container", func() {
-					c, err := executorClient.GetContainer(guid)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(c.RootFSPath).Should(Equal(expectedRootFS))
-				})
-
-				It("creates it with the tags as namespaced properties", func() {
-					Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
-					created := fakeBackend.CreateArgsForCall(0)
-					Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
-				})
-			})
-
-			Context("when the container can be created", func() {
-				BeforeEach(func() {
-					fakeBackend.CreateReturns(container, nil)
-				})
-
-				It("doesn't return an error", func() {
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("creates it with the configured owner", func() {
-					created := fakeBackend.CreateArgsForCall(0)
-					ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-					Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
-				})
-
-				It("applies the memory, disk, cpu and inode limits", func() {
-					limitedMemory := container.LimitMemoryArgsForCall(0)
-					Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(1024 * 1024 * 1024)))
-
-					limitedDisk := container.LimitDiskArgsForCall(0)
-					Ω(limitedDisk.ByteHard).Should(Equal(uint64(1024 * 1024 * 1024)))
-					Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-
-					limitedCPU := container.LimitCPUArgsForCall(0)
-					Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
-				})
-
-				Context("when the container has no memory limits requested", func() {
+				Context("when allocated with memory, disk, cpu, and inode limits", func() {
 					BeforeEach(func() {
-						guid, container = allocNewContainer(executor.ContainerAllocationRequest{
-							MemoryMB: 0,
-							DiskMB:   0,
-						})
+						allocRequest.MemoryMB = 256
+						allocRequest.DiskMB = 256
+						allocRequest.CpuPercent = 50.0
 					})
 
-					It("does not enforce a zero-value memory limit", func() {
-						Ω(container.LimitMemoryCallCount()).Should(Equal(0))
-					})
-
-					It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
-						limitedDisk := container.LimitDiskArgsForCall(0)
-						Ω(limitedDisk.ByteHard).Should(BeZero())
-						Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+					It("returns the disk, memory, and cpu limits", func() {
+						Ω(container.MemoryMB).Should(Equal(256))
+						Ω(container.DiskMB).Should(Equal(256))
+						Ω(container.CpuPercent).Should(Equal(50.0))
 					})
 				})
 
-				Context("when the container has no CPU limits requested", func() {
+				Context("when the container was allocated with a rootfs", func() {
+					var expectedRootFS = "docker:///docker.com/my-image"
+
 					BeforeEach(func() {
-						initializeContainerRequest.CpuPercent = 0
+						allocRequest.RootFSPath = expectedRootFS
 					})
 
-					It("does not enforce a zero-value limit", func() {
-						Ω(container.LimitCPUCallCount()).Should(Equal(0))
+					It("records the rootfs on the container", func() {
+						Ω(container.RootFSPath).Should(Equal(expectedRootFS))
 					})
 				})
+			})
 
-				Context("when ports are exposed", func() {
+			Describe("initializing", func() {
+				var (
+					initializedContainer executor.Container
+					initErr              error
+				)
+
+				JustBeforeEach(func() {
+					initializedContainer, initErr = executorClient.InitializeContainer(guid)
+				})
+
+				Context("when the container can be created", func() {
+					var gardenContainer *gfakes.FakeContainer
+
 					BeforeEach(func() {
-						initializeContainerRequest = executor.ContainerInitializationRequest{
-							CpuPercent: 0.5,
-							Ports: []executor.PortMapping{
-								{ContainerPort: 8080, HostPort: 0},
-								{ContainerPort: 8081, HostPort: 1234},
-							},
-						}
+						gardenContainer = new(gfakes.FakeContainer)
+						fakeBackend.CreateReturns(gardenContainer, nil)
+						fakeBackend.LookupReturns(gardenContainer, nil)
 					})
 
-					It("exposes the configured ports", func() {
-						netInH, netInC := container.NetInArgsForCall(0)
-						Ω(netInH).Should(Equal(uint32(0)))
-						Ω(netInC).Should(Equal(uint32(8080)))
-
-						netInH, netInC = container.NetInArgsForCall(1)
-						Ω(netInH).Should(Equal(uint32(1234)))
-						Ω(netInC).Should(Equal(uint32(8081)))
+					It("does not error", func() {
+						Ω(initErr).ShouldNot(HaveOccurred())
 					})
 
-					Context("when net-in succeeds", func() {
+					It("creates it with the tags as namespaced properties", func() {
+						Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
+						created := fakeBackend.CreateArgsForCall(0)
+						Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
+					})
+
+					It("creates it with the configured owner", func() {
+						created := fakeBackend.CreateArgsForCall(0)
+						ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
+						Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
+					})
+
+					Context("when created with memory, disk, cpu, and inode limits", func() {
 						BeforeEach(func() {
-							calls := uint32(0)
-							container.NetInStub = func(uint32, uint32) (uint32, uint32, error) {
-								calls++
-								return 1234 * calls, 4567 * calls, nil
-							}
+							allocRequest.MemoryMB = 256
+							allocRequest.DiskMB = 256
+							allocRequest.CpuPercent = 50
 						})
 
-						It("returns the container with mapped ports", func() {
-							Ω(initializedContainer.Ports).Should(Equal([]executor.PortMapping{
-								{HostPort: 1234, ContainerPort: 4567},
-								{HostPort: 2468, ContainerPort: 9134},
-							}))
-						})
-					})
+						It("applies them to the container", func() {
+							Ω(gardenContainer.LimitMemoryCallCount()).Should(Equal(1))
+							Ω(gardenContainer.LimitDiskCallCount()).Should(Equal(1))
+							Ω(gardenContainer.LimitCPUCallCount()).Should(Equal(1))
 
-					Context("when mapping the ports fails", func() {
-						BeforeEach(func() {
-							container.NetInReturns(0, 0, errors.New("oh no!"))
+							limitedMemory := gardenContainer.LimitMemoryArgsForCall(0)
+							Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(256 * 1024 * 1024)))
+
+							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
+							Ω(limitedDisk.ByteHard).Should(Equal(uint64(256 * 1024 * 1024)))
+							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+
+							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
+							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
 						})
 
-						It("returns an error", func() {
-							Ω(err).Should(HaveOccurred())
-							Ω(err.Error()).Should(ContainSubstring("status: 500"))
+						Context("when limiting memory fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitMemoryReturns(errors.New("oh no!"))
+							})
+
+							It("returns an error", func() {
+								Ω(initErr).Should(HaveOccurred())
+								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
+							})
+						})
+
+						Context("when limiting disk fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitDiskReturns(errors.New("oh no!"))
+							})
+
+							It("returns an error", func() {
+								Ω(initErr).Should(HaveOccurred())
+								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
+							})
+						})
+
+						Context("when limiting CPU fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitCPUReturns(errors.New("oh no!"))
+							})
+
+							It("returns an error", func() {
+								Ω(initErr).Should(HaveOccurred())
+								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
+							})
+						})
+
+						Context("when the container was allocated with a rootfs", func() {
+							var expectedRootFS = "docker:///docker.com/my-image"
+
+							BeforeEach(func() {
+								allocRequest.RootFSPath = expectedRootFS
+							})
+
+							It("does not error", func() {
+								Ω(initErr).ShouldNot(HaveOccurred())
+							})
+
+							It("creates it with the configured rootfs", func() {
+								Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
+								created := fakeBackend.CreateArgsForCall(0)
+								Ω(created.RootFSPath).Should(Equal(expectedRootFS))
+							})
+						})
+
+						Context("when the container has no memory limits requested", func() {
+							BeforeEach(func() {
+								allocRequest.MemoryMB = 0
+							})
+
+							It("does not enforce a zero-value memory limit", func() {
+								Ω(gardenContainer.LimitMemoryCallCount()).Should(Equal(0))
+							})
+						})
+
+						Context("when the container has no disk limits requested", func() {
+							BeforeEach(func() {
+								allocRequest.DiskMB = 0
+							})
+
+							It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
+								limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
+								Ω(limitedDisk.ByteHard).Should(BeZero())
+								Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+							})
+						})
+
+						Context("when the container has no CPU limits requested", func() {
+							BeforeEach(func() {
+								allocRequest.CpuPercent = 0
+							})
+
+							It("does not enforce a zero-value limit", func() {
+								Ω(gardenContainer.LimitCPUCallCount()).Should(Equal(0))
+							})
+						})
+
+						Context("when ports are exposed", func() {
+							BeforeEach(func() {
+								allocRequest.Ports = []executor.PortMapping{
+									{ContainerPort: 8080, HostPort: 0},
+									{ContainerPort: 8081, HostPort: 1234},
+								}
+							})
+
+							It("exposes the configured ports", func() {
+								netInH, netInC := gardenContainer.NetInArgsForCall(0)
+								Ω(netInH).Should(Equal(uint32(0)))
+								Ω(netInC).Should(Equal(uint32(8080)))
+
+								netInH, netInC = gardenContainer.NetInArgsForCall(1)
+								Ω(netInH).Should(Equal(uint32(1234)))
+								Ω(netInC).Should(Equal(uint32(8081)))
+							})
+
+							Context("when net-in succeeds", func() {
+								BeforeEach(func() {
+									calls := uint32(0)
+									gardenContainer.NetInStub = func(uint32, uint32) (uint32, uint32, error) {
+										calls++
+										return 1234 * calls, 4567 * calls, nil
+									}
+								})
+
+								It("returns the container with mapped ports", func() {
+									Ω(initializedContainer.Ports).Should(Equal([]executor.PortMapping{
+										{HostPort: 1234, ContainerPort: 4567},
+										{HostPort: 2468, ContainerPort: 9134},
+									}))
+								})
+							})
+
+							Context("when mapping the ports fails", func() {
+								BeforeEach(func() {
+									gardenContainer.NetInReturns(0, 0, errors.New("oh no!"))
+								})
+
+								It("returns an error", func() {
+									Ω(initErr).Should(HaveOccurred())
+									Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
+								})
+							})
 						})
 					})
 				})
 
-				Context("when a zero-value CPU percentage is specified", func() {
+				Context("when for some reason the container fails to create", func() {
 					BeforeEach(func() {
-						initializeContainerRequest = executor.ContainerInitializationRequest{
-							CpuPercent: 0,
-						}
-					})
-
-					It("does not apply it", func() {
-						Ω(container.LimitCPUCallCount()).Should(BeZero())
-					})
-				})
-
-				Context("when limiting memory fails", func() {
-					BeforeEach(func() {
-						container.LimitMemoryReturns(errors.New("oh no!"))
+						fakeBackend.CreateReturns(nil, errors.New("oh no!"))
 					})
 
 					It("returns an error", func() {
-						Ω(err).Should(HaveOccurred())
-						Ω(err.Error()).Should(ContainSubstring("status: 500"))
+						Ω(initErr).Should(HaveOccurred())
+						Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
 					})
-				})
-
-				Context("when limiting disk fails", func() {
-					BeforeEach(func() {
-						container.LimitDiskReturns(errors.New("oh no!"))
-					})
-
-					It("returns an error", func() {
-						Ω(err).Should(HaveOccurred())
-						Ω(err.Error()).Should(ContainSubstring("status: 500"))
-					})
-				})
-
-				Context("when limiting CPU fails", func() {
-					BeforeEach(func() {
-						container.LimitCPUReturns(errors.New("oh no!"))
-					})
-
-					It("returns an error", func() {
-						Ω(err).Should(HaveOccurred())
-						Ω(err.Error()).Should(ContainSubstring("status: 500"))
-					})
-				})
-			})
-
-			Context("when for some reason the container fails to create", func() {
-				BeforeEach(func() {
-					fakeBackend.CreateReturns(nil, errors.New("oh no!"))
-				})
-
-				It("returns an error", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err.Error()).Should(ContainSubstring("status: 500"))
 				})
 			})
 		})

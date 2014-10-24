@@ -50,6 +50,10 @@ func NewClient(
 }
 
 func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
+	if request.CpuPercent > 100 || request.CpuPercent < 0 {
+		return executor.Container{}, executor.ErrLimitsInvalid
+	}
+
 	logger := c.logger.Session("allocate", lager.Data{
 		"guid": guid,
 	})
@@ -73,11 +77,7 @@ func (c *client) AllocateContainer(guid string, request executor.ContainerAlloca
 	return container, nil
 }
 
-func (c *client) InitializeContainer(guid string, request executor.ContainerInitializationRequest) (executor.Container, error) {
-	if request.CpuPercent > 100 || request.CpuPercent < 0 {
-		return executor.Container{}, executor.ErrLimitsInvalid
-	}
-
+func (c *client) InitializeContainer(guid string) (executor.Container, error) {
 	logger := c.logger.Session("initialize", lager.Data{
 		"guid": guid,
 	})
@@ -103,7 +103,7 @@ func (c *client) InitializeContainer(guid string, request executor.ContainerInit
 	}
 
 	containerClient, err := c.gardenClient.Create(gapi.ContainerSpec{
-		RootFSPath: request.RootFSPath,
+		RootFSPath: container.RootFSPath,
 		Properties: properties,
 	})
 	if err != nil {
@@ -127,21 +127,19 @@ func (c *client) InitializeContainer(guid string, request executor.ContainerInit
 		return executor.Container{}, err
 	}
 
-	err = c.limitContainerCPU(request, containerClient)
+	err = c.limitContainerCPU(container, containerClient)
 	if err != nil {
 		logger.Error("failed-to-limit-cpu", err)
 		return executor.Container{}, err
 	}
 
-	portMapping, err := c.mapPorts(request, containerClient)
+	portMapping, err := c.mapPorts(container, containerClient)
 	if err != nil {
 		logger.Error("failed-to-map-ports", err)
 		return executor.Container{}, err
 	}
 
-	request.Ports = portMapping
-
-	container, err = c.registry.Create(guid, containerClient.Handle(), request)
+	container, err = c.registry.Create(guid, containerClient.Handle(), portMapping)
 	if err != nil {
 		logger.Error("failed-to-register-container", err, lager.Data{
 			"container-handle": container.ContainerHandle,
@@ -417,10 +415,10 @@ func (c *client) limitContainerDiskAndMemory(reg executor.Container, containerCl
 	return nil
 }
 
-func (c *client) limitContainerCPU(request executor.ContainerInitializationRequest, containerClient gapi.Container) error {
-	if request.CpuPercent != 0 {
+func (c *client) limitContainerCPU(reg executor.Container, containerClient gapi.Container) error {
+	if reg.CpuPercent != 0 {
 		err := containerClient.LimitCPU(gapi.CPULimits{
-			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(request.CpuPercent) / 100.0),
+			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(reg.CpuPercent) / 100.0),
 		})
 		if err != nil {
 			return err
@@ -430,9 +428,9 @@ func (c *client) limitContainerCPU(request executor.ContainerInitializationReque
 	return nil
 }
 
-func (c *client) mapPorts(request executor.ContainerInitializationRequest, containerClient gapi.Container) ([]executor.PortMapping, error) {
+func (c *client) mapPorts(reg executor.Container, containerClient gapi.Container) ([]executor.PortMapping, error) {
 	var result []executor.PortMapping
-	for _, mapping := range request.Ports {
+	for _, mapping := range reg.Ports {
 		hostPort, containerPort, err := containerClient.NetIn(mapping.HostPort, mapping.ContainerPort)
 		if err != nil {
 			return nil, err

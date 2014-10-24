@@ -22,7 +22,7 @@ type Registry interface {
 	GetAllContainers() []executor.Container
 	Reserve(guid string, req executor.ContainerAllocationRequest) (executor.Container, error)
 	Initialize(guid string) (executor.Container, error)
-	Create(guid, containerHandle string, req executor.ContainerInitializationRequest) (executor.Container, error)
+	Create(guid, containerHandle string, ports []executor.PortMapping) (executor.Container, error)
 	Start(guid string, process ifrit.Process) error
 	Complete(guid string, result executor.ContainerRunResult) error
 	Delete(guid string) error
@@ -84,10 +84,20 @@ func (r *registry) FindByGuid(guid string) (executor.Container, error) {
 
 func (r *registry) Reserve(guid string, req executor.ContainerAllocationRequest) (executor.Container, error) {
 	res := executor.Container{
-		Guid:        guid,
-		MemoryMB:    req.MemoryMB,
-		DiskMB:      req.DiskMB,
-		Tags:        req.Tags,
+		Guid: guid,
+
+		RootFSPath: req.RootFSPath,
+
+		MemoryMB:   req.MemoryMB,
+		DiskMB:     req.DiskMB,
+		CpuPercent: req.CpuPercent,
+
+		Ports: req.Ports,
+
+		Log: req.Log,
+
+		Tags: req.Tags,
+
 		State:       executor.StateReserved,
 		AllocatedAt: r.timeProvider.Time().UnixNano(),
 	}
@@ -129,7 +139,7 @@ func (r *registry) Initialize(guid string) (executor.Container, error) {
 	return res, nil
 }
 
-func (r *registry) Create(guid, containerHandle string, req executor.ContainerInitializationRequest) (executor.Container, error) {
+func (r *registry) Create(guid, containerHandle string, ports []executor.PortMapping) (executor.Container, error) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
@@ -144,10 +154,7 @@ func (r *registry) Create(guid, containerHandle string, req executor.ContainerIn
 
 	res.State = executor.StateCreated
 	res.ContainerHandle = containerHandle
-	res.CpuPercent = req.CpuPercent
-	res.Ports = req.Ports
-	res.Log = req.Log
-	res.RootFSPath = req.RootFSPath
+	res.Ports = ports
 
 	r.registeredContainers[guid] = res
 	return res, nil

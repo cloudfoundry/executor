@@ -61,14 +61,12 @@ type ContainerAllocationRequest struct {
 	MemoryMB int `json:"memory_mb"`
 	DiskMB   int `json:"disk_mb"`
 
-	Tags Tags `json:"tags,omitempty"`
-}
-
-type ContainerInitializationRequest struct {
 	CpuPercent float64       `json:"cpu_percent"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 	RootFSPath string        `json:"root_fs"`
+
+	Tags Tags `json:"tags,omitempty"`
 }
 
 type ContainerRunRequest struct {

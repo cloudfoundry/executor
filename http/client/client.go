@@ -59,8 +59,8 @@ func (c client) GetContainer(allocationGuid string) (executor.Container, error) 
 	return c.buildContainerFromApiResponse(response)
 }
 
-func (c client) InitializeContainer(allocationGuid string, request executor.ContainerInitializationRequest) (executor.Container, error) {
-	response, err := c.makeRequest(ehttp.InitializeContainer, rata.Params{"guid": allocationGuid}, request)
+func (c client) InitializeContainer(allocationGuid string) (executor.Container, error) {
+	response, err := c.makeRequest(ehttp.InitializeContainer, rata.Params{"guid": allocationGuid}, nil)
 	if err != nil {
 		// do some logging
 		return executor.Container{}, err

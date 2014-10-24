@@ -143,8 +143,13 @@ var _ = Describe("Api", func() {
 
 		BeforeEach(func() {
 			reserveRequestBody = MarshalledPayload(executor.ContainerAllocationRequest{
-				MemoryMB: 64,
-				DiskMB:   512,
+				MemoryMB:   64,
+				DiskMB:     512,
+				CpuPercent: 50.0,
+				Ports: []executor.PortMapping{
+					{ContainerPort: 8080, HostPort: 0},
+					{ContainerPort: 8081, HostPort: 1234},
+				},
 			})
 
 			reserveResponse = nil
@@ -211,19 +216,10 @@ var _ = Describe("Api", func() {
 
 	Describe("POST /containers/:guid/initialize", func() {
 		Context("when the container can be created", func() {
-			var expectedRequest executor.ContainerInitializationRequest
 			var createResponse *http.Response
 			var expectedContainer executor.Container
 
 			BeforeEach(func() {
-				expectedRequest = executor.ContainerInitializationRequest{
-					CpuPercent: 50.0,
-					Ports: []executor.PortMapping{
-						{ContainerPort: 8080, HostPort: 0},
-						{ContainerPort: 8081, HostPort: 1234},
-					},
-				}
-
 				expectedContainer = executor.Container{
 					Ports: []executor.PortMapping{
 						{HostPort: 1234, ContainerPort: 4567},
@@ -235,7 +231,7 @@ var _ = Describe("Api", func() {
 				createResponse = DoRequest(generator.CreateRequest(
 					ehttp.InitializeContainer,
 					rata.Params{"guid": containerGuid},
-					MarshalledPayload(expectedRequest),
+					nil,
 				))
 			})
 
@@ -245,9 +241,9 @@ var _ = Describe("Api", func() {
 
 			It("creates the container", func() {
 				Ω(depotClient.InitializeContainerCallCount()).Should(Equal(1))
-				guid, containerInitReq := depotClient.InitializeContainerArgsForCall(0)
+
+				guid := depotClient.InitializeContainerArgsForCall(0)
 				Ω(guid).Should(Equal(containerGuid))
-				Ω(containerInitReq).Should(Equal(expectedRequest))
 			})
 
 			It("returns the serialized initialized container", func() {
@@ -259,28 +255,13 @@ var _ = Describe("Api", func() {
 			})
 		})
 
-		Context("when the request is invalid json", func() {
-			var createResponse *http.Response
-			BeforeEach(func() {
-				createResponse = DoRequest(generator.CreateRequest(
-					ehttp.InitializeContainer,
-					rata.Params{"guid": containerGuid},
-					MarshalledPayload("asdasdasdasdasdadsads"),
-				))
-			})
-
-			It("returns 400", func() {
-				Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-			})
-		})
-
 		Context("when the container cannot be created", func() {
 			var createResponse *http.Response
 			JustBeforeEach(func() {
 				createResponse = DoRequest(generator.CreateRequest(
 					ehttp.InitializeContainer,
 					rata.Params{"guid": containerGuid},
-					MarshalledPayload(executor.ContainerInitializationRequest{}),
+					nil,
 				))
 			})
 
@@ -317,8 +298,9 @@ var _ = Describe("Api", func() {
 			runResponse = nil
 
 			allocRequestBody := MarshalledPayload(executor.ContainerAllocationRequest{
-				MemoryMB: 64,
-				DiskMB:   512,
+				MemoryMB:   64,
+				DiskMB:     512,
+				CpuPercent: 50.0,
 			})
 
 			allocResponse := DoRequest(generator.CreateRequest(
@@ -331,9 +313,7 @@ var _ = Describe("Api", func() {
 			initResponse := DoRequest(generator.CreateRequest(
 				ehttp.InitializeContainer,
 				rata.Params{"guid": containerGuid},
-				MarshalledPayload(executor.ContainerInitializationRequest{
-					CpuPercent: 50.0,
-				}),
+				nil,
 			))
 			Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
 		})
