@@ -88,9 +88,9 @@ func (r *registry) Reserve(guid string, req executor.ContainerAllocationRequest)
 
 		RootFSPath: req.RootFSPath,
 
-		MemoryMB:   req.MemoryMB,
-		DiskMB:     req.DiskMB,
-		CpuPercent: req.CpuPercent,
+		MemoryMB:  req.MemoryMB,
+		DiskMB:    req.DiskMB,
+		CPUWeight: req.CPUWeight,
 
 		Ports: req.Ports,
 

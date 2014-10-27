@@ -25,7 +25,7 @@ type Container struct {
 
 	// init
 	RootFSPath string        `json:"root_fs"`
-	CpuPercent float64       `json:"cpu_percent"`
+	CPUWeight  uint          `json:"cpu_weight"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
@@ -61,7 +61,7 @@ type ContainerAllocationRequest struct {
 	MemoryMB int `json:"memory_mb"`
 	DiskMB   int `json:"disk_mb"`
 
-	CpuPercent float64       `json:"cpu_percent"`
+	CPUWeight  uint          `json:"cpu_weight"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 	RootFSPath string        `json:"root_fs"`

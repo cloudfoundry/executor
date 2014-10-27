@@ -341,20 +341,9 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
-			Context("when the requested CPU percent is > 100", func() {
+			Context("when the requested CPU weight is > 100", func() {
 				BeforeEach(func() {
-					allocRequest.CpuPercent = 101.0
-				})
-
-				It("returns an error", func() {
-					Ω(allocErr).Should(HaveOccurred())
-					Ω(allocErr).Should(Equal(executor.ErrLimitsInvalid))
-				})
-			})
-
-			Context("when the requested CPU percent is < 0", func() {
-				BeforeEach(func() {
-					allocRequest.CpuPercent = -14.0
+					allocRequest.CPUWeight = 101
 				})
 
 				It("returns an error", func() {
@@ -401,7 +390,7 @@ var _ = Describe("Executor", func() {
 					Ω(container.Guid).Should(Equal(guid))
 					Ω(container.MemoryMB).Should(Equal(0))
 					Ω(container.DiskMB).Should(Equal(0))
-					Ω(container.CpuPercent).Should(Equal(0.0))
+					Ω(container.CPUWeight).Should(Equal(uint(0)))
 					Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
 					Ω(container.State).Should(Equal("reserved"))
 					Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
@@ -411,13 +400,13 @@ var _ = Describe("Executor", func() {
 					BeforeEach(func() {
 						allocRequest.MemoryMB = 256
 						allocRequest.DiskMB = 256
-						allocRequest.CpuPercent = 50.0
+						allocRequest.CPUWeight = 50
 					})
 
 					It("returns the disk, memory, and cpu limits", func() {
 						Ω(container.MemoryMB).Should(Equal(256))
 						Ω(container.DiskMB).Should(Equal(256))
-						Ω(container.CpuPercent).Should(Equal(50.0))
+						Ω(container.CPUWeight).Should(Equal(uint(50)))
 					})
 				})
 
@@ -473,7 +462,7 @@ var _ = Describe("Executor", func() {
 						BeforeEach(func() {
 							allocRequest.MemoryMB = 256
 							allocRequest.DiskMB = 256
-							allocRequest.CpuPercent = 50
+							allocRequest.CPUWeight = 50
 						})
 
 						It("applies them to the container", func() {
@@ -567,7 +556,7 @@ var _ = Describe("Executor", func() {
 
 						Context("when the container has no CPU limits requested", func() {
 							BeforeEach(func() {
-								allocRequest.CpuPercent = 0
+								allocRequest.CPUWeight = 0
 							})
 
 							It("does not enforce a zero-value limit", func() {

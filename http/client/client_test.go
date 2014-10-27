@@ -32,9 +32,9 @@ var _ = Describe("Client", func() {
 			zero := 0
 
 			validRequest = executor.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     1024,
-				CpuPercent: 0.5,
+				MemoryMB:  64,
+				DiskMB:    1024,
+				CPUWeight: 5,
 				Log: executor.LogConfig{
 					Guid:       "some-guid",
 					SourceName: "XYZ",
@@ -57,7 +57,7 @@ var _ = Describe("Client", func() {
           {
             "memory_mb": 64,
             "disk_mb": 1024,
-            "cpu_percent": 0.5,
+            "cpu_weight": 5,
             "ports": null,
             "root_fs":"",
             "log": {
@@ -118,7 +118,7 @@ var _ = Describe("Client", func() {
 						"executor_guid": "executor-guid",
             "memory_mb": 64,
             "disk_mb": 1024,
-            "cpu_percent": 0.5,
+            "cpu_weight": 5,
             "ports": [
 							{ "container_port": 8080, "host_port": 1234 },
 							{ "container_port": 8081, "host_port": 1235 }
@@ -140,9 +140,9 @@ var _ = Describe("Client", func() {
 				Ω(response).Should(Equal(executor.Container{
 					Guid: "guid-123",
 
-					MemoryMB:   64,
-					DiskMB:     1024,
-					CpuPercent: 0.5,
+					MemoryMB:  64,
+					DiskMB:    1024,
+					CPUWeight: 5,
 					Ports: []executor.PortMapping{
 						{ContainerPort: 8080, HostPort: 1234},
 						{ContainerPort: 8081, HostPort: 1235},
@@ -200,7 +200,7 @@ var _ = Describe("Client", func() {
 						"container_handle": "xyz",
             "memory_mb": 64,
             "disk_mb": 1024,
-            "cpu_percent": 0.5,
+            "cpu_weight": 5,
             "ports": [
 							{ "container_port": 8080, "host_port": 1234 },
 							{ "container_port": 8081, "host_port": 1235 }

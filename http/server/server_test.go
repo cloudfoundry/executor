@@ -143,9 +143,9 @@ var _ = Describe("Api", func() {
 
 		BeforeEach(func() {
 			reserveRequestBody = MarshalledPayload(executor.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     512,
-				CpuPercent: 50.0,
+				MemoryMB:  64,
+				DiskMB:    512,
+				CPUWeight: 50,
 				Ports: []executor.PortMapping{
 					{ContainerPort: 8080, HostPort: 0},
 					{ContainerPort: 8081, HostPort: 1234},
@@ -298,9 +298,9 @@ var _ = Describe("Api", func() {
 			runResponse = nil
 
 			allocRequestBody := MarshalledPayload(executor.ContainerAllocationRequest{
-				MemoryMB:   64,
-				DiskMB:     512,
-				CpuPercent: 50.0,
+				MemoryMB:  64,
+				DiskMB:    512,
+				CPUWeight: 50,
 			})
 
 			allocResponse := DoRequest(generator.CreateRequest(

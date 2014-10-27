@@ -50,7 +50,7 @@ func NewClient(
 }
 
 func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
-	if request.CpuPercent > 100 || request.CpuPercent < 0 {
+	if request.CPUWeight > 100 || request.CPUWeight < 0 {
 		return executor.Container{}, executor.ErrLimitsInvalid
 	}
 
@@ -417,9 +417,9 @@ func (c *client) limitContainerDiskAndMemory(reg executor.Container, containerCl
 }
 
 func (c *client) limitContainerCPU(reg executor.Container, containerClient gapi.Container) error {
-	if reg.CpuPercent != 0 {
+	if reg.CPUWeight != 0 {
 		err := containerClient.LimitCPU(gapi.CPULimits{
-			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(reg.CpuPercent) / 100.0),
+			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(reg.CPUWeight) / 100.0),
 		})
 		if err != nil {
 			return err

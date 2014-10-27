@@ -133,9 +133,9 @@ var _ = Describe("Registry", func() {
 			container, err = registry.Reserve("a-container", executor.ContainerAllocationRequest{
 				RootFSPath: "some-rootfs-path",
 
-				MemoryMB:   50,
-				DiskMB:     100,
-				CpuPercent: 50.5,
+				MemoryMB:  50,
+				DiskMB:    100,
+				CPUWeight: 50,
 
 				Ports: []executor.PortMapping{
 					{ContainerPort: 8080, HostPort: 1234},
@@ -155,7 +155,7 @@ var _ = Describe("Registry", func() {
 			Ω(container.RootFSPath).Should(Equal("some-rootfs-path"))
 			Ω(container.MemoryMB).Should(Equal(50))
 			Ω(container.DiskMB).Should(Equal(100))
-			Ω(container.CpuPercent).Should(Equal(50.5))
+			Ω(container.CPUWeight).Should(Equal(uint(50)))
 			Ω(container.Ports).Should(Equal([]executor.PortMapping{
 				{ContainerPort: 8080, HostPort: 1234},
 			}))
@@ -244,11 +244,11 @@ var _ = Describe("Registry", func() {
 
 			BeforeEach(func() {
 				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
-					MemoryMB:   50,
-					DiskMB:     100,
-					CpuPercent: 0.5,
-					Ports:      []executor.PortMapping{{ContainerPort: 8080}},
-					Log:        executor.LogConfig{Guid: "log-guid"},
+					MemoryMB:  50,
+					DiskMB:    100,
+					CPUWeight: 5,
+					Ports:     []executor.PortMapping{{ContainerPort: 8080}},
+					Log:       executor.LogConfig{Guid: "log-guid"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
