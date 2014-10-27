@@ -38,14 +38,13 @@ var _ = Describe("RegistryPruner", func() {
 			Eventually(process.Wait()).Should(Receive(BeNil()))
 		})
 
-		JustBeforeEach(func(done Done) {
-			timeProvider.TickerChannelFor("pruner") <- timeProvider.Time()
-			close(done)
+		JustBeforeEach(func() {
+			Eventually(timeProvider.TickerChannelFor("pruner")).Should(BeSent(timeProvider.Time()))
 		})
 
 		Context("when a container has been allocated", func() {
 			BeforeEach(func() {
-				registry.Reserve("container-guid", executor.ContainerAllocationRequest{
+				registry.Reserve("container-guid", executor.Container{
 					MemoryMB: 64,
 					DiskMB:   32,
 				})

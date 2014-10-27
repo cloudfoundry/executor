@@ -26,7 +26,7 @@ type client struct {
 	httpClient *http.Client
 }
 
-func (c client) AllocateContainer(allocationGuid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
+func (c client) AllocateContainer(allocationGuid string, request executor.Container) (executor.Container, error) {
 	container := executor.Container{}
 
 	response, err := c.makeRequest(ehttp.AllocateContainer, rata.Params{"guid": allocationGuid}, request)
@@ -59,27 +59,24 @@ func (c client) GetContainer(allocationGuid string) (executor.Container, error) 
 	return c.buildContainerFromApiResponse(response)
 }
 
-func (c client) InitializeContainer(allocationGuid string) (executor.Container, error) {
-	response, err := c.makeRequest(ehttp.InitializeContainer, rata.Params{"guid": allocationGuid}, nil)
+func (c client) RunContainer(allocationGuid string) error {
+	response, err := c.makeRequest(ehttp.RunContainer, rata.Params{"guid": allocationGuid}, nil)
 	if err != nil {
 		// do some logging
-		return executor.Container{}, err
+		return err
 	}
 
-	defer response.Body.Close()
-
-	return c.buildContainerFromApiResponse(response)
-}
-
-func (c client) Run(allocationGuid string, request executor.ContainerRunRequest) error {
-	_, err := c.makeRequest(ehttp.RunActions, rata.Params{"guid": allocationGuid}, request)
-
-	return err
+	return response.Body.Close()
 }
 
 func (c client) DeleteContainer(allocationGuid string) error {
-	_, err := c.makeRequest(ehttp.DeleteContainer, rata.Params{"guid": allocationGuid}, nil)
-	return err
+	response, err := c.makeRequest(ehttp.DeleteContainer, rata.Params{"guid": allocationGuid}, nil)
+	if err != nil {
+		// do some logging
+		return err
+	}
+
+	return response.Body.Close()
 }
 
 func (c client) ListContainers() ([]executor.Container, error) {

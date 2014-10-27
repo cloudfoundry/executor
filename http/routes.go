@@ -6,8 +6,7 @@ const (
 	Ping                  = "Ping"
 	GetContainer          = "GetContainer"
 	AllocateContainer     = "AllocateContainer"
-	InitializeContainer   = "InitializeContainer"
-	RunActions            = "RunActions"
+	RunContainer          = "RunContainer"
 	DeleteContainer       = "DeleteContainer"
 	ListContainers        = "ListContainers"
 	GetRemainingResources = "GetRemainingResources"
@@ -20,8 +19,7 @@ var Routes = rata.Routes{
 	{Path: "/containers", Method: "GET", Name: ListContainers},
 	{Path: "/containers/:guid", Method: "GET", Name: GetContainer},
 	{Path: "/containers/:guid", Method: "POST", Name: AllocateContainer},
-	{Path: "/containers/:guid/initialize", Method: "POST", Name: InitializeContainer},
-	{Path: "/containers/:guid/run", Method: "POST", Name: RunActions},
+	{Path: "/containers/:guid/run", Method: "POST", Name: RunContainer},
 	{Path: "/containers/:guid/files", Method: "GET", Name: GetFiles},
 	{Path: "/containers/:guid", Method: "DELETE", Name: DeleteContainer},
 	{Path: "/resources/remaining", Method: "GET", Name: GetRemainingResources},

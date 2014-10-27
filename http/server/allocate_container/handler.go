@@ -24,7 +24,7 @@ func New(depotClient executor.Client, logger lager.Logger) *Handler {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	allocLog := h.logger.Session("allocate-handler")
 
-	req := executor.ContainerAllocationRequest{}
+	req := executor.Container{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		allocLog.Error("failed-to-unmarshal-payload", err)

@@ -32,12 +32,12 @@ var _ = Describe("Registry", func() {
 		It("should always report the initial capacity", func() {
 			Ω(registry.TotalCapacity()).Should(Equal(initialCapacity))
 
-			registry.Reserve("a-container", executor.ContainerAllocationRequest{
+			registry.Reserve("a-container", executor.Container{
 				MemoryMB: 10,
 				DiskMB:   20,
 			})
 
-			registry.Reserve("another-container", executor.ContainerAllocationRequest{
+			registry.Reserve("another-container", executor.Container{
 				MemoryMB: 30,
 				DiskMB:   70,
 			})
@@ -50,12 +50,12 @@ var _ = Describe("Registry", func() {
 		It("should always report the available capacity", func() {
 			Ω(registry.CurrentCapacity()).Should(Equal(initialCapacity))
 
-			registry.Reserve("a-container", executor.ContainerAllocationRequest{
+			registry.Reserve("a-container", executor.Container{
 				MemoryMB: 10,
 				DiskMB:   20,
 			})
 
-			registry.Reserve("another-container", executor.ContainerAllocationRequest{
+			registry.Reserve("another-container", executor.Container{
 				MemoryMB: 30,
 				DiskMB:   70,
 			})
@@ -71,7 +71,7 @@ var _ = Describe("Registry", func() {
 	Describe("Finding by Guid", func() {
 		Context("when a container has been allocated", func() {
 			BeforeEach(func() {
-				registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				registry.Reserve("a-container", executor.Container{
 					MemoryMB: 10,
 					DiskMB:   20,
 				})
@@ -106,12 +106,12 @@ var _ = Describe("Registry", func() {
 		Context("when there are containers", func() {
 			var containerA, containerB executor.Container
 			BeforeEach(func() {
-				containerA, _ = registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				containerA, _ = registry.Reserve("a-container", executor.Container{
 					MemoryMB: 10,
 					DiskMB:   20,
 				})
 
-				containerB, _ = registry.Reserve("another-container", executor.ContainerAllocationRequest{
+				containerB, _ = registry.Reserve("another-container", executor.Container{
 					MemoryMB: 10,
 					DiskMB:   20,
 				})
@@ -130,7 +130,7 @@ var _ = Describe("Registry", func() {
 		var container executor.Container
 		BeforeEach(func() {
 			var err error
-			container, err = registry.Reserve("a-container", executor.ContainerAllocationRequest{
+			container, err = registry.Reserve("a-container", executor.Container{
 				RootFSPath: "some-rootfs-path",
 
 				MemoryMB:  50,
@@ -169,7 +169,7 @@ var _ = Describe("Registry", func() {
 
 		Context("when reusing an existing guid", func() {
 			It("should return an ErrContainerAlreadyExists error", func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB: 10,
 					DiskMB:   20,
 				})
@@ -179,14 +179,14 @@ var _ = Describe("Registry", func() {
 
 		Context("when there is no capacity to reserve the container", func() {
 			It("should return an ErrOutOfMemory when out of memory", func() {
-				_, err := registry.Reserve("another-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("another-container", executor.Container{
 					MemoryMB: 51,
 				})
 				Ω(err).Should(MatchError(ErrOutOfMemory))
 			})
 
 			It("should return an ErrOutOfDisk when out of disk", func() {
-				_, err := registry.Reserve("another-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("another-container", executor.Container{
 					DiskMB: 101,
 				})
 				Ω(err).Should(MatchError(ErrOutOfDisk))
@@ -194,14 +194,14 @@ var _ = Describe("Registry", func() {
 
 			It("should return an ErrOutOfContainers when out of containers", func() {
 				for i := 0; i < 12; i++ {
-					_, err := registry.Reserve(fmt.Sprintf("another-container-%d", i), executor.ContainerAllocationRequest{
+					_, err := registry.Reserve(fmt.Sprintf("another-container-%d", i), executor.Container{
 						MemoryMB: 1,
 						DiskMB:   1,
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				}
 
-				_, err := registry.Reserve("one-too-many-containers", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("one-too-many-containers", executor.Container{
 					MemoryMB: 1,
 					DiskMB:   1,
 				})
@@ -215,7 +215,7 @@ var _ = Describe("Registry", func() {
 			var container executor.Container
 
 			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
@@ -243,7 +243,7 @@ var _ = Describe("Registry", func() {
 			var container executor.Container
 
 			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB:  50,
 					DiskMB:    100,
 					CPUWeight: 5,
@@ -282,7 +282,7 @@ var _ = Describe("Registry", func() {
 
 		Context("when the container is reserved but not initialized", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
@@ -297,7 +297,7 @@ var _ = Describe("Registry", func() {
 
 		Context("when the container has already been created", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
@@ -326,7 +326,7 @@ var _ = Describe("Registry", func() {
 
 		Context("when the container exists", func() {
 			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.ContainerAllocationRequest{
+				_, err := registry.Reserve("a-container", executor.Container{
 					MemoryMB: 50,
 					DiskMB:   100,
 				})
@@ -412,7 +412,7 @@ func getAllGuids(registry Registry) []string {
 }
 
 func reserveContainer(registry Registry, guid string) executor.Container {
-	container, err := registry.Reserve(guid, executor.ContainerAllocationRequest{})
+	container, err := registry.Reserve(guid, executor.Container{})
 	Ω(err).ShouldNot(HaveOccurred())
 	return container
 }

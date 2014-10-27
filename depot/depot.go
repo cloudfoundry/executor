@@ -1,6 +1,7 @@
 package depot
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -10,17 +11,19 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
-	gapi "github.com/cloudfoundry-incubator/garden/api"
+	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
+const ContainerInitializationFailedMessage = "failed to initialize container: %s"
+
 type client struct {
 	containerOwnerName    string
 	containerMaxCPUShares uint64
 	containerInodeLimit   uint64
-	gardenClient          gapi.Client
+	gardenClient          garden.Client
 	registry              registry.Registry
 	logEmitter            logemitter.Emitter
 	transformer           *transformer.Transformer
@@ -31,7 +34,7 @@ func NewClient(
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
 	containerInodeLimit uint64,
-	gardenClient gapi.Client,
+	gardenClient garden.Client,
 	registry registry.Registry,
 	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
@@ -49,7 +52,7 @@ func NewClient(
 	}
 }
 
-func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
+func (c *client) AllocateContainer(guid string, request executor.Container) (executor.Container, error) {
 	if request.CPUWeight > 100 || request.CPUWeight < 0 {
 		return executor.Container{}, executor.ErrLimitsInvalid
 	} else if request.CPUWeight == 0 {
@@ -74,79 +77,6 @@ func (c *client) AllocateContainer(guid string, request executor.ContainerAlloca
 	if err != nil {
 		logger.Error("full", err)
 		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
-	}
-
-	return container, nil
-}
-
-func (c *client) InitializeContainer(guid string) (executor.Container, error) {
-	logger := c.logger.Session("initialize", lager.Data{
-		"guid": guid,
-	})
-
-	container, err := c.registry.FindByGuid(guid)
-	if err != nil {
-		logger.Error("failed-to-find-container", err)
-		return executor.Container{}, executor.ErrContainerNotFound
-	}
-
-	container, err = c.registry.Initialize(guid)
-	if err != nil {
-		logger.Error("failed-to-initialize-registry-container", err)
-		return executor.Container{}, err
-	}
-
-	properties := gapi.Properties{
-		"executor:owner": c.containerOwnerName,
-	}
-
-	for k, v := range container.Tags {
-		properties[tagPropertyPrefix+k] = v
-	}
-
-	containerClient, err := c.gardenClient.Create(gapi.ContainerSpec{
-		RootFSPath: container.RootFSPath,
-		Properties: properties,
-	})
-	if err != nil {
-		logger.Error("failed-to-create-container", err)
-		return executor.Container{}, err
-	}
-
-	defer func() {
-		if err != nil {
-			logger.Error("destroying-container-after-failed-init", err)
-			destroyErr := c.gardenClient.Destroy(containerClient.Handle())
-			if destroyErr != nil {
-				logger.Error("destroying-container-after-failed-init-also-failed", destroyErr)
-			}
-		}
-	}()
-
-	err = c.limitContainerDiskAndMemory(container, containerClient)
-	if err != nil {
-		logger.Error("failed-to-limit-memory-and-disk", err)
-		return executor.Container{}, err
-	}
-
-	err = c.limitContainerCPU(container, containerClient)
-	if err != nil {
-		logger.Error("failed-to-limit-cpu", err)
-		return executor.Container{}, err
-	}
-
-	portMapping, err := c.mapPorts(container, containerClient)
-	if err != nil {
-		logger.Error("failed-to-map-ports", err)
-		return executor.Container{}, err
-	}
-
-	container, err = c.registry.Create(guid, containerClient.Handle(), portMapping)
-	if err != nil {
-		logger.Error("failed-to-register-container", err, lager.Data{
-			"container-handle": container.ContainerHandle,
-		})
-		return executor.Container{}, err
 	}
 
 	return container, nil
@@ -187,7 +117,6 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 
 		info, err := container.Info()
 		if err != nil {
-			panic("TESTME")
 			logger.Error("info-failed", err)
 			return executor.Container{}, err
 		}
@@ -202,12 +131,19 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		}
 
 		registration.Tags = tags
+
+		for _, mapping := range info.MappedPorts {
+			registration.Ports = append(registration.Ports, executor.PortMapping{
+				HostPort:      mapping.HostPort,
+				ContainerPort: mapping.ContainerPort,
+			})
+		}
 	}
 
 	return registration, nil
 }
 
-func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
+func (c *client) RunContainer(guid string) error {
 	logger := c.logger.Session("run", lager.Data{
 		"guid": guid,
 	})
@@ -217,45 +153,115 @@ func (c *client) Run(guid string, request executor.ContainerRunRequest) error {
 		return handleSyncErr(err, logger)
 	}
 
-	registration, err := c.registry.FindByGuid(guid)
+	container, err := c.registry.FindByGuid(guid)
 	if err != nil {
-		logger.Error("container-not-found", err)
+		logger.Error("failed-to-find-container", err)
 		return executor.ErrContainerNotFound
 	}
 
-	logger = logger.WithData(lager.Data{
-		"handle": registration.ContainerHandle,
-	})
-
-	container, err := c.gardenClient.Lookup(registration.ContainerHandle)
+	container, err = c.registry.Initialize(guid)
 	if err != nil {
-		logger.Error("lookup-failed", err)
+		logger.Error("failed-to-initialize-registry-container", err)
 		return err
 	}
 
-	var result string
-	logStreamer := log_streamer.New(registration.Log.Guid, registration.Log.SourceName, registration.Log.Index, c.logEmitter)
-	steps, err := c.transformer.StepsFor(logStreamer, request.Actions, request.Env, container, &result)
-	if err != nil {
-		logger.Error("steps-invalid", err)
-		return executor.ErrStepsInvalid
-	}
+	go func() {
+		var gardenContainer garden.Container
+		var err error
 
-	run := RunSequence{
-		Container:    container,
-		CompleteURL:  request.CompleteURL,
-		Registration: registration,
-		Sequence:     sequence.New(steps),
-		Result:       &result,
-		Registry:     c.registry,
-		Logger:       c.logger,
-	}
+		defer func() {
+			if err != nil {
+				if gardenContainer != nil {
+					logger.Error("destroying-container-after-failed-init", err)
+					destroyErr := c.gardenClient.Destroy(gardenContainer.Handle())
+					if destroyErr != nil {
+						logger.Error("destroying-container-after-failed-init-also-failed", destroyErr)
+					}
+				}
 
-	process := ifrit.Invoke(run)
+				completeErr := c.registry.Complete(guid, executor.ContainerRunResult{
+					Failed:        true,
+					FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
+				})
+				if completeErr != nil {
+					logger.Error("completing-container-while-init-also-failed", completeErr)
+				}
+			}
+		}()
 
-	c.registry.Start(run.Registration.Guid, process)
+		properties := garden.Properties{
+			"executor:owner": c.containerOwnerName,
+		}
 
-	logger.Info("started")
+		for k, v := range container.Tags {
+			properties[tagPropertyPrefix+k] = v
+		}
+
+		gardenContainer, err = c.gardenClient.Create(garden.ContainerSpec{
+			RootFSPath: container.RootFSPath,
+			Properties: properties,
+		})
+		if err != nil {
+			logger.Error("failed-to-create-container", err)
+			return
+		}
+
+		err = c.limitContainerDiskAndMemory(container, gardenContainer)
+		if err != nil {
+			logger.Error("failed-to-limit-memory-and-disk", err)
+			return
+		}
+
+		err = c.limitContainerCPU(container, gardenContainer)
+		if err != nil {
+			logger.Error("failed-to-limit-cpu", err)
+			return
+		}
+
+		portMapping, err := c.mapPorts(container, gardenContainer)
+		if err != nil {
+			logger.Error("failed-to-map-ports", err)
+			return
+		}
+
+		container, err = c.registry.Create(guid, gardenContainer.Handle(), portMapping)
+		if err != nil {
+			logger.Error("failed-to-register-container", err, lager.Data{
+				"container-handle": container.ContainerHandle,
+			})
+			return
+		}
+
+		logger = logger.WithData(lager.Data{
+			"handle": gardenContainer.Handle(),
+		})
+
+		var result string
+		logStreamer := log_streamer.New(container.Log.Guid, container.Log.SourceName, container.Log.Index, c.logEmitter)
+
+		steps, err := c.transformer.StepsFor(logStreamer, container.Actions, container.Env, gardenContainer, &result)
+		if err != nil {
+			logger.Error("steps-invalid", err)
+			err = executor.ErrStepsInvalid
+			return
+		}
+
+		run := RunSequence{
+			Container:    gardenContainer,
+			CompleteURL:  container.CompleteURL,
+			Registration: container,
+			Sequence:     sequence.New(steps),
+			Result:       &result,
+			Registry:     c.registry,
+			Logger:       c.logger,
+		}
+
+		process := ifrit.Invoke(run)
+
+		c.registry.Start(run.Registration.Guid, process)
+
+		logger.Info("started")
+	}()
 
 	return nil
 }
@@ -397,9 +403,9 @@ func (c *client) syncRegistry() error {
 	return nil
 }
 
-func (c *client) limitContainerDiskAndMemory(reg executor.Container, containerClient gapi.Container) error {
+func (c *client) limitContainerDiskAndMemory(reg executor.Container, gardenContainer garden.Container) error {
 	if reg.MemoryMB != 0 {
-		err := containerClient.LimitMemory(gapi.MemoryLimits{
+		err := gardenContainer.LimitMemory(garden.MemoryLimits{
 			LimitInBytes: uint64(reg.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
@@ -407,7 +413,7 @@ func (c *client) limitContainerDiskAndMemory(reg executor.Container, containerCl
 		}
 	}
 
-	err := containerClient.LimitDisk(gapi.DiskLimits{
+	err := gardenContainer.LimitDisk(garden.DiskLimits{
 		ByteHard:  uint64(reg.DiskMB * 1024 * 1024),
 		InodeHard: c.containerInodeLimit,
 	})
@@ -418,9 +424,9 @@ func (c *client) limitContainerDiskAndMemory(reg executor.Container, containerCl
 	return nil
 }
 
-func (c *client) limitContainerCPU(reg executor.Container, containerClient gapi.Container) error {
+func (c *client) limitContainerCPU(reg executor.Container, gardenContainer garden.Container) error {
 	if reg.CPUWeight != 0 {
-		err := containerClient.LimitCPU(gapi.CPULimits{
+		err := gardenContainer.LimitCPU(garden.CPULimits{
 			LimitInShares: uint64(float64(c.containerMaxCPUShares) * float64(reg.CPUWeight) / 100.0),
 		})
 		if err != nil {
@@ -431,10 +437,10 @@ func (c *client) limitContainerCPU(reg executor.Container, containerClient gapi.
 	return nil
 }
 
-func (c *client) mapPorts(reg executor.Container, containerClient gapi.Container) ([]executor.PortMapping, error) {
+func (c *client) mapPorts(reg executor.Container, gardenContainer garden.Container) ([]executor.PortMapping, error) {
 	var result []executor.PortMapping
 	for _, mapping := range reg.Ports {
-		hostPort, containerPort, err := containerClient.NetIn(mapping.HostPort, mapping.ContainerPort)
+		hostPort, containerPort, err := gardenContainer.NetIn(mapping.HostPort, mapping.ContainerPort)
 		if err != nil {
 			return nil, err
 		}

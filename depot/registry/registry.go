@@ -20,7 +20,7 @@ type Registry interface {
 	TotalCapacity() Capacity
 	FindByGuid(guid string) (executor.Container, error)
 	GetAllContainers() []executor.Container
-	Reserve(guid string, req executor.ContainerAllocationRequest) (executor.Container, error)
+	Reserve(guid string, container executor.Container) (executor.Container, error)
 	Initialize(guid string) (executor.Container, error)
 	Create(guid, containerHandle string, ports []executor.PortMapping) (executor.Container, error)
 	Start(guid string, process ifrit.Process) error
@@ -82,25 +82,10 @@ func (r *registry) FindByGuid(guid string) (executor.Container, error) {
 	return res, nil
 }
 
-func (r *registry) Reserve(guid string, req executor.ContainerAllocationRequest) (executor.Container, error) {
-	res := executor.Container{
-		Guid: guid,
-
-		RootFSPath: req.RootFSPath,
-
-		MemoryMB:  req.MemoryMB,
-		DiskMB:    req.DiskMB,
-		CPUWeight: req.CPUWeight,
-
-		Ports: req.Ports,
-
-		Log: req.Log,
-
-		Tags: req.Tags,
-
-		State:       executor.StateReserved,
-		AllocatedAt: r.timeProvider.Time().UnixNano(),
-	}
+func (r *registry) Reserve(guid string, container executor.Container) (executor.Container, error) {
+	container.Guid = guid // see #79618102
+	container.State = executor.StateReserved
+	container.AllocatedAt = r.timeProvider.Time().UnixNano()
 
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
@@ -110,14 +95,14 @@ func (r *registry) Reserve(guid string, req executor.ContainerAllocationRequest)
 		return executor.Container{}, ErrContainerAlreadyExists
 	}
 
-	err := r.currentCapacity.alloc(res)
+	err := r.currentCapacity.alloc(container)
 	if err != nil {
 		return executor.Container{}, err
 	}
 
-	r.registeredContainers[res.Guid] = res
+	r.registeredContainers[container.Guid] = container
 
-	return res, nil
+	return container, nil
 }
 
 func (r *registry) Initialize(guid string) (executor.Container, error) {

@@ -30,8 +30,9 @@ type Container struct {
 	Log        LogConfig     `json:"log"`
 
 	// run
-	Actions []models.ExecutorAction `json:"actions"`
-	Env     []EnvironmentVariable   `json:"env,omitempty"`
+	Actions     []models.ExecutorAction `json:"actions"`
+	Env         []EnvironmentVariable   `json:"env,omitempty"`
+	CompleteURL string                  `json:"complete_url"`
 
 	RunResult ContainerRunResult `json:"run_result"`
 
@@ -55,24 +56,6 @@ type LogConfig struct {
 type PortMapping struct {
 	ContainerPort uint32 `json:"container_port"`
 	HostPort      uint32 `json:"host_port,omitempty"`
-}
-
-type ContainerAllocationRequest struct {
-	MemoryMB int `json:"memory_mb"`
-	DiskMB   int `json:"disk_mb"`
-
-	CPUWeight  uint          `json:"cpu_weight"`
-	Ports      []PortMapping `json:"ports"`
-	Log        LogConfig     `json:"log"`
-	RootFSPath string        `json:"root_fs"`
-
-	Tags Tags `json:"tags,omitempty"`
-}
-
-type ContainerRunRequest struct {
-	Actions     []models.ExecutorAction `json:"actions"`
-	Env         []EnvironmentVariable   `json:"env,omitempty"`
-	CompleteURL string                  `json:"complete_url"`
 }
 
 type ContainerRunResult struct {

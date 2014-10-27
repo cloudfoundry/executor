@@ -4,13 +4,12 @@ import "io"
 
 type Client interface {
 	Ping() error
-	AllocateContainer(allocationGuid string, request ContainerAllocationRequest) (Container, error)
-	GetContainer(allocationGuid string) (Container, error)
-	InitializeContainer(allocationGuid string) (Container, error)
-	Run(allocationGuid string, request ContainerRunRequest) error
-	DeleteContainer(allocationGuid string) error
+	AllocateContainer(guid string, request Container) (Container, error)
+	GetContainer(guid string) (Container, error)
+	RunContainer(guid string) error
+	DeleteContainer(guid string) error
 	ListContainers() ([]Container, error)
 	RemainingResources() (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
-	GetFiles(allocationGuid string, path string) (io.ReadCloser, error)
+	GetFiles(guid string, path string) (io.ReadCloser, error)
 }

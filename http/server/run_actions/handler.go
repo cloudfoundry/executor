@@ -1,7 +1,6 @@
 package run_actions
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -24,17 +23,9 @@ func New(depotClient executor.Client, logger lager.Logger) http.Handler {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	runLog := h.logger.Session("run-handler")
 
-	var request executor.ContainerRunRequest
-	err := json.NewDecoder(r.Body).Decode(&request)
-	if err != nil {
-		runLog.Error("failed-to-unmarshal-payload", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	guid := r.FormValue(":guid")
 
-	err = h.depotClient.Run(guid, request)
+	err := h.depotClient.RunContainer(guid)
 	if err != nil {
 		runLog.Error("run-actions-failed", err)
 		error_headers.Write(err, w)

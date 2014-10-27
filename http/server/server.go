@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/http/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_files"
-	"github.com/cloudfoundry-incubator/executor/http/server/initialize_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/list_containers"
 	"github.com/cloudfoundry-incubator/executor/http/server/ping"
 	"github.com/cloudfoundry-incubator/executor/http/server/remaining_resources"
@@ -69,8 +68,7 @@ func (s *Server) NewHandlers() rata.Handlers {
 		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
 		ehttp.GetTotalResources:     total_resources.New(s.DepotClient, s.Logger),
 		ehttp.Ping:                  ping.New(s.DepotClient),
-		ehttp.InitializeContainer:   initialize_container.New(s.DepotClient, s.Logger),
-		ehttp.RunActions:            run_actions.New(s.DepotClient, s.Logger),
+		ehttp.RunContainer:          run_actions.New(s.DepotClient, s.Logger),
 		ehttp.GetFiles:              get_files.New(s.DepotClient, s.Logger),
 	}
 }

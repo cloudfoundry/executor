@@ -2,11 +2,9 @@ package client_test
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	httpclient "github.com/cloudfoundry-incubator/executor/http/client"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/onsi/gomega/ghttp"
 
 	. "github.com/onsi/ginkgo"
@@ -25,13 +23,13 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Allocate", func() {
-		var validRequest executor.ContainerAllocationRequest
+		var validRequest executor.Container
 		var validResponse executor.Container
 
 		BeforeEach(func() {
 			zero := 0
 
-			validRequest = executor.ContainerAllocationRequest{
+			validRequest = executor.Container{
 				MemoryMB:  64,
 				DiskMB:    1024,
 				CPUWeight: 5,
@@ -53,19 +51,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
-					ghttp.VerifyJSON(`
-          {
-            "memory_mb": 64,
-            "disk_mb": 1024,
-            "cpu_weight": 5,
-            "ports": null,
-            "root_fs":"",
-            "log": {
-              "guid":"some-guid",
-              "source_name":"XYZ",
-              "index":0
-            }
-          }`),
+					ghttp.VerifyJSONRepresenting(validRequest),
 					ghttp.RespondWithJSONEncoded(http.StatusCreated, validResponse)),
 				)
 			})
@@ -188,103 +174,17 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("InitializeContainer", func() {
+	Describe("RunContainer", func() {
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers/guid-123/initialize"),
-					ghttp.RespondWith(http.StatusCreated, `
-          {
-						"guid": "guid-123",
-						"executor_guid": "executor-guid",
-						"container_handle": "xyz",
-            "memory_mb": 64,
-            "disk_mb": 1024,
-            "cpu_weight": 5,
-            "ports": [
-							{ "container_port": 8080, "host_port": 1234 },
-							{ "container_port": 8081, "host_port": 1235 }
-						],
-            "log": {
-              "guid":"some-guid",
-              "source_name":"XYZ",
-              "index":0
-            }
-          }`),
-				),
-				)
-			})
-
-			It("returns the initialized container", func() {
-				container, err := client.InitializeContainer("guid-123")
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.ContainerHandle).Should(Equal("xyz"))
-			})
-		})
-
-		Context("when the call fails", func() {
-			BeforeEach(func() {
-				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers/guid-123/initialize"),
-					ghttp.RespondWith(executor.ErrContainerNotFound.HttpCode(), "", http.Header{
-						"X-Executor-Error": []string{executor.ErrContainerNotFound.Name()},
-					})),
-				)
-			})
-
-			It("returns an error", func() {
-				container, err := client.InitializeContainer("guid-123")
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				Ω(container).Should(BeZero())
-			})
-		})
-	})
-
-	Describe("Run", func() {
-		var validRequest executor.ContainerRunRequest
-
-		BeforeEach(func() {
-			validRequest = executor.ContainerRunRequest{
-				CompleteURL: "the-completion-url",
-				Actions: []models.ExecutorAction{
-					{
-						Action: models.RunAction{
-							Path:    "the-script",
-							Env:     []models.EnvironmentVariable{{Name: "PATH", Value: "the-path"}},
-							Timeout: time.Second,
-						},
-					},
-				},
-			}
-		})
-
-		Context("when the call succeeds", func() {
-			BeforeEach(func() {
-				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyJSON(`
-            {
-              "actions": [
-                {
-                  "action":"run",
-                  "args":{
-                    "path":"the-script",
-                    "args":null,
-                    "env":[{"name":"PATH","value":"the-path"}],
-                    "timeout":1000000000,
-                    "resource_limits":{}
-                  }
-                }
-              ],
-              "complete_url":"the-completion-url"
-            }
-          `),
 					ghttp.VerifyRequest("POST", "/containers/guid-123/run"),
 					ghttp.RespondWith(http.StatusOK, "")),
 				)
 			})
 
 			It("does not return an error", func() {
-				err := client.Run("guid-123", validRequest)
+				err := client.RunContainer("guid-123")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -300,7 +200,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns an error", func() {
-				err := client.Run("guid-123", validRequest)
+				err := client.RunContainer("guid-123")
 				Ω(err).Should(Equal(executor.ErrStepsInvalid))
 			})
 		})

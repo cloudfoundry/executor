@@ -27,7 +27,7 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"github.com/cloudfoundry-incubator/executor/http/client"
-	gapi "github.com/cloudfoundry-incubator/garden/api"
+	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	GardenServer "github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -63,7 +63,7 @@ var _ = Describe("Executor", func() {
 		gardenAddr = fmt.Sprintf("127.0.0.1:%d", gardenPort)
 
 		fakeBackend = new(gfakes.FakeBackend)
-		fakeBackend.CapacityReturns(gapi.Capacity{
+		fakeBackend.CapacityReturns(garden.Capacity{
 			MemoryInBytes: 1024 * 1024 * 1024,
 			DiskInBytes:   1024 * 1024 * 1024,
 			MaxContainers: 1024,
@@ -106,42 +106,38 @@ var _ = Describe("Executor", func() {
 		}).Should(HaveOccurred())
 	})
 
-	allocNewContainer := func(request executor.ContainerAllocationRequest) (guid string, fakeContainer *gfakes.FakeContainer) {
-		fakeContainer = new(gfakes.FakeContainer)
-		fakeBackend.CreateReturns(fakeContainer, nil)
-		fakeBackend.LookupReturns(fakeContainer, nil)
-		fakeBackend.ContainersReturns([]gapi.Container{fakeContainer}, nil)
-		fakeContainer.HandleReturns(containerHandle)
-
+	generateGuid := func() string {
 		id, err := uuid.NewV4()
 		Ω(err).ShouldNot(HaveOccurred())
 
-		guid = id.String()
-
-		_, err = executorClient.AllocateContainer(guid, request)
-		Ω(err).ShouldNot(HaveOccurred())
-
-		return guid, fakeContainer
+		return id.String()
 	}
 
-	initNewContainer := func() (guid string, fakeContainer *gfakes.FakeContainer) {
-		index := 13
+	allocNewContainer := func(request executor.Container) string {
+		guid := generateGuid()
 
-		guid, fakeContainer = allocNewContainer(executor.ContainerAllocationRequest{
-			MemoryMB: 1024,
-			DiskMB:   1024,
-
-			Log: executor.LogConfig{
-				Guid:       "the-app-guid",
-				SourceName: "STG",
-				Index:      &index,
-			},
-		})
-
-		_, err := executorClient.InitializeContainer(guid)
+		_, err := executorClient.AllocateContainer(guid, request)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		return guid, fakeContainer
+		return guid
+	}
+
+	setupFakeContainer := func() *gfakes.FakeContainer {
+		fakeContainer := new(gfakes.FakeContainer)
+		fakeContainer.HandleReturns(containerHandle)
+
+		fakeBackend.CreateReturns(fakeContainer, nil)
+		fakeBackend.LookupReturns(fakeContainer, nil)
+		fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
+
+		return fakeContainer
+	}
+
+	getContainer := func(guid string) executor.Container {
+		container, err := executorClient.GetContainer(guid)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		return container
 	}
 
 	Describe("starting up", func() {
@@ -203,9 +199,9 @@ var _ = Describe("Executor", func() {
 				fakeContainer2 = new(gfakes.FakeContainer)
 				fakeContainer2.HandleReturns("handle-2")
 
-				fakeBackend.ContainersStub = func(ps gapi.Properties) ([]gapi.Container, error) {
-					if reflect.DeepEqual(ps, gapi.Properties{"executor:owner": ownerName}) {
-						return []gapi.Container{fakeContainer1, fakeContainer2}, nil
+				fakeBackend.ContainersStub = func(ps garden.Properties) ([]garden.Container, error) {
+					if reflect.DeepEqual(ps, garden.Properties{"executor:owner": ownerName}) {
+						return []garden.Container{fakeContainer1, fakeContainer2}, nil
 					} else {
 						return nil, nil
 					}
@@ -287,355 +283,22 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Describe("allocating the container", func() {
-			var guid string
-			var allocRequest executor.ContainerAllocationRequest
-			var allocatedContainer executor.Container
-			var allocErr error
+		Describe("allocating a container", func() {
+			var (
+				container executor.Container
+
+				guid string
+
+				allocatedContainer executor.Container
+				allocErr           error
+			)
 
 			BeforeEach(func() {
-				id, err := uuid.NewV4()
-				Ω(err).ShouldNot(HaveOccurred())
+				guid = generateGuid()
 
-				guid = id.String()
-
-				allocRequest = executor.ContainerAllocationRequest{
+				container = executor.Container{
 					Tags: executor.Tags{"some-tag": "some-value"},
-				}
-			})
 
-			JustBeforeEach(func() {
-				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, allocRequest)
-			})
-
-			It("does not return an error", func() {
-				Ω(allocErr).ShouldNot(HaveOccurred())
-			})
-
-			It("returns a container", func() {
-				Ω(allocatedContainer.Guid).Should(Equal(guid))
-				Ω(allocatedContainer.MemoryMB).Should(Equal(0))
-				Ω(allocatedContainer.DiskMB).Should(Equal(0))
-				Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
-				Ω(allocatedContainer.State).Should(Equal("reserved"))
-				Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
-			})
-
-			Context("when allocated with memory and disk limits", func() {
-				BeforeEach(func() {
-					allocRequest.MemoryMB = 256
-					allocRequest.DiskMB = 256
-				})
-
-				It("returns the limits on the container", func() {
-					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
-					Ω(allocatedContainer.DiskMB).Should(Equal(256))
-				})
-
-				It("reduces the capacity by the amount reserved", func() {
-					Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   768,
-						DiskMB:     768,
-						Containers: 1023,
-					}))
-				})
-			})
-
-			Context("when the requested CPU weight is > 100", func() {
-				BeforeEach(func() {
-					allocRequest.CPUWeight = 101
-				})
-
-				It("returns an error", func() {
-					Ω(allocErr).Should(HaveOccurred())
-					Ω(allocErr).Should(Equal(executor.ErrLimitsInvalid))
-				})
-			})
-
-			Context("when the requested CPU weight is 0", func() {
-				BeforeEach(func() {
-					allocRequest.CPUWeight = 0
-				})
-
-				It("sets the CPU weight to 100", func() {
-					Ω(allocatedContainer.CPUWeight).Should(Equal(uint(100)))
-				})
-			})
-
-			Context("when the container cannot be reserved because the guid is already taken", func() {
-				BeforeEach(func() {
-					_, err := executorClient.AllocateContainer(guid, allocRequest)
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("returns an error", func() {
-					Ω(allocErr).Should(Equal(executor.ErrContainerGuidNotAvailable))
-				})
-			})
-
-			Context("when the container cannot be reserved because there is no room", func() {
-				BeforeEach(func() {
-					allocRequest.MemoryMB = 999999999999999
-					allocRequest.DiskMB = 999999999999999
-				})
-
-				It("returns an error", func() {
-					Ω(allocErr).Should(Equal(executor.ErrInsufficientResourcesAvailable))
-				})
-			})
-
-			Describe("getting", func() {
-				var container executor.Container
-				var getErr error
-
-				JustBeforeEach(func() {
-					container, getErr = executorClient.GetContainer(guid)
-				})
-
-				It("does not return an error", func() {
-					Ω(getErr).ShouldNot(HaveOccurred())
-				})
-
-				It("retains the reserved containers", func() {
-					Ω(container.Guid).Should(Equal(guid))
-					Ω(container.MemoryMB).Should(Equal(0))
-					Ω(container.DiskMB).Should(Equal(0))
-					Ω(container.CPUWeight).Should(Equal(uint(100)))
-					Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
-					Ω(container.State).Should(Equal("reserved"))
-					Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
-				})
-
-				Context("when allocated with memory, disk, cpu, and inode limits", func() {
-					BeforeEach(func() {
-						allocRequest.MemoryMB = 256
-						allocRequest.DiskMB = 256
-						allocRequest.CPUWeight = 50
-					})
-
-					It("returns the disk, memory, and cpu limits", func() {
-						Ω(container.MemoryMB).Should(Equal(256))
-						Ω(container.DiskMB).Should(Equal(256))
-						Ω(container.CPUWeight).Should(Equal(uint(50)))
-					})
-				})
-
-				Context("when the container was allocated with a rootfs", func() {
-					var expectedRootFS = "docker:///docker.com/my-image"
-
-					BeforeEach(func() {
-						allocRequest.RootFSPath = expectedRootFS
-					})
-
-					It("records the rootfs on the container", func() {
-						Ω(container.RootFSPath).Should(Equal(expectedRootFS))
-					})
-				})
-			})
-
-			Describe("initializing", func() {
-				var (
-					initializedContainer executor.Container
-					initErr              error
-				)
-
-				JustBeforeEach(func() {
-					initializedContainer, initErr = executorClient.InitializeContainer(guid)
-				})
-
-				Context("when the container can be created", func() {
-					var gardenContainer *gfakes.FakeContainer
-
-					BeforeEach(func() {
-						gardenContainer = new(gfakes.FakeContainer)
-						fakeBackend.CreateReturns(gardenContainer, nil)
-						fakeBackend.LookupReturns(gardenContainer, nil)
-					})
-
-					It("does not error", func() {
-						Ω(initErr).ShouldNot(HaveOccurred())
-					})
-
-					It("creates it with the tags as namespaced properties", func() {
-						Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
-						created := fakeBackend.CreateArgsForCall(0)
-						Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
-					})
-
-					It("creates it with the configured owner", func() {
-						created := fakeBackend.CreateArgsForCall(0)
-						ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-						Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
-					})
-
-					Context("when created with memory, disk, cpu, and inode limits", func() {
-						BeforeEach(func() {
-							allocRequest.MemoryMB = 256
-							allocRequest.DiskMB = 256
-							allocRequest.CPUWeight = 50
-						})
-
-						It("applies them to the container", func() {
-							Ω(gardenContainer.LimitMemoryCallCount()).Should(Equal(1))
-							Ω(gardenContainer.LimitDiskCallCount()).Should(Equal(1))
-							Ω(gardenContainer.LimitCPUCallCount()).Should(Equal(1))
-
-							limitedMemory := gardenContainer.LimitMemoryArgsForCall(0)
-							Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(256 * 1024 * 1024)))
-
-							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
-							Ω(limitedDisk.ByteHard).Should(Equal(uint64(256 * 1024 * 1024)))
-							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-
-							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
-							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
-						})
-
-						Context("when limiting memory fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitMemoryReturns(errors.New("oh no!"))
-							})
-
-							It("returns an error", func() {
-								Ω(initErr).Should(HaveOccurred())
-								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
-							})
-						})
-
-						Context("when limiting disk fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitDiskReturns(errors.New("oh no!"))
-							})
-
-							It("returns an error", func() {
-								Ω(initErr).Should(HaveOccurred())
-								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
-							})
-						})
-
-						Context("when limiting CPU fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitCPUReturns(errors.New("oh no!"))
-							})
-
-							It("returns an error", func() {
-								Ω(initErr).Should(HaveOccurred())
-								Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
-							})
-						})
-
-						Context("when the container was allocated with a rootfs", func() {
-							var expectedRootFS = "docker:///docker.com/my-image"
-
-							BeforeEach(func() {
-								allocRequest.RootFSPath = expectedRootFS
-							})
-
-							It("does not error", func() {
-								Ω(initErr).ShouldNot(HaveOccurred())
-							})
-
-							It("creates it with the configured rootfs", func() {
-								Ω(fakeBackend.CreateCallCount()).Should(Equal(1))
-								created := fakeBackend.CreateArgsForCall(0)
-								Ω(created.RootFSPath).Should(Equal(expectedRootFS))
-							})
-						})
-
-						Context("when the container has no memory limits requested", func() {
-							BeforeEach(func() {
-								allocRequest.MemoryMB = 0
-							})
-
-							It("does not enforce a zero-value memory limit", func() {
-								Ω(gardenContainer.LimitMemoryCallCount()).Should(Equal(0))
-							})
-						})
-
-						Context("when the container has no disk limits requested", func() {
-							BeforeEach(func() {
-								allocRequest.DiskMB = 0
-							})
-
-							It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
-								limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
-								Ω(limitedDisk.ByteHard).Should(BeZero())
-								Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-							})
-						})
-
-						Context("when ports are exposed", func() {
-							BeforeEach(func() {
-								allocRequest.Ports = []executor.PortMapping{
-									{ContainerPort: 8080, HostPort: 0},
-									{ContainerPort: 8081, HostPort: 1234},
-								}
-							})
-
-							It("exposes the configured ports", func() {
-								netInH, netInC := gardenContainer.NetInArgsForCall(0)
-								Ω(netInH).Should(Equal(uint32(0)))
-								Ω(netInC).Should(Equal(uint32(8080)))
-
-								netInH, netInC = gardenContainer.NetInArgsForCall(1)
-								Ω(netInH).Should(Equal(uint32(1234)))
-								Ω(netInC).Should(Equal(uint32(8081)))
-							})
-
-							Context("when net-in succeeds", func() {
-								BeforeEach(func() {
-									calls := uint32(0)
-									gardenContainer.NetInStub = func(uint32, uint32) (uint32, uint32, error) {
-										calls++
-										return 1234 * calls, 4567 * calls, nil
-									}
-								})
-
-								It("returns the container with mapped ports", func() {
-									Ω(initializedContainer.Ports).Should(Equal([]executor.PortMapping{
-										{HostPort: 1234, ContainerPort: 4567},
-										{HostPort: 2468, ContainerPort: 9134},
-									}))
-								})
-							})
-
-							Context("when mapping the ports fails", func() {
-								BeforeEach(func() {
-									gardenContainer.NetInReturns(0, 0, errors.New("oh no!"))
-								})
-
-								It("returns an error", func() {
-									Ω(initErr).Should(HaveOccurred())
-									Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
-								})
-							})
-						})
-					})
-				})
-
-				Context("when for some reason the container fails to create", func() {
-					BeforeEach(func() {
-						fakeBackend.CreateReturns(nil, errors.New("oh no!"))
-					})
-
-					It("returns an error", func() {
-						Ω(initErr).Should(HaveOccurred())
-						Ω(initErr.Error()).Should(ContainSubstring("status: 500"))
-					})
-				})
-			})
-		})
-
-		Describe("running something", func() {
-			var runRequest executor.ContainerRunRequest
-
-			var guid string
-			var fakeContainer *gfakes.FakeContainer
-
-			BeforeEach(func() {
-				guid, fakeContainer = initNewContainer()
-
-				runRequest = executor.ContainerRunRequest{
 					Env: []executor.EnvironmentVariable{
 						{Name: "ENV1", Value: "val1"},
 						{Name: "ENV2", Value: "val2"},
@@ -655,126 +318,387 @@ var _ = Describe("Executor", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := executorClient.Run(guid, runRequest)
-				Ω(err).ShouldNot(HaveOccurred())
+				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, container)
 			})
 
-			Context("when running succeeds", func() {
-				BeforeEach(func() {
-					process := new(gfakes.FakeProcess)
-					process.WaitReturns(0, nil)
+			It("does not return an error", func() {
+				Ω(allocErr).ShouldNot(HaveOccurred())
+			})
 
-					fakeContainer.RunReturns(process, nil)
+			It("returns a container", func() {
+				Ω(allocatedContainer.Guid).Should(Equal(guid))
+				Ω(allocatedContainer.MemoryMB).Should(Equal(0))
+				Ω(allocatedContainer.DiskMB).Should(Equal(0))
+				Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
+				Ω(allocatedContainer.State).Should(Equal("reserved"))
+				Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+			})
+
+			Context("when allocated with memory and disk limits", func() {
+				BeforeEach(func() {
+					container.MemoryMB = 256
+					container.DiskMB = 256
 				})
 
-				It("propagates global environment variables to each run action", func() {
-					Eventually(fakeContainer.RunCallCount, 10).Should(Equal(1))
+				It("returns the limits on the container", func() {
+					Ω(allocatedContainer.MemoryMB).Should(Equal(256))
+					Ω(allocatedContainer.DiskMB).Should(Equal(256))
+				})
 
-					spec, _ := fakeContainer.RunArgsForCall(0)
-					Ω(spec.Path).Should(Equal("ls"))
-					Ω(spec.Env).Should(Equal([]string{
-						"ENV1=val1",
-						"ENV2=val2",
-						"RUN_ENV1=run_val1",
-						"RUN_ENV2=run_val2",
+				It("reduces the capacity by the amount reserved", func() {
+					Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
+						MemoryMB:   768,
+						DiskMB:     768,
+						Containers: 1023,
 					}))
 				})
+			})
 
-				It("saves the failed result in the container's properties", func() {
-					Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(1))
-
-					name, value := fakeContainer.SetPropertyArgsForCall(0)
-					Ω(name).Should(Equal("executor:failed"))
-					Ω(value).Should(Equal("false"))
+			Context("when the requested CPU weight is > 100", func() {
+				BeforeEach(func() {
+					container.CPUWeight = 101
 				})
 
-				Context("and there is a complete callback", func() {
-					var callbackHandler *ghttp.Server
-
-					BeforeEach(func() {
-						callbackHandler = ghttp.NewServer()
-						runRequest.CompleteURL = callbackHandler.URL() + "/result"
-
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
-									Guid:   guid,
-									Failed: false,
-								}),
-							),
-						)
-					})
-
-					It("invokes the callback with failed false", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
-					})
-
-					Context("and the callback fails", func() {
-						BeforeEach(func() {
-							callbackHandler.SetHandler(
-								0,
-								http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-									callbackHandler.HTTPTestServer.CloseClientConnections()
-								}),
-							)
-
-							callbackHandler.AppendHandlers(
-								ghttp.RespondWith(http.StatusInternalServerError, ""),
-								ghttp.RespondWith(http.StatusOK, ""),
-							)
-						})
-
-						It("invokes the callback repeatedly", func() {
-							Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
-						})
-					})
+				It("returns an error", func() {
+					Ω(allocErr).Should(HaveOccurred())
+					Ω(allocErr).Should(Equal(executor.ErrLimitsInvalid))
 				})
 			})
 
-			Context("when running fails", func() {
+			Context("when the guid is already taken", func() {
 				BeforeEach(func() {
-					process := new(gfakes.FakeProcess)
-					process.WaitReturns(1, nil)
-
-					fakeContainer.RunReturns(process, nil)
+					_, err := executorClient.AllocateContainer(guid, container)
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				It("saves the failed result in the container's properties", func() {
-					Eventually(fakeContainer.SetPropertyCallCount).Should(Equal(2))
+				It("returns an error", func() {
+					Ω(allocErr).Should(Equal(executor.ErrContainerGuidNotAvailable))
+				})
+			})
 
-					name, value := fakeContainer.SetPropertyArgsForCall(0)
-					Ω(name).Should(Equal("executor:failed"))
-					Ω(value).Should(Equal("true"))
-
-					name, value = fakeContainer.SetPropertyArgsForCall(1)
-					Ω(name).Should(Equal("executor:failure_reason"))
-					Ω(value).Should(Equal("Exited with status 1"))
+			Context("when there is no room", func() {
+				BeforeEach(func() {
+					container.MemoryMB = 999999999999999
+					container.DiskMB = 999999999999999
 				})
 
-				Context("and there is a complete callback", func() {
-					var callbackHandler *ghttp.Server
+				It("returns an error", func() {
+					Ω(allocErr).Should(Equal(executor.ErrInsufficientResourcesAvailable))
+				})
+			})
+
+			Describe("running it", func() {
+				var runErr error
+
+				JustBeforeEach(func() {
+					runErr = executorClient.RunContainer(guid)
+				})
+
+				itCompletesWithFailure := func(reason string) {
+					It("eventually completes with failure", func() {
+						var container executor.Container
+
+						Eventually(func() string {
+							container = getContainer(guid)
+							return container.State
+						}, 5*time.Second, 1*time.Second).Should(Equal(executor.StateCompleted))
+
+						Ω(container.RunResult.Failed).Should(BeTrue())
+						Ω(container.RunResult.FailureReason).Should(Equal(reason))
+					})
+				}
+
+				Context("when the container can be created", func() {
+					var gardenContainer *gfakes.FakeContainer
 
 					BeforeEach(func() {
-						callbackHandler = ghttp.NewServer()
-						runRequest.CompleteURL = callbackHandler.URL() + "/result"
+						gardenContainer = new(gfakes.FakeContainer)
+						gardenContainer.HandleReturns(containerHandle)
 
-						callbackHandler.AppendHandlers(
-							ghttp.CombineHandlers(
-								ghttp.VerifyRequest("PUT", "/result"),
-								ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
-									Guid:          guid,
-									Failed:        true,
-									FailureReason: "Exited with status 1",
-								}),
-							),
-						)
+						fakeBackend.LookupReturns(gardenContainer, nil)
+						fakeBackend.ContainersReturns([]garden.Container{gardenContainer}, nil)
+
+						fakeBackend.CreateReturns(gardenContainer, nil)
+
+						process := new(gfakes.FakeProcess)
+						process.WaitReturns(0, nil)
+
+						gardenContainer.RunReturns(process, nil)
 					})
 
-					It("invokes the callback with failed true and a reason", func() {
-						Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+					It("returns no error", func() {
+						Ω(runErr).ShouldNot(HaveOccurred())
+					})
+
+					It("creates it with the tags as namespaced properties", func() {
+						Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
+
+						created := fakeBackend.CreateArgsForCall(0)
+						Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
+					})
+
+					It("creates it with the configured owner", func() {
+						Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
+
+						created := fakeBackend.CreateArgsForCall(0)
+						ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
+						Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
+					})
+
+					It("propagates global environment variables to each run action", func() {
+						Eventually(gardenContainer.RunCallCount, 10).Should(Equal(1))
+
+						spec, _ := gardenContainer.RunArgsForCall(0)
+						Ω(spec.Path).Should(Equal("ls"))
+						Ω(spec.Env).Should(Equal([]string{
+							"ENV1=val1",
+							"ENV2=val2",
+							"RUN_ENV1=run_val1",
+							"RUN_ENV2=run_val2",
+						}))
+					})
+
+					It("saves the failed result in the container's properties", func() {
+						Eventually(gardenContainer.SetPropertyCallCount).Should(Equal(1))
+
+						name, value := gardenContainer.SetPropertyArgsForCall(0)
+						Ω(name).Should(Equal("executor:failed"))
+						Ω(value).Should(Equal("false"))
+					})
+
+					Context("when created with memory, disk, cpu, and inode limits", func() {
+						BeforeEach(func() {
+							container.MemoryMB = 256
+							container.DiskMB = 256
+							container.CPUWeight = 50
+						})
+
+						It("applies them to the container", func() {
+							Eventually(gardenContainer.LimitMemoryCallCount).Should(Equal(1))
+							Eventually(gardenContainer.LimitDiskCallCount).Should(Equal(1))
+							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(1))
+
+							limitedMemory := gardenContainer.LimitMemoryArgsForCall(0)
+							Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(256 * 1024 * 1024)))
+
+							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
+							Ω(limitedDisk.ByteHard).Should(Equal(uint64(256 * 1024 * 1024)))
+							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+
+							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
+							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
+						})
+
+						Context("when limiting memory fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitMemoryReturns(errors.New("oh no!"))
+							})
+
+							itCompletesWithFailure("failed to initialize container: oh no!")
+						})
+
+						Context("when limiting disk fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitDiskReturns(errors.New("oh no!"))
+							})
+
+							itCompletesWithFailure("failed to initialize container: oh no!")
+						})
+
+						Context("when limiting CPU fails", func() {
+							BeforeEach(func() {
+								gardenContainer.LimitCPUReturns(errors.New("oh no!"))
+							})
+
+							itCompletesWithFailure("failed to initialize container: oh no!")
+						})
+					})
+
+					Context("when the container was allocated with a rootfs", func() {
+						var expectedRootFS = "docker:///docker.com/my-image"
+
+						BeforeEach(func() {
+							container.RootFSPath = expectedRootFS
+						})
+
+						It("creates it with the configured rootfs", func() {
+							Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
+
+							created := fakeBackend.CreateArgsForCall(0)
+							Ω(created.RootFSPath).Should(Equal(expectedRootFS))
+						})
+					})
+
+					Context("when the container has no memory limits requested", func() {
+						BeforeEach(func() {
+							container.MemoryMB = 0
+						})
+
+						It("does not enforce a zero-value memory limit", func() {
+							Consistently(gardenContainer.LimitMemoryCallCount).Should(Equal(0))
+						})
+					})
+
+					Context("when the container has no disk limits requested", func() {
+						BeforeEach(func() {
+							container.DiskMB = 0
+						})
+
+						It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
+							Eventually(gardenContainer.LimitDiskCallCount).Should(Equal(1))
+
+							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
+							Ω(limitedDisk.ByteHard).Should(BeZero())
+							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
+						})
+					})
+
+					Context("when the container has no CPU limits requested", func() {
+						BeforeEach(func() {
+							container.CPUWeight = 0
+						})
+
+						It("does not enforce a zero-value limit", func() {
+							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(0))
+						})
+					})
+
+					Context("when ports are exposed", func() {
+						BeforeEach(func() {
+							container.Ports = []executor.PortMapping{
+								{ContainerPort: 8080, HostPort: 0},
+								{ContainerPort: 8081, HostPort: 1234},
+							}
+						})
+
+						It("exposes the configured ports", func() {
+							Eventually(gardenContainer.NetInCallCount).Should(Equal(2))
+
+							netInH, netInC := gardenContainer.NetInArgsForCall(0)
+							Ω(netInH).Should(Equal(uint32(0)))
+							Ω(netInC).Should(Equal(uint32(8080)))
+
+							netInH, netInC = gardenContainer.NetInArgsForCall(1)
+							Ω(netInH).Should(Equal(uint32(1234)))
+							Ω(netInC).Should(Equal(uint32(8081)))
+						})
+
+						Context("when mapping the ports fails", func() {
+							BeforeEach(func() {
+								gardenContainer.NetInReturns(0, 0, errors.New("oh no!"))
+							})
+
+							itCompletesWithFailure("failed to initialize container: oh no!")
+						})
+					})
+
+					Context("and there is a complete callback", func() {
+						var callbackHandler *ghttp.Server
+
+						BeforeEach(func() {
+							callbackHandler = ghttp.NewServer()
+							container.CompleteURL = callbackHandler.URL() + "/result"
+
+							callbackHandler.AppendHandlers(
+								ghttp.CombineHandlers(
+									ghttp.VerifyRequest("PUT", "/result"),
+									ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+										Guid:   guid,
+										Failed: false,
+									}),
+								),
+							)
+						})
+
+						It("invokes the callback with failed false", func() {
+							Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+						})
+
+						Context("and the callback fails", func() {
+							BeforeEach(func() {
+								callbackHandler.SetHandler(
+									0,
+									http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+										callbackHandler.HTTPTestServer.CloseClientConnections()
+									}),
+								)
+
+								callbackHandler.AppendHandlers(
+									ghttp.RespondWith(http.StatusInternalServerError, ""),
+									ghttp.RespondWith(http.StatusOK, ""),
+								)
+							})
+
+							It("invokes the callback repeatedly", func() {
+								Eventually(callbackHandler.ReceivedRequests, 5).Should(HaveLen(3))
+							})
+						})
+					})
+
+					Context("when running fails", func() {
+						BeforeEach(func() {
+							process := new(gfakes.FakeProcess)
+							process.WaitReturns(1, nil)
+
+							gardenContainer.RunReturns(process, nil)
+						})
+
+						It("saves the failed result in the container's properties", func() {
+							Eventually(gardenContainer.SetPropertyCallCount).Should(Equal(2))
+
+							name, value := gardenContainer.SetPropertyArgsForCall(0)
+							Ω(name).Should(Equal("executor:failed"))
+							Ω(value).Should(Equal("true"))
+
+							name, value = gardenContainer.SetPropertyArgsForCall(1)
+							Ω(name).Should(Equal("executor:failure_reason"))
+							Ω(value).Should(Equal("Exited with status 1"))
+						})
+
+						Context("and there is a complete callback", func() {
+							var callbackHandler *ghttp.Server
+
+							BeforeEach(func() {
+								callbackHandler = ghttp.NewServer()
+								container.CompleteURL = callbackHandler.URL() + "/result"
+
+								callbackHandler.AppendHandlers(
+									ghttp.CombineHandlers(
+										ghttp.VerifyRequest("PUT", "/result"),
+										ghttp.VerifyJSONRepresenting(executor.ContainerRunResult{
+											Guid:          guid,
+											Failed:        true,
+											FailureReason: "Exited with status 1",
+										}),
+									),
+								)
+							})
+
+							It("invokes the callback with failed true and a reason", func() {
+								Eventually(callbackHandler.ReceivedRequests).Should(HaveLen(1))
+							})
+						})
 					})
 				})
+
+				Context("when the container cannot be created", func() {
+					BeforeEach(func() {
+						fakeBackend.CreateReturns(nil, errors.New("oh no!"))
+					})
+
+					It("does not immediately return an error", func() {
+						Ω(runErr).ShouldNot(HaveOccurred())
+					})
+
+					itCompletesWithFailure("failed to initialize container: oh no!")
+				})
+			})
+		})
+
+		Describe("running a bogus guid", func() {
+			It("returns an error", func() {
+				err := executorClient.RunContainer("bogus")
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
@@ -784,82 +708,130 @@ var _ = Describe("Executor", func() {
 				fakeContainer *gfakes.FakeContainer
 
 				container executor.Container
+				getErr    error
 			)
 
 			BeforeEach(func() {
-				guid, fakeContainer = initNewContainer()
+				guid = allocNewContainer(executor.Container{})
+
+				fakeContainer = setupFakeContainer()
+
+				err := executorClient.RunContainer(guid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(func() string {
+					container, err := executorClient.GetContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return container.State
+				}, 5*time.Second).Should(MatchRegexp(executor.StateCreated + "|" + executor.StateCompleted))
 			})
 
 			JustBeforeEach(func() {
-				var err error
-
-				container, err = executorClient.GetContainer(guid)
-				Ω(err).ShouldNot(HaveOccurred())
+				container, getErr = executorClient.GetContainer(guid)
 			})
 
-			Context("when the container has not finished", func() {
-				BeforeEach(func() {
-					fakeContainer.GetPropertyReturns("", errors.New("oh no!"))
+			Context("when getting the container info succeeds", func() {
+				It("does not error", func() {
+					Ω(getErr).ShouldNot(HaveOccurred())
 				})
 
-				It("returns a zero-value for the run result", func() {
-					Ω(container.RunResult).Should(BeZero())
-				})
-			})
+				Context("when the container has not finished", func() {
+					BeforeEach(func() {
+						fakeContainer.GetPropertyReturns("", errors.New("oh no!"))
+					})
 
-			Context("when the container is failed", func() {
-				BeforeEach(func() {
-					fakeContainer.GetPropertyStub = func(name string) (string, error) {
-						switch name {
-						case "executor:failed":
-							return "true", nil
-						case "executor:failure_reason":
-							return "obama", nil
-						default:
-							panic("unknown property access: " + name)
+					It("returns a that it has not failed", func() {
+						Ω(container.RunResult.Failed).Should(BeFalse())
+						Ω(container.RunResult.FailureReason).Should(BeEmpty())
+					})
+				})
+
+				Context("when the container is failed", func() {
+					BeforeEach(func() {
+						fakeContainer.GetPropertyStub = func(name string) (string, error) {
+							switch name {
+							case "executor:failed":
+								return "true", nil
+							case "executor:failure_reason":
+								return "obama", nil
+							default:
+								panic("unknown property access: " + name)
+							}
 						}
-					}
+					})
+
+					It("returns its run result as not failed", func() {
+						Ω(container.RunResult.Failed).Should(BeTrue())
+						Ω(container.RunResult.FailureReason).Should(Equal("obama"))
+					})
 				})
 
-				It("returns its run result as not failed", func() {
-					Ω(container.RunResult.Failed).Should(BeTrue())
-					Ω(container.RunResult.FailureReason).Should(Equal("obama"))
-				})
-			})
-
-			Context("when the container is not failed", func() {
-				BeforeEach(func() {
-					fakeContainer.GetPropertyStub = func(name string) (string, error) {
-						switch name {
-						case "executor:failed":
-							return "false", nil
-						default:
-							panic("unknown property access: " + name)
+				Context("when the container is not failed", func() {
+					BeforeEach(func() {
+						fakeContainer.GetPropertyStub = func(name string) (string, error) {
+							switch name {
+							case "executor:failed":
+								return "false", nil
+							default:
+								panic("unknown property access: " + name)
+							}
 						}
-					}
+					})
+
+					It("returns its run result as not failed", func() {
+						Ω(container.RunResult.Failed).Should(BeFalse())
+					})
 				})
 
-				It("returns its run result as not failed", func() {
-					Ω(container.RunResult.Failed).Should(BeFalse())
+				Context("when the container has tag-namespaced properties", func() {
+					BeforeEach(func() {
+						fakeContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:failed": "false",
+								"tag:tag-1":       "tag-1-value",
+								"tag:tag-2":       "tag-2-value",
+							},
+						}, nil)
+					})
+
+					It("returns the properties", func() {
+						Ω(container.Tags).Should(Equal(executor.Tags{
+							"tag-1": "tag-1-value",
+							"tag-2": "tag-2-value",
+						}))
+					})
+				})
+
+				Context("when the container has mapped ports", func() {
+					BeforeEach(func() {
+						fakeContainer.InfoStub = func() (garden.ContainerInfo, error) {
+							return garden.ContainerInfo{
+								MappedPorts: []garden.PortMapping{
+									{HostPort: 1234, ContainerPort: 5678},
+									{HostPort: 4321, ContainerPort: 8765},
+								},
+							}, nil
+						}
+					})
+
+					It("returns the container with mapped ports", func() {
+						Ω(container.Ports).Should(Equal([]executor.PortMapping{
+							{HostPort: 1234, ContainerPort: 5678},
+							{HostPort: 4321, ContainerPort: 8765},
+						}))
+					})
 				})
 			})
 
-			Context("when the container has tag-namespaced properties", func() {
+			Context("when getting the info fails", func() {
 				BeforeEach(func() {
-					fakeContainer.InfoReturns(gapi.ContainerInfo{
-						Properties: gapi.Properties{
-							"executor:failed": "false",
-							"tag:tag-1":       "tag-1-value",
-							"tag:tag-2":       "tag-2-value",
-						},
-					}, nil)
+					fakeContainer.InfoReturns(garden.ContainerInfo{}, errors.New("oh no!"))
 				})
 
-				It("returns the properties", func() {
-					Ω(container.Tags).Should(Equal(executor.Tags{
-						"tag-1": "tag-1-value",
-						"tag-2": "tag-2-value",
-					}))
+				It("returns the error", func() {
+					Ω(getErr).Should(HaveOccurred())
+					Ω(getErr.Error()).Should(ContainSubstring("status: 500"))
 				})
 			})
 		})
@@ -869,7 +841,7 @@ var _ = Describe("Executor", func() {
 
 			Context("when the container has been allocated", func() {
 				BeforeEach(func() {
-					guid, _ = allocNewContainer(executor.ContainerAllocationRequest{
+					guid = allocNewContainer(executor.Container{
 						MemoryMB: 1024,
 						DiskMB:   1024,
 					})
@@ -887,59 +859,74 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
-			Context("when the container has been initialized", func() {
+			Context("while the container is initializing", func() {
+				var createdContainer chan struct{}
+
 				BeforeEach(func() {
-					guid, _ = initNewContainer()
+					guid = allocNewContainer(executor.Container{})
+
+					fakeContainer := new(gfakes.FakeContainer)
+					fakeContainer.HandleReturns(containerHandle)
+
+					creating := make(chan struct{})
+
+					createdContainer = make(chan struct{})
+
+					fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
+						close(creating)
+						<-createdContainer
+
+						fakeBackend.LookupReturns(fakeContainer, nil)
+						fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
+
+						return fakeContainer, nil
+					}
+
+					err := executorClient.RunContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(creating).Should(BeClosed())
 				})
 
-				Context("when deleting the container succeeds", func() {
-					It("destroys the garden container", func() {
-						err := executorClient.DeleteContainer(guid)
-						Ω(err).ShouldNot(HaveOccurred())
-
-						Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-						Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
-					})
-
-					It("removes the container from the registry", func() {
-						err := executorClient.DeleteContainer(guid)
-						Ω(err).ShouldNot(HaveOccurred())
-
-						_, err = executorClient.GetContainer(guid)
-						Ω(err).Should(Equal(executor.ErrContainerNotFound))
-					})
+				AfterEach(func() {
+					select {
+					case <-createdContainer:
+					default:
+						// un-hang garden
+						close(createdContainer)
+					}
 				})
 
-				Context("when deleting the container fails", func() {
-					BeforeEach(func() {
-						fakeBackend.DestroyReturns(errors.New("oh no!"))
-					})
+				It("destroys the garden container after creating it", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
 
-					It("returns an error", func() {
-						err := executorClient.DeleteContainer(guid)
-						Ω(err.Error()).Should(ContainSubstring("status: 500"))
-					})
+					Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
 
-					Describe("retrying", func() {
-						BeforeEach(func() {
-							executorClient.DeleteContainer(guid)
-							fakeBackend.DestroyReturns(nil)
-						})
+					close(createdContainer)
 
-						It("tries to delete the garden container again", func() {
-							err := executorClient.DeleteContainer(guid)
-							Ω(fakeBackend.DestroyCallCount()).Should(Equal(2))
-							Ω(err).ShouldNot(HaveOccurred())
-						})
-					})
+					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
+				})
+
+				It("removes the container from the registry", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = executorClient.GetContainer(guid)
+					Ω(err).Should(Equal(executor.ErrContainerNotFound))
 				})
 			})
 
 			Context("while it is running", func() {
 				BeforeEach(func() {
-					var fakeContainer *gfakes.FakeContainer
+					guid = allocNewContainer(executor.Container{
+						Actions: []models.ExecutorAction{
+							{Action: models.RunAction{Path: "ls"}},
+						},
+					})
 
-					guid, fakeContainer = initNewContainer()
+					fakeContainer := setupFakeContainer()
 
 					waiting := make(chan struct{})
 					destroying := make(chan struct{})
@@ -958,12 +945,15 @@ var _ = Describe("Executor", func() {
 						return nil
 					}
 
-					err := executorClient.Run(guid, executor.ContainerRunRequest{
-						Actions: []models.ExecutorAction{
-							{Action: models.RunAction{Path: "ls"}},
-						},
-					})
+					err := executorClient.RunContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(func() string {
+						container, err := executorClient.GetContainer(guid)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						return container.State
+					}, 5*time.Second).Should(Equal(executor.StateCreated))
 
 					Eventually(waiting).Should(BeClosed())
 				})
@@ -1003,7 +993,7 @@ var _ = Describe("Executor", func() {
 
 			Context("when the container hasn't been initialized", func() {
 				BeforeEach(func() {
-					guid, _ = allocNewContainer(executor.ContainerAllocationRequest{
+					guid = allocNewContainer(executor.Container{
 						MemoryMB: 1024,
 						DiskMB:   1024,
 					})
@@ -1018,7 +1008,19 @@ var _ = Describe("Executor", func() {
 				var fakeContainer *gfakes.FakeContainer
 
 				BeforeEach(func() {
-					guid, fakeContainer = initNewContainer()
+					guid = allocNewContainer(executor.Container{})
+
+					fakeContainer = setupFakeContainer()
+
+					err := executorClient.RunContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Eventually(func() string {
+						container, err := executorClient.GetContainer(guid)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						return container.State
+					}, 5*time.Second).Should(MatchRegexp(executor.StateCreated + "|" + executor.StateCompleted))
 				})
 
 				Context("when streaming out the file succeeds", func() {
@@ -1061,59 +1063,12 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Describe("staying in sync with garden", func() {
-			Context("when a created container disappears out from under us", func() {
-				var guid string
-
-				BeforeEach(func() {
-					guid, _ = initNewContainer()
-
-					fakeBackend.ContainersReturns([]gapi.Container{}, nil)
-				})
-
-				It("returns a not-found response when that container is queried", func() {
-					_, err := executorClient.GetContainer(guid)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				})
-
-				It("returns a not-found error when that container is deleted", func() {
-					err := executorClient.DeleteContainer(guid)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				})
-
-				It("returns a not-found error when attempting to run something in that container", func() {
-					err := executorClient.Run(guid, executor.ContainerRunRequest{})
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				})
-
-				It("does not return that container when listing containers", func() {
-					Ω(executorClient.ListContainers()).Should(BeEmpty())
-				})
-
-				It("frees that container's resources from the available resources", func() {
-					Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   1024,
-						DiskMB:     1024,
-						Containers: 1024,
-					}))
-				})
-
-				It("makes that container's resources available for subsequent allocations", func() {
-					_, err := executorClient.AllocateContainer("the-guid", executor.ContainerAllocationRequest{
-						MemoryMB: 1024,
-					})
-
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-			})
-		})
-
 		Describe("pruning the registry", func() {
 			It("continually prunes the registry", func() {
 				guid, err := uuid.NewV4()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = executorClient.AllocateContainer(guid.String(), executor.ContainerAllocationRequest{
+				_, err = executorClient.AllocateContainer(guid.String(), executor.Container{
 					MemoryMB: 1024,
 					DiskMB:   1024,
 				})

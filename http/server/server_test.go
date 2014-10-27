@@ -142,7 +142,7 @@ var _ = Describe("Api", func() {
 		var reserveResponse *http.Response
 
 		BeforeEach(func() {
-			reserveRequestBody = MarshalledPayload(executor.ContainerAllocationRequest{
+			reserveRequestBody = MarshalledPayload(executor.Container{
 				MemoryMB:  64,
 				DiskMB:    512,
 				CPUWeight: 50,
@@ -214,93 +214,39 @@ var _ = Describe("Api", func() {
 		})
 	})
 
-	Describe("POST /containers/:guid/initialize", func() {
-		Context("when the container can be created", func() {
-			var createResponse *http.Response
-			var expectedContainer executor.Container
-
-			BeforeEach(func() {
-				expectedContainer = executor.Container{
-					Ports: []executor.PortMapping{
-						{HostPort: 1234, ContainerPort: 4567},
-						{HostPort: 2468, ContainerPort: 9134},
-					},
-				}
-				depotClient.InitializeContainerReturns(expectedContainer, nil)
-
-				createResponse = DoRequest(generator.CreateRequest(
-					ehttp.InitializeContainer,
-					rata.Params{"guid": containerGuid},
-					nil,
-				))
-			})
-
-			It("returns 201", func() {
-				Ω(createResponse.StatusCode).Should(Equal(http.StatusCreated))
-			})
-
-			It("creates the container", func() {
-				Ω(depotClient.InitializeContainerCallCount()).Should(Equal(1))
-
-				guid := depotClient.InitializeContainerArgsForCall(0)
-				Ω(guid).Should(Equal(containerGuid))
-			})
-
-			It("returns the serialized initialized container", func() {
-				var initializedContainer executor.Container
-
-				err := json.NewDecoder(createResponse.Body).Decode(&initializedContainer)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(initializedContainer).Should(Equal(expectedContainer))
-			})
-		})
-
-		Context("when the container cannot be created", func() {
-			var createResponse *http.Response
-			JustBeforeEach(func() {
-				createResponse = DoRequest(generator.CreateRequest(
-					ehttp.InitializeContainer,
-					rata.Params{"guid": containerGuid},
-					nil,
-				))
-			})
-
-			Context("when the requested limits are invalid", func() {
-				BeforeEach(func() {
-					depotClient.InitializeContainerReturns(executor.Container{}, executor.ErrLimitsInvalid)
-				})
-
-				It("returns 400", func() {
-					Ω(createResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-				})
-			})
-
-			Context("when for some reason the container fails to create", func() {
-				disaster := errors.New("oh no!")
-
-				BeforeEach(func() {
-					depotClient.InitializeContainerReturns(executor.Container{}, disaster)
-				})
-
-				It("returns 500", func() {
-					Ω(createResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
-				})
-			})
-		})
-	})
-
 	Describe("POST /containers/:guid/run", func() {
 		var runRequestBody io.Reader
 		var runResponse *http.Response
+
+		var expectedActions []models.ExecutorAction
+		var expectedEnv []executor.EnvironmentVariable
 
 		BeforeEach(func() {
 			runRequestBody = nil
 			runResponse = nil
 
-			allocRequestBody := MarshalledPayload(executor.ContainerAllocationRequest{
+			expectedActions = []models.ExecutorAction{
+				{
+					models.RunAction{
+						Path: "ls",
+						Args: []string{"-al"},
+					},
+				},
+			}
+
+			expectedEnv = []executor.EnvironmentVariable{
+				{Name: "ENV1", Value: "val1"},
+				{Name: "ENV2", Value: "val2"},
+			}
+
+			allocRequestBody := MarshalledPayload(executor.Container{
 				MemoryMB:  64,
 				DiskMB:    512,
 				CPUWeight: 50,
+
+				Actions:     expectedActions,
+				Env:         expectedEnv,
+				CompleteURL: "http://example.com",
 			})
 
 			allocResponse := DoRequest(generator.CreateRequest(
@@ -309,91 +255,26 @@ var _ = Describe("Api", func() {
 				allocRequestBody,
 			))
 			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-
-			initResponse := DoRequest(generator.CreateRequest(
-				ehttp.InitializeContainer,
-				rata.Params{"guid": containerGuid},
-				nil,
-			))
-			Ω(initResponse.StatusCode).Should(Equal(http.StatusCreated))
 		})
 
 		JustBeforeEach(func() {
 			runResponse = DoRequest(generator.CreateRequest(
-				ehttp.RunActions,
+				ehttp.RunContainer,
 				rata.Params{"guid": containerGuid},
-				runRequestBody,
+				nil,
 			))
 		})
 
-		Context("with a set of actions as the body", func() {
-			var expectedActions []models.ExecutorAction
-			var expectedEnv []executor.EnvironmentVariable
-
-			var runRequest executor.ContainerRunRequest
-
-			BeforeEach(func() {
-				expectedActions = []models.ExecutorAction{
-					{
-						models.RunAction{
-							Path: "ls",
-							Args: []string{"-al"},
-						},
-					},
-				}
-
-				expectedEnv = []executor.EnvironmentVariable{
-					{Name: "ENV1", Value: "val1"},
-					{Name: "ENV2", Value: "val2"},
-				}
-
-				runRequest = executor.ContainerRunRequest{
-					Actions:     expectedActions,
-					Env:         expectedEnv,
-					CompleteURL: "http://example.com",
-				}
-
-				runRequestBody = MarshalledPayload(runRequest)
-			})
-
-			It("returns 201", func() {
-				Ω(runResponse.StatusCode).Should(Equal(http.StatusCreated))
-				time.Sleep(time.Second)
-			})
-
-			It("runs the actions", func() {
-				Eventually(depotClient.RunCallCount).Should(Equal(1))
-
-				guid, req := depotClient.RunArgsForCall(0)
-				Ω(guid).Should(Equal(containerGuid))
-				Ω(req).Should(Equal(runRequest))
-			})
-
-			Context("when the actions are invalid", func() {
-				BeforeEach(func() {
-					depotClient.RunStub = func(guid string, runRequest executor.ContainerRunRequest) error {
-						return executor.ErrStepsInvalid
-					}
-
-					runRequestBody = MarshalledPayload(executor.ContainerRunRequest{
-						Actions: []models.ExecutorAction{},
-					})
-				})
-
-				It("returns 400", func() {
-					Ω(runResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-				})
-			})
+		It("returns 201", func() {
+			Ω(runResponse.StatusCode).Should(Equal(http.StatusCreated))
+			time.Sleep(time.Second)
 		})
 
-		Context("with an invalid body", func() {
-			BeforeEach(func() {
-				runRequestBody = MarshalledPayload("lol")
-			})
+		It("runs the actions", func() {
+			Eventually(depotClient.RunContainerCallCount).Should(Equal(1))
 
-			It("returns 400", func() {
-				Ω(runResponse.StatusCode).Should(Equal(http.StatusBadRequest))
-			})
+			guid := depotClient.RunContainerArgsForCall(0)
+			Ω(guid).Should(Equal(containerGuid))
 		})
 	})
 
@@ -462,7 +343,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container exists", func() {
 			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(executor.ContainerAllocationRequest{
+				allocRequestBody := MarshalledPayload(executor.Container{
 					MemoryMB: 64,
 					DiskMB:   512,
 				})
@@ -527,7 +408,7 @@ var _ = Describe("Api", func() {
 
 		Context("when the container exists", func() {
 			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(executor.ContainerAllocationRequest{
+				allocRequestBody := MarshalledPayload(executor.Container{
 					MemoryMB: 64,
 					DiskMB:   512,
 				})
