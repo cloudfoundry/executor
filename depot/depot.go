@@ -132,12 +132,15 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 
 		registration.Tags = tags
 
-		for _, mapping := range info.MappedPorts {
-			registration.Ports = append(registration.Ports, executor.PortMapping{
+		ports := make([]executor.PortMapping, len(info.MappedPorts))
+		for i, mapping := range info.MappedPorts {
+			ports[i] = executor.PortMapping{
 				HostPort:      mapping.HostPort,
 				ContainerPort: mapping.ContainerPort,
-			})
+			}
 		}
+
+		registration.Ports = ports
 	}
 
 	return registration, nil
@@ -218,13 +221,13 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		portMapping, err := c.mapPorts(container, gardenContainer)
+		err = c.mapPorts(container, gardenContainer)
 		if err != nil {
 			logger.Error("failed-to-map-ports", err)
 			return
 		}
 
-		container, err = c.registry.Create(guid, gardenContainer.Handle(), portMapping)
+		container, err = c.registry.Create(guid, gardenContainer.Handle())
 		if err != nil {
 			logger.Error("failed-to-register-container", err, lager.Data{
 				"container-handle": container.ContainerHandle,
@@ -437,21 +440,15 @@ func (c *client) limitContainerCPU(reg executor.Container, gardenContainer garde
 	return nil
 }
 
-func (c *client) mapPorts(reg executor.Container, gardenContainer garden.Container) ([]executor.PortMapping, error) {
-	var result []executor.PortMapping
+func (c *client) mapPorts(reg executor.Container, gardenContainer garden.Container) error {
 	for _, mapping := range reg.Ports {
-		hostPort, containerPort, err := gardenContainer.NetIn(mapping.HostPort, mapping.ContainerPort)
+		_, _, err := gardenContainer.NetIn(mapping.HostPort, mapping.ContainerPort)
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		result = append(result, executor.PortMapping{
-			HostPort:      hostPort,
-			ContainerPort: containerPort,
-		})
 	}
 
-	return result, nil
+	return nil
 }
 
 func handleSyncErr(err error, logger lager.Logger) error {

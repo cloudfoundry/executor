@@ -22,7 +22,7 @@ type Registry interface {
 	GetAllContainers() []executor.Container
 	Reserve(guid string, container executor.Container) (executor.Container, error)
 	Initialize(guid string) (executor.Container, error)
-	Create(guid, containerHandle string, ports []executor.PortMapping) (executor.Container, error)
+	Create(guid, containerHandle string) (executor.Container, error)
 	Start(guid string, process ifrit.Process) error
 	Complete(guid string, result executor.ContainerRunResult) error
 	Delete(guid string) error
@@ -124,7 +124,7 @@ func (r *registry) Initialize(guid string) (executor.Container, error) {
 	return res, nil
 }
 
-func (r *registry) Create(guid, containerHandle string, ports []executor.PortMapping) (executor.Container, error) {
+func (r *registry) Create(guid, containerHandle string) (executor.Container, error) {
 	r.containersMutex.Lock()
 	defer r.containersMutex.Unlock()
 
@@ -139,7 +139,6 @@ func (r *registry) Create(guid, containerHandle string, ports []executor.PortMap
 
 	res.State = executor.StateCreated
 	res.ContainerHandle = containerHandle
-	res.Ports = ports
 
 	r.registeredContainers[guid] = res
 	return res, nil
