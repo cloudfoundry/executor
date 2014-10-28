@@ -352,6 +352,16 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
+			Context("when the requested CPU weight is 0", func() {
+				BeforeEach(func() {
+					allocRequest.CPUWeight = 0
+				})
+
+				It("sets the CPU weight to 100", func() {
+					Ω(allocatedContainer.CPUWeight).Should(Equal(uint(100)))
+				})
+			})
+
 			Context("when the container cannot be reserved because the guid is already taken", func() {
 				BeforeEach(func() {
 					_, err := executorClient.AllocateContainer(guid, allocRequest)
@@ -390,7 +400,7 @@ var _ = Describe("Executor", func() {
 					Ω(container.Guid).Should(Equal(guid))
 					Ω(container.MemoryMB).Should(Equal(0))
 					Ω(container.DiskMB).Should(Equal(0))
-					Ω(container.CPUWeight).Should(Equal(uint(0)))
+					Ω(container.CPUWeight).Should(Equal(uint(100)))
 					Ω(container.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
 					Ω(container.State).Should(Equal("reserved"))
 					Ω(container.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
@@ -551,16 +561,6 @@ var _ = Describe("Executor", func() {
 								limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
 								Ω(limitedDisk.ByteHard).Should(BeZero())
 								Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-							})
-						})
-
-						Context("when the container has no CPU limits requested", func() {
-							BeforeEach(func() {
-								allocRequest.CPUWeight = 0
-							})
-
-							It("does not enforce a zero-value limit", func() {
-								Ω(gardenContainer.LimitCPUCallCount()).Should(Equal(0))
 							})
 						})
 

@@ -52,6 +52,8 @@ func NewClient(
 func (c *client) AllocateContainer(guid string, request executor.ContainerAllocationRequest) (executor.Container, error) {
 	if request.CPUWeight > 100 || request.CPUWeight < 0 {
 		return executor.Container{}, executor.ErrLimitsInvalid
+	} else if request.CPUWeight == 0 {
+		request.CPUWeight = 100
 	}
 
 	logger := c.logger.Session("allocate", lager.Data{
