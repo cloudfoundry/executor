@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -244,9 +245,11 @@ func initializeDepotClient(
 	}
 
 	return depot.NewClient(
-		containerOwnerName,
-		containerMaxCpuShares,
-		containerInodeLimit,
+		exchanger.NewExchanger(
+			containerOwnerName,
+			containerMaxCpuShares,
+			containerInodeLimit,
+		),
 		gardenClient,
 		reg,
 		logEmitter,

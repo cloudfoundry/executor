@@ -1,9 +1,11 @@
 package depot
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	gapi "github.com/cloudfoundry-incubator/garden/api"
@@ -50,34 +52,35 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 
 			runLog.Info("completed")
 
-			payload := executor.ContainerRunResult{
+			result := executor.ContainerRunResult{
 				Guid: r.Registration.Guid,
 			}
 
-			// there's not a whole lot we can do about these errors.
 			if seqErr == nil {
-				payload.Failed = false
-
-				err := r.Container.SetProperty(runResultFailedProperty, runResultFalseValue)
-				if err != nil {
-					runLog.Error("failed-to-succeed", err)
-				}
+				result.Failed = false
 			} else {
-				payload.Failed = true
-				payload.FailureReason = seqErr.Error()
-
-				err := r.Container.SetProperty(runResultFailedProperty, runResultTrueValue)
-				if err != nil {
-					runLog.Error("failed-to-fail", err)
-				}
-
-				err = r.Container.SetProperty(runResultFailureReasonProperty, seqErr.Error())
-				if err != nil {
-					runLog.Error("failed-to-fail-for-a-reason", err)
-				}
+				result.Failed = true
+				result.FailureReason = seqErr.Error()
 			}
 
-			err := r.Registry.Complete(r.Registration.Guid, payload)
+			resultPayload, err := json.Marshal(result)
+			if err != nil {
+				return err
+			}
+
+			err = r.Container.SetProperty(exchanger.ContainerResultProperty, string(resultPayload))
+			if err != nil {
+				// not a lot we can do here
+				runLog.Error("failed-to-save-result", err)
+			}
+
+			err = r.Container.SetProperty(exchanger.ContainerStateProperty, string(executor.StateCompleted))
+			if err != nil {
+				// not a lot we can do here
+				runLog.Error("failed-to-save-result", err)
+			}
+
+			err = r.Registry.Complete(r.Registration.Guid, result)
 			if err != nil {
 				runLog.Error("failed-to-complete", err)
 			}
@@ -88,7 +91,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 
 			ifrit.Invoke(&Callback{
 				URL:     r.CompleteURL,
-				Payload: payload,
+				Payload: result,
 			})
 
 			runLog.Info("callback-started")

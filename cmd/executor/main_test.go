@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"syscall"
 	"time"
 
@@ -148,7 +149,9 @@ var _ = Describe("Executor", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			runner.StartCheck = ""
-			process = ginkgomon.Invoke(runner)
+
+			// start without check; some things make it fail on start
+			process = ifrit.Invoke(runner)
 		})
 
 		BeforeEach(func() {
@@ -330,7 +333,7 @@ var _ = Describe("Executor", func() {
 				Ω(allocatedContainer.MemoryMB).Should(Equal(0))
 				Ω(allocatedContainer.DiskMB).Should(Equal(0))
 				Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
-				Ω(allocatedContainer.State).Should(Equal("reserved"))
+				Ω(allocatedContainer.State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
 			})
 
@@ -398,7 +401,7 @@ var _ = Describe("Executor", func() {
 					It("eventually completes with failure", func() {
 						var container executor.Container
 
-						Eventually(func() string {
+						Eventually(func() executor.State {
 							container = getContainer(guid)
 							return container.State
 						}, 5*time.Second, 1*time.Second).Should(Equal(executor.StateCompleted))
@@ -412,7 +415,8 @@ var _ = Describe("Executor", func() {
 					var gardenContainer *gfakes.FakeContainer
 
 					BeforeEach(func() {
-						gardenContainer = new(gfakes.FakeContainer)
+						gardenContainer = fakeGardenContainerWithProperties()
+
 						gardenContainer.HandleReturns(containerHandle)
 
 						fakeBackend.LookupReturns(gardenContainer, nil)
@@ -458,12 +462,16 @@ var _ = Describe("Executor", func() {
 						}))
 					})
 
-					It("saves the failed result in the container's properties", func() {
-						Eventually(gardenContainer.SetPropertyCallCount).Should(Equal(1))
+					It("saves the succeeded run result", func() {
+						var container executor.Container
 
-						name, value := gardenContainer.SetPropertyArgsForCall(0)
-						Ω(name).Should(Equal("executor:failed"))
-						Ω(value).Should(Equal("false"))
+						Eventually(func() executor.State {
+							container = getContainer(guid)
+							return container.State
+						}).Should(Equal(executor.StateCompleted))
+
+						Ω(container.RunResult.Failed).Should(BeFalse())
+						Ω(container.RunResult.FailureReason).Should(BeEmpty())
 					})
 
 					Context("when created with memory, disk, cpu, and inode limits", func() {
@@ -487,30 +495,6 @@ var _ = Describe("Executor", func() {
 
 							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
 							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
-						})
-
-						Context("when limiting memory fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitMemoryReturns(errors.New("oh no!"))
-							})
-
-							itCompletesWithFailure("failed to initialize container: oh no!")
-						})
-
-						Context("when limiting disk fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitDiskReturns(errors.New("oh no!"))
-							})
-
-							itCompletesWithFailure("failed to initialize container: oh no!")
-						})
-
-						Context("when limiting CPU fails", func() {
-							BeforeEach(func() {
-								gardenContainer.LimitCPUReturns(errors.New("oh no!"))
-							})
-
-							itCompletesWithFailure("failed to initialize container: oh no!")
 						})
 					})
 
@@ -582,14 +566,6 @@ var _ = Describe("Executor", func() {
 							Ω(netInH).Should(Equal(uint32(1234)))
 							Ω(netInC).Should(Equal(uint32(8081)))
 						})
-
-						Context("when mapping the ports fails", func() {
-							BeforeEach(func() {
-								gardenContainer.NetInReturns(0, 0, errors.New("oh no!"))
-							})
-
-							itCompletesWithFailure("failed to initialize container: oh no!")
-						})
 					})
 
 					Context("and there is a complete callback", func() {
@@ -643,16 +619,16 @@ var _ = Describe("Executor", func() {
 							gardenContainer.RunReturns(process, nil)
 						})
 
-						It("saves the failed result in the container's properties", func() {
-							Eventually(gardenContainer.SetPropertyCallCount).Should(Equal(2))
+						It("saves the failed result and reason", func() {
+							var container executor.Container
 
-							name, value := gardenContainer.SetPropertyArgsForCall(0)
-							Ω(name).Should(Equal("executor:failed"))
-							Ω(value).Should(Equal("true"))
+							Eventually(func() executor.State {
+								container = getContainer(guid)
+								return container.State
+							}).Should(Equal(executor.StateCompleted))
 
-							name, value = gardenContainer.SetPropertyArgsForCall(1)
-							Ω(name).Should(Equal("executor:failure_reason"))
-							Ω(value).Should(Equal("Exited with status 1"))
+							Ω(container.RunResult.Failed).Should(BeTrue())
+							Ω(container.RunResult.FailureReason).Should(Equal("Exited with status 1"))
 						})
 
 						Context("and there is a complete callback", func() {
@@ -699,140 +675,6 @@ var _ = Describe("Executor", func() {
 			It("returns an error", func() {
 				err := executorClient.RunContainer("bogus")
 				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-			})
-		})
-
-		Describe("getting a container", func() {
-			var (
-				guid          string
-				fakeContainer *gfakes.FakeContainer
-
-				container executor.Container
-				getErr    error
-			)
-
-			BeforeEach(func() {
-				guid = allocNewContainer(executor.Container{})
-
-				fakeContainer = setupFakeContainer()
-
-				err := executorClient.RunContainer(guid)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Eventually(func() string {
-					container, err := executorClient.GetContainer(guid)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					return container.State
-				}, 5*time.Second).Should(MatchRegexp(executor.StateCreated + "|" + executor.StateCompleted))
-			})
-
-			JustBeforeEach(func() {
-				container, getErr = executorClient.GetContainer(guid)
-			})
-
-			Context("when getting the container info succeeds", func() {
-				It("does not error", func() {
-					Ω(getErr).ShouldNot(HaveOccurred())
-				})
-
-				Context("when the container has not finished", func() {
-					BeforeEach(func() {
-						fakeContainer.GetPropertyReturns("", errors.New("oh no!"))
-					})
-
-					It("returns a that it has not failed", func() {
-						Ω(container.RunResult.Failed).Should(BeFalse())
-						Ω(container.RunResult.FailureReason).Should(BeEmpty())
-					})
-				})
-
-				Context("when the container is failed", func() {
-					BeforeEach(func() {
-						fakeContainer.GetPropertyStub = func(name string) (string, error) {
-							switch name {
-							case "executor:failed":
-								return "true", nil
-							case "executor:failure_reason":
-								return "obama", nil
-							default:
-								panic("unknown property access: " + name)
-							}
-						}
-					})
-
-					It("returns its run result as not failed", func() {
-						Ω(container.RunResult.Failed).Should(BeTrue())
-						Ω(container.RunResult.FailureReason).Should(Equal("obama"))
-					})
-				})
-
-				Context("when the container is not failed", func() {
-					BeforeEach(func() {
-						fakeContainer.GetPropertyStub = func(name string) (string, error) {
-							switch name {
-							case "executor:failed":
-								return "false", nil
-							default:
-								panic("unknown property access: " + name)
-							}
-						}
-					})
-
-					It("returns its run result as not failed", func() {
-						Ω(container.RunResult.Failed).Should(BeFalse())
-					})
-				})
-
-				Context("when the container has tag-namespaced properties", func() {
-					BeforeEach(func() {
-						fakeContainer.InfoReturns(garden.ContainerInfo{
-							Properties: garden.Properties{
-								"executor:failed": "false",
-								"tag:tag-1":       "tag-1-value",
-								"tag:tag-2":       "tag-2-value",
-							},
-						}, nil)
-					})
-
-					It("returns the properties", func() {
-						Ω(container.Tags).Should(Equal(executor.Tags{
-							"tag-1": "tag-1-value",
-							"tag-2": "tag-2-value",
-						}))
-					})
-				})
-
-				Context("when the container has mapped ports", func() {
-					BeforeEach(func() {
-						fakeContainer.InfoStub = func() (garden.ContainerInfo, error) {
-							return garden.ContainerInfo{
-								MappedPorts: []garden.PortMapping{
-									{HostPort: 1234, ContainerPort: 5678},
-									{HostPort: 4321, ContainerPort: 8765},
-								},
-							}, nil
-						}
-					})
-
-					It("returns the container with mapped ports", func() {
-						Ω(container.Ports).Should(Equal([]executor.PortMapping{
-							{HostPort: 1234, ContainerPort: 5678},
-							{HostPort: 4321, ContainerPort: 8765},
-						}))
-					})
-				})
-			})
-
-			Context("when getting the info fails", func() {
-				BeforeEach(func() {
-					fakeContainer.InfoReturns(garden.ContainerInfo{}, errors.New("oh no!"))
-				})
-
-				It("returns the error", func() {
-					Ω(getErr).Should(HaveOccurred())
-					Ω(getErr.Error()).Should(ContainSubstring("status: 500"))
-				})
 			})
 		})
 
@@ -948,13 +790,6 @@ var _ = Describe("Executor", func() {
 					err := executorClient.RunContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Eventually(func() string {
-						container, err := executorClient.GetContainer(guid)
-						Ω(err).ShouldNot(HaveOccurred())
-
-						return container.State
-					}, 5*time.Second).Should(Equal(executor.StateCreated))
-
 					Eventually(waiting).Should(BeClosed())
 				})
 
@@ -970,7 +805,7 @@ var _ = Describe("Executor", func() {
 					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
 				})
 
-				It("removes the container from the registry", func() {
+				It("removes the container from the API", func() {
 					executorClient.DeleteContainer(guid)
 
 					_, err := executorClient.GetContainer(guid)
@@ -1008,19 +843,25 @@ var _ = Describe("Executor", func() {
 				var fakeContainer *gfakes.FakeContainer
 
 				BeforeEach(func() {
-					guid = allocNewContainer(executor.Container{})
+					guid = allocNewContainer(executor.Container{
+						Actions: []models.ExecutorAction{
+							{
+								models.RunAction{
+									Path: "ls",
+								},
+							},
+						},
+					})
 
 					fakeContainer = setupFakeContainer()
+
+					process := new(gfakes.FakeProcess)
+					fakeContainer.RunReturns(process, nil)
 
 					err := executorClient.RunContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Eventually(func() string {
-						container, err := executorClient.GetContainer(guid)
-						Ω(err).ShouldNot(HaveOccurred())
-
-						return container.State
-					}, 5*time.Second).Should(MatchRegexp(executor.StateCreated + "|" + executor.StateCompleted))
+					Eventually(fakeContainer.RunCallCount).Should(Equal(1))
 				})
 
 				Context("when streaming out the file succeeds", func() {
@@ -1139,3 +980,34 @@ var _ = Describe("Executor", func() {
 		})
 	})
 })
+
+func fakeGardenContainerWithProperties() *gfakes.FakeContainer {
+	properties := make(garden.Properties)
+	propertyMu := new(sync.RWMutex)
+
+	return &gfakes.FakeContainer{
+		SetPropertyStub: func(key, value string) error {
+			propertyMu.Lock()
+			defer propertyMu.Unlock()
+
+			properties[key] = value
+			return nil
+		},
+
+		GetPropertyStub: func(key string) (string, error) {
+			propertyMu.RLock()
+			defer propertyMu.RUnlock()
+
+			return properties[key], nil
+		},
+
+		InfoStub: func() (garden.ContainerInfo, error) {
+			propertyMu.RLock()
+			defer propertyMu.RUnlock()
+
+			return garden.ContainerInfo{
+				Properties: properties,
+			}, nil
+		},
+	}
+}

@@ -5,31 +5,31 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
+type State string
+
 const (
-	StateReserved     = "reserved"
-	StateInitializing = "initializing"
-	StateCreated      = "created"
-	StateCompleted    = "completed"
+	StateInvalid      State = ""
+	StateReserved     State = "reserved"
+	StateInitializing State = "initializing"
+	StateCreated      State = "created"
+	StateCompleted    State = "completed"
 )
 
 type Container struct {
 	Guid string `json:"guid"`
 
-	// alloc
-	MemoryMB int `json:"memory_mb"`
-	DiskMB   int `json:"disk_mb"`
+	MemoryMB  int  `json:"memory_mb"`
+	DiskMB    int  `json:"disk_mb"`
+	CPUWeight uint `json:"cpu_weight"`
 
 	Tags Tags `json:"tags,omitempty"`
 
 	AllocatedAt int64 `json:"allocated_at"`
 
-	// init
 	RootFSPath string        `json:"root_fs"`
-	CPUWeight  uint          `json:"cpu_weight"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
-	// run
 	Actions     []models.ExecutorAction `json:"actions"`
 	Env         []EnvironmentVariable   `json:"env,omitempty"`
 	CompleteURL string                  `json:"complete_url"`
@@ -37,9 +37,9 @@ type Container struct {
 	RunResult ContainerRunResult `json:"run_result"`
 
 	// internally updated
-	State           string        `json:"state"`
+	State           State         `json:"state"`
 	ContainerHandle string        `json:"container_handle"`
-	Process         ifrit.Process `json:"-"`
+	Process         ifrit.Process `json:"-"` // disregard for now
 }
 
 type EnvironmentVariable struct {

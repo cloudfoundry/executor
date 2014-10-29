@@ -346,53 +346,6 @@ var _ = Describe("Registry", func() {
 			})
 		})
 	})
-
-	Describe("syncing", func() {
-		It("removes created containers whose handles are not in the given set", func() {
-			reservedContainer := reserveContainer(registry, "guid1")
-			initializedContainer := initializeContainer(registry, "guid2")
-			createdContainer1 := createContainer(registry, "guid3")
-			createdContainer2 := createContainer(registry, "guid4")
-			createdContainer3 := createContainer(registry, "guid5")
-			completedContainer1 := setupCompletedContainer(registry, "guid8")
-			completedContainer2 := setupCompletedContainer(registry, "guid9")
-
-			Ω(getAllGuids(registry)).Should(ConsistOf(
-				reservedContainer.Guid,
-				initializedContainer.Guid,
-				createdContainer1.Guid,
-				createdContainer2.Guid,
-				createdContainer3.Guid,
-				completedContainer1.Guid,
-				completedContainer2.Guid,
-			))
-
-			registry.Sync(map[string]struct{}{
-				createdContainer2.ContainerHandle:   struct{}{},
-				completedContainer2.ContainerHandle: struct{}{},
-			})
-
-			Ω(getAllGuids(registry)).Should(ConsistOf(
-				reservedContainer.Guid,
-				initializedContainer.Guid,
-				createdContainer2.Guid,
-				completedContainer2.Guid,
-			))
-		})
-	})
-
-	It("frees resources for containers whose handles are not in the given set", func() {
-		container1 := createContainer(registry, "guid1")
-		createContainer(registry, "guid2")
-
-		Ω(registry.CurrentCapacity().Containers).Should(Equal(initialCapacity.Containers - 2))
-
-		registry.Sync(map[string]struct{}{
-			container1.ContainerHandle: struct{}{},
-		})
-
-		Ω(registry.CurrentCapacity().Containers).Should(Equal(initialCapacity.Containers - 1))
-	})
 })
 
 func getAllGuids(registry Registry) []string {
