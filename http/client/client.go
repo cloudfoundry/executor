@@ -26,10 +26,10 @@ type client struct {
 	httpClient *http.Client
 }
 
-func (c client) AllocateContainer(allocationGuid string, request executor.Container) (executor.Container, error) {
+func (c client) AllocateContainer(request executor.Container) (executor.Container, error) {
 	container := executor.Container{}
 
-	response, err := c.makeRequest(ehttp.AllocateContainer, rata.Params{"guid": allocationGuid}, request)
+	response, err := c.makeRequest(ehttp.AllocateContainer, nil, request)
 	if err != nil {
 		return container, err
 	}

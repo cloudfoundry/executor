@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	gapi "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/pivotal-golang/lager"
@@ -19,7 +18,6 @@ type RunSequence struct {
 	Registration executor.Container
 	Sequence     sequence.Step
 	Result       *string
-	Registry     registry.Registry
 	Logger       lager.Logger
 }
 
@@ -27,8 +25,7 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 	seqComplete := make(chan error)
 
 	runLog := r.Logger.Session("run", lager.Data{
-		"guid":   r.Registration.Guid,
-		"handle": r.Registration.ContainerHandle,
+		"guid": r.Registration.Guid,
 	})
 
 	go func() {
@@ -78,11 +75,6 @@ func (r RunSequence) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) er
 			if err != nil {
 				// not a lot we can do here
 				runLog.Error("failed-to-save-result", err)
-			}
-
-			err = r.Registry.Complete(r.Registration.Guid, result)
-			if err != nil {
-				runLog.Error("failed-to-complete", err)
 			}
 
 			if r.CompleteURL == "" {

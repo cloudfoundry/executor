@@ -1,11 +1,15 @@
 package registry_test
 
 import (
+	"fmt"
 	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/allocations"
+	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	. "github.com/cloudfoundry-incubator/executor/depot/registry"
+	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -20,8 +24,13 @@ var _ = Describe("RegistryPruner", func() {
 		var registry Registry
 		var process ifrit.Process
 		var interval time.Duration
+		var allocationsClient garden.Client
+		var exc exchanger.Exchanger
 
 		BeforeEach(func() {
+			allocationsClient = allocations.NewClient()
+			exc = exchanger.NewExchanger("the-owner", 1024, 2048)
+
 			timeProvider = faketimeprovider.New(time.Now())
 			timeProvider.ProvideFakeChannels = true
 			registry = New(Capacity{
@@ -30,7 +39,7 @@ var _ = Describe("RegistryPruner", func() {
 				Containers: 5,
 			}, timeProvider)
 			interval = 10 * time.Second
-			process = ifrit.Envoke(NewPruner(registry, timeProvider, interval, lagertest.NewTestLogger("test")))
+			process = ifrit.Envoke(NewPruner(registry, allocationsClient, exc, timeProvider, interval, lagertest.NewTestLogger("test")))
 		})
 
 		AfterEach(func() {
@@ -43,36 +52,59 @@ var _ = Describe("RegistryPruner", func() {
 		})
 
 		Context("when a container has been allocated", func() {
+			var allocatedContainer garden.Container
+
 			BeforeEach(func() {
-				registry.Reserve("container-guid", executor.Container{
-					MemoryMB: 64,
-					DiskMB:   32,
+				allocatedAt := timeProvider.Time().UnixNano()
+
+				var err error
+				allocatedContainer, err = allocationsClient.Create(garden.ContainerSpec{
+					Handle: "some-handle",
+					Properties: garden.Properties{
+						exchanger.ContainerStateProperty:       string(executor.StateReserved),
+						exchanger.ContainerAllocatedAtProperty: fmt.Sprintf("%d", allocatedAt),
+					},
 				})
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
+			allContainers := func() []garden.Container {
+				containers, err := allocationsClient.Containers(garden.Properties{})
+				Ω(err).ShouldNot(HaveOccurred())
+				return containers
+			}
+
 			It("should not remove newly allocated containers", func() {
-				Consistently(registry.GetAllContainers).Should(HaveLen(1))
+				Consistently(allContainers).Should(HaveLen(1))
+			})
+
+			Context("and then starts initializing", func() {
+				BeforeEach(func() {
+					allocatedContainer.SetProperty(exchanger.ContainerStateProperty, string(executor.StateInitializing))
+				})
+
+				It("should not be pruned", func() {
+					Consistently(allContainers).Should(HaveLen(1))
+				})
+
+				Context("when a substantial amount of time has passed", func() {
+					BeforeEach(func() {
+						timeProvider.Increment(interval)
+					})
+
+					It("should not be pruned", func() {
+						Consistently(allContainers).Should(HaveLen(1))
+					})
+				})
 			})
 
 			Context("when a substantial amount of time has passed", func() {
 				BeforeEach(func() {
-					timeProvider.Increment(interval)
+					timeProvider.Increment(interval + 1)
 				})
 
 				It("removes old allocated containers", func() {
-					Eventually(registry.GetAllContainers).Should(BeEmpty())
-				})
-			})
-
-			Context("when a container has been initialized and substantial amount of time has passed", func() {
-				BeforeEach(func() {
-					_, err := registry.Initialize("container-guid")
-					Ω(err).ShouldNot(HaveOccurred())
-					timeProvider.Increment(interval)
-				})
-
-				It("should not reap the container", func() {
-					Consistently(registry.GetAllContainers).Should(HaveLen(1))
+					Eventually(allContainers).Should(BeEmpty())
 				})
 			})
 		})

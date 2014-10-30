@@ -5,9 +5,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/pivotal-golang/lager"
 )
 
 const (
@@ -19,25 +18,19 @@ const (
 	remainingDisk       = metric.Mebibytes("CapacityRemainingDisk")
 	remainingContainers = metric.Metric("CapacityRemainingContainers")
 
-	containersExpected = metric.Metric("ContainersExpected")
-	containersActual   = metric.Metric("ContainersActual")
+	containerCount = metric.Metric("ContainerCount")
 )
 
 type ExecutorSource interface {
-	CurrentCapacity() registry.Capacity
-	TotalCapacity() registry.Capacity
-	GetAllContainers() []executor.Container
-}
-
-type ActualSource interface {
-	Containers() ([]garden_api.Container, error)
+	RemainingResources() (executor.ExecutorResources, error)
+	TotalResources() (executor.ExecutorResources, error)
+	ListContainers() ([]executor.Container, error)
 }
 
 type Reporter struct {
-	Interval time.Duration
-
+	Interval       time.Duration
 	ExecutorSource ExecutorSource
-	ActualSource   ActualSource
+	Logger         lager.Logger
 }
 
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -49,15 +42,23 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			return nil
 
 		case <-time.After(reporter.Interval):
-			remainingCapacity := reporter.ExecutorSource.CurrentCapacity()
-			totalCapacity := reporter.ExecutorSource.TotalCapacity()
-			containers := reporter.ExecutorSource.GetAllContainers()
+			remainingCapacity, err := reporter.ExecutorSource.RemainingResources()
+			if err != nil {
+				reporter.Logger.Fatal("this-cant-happen", err)
+			}
 
-			gardenContainers := -1
+			totalCapacity, err := reporter.ExecutorSource.TotalResources()
+			if err != nil {
+				reporter.Logger.Fatal("this-cant-happen", err)
+			}
 
-			actualContainers, err := reporter.ActualSource.Containers()
-			if err == nil {
-				gardenContainers = len(actualContainers)
+			var nContainers int
+			containers, err := reporter.ExecutorSource.ListContainers()
+			if err != nil {
+				reporter.Logger.Error("failed-to-list-containers", err)
+				nContainers = -1
+			} else {
+				nContainers = len(containers)
 			}
 
 			totalMemory.Send(totalCapacity.MemoryMB)
@@ -68,8 +69,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			remainingDisk.Send(remainingCapacity.DiskMB)
 			remainingContainers.Send(remainingCapacity.Containers)
 
-			containersExpected.Send(len(containers))
-			containersActual.Send(gardenContainers)
+			containerCount.Send(nContainers)
 		}
 	}
 }

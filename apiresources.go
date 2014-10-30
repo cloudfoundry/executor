@@ -1,9 +1,6 @@
 package executor
 
-import (
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/tedsuo/ifrit"
-)
+import "github.com/cloudfoundry-incubator/runtime-schema/models"
 
 type State string
 
@@ -17,6 +14,8 @@ const (
 
 type Container struct {
 	Guid string `json:"guid"`
+
+	State State `json:"state"`
 
 	MemoryMB  int  `json:"memory_mb"`
 	DiskMB    int  `json:"disk_mb"`
@@ -35,11 +34,6 @@ type Container struct {
 	CompleteURL string                  `json:"complete_url"`
 
 	RunResult ContainerRunResult `json:"run_result"`
-
-	// internally updated
-	State           State         `json:"state"`
-	ContainerHandle string        `json:"container_handle"`
-	Process         ifrit.Process `json:"-"` // disregard for now
 }
 
 type EnvironmentVariable struct {

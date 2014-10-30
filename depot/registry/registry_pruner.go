@@ -4,24 +4,31 @@ import (
 	"os"
 	"time"
 
+	garden "github.com/cloudfoundry-incubator/garden/api"
+
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 )
 
 type RegistryPruner struct {
-	registry     Registry
-	timeProvider timeprovider.TimeProvider
-	interval     time.Duration
-	logger       lager.Logger
+	registry         Registry
+	exchanger        exchanger.Exchanger
+	allocationClient garden.Client
+	timeProvider     timeprovider.TimeProvider
+	interval         time.Duration
+	logger           lager.Logger
 }
 
-func NewPruner(registry Registry, timeProvider timeprovider.TimeProvider, interval time.Duration, logger lager.Logger) *RegistryPruner {
+func NewPruner(registry Registry, allocationClient garden.Client, exchanger exchanger.Exchanger, timeProvider timeprovider.TimeProvider, interval time.Duration, logger lager.Logger) *RegistryPruner {
 	return &RegistryPruner{
-		registry:     registry,
-		timeProvider: timeProvider,
-		interval:     interval,
-		logger:       logger.Session("registry-pruner"),
+		registry:         registry,
+		allocationClient: allocationClient,
+		timeProvider:     timeProvider,
+		interval:         interval,
+		exchanger:        exchanger,
+		logger:           logger.Session("registry-pruner"),
 	}
 }
 
@@ -44,9 +51,18 @@ func (p *RegistryPruner) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}
 func (p *RegistryPruner) prune() {
 	pLog := p.logger.Session("prune")
 
-	for _, container := range p.registry.GetAllContainers() {
-		if container.State != executor.StateReserved {
-			continue
+	containers, err := p.allocationClient.Containers(garden.Properties{
+		exchanger.ContainerStateProperty: string(executor.StateReserved),
+	})
+
+	if err != nil {
+		p.logger.Error("failed-to-read-containers", err)
+	}
+
+	for _, gardenContainer := range containers {
+		container, err := p.exchanger.Garden2Executor(gardenContainer)
+		if err != nil {
+			p.logger.Error("failed-to-convert-container", err)
 		}
 
 		lifespan := p.timeSinceContainerAllocated(container)
@@ -59,15 +75,17 @@ func (p *RegistryPruner) prune() {
 
 			pLog.Debug("pruning-reserved-container")
 
-			err := p.registry.Delete(container.Guid)
+			err := p.allocationClient.Destroy(gardenContainer.Handle())
 			if err != nil {
-				pLog.Error("failed-to-delete-container", err)
-				return
+				pLog.Error("failed-to-destroy-stale-allocation", err)
+				continue
 			}
 
-			pLog.Info("done")
+			p.registry.Delete(container)
 		}
 	}
+
+	pLog.Info("done")
 }
 
 func (p *RegistryPruner) timeSinceContainerAllocated(container executor.Container) time.Duration {

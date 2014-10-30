@@ -44,7 +44,7 @@ var _ = Describe("Exchanger", func() {
 		})
 
 		JustBeforeEach(func() {
-			executorContainer, exchangeErr = exchanger.Garden2Executor(gardenClient, gardenContainer)
+			executorContainer, exchangeErr = exchanger.Garden2Executor(gardenContainer)
 		})
 
 		It("does not error", func() {
@@ -52,22 +52,8 @@ var _ = Describe("Exchanger", func() {
 		})
 
 		Describe("the exchanged Executor container", func() {
-			It("has the Garden container handle as its container handle", func() {
-				Ω(executorContainer.ContainerHandle).Should(Equal("some-container-handle"))
-			})
-
-			Context("when the container has an executor:guid property", func() {
-				BeforeEach(func() {
-					gardenContainer.InfoReturns(garden.ContainerInfo{
-						Properties: garden.Properties{
-							"executor:guid": "some-guid",
-						},
-					}, nil)
-				})
-
-				It("has it as its guid", func() {
-					Ω(executorContainer.Guid).Should(Equal("some-guid"))
-				})
+			It("has the Garden container handle as its container guid", func() {
+				Ω(executorContainer.Guid).Should(Equal("some-container-handle"))
 			})
 
 			Context("when the container has an executor:state property", func() {
@@ -503,6 +489,10 @@ var _ = Describe("Exchanger", func() {
 		)
 
 		BeforeEach(func() {
+			executorContainer = executor.Container{
+				Guid: "some-guid",
+			}
+
 			gardenClient = new(fakes.FakeGardenClient)
 			fakeGardenContainer = new(gfakes.FakeContainer)
 		})
@@ -526,15 +516,9 @@ var _ = Describe("Exchanger", func() {
 					Ω(containerSpec.Properties["executor:owner"]).Should(Equal(ownerName))
 				})
 
-				Context("when the Executor container has a handle", func() {
-					BeforeEach(func() {
-						executorContainer.ContainerHandle = "some-container-handle"
-					})
-
-					It("creates it with the container handle", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Handle).Should(Equal("some-container-handle"))
-					})
+				It("creates it with the guid as the handle", func() {
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Handle).Should(Equal("some-guid"))
 				})
 
 				Context("when the Executor container has a rootfs", func() {
@@ -545,17 +529,6 @@ var _ = Describe("Exchanger", func() {
 					It("creates it with the rootfs", func() {
 						containerSpec := gardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.RootFSPath).Should(Equal("focker:///some-rootfs"))
-					})
-				})
-
-				Context("when the Executor container has a Guid", func() {
-					BeforeEach(func() {
-						executorContainer.Guid = "some-guid"
-					})
-
-					It("creates it with the executor:guid property", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:guid"]).To(Equal("some-guid"))
 					})
 				})
 

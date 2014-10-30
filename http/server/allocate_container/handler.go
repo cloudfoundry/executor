@@ -32,9 +32,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	guid := r.FormValue(":guid")
-
-	container, err := h.depotClient.AllocateContainer(guid, req)
+	container, err := h.depotClient.AllocateContainer(req)
 	if err != nil {
 		allocLog.Error("failed-to-allocate-container", err)
 		error_headers.Write(err, w)

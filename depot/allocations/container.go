@@ -57,8 +57,7 @@ func (c *container) SetProperty(name string, value string) error {
 	c.lock.Lock()
 	c.properties[name] = value
 	c.lock.Unlock()
-
-	return ErrNotImplemented
+	return nil
 }
 
 func (c *container) RemoveProperty(name string) error {

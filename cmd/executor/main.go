@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot/allocations"
 	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/registry"
@@ -152,6 +153,8 @@ func main() {
 	gardenClient := GardenClient.New(GardenConnection.New(*gardenNetwork, *gardenAddr))
 	waitForGarden(logger, gardenClient)
 
+	allocationClient := allocations.NewClient()
+
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
 		owner:        *containerOwnerName,
@@ -167,6 +170,12 @@ func main() {
 		*maxConcurrentDownloads,
 	)
 
+	exchanger := exchanger.NewExchanger(
+		*containerOwnerName,
+		*containerMaxCpuShares,
+		*containerInodeLimit,
+	)
+
 	reg := registry.New(fetchCapacity(logger, gardenClient), timeprovider.NewTimeProvider())
 	depotClient := initializeDepotClient(
 		logger,
@@ -175,7 +184,9 @@ func main() {
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
+		exchanger,
 		gardenClient,
+		allocationClient,
 		reg,
 		transformer,
 	)
@@ -183,6 +194,8 @@ func main() {
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
 		{"registry-pruner", registry.NewPruner(
 			reg,
+			allocationClient,
+			exchanger,
 			timeprovider.NewTimeProvider(),
 			*registryPruningInterval,
 			logger,
@@ -193,9 +206,9 @@ func main() {
 			DepotClient: depotClient,
 		}},
 		{"metrics-reporter", &metrics.Reporter{
-			ExecutorSource: reg,
-			ActualSource:   containersFetcher,
+			ExecutorSource: depotClient,
 			Interval:       *metricsReportInterval,
+			Logger:         logger.Session("metrics-reporter"),
 		}},
 	})
 
@@ -234,7 +247,9 @@ func initializeDepotClient(
 	logger lager.Logger,
 	loggregatorSecret, loggregatorServer, containerOwnerName string,
 	containerMaxCpuShares, containerInodeLimit uint64,
+	exchanger exchanger.Exchanger,
 	gardenClient garden_api.Client,
+	allocationClient garden_api.Client,
 	reg registry.Registry,
 	transformer *transformer.Transformer,
 ) executor.Client {
@@ -245,13 +260,10 @@ func initializeDepotClient(
 	}
 
 	return depot.NewClient(
-		exchanger.NewExchanger(
-			containerOwnerName,
-			containerMaxCpuShares,
-			containerInodeLimit,
-		),
-		gardenClient,
+		exchanger,
 		reg,
+		gardenClient,
+		allocationClient,
 		logEmitter,
 		transformer,
 		logger,

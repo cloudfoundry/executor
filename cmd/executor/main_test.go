@@ -41,13 +41,12 @@ var executorClient executor.Client
 
 var _ = Describe("Executor", func() {
 	var (
-		gardenAddr      string
-		debugAddr       string
-		containerHandle string = "some-handle"
-		process         ifrit.Process
-		cachePath       string
-		tmpDir          string
-		ownerName       string
+		gardenAddr string
+		debugAddr  string
+		process    ifrit.Process
+		cachePath  string
+		tmpDir     string
+		ownerName  string
 
 		fakeBackend *gfakes.FakeBackend
 	)
@@ -95,6 +94,7 @@ var _ = Describe("Executor", func() {
 			process.Signal(os.Kill)
 			Eventually(process.Wait()).Should(Receive())
 		}
+
 		gardenServer.Stop()
 
 		Eventually(func() error {
@@ -115,19 +115,51 @@ var _ = Describe("Executor", func() {
 	}
 
 	allocNewContainer := func(request executor.Container) string {
-		guid := generateGuid()
+		request.Guid = generateGuid()
 
-		_, err := executorClient.AllocateContainer(guid, request)
+		_, err := executorClient.AllocateContainer(request)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		return guid
+		return request.Guid
 	}
 
-	setupFakeContainer := func() *gfakes.FakeContainer {
-		fakeContainer := new(gfakes.FakeContainer)
-		fakeContainer.HandleReturns(containerHandle)
+	setupFakeContainer := func(guid string) *gfakes.FakeContainer {
+		properties := make(garden.Properties)
+		propertyMu := new(sync.RWMutex)
 
-		fakeBackend.CreateReturns(fakeContainer, nil)
+		fakeContainer := &gfakes.FakeContainer{
+			SetPropertyStub: func(key, value string) error {
+				propertyMu.Lock()
+				defer propertyMu.Unlock()
+
+				properties[key] = value
+				return nil
+			},
+
+			GetPropertyStub: func(key string) (string, error) {
+				propertyMu.RLock()
+				defer propertyMu.RUnlock()
+
+				return properties[key], nil
+			},
+
+			InfoStub: func() (garden.ContainerInfo, error) {
+				propertyMu.RLock()
+				defer propertyMu.RUnlock()
+
+				return garden.ContainerInfo{
+					Properties: properties,
+				}, nil
+			},
+		}
+
+		fakeContainer.HandleReturns(guid)
+
+		fakeBackend.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
+			properties = spec.Properties
+			return fakeContainer, nil
+		}
+
 		fakeBackend.LookupReturns(fakeContainer, nil)
 		fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
 
@@ -300,6 +332,8 @@ var _ = Describe("Executor", func() {
 				guid = generateGuid()
 
 				container = executor.Container{
+					Guid: guid,
+
 					Tags: executor.Tags{"some-tag": "some-value"},
 
 					Env: []executor.EnvironmentVariable{
@@ -321,7 +355,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			JustBeforeEach(func() {
-				allocatedContainer, allocErr = executorClient.AllocateContainer(guid, container)
+				allocatedContainer, allocErr = executorClient.AllocateContainer(container)
 			})
 
 			It("does not return an error", func() {
@@ -335,6 +369,14 @@ var _ = Describe("Executor", func() {
 				Ω(allocatedContainer.Tags).Should(Equal(executor.Tags{"some-tag": "some-value"}))
 				Ω(allocatedContainer.State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainer.AllocatedAt).Should(BeNumerically("~", time.Now().UnixNano(), time.Second))
+			})
+
+			It("shows up in the container list", func() {
+				containers, err := executorClient.ListContainers()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(containers).Should(HaveLen(1))
+				Ω(containers[0].Guid).Should(Equal(allocatedContainer.Guid))
+				Ω(containers[0].State).Should(Equal(executor.StateReserved))
 			})
 
 			Context("when allocated with memory and disk limits", func() {
@@ -370,12 +412,22 @@ var _ = Describe("Executor", func() {
 
 			Context("when the guid is already taken", func() {
 				BeforeEach(func() {
-					_, err := executorClient.AllocateContainer(guid, container)
+					_, err := executorClient.AllocateContainer(container)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("returns an error", func() {
 					Ω(allocErr).Should(Equal(executor.ErrContainerGuidNotAvailable))
+				})
+			})
+
+			Context("when a guid is not specified", func() {
+				BeforeEach(func() {
+					container.Guid = ""
+				})
+
+				It("returns an error", func() {
+					Ω(allocErr).Should(Equal(executor.ErrGuidNotSpecified))
 				})
 			})
 
@@ -415,14 +467,7 @@ var _ = Describe("Executor", func() {
 					var gardenContainer *gfakes.FakeContainer
 
 					BeforeEach(func() {
-						gardenContainer = fakeGardenContainerWithProperties()
-
-						gardenContainer.HandleReturns(containerHandle)
-
-						fakeBackend.LookupReturns(gardenContainer, nil)
-						fakeBackend.ContainersReturns([]garden.Container{gardenContainer}, nil)
-
-						fakeBackend.CreateReturns(gardenContainer, nil)
+						gardenContainer = setupFakeContainer(guid)
 
 						process := new(gfakes.FakeProcess)
 						process.WaitReturns(0, nil)
@@ -678,17 +723,24 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Describe("deleting a container", func() {
+		Describe("deleting a bogus guid", func() {
+			It("returns ErrContainerNotFound", func() {
+				err := executorClient.DeleteContainer("bogus")
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+			})
+		})
+
+		Context("when the container has been allocated", func() {
 			var guid string
 
-			Context("when the container has been allocated", func() {
-				BeforeEach(func() {
-					guid = allocNewContainer(executor.Container{
-						MemoryMB: 1024,
-						DiskMB:   1024,
-					})
+			BeforeEach(func() {
+				guid = allocNewContainer(executor.Container{
+					MemoryMB: 1024,
+					DiskMB:   1024,
 				})
+			})
 
+			Describe("deleting it", func() {
 				It("makes the previously allocated resources available again", func() {
 					err := executorClient.DeleteContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
@@ -701,44 +753,58 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
-			Context("while the container is initializing", func() {
-				var createdContainer chan struct{}
-
-				BeforeEach(func() {
-					guid = allocNewContainer(executor.Container{})
-
-					fakeContainer := new(gfakes.FakeContainer)
-					fakeContainer.HandleReturns(containerHandle)
-
-					creating := make(chan struct{})
-
-					createdContainer = make(chan struct{})
-
-					fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
-						close(creating)
-						<-createdContainer
-
-						fakeBackend.LookupReturns(fakeContainer, nil)
-						fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
-
-						return fakeContainer, nil
-					}
-
-					err := executorClient.RunContainer(guid)
+			Describe("listing containers", func() {
+				It("shows up in the container list in reserved state", func() {
+					containers, err := executorClient.ListContainers()
 					Ω(err).ShouldNot(HaveOccurred())
-
-					Eventually(creating).Should(BeClosed())
+					Ω(containers).Should(HaveLen(1))
+					Ω(containers[0].Guid).Should(Equal(guid))
+					Ω(containers[0].State).Should(Equal(executor.StateReserved))
 				})
+			})
+		})
 
-				AfterEach(func() {
-					select {
-					case <-createdContainer:
-					default:
-						// un-hang garden
-						close(createdContainer)
-					}
-				})
+		Context("while the container is initializing", func() {
+			var guid string
 
+			var createdContainer chan struct{}
+
+			BeforeEach(func() {
+				guid = allocNewContainer(executor.Container{})
+
+				fakeContainer := new(gfakes.FakeContainer)
+				fakeContainer.HandleReturns(guid)
+
+				creating := make(chan struct{})
+
+				createdContainer = make(chan struct{})
+
+				fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
+					close(creating)
+					<-createdContainer
+
+					fakeBackend.LookupReturns(fakeContainer, nil)
+					fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
+
+					return fakeContainer, nil
+				}
+
+				err := executorClient.RunContainer(guid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(creating).Should(BeClosed())
+			})
+
+			AfterEach(func() {
+				select {
+				case <-createdContainer:
+				default:
+					// un-hang garden
+					close(createdContainer)
+				}
+			})
+
+			Describe("deleting it", func() {
 				It("destroys the garden container after creating it", func() {
 					err := executorClient.DeleteContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
@@ -748,7 +814,7 @@ var _ = Describe("Executor", func() {
 					close(createdContainer)
 
 					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
 				})
 
 				It("removes the container from the registry", func() {
@@ -760,39 +826,53 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
-			Context("while it is running", func() {
-				BeforeEach(func() {
-					guid = allocNewContainer(executor.Container{
-						Actions: []models.ExecutorAction{
-							{Action: models.RunAction{Path: "ls"}},
-						},
-					})
-
-					fakeContainer := setupFakeContainer()
-
-					waiting := make(chan struct{})
-					destroying := make(chan struct{})
-
-					process := new(gfakes.FakeProcess)
-					process.WaitStub = func() (int, error) {
-						close(waiting)
-						<-destroying
-						return 123, nil
-					}
-
-					fakeContainer.RunReturns(process, nil)
-
-					fakeBackend.DestroyStub = func(string) error {
-						close(destroying)
-						return nil
-					}
-
-					err := executorClient.RunContainer(guid)
+			Describe("listing containers", func() {
+				It("shows up in the container list in initializing state", func() {
+					containers, err := executorClient.ListContainers()
 					Ω(err).ShouldNot(HaveOccurred())
+					Ω(containers).Should(HaveLen(1))
+					Ω(containers[0].Guid).Should(Equal(guid))
+					Ω(containers[0].State).Should(Equal(executor.StateInitializing))
+				})
+			})
+		})
 
-					Eventually(waiting).Should(BeClosed())
+		Context("while it is running", func() {
+			var guid string
+			var cleanup chan struct{}
+
+			BeforeEach(func() {
+				guid = allocNewContainer(executor.Container{
+					Actions: []models.ExecutorAction{
+						{Action: models.RunAction{Path: "ls"}},
+					},
 				})
 
+				fakeContainer := setupFakeContainer(guid)
+
+				waiting := make(chan struct{})
+				cleanup = make(chan struct{})
+
+				process := new(gfakes.FakeProcess)
+				process.WaitStub = func() (int, error) {
+					close(waiting)
+					<-cleanup
+					return 123, nil
+				}
+
+				fakeContainer.RunReturns(process, nil)
+
+				err := executorClient.RunContainer(guid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(waiting).Should(BeClosed())
+			})
+
+			AfterEach(func() {
+				close(cleanup)
+			})
+
+			Describe("deleting it", func() {
 				It("does not return an error", func() {
 					err := executorClient.DeleteContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
@@ -802,14 +882,17 @@ var _ = Describe("Executor", func() {
 					executorClient.DeleteContainer(guid)
 
 					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(containerHandle))
+					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
 				})
+			})
 
-				It("removes the container from the API", func() {
-					executorClient.DeleteContainer(guid)
-
-					_, err := executorClient.GetContainer(guid)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
+			Describe("listing containers", func() {
+				It("shows up in the container list in created state", func() {
+					containers, err := executorClient.ListContainers()
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(containers).Should(HaveLen(1))
+					Ω(containers[0].Guid).Should(Equal(guid))
+					Ω(containers[0].State).Should(Equal(executor.StateCreated))
 				})
 			})
 		})
@@ -853,7 +936,7 @@ var _ = Describe("Executor", func() {
 						},
 					})
 
-					fakeContainer = setupFakeContainer()
+					fakeContainer = setupFakeContainer(guid)
 
 					process := new(gfakes.FakeProcess)
 					fakeContainer.RunReturns(process, nil)
@@ -905,17 +988,17 @@ var _ = Describe("Executor", func() {
 		})
 
 		Describe("pruning the registry", func() {
-			It("continually prunes the registry", func() {
-				guid, err := uuid.NewV4()
-				Ω(err).ShouldNot(HaveOccurred())
+			It("continously prunes the registry", func() {
+				_, err := executorClient.AllocateContainer(executor.Container{
+					Guid: "some-handle",
 
-				_, err = executorClient.AllocateContainer(guid.String(), executor.Container{
 					MemoryMB: 1024,
 					DiskMB:   1024,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(executorClient.ListContainers()).Should(HaveLen(1))
+
 				Eventually(executorClient.ListContainers, pruningInterval*3).Should(BeEmpty())
 			})
 		})
@@ -980,34 +1063,3 @@ var _ = Describe("Executor", func() {
 		})
 	})
 })
-
-func fakeGardenContainerWithProperties() *gfakes.FakeContainer {
-	properties := make(garden.Properties)
-	propertyMu := new(sync.RWMutex)
-
-	return &gfakes.FakeContainer{
-		SetPropertyStub: func(key, value string) error {
-			propertyMu.Lock()
-			defer propertyMu.Unlock()
-
-			properties[key] = value
-			return nil
-		},
-
-		GetPropertyStub: func(key string) (string, error) {
-			propertyMu.RLock()
-			defer propertyMu.RUnlock()
-
-			return properties[key], nil
-		},
-
-		InfoStub: func() (garden.ContainerInfo, error) {
-			propertyMu.RLock()
-			defer propertyMu.RUnlock()
-
-			return garden.ContainerInfo{
-				Properties: properties,
-			}, nil
-		},
-	}
-}

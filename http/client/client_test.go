@@ -30,6 +30,7 @@ var _ = Describe("Client", func() {
 			zero := 0
 
 			validRequest = executor.Container{
+				Guid:      containerGuid,
 				MemoryMB:  64,
 				DiskMB:    1024,
 				CPUWeight: 5,
@@ -50,14 +51,14 @@ var _ = Describe("Client", func() {
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
+					ghttp.VerifyRequest("POST", "/containers"),
 					ghttp.VerifyJSONRepresenting(validRequest),
 					ghttp.RespondWithJSONEncoded(http.StatusCreated, validResponse)),
 				)
 			})
 
 			It("returns a container", func() {
-				response, err := client.AllocateContainer(containerGuid, validRequest)
+				response, err := client.AllocateContainer(validRequest)
 
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(response).Should(Equal(validResponse))
@@ -67,13 +68,13 @@ var _ = Describe("Client", func() {
 		Context("when the call fails because the resources are unavailable", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
+					ghttp.VerifyRequest("POST", "/containers"),
 					ghttp.RespondWith(http.StatusServiceUnavailable, "")),
 				)
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(containerGuid, validRequest)
+				_, err := client.AllocateContainer(validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -81,13 +82,13 @@ var _ = Describe("Client", func() {
 		Context("when the call fails for any other reason", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/containers/"+containerGuid),
+					ghttp.VerifyRequest("POST", "/containers"),
 					ghttp.RespondWith(http.StatusInternalServerError, "")),
 				)
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(containerGuid, validRequest)
+				_, err := client.AllocateContainer(validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})

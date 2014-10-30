@@ -20,8 +20,8 @@ var _ = Describe("Registry", func() {
 	BeforeEach(func() {
 		initialCapacity = Capacity{
 			MemoryMB:   100,
-			DiskMB:     200,
-			Containers: 13,
+			DiskMB:     100,
+			Containers: 10,
 		}
 
 		timeProvider = faketimeprovider.New(time.Now())
@@ -32,12 +32,14 @@ var _ = Describe("Registry", func() {
 		It("should always report the initial capacity", func() {
 			Ω(registry.TotalCapacity()).Should(Equal(initialCapacity))
 
-			registry.Reserve("a-container", executor.Container{
+			registry.Reserve(executor.Container{
+				Guid:     "a-container",
 				MemoryMB: 10,
 				DiskMB:   20,
 			})
 
-			registry.Reserve("another-container", executor.Container{
+			registry.Reserve(executor.Container{
+				Guid:     "another-container",
 				MemoryMB: 30,
 				DiskMB:   70,
 			})
@@ -50,91 +52,40 @@ var _ = Describe("Registry", func() {
 		It("should always report the available capacity", func() {
 			Ω(registry.CurrentCapacity()).Should(Equal(initialCapacity))
 
-			registry.Reserve("a-container", executor.Container{
+			registry.Reserve(executor.Container{
+				Guid:     "a-container",
 				MemoryMB: 10,
 				DiskMB:   20,
 			})
 
-			registry.Reserve("another-container", executor.Container{
+			registry.Reserve(executor.Container{
+				Guid:     "another-container",
 				MemoryMB: 30,
 				DiskMB:   70,
 			})
 
 			Ω(registry.CurrentCapacity()).Should(Equal(Capacity{
 				MemoryMB:   60,
-				DiskMB:     110,
-				Containers: 11,
+				DiskMB:     10,
+				Containers: 8,
 			}))
 		})
 	})
 
-	Describe("Finding by Guid", func() {
-		Context("when a container has been allocated", func() {
-			BeforeEach(func() {
-				registry.Reserve("a-container", executor.Container{
-					MemoryMB: 10,
-					DiskMB:   20,
-				})
-			})
-
-			It("can find container by GUID", func() {
-				container, err := registry.FindByGuid("a-container")
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container).ShouldNot(BeZero())
-				Ω(container.Guid).Should(Equal("a-container"))
-				Ω(container.MemoryMB).Should(Equal(10))
-				Ω(container.DiskMB).Should(Equal(20))
-			})
-		})
-
-		Context("when the requested GUID does not exist", func() {
-			It("should return an ErrContainerNotFound error", func() {
-				container, err := registry.FindByGuid("nope")
-				Ω(container).Should(BeZero())
-				Ω(err).Should(MatchError(ErrContainerNotFound))
-			})
-		})
-	})
-
-	Describe("Get all containers", func() {
-		Context("when there are no containers", func() {
-			It("should return an empty array", func() {
-				Ω(registry.GetAllContainers()).Should(BeEmpty())
-			})
-		})
-
-		Context("when there are containers", func() {
-			var containerA, containerB executor.Container
-			BeforeEach(func() {
-				containerA, _ = registry.Reserve("a-container", executor.Container{
-					MemoryMB: 10,
-					DiskMB:   20,
-				})
-
-				containerB, _ = registry.Reserve("another-container", executor.Container{
-					MemoryMB: 10,
-					DiskMB:   20,
-				})
-			})
-
-			It("should return them all", func() {
-				containers := registry.GetAllContainers()
-				Ω(containers).Should(HaveLen(2))
-				Ω(containers).Should(ContainElement(containerA))
-				Ω(containers).Should(ContainElement(containerB))
-			})
-		})
-	})
-
 	Describe("Reserving a container", func() {
-		var container executor.Container
+		var (
+			container executor.Container
+
+			reserveErr error
+		)
+
 		BeforeEach(func() {
-			var err error
-			container, err = registry.Reserve("a-container", executor.Container{
+			container = executor.Container{
+				Guid:       "a-container",
 				RootFSPath: "some-rootfs-path",
 
 				MemoryMB:  50,
-				DiskMB:    100,
+				DiskMB:    50,
 				CPUWeight: 50,
 
 				Ports: []executor.PortMapping{
@@ -146,242 +97,75 @@ var _ = Describe("Registry", func() {
 				},
 
 				Tags: executor.Tags{"a": "b"},
-			})
-			Ω(err).ShouldNot(HaveOccurred())
+			}
 		})
 
-		It("should return a correctly configured container in the reserved state", func() {
-			Ω(container.Guid).Should(Equal("a-container"))
-			Ω(container.RootFSPath).Should(Equal("some-rootfs-path"))
-			Ω(container.MemoryMB).Should(Equal(50))
-			Ω(container.DiskMB).Should(Equal(100))
-			Ω(container.CPUWeight).Should(Equal(uint(50)))
-			Ω(container.Ports).Should(Equal([]executor.PortMapping{
-				{ContainerPort: 8080, HostPort: 1234},
-			}))
-			Ω(container.Log).Should(Equal(executor.LogConfig{
-				Guid: "some-log-guid",
-			}))
-			Ω(container.Tags).Should(Equal(executor.Tags{"a": "b"}))
-			Ω(container.State).Should(Equal(executor.StateReserved))
-			Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+		JustBeforeEach(func() {
+			reserveErr = registry.Reserve(container)
 		})
 
-		Context("when reusing an existing guid", func() {
-			It("should return an ErrContainerAlreadyExists error", func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB: 10,
-					DiskMB:   20,
-				})
-				Ω(err).Should(MatchError(ErrContainerAlreadyExists))
+		Context("when there is enough capacity for the container", func() {
+			It("succeeds", func() {
+				Ω(reserveErr).ShouldNot(HaveOccurred())
 			})
 		})
 
-		Context("when there is no capacity to reserve the container", func() {
-			It("should return an ErrOutOfMemory when out of memory", func() {
-				_, err := registry.Reserve("another-container", executor.Container{
-					MemoryMB: 51,
-				})
-				Ω(err).Should(MatchError(ErrOutOfMemory))
+		Context("when there is no memory capacity for the container", func() {
+			BeforeEach(func() {
+				container.MemoryMB = 101
 			})
 
-			It("should return an ErrOutOfDisk when out of disk", func() {
-				_, err := registry.Reserve("another-container", executor.Container{
-					DiskMB: 101,
-				})
-				Ω(err).Should(MatchError(ErrOutOfDisk))
+			It("should return an ErrOutOfMemory", func() {
+				Ω(reserveErr).Should(MatchError(ErrOutOfMemory))
+			})
+		})
+
+		Context("when there is no disk capacity for the container", func() {
+			BeforeEach(func() {
+				container.DiskMB = 101
 			})
 
-			It("should return an ErrOutOfContainers when out of containers", func() {
-				for i := 0; i < 12; i++ {
-					_, err := registry.Reserve(fmt.Sprintf("another-container-%d", i), executor.Container{
+			It("should return an ErrOutOfDisk", func() {
+				Ω(reserveErr).Should(MatchError(ErrOutOfDisk))
+			})
+		})
+
+		Context("when the container limit has been reached", func() {
+			BeforeEach(func() {
+				for i := 0; i < 10; i++ {
+					err := registry.Reserve(executor.Container{
+						Guid:     fmt.Sprintf("another-container-%d", i),
 						MemoryMB: 1,
 						DiskMB:   1,
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				}
-
-				_, err := registry.Reserve("one-too-many-containers", executor.Container{
-					MemoryMB: 1,
-					DiskMB:   1,
-				})
-				Ω(err).Should(MatchError(ErrOutOfContainers))
-			})
-		})
-	})
-
-	Describe("initializing a container", func() {
-		Context("when the container is reserved but not initialized", func() {
-			var container executor.Container
-
-			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB: 50,
-					DiskMB:   100,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				container, err = registry.Initialize("a-container")
-				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("should transition the container to the initializing state ", func() {
-				Ω(container.State).Should(Equal(executor.StateInitializing))
-			})
-
-			It("should still have the allocation information", func() {
-				Ω(container.Guid).Should(Equal("a-container"))
-				Ω(container.MemoryMB).Should(Equal(50))
-				Ω(container.DiskMB).Should(Equal(100))
-				Ω(container.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
-			})
-		})
-	})
-
-	Describe("creating a container", func() {
-		Context("when the container exists and is initializing", func() {
-			var container executor.Container
-
-			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB:  50,
-					DiskMB:    100,
-					CPUWeight: 5,
-					Ports:     []executor.PortMapping{{ContainerPort: 8080}},
-					Log:       executor.LogConfig{Guid: "log-guid"},
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = registry.Initialize("a-container")
-				Ω(err).ShouldNot(HaveOccurred())
-
-				container, err = registry.Create("a-container", "handle")
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("should transition the container to the created state and attach the passed in handle", func() {
-				Ω(container.State).Should(Equal(executor.StateCreated))
-				Ω(container.ContainerHandle).Should(Equal("handle"))
-			})
-		})
-
-		Context("when the container does not exist", func() {
-			It("should return an ErrContainerNotFound", func() {
-				_, err := registry.Create("a-container", "handle")
-				Ω(err).Should(MatchError(ErrContainerNotFound))
-			})
-		})
-
-		Context("when the container is reserved but not initialized", func() {
-			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB: 50,
-					DiskMB:   100,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("should return an ErrContainerNotInitialized", func() {
-				_, err := registry.Create("a-container", "another-handle")
-				Ω(err).Should(MatchError(ErrContainerNotInitialized))
-			})
-		})
-
-		Context("when the container has already been created", func() {
-			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB: 50,
-					DiskMB:   100,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = registry.Initialize("a-container")
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = registry.Create("a-container", "handle")
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("should return an ErrContainerNotInitialized", func() {
-				_, err := registry.Create("a-container", "another-handle")
-				Ω(err).Should(MatchError(ErrContainerNotInitialized))
+			It("should return an ErrOutOfContainers", func() {
+				Ω(reserveErr).Should(MatchError(ErrOutOfContainers))
 			})
 		})
 	})
 
 	Describe("deleting a container", func() {
-		var deleteErr error
+		container := executor.Container{
+			Guid:     "a-container",
+			MemoryMB: 50,
+			DiskMB:   100,
+		}
 
 		JustBeforeEach(func() {
-			deleteErr = registry.Delete("a-container")
+			registry.Delete(container)
 		})
 
-		Context("when the container exists", func() {
-			BeforeEach(func() {
-				_, err := registry.Reserve("a-container", executor.Container{
-					MemoryMB: 50,
-					DiskMB:   100,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("does not error", func() {
-				Ω(deleteErr).ShouldNot(HaveOccurred())
-			})
-
-			It("should free its resources", func() {
-				Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
-			})
-
-			It("should not be able to find it again", func() {
-				_, err := registry.FindByGuid("a-container")
-				Ω(err).Should(MatchError(ErrContainerNotFound))
-			})
+		BeforeEach(func() {
+			err := registry.Reserve(container)
+			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		Context("when the container does not exist", func() {
-			It("should error", func() {
-				err := registry.Delete("bam")
-				Ω(err).Should(MatchError(ErrContainerNotFound))
-			})
+		It("should free its resources", func() {
+			Ω(registry.CurrentCapacity()).Should(Equal(registry.TotalCapacity()))
 		})
 	})
 })
-
-func getAllGuids(registry Registry) []string {
-	result := []string{}
-	for _, container := range registry.GetAllContainers() {
-		result = append(result, container.Guid)
-	}
-	return result
-}
-
-func reserveContainer(registry Registry, guid string) executor.Container {
-	container, err := registry.Reserve(guid, executor.Container{})
-	Ω(err).ShouldNot(HaveOccurred())
-	return container
-}
-
-func initializeContainer(registry Registry, guid string) executor.Container {
-	reserveContainer(registry, guid)
-
-	container, err := registry.Initialize(guid)
-	Ω(err).ShouldNot(HaveOccurred())
-	return container
-}
-
-func createContainer(registry Registry, guid string) executor.Container {
-	initializeContainer(registry, guid)
-
-	container, err := registry.Create(guid, guid+"-handle")
-	Ω(err).ShouldNot(HaveOccurred())
-	return container
-}
-
-func setupCompletedContainer(registry Registry, guid string) executor.Container {
-	container := createContainer(registry, guid)
-
-	err := registry.Complete(guid, executor.ContainerRunResult{})
-	Ω(err).ShouldNot(HaveOccurred())
-	return container
-}

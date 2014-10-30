@@ -17,7 +17,7 @@ type GardenClient interface {
 }
 
 type Exchanger interface {
-	Garden2Executor(GardenClient, garden.Container) (executor.Container, error)
+	Garden2Executor(garden.Container) (executor.Container, error)
 	Executor2Garden(GardenClient, executor.Container) (garden.Container, error)
 }
 
@@ -26,7 +26,6 @@ const (
 	executorPropertyPrefix = "executor:"
 
 	ContainerOwnerProperty       = executorPropertyPrefix + "owner"
-	ContainerGuidProperty        = executorPropertyPrefix + "guid"
 	ContainerStateProperty       = executorPropertyPrefix + "state"
 	ContainerAllocatedAtProperty = executorPropertyPrefix + "allocated-at"
 	ContainerRootfsProperty      = executorPropertyPrefix + "rootfs"
@@ -99,7 +98,7 @@ type exchanger struct {
 	containerInodeLimit   uint64
 }
 
-func (exchanger exchanger) Garden2Executor(gardenClient GardenClient, gardenContainer garden.Container) (executor.Container, error) {
+func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (executor.Container, error) {
 	info, err := gardenContainer.Info()
 	if err != nil {
 		return executor.Container{}, err
@@ -121,21 +120,19 @@ func (exchanger exchanger) Garden2Executor(gardenClient GardenClient, gardenCont
 	}
 
 	executorContainer := executor.Container{
-		MemoryMB:  int(memoryLimits.LimitInBytes / 1024 / 1024),
+		Guid: gardenContainer.Handle(),
+
+		MemoryMB: int(memoryLimits.LimitInBytes / 1024 / 1024),
 
 		DiskMB:    int(diskLimits.ByteHard / 1024 / 1024),
 		CPUWeight: uint(100.0 * float64(cpuLimits.LimitInShares) / float64(exchanger.containerMaxCPUShares)),
 
 		Tags:  executor.Tags{},
 		Ports: make([]executor.PortMapping, len(info.MappedPorts)),
-
-		ContainerHandle: gardenContainer.Handle(),
 	}
 
 	for key, value := range info.Properties {
 		switch key {
-		case ContainerGuidProperty:
-			executorContainer.Guid = value
 		case ContainerStateProperty:
 			state := executor.State(value)
 
@@ -211,7 +208,7 @@ func (exchanger exchanger) Garden2Executor(gardenClient GardenClient, gardenCont
 
 func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorContainer executor.Container) (garden.Container, error) {
 	containerSpec := garden.ContainerSpec{
-		Handle:     executorContainer.ContainerHandle,
+		Handle:     executorContainer.Guid,
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
@@ -237,7 +234,6 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 
 	containerSpec.Properties = garden.Properties{
 		ContainerOwnerProperty:       exchanger.containerOwnerName,
-		ContainerGuidProperty:        executorContainer.Guid,
 		ContainerStateProperty:       string(executorContainer.State),
 		ContainerAllocatedAtProperty: fmt.Sprintf("%d", executorContainer.AllocatedAt),
 		ContainerRootfsProperty:      executorContainer.RootFSPath,

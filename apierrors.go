@@ -41,4 +41,5 @@ var (
 	ErrContainerNotFound              = registerError("ContainerNotFound", "container not found", http.StatusNotFound)
 	ErrStepsInvalid                   = registerError("StepsInvalid", "steps invalid", http.StatusBadRequest)
 	ErrLimitsInvalid                  = registerError("LimitsInvalid", "container limits invalid", http.StatusBadRequest)
+	ErrGuidNotSpecified               = registerError("GuidNotSpecified", "container guid not specified", http.StatusBadRequest)
 )
