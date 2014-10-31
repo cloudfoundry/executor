@@ -656,6 +656,22 @@ var _ = Describe("Executor", func() {
 						})
 					})
 
+					Context("after running succeeds", func() {
+						Describe("deleting the container", func() {
+							It("works", func(done Done) {
+								defer close(done)
+
+								Eventually(func() executor.State {
+									container = getContainer(guid)
+									return container.State
+								}).Should(Equal(executor.StateCompleted))
+
+								err := executorClient.DeleteContainer(guid)
+								Ω(err).ShouldNot(HaveOccurred())
+							}, 5)
+						})
+					})
+
 					Context("when running fails", func() {
 						BeforeEach(func() {
 							process := new(gfakes.FakeProcess)
@@ -838,8 +854,13 @@ var _ = Describe("Executor", func() {
 		})
 
 		Context("while it is running", func() {
-			var guid string
-			var cleanup chan struct{}
+			var (
+				guid           string
+				cleanup        chan struct{}
+				finishStopping chan struct{}
+
+				fakeContainer *gfakes.FakeContainer
+			)
 
 			BeforeEach(func() {
 				guid = allocNewContainer(executor.Container{
@@ -848,10 +869,11 @@ var _ = Describe("Executor", func() {
 					},
 				})
 
-				fakeContainer := setupFakeContainer(guid)
+				fakeContainer = setupFakeContainer(guid)
 
 				waiting := make(chan struct{})
 				cleanup = make(chan struct{})
+				finishStopping = make(chan struct{})
 
 				process := new(gfakes.FakeProcess)
 				process.WaitStub = func() (int, error) {
@@ -865,6 +887,11 @@ var _ = Describe("Executor", func() {
 				err := executorClient.RunContainer(guid)
 				Ω(err).ShouldNot(HaveOccurred())
 
+				fakeContainer.StopStub = func(bool) error {
+					<-finishStopping
+					return nil
+				}
+
 				Eventually(waiting).Should(BeClosed())
 			})
 
@@ -874,12 +901,18 @@ var _ = Describe("Executor", func() {
 
 			Describe("deleting it", func() {
 				It("does not return an error", func() {
+					close(finishStopping)
 					err := executorClient.DeleteContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				It("deletes the container", func() {
-					executorClient.DeleteContainer(guid)
+				It("deletes the container after cancelling its actions", func() {
+					go executorClient.DeleteContainer(guid)
+
+					Eventually(fakeContainer.StopCallCount).Should(Equal(1))
+					Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
+
+					close(finishStopping)
 
 					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
 					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
+	"github.com/cloudfoundry-incubator/executor"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	garden_client "github.com/cloudfoundry-incubator/garden/client"
 )
@@ -14,31 +14,29 @@ const Automatic = "auto"
 var (
 	ErrMemoryFlagInvalid = fmt.Errorf("memory limit must be a positive number or '%s'", Automatic)
 	ErrDiskFlagInvalid   = fmt.Errorf("disk limit must be a positive number or '%s'", Automatic)
-	EmptyCapacity        = registry.Capacity{}
 )
 
 func ConfigureCapacity(
 	gardenClient garden_client.Client,
 	memoryMBFlag string,
 	diskMBFlag string,
-) (registry.Capacity, error) {
-
+) (executor.ExecutorResources, error) {
 	gardenCapacity, err := gardenClient.Capacity()
 	if err != nil {
-		return EmptyCapacity, err
+		return executor.ExecutorResources{}, err
 	}
 
 	memory, err := memoryInMB(gardenCapacity, memoryMBFlag)
 	if err != nil {
-		return EmptyCapacity, err
+		return executor.ExecutorResources{}, err
 	}
 
 	disk, err := diskInMB(gardenCapacity, diskMBFlag)
 	if err != nil {
-		return EmptyCapacity, err
+		return executor.ExecutorResources{}, err
 	}
 
-	return registry.Capacity{
+	return executor.ExecutorResources{
 		MemoryMB:   memory,
 		DiskMB:     disk,
 		Containers: int(gardenCapacity.MaxContainers),

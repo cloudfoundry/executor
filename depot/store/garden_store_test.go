@@ -1,59 +1,84 @@
-package exchanger_test
+package store_test
 
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"strconv"
 
 	"github.com/cloudfoundry-incubator/executor"
-	. "github.com/cloudfoundry-incubator/executor/depot/exchanger"
-	"github.com/cloudfoundry-incubator/executor/depot/exchanger/fakes"
+	"github.com/cloudfoundry-incubator/executor/depot/store"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = Describe("Exchanger", func() {
+var _ = Describe("GardenContainerStore", func() {
 	var (
+		gardenStore      *store.GardenStore
+		fakeGardenClient *gfakes.FakeClient
+
 		ownerName           = "some-owner-name"
-		maxCPUShares uint64 = 1024
 		inodeLimit   uint64 = 2000000
-
-		exchanger Exchanger
-
-		gardenClient *fakes.FakeGardenClient
+		maxCPUShares uint64 = 1024
 	)
 
 	BeforeEach(func() {
-		exchanger = NewExchanger(ownerName, maxCPUShares, inodeLimit)
+		fakeGardenClient = new(gfakes.FakeClient)
+		gardenStore = store.NewGardenStore(
+			fakeGardenClient,
+			ownerName,
+			maxCPUShares,
+			inodeLimit,
+			nil,
+			nil,
+		)
 	})
 
-	Describe("Garden2Executor", func() {
+	Describe("Lookup", func() {
 		var (
-			gardenContainer *gfakes.FakeContainer
-
 			executorContainer executor.Container
-			exchangeErr       error
+			lookupErr         error
 		)
 
-		BeforeEach(func() {
-			gardenContainer = new(gfakes.FakeContainer)
-			gardenContainer.HandleReturns("some-container-handle")
-		})
-
 		JustBeforeEach(func() {
-			executorContainer, exchangeErr = exchanger.Garden2Executor(gardenContainer)
+			executorContainer, lookupErr = gardenStore.Lookup("some-container-handle")
 		})
 
-		It("does not error", func() {
-			Ω(exchangeErr).ShouldNot(HaveOccurred())
+		Context("when the container doesn't exist", func() {
+			BeforeEach(func() {
+				fakeGardenClient.LookupReturns(nil, errors.New("didn't find it"))
+			})
+
+			It("returns a container-not-found error", func() {
+				Ω(lookupErr).Should(Equal(store.ErrContainerNotFound))
+			})
 		})
 
-		Describe("the exchanged Executor container", func() {
+		Context("when the container exists", func() {
+			var gardenContainer *gfakes.FakeContainer
+
+			BeforeEach(func() {
+				gardenContainer = new(gfakes.FakeContainer)
+				gardenContainer.HandleReturns("some-container-handle")
+
+				fakeGardenClient.LookupReturns(gardenContainer, nil)
+			})
+
+			It("does not error", func() {
+				Ω(lookupErr).ShouldNot(HaveOccurred())
+			})
+
 			It("has the Garden container handle as its container guid", func() {
 				Ω(executorContainer.Guid).Should(Equal("some-container-handle"))
+			})
+
+			It("looked up by the given guid", func() {
+				Ω(fakeGardenClient.LookupArgsForCall(0)).Should(Equal("some-container-handle"))
 			})
 
 			Context("when the container has an executor:state property", func() {
@@ -123,7 +148,7 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns an InvalidStateError", func() {
-						Ω(exchangeErr).Should(Equal(InvalidStateError{"bogus-state"}))
+						Ω(lookupErr).Should(Equal(store.InvalidStateError{"bogus-state"}))
 					})
 				})
 			})
@@ -152,23 +177,78 @@ var _ = Describe("Exchanger", func() {
 						}, nil)
 					})
 
-					It("returns an InvalidTimestampError", func() {
-						Ω(exchangeErr).Should(Equal(InvalidTimestampError{"some-bogus-timestamp"}))
+					It("returns a MalformedPropertyError", func() {
+						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+							Property: "executor:allocated-at",
+							Value:    "some-bogus-timestamp",
+						}))
 					})
 				})
 			})
 
-			Context("when the container has an executor:rootfs property", func() {
-				BeforeEach(func() {
-					gardenContainer.InfoReturns(garden.ContainerInfo{
-						Properties: garden.Properties{
-							"executor:rootfs": "focker:///some-rootfs",
-						},
-					}, nil)
+			Context("when the container has an executor:memory-mb property", func() {
+				Context("when it's a valid integer", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:memory-mb": "1024",
+							},
+						}, nil)
+					})
+
+					It("has it as its rootfs path", func() {
+						Ω(executorContainer.MemoryMB).Should(Equal(1024))
+					})
 				})
 
-				It("has it as its rootfs path", func() {
-					Ω(executorContainer.RootFSPath).Should(Equal("focker:///some-rootfs"))
+				Context("when it's a bogus value", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:memory-mb": "some-bogus-integer",
+							},
+						}, nil)
+					})
+
+					It("returns a MalformedPropertyError", func() {
+						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+							Property: "executor:memory-mb",
+							Value:    "some-bogus-integer",
+						}))
+					})
+				})
+			})
+
+			Context("when the container has an executor:disk-mb property", func() {
+				Context("when it's a valid integer", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:disk-mb": "2048",
+							},
+						}, nil)
+					})
+
+					It("has it as its disk reservation", func() {
+						Ω(executorContainer.DiskMB).Should(Equal(2048))
+					})
+				})
+
+				Context("when it's a bogus value", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:disk-mb": "some-bogus-integer",
+							},
+						}, nil)
+					})
+
+					It("returns a MalformedPropertyError", func() {
+						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+							Property: "executor:disk-mb",
+							Value:    "some-bogus-integer",
+						}))
+					})
 				})
 			})
 
@@ -222,10 +302,10 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns an InvalidJSONError", func() {
-						Ω(exchangeErr).Should(HaveOccurred())
-						Ω(exchangeErr.Error()).Should(ContainSubstring("executor:actions"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("ß"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("invalid character"))
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:actions"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
 				})
 			})
@@ -262,10 +342,10 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns an InvalidJSONError", func() {
-						Ω(exchangeErr).Should(HaveOccurred())
-						Ω(exchangeErr.Error()).Should(ContainSubstring("executor:env"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("ß"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("invalid character"))
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:env"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
 				})
 			})
@@ -343,10 +423,10 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns an InvalidJSONError", func() {
-						Ω(exchangeErr).Should(HaveOccurred())
-						Ω(exchangeErr.Error()).Should(ContainSubstring("executor:log"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("ß"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("invalid character"))
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:log"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
 				})
 			})
@@ -385,35 +465,11 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns an InvalidJSONError", func() {
-						Ω(exchangeErr).Should(HaveOccurred())
-						Ω(exchangeErr.Error()).Should(ContainSubstring("executor:result"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("ß"))
-						Ω(exchangeErr.Error()).Should(ContainSubstring("invalid character"))
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:result"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
-				})
-			})
-
-			Context("when the container has memory limits", func() {
-				BeforeEach(func() {
-					gardenContainer.CurrentMemoryLimitsReturns(garden.MemoryLimits{
-						LimitInBytes: 64 * 1024 * 1024,
-					}, nil)
-				})
-
-				It("returns them", func() {
-					Ω(executorContainer.MemoryMB).Should(Equal(64))
-				})
-			})
-
-			Context("when the container has disk limits", func() {
-				BeforeEach(func() {
-					gardenContainer.CurrentDiskLimitsReturns(garden.DiskLimits{
-						ByteHard: 64 * 1024 * 1024,
-					}, nil)
-				})
-
-				It("returns them", func() {
-					Ω(executorContainer.DiskMB).Should(Equal(64))
 				})
 			})
 
@@ -437,55 +493,19 @@ var _ = Describe("Exchanger", func() {
 				})
 
 				It("returns the error", func() {
-					Ω(exchangeErr).Should(Equal(disaster))
-				})
-			})
-
-			Context("when getting the current memory limits from Garden fails", func() {
-				disaster := errors.New("oh no!")
-
-				BeforeEach(func() {
-					gardenContainer.CurrentMemoryLimitsReturns(garden.MemoryLimits{}, disaster)
-				})
-
-				It("returns the error", func() {
-					Ω(exchangeErr).Should(Equal(disaster))
-				})
-			})
-
-			Context("when getting the current disk limits from Garden fails", func() {
-				disaster := errors.New("oh no!")
-
-				BeforeEach(func() {
-					gardenContainer.CurrentDiskLimitsReturns(garden.DiskLimits{}, disaster)
-				})
-
-				It("returns the error", func() {
-					Ω(exchangeErr).Should(Equal(disaster))
-				})
-			})
-
-			Context("when getting the current CPU limits from Garden fails", func() {
-				disaster := errors.New("oh no!")
-
-				BeforeEach(func() {
-					gardenContainer.CurrentCPULimitsReturns(garden.CPULimits{}, disaster)
-				})
-
-				It("returns the error", func() {
-					Ω(exchangeErr).Should(Equal(disaster))
+					Ω(lookupErr).Should(Equal(disaster))
 				})
 			})
 		})
 	})
 
-	Describe("Executor2Garden", func() {
+	Describe("Create", func() {
 		var (
 			executorContainer   executor.Container
 			fakeGardenContainer *gfakes.FakeContainer
 
-			gardenContainer garden.Container
-			exchangeErr     error
+			createdContainer executor.Container
+			createErr        error
 		)
 
 		BeforeEach(func() {
@@ -493,31 +513,42 @@ var _ = Describe("Exchanger", func() {
 				Guid: "some-guid",
 			}
 
-			gardenClient = new(fakes.FakeGardenClient)
 			fakeGardenContainer = new(gfakes.FakeContainer)
 		})
 
 		JustBeforeEach(func() {
-			gardenContainer, exchangeErr = exchanger.Executor2Garden(gardenClient, executorContainer)
+			createdContainer, createErr = gardenStore.Create(executorContainer)
 		})
 
 		Context("when creating the container succeeds", func() {
 			BeforeEach(func() {
-				gardenClient.CreateReturns(fakeGardenContainer, nil)
+				fakeGardenClient.CreateReturns(fakeGardenContainer, nil)
 			})
 
 			It("does not error", func() {
-				Ω(exchangeErr).ShouldNot(HaveOccurred())
+				Ω(createErr).ShouldNot(HaveOccurred())
+			})
+
+			It("returns a created container", func() {
+				expectedCreatedContainer := executorContainer
+				expectedCreatedContainer.State = executor.StateCreated
+
+				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
 			})
 
 			Describe("the exchanged Garden container", func() {
+				It("creates it with the state as 'created'", func() {
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Properties["executor:state"]).Should(Equal(string(executor.StateCreated)))
+				})
+
 				It("creates it with the owner property", func() {
-					containerSpec := gardenClient.CreateArgsForCall(0)
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties["executor:owner"]).Should(Equal(ownerName))
 				})
 
 				It("creates it with the guid as the handle", func() {
-					containerSpec := gardenClient.CreateArgsForCall(0)
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Handle).Should(Equal("some-guid"))
 				})
 
@@ -527,19 +558,8 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("creates it with the rootfs", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.RootFSPath).Should(Equal("focker:///some-rootfs"))
-					})
-				})
-
-				Context("when the Executor container has a state", func() {
-					BeforeEach(func() {
-						executorContainer.State = executor.StateReserved
-					})
-
-					It("creates it with the executor:state property", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:state"]).To(Equal(string(executor.StateReserved)))
 					})
 				})
 
@@ -549,18 +569,18 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("creates it with the executor:allocated-at property", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:allocated-at"]).To(Equal("123456789"))
 					})
 				})
 
-				Context("when the Executor container has a root fs", func() {
+				Context("when the Executor container has a rootfs", func() {
 					BeforeEach(func() {
 						executorContainer.RootFSPath = "some/root/path"
 					})
 
 					It("creates it with the executor:rootfs property", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:rootfs"]).To(Equal("some/root/path"))
 					})
 				})
@@ -571,7 +591,7 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("creates it with the executor:complete-url property", func() {
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:complete-url"]).To(Equal("http://callback.example.com/bye"))
 					})
 				})
@@ -593,7 +613,7 @@ var _ = Describe("Exchanger", func() {
 						payload, err := json.Marshal(actions)
 						Ω(err).ShouldNot(HaveOccurred())
 
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:actions"]).To(MatchJSON(payload))
 					})
 				})
@@ -611,7 +631,7 @@ var _ = Describe("Exchanger", func() {
 						payload, err := json.Marshal(env)
 						Ω(err).ShouldNot(HaveOccurred())
 
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:env"]).To(MatchJSON(payload))
 					})
 				})
@@ -632,7 +652,7 @@ var _ = Describe("Exchanger", func() {
 						payload, err := json.Marshal(log)
 						Ω(err).ShouldNot(HaveOccurred())
 
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:log"]).To(MatchJSON(payload))
 					})
 				})
@@ -652,7 +672,7 @@ var _ = Describe("Exchanger", func() {
 						payload, err := json.Marshal(runResult)
 						Ω(err).ShouldNot(HaveOccurred())
 
-						containerSpec := gardenClient.CreateArgsForCall(0)
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:result"]).To(MatchJSON(payload))
 					})
 				})
@@ -667,7 +687,7 @@ var _ = Describe("Exchanger", func() {
 				})
 
 				It("creates it with the tag properties", func() {
-					containerSpec := gardenClient.CreateArgsForCall(0)
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties["tag:tag-one"]).To(Equal("one"))
 					Ω(containerSpec.Properties["tag:tag-two"]).To(Equal("two"))
 				})
@@ -701,7 +721,7 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns the error", func() {
-						Ω(exchangeErr).Should(Equal(disaster))
+						Ω(createErr).Should(Equal(disaster))
 					})
 				})
 			})
@@ -718,6 +738,18 @@ var _ = Describe("Exchanger", func() {
 					}))
 				})
 
+				It("creates it with the executor:memory-mb property", func() {
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Properties["executor:memory-mb"]).To(Equal("64"))
+				})
+
+				It("records its resource consumption", func() {
+					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
+						MemoryMB:   64,
+						Containers: 1,
+					}))
+				})
+
 				Context("and limiting memory fails", func() {
 					disaster := errors.New("oh no!")
 
@@ -726,7 +758,7 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns the error", func() {
-						Ω(exchangeErr).Should(Equal(disaster))
+						Ω(createErr).Should(Equal(disaster))
 					})
 				})
 			})
@@ -754,6 +786,18 @@ var _ = Describe("Exchanger", func() {
 					}))
 				})
 
+				It("records its resource consumption", func() {
+					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
+						DiskMB:     64,
+						Containers: 1,
+					}))
+				})
+
+				It("creates it with the executor:disk-mb property", func() {
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Properties["executor:disk-mb"]).To(Equal("64"))
+				})
+
 				Context("and limiting disk fails", func() {
 					disaster := errors.New("oh no!")
 
@@ -762,7 +806,7 @@ var _ = Describe("Exchanger", func() {
 					})
 
 					It("returns the error", func() {
-						Ω(exchangeErr).Should(Equal(disaster))
+						Ω(createErr).Should(Equal(disaster))
 					})
 				})
 			})
@@ -798,11 +842,324 @@ var _ = Describe("Exchanger", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				gardenClient.CreateReturns(nil, disaster)
+				fakeGardenClient.CreateReturns(nil, disaster)
 			})
 
 			It("returns the error", func() {
-				Ω(exchangeErr).Should(Equal(disaster))
+				Ω(createErr).Should(Equal(disaster))
+			})
+		})
+	})
+
+	Describe("List", func() {
+		It("returns an executor container for each container in garden", func() {
+			fakeContainer1 := &gfakes.FakeContainer{
+				HandleStub: func() string {
+					return "fake-handle-1"
+				},
+
+				InfoStub: func() (garden.ContainerInfo, error) {
+					return garden.ContainerInfo{
+						Properties: garden.Properties{
+							store.ContainerStateProperty: string(executor.StateCreated),
+						},
+					}, nil
+				},
+			}
+
+			fakeContainer2 := &gfakes.FakeContainer{
+				HandleStub: func() string {
+					return "fake-handle-2"
+				},
+
+				InfoStub: func() (garden.ContainerInfo, error) {
+					return garden.ContainerInfo{
+						Properties: garden.Properties{
+							store.ContainerStateProperty: string(executor.StateCreated),
+						},
+					}, nil
+				},
+			}
+
+			fakeGardenClient.ContainersReturns([]garden.Container{
+				fakeContainer1,
+				fakeContainer2,
+			}, nil)
+
+			containers, err := gardenStore.List()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(containers).Should(HaveLen(2))
+			Ω(containers[0].Guid).Should(Equal("fake-handle-1"))
+			Ω(containers[1].Guid).Should(Equal("fake-handle-2"))
+
+			Ω(containers[0].State).Should(Equal(executor.StateCreated))
+			Ω(containers[1].State).Should(Equal(executor.StateCreated))
+		})
+
+		It("only queries garden for the containers with the right owner", func() {
+			_, err := gardenStore.List()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
+				store.ContainerOwnerProperty: ownerName,
+			}))
+		})
+	})
+
+	Describe("Destroy", func() {
+		Context("when the container exists", func() {
+			var fakeContainer *gfakes.FakeContainer
+
+			BeforeEach(func() {
+				fakeContainer = new(gfakes.FakeContainer)
+				fakeGardenClient.LookupReturns(fakeContainer, nil)
+			})
+
+			It("deletes the container", func() {
+				gardenStore.Destroy("the-guid")
+				Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
+			})
+
+			It("doesn't return an error", func() {
+				err := gardenStore.Destroy("the-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			Context("when getting the container info fails", func() {
+				BeforeEach(func() {
+					fakeContainer.InfoReturns(garden.ContainerInfo{}, errors.New("no-can-do"))
+				})
+
+				It("returns an error", func() {
+					err := gardenStore.Destroy("the-guid")
+					Ω(err).Should(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when the container does not exist", func() {
+			BeforeEach(func() {
+				fakeGardenClient.LookupReturns(nil, errors.New("aint-no-container"))
+			})
+
+			It("returns a container-not-found error", func() {
+				err := gardenStore.Destroy("the-guid")
+				Ω(err).Should(Equal(store.ErrContainerNotFound))
+			})
+		})
+	})
+
+	Describe("ConsumedResources", func() {
+		setupContainerWithLimits := func(memory, disk uint64) {
+			fakeGardenClient.LookupReturns(&gfakes.FakeContainer{
+				InfoStub: func() (garden.ContainerInfo, error) {
+					return garden.ContainerInfo{
+						Properties: garden.Properties{
+							"executor:memory-mb": strconv.Itoa(int(memory)),
+							"executor:disk-mb":   strconv.Itoa(int(disk)),
+						},
+					}, nil
+				},
+			}, nil)
+		}
+
+		BeforeEach(func() {
+			fakeGardenClient.CreateReturns(new(gfakes.FakeContainer), nil)
+		})
+
+		Context("when no containers are created", func() {
+			It("is zero", func() {
+				Ω(gardenStore.ConsumedResources()).Should(BeZero())
+			})
+		})
+
+		Context("when a container is created", func() {
+			BeforeEach(func() {
+				_, err := gardenStore.Create(executor.Container{
+					Guid:     "first-container",
+					MemoryMB: 64,
+					DiskMB:   64,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("reports its memory and disk usage", func() {
+				Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
+					MemoryMB:   64,
+					DiskMB:     64,
+					Containers: 1,
+				}))
+			})
+
+			Context("and a second container is created", func() {
+				BeforeEach(func() {
+					_, err := gardenStore.Create(executor.Container{
+						Guid:     "second-container",
+						MemoryMB: 32,
+						DiskMB:   32,
+					})
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("reports the usage of both containers", func() {
+					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
+						MemoryMB:   96,
+						DiskMB:     96,
+						Containers: 2,
+					}))
+				})
+
+				Context("and then destroyed", func() {
+					BeforeEach(func() {
+						setupContainerWithLimits(32, 32)
+						gardenStore.Destroy("second-container")
+					})
+
+					It("goes back to the consumed resources of the first container", func() {
+						Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
+							MemoryMB:   64,
+							DiskMB:     64,
+							Containers: 1,
+						}))
+					})
+				})
+			})
+
+			Context("and then destroyed", func() {
+				BeforeEach(func() {
+					setupContainerWithLimits(64, 64)
+					gardenStore.Destroy("first-container")
+				})
+
+				It("goes back to zero consumed resources", func() {
+					Ω(gardenStore.ConsumedResources()).Should(BeZero())
+				})
+			})
+		})
+	})
+
+	Describe("Complete", func() {
+		var completeErr error
+
+		JustBeforeEach(func() {
+			completeErr = gardenStore.Complete("the-guid", executor.ContainerRunResult{
+				Guid:          "the-guid",
+				Failed:        true,
+				FailureReason: "these things just happen",
+			})
+		})
+
+		Context("when the container exists", func() {
+			var fakeContainer *gfakes.FakeContainer
+
+			BeforeEach(func() {
+				fakeContainer = new(gfakes.FakeContainer)
+				fakeGardenClient.LookupReturns(fakeContainer, nil)
+			})
+
+			It("looks up the container by the guid", func() {
+				Ω(fakeGardenClient.LookupArgsForCall(0)).Should(Equal("the-guid"))
+			})
+
+			It("stores the run-result on the container before setting the state, so that things polling on the state will see the result", func() {
+				key, value := fakeContainer.SetPropertyArgsForCall(0)
+				Ω(key).Should(Equal(store.ContainerResultProperty))
+				Ω(value).Should(MatchJSON(`{
+					"guid": "the-guid",
+					"failed":true,
+					"failure_reason": "these things just happen"
+				}`))
+			})
+
+			It("saves the container state as completed", func() {
+				key, value := fakeContainer.SetPropertyArgsForCall(1)
+				Ω(key).Should(Equal(store.ContainerStateProperty))
+				Ω(value).Should(Equal(string(executor.StateCompleted)))
+			})
+
+			Context("when setting the property fails", func() {
+				BeforeEach(func() {
+					fakeContainer.SetPropertyReturns(errors.New("this is bad."))
+				})
+
+				It("returns an error", func() {
+					Ω(completeErr).Should(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when the container doesn't exist", func() {
+			BeforeEach(func() {
+				fakeGardenClient.LookupReturns(nil, errors.New("fuuuuuuuu"))
+			})
+
+			It("returns a container-not-found error", func() {
+				Ω(completeErr).Should(Equal(store.ErrContainerNotFound))
+			})
+		})
+	})
+
+	Describe("GetFiles", func() {
+		Context("when the container exists", func() {
+			var (
+				container  *gfakes.FakeContainer
+				fakeStream *gbytes.Buffer
+			)
+
+			BeforeEach(func() {
+				fakeStream = gbytes.BufferWithBytes([]byte("stuff"))
+
+				container = &gfakes.FakeContainer{}
+				container.StreamOutReturns(fakeStream, nil)
+
+				fakeGardenClient.LookupReturns(container, nil)
+			})
+
+			It("gets the files", func() {
+				stream, err := gardenStore.GetFiles("the-guid", "the-path")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(container.StreamOutArgsForCall(0)).Should(Equal("the-path"))
+
+				bytes, err := ioutil.ReadAll(stream)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(string(bytes)).Should(Equal("stuff"))
+
+				stream.Close()
+				Ω(fakeStream.Closed()).Should(BeTrue())
+			})
+		})
+
+		Context("when the container doesn't exist", func() {
+			BeforeEach(func() {
+				fakeGardenClient.LookupReturns(nil, errors.New("shiiii"))
+			})
+
+			It("returns a container-not-found error", func() {
+				_, err := gardenStore.GetFiles("the-guid", "the-path")
+				Ω(err).Should(Equal(store.ErrContainerNotFound))
+			})
+		})
+	})
+
+	Describe("Ping", func() {
+		Context("when pinging succeeds", func() {
+			It("succeeds", func() {
+				err := gardenStore.Ping()
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("when pinging fails", func() {
+			disaster := errors.New("welp")
+
+			BeforeEach(func() {
+				fakeGardenClient.PingReturns(disaster)
+			})
+
+			It("returns a container-not-found error", func() {
+				Ω(gardenStore.Ping()).Should(Equal(disaster))
 			})
 		})
 	})

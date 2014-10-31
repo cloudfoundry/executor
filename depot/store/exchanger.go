@@ -1,8 +1,9 @@
-package exchanger
+package store
 
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -34,51 +35,9 @@ const (
 	ContainerEnvProperty         = executorPropertyPrefix + "env"
 	ContainerLogProperty         = executorPropertyPrefix + "log"
 	ContainerResultProperty      = executorPropertyPrefix + "result"
+	ContainerMemoryMBProperty    = executorPropertyPrefix + "memory-mb"
+	ContainerDiskMBProperty      = executorPropertyPrefix + "disk-mb"
 )
-
-type InvalidStateError struct {
-	State string
-}
-
-func (err InvalidStateError) Error() string {
-	return fmt.Sprintf("invalid state: %s", err.State)
-}
-
-type InvalidTimestampError struct {
-	Timestamp string
-}
-
-func (err InvalidTimestampError) Error() string {
-	return fmt.Sprintf("invalid timestamp: %s", err.Timestamp)
-}
-
-type InvalidJSONError struct {
-	Property     string
-	Value        string
-	UnmarshalErr error
-}
-
-func (err InvalidJSONError) Error() string {
-	return fmt.Sprintf(
-		"invalid JSON in property %s: %s\n\nvalue: %s",
-		err.Property,
-		err.UnmarshalErr.Error(),
-		err.Value,
-	)
-}
-
-type ContainerLookupError struct {
-	Handle    string
-	LookupErr error
-}
-
-func (err ContainerLookupError) Error() string {
-	return fmt.Sprintf(
-		"lookup container with handle %s failed: %s",
-		err.Handle,
-		err.LookupErr.Error(),
-	)
-}
 
 func NewExchanger(
 	containerOwnerName string,
@@ -104,16 +63,6 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		return executor.Container{}, err
 	}
 
-	memoryLimits, err := gardenContainer.CurrentMemoryLimits()
-	if err != nil {
-		return executor.Container{}, err
-	}
-
-	diskLimits, err := gardenContainer.CurrentDiskLimits()
-	if err != nil {
-		return executor.Container{}, err
-	}
-
 	cpuLimits, err := gardenContainer.CurrentCPULimits()
 	if err != nil {
 		return executor.Container{}, err
@@ -122,9 +71,6 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 	executorContainer := executor.Container{
 		Guid: gardenContainer.Handle(),
 
-		MemoryMB: int(memoryLimits.LimitInBytes / 1024 / 1024),
-
-		DiskMB:    int(diskLimits.ByteHard / 1024 / 1024),
 		CPUWeight: uint(100.0 * float64(cpuLimits.LimitInShares) / float64(exchanger.containerMaxCPUShares)),
 
 		Tags:  executor.Tags{},
@@ -147,7 +93,10 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		case ContainerAllocatedAtProperty:
 			_, err := fmt.Sscanf(value, "%d", &executorContainer.AllocatedAt)
 			if err != nil {
-				return executor.Container{}, InvalidTimestampError{value}
+				return executor.Container{}, MalformedPropertyError{
+					Property: ContainerAllocatedAtProperty,
+					Value:    value,
+				}
 			}
 		case ContainerRootfsProperty:
 			executorContainer.RootFSPath = value
@@ -189,6 +138,26 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 					UnmarshalErr: err,
 				}
 			}
+		case ContainerMemoryMBProperty:
+			memoryMB, err := strconv.Atoi(value)
+			if err != nil {
+				return executor.Container{}, MalformedPropertyError{
+					Property: key,
+					Value:    value,
+				}
+			}
+
+			executorContainer.MemoryMB = memoryMB
+		case ContainerDiskMBProperty:
+			diskMB, err := strconv.Atoi(value)
+			if err != nil {
+				return executor.Container{}, MalformedPropertyError{
+					Property: key,
+					Value:    value,
+				}
+			}
+
+			executorContainer.DiskMB = diskMB
 		default:
 			if strings.HasPrefix(key, tagPropertyPrefix) {
 				executorContainer.Tags[key[len(tagPropertyPrefix):]] = value
@@ -242,6 +211,8 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		ContainerEnvProperty:         string(envJson),
 		ContainerLogProperty:         string(logJson),
 		ContainerResultProperty:      string(resultJson),
+		ContainerMemoryMBProperty:    fmt.Sprintf("%d", executorContainer.MemoryMB),
+		ContainerDiskMBProperty:      fmt.Sprintf("%d", executorContainer.DiskMB),
 	}
 
 	for name, value := range executorContainer.Tags {

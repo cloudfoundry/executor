@@ -9,10 +9,8 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
-	"github.com/cloudfoundry-incubator/executor/depot/allocations"
-	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
+	"github.com/cloudfoundry-incubator/executor/depot/store"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -153,12 +151,11 @@ func main() {
 	gardenClient := GardenClient.New(GardenConnection.New(*gardenNetwork, *gardenAddr))
 	waitForGarden(logger, gardenClient)
 
-	allocationClient := allocations.NewClient()
-
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
 		owner:        *containerOwnerName,
 	}
+
 	destroyContainers(gardenClient, containersFetcher, logger)
 
 	workDir := setupWorkDir(logger, *tempDir)
@@ -170,13 +167,6 @@ func main() {
 		*maxConcurrentDownloads,
 	)
 
-	exchanger := exchanger.NewExchanger(
-		*containerOwnerName,
-		*containerMaxCpuShares,
-		*containerInodeLimit,
-	)
-
-	reg := registry.New(fetchCapacity(logger, gardenClient), timeprovider.NewTimeProvider())
 	depotClient := initializeDepotClient(
 		logger,
 		*loggregatorSecret,
@@ -184,22 +174,13 @@ func main() {
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
-		exchanger,
 		gardenClient,
-		allocationClient,
-		reg,
 		transformer,
+		fetchCapacity(logger, gardenClient),
+		*registryPruningInterval,
 	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
-		{"registry-pruner", registry.NewPruner(
-			reg,
-			allocationClient,
-			exchanger,
-			timeprovider.NewTimeProvider(),
-			*registryPruningInterval,
-			logger,
-		)},
 		{"api-server", &server.Server{
 			Address:     *listenAddr,
 			Logger:      logger,
@@ -245,13 +226,13 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 
 func initializeDepotClient(
 	logger lager.Logger,
-	loggregatorSecret, loggregatorServer, containerOwnerName string,
+	loggregatorSecret, loggregatorServer string,
+	containerOwnerName string,
 	containerMaxCpuShares, containerInodeLimit uint64,
-	exchanger exchanger.Exchanger,
 	gardenClient garden_api.Client,
-	allocationClient garden_api.Client,
-	reg registry.Registry,
 	transformer *transformer.Transformer,
+	totalCapacity executor.ExecutorResources,
+	registryPruningInterval time.Duration,
 ) executor.Client {
 	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
 	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
@@ -259,13 +240,24 @@ func initializeDepotClient(
 		panic(err)
 	}
 
-	return depot.NewClient(
-		exchanger,
-		reg,
+	gardenStore := store.NewGardenStore(
 		gardenClient,
-		allocationClient,
+		containerOwnerName,
+		containerMaxCpuShares,
+		containerInodeLimit,
 		logEmitter,
 		transformer,
+	)
+
+	allocationStore := store.NewAllocationStore(
+		timeprovider.NewTimeProvider(),
+		registryPruningInterval,
+	)
+
+	return depot.NewClient(
+		totalCapacity,
+		gardenStore,
+		allocationStore,
 		logger,
 	)
 }
@@ -301,7 +293,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client) {
 	}
 }
 
-func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client) registry.Capacity {
+func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client) executor.ExecutorResources {
 	capacity, err := configuration.ConfigureCapacity(gardenClient, *memoryMBFlag, *diskMBFlag)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)

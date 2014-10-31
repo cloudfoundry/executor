@@ -1,21 +1,12 @@
 package depot
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"time"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/allocations"
-	"github.com/cloudfoundry-incubator/executor/depot/exchanger"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
-	"github.com/cloudfoundry-incubator/executor/depot/sequence"
-	"github.com/cloudfoundry-incubator/executor/depot/transformer"
-	garden "github.com/cloudfoundry-incubator/garden/api"
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
@@ -23,32 +14,51 @@ import (
 const ContainerInitializationFailedMessage = "failed to initialize container: %s"
 
 type client struct {
-	exchanger        exchanger.Exchanger
-	gardenClient     garden.Client
-	allocationClient garden.Client
-	logEmitter       logemitter.Emitter
-	registry         registry.Registry
-	transformer      *transformer.Transformer
-	logger           lager.Logger
+	logger lager.Logger
+
+	totalCapacity   executor.ExecutorResources
+	gardenStore     GardenStore
+	allocationStore AllocationStore
+
+	resourcesL sync.Mutex
+}
+
+type Store interface {
+	Create(executor.Container) (executor.Container, error)
+	Lookup(guid string) (executor.Container, error)
+	List() ([]executor.Container, error)
+	Destroy(guid string) error
+	Complete(guid string, result executor.ContainerRunResult) error
+
+	ConsumedResources() executor.ExecutorResources
+}
+
+type AllocationStore interface {
+	Store
+
+	StartInitializing(guid string) error
+}
+
+type GardenStore interface {
+	Ping() error
+
+	Store
+
+	Run(executor.Container, func(executor.ContainerRunResult)) error
+	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
 func NewClient(
-	exchanger exchanger.Exchanger,
-	registry registry.Registry,
-	gardenClient garden.Client,
-	allocationClient garden.Client,
-	logEmitter logemitter.Emitter,
-	transformer *transformer.Transformer,
+	totalCapacity executor.ExecutorResources,
+	gardenStore GardenStore,
+	allocationStore AllocationStore,
 	logger lager.Logger,
 ) executor.Client {
 	return &client{
-		exchanger:        exchanger,
-		gardenClient:     gardenClient,
-		allocationClient: allocationClient,
-		registry:         registry,
-		logEmitter:       logEmitter,
-		transformer:      transformer,
-		logger:           logger.Session("depot-client"),
+		totalCapacity:   totalCapacity,
+		gardenStore:     gardenStore,
+		allocationStore: allocationStore,
+		logger:          logger.Session("depot-client"),
 	}
 }
 
@@ -67,22 +77,21 @@ func (c *client) AllocateContainer(executorContainer executor.Container) (execut
 		"guid": executorContainer.Guid,
 	})
 
-	err := c.registry.Reserve(executorContainer)
-	if err != nil {
-		logger.Error("full", err)
+	c.resourcesL.Lock()
+	defer c.resourcesL.Unlock()
+
+	if !c.hasSpace(executorContainer) {
+		logger.Info("full")
 		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
 	}
 
-	executorContainer.State = executor.StateReserved
-	executorContainer.AllocatedAt = time.Now().UnixNano()
-
-	_, err = c.exchanger.Executor2Garden(c.allocationClient, executorContainer)
-	if err == allocations.ErrContainerAlreadyExists {
-		logger.Error("container-already-allocated", err)
-		return executor.Container{}, executor.ErrContainerGuidNotAvailable
+	createdContainer, err := c.allocationStore.Create(executorContainer)
+	if err != nil {
+		logger.Error("container-allocation-failed", err)
+		return executor.Container{}, err
 	}
 
-	return executorContainer, nil
+	return createdContainer, nil
 }
 
 func (c *client) GetContainer(guid string) (executor.Container, error) {
@@ -90,16 +99,16 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		"guid": guid,
 	})
 
-	gardenContainer, err := c.allocationClient.Lookup(guid)
+	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
-		gardenContainer, err = c.gardenClient.Lookup(guid)
+		container, err = c.gardenStore.Lookup(guid)
 		if err != nil {
 			logger.Error("container-not-found", err)
 			return executor.Container{}, executor.ErrContainerNotFound
 		}
 	}
 
-	return c.exchanger.Garden2Executor(gardenContainer)
+	return container, nil
 }
 
 func (c *client) RunContainer(guid string) error {
@@ -107,152 +116,96 @@ func (c *client) RunContainer(guid string) error {
 		"guid": guid,
 	})
 
-	allocatedContainer, err := c.allocationClient.Lookup(guid)
+	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
 		logger.Error("failed-to-find-container", err)
 		return executor.ErrContainerNotFound
 	}
 
-	executorContainer, err := c.exchanger.Garden2Executor(allocatedContainer)
+	err = c.allocationStore.StartInitializing(container.Guid)
 	if err != nil {
-		logger.Error("failed-to-read-container", err)
-		return err
-	}
-
-	err = allocatedContainer.SetProperty(exchanger.ContainerStateProperty, string(executor.StateInitializing))
-	if err != nil {
-		logger.Error("failed-to-initialize-registry-container", err)
-		return err
+		logger.Error("failed-to-initialize-container", err)
+		return executor.ErrContainerNotFound
 	}
 
 	go func() {
-		var gardenContainer garden.Container
-		var err error
-
-		defer func() {
-			if err != nil {
-				if gardenContainer != nil {
-					logger.Error("destroying-container-after-failed-init", err)
-					destroyErr := c.gardenClient.Destroy(gardenContainer.Handle())
-					if destroyErr != nil {
-						logger.Error("destroying-container-after-failed-init-also-failed", destroyErr)
-					}
-				}
-
-				result := executor.ContainerRunResult{
-					Failed:        true,
-					FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
-				}
-
-				resultPayload, err := json.Marshal(result)
-				if err != nil {
-					logger.Error("failed-to-marshal-result", err)
-					return
-				}
-
-				err = allocatedContainer.SetProperty(exchanger.ContainerResultProperty, string(resultPayload))
-				if err != nil {
-					logger.Error("failed-to-set-result", err)
-					return
-				}
-
-				err = allocatedContainer.SetProperty(exchanger.ContainerStateProperty, string(executor.StateCompleted))
-				if err != nil {
-					logger.Error("failed-to-set-state", err)
-					return
-				}
-			}
-		}()
-
-		executorContainer.State = executor.StateCreated
-
-		gardenContainer, err = c.exchanger.Executor2Garden(c.gardenClient, executorContainer)
+		container, err := c.gardenStore.Create(container)
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
+
+			c.allocationStore.Complete(guid, executor.ContainerRunResult{
+				Failed:        true,
+				FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
+			})
+
 			return
 		}
 
-		info, err := gardenContainer.Info()
-		log.Println(info.Properties, err)
+		err = c.allocationStore.Destroy(guid)
+		if err == store.ErrContainerNotFound {
+			logger.Debug("container-deleted-while-initilizing")
 
-		err = c.allocationClient.Destroy(guid)
-		if err != nil {
-			logger.Error("failed-to-remove-allocated-container", err)
+			err := c.gardenStore.Destroy(container.Guid)
+			if err != nil {
+				logger.Error("failed-to-destroy-newly-initialized-container", err)
+			}
+
+			logger.Info("destroyed-newly-initialized-container")
+
+			return
+		} else if err != nil {
+			logger.Error("failed-to-remove-allocated-container-for-some-reason", err)
 			return
 		}
 
-		logger = logger.WithData(lager.Data{
-			"handle": gardenContainer.Handle(),
+		err = c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
+			err := c.gardenStore.Complete(container.Guid, result)
+			if err != nil {
+				// not a lot we can do here
+				logger.Error("failed-to-save-result", err)
+			}
+
+			if container.CompleteURL == "" {
+				return
+			}
+
+			ifrit.Invoke(&Callback{
+				URL:     container.CompleteURL,
+				Payload: result,
+			})
+
+			logger.Info("callback-started")
 		})
 
-		var result string
-		logStreamer := log_streamer.New(
-			executorContainer.Log.Guid,
-			executorContainer.Log.SourceName,
-			executorContainer.Log.Index,
-			c.logEmitter,
-		)
-
-		steps, err := c.transformer.StepsFor(
-			logStreamer,
-			executorContainer.Actions,
-			executorContainer.Env,
-			gardenContainer,
-			&result,
-		)
 		if err != nil {
-			logger.Error("steps-invalid", err)
-			err = executor.ErrStepsInvalid
+			logger.Error("failed-to-run-container", err)
 			return
 		}
-
-		run := RunSequence{
-			Container:    gardenContainer,
-			CompleteURL:  executorContainer.CompleteURL,
-			Registration: executorContainer,
-			Sequence:     sequence.New(steps),
-			Result:       &result,
-			Logger:       c.logger,
-		}
-
-		process := ifrit.Invoke(run)
-
-		c.registry.Start(run.Registration.Guid, process)
-		logger.Info("started")
 	}()
 
 	return nil
 }
 
 func (c *client) ListContainers() ([]executor.Container, error) {
-	containersByHandle := make(map[string]garden.Container)
+	containersByHandle := make(map[string]executor.Container)
 
-	gardenContainers, err := c.gardenClient.Containers(garden.Properties{})
+	gardenContainers, err := c.gardenStore.List()
 	if err != nil {
 		return nil, err
 	}
 
-	allocatedContainers, err := c.allocationClient.Containers(garden.Properties{})
+	allocatedContainers, err := c.allocationStore.List()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, gardenContainer := range gardenContainers {
-		containersByHandle[gardenContainer.Handle()] = gardenContainer
-	}
-
-	for _, gardenContainer := range allocatedContainers {
-		containersByHandle[gardenContainer.Handle()] = gardenContainer
+	for _, gardenContainer := range append(gardenContainers, allocatedContainers...) {
+		containersByHandle[gardenContainer.Guid] = gardenContainer
 	}
 
 	var containers []executor.Container
-	for _, gardenContainer := range containersByHandle {
-		executorContainer, err := c.exchanger.Garden2Executor(gardenContainer)
-		if err != nil {
-			return nil, err
-		}
-
-		containers = append(containers, executorContainer)
+	for _, container := range containersByHandle {
+		containers = append(containers, container)
 	}
 
 	return containers, nil
@@ -263,86 +216,73 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	var container garden.Container
-	var client garden.Client
-	var err error
+	if err := c.allocationStore.Destroy(guid); err == nil {
+		logger.Info("deleted-allocation")
+		return nil
+	}
 
-	if container, err = c.allocationClient.Lookup(guid); err == nil {
-		client = c.allocationClient
-	} else if container, err = c.gardenClient.Lookup(guid); err == nil {
-		client = c.gardenClient
-	} else {
+	err := c.gardenStore.Destroy(guid)
+	if err != nil {
+		logger.Error("failed-to-destroy", err)
 		return executor.ErrContainerNotFound
 	}
-
-	executorContainer, err := c.exchanger.Garden2Executor(container)
-	if err != nil {
-		logger.Error("failed-to-convert-container", err)
-		return err
-	}
-
-	err = client.Destroy(guid)
-	if err != nil {
-		return err
-	}
-
-	c.registry.Delete(executorContainer)
 
 	return nil
 }
 
 func (c *client) RemainingResources() (executor.ExecutorResources, error) {
-	cap := c.registry.CurrentCapacity()
+	remainingResources, err := c.TotalResources()
+	if err != nil {
+		return executor.ExecutorResources{}, err
+	}
 
-	return executor.ExecutorResources{
-		MemoryMB:   cap.MemoryMB,
-		DiskMB:     cap.DiskMB,
-		Containers: cap.Containers,
-	}, nil
+	for _, resources := range []executor.ExecutorResources{
+		c.allocationStore.ConsumedResources(),
+		c.gardenStore.ConsumedResources(),
+	} {
+		remainingResources.Containers -= resources.Containers
+		remainingResources.DiskMB -= resources.DiskMB
+		remainingResources.MemoryMB -= resources.MemoryMB
+	}
+
+	return remainingResources, nil
 }
 
 func (c *client) Ping() error {
-	return c.gardenClient.Ping()
+	return c.gardenStore.Ping()
 }
 
 func (c *client) TotalResources() (executor.ExecutorResources, error) {
-	totalCapacity := c.registry.TotalCapacity()
+	totalCapacity := c.totalCapacity
 
-	resources := executor.ExecutorResources{
+	return executor.ExecutorResources{
 		MemoryMB:   totalCapacity.MemoryMB,
 		DiskMB:     totalCapacity.DiskMB,
 		Containers: totalCapacity.Containers,
-	}
-	return resources, nil
+	}, nil
 }
 
 func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
-	logger := c.logger.Session("get-files", lager.Data{
-		"guid":        guid,
-		"source-path": sourcePath,
-	})
+	return c.gardenStore.GetFiles(guid, sourcePath)
+}
 
-	container, err := c.gardenClient.Lookup(guid)
+func (c *client) hasSpace(container executor.Container) bool {
+	remainingResources, err := c.RemainingResources()
 	if err != nil {
-		logger.Error("lookup-failed", err)
-		return nil, err
+		panic("welp")
 	}
 
-	return container.StreamOut(sourcePath)
-}
-
-func handleSyncErr(err error, logger lager.Logger) error {
-	logger.Error("could-not-sync-registry", err)
-	return err
-}
-
-func handleDeleteError(err error, logger lager.Logger) error {
-	if err == registry.ErrContainerNotFound {
-		logger.Error("container-not-found", err)
-		return executor.ErrContainerNotFound
+	if remainingResources.MemoryMB < container.MemoryMB {
+		return false
 	}
 
-	logger.Error("failed-to-delete-container", err)
+	if remainingResources.DiskMB < container.DiskMB {
+		return false
+	}
 
-	return err
+	if remainingResources.Containers < 1 {
+		return false
+	}
+
+	return true
 }

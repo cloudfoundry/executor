@@ -35,7 +35,6 @@ type Transformer struct {
 	compressor       compressor.Compressor
 	logger           lager.Logger
 	tempDir          string
-	result           *string
 }
 
 func NewTransformer(
@@ -61,12 +60,11 @@ func (transformer *Transformer) StepsFor(
 	actions []models.ExecutorAction,
 	globalEnv []executor.EnvironmentVariable,
 	container garden_api.Container,
-	result *string,
 ) ([]sequence.Step, error) {
 	subSteps := []sequence.Step{}
 
 	for _, a := range actions {
-		step, err := transformer.convertAction(logStreamer, a, globalEnv, container, result)
+		step, err := transformer.convertAction(logStreamer, a, globalEnv, container)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +80,6 @@ func (transformer *Transformer) convertAction(
 	action models.ExecutorAction,
 	globalEnv []executor.EnvironmentVariable,
 	container garden_api.Container,
-	result *string,
 ) (sequence.Step, error) {
 	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
@@ -129,7 +126,6 @@ func (transformer *Transformer) convertAction(
 			actionModel.Action,
 			globalEnv,
 			container,
-			result,
 		)
 		if err != nil {
 			return nil, err
@@ -149,7 +145,6 @@ func (transformer *Transformer) convertAction(
 			actionModel.Action,
 			globalEnv,
 			container,
-			result,
 		)
 		if err != nil {
 			return nil, err
@@ -189,7 +184,6 @@ func (transformer *Transformer) convertAction(
 			actionModel.Action,
 			globalEnv,
 			container,
-			result,
 		)
 		if err != nil {
 			return nil, err
@@ -214,7 +208,6 @@ func (transformer *Transformer) convertAction(
 				action,
 				globalEnv,
 				container,
-				result,
 			)
 			if err != nil {
 				return nil, err

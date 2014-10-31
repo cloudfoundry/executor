@@ -3,8 +3,8 @@ package configuration_test
 import (
 	"errors"
 
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
-	"github.com/cloudfoundry-incubator/executor/depot/registry"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	. "github.com/onsi/ginkgo"
@@ -19,7 +19,7 @@ var _ = Describe("configuration", func() {
 	})
 
 	Describe("ConfigureCapacity", func() {
-		var capacity registry.Capacity
+		var capacity executor.ExecutorResources
 		var err error
 		var memLimit string
 		var diskLimit string
