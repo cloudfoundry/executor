@@ -175,6 +175,7 @@ func main() {
 	}
 
 	gardenStore := store.NewGardenStore(
+		logger.Session("garden-store"),
 		gardenClient,
 		*containerOwnerName,
 		*containerMaxCpuShares,

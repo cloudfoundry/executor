@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/timer"
 	"github.com/tedsuo/ifrit"
 )
@@ -23,6 +24,8 @@ var (
 )
 
 type GardenStore struct {
+	logger lager.Logger
+
 	gardenClient          garden.Client
 	containerOwnerName    string
 	containerMaxCPUShares uint64
@@ -42,6 +45,7 @@ type GardenStore struct {
 }
 
 func NewGardenStore(
+	logger lager.Logger,
 	gardenClient garden.Client,
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
@@ -51,6 +55,8 @@ func NewGardenStore(
 	timer timer.Timer,
 ) *GardenStore {
 	return &GardenStore{
+		logger: logger,
+
 		gardenClient:          gardenClient,
 		containerInodeLimit:   containerInodeLimit,
 		containerMaxCPUShares: containerMaxCPUShares,
@@ -287,7 +293,8 @@ func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 			case <-ticker:
 				containers, err := store.List()
 				if err != nil {
-					return err
+					store.logger.Error("failed-to-list-containers", err)
+					continue
 				}
 
 				store.resourcesL.Lock()

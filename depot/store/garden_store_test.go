@@ -13,6 +13,7 @@ import (
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/pivotal-golang/timer/fake_timer"
 	"github.com/tedsuo/ifrit"
 
@@ -38,6 +39,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
+			lagertest.NewTestLogger("test"),
 			fakeGardenClient,
 			ownerName,
 			maxCPUShares,
