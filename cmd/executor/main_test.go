@@ -372,7 +372,7 @@ var _ = Describe("Executor", func() {
 			})
 
 			It("shows up in the container list", func() {
-				containers, err := executorClient.ListContainers()
+				containers, err := executorClient.ListContainers(nil)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(containers).Should(HaveLen(1))
 				Ω(containers[0].Guid).Should(Equal(allocatedContainer.Guid))
@@ -771,7 +771,7 @@ var _ = Describe("Executor", func() {
 
 			Describe("listing containers", func() {
 				It("shows up in the container list in reserved state", func() {
-					containers, err := executorClient.ListContainers()
+					containers, err := executorClient.ListContainers(nil)
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(containers).Should(HaveLen(1))
 					Ω(containers[0].Guid).Should(Equal(guid))
@@ -844,7 +844,7 @@ var _ = Describe("Executor", func() {
 
 			Describe("listing containers", func() {
 				It("shows up in the container list in initializing state", func() {
-					containers, err := executorClient.ListContainers()
+					containers, err := executorClient.ListContainers(nil)
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(containers).Should(HaveLen(1))
 					Ω(containers[0].Guid).Should(Equal(guid))
@@ -924,7 +924,7 @@ var _ = Describe("Executor", func() {
 
 			Describe("listing containers", func() {
 				It("shows up in the container list in created state", func() {
-					containers, err := executorClient.ListContainers()
+					containers, err := executorClient.ListContainers(nil)
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(containers).Should(HaveLen(1))
 					Ω(containers[0].Guid).Should(Equal(guid))
@@ -1060,9 +1060,14 @@ var _ = Describe("Executor", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(executorClient.ListContainers()).Should(HaveLen(1))
+				Ω(executorClient.ListContainers(nil)).Should(HaveLen(1))
 
-				Eventually(executorClient.ListContainers, pruningInterval*3).Should(BeEmpty())
+				Eventually(func() interface{} {
+					containers, err := executorClient.ListContainers(nil)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return containers
+				}, pruningInterval*3).Should(BeEmpty())
 			})
 		})
 
@@ -1077,6 +1082,66 @@ var _ = Describe("Executor", func() {
 			It("exits successfully", func() {
 				process.Signal(syscall.SIGINT)
 				Eventually(runner, 2).Should(gexec.Exit())
+			})
+		})
+
+		Describe("listing containers", func() {
+			Context("with no containers", func() {
+				It("returns an empty set of containers", func() {
+					Ω(executorClient.ListContainers(nil)).Should(BeEmpty())
+				})
+			})
+
+			Context("when a container has been allocated", func() {
+				var (
+					container executor.Container
+
+					guid string
+				)
+
+				JustBeforeEach(func() {
+					guid = allocNewContainer(container)
+				})
+
+				Context("without tags", func() {
+					It("includes the allocated container", func() {
+
+					})
+				})
+
+				Context("with tags", func() {
+					BeforeEach(func() {
+						container.Tags = executor.Tags{
+							"some-tag": "some-value",
+						}
+					})
+
+					Describe("listing by matching tags", func() {
+						It("includes the allocated container", func() {
+							containers, err := executorClient.ListContainers(executor.Tags{
+								"some-tag": "some-value",
+							})
+							Ω(err).ShouldNot(HaveOccurred())
+							Ω(containers).Should(HaveLen(1))
+							Ω(containers[0].Guid).Should(Equal(guid))
+						})
+
+						It("filters by and-ing the requested tags", func() {
+							Ω(executorClient.ListContainers(executor.Tags{
+								"some-tag":  "some-value",
+								"bogus-tag": "bogus-value",
+							})).Should(BeEmpty())
+						})
+					})
+
+					Describe("listing by non-matching tags", func() {
+						It("does not include the allocated container", func() {
+							Ω(executorClient.ListContainers(executor.Tags{
+								"some-tag": "bogus-value",
+							})).Should(BeEmpty())
+						})
+					})
+				})
 			})
 		})
 

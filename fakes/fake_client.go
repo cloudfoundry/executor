@@ -49,9 +49,11 @@ type FakeClient struct {
 	deleteContainerReturns struct {
 		result1 error
 	}
-	ListContainersStub        func() ([]executor.Container, error)
+	ListContainersStub        func(executor.Tags) ([]executor.Container, error)
 	listContainersMutex       sync.RWMutex
-	listContainersArgsForCall []struct{}
+	listContainersArgsForCall []struct {
+		arg1 executor.Tags
+	}
 	listContainersReturns struct {
 		result1 []executor.Container
 		result2 error
@@ -236,12 +238,14 @@ func (fake *FakeClient) DeleteContainerReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeClient) ListContainers() ([]executor.Container, error) {
+func (fake *FakeClient) ListContainers(arg1 executor.Tags) ([]executor.Container, error) {
 	fake.listContainersMutex.Lock()
-	fake.listContainersArgsForCall = append(fake.listContainersArgsForCall, struct{}{})
+	fake.listContainersArgsForCall = append(fake.listContainersArgsForCall, struct {
+		arg1 executor.Tags
+	}{arg1})
 	fake.listContainersMutex.Unlock()
 	if fake.ListContainersStub != nil {
-		return fake.ListContainersStub()
+		return fake.ListContainersStub(arg1)
 	} else {
 		return fake.listContainersReturns.result1, fake.listContainersReturns.result2
 	}
@@ -251,6 +255,12 @@ func (fake *FakeClient) ListContainersCallCount() int {
 	fake.listContainersMutex.RLock()
 	defer fake.listContainersMutex.RUnlock()
 	return len(fake.listContainersArgsForCall)
+}
+
+func (fake *FakeClient) ListContainersArgsForCall(i int) executor.Tags {
+	fake.listContainersMutex.RLock()
+	defer fake.listContainersMutex.RUnlock()
+	return fake.listContainersArgsForCall[i].arg1
 }
 
 func (fake *FakeClient) ListContainersReturns(result1 []executor.Container, result2 error) {

@@ -24,7 +24,7 @@ const (
 type ExecutorSource interface {
 	RemainingResources() (executor.ExecutorResources, error)
 	TotalResources() (executor.ExecutorResources, error)
-	ListContainers() ([]executor.Container, error)
+	ListContainers(executor.Tags) ([]executor.Container, error)
 }
 
 type Reporter struct {
@@ -53,7 +53,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			}
 
 			var nContainers int
-			containers, err := reporter.ExecutorSource.ListContainers()
+			containers, err := reporter.ExecutorSource.ListContainers(nil)
 			if err != nil {
 				reporter.Logger.Error("failed-to-list-containers", err)
 				nContainers = -1

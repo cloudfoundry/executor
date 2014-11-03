@@ -897,7 +897,7 @@ var _ = Describe("GardenContainerStore", func() {
 				fakeContainer2,
 			}, nil)
 
-			containers, err := gardenStore.List()
+			containers, err := gardenStore.List(nil)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(containers).Should(HaveLen(2))
@@ -909,12 +909,25 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 
 		It("only queries garden for the containers with the right owner", func() {
-			_, err := gardenStore.List()
+			_, err := gardenStore.List(nil)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
 				store.ContainerOwnerProperty: ownerName,
 			}))
+		})
+
+		Context("when tags are specified", func() {
+			It("filters by the tag properties", func() {
+				_, err := gardenStore.List(executor.Tags{"a": "b", "c": "d"})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
+					store.ContainerOwnerProperty: ownerName,
+					"tag:a": "b",
+					"tag:c": "d",
+				}))
+			})
 		})
 	})
 

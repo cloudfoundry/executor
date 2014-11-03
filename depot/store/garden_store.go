@@ -79,10 +79,16 @@ func (store *GardenStore) Lookup(guid string) (executor.Container, error) {
 	return exchanger.Garden2Executor(gardenContainer)
 }
 
-func (store *GardenStore) List() ([]executor.Container, error) {
-	gardenContainers, err := store.gardenClient.Containers(garden.Properties{
+func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error) {
+	filter := garden.Properties{
 		ContainerOwnerProperty: store.containerOwnerName,
-	})
+	}
+
+	for k, v := range tags {
+		filter[tagPropertyPrefix+k] = v
+	}
+
+	gardenContainers, err := store.gardenClient.Containers(filter)
 	if err != nil {
 		return nil, ErrContainerNotFound
 	}
@@ -291,7 +297,7 @@ func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 				break dance
 
 			case <-ticker:
-				containers, err := store.List()
+				containers, err := store.List(nil)
 				if err != nil {
 					store.logger.Error("failed-to-list-containers", err)
 					continue

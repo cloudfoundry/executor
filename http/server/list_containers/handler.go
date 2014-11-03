@@ -3,6 +3,7 @@ package list_containers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/http/server/error_headers"
@@ -24,7 +25,16 @@ func New(depotClient executor.Client, logger lager.Logger) http.Handler {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	listLog := h.logger.Session("list-handler")
 
-	resources, err := h.depotClient.ListContainers()
+	tags := executor.Tags{}
+
+	for _, tag := range r.URL.Query()["tag"] {
+		segments := strings.SplitN(tag, ":", 2)
+		if len(segments) == 2 {
+			tags[segments[0]] = segments[1]
+		}
+	}
+
+	resources, err := h.depotClient.ListContainers(tags)
 	if err != nil {
 		listLog.Error("failed-to-list-container", err)
 		error_headers.Write(err, w)

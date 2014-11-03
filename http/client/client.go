@@ -29,7 +29,7 @@ type client struct {
 func (c client) AllocateContainer(request executor.Container) (executor.Container, error) {
 	container := executor.Container{}
 
-	response, err := c.makeRequest(ehttp.AllocateContainer, nil, request)
+	response, err := c.doRequest(ehttp.AllocateContainer, nil, request, nil)
 	if err != nil {
 		return container, err
 	}
@@ -49,7 +49,7 @@ func (c client) AllocateContainer(request executor.Container) (executor.Containe
 }
 
 func (c client) GetContainer(allocationGuid string) (executor.Container, error) {
-	response, err := c.makeRequest(ehttp.GetContainer, rata.Params{"guid": allocationGuid}, nil)
+	response, err := c.doRequest(ehttp.GetContainer, rata.Params{"guid": allocationGuid}, nil, nil)
 	if err != nil {
 		return executor.Container{}, err
 	}
@@ -60,7 +60,7 @@ func (c client) GetContainer(allocationGuid string) (executor.Container, error) 
 }
 
 func (c client) RunContainer(allocationGuid string) error {
-	response, err := c.makeRequest(ehttp.RunContainer, rata.Params{"guid": allocationGuid}, nil)
+	response, err := c.doRequest(ehttp.RunContainer, rata.Params{"guid": allocationGuid}, nil, nil)
 	if err != nil {
 		// do some logging
 		return err
@@ -70,7 +70,7 @@ func (c client) RunContainer(allocationGuid string) error {
 }
 
 func (c client) DeleteContainer(allocationGuid string) error {
-	response, err := c.makeRequest(ehttp.DeleteContainer, rata.Params{"guid": allocationGuid}, nil)
+	response, err := c.doRequest(ehttp.DeleteContainer, rata.Params{"guid": allocationGuid}, nil, nil)
 	if err != nil {
 		// do some logging
 		return err
@@ -79,10 +79,15 @@ func (c client) DeleteContainer(allocationGuid string) error {
 	return response.Body.Close()
 }
 
-func (c client) ListContainers() ([]executor.Container, error) {
+func (c client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
 	containers := []executor.Container{}
 
-	response, err := c.makeRequest(ehttp.ListContainers, nil, nil)
+	filter := make([]string, 0, len(tags))
+	for name, value := range tags {
+		filter = append(filter, fmt.Sprintf("%s:%s", name, value))
+	}
+
+	response, err := c.doRequest(ehttp.ListContainers, nil, nil, url.Values{"tag": filter})
 	if err != nil {
 		return containers, err
 	}
@@ -137,7 +142,7 @@ func (c client) TotalResources() (executor.ExecutorResources, error) {
 }
 
 func (c client) Ping() error {
-	response, err := c.makeRequest(ehttp.Ping, nil, nil)
+	response, err := c.doRequest(ehttp.Ping, nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -161,7 +166,7 @@ func (c client) buildContainerFromApiResponse(response *http.Response) (executor
 func (c client) getResources(apiEndpoint string) (executor.ExecutorResources, error) {
 	resources := executor.ExecutorResources{}
 
-	response, err := c.makeRequest(apiEndpoint, nil, nil)
+	response, err := c.doRequest(apiEndpoint, nil, nil, nil)
 	if err != nil {
 		return resources, err
 	}
@@ -176,7 +181,7 @@ func (c client) getResources(apiEndpoint string) (executor.ExecutorResources, er
 	return resources, nil
 }
 
-func (c client) makeRequest(handlerName string, params rata.Params, payload interface{}) (*http.Response, error) {
+func (c client) doRequest(handlerName string, params rata.Params, payload interface{}, queryParameters url.Values) (*http.Response, error) {
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -185,6 +190,10 @@ func (c client) makeRequest(handlerName string, params rata.Params, payload inte
 	req, err := c.reqGen.CreateRequest(handlerName, params, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err
+	}
+
+	if queryParameters != nil {
+		req.URL.RawQuery = queryParameters.Encode()
 	}
 
 	req.Header.Set("Content-Type", "application/json")

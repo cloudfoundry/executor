@@ -26,7 +26,7 @@ type client struct {
 type Store interface {
 	Create(executor.Container) (executor.Container, error)
 	Lookup(guid string) (executor.Container, error)
-	List() ([]executor.Container, error)
+	List(executor.Tags) ([]executor.Container, error)
 	Destroy(guid string) error
 	Complete(guid string, result executor.ContainerRunResult) error
 
@@ -186,15 +186,15 @@ func (c *client) RunContainer(guid string) error {
 	return nil
 }
 
-func (c *client) ListContainers() ([]executor.Container, error) {
+func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
 	containersByHandle := make(map[string]executor.Container)
 
-	gardenContainers, err := c.gardenStore.List()
+	gardenContainers, err := c.gardenStore.List(tags)
 	if err != nil {
 		return nil, err
 	}
 
-	allocatedContainers, err := c.allocationStore.List()
+	allocatedContainers, err := c.allocationStore.List(tags)
 	if err != nil {
 		return nil, err
 	}

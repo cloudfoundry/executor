@@ -281,8 +281,11 @@ var _ = Describe("Api", func() {
 	Describe("GET /containers", func() {
 		var expectedContainers []executor.Container
 
-		Context("when we can succesfully get containers ", func() {
-			var listResponse *http.Response
+		Context("when we can succesfully get containers", func() {
+			var (
+				listRequest  *http.Request
+				listResponse *http.Response
+			)
 
 			BeforeEach(func() {
 				expectedContainers = []executor.Container{
@@ -292,11 +295,17 @@ var _ = Describe("Api", func() {
 
 				depotClient.ListContainersReturns(expectedContainers, nil)
 
-				listResponse = DoRequest(generator.CreateRequest(
+				var err error
+				listRequest, err = generator.CreateRequest(
 					ehttp.ListContainers,
 					nil,
 					nil,
-				))
+				)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			JustBeforeEach(func() {
+				listResponse = DoRequest(listRequest, nil)
 			})
 
 			It("returns 200", func() {
@@ -308,6 +317,21 @@ var _ = Describe("Api", func() {
 				err := json.NewDecoder(listResponse.Body).Decode(&containers)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(containers).Should(Equal(expectedContainers))
+			})
+
+			Context("and tags are specified", func() {
+				BeforeEach(func() {
+					listRequest.URL.RawQuery = url.Values{
+						"tag": []string{"a:b", "c:d"},
+					}.Encode()
+				})
+
+				It("filters by the given tags", func() {
+					Ω(depotClient.ListContainersArgsForCall(0)).Should(Equal(executor.Tags{
+						"a": "b",
+						"c": "d",
+					}))
+				})
 			})
 		})
 

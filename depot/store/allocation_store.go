@@ -41,16 +41,28 @@ func (store *AllocationStore) Lookup(guid string) (executor.Container, error) {
 	}
 }
 
-func (store *AllocationStore) List() ([]executor.Container, error) {
+func (store *AllocationStore) List(tags executor.Tags) ([]executor.Container, error) {
 	store.mutex.RLock()
 	defer store.mutex.RUnlock()
 
 	result := make([]executor.Container, 0, len(store.containers))
 	for _, container := range store.containers {
-		result = append(result, container)
+		if tagsMatch(tags, container.Tags) {
+			result = append(result, container)
+		}
 	}
 
 	return result, nil
+}
+
+func tagsMatch(needles, haystack executor.Tags) bool {
+	for k, v := range needles {
+		if haystack[k] != v {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (store *AllocationStore) Create(container executor.Container) (executor.Container, error) {

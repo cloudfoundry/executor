@@ -42,17 +42,22 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("when the expiration time passes", func() {
 			It("reaps the reserved container", func() {
-				Ω(allocationStore.List()).Should(ContainElement(createdContainer))
+				Ω(allocationStore.List(nil)).Should(ContainElement(createdContainer))
 
 				timeProvider.Increment(expirationTime + 1)
 
-				Eventually(allocationStore.List, expirationTime).Should(BeEmpty())
+				Eventually(func() interface{} {
+					containers, err := allocationStore.List(nil)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return containers
+				}, expirationTime).Should(BeEmpty())
 			})
 		})
 
 		Context("and then starting to initialize it", func() {
 			It("prevents the container from expiring", func() {
-				Ω(allocationStore.List()).Should(ContainElement(createdContainer))
+				Ω(allocationStore.List(nil)).Should(ContainElement(createdContainer))
 
 				err := allocationStore.StartInitializing(createdContainer.Guid)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -62,13 +67,18 @@ var _ = Describe("AllocationStore", func() {
 				initializingContainer := createdContainer
 				initializingContainer.State = executor.StateInitializing
 
-				Consistently(allocationStore.List, expirationTime).Should(ContainElement(initializingContainer))
+				Consistently(func() interface{} {
+					containers, err := allocationStore.List(nil)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return containers
+				}, expirationTime).Should(ContainElement(initializingContainer))
 			})
 		})
 
 		Context("and then completing it", func() {
 			It("prevents the container from expiring", func() {
-				Ω(allocationStore.List()).Should(ContainElement(createdContainer))
+				Ω(allocationStore.List(nil)).Should(ContainElement(createdContainer))
 
 				runResult := executor.ContainerRunResult{
 					Failed:        true,
@@ -84,7 +94,12 @@ var _ = Describe("AllocationStore", func() {
 				completedContainer.State = executor.StateCompleted
 				completedContainer.RunResult = runResult
 
-				Consistently(allocationStore.List, expirationTime).Should(ContainElement(completedContainer))
+				Consistently(func() interface{} {
+					containers, err := allocationStore.List(nil)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					return containers
+				}, expirationTime).Should(ContainElement(completedContainer))
 			})
 		})
 
@@ -183,30 +198,73 @@ var _ = Describe("AllocationStore", func() {
 	})
 
 	Describe("List", func() {
-		It("returns all of the containers", func() {
-			container1, err := allocationStore.Create(executor.Container{
-				Guid:  "guid-1",
-				State: executor.StateReserved,
+		Context("with no tags", func() {
+			It("returns all of the containers", func() {
+				container1, err := allocationStore.Create(executor.Container{
+					Guid:  "guid-1",
+					State: executor.StateReserved,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				container2, err := allocationStore.Create(executor.Container{
+					Guid:  "guid-2",
+					State: executor.StateReserved,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(allocationStore.List(nil)).Should(ConsistOf([]executor.Container{
+					container1,
+					container2,
+				}))
+
+				err = allocationStore.Destroy("guid-1")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(allocationStore.List(nil)).Should(ConsistOf([]executor.Container{
+					container2,
+				}))
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+		})
 
-			container2, err := allocationStore.Create(executor.Container{
-				Guid:  "guid-2",
-				State: executor.StateReserved,
+		Context("with tags", func() {
+			It("returns only containers matching the given tags", func() {
+				container1, err := allocationStore.Create(executor.Container{
+					Guid:  "guid-1",
+					State: executor.StateReserved,
+					Tags:  executor.Tags{"a": "b"},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				container2, err := allocationStore.Create(executor.Container{
+					Guid:  "guid-2",
+					State: executor.StateReserved,
+					Tags:  executor.Tags{"a": "b", "c": "d"},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				container3, err := allocationStore.Create(executor.Container{
+					Guid:  "guid-3",
+					State: executor.StateReserved,
+					Tags:  executor.Tags{"c": "d"},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(allocationStore.List(executor.Tags{"a": "b"})).Should(ConsistOf([]executor.Container{
+					container1,
+					container2,
+				}))
+
+				Ω(allocationStore.List(executor.Tags{"a": "b", "c": "d"})).Should(ConsistOf([]executor.Container{
+					container2,
+				}))
+
+				Ω(allocationStore.List(executor.Tags{"c": "d"})).Should(ConsistOf([]executor.Container{
+					container2,
+					container3,
+				}))
+
+				Ω(allocationStore.List(executor.Tags{"e": "bogus"})).Should(BeEmpty())
 			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(allocationStore.List()).Should(ConsistOf([]executor.Container{
-				container1,
-				container2,
-			}))
-
-			err = allocationStore.Destroy("guid-1")
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(allocationStore.List()).Should(ConsistOf([]executor.Container{
-				container2,
-			}))
 		})
 	})
 

@@ -239,22 +239,48 @@ var _ = Describe("Client", func() {
 
 	Describe("ListContainers", func() {
 		var listResponse []executor.Container
+
 		BeforeEach(func() {
 			listResponse = []executor.Container{
 				{Guid: "a"},
 				{Guid: "b"},
 			}
-
-			fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
-				ghttp.VerifyRequest("GET", "/containers"),
-				ghttp.RespondWithJSONEncoded(http.StatusOK, listResponse)),
-			)
 		})
 
-		It("should returns the list of containers sent back by the server", func() {
-			response, err := client.ListContainers()
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(response).Should(Equal(listResponse))
+		Context("with no tags", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, listResponse)),
+				)
+			})
+
+			It("should returns the list of containers sent back by the server", func() {
+				response, err := client.ListContainers(nil)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(response).Should(Equal(listResponse))
+			})
+		})
+
+		Context("when tags are provided", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers"),
+					func(w http.ResponseWriter, r *http.Request) {
+						Ω(r.URL.Query()["tag"]).Should(ConsistOf([]string{"a:b", "c:d"}))
+					},
+					ghttp.RespondWithJSONEncoded(http.StatusOK, listResponse)),
+				)
+			})
+
+			It("specifies them as query params", func() {
+				response, err := client.ListContainers(executor.Tags{
+					"a": "b",
+					"c": "d",
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(response).Should(Equal(listResponse))
+			})
 		})
 	})
 
