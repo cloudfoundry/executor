@@ -864,6 +864,9 @@ var _ = Describe("Executor", func() {
 
 			BeforeEach(func() {
 				guid = allocNewContainer(executor.Container{
+					MemoryMB: 64,
+					DiskMB:   64,
+
 					Actions: []models.ExecutorAction{
 						{Action: models.RunAction{Path: "ls"}},
 					},
@@ -926,6 +929,33 @@ var _ = Describe("Executor", func() {
 					Ω(containers).Should(HaveLen(1))
 					Ω(containers[0].Guid).Should(Equal(guid))
 					Ω(containers[0].State).Should(Equal(executor.StateCreated))
+				})
+			})
+
+			Describe("remaining resources", func() {
+				It("has the container's reservation subtracted", func() {
+					remaining, err := executorClient.RemainingResources()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(remaining.MemoryMB).Should(Equal(1024 - 64))
+					Ω(remaining.DiskMB).Should(Equal(1024 - 64))
+				})
+
+				Context("when the container disappears", func() {
+					It("eventually goes back to the total resources", func() {
+						fakeBackend.ContainersReturns(nil, nil)
+
+						Eventually(func() executor.ExecutorResources {
+							resources, err := executorClient.RemainingResources()
+							Ω(err).ShouldNot(HaveOccurred())
+
+							return resources
+						}).Should(Equal(executor.ExecutorResources{
+							MemoryMB:   1024,
+							DiskMB:     1024,
+							Containers: 1024,
+						}))
+					})
 				})
 			})
 		})

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
@@ -13,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/pivotal-golang/timer"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -28,6 +30,7 @@ type GardenStore struct {
 
 	logEmitter  logemitter.Emitter
 	transformer *transformer.Transformer
+	timer       timer.Timer
 
 	containers   uint64
 	usedMemoryMB uint64
@@ -45,6 +48,7 @@ func NewGardenStore(
 	containerInodeLimit uint64,
 	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
+	timer timer.Timer,
 ) *GardenStore {
 	return &GardenStore{
 		gardenClient:          gardenClient,
@@ -53,6 +57,7 @@ func NewGardenStore(
 		containerOwnerName:    containerOwnerName,
 		logEmitter:            logEmitter,
 		transformer:           transformer,
+		timer:                 timer,
 
 		runningProcesses: map[string]ifrit.Process{},
 	}
@@ -84,6 +89,7 @@ func (store *GardenStore) List() ([]executor.Container, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result = append(result, container)
 	}
 
@@ -265,4 +271,41 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 	store.processesL.Unlock()
 
 	return nil
+}
+
+func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		ticker := store.timer.Every(interval)
+		close(ready)
+
+	dance:
+		for {
+			select {
+			case <-signals:
+				break dance
+
+			case <-ticker:
+				containers, err := store.List()
+				if err != nil {
+					return err
+				}
+
+				store.resourcesL.Lock()
+
+				store.usedDiskMB = 0
+				store.usedMemoryMB = 0
+				store.containers = 0
+
+				for _, container := range containers {
+					store.usedMemoryMB += uint64(container.MemoryMB)
+					store.usedDiskMB += uint64(container.DiskMB)
+					store.containers++
+				}
+
+				store.resourcesL.Unlock()
+			}
+		}
+
+		return nil
+	})
 }

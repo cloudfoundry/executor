@@ -30,6 +30,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
+	"github.com/pivotal-golang/timer"
 )
 
 var listenAddr = flag.String(
@@ -167,17 +168,27 @@ func main() {
 		*maxConcurrentDownloads,
 	)
 
-	depotClient := initializeDepotClient(
-		logger,
-		*loggregatorSecret,
-		*loggregatorServer,
+	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
+	logEmitter, err := logemitter.NewEmitter(*loggregatorServer, "", "", false)
+	if err != nil {
+		panic(err)
+	}
+
+	gardenStore := store.NewGardenStore(
+		gardenClient,
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
-		gardenClient,
+		logEmitter,
 		transformer,
+		timer.NewTimer(),
+	)
+
+	depotClient := initializeDepotClient(
+		logger,
 		fetchCapacity(logger, gardenClient),
 		*registryPruningInterval,
+		gardenStore,
 	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
@@ -191,13 +202,14 @@ func main() {
 			Interval:       *metricsReportInterval,
 			Logger:         logger.Session("metrics-reporter"),
 		}},
+		{"garden-syncer", gardenStore.TrackContainers(1 * time.Second)},
 	})
 
 	monitor := ifrit.Envoke(sigmon.New(group))
 
 	logger.Info("started")
 
-	err := <-monitor.Wait()
+	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -226,29 +238,10 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 
 func initializeDepotClient(
 	logger lager.Logger,
-	loggregatorSecret, loggregatorServer string,
-	containerOwnerName string,
-	containerMaxCpuShares, containerInodeLimit uint64,
-	gardenClient garden_api.Client,
-	transformer *transformer.Transformer,
 	totalCapacity executor.ExecutorResources,
 	registryPruningInterval time.Duration,
+	gardenStore depot.GardenStore,
 ) executor.Client {
-	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
-	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
-	if err != nil {
-		panic(err)
-	}
-
-	gardenStore := store.NewGardenStore(
-		gardenClient,
-		containerOwnerName,
-		containerMaxCpuShares,
-		containerInodeLimit,
-		logEmitter,
-		transformer,
-	)
-
 	allocationStore := store.NewAllocationStore(
 		timeprovider.NewTimeProvider(),
 		registryPruningInterval,

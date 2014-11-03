@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/timer/fake_timer"
+	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,9 +29,13 @@ var _ = Describe("GardenContainerStore", func() {
 		ownerName           = "some-owner-name"
 		inodeLimit   uint64 = 2000000
 		maxCPUShares uint64 = 1024
+
+		fakeTimer *fake_timer.FakeTimer
 	)
 
 	BeforeEach(func() {
+		fakeTimer = fake_timer.NewFakeTimer(time.Now())
+
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
 			fakeGardenClient,
@@ -36,6 +44,7 @@ var _ = Describe("GardenContainerStore", func() {
 			inodeLimit,
 			nil,
 			nil,
+			fakeTimer,
 		)
 	})
 
@@ -1161,6 +1170,60 @@ var _ = Describe("GardenContainerStore", func() {
 			It("returns a container-not-found error", func() {
 				Ω(gardenStore.Ping()).Should(Equal(disaster))
 			})
+		})
+	})
+
+	Describe("TrackContainers", func() {
+		It("keeps the consumed resources in sync with garden", func() {
+			fakeGardenClient.CreateReturns(&gfakes.FakeContainer{}, nil)
+
+			fakeGardenClient.ContainersReturns([]garden.Container{
+				&gfakes.FakeContainer{
+					InfoStub: func() (garden.ContainerInfo, error) {
+						return garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:memory-mb": "2",
+							},
+						}, nil
+					},
+				},
+			}, nil)
+
+			runner := gardenStore.TrackContainers(2 * time.Second)
+
+			_, err := gardenStore.Create(executor.Container{
+				MemoryMB: 2,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			_, err = gardenStore.Create(executor.Container{
+				MemoryMB: 5,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			process := ifrit.Invoke(runner)
+
+			Ω(gardenStore.ConsumedResources().MemoryMB).Should(Equal(7))
+
+			fakeTimer.Elapse(2 * time.Second)
+
+			By("syncing the memory usage")
+			Eventually(func() int { return gardenStore.ConsumedResources().MemoryMB }).Should(Equal(2))
+
+			_, err = gardenStore.Create(executor.Container{
+				MemoryMB: 20,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(gardenStore.ConsumedResources().MemoryMB).Should(Equal(22))
+
+			fakeTimer.Elapse(2 * time.Second)
+
+			By("syncing the memory usage. again.")
+			Eventually(func() int { return gardenStore.ConsumedResources().MemoryMB }).Should(Equal(2))
+
+			process.Signal(os.Interrupt)
+			Eventually(process.Wait()).Should(Receive())
 		})
 	})
 })
