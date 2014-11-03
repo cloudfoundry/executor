@@ -42,6 +42,7 @@ func New(
 			"-containerInodeLimit", strconv.Itoa(245000),
 			"-pruneInterval", pruneInterval.String(),
 			"-debugAddr", debugAddr,
+			"-gardenSyncInterval", "1s",
 		),
 	})
 }

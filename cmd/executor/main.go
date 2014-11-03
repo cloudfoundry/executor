@@ -135,6 +135,12 @@ var maxConcurrentDownloads = flag.Uint(
 	"maximum in-flight downloads",
 )
 
+var gardenSyncInterval = flag.Duration(
+	"gardenSyncInterval",
+	30*time.Second,
+	"interval on which to poll Garden's containers to ensure usage is in sync",
+)
+
 func main() {
 	flag.Parse()
 
@@ -203,7 +209,7 @@ func main() {
 			Interval:       *metricsReportInterval,
 			Logger:         logger.Session("metrics-reporter"),
 		}},
-		{"garden-syncer", gardenStore.TrackContainers(1 * time.Second)},
+		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval)},
 	})
 
 	monitor := ifrit.Envoke(sigmon.New(group))
