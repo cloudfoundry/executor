@@ -252,14 +252,6 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 				seq.Cancel()
 
 			case seqErr := <-seqComplete:
-				if seqErr == sequence.CancelledError {
-					// we do this because we don't want to hit the rep's callback
-					// when it destroys the container. which is silly.
-					//
-					// remove when the callback is gone.
-					return seqErr
-				}
-
 				result := executor.ContainerRunResult{
 					Guid: container.Guid,
 				}

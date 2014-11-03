@@ -8,7 +8,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/pivotal-golang/lager"
-	"github.com/tedsuo/ifrit"
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container: %s"
@@ -164,17 +163,6 @@ func (c *client) RunContainer(guid string) error {
 				// not a lot we can do here
 				logger.Error("failed-to-save-result", err)
 			}
-
-			if container.CompleteURL == "" {
-				return
-			}
-
-			ifrit.Invoke(&Callback{
-				URL:     container.CompleteURL,
-				Payload: result,
-			})
-
-			logger.Info("callback-started")
 		})
 
 		if err != nil {

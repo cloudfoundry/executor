@@ -244,9 +244,8 @@ var _ = Describe("Api", func() {
 				DiskMB:    512,
 				CPUWeight: 50,
 
-				Actions:     expectedActions,
-				Env:         expectedEnv,
-				CompleteURL: "http://example.com",
+				Actions: expectedActions,
+				Env:     expectedEnv,
 			})
 
 			allocResponse := DoRequest(generator.CreateRequest(

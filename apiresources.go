@@ -29,9 +29,8 @@ type Container struct {
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
-	Actions     []models.ExecutorAction `json:"actions"`
-	Env         []EnvironmentVariable   `json:"env,omitempty"`
-	CompleteURL string                  `json:"complete_url"`
+	Actions []models.ExecutorAction `json:"actions"`
+	Env     []EnvironmentVariable   `json:"env,omitempty"`
 
 	RunResult ContainerRunResult `json:"run_result"`
 }

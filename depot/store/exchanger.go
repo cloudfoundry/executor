@@ -30,7 +30,6 @@ const (
 	ContainerStateProperty       = executorPropertyPrefix + "state"
 	ContainerAllocatedAtProperty = executorPropertyPrefix + "allocated-at"
 	ContainerRootfsProperty      = executorPropertyPrefix + "rootfs"
-	ContainerCompleteURLProperty = executorPropertyPrefix + "complete-url"
 	ContainerActionsProperty     = executorPropertyPrefix + "actions"
 	ContainerEnvProperty         = executorPropertyPrefix + "env"
 	ContainerLogProperty         = executorPropertyPrefix + "log"
@@ -100,8 +99,6 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 		case ContainerRootfsProperty:
 			executorContainer.RootFSPath = value
-		case ContainerCompleteURLProperty:
-			executorContainer.CompleteURL = value
 		case ContainerActionsProperty:
 			err := json.Unmarshal([]byte(value), &executorContainer.Actions)
 			if err != nil {
@@ -206,7 +203,6 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		ContainerStateProperty:       string(executorContainer.State),
 		ContainerAllocatedAtProperty: fmt.Sprintf("%d", executorContainer.AllocatedAt),
 		ContainerRootfsProperty:      executorContainer.RootFSPath,
-		ContainerCompleteURLProperty: executorContainer.CompleteURL,
 		ContainerActionsProperty:     string(actionsJson),
 		ContainerEnvProperty:         string(envJson),
 		ContainerLogProperty:         string(logJson),

@@ -263,20 +263,6 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
-			Context("when the container has an executor:complete-url property", func() {
-				BeforeEach(func() {
-					gardenContainer.InfoReturns(garden.ContainerInfo{
-						Properties: garden.Properties{
-							"executor:complete-url": "gopher://google.com",
-						},
-					}, nil)
-				})
-
-				It("has it as its rootfs path", func() {
-					Ω(executorContainer.CompleteURL).Should(Equal("gopher://google.com"))
-				})
-			})
-
 			Context("when the container has an executor:actions property", func() {
 				Context("and the actions are valid", func() {
 					actions := []models.ExecutorAction{
@@ -593,17 +579,6 @@ var _ = Describe("GardenContainerStore", func() {
 					It("creates it with the executor:rootfs property", func() {
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:rootfs"]).To(Equal("some/root/path"))
-					})
-				})
-
-				Context("when the Executor container has a complete-url", func() {
-					BeforeEach(func() {
-						executorContainer.CompleteURL = "http://callback.example.com/bye"
-					})
-
-					It("creates it with the executor:complete-url property", func() {
-						containerSpec := fakeGardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:complete-url"]).To(Equal("http://callback.example.com/bye"))
 					})
 				})
 
