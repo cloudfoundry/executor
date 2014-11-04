@@ -263,6 +263,39 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
+			Context("when the container has an executor:cpu-weight", func() {
+				Context("when it's a valid integer", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:cpu-weight": "99",
+							},
+						}, nil)
+					})
+
+					It("has it as its cpu weight", func() {
+						Ω(executorContainer.CPUWeight).Should(Equal(uint(99)))
+					})
+				})
+
+				Context("when it's a bogus value", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:cpu-weight": "some-bogus-integer",
+							},
+						}, nil)
+					})
+
+					It("returns a MalformedPropertyError", func() {
+						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+							Property: "executor:cpu-weight",
+							Value:    "some-bogus-integer",
+						}))
+					})
+				})
+			})
+
 			Context("when the container has an executor:actions property", func() {
 				Context("and the actions are valid", func() {
 					actions := []models.ExecutorAction{
@@ -467,18 +500,6 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
-				})
-			})
-
-			Context("when the container has cpu limits", func() {
-				BeforeEach(func() {
-					gardenContainer.CurrentCPULimitsReturns(garden.CPULimits{
-						LimitInShares: 512,
-					}, nil)
-				})
-
-				It("returns them", func() {
-					Ω(executorContainer.CPUWeight).Should(Equal(uint(50)))
 				})
 			})
 

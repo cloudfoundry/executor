@@ -36,6 +36,7 @@ const (
 	ContainerResultProperty      = executorPropertyPrefix + "result"
 	ContainerMemoryMBProperty    = executorPropertyPrefix + "memory-mb"
 	ContainerDiskMBProperty      = executorPropertyPrefix + "disk-mb"
+	ContainerCPUWeightProperty   = executorPropertyPrefix + "cpu-weight"
 )
 
 func NewExchanger(
@@ -62,16 +63,8 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		return executor.Container{}, err
 	}
 
-	cpuLimits, err := gardenContainer.CurrentCPULimits()
-	if err != nil {
-		return executor.Container{}, err
-	}
-
 	executorContainer := executor.Container{
-		Guid: gardenContainer.Handle(),
-
-		CPUWeight: uint(100.0 * float64(cpuLimits.LimitInShares) / float64(exchanger.containerMaxCPUShares)),
-
+		Guid:  gardenContainer.Handle(),
 		Tags:  executor.Tags{},
 		Ports: make([]executor.PortMapping, len(info.MappedPorts)),
 	}
@@ -155,6 +148,16 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 
 			executorContainer.DiskMB = diskMB
+		case ContainerCPUWeightProperty:
+			cpuWeight, err := strconv.Atoi(value)
+			if err != nil {
+				return executor.Container{}, MalformedPropertyError{
+					Property: key,
+					Value:    value,
+				}
+			}
+
+			executorContainer.CPUWeight = uint(cpuWeight)
 		default:
 			if strings.HasPrefix(key, tagPropertyPrefix) {
 				executorContainer.Tags[key[len(tagPropertyPrefix):]] = value
@@ -209,6 +212,7 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		ContainerResultProperty:      string(resultJson),
 		ContainerMemoryMBProperty:    fmt.Sprintf("%d", executorContainer.MemoryMB),
 		ContainerDiskMBProperty:      fmt.Sprintf("%d", executorContainer.DiskMB),
+		ContainerCPUWeightProperty:   fmt.Sprintf("%d", executorContainer.CPUWeight),
 	}
 
 	for name, value := range executorContainer.Tags {
