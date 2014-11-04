@@ -5,11 +5,11 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
+	"github.com/cloudfoundry-incubator/executor/depot/store/fakes"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -26,6 +26,7 @@ var _ = Describe("GardenContainerStore", func() {
 	var (
 		gardenStore      *store.GardenStore
 		fakeGardenClient *gfakes.FakeClient
+		tracker          *fakes.FakeInitializedTracker
 
 		ownerName           = "some-owner-name"
 		inodeLimit   uint64 = 2000000
@@ -36,6 +37,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 	BeforeEach(func() {
 		fakeTimer = fake_timer.NewFakeTimer(time.Now())
+		tracker = new(fakes.FakeInitializedTracker)
 
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
@@ -47,6 +49,7 @@ var _ = Describe("GardenContainerStore", func() {
 			nil,
 			nil,
 			fakeTimer,
+			tracker,
 		)
 	})
 
@@ -554,6 +557,11 @@ var _ = Describe("GardenContainerStore", func() {
 				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
 			})
 
+			It("records its resource consumption", func() {
+				Ω(tracker.InitializeCallCount()).Should(Equal(1))
+				Ω(tracker.InitializeArgsForCall(0)).Should(Equal(createdContainer))
+			})
+
 			Describe("the exchanged Garden container", func() {
 				It("creates it with the state as 'created'", func() {
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
@@ -750,13 +758,6 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(containerSpec.Properties["executor:memory-mb"]).To(Equal("64"))
 				})
 
-				It("records its resource consumption", func() {
-					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   64,
-						Containers: 1,
-					}))
-				})
-
 				Context("and limiting memory fails", func() {
 					disaster := errors.New("oh no!")
 
@@ -790,13 +791,6 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(fakeGardenContainer.LimitDiskArgsForCall(0)).Should(Equal(garden.DiskLimits{
 						ByteHard:  64 * 1024 * 1024,
 						InodeHard: inodeLimit,
-					}))
-				})
-
-				It("records its resource consumption", func() {
-					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-						DiskMB:     64,
-						Containers: 1,
 					}))
 				})
 
@@ -928,134 +922,23 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("Destroy", func() {
-		Context("when the container exists", func() {
-			var fakeContainer *gfakes.FakeContainer
+		var destroyErr error
 
-			BeforeEach(func() {
-				fakeContainer = new(gfakes.FakeContainer)
-				fakeGardenClient.LookupReturns(fakeContainer, nil)
-			})
-
-			It("deletes the container", func() {
-				gardenStore.Destroy("the-guid")
-				Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
-			})
-
-			It("doesn't return an error", func() {
-				err := gardenStore.Destroy("the-guid")
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			Context("when getting the container info fails", func() {
-				BeforeEach(func() {
-					fakeContainer.InfoReturns(garden.ContainerInfo{}, errors.New("no-can-do"))
-				})
-
-				It("returns an error", func() {
-					err := gardenStore.Destroy("the-guid")
-					Ω(err).Should(HaveOccurred())
-				})
-			})
+		JustBeforeEach(func() {
+			destroyErr = gardenStore.Destroy("the-guid")
 		})
 
-		Context("when the container does not exist", func() {
-			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, errors.New("aint-no-container"))
-			})
-
-			It("returns a container-not-found error", func() {
-				err := gardenStore.Destroy("the-guid")
-				Ω(err).Should(Equal(store.ErrContainerNotFound))
-			})
-		})
-	})
-
-	Describe("ConsumedResources", func() {
-		setupContainerWithLimits := func(memory, disk uint64) {
-			fakeGardenClient.LookupReturns(&gfakes.FakeContainer{
-				InfoStub: func() (garden.ContainerInfo, error) {
-					return garden.ContainerInfo{
-						Properties: garden.Properties{
-							"executor:memory-mb": strconv.Itoa(int(memory)),
-							"executor:disk-mb":   strconv.Itoa(int(disk)),
-						},
-					}, nil
-				},
-			}, nil)
-		}
-
-		BeforeEach(func() {
-			fakeGardenClient.CreateReturns(new(gfakes.FakeContainer), nil)
+		It("doesn't return an error", func() {
+			Ω(destroyErr).ShouldNot(HaveOccurred())
 		})
 
-		Context("when no containers are created", func() {
-			It("is zero", func() {
-				Ω(gardenStore.ConsumedResources()).Should(BeZero())
-			})
+		It("releases its resource consumption", func() {
+			Ω(tracker.DeinitializeCallCount()).Should(Equal(1))
+			Ω(tracker.DeinitializeArgsForCall(0)).Should(Equal("the-guid"))
 		})
 
-		Context("when a container is created", func() {
-			BeforeEach(func() {
-				_, err := gardenStore.Create(executor.Container{
-					Guid:     "first-container",
-					MemoryMB: 64,
-					DiskMB:   64,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("reports its memory and disk usage", func() {
-				Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-					MemoryMB:   64,
-					DiskMB:     64,
-					Containers: 1,
-				}))
-			})
-
-			Context("and a second container is created", func() {
-				BeforeEach(func() {
-					_, err := gardenStore.Create(executor.Container{
-						Guid:     "second-container",
-						MemoryMB: 32,
-						DiskMB:   32,
-					})
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-
-				It("reports the usage of both containers", func() {
-					Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   96,
-						DiskMB:     96,
-						Containers: 2,
-					}))
-				})
-
-				Context("and then destroyed", func() {
-					BeforeEach(func() {
-						setupContainerWithLimits(32, 32)
-						gardenStore.Destroy("second-container")
-					})
-
-					It("goes back to the consumed resources of the first container", func() {
-						Ω(gardenStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-							MemoryMB:   64,
-							DiskMB:     64,
-							Containers: 1,
-						}))
-					})
-				})
-			})
-
-			Context("and then destroyed", func() {
-				BeforeEach(func() {
-					setupContainerWithLimits(64, 64)
-					gardenStore.Destroy("first-container")
-				})
-
-				It("goes back to zero consumed resources", func() {
-					Ω(gardenStore.ConsumedResources()).Should(BeZero())
-				})
-			})
+		It("destroys the container", func() {
+			Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
 		})
 	})
 
@@ -1190,6 +1073,10 @@ var _ = Describe("GardenContainerStore", func() {
 
 			fakeGardenClient.ContainersReturns([]garden.Container{
 				&gfakes.FakeContainer{
+					HandleStub: func() string {
+						return "some-handle"
+					},
+
 					InfoStub: func() (garden.ContainerInfo, error) {
 						return garden.ContainerInfo{
 							Properties: garden.Properties{
@@ -1214,24 +1101,23 @@ var _ = Describe("GardenContainerStore", func() {
 
 			process := ifrit.Invoke(runner)
 
-			Ω(gardenStore.ConsumedResources().MemoryMB).Should(Equal(7))
+			Ω(tracker.SyncInitializedCallCount()).Should(Equal(0))
 
 			fakeTimer.Elapse(2 * time.Second)
 
-			By("syncing the memory usage")
-			Eventually(func() int { return gardenStore.ConsumedResources().MemoryMB }).Should(Equal(2))
-
-			_, err = gardenStore.Create(executor.Container{
-				MemoryMB: 20,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(gardenStore.ConsumedResources().MemoryMB).Should(Equal(22))
+			By("syncing the current set of containers")
+			Eventually(tracker.SyncInitializedCallCount).Should(Equal(1))
+			Ω(tracker.SyncInitializedArgsForCall(0)).Should(Equal([]executor.Container{
+				{Guid: "some-handle", MemoryMB: 2, Ports: []executor.PortMapping{}, Tags: executor.Tags{}},
+			}))
 
 			fakeTimer.Elapse(2 * time.Second)
 
-			By("syncing the memory usage. again.")
-			Eventually(func() int { return gardenStore.ConsumedResources().MemoryMB }).Should(Equal(2))
+			By("syncing the current set of containers. again.")
+			Eventually(tracker.SyncInitializedCallCount).Should(Equal(2))
+			Ω(tracker.SyncInitializedArgsForCall(1)).Should(Equal([]executor.Container{
+				{Guid: "some-handle", MemoryMB: 2, Ports: []executor.PortMapping{}, Tags: executor.Tags{}},
+			}))
 
 			process.Signal(os.Interrupt)
 			Eventually(process.Wait()).Should(Receive())

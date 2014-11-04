@@ -35,13 +35,16 @@ type GardenStore struct {
 	transformer *transformer.Transformer
 	timer       timer.Timer
 
-	containers   uint64
-	usedMemoryMB uint64
-	usedDiskMB   uint64
-	resourcesL   sync.RWMutex
+	tracker InitializedTracker
 
 	runningProcesses map[string]ifrit.Process
 	processesL       sync.Mutex
+}
+
+type InitializedTracker interface {
+	Initialize(executor.Container)
+	Deinitialize(string)
+	SyncInitialized([]executor.Container)
 }
 
 func NewGardenStore(
@@ -53,6 +56,7 @@ func NewGardenStore(
 	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
 	timer timer.Timer,
+	tracker InitializedTracker,
 ) *GardenStore {
 	return &GardenStore{
 		logger: logger,
@@ -64,6 +68,8 @@ func NewGardenStore(
 		logEmitter:            logEmitter,
 		transformer:           transformer,
 		timer:                 timer,
+
+		tracker: tracker,
 
 		runningProcesses: map[string]ifrit.Process{},
 	}
@@ -118,11 +124,7 @@ func (store *GardenStore) Create(container executor.Container) (executor.Contain
 		return executor.Container{}, err
 	}
 
-	store.resourcesL.Lock()
-	store.usedMemoryMB += uint64(container.MemoryMB)
-	store.usedDiskMB += uint64(container.DiskMB)
-	store.containers++
-	store.resourcesL.Unlock()
+	store.tracker.Initialize(container)
 
 	return container, nil
 }
@@ -138,40 +140,14 @@ func (store *GardenStore) Destroy(guid string) error {
 		<-process.Wait()
 	}
 
-	container, err := store.gardenClient.Lookup(guid)
-	if err != nil {
-		return ErrContainerNotFound
-	}
-
-	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
-	executorContainer, err := exchanger.Garden2Executor(container)
+	err := store.gardenClient.Destroy(guid)
 	if err != nil {
 		return err
 	}
 
-	err = store.gardenClient.Destroy(guid)
-	if err != nil {
-		return err
-	}
-
-	store.resourcesL.Lock()
-	store.usedMemoryMB -= uint64(executorContainer.MemoryMB)
-	store.usedDiskMB -= uint64(executorContainer.DiskMB)
-	store.containers--
-	store.resourcesL.Unlock()
+	store.tracker.Deinitialize(guid)
 
 	return nil
-}
-
-func (store *GardenStore) ConsumedResources() executor.ExecutorResources {
-	store.resourcesL.RLock()
-	defer store.resourcesL.RUnlock()
-
-	return executor.ExecutorResources{
-		MemoryMB:   int(store.usedMemoryMB),
-		DiskMB:     int(store.usedDiskMB),
-		Containers: int(store.containers),
-	}
 }
 
 func (store *GardenStore) Complete(guid string, result executor.ContainerRunResult) error {
@@ -295,19 +271,7 @@ func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 					continue
 				}
 
-				store.resourcesL.Lock()
-
-				store.usedDiskMB = 0
-				store.usedMemoryMB = 0
-				store.containers = 0
-
-				for _, container := range containers {
-					store.usedMemoryMB += uint64(container.MemoryMB)
-					store.usedDiskMB += uint64(container.DiskMB)
-					store.containers++
-				}
-
-				store.resourcesL.Unlock()
+				store.tracker.SyncInitialized(containers)
 			}
 		}
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
+	"github.com/cloudfoundry-incubator/executor/depot/store/fakes"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 
 	. "github.com/onsi/ginkgo"
@@ -15,6 +16,7 @@ var _ = Describe("AllocationStore", func() {
 	var (
 		timeProvider   *faketimeprovider.FakeTimeProvider
 		expirationTime time.Duration
+		tracker        *fakes.FakeAllocationTracker
 
 		allocationStore *store.AllocationStore
 	)
@@ -22,8 +24,13 @@ var _ = Describe("AllocationStore", func() {
 	BeforeEach(func() {
 		timeProvider = faketimeprovider.New(time.Now())
 		expirationTime = 1 * time.Second
+		tracker = new(fakes.FakeAllocationTracker)
 
-		allocationStore = store.NewAllocationStore(timeProvider, expirationTime)
+		allocationStore = store.NewAllocationStore(
+			timeProvider,
+			expirationTime,
+			tracker,
+		)
 	})
 
 	Describe("creating a container", func() {
@@ -38,6 +45,11 @@ var _ = Describe("AllocationStore", func() {
 
 		It("tracks the container's allocated at time", func() {
 			Ω(createdContainer.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+		})
+
+		It("tracks the container's resource usage", func() {
+			Ω(tracker.AllocateCallCount()).Should(Equal(1))
+			Ω(tracker.AllocateArgsForCall(0)).Should(Equal(createdContainer))
 		})
 
 		Context("when the expiration time passes", func() {
@@ -268,46 +280,32 @@ var _ = Describe("AllocationStore", func() {
 		})
 	})
 
-	Describe("ConsumedResources", func() {
-		It("returns the total resources consumed by all containers", func() {
-			_, err := allocationStore.Create(executor.Container{
-				Guid:     "guid-1",
-				State:    executor.StateReserved,
-				MemoryMB: 10,
-				DiskMB:   100,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			_, err = allocationStore.Create(executor.Container{
-				Guid:     "guid-2",
-				State:    executor.StateReserved,
-				MemoryMB: 5,
-				DiskMB:   50,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(allocationStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-				MemoryMB:   15,
-				DiskMB:     150,
-				Containers: 2,
-			}))
-
-			err = allocationStore.Destroy("guid-1")
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(allocationStore.ConsumedResources()).Should(Equal(executor.ExecutorResources{
-				MemoryMB:   5,
-				DiskMB:     50,
-				Containers: 1,
-			}))
-		})
-	})
-
 	Describe("Destroy", func() {
+		var destroyErr error
+
+		JustBeforeEach(func() {
+			destroyErr = allocationStore.Destroy("the-guid")
+		})
+
+		Context("when the container exists", func() {
+			BeforeEach(func() {
+				_, err := allocationStore.Create(executor.Container{Guid: "the-guid"})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("succeeds", func() {
+				Ω(destroyErr).ShouldNot(HaveOccurred())
+			})
+
+			It("releases the container's resource usage", func() {
+				Ω(tracker.DeallocateCallCount()).Should(Equal(1))
+				Ω(tracker.DeallocateArgsForCall(0)).Should(Equal("the-guid"))
+			})
+		})
+
 		Context("when the container does not exist", func() {
 			It("returns a container-not-found error", func() {
-				err := allocationStore.Destroy("bogus-guid")
-				Ω(err).Should(Equal(store.ErrContainerNotFound))
+				Ω(destroyErr).Should(Equal(store.ErrContainerNotFound))
 			})
 		})
 	})

@@ -11,10 +11,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	garden "github.com/cloudfoundry-incubator/garden/api"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -22,10 +21,12 @@ import (
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
+	"github.com/cloudfoundry-incubator/executor/depot/tallyman"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/http/server"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
+	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -166,6 +167,7 @@ func main() {
 	destroyContainers(gardenClient, containersFetcher, logger)
 
 	workDir := setupWorkDir(logger, *tempDir)
+
 	transformer := initializeTransformer(
 		logger,
 		*cachePath,
@@ -174,28 +176,27 @@ func main() {
 		*maxConcurrentDownloads,
 	)
 
-	os.Setenv("LOGGREGATOR_SHARED_SECRET", *loggregatorSecret)
-	logEmitter, err := logemitter.NewEmitter(*loggregatorServer, "", "", false)
-	if err != nil {
-		panic(err)
-	}
+	tallyman := tallyman.NewTallyman()
 
-	gardenStore := store.NewGardenStore(
-		logger.Session("garden-store"),
+	gardenStore, allocationStore := initializeStores(
+		logger,
 		gardenClient,
+		transformer,
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
-		logEmitter,
-		transformer,
-		timer.NewTimer(),
+		*loggregatorServer,
+		*loggregatorSecret,
+		*registryPruningInterval,
+		tallyman,
 	)
 
-	depotClient := initializeDepotClient(
-		logger,
+	depotClient := depot.NewClient(
 		fetchCapacity(logger, gardenClient),
-		*registryPruningInterval,
 		gardenStore,
+		allocationStore,
+		tallyman,
+		logger,
 	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
@@ -216,7 +217,7 @@ func main() {
 
 	logger.Info("started")
 
-	err = <-monitor.Wait()
+	err := <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -243,23 +244,43 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 	return workDir
 }
 
-func initializeDepotClient(
+func initializeStores(
 	logger lager.Logger,
-	totalCapacity executor.ExecutorResources,
+	gardenClient garden.Client,
+	transformer *transformer.Transformer,
+	containerOwnerName string,
+	containerMaxCpuShares uint64,
+	containerInodeLimit uint64,
+	loggregatorServer string,
+	loggregatorSecret string,
 	registryPruningInterval time.Duration,
-	gardenStore depot.GardenStore,
-) executor.Client {
+	tallyman *tallyman.Tallyman,
+) (*store.GardenStore, *store.AllocationStore) {
+	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
+	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
+	if err != nil {
+		panic(err)
+	}
+
+	gardenStore := store.NewGardenStore(
+		logger.Session("garden-store"),
+		gardenClient,
+		containerOwnerName,
+		containerMaxCpuShares,
+		containerInodeLimit,
+		logEmitter,
+		transformer,
+		timer.NewTimer(),
+		tallyman,
+	)
+
 	allocationStore := store.NewAllocationStore(
 		timeprovider.NewTimeProvider(),
 		registryPruningInterval,
+		tallyman,
 	)
 
-	return depot.NewClient(
-		totalCapacity,
-		gardenStore,
-		allocationStore,
-		logger,
-	)
+	return gardenStore, allocationStore
 }
 
 func initializeTransformer(
@@ -307,7 +328,7 @@ func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client) execut
 	return capacity
 }
 
-func destroyContainers(gardenClient garden_api.Client, containersFetcher *executorContainers, logger lager.Logger) {
+func destroyContainers(gardenClient garden.Client, containersFetcher *executorContainers, logger lager.Logger) {
 	containers, err := containersFetcher.Containers()
 	if err != nil {
 		logger.Fatal("failed-to-get-containers", err)

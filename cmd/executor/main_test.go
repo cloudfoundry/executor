@@ -671,13 +671,6 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Describe("deleting a bogus guid", func() {
-			It("returns ErrContainerNotFound", func() {
-				err := executorClient.DeleteContainer("bogus")
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-			})
-		})
-
 		Context("when the container has been allocated", func() {
 			var guid string
 

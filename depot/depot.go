@@ -12,12 +12,17 @@ import (
 
 const ContainerInitializationFailedMessage = "failed to initialize container: %s"
 
+type AllocationsTracker interface {
+	Allocations() []executor.Container
+}
+
 type client struct {
 	logger lager.Logger
 
 	totalCapacity   executor.ExecutorResources
 	gardenStore     GardenStore
 	allocationStore AllocationStore
+	tracker         AllocationsTracker
 
 	resourcesL sync.Mutex
 }
@@ -28,8 +33,6 @@ type Store interface {
 	List(executor.Tags) ([]executor.Container, error)
 	Destroy(guid string) error
 	Complete(guid string, result executor.ContainerRunResult) error
-
-	ConsumedResources() executor.ExecutorResources
 }
 
 type AllocationStore interface {
@@ -51,12 +54,14 @@ func NewClient(
 	totalCapacity executor.ExecutorResources,
 	gardenStore GardenStore,
 	allocationStore AllocationStore,
+	tracker AllocationsTracker,
 	logger lager.Logger,
 ) executor.Client {
 	return &client{
 		totalCapacity:   totalCapacity,
 		gardenStore:     gardenStore,
 		allocationStore: allocationStore,
+		tracker:         tracker,
 		logger:          logger.Session("depot-client"),
 	}
 }
@@ -224,13 +229,10 @@ func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 		return executor.ExecutorResources{}, err
 	}
 
-	for _, resources := range []executor.ExecutorResources{
-		c.allocationStore.ConsumedResources(),
-		c.gardenStore.ConsumedResources(),
-	} {
-		remainingResources.Containers -= resources.Containers
-		remainingResources.DiskMB -= resources.DiskMB
-		remainingResources.MemoryMB -= resources.MemoryMB
+	for _, banana := range c.tracker.Allocations() {
+		remainingResources.Containers--
+		remainingResources.DiskMB -= banana.DiskMB
+		remainingResources.MemoryMB -= banana.MemoryMB
 	}
 
 	return remainingResources, nil
