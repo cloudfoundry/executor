@@ -105,7 +105,11 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 	for _, gardenContainer := range gardenContainers {
 		container, err := exchanger.Garden2Executor(gardenContainer)
 		if err != nil {
-			return nil, err
+			store.logger.Error("failed-to-get-container-info", err, lager.Data{
+				"handle": gardenContainer.Handle(),
+			})
+
+			continue
 		}
 
 		result = append(result, container)

@@ -853,8 +853,12 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("List", func() {
-		It("returns an executor container for each container in garden", func() {
-			fakeContainer1 := &gfakes.FakeContainer{
+		var (
+			fakeContainer1, fakeContainer2 *gfakes.FakeContainer
+		)
+
+		BeforeEach(func() {
+			fakeContainer1 = &gfakes.FakeContainer{
 				HandleStub: func() string {
 					return "fake-handle-1"
 				},
@@ -868,7 +872,7 @@ var _ = Describe("GardenContainerStore", func() {
 				},
 			}
 
-			fakeContainer2 := &gfakes.FakeContainer{
+			fakeContainer2 = &gfakes.FakeContainer{
 				HandleStub: func() string {
 					return "fake-handle-2"
 				},
@@ -886,7 +890,9 @@ var _ = Describe("GardenContainerStore", func() {
 				fakeContainer1,
 				fakeContainer2,
 			}, nil)
+		})
 
+		It("returns an executor container for each container in garden", func() {
 			containers, err := gardenStore.List(nil)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -917,6 +923,22 @@ var _ = Describe("GardenContainerStore", func() {
 					"tag:a": "b",
 					"tag:c": "d",
 				}))
+			})
+		})
+
+		Context("when a container's info fails to fetch", func() {
+			BeforeEach(func() {
+				fakeContainer1.InfoReturns(garden.ContainerInfo{}, errors.New("oh no!"))
+			})
+
+			It("excludes it from the result set", func() {
+				containers, err := gardenStore.List(nil)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(containers).Should(HaveLen(1))
+				Ω(containers[0].Guid).Should(Equal("fake-handle-2"))
+
+				Ω(containers[0].State).Should(Equal(executor.StateCreated))
 			})
 		})
 	})
