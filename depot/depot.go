@@ -206,7 +206,12 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 		return nil, err
 	}
 
-	for _, gardenContainer := range append(gardenContainers, allocatedContainers...) {
+	//the ordering here is important.  we want allocated containers to override
+	//garden containers as a member of latter is uninitialized until its
+	//counterpart in the former is gone and we don't want to publicize containers that
+	//are in a half-baked state
+	combinedContainers := append(gardenContainers, allocatedContainers...)
+	for _, gardenContainer := range combinedContainers {
 		containersByHandle[gardenContainer.Guid] = gardenContainer
 	}
 
