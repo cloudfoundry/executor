@@ -156,7 +156,7 @@ func (store *AllocationStore) reapExpiredAllocations(expirationTime time.Duratio
 
 		expiredAllocations := []string{}
 
-		store.lock.RLock()
+		store.lock.Lock()
 
 		for guid, container := range store.containers {
 			if container.State != executor.StateReserved {
@@ -171,13 +171,10 @@ func (store *AllocationStore) reapExpiredAllocations(expirationTime time.Duratio
 			}
 		}
 
-		store.lock.RUnlock()
-
 		if len(expiredAllocations) == 0 {
+			store.lock.Unlock()
 			continue
 		}
-
-		store.lock.Lock()
 
 		for _, guid := range expiredAllocations {
 			store.tracker.Deallocate(guid)
