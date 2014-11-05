@@ -65,3 +65,21 @@ type ExecutorResources struct {
 }
 
 type Tags map[string]string
+
+type Event interface {
+	EventType() EventType
+}
+
+type EventType string
+
+const (
+	EventTypeInvalid EventType = ""
+
+	EventTypeRunResult EventType = "run_result"
+)
+
+type RunResultEvent struct {
+	RunResult ContainerRunResult
+}
+
+func (RunResultEvent) EventType() EventType { return EventTypeRunResult }

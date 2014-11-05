@@ -457,6 +457,7 @@ var _ = Describe("Executor", func() {
 							return container.State
 						}, 5*time.Second, 1*time.Second).Should(Equal(executor.StateCompleted))
 
+						Ω(container.RunResult.Guid).Should(Equal(guid))
 						Ω(container.RunResult.Failed).Should(BeTrue())
 						Ω(container.RunResult.FailureReason).Should(Equal(reason))
 					})
@@ -516,6 +517,25 @@ var _ = Describe("Executor", func() {
 
 						Ω(container.RunResult.Failed).Should(BeFalse())
 						Ω(container.RunResult.FailureReason).Should(BeEmpty())
+					})
+
+					Context("when listening for events", func() {
+						var events <-chan executor.Event
+
+						BeforeEach(func() {
+							var err error
+
+							events, err = executorClient.SubscribeToEvents()
+							Ω(err).ShouldNot(HaveOccurred())
+						})
+
+						It("emits a run result event on completion", func() {
+							Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
+								RunResult: executor.ContainerRunResult{
+									Guid: guid,
+								},
+							})))
+						})
 					})
 
 					Context("when created with memory, disk, cpu, and inode limits", func() {
@@ -647,6 +667,27 @@ var _ = Describe("Executor", func() {
 							Ω(container.RunResult.Failed).Should(BeTrue())
 							Ω(container.RunResult.FailureReason).Should(Equal("Exited with status 1"))
 						})
+
+						Context("when listening for events", func() {
+							var events <-chan executor.Event
+
+							BeforeEach(func() {
+								var err error
+
+								events, err = executorClient.SubscribeToEvents()
+								Ω(err).ShouldNot(HaveOccurred())
+							})
+
+							It("emits a run result event", func() {
+								Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
+									RunResult: executor.ContainerRunResult{
+										Guid:          guid,
+										Failed:        true,
+										FailureReason: "Exited with status 1",
+									},
+								})))
+							})
+						})
 					})
 				})
 
@@ -657,6 +698,27 @@ var _ = Describe("Executor", func() {
 
 					It("does not immediately return an error", func() {
 						Ω(runErr).ShouldNot(HaveOccurred())
+					})
+
+					Context("when listening for events", func() {
+						var events <-chan executor.Event
+
+						BeforeEach(func() {
+							var err error
+
+							events, err = executorClient.SubscribeToEvents()
+							Ω(err).ShouldNot(HaveOccurred())
+						})
+
+						It("emits a run result event", func() {
+							Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
+								RunResult: executor.ContainerRunResult{
+									Guid:          guid,
+									Failed:        true,
+									FailureReason: "failed to initialize container: oh no!",
+								},
+							})))
+						})
 					})
 
 					itCompletesWithFailure("failed to initialize container: oh no!")

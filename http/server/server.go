@@ -7,6 +7,7 @@ import (
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
 	"github.com/cloudfoundry-incubator/executor/http/server/allocate_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/delete_container"
+	"github.com/cloudfoundry-incubator/executor/http/server/events"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_files"
 	"github.com/cloudfoundry-incubator/executor/http/server/list_containers"
@@ -61,14 +62,16 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 
 func (s *Server) NewHandlers() rata.Handlers {
 	return rata.Handlers{
-		ehttp.AllocateContainer:     allocate_container.New(s.DepotClient, s.Logger),
-		ehttp.GetContainer:          get_container.New(s.DepotClient, s.Logger),
-		ehttp.ListContainers:        list_containers.New(s.DepotClient, s.Logger),
-		ehttp.DeleteContainer:       delete_container.New(s.DepotClient, s.Logger),
-		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
-		ehttp.GetTotalResources:     total_resources.New(s.DepotClient, s.Logger),
 		ehttp.Ping:                  ping.New(s.DepotClient),
-		ehttp.RunContainer:          run_actions.New(s.DepotClient, s.Logger),
-		ehttp.GetFiles:              get_files.New(s.DepotClient, s.Logger),
+		ehttp.Events:                events.New(s.DepotClient),
+		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
+
+		ehttp.AllocateContainer: allocate_container.New(s.DepotClient, s.Logger),
+		ehttp.GetContainer:      get_container.New(s.DepotClient, s.Logger),
+		ehttp.ListContainers:    list_containers.New(s.DepotClient, s.Logger),
+		ehttp.DeleteContainer:   delete_container.New(s.DepotClient, s.Logger),
+		ehttp.GetTotalResources: total_resources.New(s.DepotClient, s.Logger),
+		ehttp.RunContainer:      run_actions.New(s.DepotClient, s.Logger),
+		ehttp.GetFiles:          get_files.New(s.DepotClient, s.Logger),
 	}
 }

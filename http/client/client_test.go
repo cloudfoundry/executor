@@ -1,11 +1,13 @@
 package client_test
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/cloudfoundry-incubator/executor"
 	httpclient "github.com/cloudfoundry-incubator/executor/http/client"
 	"github.com/onsi/gomega/ghttp"
+	"github.com/vito/go-sse/sse"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -373,6 +375,81 @@ var _ = Describe("Client", func() {
 				err := client.Ping()
 				Ω(err).Should(HaveOccurred())
 				Ω(err.Error()).Should(ContainSubstring("Whoa"))
+			})
+		})
+	})
+
+	Describe("SubscribeToEvents", func() {
+		Context("when the server returns events", func() {
+			runResult1 := executor.ContainerRunResult{
+				Guid:          "the-guid",
+				Failed:        true,
+				FailureReason: "i hit my head",
+			}
+
+			runResult2 := executor.ContainerRunResult{
+				Guid:   "a-guid",
+				Failed: false,
+			}
+
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/events"),
+					func(w http.ResponseWriter, r *http.Request) {
+						flusher := w.(http.Flusher)
+
+						w.Header().Add("Content-Type", "text/event-stream; charset=utf-8")
+						w.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
+						w.Header().Add("Connection", "keep-alive")
+
+						w.WriteHeader(http.StatusOK)
+
+						flusher.Flush()
+
+						firstEventPayload, err := json.Marshal(executor.RunResultEvent{runResult1})
+						Ω(err).ShouldNot(HaveOccurred())
+
+						secondEventPayload, err := json.Marshal(executor.RunResultEvent{runResult2})
+						Ω(err).ShouldNot(HaveOccurred())
+
+						result := sse.Event{
+							ID:   "0",
+							Name: "run_result",
+							Data: firstEventPayload,
+						}
+
+						err = result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						flusher.Flush()
+
+						result = sse.Event{
+							ID:   "1",
+							Name: "run_result",
+							Data: secondEventPayload,
+						}
+
+						err = result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						flusher.Flush()
+					},
+				))
+			})
+
+			It("returns them over the channel", func() {
+				eventChannel, err := client.SubscribeToEvents()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(eventChannel).Should(Receive(Equal(executor.RunResultEvent{
+					RunResult: runResult1,
+				})))
+
+				Eventually(eventChannel).Should(Receive(Equal(executor.RunResultEvent{
+					RunResult: runResult2,
+				})))
+
+				Eventually(eventChannel).Should(BeClosed())
 			})
 		})
 	})

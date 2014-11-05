@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	garden "github.com/cloudfoundry-incubator/garden/api"
@@ -196,6 +197,7 @@ func main() {
 		gardenStore,
 		allocationStore,
 		tallyman,
+		event.NewHub(),
 		logger,
 	)
 

@@ -17,6 +17,7 @@ import (
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
 	. "github.com/cloudfoundry-incubator/executor/http/server"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/vito/go-sse/sse"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
@@ -631,6 +632,100 @@ var _ = Describe("Api", func() {
 
 			It("should 502", func() {
 				response := DoRequest(generator.CreateRequest(ehttp.Ping, nil, nil))
+				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
+			})
+		})
+	})
+
+	Describe("GET /events", func() {
+		Context("when the depot emits events", func() {
+			event1 := executor.RunResultEvent{
+				executor.ContainerRunResult{
+					Guid:          "a",
+					Failed:        true,
+					FailureReason: "cuz",
+				},
+			}
+
+			event2 := executor.RunResultEvent{
+				executor.ContainerRunResult{
+					Guid:   "b",
+					Failed: false,
+				},
+			}
+
+			event3 := executor.RunResultEvent{
+				executor.ContainerRunResult{
+					Guid:          "c",
+					Failed:        true,
+					FailureReason: "cause we needed another to fail",
+				},
+			}
+
+			BeforeEach(func() {
+				events := make(chan executor.Event, 3)
+				events <- event1
+				events <- event2
+				events <- event3
+				close(events)
+
+				depotClient.SubscribeToEventsReturns(events, nil)
+			})
+
+			It("response with the appropriate SSE headers", func() {
+				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
+				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+
+				Ω(response.Header.Get("Content-Type")).Should(Equal("text/event-stream; charset=utf-8"))
+				Ω(response.Header.Get("Cache-Control")).Should(Equal("no-cache, no-store, must-revalidate"))
+				Ω(response.Header.Get("Connection")).Should(Equal("keep-alive"))
+			})
+
+			It("emits the events via SSE and ends when the channel closes", func() {
+				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
+				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+
+				reader := sse.NewReader(response.Body)
+
+				payload1, err := json.Marshal(event1)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				payload2, err := json.Marshal(event2)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				payload3, err := json.Marshal(event3)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(reader.Next()).Should(Equal(sse.Event{
+					ID:   "0",
+					Name: "run_result",
+					Data: payload1,
+				}))
+
+				Ω(reader.Next()).Should(Equal(sse.Event{
+					ID:   "1",
+					Name: "run_result",
+					Data: payload2,
+				}))
+
+				Ω(reader.Next()).Should(Equal(sse.Event{
+					ID:   "2",
+					Name: "run_result",
+					Data: payload3,
+				}))
+
+				_, err = reader.Next()
+				Ω(err).Should(Equal(io.EOF))
+			})
+		})
+
+		Context("when the depot returns an error", func() {
+			BeforeEach(func() {
+				depotClient.SubscribeToEventsReturns(nil, errors.New("oh no!"))
+			})
+
+			It("should 502", func() {
+				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
 			})
 		})

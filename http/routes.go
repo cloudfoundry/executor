@@ -4,6 +4,7 @@ import "github.com/tedsuo/rata"
 
 const (
 	Ping                  = "Ping"
+	Events                = "Events"
 	GetContainer          = "GetContainer"
 	AllocateContainer     = "AllocateContainer"
 	RunContainer          = "RunContainer"
@@ -16,6 +17,7 @@ const (
 
 var Routes = rata.Routes{
 	{Path: "/ping", Method: "GET", Name: Ping},
+	{Path: "/events", Method: "GET", Name: Events},
 	{Path: "/containers", Method: "GET", Name: ListContainers},
 	{Path: "/containers", Method: "POST", Name: AllocateContainer},
 	{Path: "/containers/:guid", Method: "GET", Name: GetContainer},

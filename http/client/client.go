@@ -10,6 +10,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
+	"github.com/vito/go-sse/sse"
 
 	"github.com/tedsuo/rata"
 )
@@ -150,6 +151,44 @@ func (c client) Ping() error {
 	response.Body.Close()
 
 	return nil
+}
+
+func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
+	events := make(chan executor.Event)
+
+	source := &sse.EventSource{
+		Client: c.httpClient,
+		CreateRequest: func() *http.Request {
+			request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)
+			if err != nil {
+				panic(err) // totally shouldn't happen
+			}
+
+			return request
+		},
+	}
+
+	go func() {
+		for {
+			sseEvent, err := source.Next()
+			if err != nil {
+				close(events)
+				break
+			}
+
+			switch executor.EventType(sseEvent.Name) {
+			case executor.EventTypeRunResult:
+				runResultEvent := executor.RunResultEvent{}
+
+				err := json.Unmarshal(sseEvent.Data, &runResultEvent)
+				if err == nil {
+					events <- runResultEvent
+				}
+			}
+		}
+	}()
+
+	return events, nil
 }
 
 func (c client) buildContainerFromApiResponse(response *http.Response) (executor.Container, error) {

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/pivotal-golang/lager"
 )
@@ -23,6 +24,7 @@ type client struct {
 	gardenStore     GardenStore
 	allocationStore AllocationStore
 	tracker         AllocationsTracker
+	eventHub        event.Hub
 
 	resourcesL sync.Mutex
 }
@@ -55,6 +57,7 @@ func NewClient(
 	gardenStore GardenStore,
 	allocationStore AllocationStore,
 	tracker AllocationsTracker,
+	eventHub event.Hub,
 	logger lager.Logger,
 ) executor.Client {
 	return &client{
@@ -62,6 +65,7 @@ func NewClient(
 		gardenStore:     gardenStore,
 		allocationStore: allocationStore,
 		tracker:         tracker,
+		eventHub:        eventHub,
 		logger:          logger.Session("depot-client"),
 	}
 }
@@ -137,10 +141,15 @@ func (c *client) RunContainer(guid string) error {
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 
-			c.allocationStore.Complete(guid, executor.ContainerRunResult{
+			runResult := executor.ContainerRunResult{
+				Guid:          guid,
 				Failed:        true,
 				FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
-			})
+			}
+
+			c.eventHub.EmitEvent(executor.RunResultEvent{runResult})
+
+			c.allocationStore.Complete(guid, runResult)
 
 			return
 		}
@@ -163,6 +172,8 @@ func (c *client) RunContainer(guid string) error {
 		}
 
 		err = c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
+			c.eventHub.EmitEvent(executor.RunResultEvent{result})
+
 			err := c.gardenStore.Complete(container.Guid, result)
 			if err != nil {
 				// not a lot we can do here
@@ -254,6 +265,10 @@ func (c *client) TotalResources() (executor.ExecutorResources, error) {
 
 func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	return c.gardenStore.GetFiles(guid, sourcePath)
+}
+
+func (c *client) SubscribeToEvents() (<-chan executor.Event, error) {
+	return c.eventHub.Subscribe(), nil
 }
 
 func (c *client) hasSpace(container executor.Container) bool {

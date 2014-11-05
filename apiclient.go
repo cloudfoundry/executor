@@ -12,4 +12,5 @@ type Client interface {
 	RemainingResources() (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)
+	SubscribeToEvents() (<-chan Event, error)
 }

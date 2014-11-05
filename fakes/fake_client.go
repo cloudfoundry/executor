@@ -82,6 +82,13 @@ type FakeClient struct {
 		result1 io.ReadCloser
 		result2 error
 	}
+	SubscribeToEventsStub        func() (<-chan executor.Event, error)
+	subscribeToEventsMutex       sync.RWMutex
+	subscribeToEventsArgsForCall []struct{}
+	subscribeToEventsReturns struct {
+		result1 <-chan executor.Event
+		result2 error
+	}
 }
 
 func (fake *FakeClient) Ping() error {
@@ -351,6 +358,31 @@ func (fake *FakeClient) GetFilesReturns(result1 io.ReadCloser, result2 error) {
 	fake.GetFilesStub = nil
 	fake.getFilesReturns = struct {
 		result1 io.ReadCloser
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) SubscribeToEvents() (<-chan executor.Event, error) {
+	fake.subscribeToEventsMutex.Lock()
+	fake.subscribeToEventsArgsForCall = append(fake.subscribeToEventsArgsForCall, struct{}{})
+	fake.subscribeToEventsMutex.Unlock()
+	if fake.SubscribeToEventsStub != nil {
+		return fake.SubscribeToEventsStub()
+	} else {
+		return fake.subscribeToEventsReturns.result1, fake.subscribeToEventsReturns.result2
+	}
+}
+
+func (fake *FakeClient) SubscribeToEventsCallCount() int {
+	fake.subscribeToEventsMutex.RLock()
+	defer fake.subscribeToEventsMutex.RUnlock()
+	return len(fake.subscribeToEventsArgsForCall)
+}
+
+func (fake *FakeClient) SubscribeToEventsReturns(result1 <-chan executor.Event, result2 error) {
+	fake.SubscribeToEventsStub = nil
+	fake.subscribeToEventsReturns = struct {
+		result1 <-chan executor.Event
 		result2 error
 	}{result1, result2}
 }
