@@ -145,8 +145,13 @@ var _ = Describe("Executor", func() {
 				propertyMu.RLock()
 				defer propertyMu.RUnlock()
 
+				copied := make(garden.Properties)
+				for k, v := range properties {
+					copied[k] = v
+				}
+
 				return garden.ContainerInfo{
-					Properties: properties,
+					Properties: copied,
 				}, nil
 			},
 		}
