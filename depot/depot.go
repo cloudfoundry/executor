@@ -170,12 +170,22 @@ func (c *client) RunContainer(guid string) error {
 			err := c.gardenStore.Complete(container.Guid, result)
 			if err != nil {
 				// not a lot we can do here
-				logger.Error("failed-to-save-result", err)
+				logger.Error("failed-to-save-result-upon-completion", err)
 			}
 		})
 
-		if err != nil {
-			logger.Error("failed-to-run-container", err)
+		if err == store.ErrContainerNotFound {
+			logger.Debug("container-deleted-just-before-running")
+			return
+		} else if err != nil {
+			err := c.gardenStore.Complete(container.Guid, executor.ContainerRunResult{
+				Failed:        true,
+				FailureReason: fmt.Sprintf("failed to start running: %s", err.Error()),
+			})
+			if err != nil {
+				// not a lot we can do here
+				logger.Error("failed-to-save-result-when-handling-run-error", err)
+			}
 			return
 		}
 	}()
