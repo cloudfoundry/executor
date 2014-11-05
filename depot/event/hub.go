@@ -6,7 +6,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 )
 
-const SUBSCRIBER_BUFFER = 12
+const SUBSCRIBER_BUFFER = 1024
 
 type Hub interface {
 	EmitEvent(executor.Event)
