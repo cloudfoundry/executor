@@ -11,6 +11,7 @@ const SUBSCRIBER_BUFFER = 12
 type Hub interface {
 	EmitEvent(executor.Event)
 	Subscribe() <-chan executor.Event
+	Close()
 }
 
 func NewHub() Hub {

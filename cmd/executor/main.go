@@ -205,6 +205,7 @@ func main() {
 	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
+		{"hub-drainer", drainHub(hub)},
 		{"api-server", &server.Server{
 			Address:     *listenAddr,
 			Logger:      logger,
@@ -229,6 +230,15 @@ func main() {
 	}
 
 	logger.Info("exited")
+}
+
+func drainHub(hub event.Hub) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		close(ready)
+		<-signals
+		hub.Close()
+		return nil
+	})
 }
 
 func setupWorkDir(logger lager.Logger, tempDir string) string {

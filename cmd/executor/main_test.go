@@ -90,8 +90,7 @@ var _ = Describe("Executor", func() {
 
 	AfterEach(func() {
 		if process != nil {
-			process.Signal(os.Kill)
-			Eventually(process.Wait()).Should(Receive())
+			ginkgomon.Kill(process)
 		}
 
 		gardenServer.Stop()
@@ -535,6 +534,15 @@ var _ = Describe("Executor", func() {
 							completeEvent := event.(executor.ContainerCompleteEvent)
 							Ω(completeEvent.Container.State).Should(Equal(executor.StateCompleted))
 							Ω(completeEvent.Container.RunResult.Failed).Should(BeFalse())
+						})
+
+						Describe("shutting down", func() {
+							It("exits and ends the event stream", func() {
+								process.Signal(os.Interrupt)
+
+								Eventually(events).Should(BeClosed())
+								Eventually(process.Wait(), 10).Should(Receive(BeNil()))
+							})
 						})
 					})
 
