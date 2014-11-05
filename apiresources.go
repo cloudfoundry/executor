@@ -52,8 +52,6 @@ type PortMapping struct {
 }
 
 type ContainerRunResult struct {
-	Guid string `json:"guid"`
-
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
 }
@@ -75,11 +73,11 @@ type EventType string
 const (
 	EventTypeInvalid EventType = ""
 
-	EventTypeRunResult EventType = "run_result"
+	EventTypeContainerComplete EventType = "container_complete"
 )
 
-type RunResultEvent struct {
-	RunResult ContainerRunResult
+type ContainerCompleteEvent struct {
+	Container Container
 }
 
-func (RunResultEvent) EventType() EventType { return EventTypeRunResult }
+func (ContainerCompleteEvent) EventType() EventType { return EventTypeContainerComplete }

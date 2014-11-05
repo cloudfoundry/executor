@@ -381,15 +381,21 @@ var _ = Describe("Client", func() {
 
 	Describe("SubscribeToEvents", func() {
 		Context("when the server returns events", func() {
-			runResult1 := executor.ContainerRunResult{
-				Guid:          "the-guid",
-				Failed:        true,
-				FailureReason: "i hit my head",
+			container1 := executor.Container{
+				Guid: "the-guid",
+
+				RunResult: executor.ContainerRunResult{
+					Failed:        true,
+					FailureReason: "i hit my head",
+				},
 			}
 
-			runResult2 := executor.ContainerRunResult{
-				Guid:   "a-guid",
-				Failed: false,
+			container2 := executor.Container{
+				Guid: "a-guid",
+
+				RunResult: executor.ContainerRunResult{
+					Failed: false,
+				},
 			}
 
 			BeforeEach(func() {
@@ -406,15 +412,15 @@ var _ = Describe("Client", func() {
 
 						flusher.Flush()
 
-						firstEventPayload, err := json.Marshal(executor.RunResultEvent{runResult1})
+						firstEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{container1})
 						Ω(err).ShouldNot(HaveOccurred())
 
-						secondEventPayload, err := json.Marshal(executor.RunResultEvent{runResult2})
+						secondEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{container2})
 						Ω(err).ShouldNot(HaveOccurred())
 
 						result := sse.Event{
 							ID:   "0",
-							Name: "run_result",
+							Name: string(executor.EventTypeContainerComplete),
 							Data: firstEventPayload,
 						}
 
@@ -425,7 +431,7 @@ var _ = Describe("Client", func() {
 
 						result = sse.Event{
 							ID:   "1",
-							Name: "run_result",
+							Name: string(executor.EventTypeContainerComplete),
 							Data: secondEventPayload,
 						}
 
@@ -441,12 +447,12 @@ var _ = Describe("Client", func() {
 				eventChannel, err := client.SubscribeToEvents()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Eventually(eventChannel).Should(Receive(Equal(executor.RunResultEvent{
-					RunResult: runResult1,
+				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerCompleteEvent{
+					Container: container1,
 				})))
 
-				Eventually(eventChannel).Should(Receive(Equal(executor.RunResultEvent{
-					RunResult: runResult2,
+				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerCompleteEvent{
+					Container: container2,
 				})))
 
 				Eventually(eventChannel).Should(BeClosed())

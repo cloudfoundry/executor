@@ -141,15 +141,10 @@ func (c *client) RunContainer(guid string) error {
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 
-			runResult := executor.ContainerRunResult{
-				Guid:          guid,
+			c.allocationStore.Complete(guid, executor.ContainerRunResult{
 				Failed:        true,
 				FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
-			}
-
-			c.eventHub.EmitEvent(executor.RunResultEvent{runResult})
-
-			c.allocationStore.Complete(guid, runResult)
+			})
 
 			return
 		}
@@ -172,8 +167,6 @@ func (c *client) RunContainer(guid string) error {
 		}
 
 		err = c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
-			c.eventHub.EmitEvent(executor.RunResultEvent{result})
-
 			err := c.gardenStore.Complete(container.Guid, result)
 			if err != nil {
 				// not a lot we can do here

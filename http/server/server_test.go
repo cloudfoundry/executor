@@ -639,26 +639,24 @@ var _ = Describe("Api", func() {
 
 	Describe("GET /events", func() {
 		Context("when the depot emits events", func() {
-			event1 := executor.RunResultEvent{
-				executor.ContainerRunResult{
-					Guid:          "a",
-					Failed:        true,
-					FailureReason: "cuz",
+			event1 := executor.ContainerCompleteEvent{
+				executor.Container{
+					Guid: "the-guid",
+
+					RunResult: executor.ContainerRunResult{
+						Failed:        true,
+						FailureReason: "i hit my head",
+					},
 				},
 			}
 
-			event2 := executor.RunResultEvent{
-				executor.ContainerRunResult{
-					Guid:   "b",
-					Failed: false,
-				},
-			}
+			event2 := executor.ContainerCompleteEvent{
+				executor.Container{
+					Guid: "a-guid",
 
-			event3 := executor.RunResultEvent{
-				executor.ContainerRunResult{
-					Guid:          "c",
-					Failed:        true,
-					FailureReason: "cause we needed another to fail",
+					RunResult: executor.ContainerRunResult{
+						Failed: false,
+					},
 				},
 			}
 
@@ -666,7 +664,6 @@ var _ = Describe("Api", func() {
 				events := make(chan executor.Event, 3)
 				events <- event1
 				events <- event2
-				events <- event3
 				close(events)
 
 				depotClient.SubscribeToEventsReturns(events, nil)
@@ -693,25 +690,16 @@ var _ = Describe("Api", func() {
 				payload2, err := json.Marshal(event2)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				payload3, err := json.Marshal(event3)
-				Ω(err).ShouldNot(HaveOccurred())
-
 				Ω(reader.Next()).Should(Equal(sse.Event{
 					ID:   "0",
-					Name: "run_result",
+					Name: string(executor.EventTypeContainerComplete),
 					Data: payload1,
 				}))
 
 				Ω(reader.Next()).Should(Equal(sse.Event{
 					ID:   "1",
-					Name: "run_result",
+					Name: string(executor.EventTypeContainerComplete),
 					Data: payload2,
-				}))
-
-				Ω(reader.Next()).Should(Equal(sse.Event{
-					ID:   "2",
-					Name: "run_result",
-					Data: payload3,
 				}))
 
 				_, err = reader.Next()

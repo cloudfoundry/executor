@@ -457,7 +457,6 @@ var _ = Describe("Executor", func() {
 							return container.State
 						}, 5*time.Second, 1*time.Second).Should(Equal(executor.StateCompleted))
 
-						Ω(container.RunResult.Guid).Should(Equal(guid))
 						Ω(container.RunResult.Failed).Should(BeTrue())
 						Ω(container.RunResult.FailureReason).Should(Equal(reason))
 					})
@@ -529,12 +528,13 @@ var _ = Describe("Executor", func() {
 							Ω(err).ShouldNot(HaveOccurred())
 						})
 
-						It("emits a run result event on completion", func() {
-							Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
-								RunResult: executor.ContainerRunResult{
-									Guid: guid,
-								},
-							})))
+						It("emits a completed container event on completion", func() {
+							var event executor.Event
+							Eventually(events, 5).Should(Receive(&event))
+
+							completeEvent := event.(executor.ContainerCompleteEvent)
+							Ω(completeEvent.Container.State).Should(Equal(executor.StateCompleted))
+							Ω(completeEvent.Container.RunResult.Failed).Should(BeFalse())
 						})
 					})
 
@@ -678,14 +678,14 @@ var _ = Describe("Executor", func() {
 								Ω(err).ShouldNot(HaveOccurred())
 							})
 
-							It("emits a run result event", func() {
-								Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
-									RunResult: executor.ContainerRunResult{
-										Guid:          guid,
-										Failed:        true,
-										FailureReason: "Exited with status 1",
-									},
-								})))
+							It("emits a completed container event", func() {
+								var event executor.Event
+								Eventually(events, 5).Should(Receive(&event))
+
+								completeEvent := event.(executor.ContainerCompleteEvent)
+								Ω(completeEvent.Container.State).Should(Equal(executor.StateCompleted))
+								Ω(completeEvent.Container.RunResult.Failed).Should(BeTrue())
+								Ω(completeEvent.Container.RunResult.FailureReason).Should(Equal("Exited with status 1"))
 							})
 						})
 					})
@@ -710,14 +710,14 @@ var _ = Describe("Executor", func() {
 							Ω(err).ShouldNot(HaveOccurred())
 						})
 
-						It("emits a run result event", func() {
-							Eventually(events, 5).Should(Receive(Equal(executor.RunResultEvent{
-								RunResult: executor.ContainerRunResult{
-									Guid:          guid,
-									Failed:        true,
-									FailureReason: "failed to initialize container: oh no!",
-								},
-							})))
+						It("emits a completed container event", func() {
+							var event executor.Event
+							Eventually(events, 5).Should(Receive(&event))
+
+							completeEvent := event.(executor.ContainerCompleteEvent)
+							Ω(completeEvent.Container.State).Should(Equal(executor.StateCompleted))
+							Ω(completeEvent.Container.RunResult.Failed).Should(BeTrue())
+							Ω(completeEvent.Container.RunResult.FailureReason).Should(Equal("failed to initialize container: oh no!"))
 						})
 					})
 

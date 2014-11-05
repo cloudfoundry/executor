@@ -179,6 +179,8 @@ func main() {
 
 	tallyman := tallyman.NewTallyman()
 
+	hub := event.NewHub()
+
 	gardenStore, allocationStore := initializeStores(
 		logger,
 		gardenClient,
@@ -190,6 +192,7 @@ func main() {
 		*loggregatorSecret,
 		*registryPruningInterval,
 		tallyman,
+		hub,
 	)
 
 	depotClient := depot.NewClient(
@@ -197,7 +200,7 @@ func main() {
 		gardenStore,
 		allocationStore,
 		tallyman,
-		event.NewHub(),
+		hub,
 		logger,
 	)
 
@@ -257,6 +260,7 @@ func initializeStores(
 	loggregatorSecret string,
 	registryPruningInterval time.Duration,
 	tallyman *tallyman.Tallyman,
+	emitter store.EventEmitter,
 ) (*store.GardenStore, *store.AllocationStore) {
 	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
 	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
@@ -274,12 +278,14 @@ func initializeStores(
 		transformer,
 		timer.NewTimer(),
 		tallyman,
+		emitter,
 	)
 
 	allocationStore := store.NewAllocationStore(
 		timeprovider.NewTimeProvider(),
 		registryPruningInterval,
 		tallyman,
+		emitter,
 	)
 
 	return gardenStore, allocationStore

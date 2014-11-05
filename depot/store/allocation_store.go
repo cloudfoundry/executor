@@ -15,6 +15,8 @@ type AllocationStore struct {
 	lock       sync.RWMutex
 
 	tracker AllocationTracker
+
+	emitter EventEmitter
 }
 
 type AllocationTracker interface {
@@ -26,12 +28,16 @@ func NewAllocationStore(
 	timeProvider timeprovider.TimeProvider,
 	expirationTime time.Duration,
 	tracker AllocationTracker,
+	emitter EventEmitter,
 ) *AllocationStore {
 	store := &AllocationStore{
 		timeProvider: timeProvider,
 
 		containers: make(map[string]executor.Container),
-		tracker:    tracker,
+
+		tracker: tracker,
+
+		emitter: emitter,
 	}
 
 	go store.reapExpiredAllocations(expirationTime)
@@ -114,6 +120,11 @@ func (store *AllocationStore) Complete(guid string, result executor.ContainerRun
 	if container, found := store.containers[guid]; found {
 		container.State = executor.StateCompleted
 		container.RunResult = result
+
+		store.emitter.EmitEvent(executor.ContainerCompleteEvent{
+			Container: container,
+		})
+
 		store.containers[guid] = container
 	} else {
 		return ErrContainerNotFound

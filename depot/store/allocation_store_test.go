@@ -17,6 +17,7 @@ var _ = Describe("AllocationStore", func() {
 		timeProvider   *faketimeprovider.FakeTimeProvider
 		expirationTime time.Duration
 		tracker        *fakes.FakeAllocationTracker
+		emitter        *fakes.FakeEventEmitter
 
 		allocationStore *store.AllocationStore
 	)
@@ -25,11 +26,13 @@ var _ = Describe("AllocationStore", func() {
 		timeProvider = faketimeprovider.New(time.Now())
 		expirationTime = 1 * time.Second
 		tracker = new(fakes.FakeAllocationTracker)
+		emitter = new(fakes.FakeEventEmitter)
 
 		allocationStore = store.NewAllocationStore(
 			timeProvider,
 			expirationTime,
 			tracker,
+			emitter,
 		)
 	})
 
@@ -194,10 +197,21 @@ var _ = Describe("AllocationStore", func() {
 			It("updates the container's state and result", func() {
 				container, err := allocationStore.Lookup("the-guid")
 				Ω(err).ShouldNot(HaveOccurred())
+
 				Ω(container.State).Should(Equal(executor.StateCompleted))
 				Ω(container.RunResult).Should(Equal(executor.ContainerRunResult{
 					Failed:        true,
 					FailureReason: "because this is a test",
+				}))
+			})
+
+			It("emits a container complete event", func() {
+				container, err := allocationStore.Lookup("the-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(emitter.EmitEventCallCount()).Should(Equal(1))
+				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.ContainerCompleteEvent{
+					Container: container,
 				}))
 			})
 		})

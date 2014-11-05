@@ -177,12 +177,12 @@ func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 			}
 
 			switch executor.EventType(sseEvent.Name) {
-			case executor.EventTypeRunResult:
-				runResultEvent := executor.RunResultEvent{}
+			case executor.EventTypeContainerComplete:
+				event := executor.ContainerCompleteEvent{}
 
-				err := json.Unmarshal(sseEvent.Data, &runResultEvent)
+				err := json.Unmarshal(sseEvent.Data, &event)
 				if err == nil {
-					events <- runResultEvent
+					events <- event
 				}
 			}
 		}

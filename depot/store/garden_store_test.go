@@ -27,6 +27,7 @@ var _ = Describe("GardenContainerStore", func() {
 		gardenStore      *store.GardenStore
 		fakeGardenClient *gfakes.FakeClient
 		tracker          *fakes.FakeInitializedTracker
+		emitter          *fakes.FakeEventEmitter
 
 		ownerName           = "some-owner-name"
 		inodeLimit   uint64 = 2000000
@@ -38,6 +39,7 @@ var _ = Describe("GardenContainerStore", func() {
 	BeforeEach(func() {
 		fakeTimer = fake_timer.NewFakeTimer(time.Now())
 		tracker = new(fakes.FakeInitializedTracker)
+		emitter = new(fakes.FakeEventEmitter)
 
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
@@ -50,6 +52,7 @@ var _ = Describe("GardenContainerStore", func() {
 			nil,
 			fakeTimer,
 			tracker,
+			emitter,
 		)
 	})
 
@@ -467,7 +470,6 @@ var _ = Describe("GardenContainerStore", func() {
 			Context("when the Garden container has a run result", func() {
 				Context("and the run result is valid", func() {
 					runResult := executor.ContainerRunResult{
-						Guid:          "my-guid",
 						Failed:        true,
 						FailureReason: "because",
 					}
@@ -674,7 +676,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 				Context("when the Executor container has a run result", func() {
 					runResult := executor.ContainerRunResult{
-						Guid:          "my-guid",
 						Failed:        true,
 						FailureReason: "because",
 					}
@@ -969,7 +970,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 		JustBeforeEach(func() {
 			completeErr = gardenStore.Complete("the-guid", executor.ContainerRunResult{
-				Guid:          "the-guid",
 				Failed:        true,
 				FailureReason: "these things just happen",
 			})
@@ -991,7 +991,6 @@ var _ = Describe("GardenContainerStore", func() {
 				key, value := fakeContainer.SetPropertyArgsForCall(0)
 				Ω(key).Should(Equal(store.ContainerResultProperty))
 				Ω(value).Should(MatchJSON(`{
-					"guid": "the-guid",
 					"failed":true,
 					"failure_reason": "these things just happen"
 				}`))
@@ -1001,6 +1000,16 @@ var _ = Describe("GardenContainerStore", func() {
 				key, value := fakeContainer.SetPropertyArgsForCall(1)
 				Ω(key).Should(Equal(store.ContainerStateProperty))
 				Ω(value).Should(Equal(string(executor.StateCompleted)))
+			})
+
+			It("emits a container complete event", func() {
+				container, err := gardenStore.Lookup("the-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(emitter.EmitEventCallCount()).Should(Equal(1))
+				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.ContainerCompleteEvent{
+					Container: container,
+				}))
 			})
 
 			Context("when setting the property fails", func() {

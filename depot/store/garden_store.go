@@ -37,6 +37,8 @@ type GardenStore struct {
 
 	tracker InitializedTracker
 
+	eventEmitter EventEmitter
+
 	runningProcesses map[string]ifrit.Process
 	processesL       sync.Mutex
 }
@@ -57,6 +59,7 @@ func NewGardenStore(
 	transformer *transformer.Transformer,
 	timer timer.Timer,
 	tracker InitializedTracker,
+	eventEmitter EventEmitter,
 ) *GardenStore {
 	return &GardenStore{
 		logger: logger,
@@ -70,6 +73,8 @@ func NewGardenStore(
 		timer:                 timer,
 
 		tracker: tracker,
+
+		eventEmitter: eventEmitter,
 
 		runningProcesses: map[string]ifrit.Process{},
 	}
@@ -175,6 +180,17 @@ func (store *GardenStore) Complete(guid string, result executor.ContainerRunResu
 		return err
 	}
 
+	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
+
+	executorContainer, err := exchanger.Garden2Executor(gardenContainer)
+	if err != nil {
+		return err
+	}
+
+	store.eventEmitter.EmitEvent(executor.ContainerCompleteEvent{
+		Container: executorContainer,
+	})
+
 	return nil
 }
 
@@ -232,9 +248,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 				seq.Cancel()
 
 			case seqErr := <-seqComplete:
-				result := executor.ContainerRunResult{
-					Guid: container.Guid,
-				}
+				result := executor.ContainerRunResult{}
 
 				if seqErr == nil {
 					result.Failed = false
