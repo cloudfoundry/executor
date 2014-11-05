@@ -77,7 +77,7 @@ const (
 )
 
 type ContainerCompleteEvent struct {
-	Container Container
+	Container Container `json:"container"`
 }
 
 func (ContainerCompleteEvent) EventType() EventType { return EventTypeContainerComplete }
