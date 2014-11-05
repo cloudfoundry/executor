@@ -243,10 +243,10 @@ func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 		return executor.ExecutorResources{}, err
 	}
 
-	for _, banana := range c.tracker.Allocations() {
+	for _, allocation := range c.tracker.Allocations() {
 		remainingResources.Containers--
-		remainingResources.DiskMB -= banana.DiskMB
-		remainingResources.MemoryMB -= banana.MemoryMB
+		remainingResources.DiskMB -= allocation.DiskMB
+		remainingResources.MemoryMB -= allocation.MemoryMB
 	}
 
 	return remainingResources, nil
