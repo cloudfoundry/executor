@@ -6,18 +6,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 )
 
-// type Tallyman interface {
-// 	Allocations() []executor.Container
-//
-// 	Allocate(executor.Container)
-// 	Deallocate(string) //<- does not clobber initialized
-//
-// 	Initialize(executor.Container)
-// 	Deinitialize(string)
-//
-// 	SyncInitialized([]executor.Container) //<- replaces full set of initialized containers
-// }
-
 type Tallyman struct {
 	allocated   map[string]executor.Container
 	initialized map[string]executor.Container
