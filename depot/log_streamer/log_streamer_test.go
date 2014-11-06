@@ -3,6 +3,7 @@ package log_streamer_test
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/depot/log_streamer"
@@ -32,15 +33,15 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should emit that message", func() {
-				Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
+				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
 
-				emission := loggregatorEmitter.Emissions[0]
+				emission := loggregatorEmitter.Emissions()[0]
 				Ω(emission.GetAppId()).Should(Equal(guid))
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
 				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
 				Ω(emission.GetSourceInstance()).Should(Equal("11"))
 
-				emission = loggregatorEmitter.Emissions[1]
+				emission = loggregatorEmitter.Emissions()[1]
 				Ω(emission.GetAppId()).Should(Equal(guid))
 				Ω(emission.GetSourceType()).Should(Equal(sourceName))
 				Ω(emission.GetSourceInstance()).Should(Equal("11"))
@@ -56,9 +57,9 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should do the right thing", func() {
-				Ω(loggregatorEmitter.Emissions).Should(HaveLen(7))
+				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(7))
 				for i, expectedString := range []string{"A", "B", "C", "D", "E", "F", "G"} {
-					Ω(string(loggregatorEmitter.Emissions[i].GetMessage())).Should(Equal(expectedString))
+					Ω(string(loggregatorEmitter.Emissions()[i].GetMessage())).Should(Equal(expectedString))
 				}
 			})
 		})
@@ -72,9 +73,9 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("concatenates them, until a new-line is received, and then emits that", func() {
-				Ω(loggregatorEmitter.Emissions).Should(HaveLen(1))
+				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
 
-				emission := loggregatorEmitter.Emissions[0]
+				emission := loggregatorEmitter.Emissions()[0]
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log it is made of wood - and it is longerthan it seems"))
 			})
 		})
@@ -85,12 +86,12 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should break the message up into multiple loggings", func() {
-				Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
+				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
 
-				emission := loggregatorEmitter.Emissions[0]
+				emission := loggregatorEmitter.Emissions()[0]
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
 
-				emission = loggregatorEmitter.Emissions[1]
+				emission = loggregatorEmitter.Emissions()[1]
 				Ω(string(emission.GetMessage())).Should(Equal("and this is another"))
 			})
 		})
@@ -102,12 +103,12 @@ var _ = Describe("LogStreamer", func() {
 					message = strings.Repeat("7", MAX_MESSAGE_SIZE)
 					Ω([]byte(message)).Should(HaveLen(MAX_MESSAGE_SIZE), "Ensure that the byte representation of our message is under the limit")
 
-					fmt.Fprintf(streamer.Stdout(), message)
+					fmt.Fprintf(streamer.Stdout(), message+"\n")
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions).Should(HaveLen(1))
-					emission := loggregatorEmitter.Emissions[0]
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
+					emission := loggregatorEmitter.Emissions()[0]
 					Ω(string(emission.GetMessage())).Should(Equal(message))
 				})
 			})
@@ -122,11 +123,11 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions).Should(HaveLen(4))
-					Ω(string(loggregatorEmitter.Emissions[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions[1].GetMessage())).Should(Equal(strings.Repeat("8", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions[2].GetMessage())).Should(Equal(strings.Repeat("9", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions[3].GetMessage())).Should(Equal("hello"))
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(4))
+					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
+					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal(strings.Repeat("8", MAX_MESSAGE_SIZE)))
+					Ω(string(loggregatorEmitter.Emissions()[2].GetMessage())).Should(Equal(strings.Repeat("9", MAX_MESSAGE_SIZE)))
+					Ω(string(loggregatorEmitter.Emissions()[3].GetMessage())).Should(Equal("hello"))
 				})
 			})
 
@@ -138,9 +139,9 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
-					Ω(string(loggregatorEmitter.Emissions[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE-1)))
-					Ω(string(loggregatorEmitter.Emissions[1].GetMessage())).Should(Equal("\u0623"))
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE-1)))
+					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal("\u0623"))
 				})
 			})
 
@@ -152,9 +153,9 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
-					Ω(string(loggregatorEmitter.Emissions[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions[1].GetMessage())).Should(Equal("8888"))
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
+					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal("8888"))
 				})
 			})
 		})
@@ -163,25 +164,25 @@ var _ = Describe("LogStreamer", func() {
 	Context("when told to emit stderr", func() {
 		It("should handle short messages", func() {
 			fmt.Fprintf(streamer.Stderr(), "this is a log\nand this is another\nand this one isn't done yet...")
-			Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
+			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
 
-			emission := loggregatorEmitter.Emissions[0]
+			emission := loggregatorEmitter.Emissions()[0]
 			Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
 			Ω(emission.GetSourceType()).Should(Equal(sourceName))
 			Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_ERR))
 
-			emission = loggregatorEmitter.Emissions[1]
+			emission = loggregatorEmitter.Emissions()[1]
 			Ω(string(emission.GetMessage())).Should(Equal("and this is another"))
 		})
 
 		It("should handle long messages", func() {
 			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", MAX_MESSAGE_SIZE+1)+"\n")
-			Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
+			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
 
-			emission := loggregatorEmitter.Emissions[0]
+			emission := loggregatorEmitter.Emissions()[0]
 			Ω(string(emission.GetMessage())).Should(Equal(strings.Repeat("e", MAX_MESSAGE_SIZE)))
 
-			emission = loggregatorEmitter.Emissions[1]
+			emission = loggregatorEmitter.Emissions()[1]
 			Ω(string(emission.GetMessage())).Should(Equal("e"))
 		})
 	})
@@ -191,13 +192,13 @@ var _ = Describe("LogStreamer", func() {
 			fmt.Fprintf(streamer.Stdout(), "this is a stdout")
 			fmt.Fprintf(streamer.Stderr(), "this is a stderr")
 
-			Ω(loggregatorEmitter.Emissions).Should(HaveLen(0))
+			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(0))
 
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions).Should(HaveLen(2))
-			Ω(loggregatorEmitter.Emissions[0].GetMessageType()).Should(Equal(events.LogMessage_OUT))
-			Ω(loggregatorEmitter.Emissions[1].GetMessageType()).Should(Equal(events.LogMessage_ERR))
+			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+			Ω(loggregatorEmitter.Emissions()[0].GetMessageType()).Should(Equal(events.LogMessage_OUT))
+			Ω(loggregatorEmitter.Emissions()[1].GetMessageType()).Should(Equal(events.LogMessage_ERR))
 		})
 	})
 
@@ -209,7 +210,7 @@ var _ = Describe("LogStreamer", func() {
 			streamer.Stderr().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions).Should(BeEmpty())
+			Ω(loggregatorEmitter.Emissions()).Should(BeEmpty())
 		})
 	})
 
@@ -220,13 +221,39 @@ var _ = Describe("LogStreamer", func() {
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions[0].GetSourceInstance()).Should(Equal("0"))
+			Ω(loggregatorEmitter.Emissions()[0].GetSourceInstance()).Should(Equal("0"))
+		})
+	})
+
+	Context("with multiple goroutines emitting simultaneously", func() {
+		var waitGroup *sync.WaitGroup
+
+		BeforeEach(func() {
+			waitGroup = new(sync.WaitGroup)
+
+			for i := 0; i < 2; i++ {
+				waitGroup.Add(1)
+				go func() {
+					defer waitGroup.Done()
+					fmt.Fprintln(streamer.Stdout(), "this is a log")
+				}()
+			}
+		})
+
+		AfterEach(func(done Done) {
+			defer close(done)
+			waitGroup.Wait()
+		})
+
+		It("does not trigger data races", func() {
+			Eventually(loggregatorEmitter.Emissions).Should(HaveLen(2))
 		})
 	})
 })
 
 type FakeLoggregatorEmitter struct {
-	Emissions []*events.LogMessage
+	emissions []*events.LogMessage
+	sync.Mutex
 }
 
 func NewFakeLoggregatorEmmitter() *FakeLoggregatorEmitter {
@@ -242,5 +269,15 @@ func (e *FakeLoggregatorEmitter) EmitError(appid, message string) {
 }
 
 func (e *FakeLoggregatorEmitter) EmitLogMessage(msg *events.LogMessage) {
-	e.Emissions = append(e.Emissions, msg)
+	e.Lock()
+	defer e.Unlock()
+	e.emissions = append(e.emissions, msg)
+}
+
+func (e *FakeLoggregatorEmitter) Emissions() []*events.LogMessage {
+	e.Lock()
+	defer e.Unlock()
+	emissionsCopy := make([]*events.LogMessage, len(e.emissions))
+	copy(emissionsCopy, e.emissions)
+	return emissionsCopy
 }

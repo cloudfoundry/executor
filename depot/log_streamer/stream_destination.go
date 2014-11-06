@@ -1,6 +1,7 @@
 package log_streamer
 
 import (
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -17,6 +18,7 @@ type streamDestination struct {
 	messageType events.LogMessage_MessageType
 	emitter     logemitter.Emitter
 	buffer      []byte
+	bufferLock  sync.Mutex
 }
 
 func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, em logemitter.Emitter) *streamDestination {
@@ -36,10 +38,9 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 }
 
 func (destination *streamDestination) flush() {
-	if len(destination.buffer) > 0 {
-		msg := make([]byte, len(destination.buffer))
-		copy(msg, destination.buffer)
+	msg := destination.copyAndResetBuffer()
 
+	if len(msg) > 0 {
 		destination.emitter.EmitLogMessage(&events.LogMessage{
 			AppId:          &destination.guid,
 			SourceType:     &destination.sourceName,
@@ -48,8 +49,22 @@ func (destination *streamDestination) flush() {
 			MessageType:    &destination.messageType,
 			Timestamp:      proto.Int64(time.Now().UnixNano()),
 		})
-		destination.buffer = destination.buffer[:0]
 	}
+}
+
+func (destination *streamDestination) copyAndResetBuffer() []byte {
+	destination.bufferLock.Lock()
+	defer destination.bufferLock.Unlock()
+
+	if len(destination.buffer) > 0 {
+		msg := make([]byte, len(destination.buffer))
+		copy(msg, destination.buffer)
+
+		destination.buffer = destination.buffer[:0]
+		return msg
+	}
+
+	return []byte{}
 }
 
 func (destination *streamDestination) processMessage(message string) {
@@ -67,7 +82,24 @@ func (destination *streamDestination) processMessage(message string) {
 }
 
 func (destination *streamDestination) processString(message string, terminates bool) {
-	for len(message)+len(destination.buffer) >= MAX_MESSAGE_SIZE {
+	for {
+		message = destination.appendToBuffer(message)
+		if len(message) == 0 {
+			break
+		}
+		destination.flush()
+	}
+
+	if terminates {
+		destination.flush()
+	}
+}
+
+func (destination *streamDestination) appendToBuffer(message string) string {
+	destination.bufferLock.Lock()
+	defer destination.bufferLock.Unlock()
+
+	if len(message)+len(destination.buffer) >= MAX_MESSAGE_SIZE {
 		remainingSpaceInBuffer := MAX_MESSAGE_SIZE - len(destination.buffer)
 		destination.buffer = append(destination.buffer, []byte(message[0:remainingSpaceInBuffer])...)
 
@@ -79,12 +111,9 @@ func (destination *streamDestination) processString(message string, terminates b
 			message = message[remainingSpaceInBuffer:]
 		}
 
-		destination.flush()
+		return message
 	}
 
 	destination.buffer = append(destination.buffer, []byte(message)...)
-
-	if terminates {
-		destination.flush()
-	}
+	return ""
 }
