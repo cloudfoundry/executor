@@ -219,7 +219,6 @@ func main() {
 	)
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
-		{"hub-drainer", drainHub(hub)},
 		{"api-server", &server.Server{
 			Address:     *listenAddr,
 			Logger:      logger,
@@ -231,9 +230,10 @@ func main() {
 			Logger:         logger.Session("metrics-reporter"),
 		}},
 		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval)},
+		{"hub-drainer", drainHub(hub)},
 	})
 
-	monitor := ifrit.Envoke(sigmon.New(group))
+	monitor := ifrit.Invoke(sigmon.New(group))
 
 	logger.Info("started")
 
