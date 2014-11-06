@@ -26,7 +26,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/http/server"
-	_ "github.com/cloudfoundry/dropsonde/autowire"
+	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
@@ -143,10 +143,24 @@ var gardenSyncInterval = flag.Duration(
 	"interval on which to poll Garden's containers to ensure usage is in sync",
 )
 
+var dropsondeOrigin = flag.String(
+	"dropsondeOrigin",
+	"executor",
+	"Origin identifier for dropsonde-emitted metrics.",
+)
+
+var dropsondeDestination = flag.String(
+	"dropsondeDestination",
+	"localhost:3457",
+	"Destination for dropsonde-emitted metrics.",
+)
+
 func main() {
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
+
+	initializeDropsonde(logger)
 
 	if *containerMaxCpuShares == 0 {
 		logger.Error("max-cpu-shares-invalid", nil)
@@ -257,6 +271,13 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 	}
 
 	return workDir
+}
+
+func initializeDropsonde(logger lager.Logger) {
+	err := dropsonde.Initialize(*dropsondeOrigin, *dropsondeDestination)
+	if err != nil {
+		logger.Error("failed to initialize dropsonde: %v", err)
+	}
 }
 
 func initializeStores(

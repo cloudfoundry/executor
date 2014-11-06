@@ -7,8 +7,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	. "github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/fakes"
-	"github.com/cloudfoundry/dropsonde/autowire/metrics"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
