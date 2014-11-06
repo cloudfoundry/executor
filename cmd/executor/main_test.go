@@ -545,8 +545,8 @@ var _ = Describe("Executor", func() {
 							It("exits and ends the event stream", func() {
 								process.Signal(os.Interrupt)
 
-								Eventually(events).Should(BeClosed())
-								Eventually(process.Wait(), 10).Should(Receive(BeNil()))
+								Eventually(events, 5).Should(BeClosed())
+								Eventually(process.Wait(), 5).Should(Receive(BeNil()))
 							})
 						})
 					})
