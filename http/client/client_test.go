@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	httpclient "github.com/cloudfoundry-incubator/executor/http/client"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/onsi/gomega/ghttp"
 	"github.com/vito/go-sse/sse"
 
@@ -17,6 +18,12 @@ var _ = Describe("Client", func() {
 	var fakeExecutor *ghttp.Server
 	var client executor.Client
 	var containerGuid string
+
+	action := models.ExecutorAction{
+		models.RunAction{
+			Path: "ls",
+		},
+	}
 
 	BeforeEach(func() {
 		containerGuid = "container-guid"
@@ -33,6 +40,7 @@ var _ = Describe("Client", func() {
 
 			validRequest = executor.Container{
 				Guid:      containerGuid,
+				Action:    action,
 				MemoryMB:  64,
 				DiskMB:    1024,
 				CPUWeight: 5,
@@ -45,6 +53,7 @@ var _ = Describe("Client", func() {
 
 			validResponse = executor.Container{
 				Guid:     "guid-123",
+				Action:   action,
 				MemoryMB: 64,
 				DiskMB:   1024,
 			}
@@ -244,8 +253,8 @@ var _ = Describe("Client", func() {
 
 		BeforeEach(func() {
 			listResponse = []executor.Container{
-				{Guid: "a"},
-				{Guid: "b"},
+				{Guid: "a", Action: action},
+				{Guid: "b", Action: action},
 			}
 		})
 
@@ -384,6 +393,8 @@ var _ = Describe("Client", func() {
 			container1 := executor.Container{
 				Guid: "the-guid",
 
+				Action: action,
+
 				RunResult: executor.ContainerRunResult{
 					Failed:        true,
 					FailureReason: "i hit my head",
@@ -392,6 +403,8 @@ var _ = Describe("Client", func() {
 
 			container2 := executor.Container{
 				Guid: "a-guid",
+
+				Action: action,
 
 				RunResult: executor.ContainerRunResult{
 					Failed: false,

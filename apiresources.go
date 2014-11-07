@@ -12,10 +12,20 @@ const (
 	StateCompleted    State = "completed"
 )
 
+type Health string
+
+const (
+	HealthInvalid     Health = ""
+	HealthUnmonitored Health = "unmonitored"
+	HealthUp          Health = "up"
+	HealthDown        Health = "down"
+)
+
 type Container struct {
 	Guid string `json:"guid"`
 
-	State State `json:"state"`
+	State  State  `json:"state"`
+	Health Health `json:"health"`
 
 	MemoryMB  int  `json:"memory_mb"`
 	DiskMB    int  `json:"disk_mb"`
@@ -29,8 +39,11 @@ type Container struct {
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
-	Actions []models.ExecutorAction `json:"actions"`
-	Env     []EnvironmentVariable   `json:"env,omitempty"`
+	Setup   *models.ExecutorAction `json:"setup"`
+	Action  models.ExecutorAction  `json:"run"`
+	Monitor *models.ExecutorAction `json:"monitor"`
+
+	Env []EnvironmentVariable `json:"env,omitempty"`
 
 	RunResult ContainerRunResult `json:"run_result"`
 }

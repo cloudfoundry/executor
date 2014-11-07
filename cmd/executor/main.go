@@ -174,6 +174,18 @@ var skipCertVerify = flag.Bool(
 	"skip SSL certificate verification",
 )
 
+var healthyMonitoringInterval = flag.Duration(
+	"healthyMonitoringInterval",
+	30*time.Second,
+	"interval on which to check healthy containers",
+)
+
+var unhealthyMonitoringInterval = flag.Duration(
+	"unhealthyMonitoringInterval",
+	500*time.Millisecond,
+	"interval on which to check unhealthy containers",
+)
+
 func main() {
 	flag.Parse()
 
@@ -227,6 +239,8 @@ func main() {
 		*loggregatorServer,
 		*loggregatorSecret,
 		*registryPruningInterval,
+		*healthyMonitoringInterval,
+		*unhealthyMonitoringInterval,
 		tallyman,
 		hub,
 	)
@@ -312,6 +326,8 @@ func initializeStores(
 	loggregatorServer string,
 	loggregatorSecret string,
 	registryPruningInterval time.Duration,
+	healthyMonitoringInterval time.Duration,
+	unhealthyMonitoringInterval time.Duration,
 	tallyman *tallyman.Tallyman,
 	emitter store.EventEmitter,
 ) (*store.GardenStore, *store.AllocationStore) {
@@ -327,6 +343,8 @@ func initializeStores(
 		containerOwnerName,
 		containerMaxCpuShares,
 		containerInodeLimit,
+		healthyMonitoringInterval,
+		unhealthyMonitoringInterval,
 		logEmitter,
 		transformer,
 		timer.NewTimer(),

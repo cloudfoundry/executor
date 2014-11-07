@@ -28,9 +28,12 @@ const (
 
 	ContainerOwnerProperty       = executorPropertyPrefix + "owner"
 	ContainerStateProperty       = executorPropertyPrefix + "state"
+	ContainerHealthProperty      = executorPropertyPrefix + "health"
 	ContainerAllocatedAtProperty = executorPropertyPrefix + "allocated-at"
 	ContainerRootfsProperty      = executorPropertyPrefix + "rootfs"
-	ContainerActionsProperty     = executorPropertyPrefix + "actions"
+	ContainerActionProperty      = executorPropertyPrefix + "action"
+	ContainerSetupProperty       = executorPropertyPrefix + "setup"
+	ContainerMonitorProperty     = executorPropertyPrefix + "monitor"
 	ContainerEnvProperty         = executorPropertyPrefix + "env"
 	ContainerLogProperty         = executorPropertyPrefix + "log"
 	ContainerResultProperty      = executorPropertyPrefix + "result"
@@ -82,6 +85,16 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			} else {
 				return executor.Container{}, InvalidStateError{value}
 			}
+		case ContainerHealthProperty:
+			health := executor.Health(value)
+
+			if health == executor.HealthUnmonitored ||
+				health == executor.HealthUp ||
+				health == executor.HealthDown {
+				executorContainer.Health = health
+			} else {
+				return executor.Container{}, InvalidHealthError{value}
+			}
 		case ContainerAllocatedAtProperty:
 			_, err := fmt.Sscanf(value, "%d", &executorContainer.AllocatedAt)
 			if err != nil {
@@ -92,8 +105,26 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 		case ContainerRootfsProperty:
 			executorContainer.RootFSPath = value
-		case ContainerActionsProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Actions)
+		case ContainerSetupProperty:
+			err := json.Unmarshal([]byte(value), &executorContainer.Setup)
+			if err != nil {
+				return executor.Container{}, InvalidJSONError{
+					Property:     key,
+					Value:        value,
+					UnmarshalErr: err,
+				}
+			}
+		case ContainerActionProperty:
+			err := json.Unmarshal([]byte(value), &executorContainer.Action)
+			if err != nil {
+				return executor.Container{}, InvalidJSONError{
+					Property:     key,
+					Value:        value,
+					UnmarshalErr: err,
+				}
+			}
+		case ContainerMonitorProperty:
+			err := json.Unmarshal([]byte(value), &executorContainer.Monitor)
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -181,7 +212,17 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
-	actionsJson, err := json.Marshal(executorContainer.Actions)
+	setupJson, err := json.Marshal(executorContainer.Setup)
+	if err != nil {
+		return nil, err
+	}
+
+	actionJson, err := json.Marshal(executorContainer.Action)
+	if err != nil {
+		return nil, err
+	}
+
+	monitorJson, err := json.Marshal(executorContainer.Monitor)
 	if err != nil {
 		return nil, err
 	}
@@ -204,9 +245,12 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 	containerSpec.Properties = garden.Properties{
 		ContainerOwnerProperty:       exchanger.containerOwnerName,
 		ContainerStateProperty:       string(executorContainer.State),
+		ContainerHealthProperty:      string(executorContainer.Health),
 		ContainerAllocatedAtProperty: fmt.Sprintf("%d", executorContainer.AllocatedAt),
 		ContainerRootfsProperty:      executorContainer.RootFSPath,
-		ContainerActionsProperty:     string(actionsJson),
+		ContainerSetupProperty:       string(setupJson),
+		ContainerActionProperty:      string(actionJson),
+		ContainerMonitorProperty:     string(monitorJson),
 		ContainerEnvProperty:         string(envJson),
 		ContainerLogProperty:         string(logJson),
 		ContainerResultProperty:      string(resultJson),
@@ -217,6 +261,10 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 
 	for name, value := range executorContainer.Tags {
 		containerSpec.Properties[tagPropertyPrefix+name] = value
+	}
+
+	for _, env := range executorContainer.Env {
+		containerSpec.Env = append(containerSpec.Env, env.Name+"="+env.Value)
 	}
 
 	gardenContainer, err := gardenClient.Create(containerSpec)

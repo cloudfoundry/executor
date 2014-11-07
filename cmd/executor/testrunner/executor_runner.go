@@ -45,6 +45,8 @@ func New(
 			"-debugAddr", debugAddr,
 			"-gardenSyncInterval", "1s",
 			"-allowPrivileged="+strconv.FormatBool(allowPrivileged),
+			"-healthyMonitoringInterval", "1s",
+			"-unhealthyMonitoringInterval", "100ms",
 		),
 	})
 }

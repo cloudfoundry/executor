@@ -36,6 +36,12 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeTimer *fake_timer.FakeTimer
 	)
 
+	action := models.ExecutorAction{
+		models.RunAction{
+			Path: "ls",
+		},
+	}
+
 	BeforeEach(func() {
 		fakeTimer = fake_timer.NewFakeTimer(time.Now())
 		tracker = new(fakes.FakeInitializedTracker)
@@ -48,6 +54,8 @@ var _ = Describe("GardenContainerStore", func() {
 			ownerName,
 			maxCPUShares,
 			inodeLimit,
+			5*time.Second,
+			100*time.Millisecond,
 			nil,
 			nil,
 			fakeTimer,
@@ -166,6 +174,50 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("returns an InvalidStateError", func() {
 						Ω(lookupErr).Should(Equal(store.InvalidStateError{"bogus-state"}))
+					})
+				})
+			})
+
+			Context("when the container has an executor:health property", func() {
+				Context("and it's Up", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:health": string(executor.HealthUp),
+							},
+						}, nil)
+					})
+
+					It("has it as its health", func() {
+						Ω(executorContainer.Health).Should(Equal(executor.HealthUp))
+					})
+				})
+
+				Context("and it's Down", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:health": string(executor.HealthDown),
+							},
+						}, nil)
+					})
+
+					It("has it as its health", func() {
+						Ω(executorContainer.Health).Should(Equal(executor.HealthDown))
+					})
+				})
+
+				Context("when it's some other state", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:health": "bogus-state",
+							},
+						}, nil)
+					})
+
+					It("returns an InvalidStateError", func() {
+						Ω(lookupErr).Should(Equal(store.InvalidHealthError{"bogus-state"}))
 					})
 				})
 			})
@@ -302,44 +354,120 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
-			Context("when the container has an executor:actions property", func() {
-				Context("and the actions are valid", func() {
-					actions := []models.ExecutorAction{
-						{
-							models.RunAction{
-								Path: "ls",
-							},
-						},
-					}
-
+			Context("when the container has an executor:action property", func() {
+				Context("and the action is valid", func() {
 					BeforeEach(func() {
-						payload, err := json.Marshal(actions)
+						payload, err := json.Marshal(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:actions": string(payload),
+								"executor:action": string(payload),
 							},
 						}, nil)
 					})
 
 					It("has it as its action", func() {
-						Ω(executorContainer.Actions).Should(Equal(actions))
+						Ω(executorContainer.Action).Should(Equal(action))
 					})
 				})
 
-				Context("and the actions are invalid", func() {
+				Context("and the action is invalid", func() {
 					BeforeEach(func() {
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:actions": "ß",
+								"executor:action": "ß",
 							},
 						}, nil)
 					})
 
 					It("returns an InvalidJSONError", func() {
 						Ω(lookupErr).Should(HaveOccurred())
-						Ω(lookupErr.Error()).Should(ContainSubstring("executor:actions"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:action"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
+					})
+				})
+			})
+
+			Context("when the container has an executor:setup property", func() {
+				Context("and the action is valid", func() {
+					action := models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
+						},
+					}
+
+					BeforeEach(func() {
+						payload, err := json.Marshal(action)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:setup": string(payload),
+							},
+						}, nil)
+					})
+
+					It("has it as its setup", func() {
+						Ω(*executorContainer.Setup).Should(Equal(action))
+					})
+				})
+
+				Context("and the action is invalid", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:setup": "ß",
+							},
+						}, nil)
+					})
+
+					It("returns an InvalidJSONError", func() {
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:setup"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
+					})
+				})
+			})
+
+			Context("when the container has an executor:monitor property", func() {
+				Context("and the action is valid", func() {
+					action := models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
+						},
+					}
+
+					BeforeEach(func() {
+						payload, err := json.Marshal(action)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:monitor": string(payload),
+							},
+						}, nil)
+					})
+
+					It("has it as its monitor", func() {
+						Ω(*executorContainer.Monitor).Should(Equal(action))
+					})
+				})
+
+				Context("and the action is invalid", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:monitor": "ß",
+							},
+						}, nil)
+					})
+
+					It("returns an InvalidJSONError", func() {
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:monitor"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
@@ -531,9 +659,17 @@ var _ = Describe("GardenContainerStore", func() {
 			createErr        error
 		)
 
+		action := models.ExecutorAction{
+			models.RunAction{
+				Path: "ls",
+			},
+		}
+
 		BeforeEach(func() {
 			executorContainer = executor.Container{
 				Guid: "some-guid",
+
+				Action: action,
 			}
 
 			fakeGardenContainer = new(gfakes.FakeContainer)
@@ -580,6 +716,39 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(containerSpec.Handle).Should(Equal("some-guid"))
 				})
 
+				It("creates it with the executor:action property", func() {
+					payload, err := json.Marshal(action)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Properties["executor:action"]).To(MatchJSON(payload))
+				})
+
+				Context("when the Executor container has health", func() {
+					BeforeEach(func() {
+						executorContainer.Health = executor.HealthDown
+					})
+
+					It("creates it with the health as a property", func() {
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Properties["executor:health"]).Should(Equal(string(executor.HealthDown)))
+					})
+				})
+
+				Context("when the Executor container has container-wide env", func() {
+					BeforeEach(func() {
+						executorContainer.Env = []executor.EnvironmentVariable{
+							{Name: "GLOBAL1", Value: "VALUE1"},
+							{Name: "GLOBAL2", Value: "VALUE2"},
+						}
+					})
+
+					It("creates the container with the env", func() {
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Env).Should(Equal([]string{"GLOBAL1=VALUE1", "GLOBAL2=VALUE2"}))
+					})
+				})
+
 				Context("when the Executor container has a rootfs", func() {
 					BeforeEach(func() {
 						executorContainer.RootFSPath = "focker:///some-rootfs"
@@ -613,25 +782,43 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 				})
 
-				Context("when the Executor container has Actions", func() {
-					actions := []models.ExecutorAction{
-						{
-							models.RunAction{
-								Path: "ls",
-							},
+				Context("when the Executor container has a Setup", func() {
+					action := models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
 						},
 					}
 
 					BeforeEach(func() {
-						executorContainer.Actions = actions
+						executorContainer.Setup = &action
 					})
 
-					It("creates it with the executor:actions property", func() {
-						payload, err := json.Marshal(actions)
+					It("creates it with the executor:action property", func() {
+						payload, err := json.Marshal(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:actions"]).To(MatchJSON(payload))
+						Ω(containerSpec.Properties["executor:setup"]).To(MatchJSON(payload))
+					})
+				})
+
+				Context("when the Executor container has a Monitor", func() {
+					action := models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
+						},
+					}
+
+					BeforeEach(func() {
+						executorContainer.Monitor = &action
+					})
+
+					It("creates it with the executor:action property", func() {
+						payload, err := json.Marshal(action)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Properties["executor:monitor"]).To(MatchJSON(payload))
 					})
 				})
 
@@ -1122,11 +1309,13 @@ var _ = Describe("GardenContainerStore", func() {
 
 			_, err := gardenStore.Create(executor.Container{
 				MemoryMB: 2,
+				Action:   action,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
 			_, err = gardenStore.Create(executor.Container{
 				MemoryMB: 5,
+				Action:   action,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
