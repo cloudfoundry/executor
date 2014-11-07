@@ -1,0 +1,13 @@
+---
+image: docker:///cloudfoundry/warden-ci
+
+inputs:
+  # - name: executor
+  #   path: gopath/src/github.com/cloudfoundry-incubator/executor
+  #
+  # - name: garden-linux
+  #   path: gopath/src/github.com/cloudfoundry-incubator/garden-linux
+  - name: gopath
+
+run:
+  path: gopath/src/github.com/cloudfoundry-incubator/executor/scripts/test

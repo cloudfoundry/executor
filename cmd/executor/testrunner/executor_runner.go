@@ -43,6 +43,8 @@ func New(
 			"-pruneInterval", pruneInterval.String(),
 			"-debugAddr", debugAddr,
 			"-gardenSyncInterval", "1s",
+			"-healthyMonitoringInterval", "1s",
+			"-unhealthyMonitoringInterval", "100ms",
 		),
 	})
 }

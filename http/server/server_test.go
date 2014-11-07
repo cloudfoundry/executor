@@ -219,19 +219,17 @@ var _ = Describe("Api", func() {
 		var runRequestBody io.Reader
 		var runResponse *http.Response
 
-		var expectedActions []models.ExecutorAction
+		var expectedAction models.ExecutorAction
 		var expectedEnv []executor.EnvironmentVariable
 
 		BeforeEach(func() {
 			runRequestBody = nil
 			runResponse = nil
 
-			expectedActions = []models.ExecutorAction{
-				{
-					models.RunAction{
-						Path: "ls",
-						Args: []string{"-al"},
-					},
+			expectedAction = models.ExecutorAction{
+				models.RunAction{
+					Path: "ls",
+					Args: []string{"-al"},
 				},
 			}
 
@@ -245,8 +243,8 @@ var _ = Describe("Api", func() {
 				DiskMB:    512,
 				CPUWeight: 50,
 
-				Actions: expectedActions,
-				Env:     expectedEnv,
+				Action: &expectedAction,
+				Env:    expectedEnv,
 			})
 
 			allocResponse := DoRequest(generator.CreateRequest(

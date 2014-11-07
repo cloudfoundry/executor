@@ -1,22 +1,22 @@
+// +build linux
+
 package main_test
 
 import (
-	"errors"
+	"archive/tar"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/testrunner"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -28,53 +28,41 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/http/client"
 	garden "github.com/cloudfoundry-incubator/garden/api"
-	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
-	GardenServer "github.com/cloudfoundry-incubator/garden/server"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/pivotal-golang/lager/lagertest"
 )
 
-var gardenServer *GardenServer.GardenServer
 var runner *ginkgomon.Runner
 var executorClient executor.Client
 
 var _ = Describe("Executor", func() {
 	var (
-		gardenAddr string
-		debugAddr  string
-		process    ifrit.Process
-		cachePath  string
-		tmpDir     string
-		ownerName  string
+		debugAddr string
+		process   ifrit.Process
+		cachePath string
+		tmpDir    string
+		ownerName string
 
-		fakeBackend *gfakes.FakeBackend
+		gardenCapacity garden.Capacity
 	)
 
 	pruningInterval := 500 * time.Millisecond
 
 	BeforeEach(func() {
-		gardenPort := 9001 + GinkgoParallelNode()
+		var err error
+
+		gardenCapacity, err = gardenClient.Capacity()
+		Ω(err).ShouldNot(HaveOccurred())
+
 		debugAddr = fmt.Sprintf("127.0.0.1:%d", 10001+GinkgoParallelNode())
 		executorAddr := fmt.Sprintf("127.0.0.1:%d", 1700+GinkgoParallelNode())
 
 		executorClient = client.New(http.DefaultClient, "http://"+executorAddr)
 
-		gardenAddr = fmt.Sprintf("127.0.0.1:%d", gardenPort)
-
-		fakeBackend = new(gfakes.FakeBackend)
-		fakeBackend.CapacityReturns(garden.Capacity{
-			MemoryInBytes: 1024 * 1024 * 1024,
-			DiskInBytes:   1024 * 1024 * 1024,
-			MaxContainers: 1024,
-		}, nil)
-
-		gardenServer = GardenServer.New("tcp", gardenAddr, 0, fakeBackend, lagertest.NewTestLogger("garden"))
 		tmpDir = path.Join(os.TempDir(), fmt.Sprintf("executor_%d", GinkgoParallelNode()))
 		cachePath = path.Join(tmpDir, "cache")
 		ownerName = fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
 
 		runner = testrunner.New(
-			executorPath,
+			builtComponents["executor"],
 			executorAddr,
 			"tcp",
 			gardenAddr,
@@ -92,17 +80,6 @@ var _ = Describe("Executor", func() {
 		if process != nil {
 			ginkgomon.Kill(process)
 		}
-
-		gardenServer.Stop()
-
-		Eventually(func() error {
-			conn, err := net.Dial("tcp", gardenAddr)
-			if err == nil {
-				conn.Close()
-			}
-
-			return err
-		}).Should(HaveOccurred())
 	})
 
 	generateGuid := func() string {
@@ -121,57 +98,22 @@ var _ = Describe("Executor", func() {
 		return request.Guid
 	}
 
-	setupFakeContainer := func(guid string) *gfakes.FakeContainer {
-		properties := make(garden.Properties)
-		propertyMu := new(sync.RWMutex)
-
-		fakeContainer := &gfakes.FakeContainer{
-			SetPropertyStub: func(key, value string) error {
-				propertyMu.Lock()
-				defer propertyMu.Unlock()
-
-				properties[key] = value
-				return nil
-			},
-
-			GetPropertyStub: func(key string) (string, error) {
-				propertyMu.RLock()
-				defer propertyMu.RUnlock()
-
-				return properties[key], nil
-			},
-
-			InfoStub: func() (garden.ContainerInfo, error) {
-				propertyMu.RLock()
-				defer propertyMu.RUnlock()
-
-				copied := make(garden.Properties)
-				for k, v := range properties {
-					copied[k] = v
-				}
-
-				return garden.ContainerInfo{
-					Properties: copied,
-				}, nil
-			},
-		}
-
-		fakeContainer.HandleReturns(guid)
-
-		fakeBackend.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
-			properties = spec.Properties
-			return fakeContainer, nil
-		}
-
-		fakeBackend.LookupReturns(fakeContainer, nil)
-		fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
-
-		return fakeContainer
-	}
-
 	getContainer := func(guid string) executor.Container {
 		container, err := executorClient.GetContainer(guid)
 		Ω(err).ShouldNot(HaveOccurred())
+
+		return container
+	}
+
+	findGardenContainer := func(handle string) garden.Container {
+		var container garden.Container
+
+		Eventually(func() error {
+			var err error
+
+			container, err = gardenClient.Lookup(handle)
+			return err
+		}, 10).ShouldNot(HaveOccurred())
 
 		return container
 	}
@@ -180,9 +122,6 @@ var _ = Describe("Executor", func() {
 		var workingDir string
 
 		JustBeforeEach(func() {
-			err := gardenServer.Start()
-			Ω(err).ShouldNot(HaveOccurred())
-
 			runner.StartCheck = ""
 
 			// start without check; some things make it fail on start
@@ -228,47 +167,42 @@ var _ = Describe("Executor", func() {
 		})
 
 		Context("when there are containers that are owned by the executor", func() {
-			var fakeContainer1, fakeContainer2 *gfakes.FakeContainer
+			var container1, container2 garden.Container
 
 			BeforeEach(func() {
-				fakeContainer1 = new(gfakes.FakeContainer)
-				fakeContainer1.HandleReturns("handle-1")
+				var err error
 
-				fakeContainer2 = new(gfakes.FakeContainer)
-				fakeContainer2.HandleReturns("handle-2")
+				container1, err = gardenClient.Create(garden.ContainerSpec{
+					Properties: garden.Properties{
+						"executor:owner": ownerName,
+					},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 
-				fakeBackend.ContainersStub = func(ps garden.Properties) ([]garden.Container, error) {
-					if reflect.DeepEqual(ps, garden.Properties{"executor:owner": ownerName}) {
-						return []garden.Container{fakeContainer1, fakeContainer2}, nil
-					} else {
-						return nil, nil
-					}
-				}
+				container2, err = gardenClient.Create(garden.ContainerSpec{
+					Properties: garden.Properties{
+						"executor:owner": ownerName,
+					},
+				})
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("deletes those containers (and only those containers)", func() {
-				Eventually(fakeBackend.DestroyCallCount).Should(Equal(2))
-				Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal("handle-1"))
-				Ω(fakeBackend.DestroyArgsForCall(1)).Should(Equal("handle-2"))
-			})
+				Eventually(func() error {
+					_, err := gardenClient.Lookup(container1.Handle())
+					return err
+				}, 10).Should(HaveOccurred())
 
-			Context("when deleting the container fails", func() {
-				BeforeEach(func() {
-					fakeBackend.DestroyReturns(errors.New("i tried to delete the thing but i failed. sorry."))
-				})
-
-				It("should exit sadly", func() {
-					Eventually(runner, 5*time.Second).Should(gexec.Exit(2))
-				})
+				Eventually(func() error {
+					_, err := gardenClient.Lookup(container2.Handle())
+					return err
+				}, 10).Should(HaveOccurred())
 			})
 		})
 	})
 
 	Describe("when started", func() {
 		BeforeEach(func() {
-			err := gardenServer.Start()
-			Ω(err).ShouldNot(HaveOccurred())
-
 			process = ginkgomon.Invoke(runner)
 		})
 
@@ -280,21 +214,22 @@ var _ = Describe("Executor", func() {
 			})
 
 			Context("when Garden responds to ping", func() {
-				BeforeEach(func() {
-					fakeBackend.PingReturns(nil)
-				})
-
-				It("not return an error", func() {
+				It("does not return an error", func() {
 					Ω(pingErr).ShouldNot(HaveOccurred())
 				})
 			})
 
 			Context("when Garden returns an error", func() {
 				BeforeEach(func() {
-					fakeBackend.PingReturns(errors.New("oh no!"))
+					stopProcess(gardenProcess)
+				})
+
+				AfterEach(func() {
+					gardenProcess = ifrit.Invoke(gardenRunner)
 				})
 
 				It("should return an error", func() {
+					Ω(pingErr).Should(HaveOccurred())
 					Ω(pingErr.Error()).Should(ContainSubstring("status: 502"))
 				})
 			})
@@ -303,6 +238,7 @@ var _ = Describe("Executor", func() {
 		Describe("getting the total resources", func() {
 			var resources executor.ExecutorResources
 			var resourceErr error
+
 			JustBeforeEach(func() {
 				resources, resourceErr = executorClient.TotalResources()
 			})
@@ -313,9 +249,9 @@ var _ = Describe("Executor", func() {
 
 			It("returns the preset capacity", func() {
 				expectedResources := executor.ExecutorResources{
-					MemoryMB:   1024,
-					DiskMB:     1024,
-					Containers: 1024,
+					MemoryMB:   int(gardenCapacity.MemoryInBytes / 1024 / 1024),
+					DiskMB:     int(gardenCapacity.DiskInBytes / 1024 / 1024),
+					Containers: int(gardenCapacity.MaxContainers),
 				}
 				Ω(resources).Should(Equal(expectedResources))
 			})
@@ -343,14 +279,13 @@ var _ = Describe("Executor", func() {
 						{Name: "ENV1", Value: "val1"},
 						{Name: "ENV2", Value: "val2"},
 					},
-					Actions: []models.ExecutorAction{
-						{
-							models.RunAction{
-								Path: "ls",
-								Env: []models.EnvironmentVariable{
-									{Name: "RUN_ENV1", Value: "run_val1"},
-									{Name: "RUN_ENV2", Value: "run_val2"},
-								},
+
+					Action: &models.ExecutorAction{
+						models.RunAction{
+							Path: "true",
+							Env: []models.EnvironmentVariable{
+								{Name: "RUN_ENV1", Value: "run_val1"},
+								{Name: "RUN_ENV2", Value: "run_val2"},
 							},
 						},
 					},
@@ -395,9 +330,9 @@ var _ = Describe("Executor", func() {
 
 				It("reduces the capacity by the amount reserved", func() {
 					Ω(executorClient.RemainingResources()).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   768,
-						DiskMB:     768,
-						Containers: 1023,
+						MemoryMB:   int(gardenCapacity.MemoryInBytes/1024/1024) - 256,
+						DiskMB:     int(gardenCapacity.DiskInBytes/1024/1024) - 256,
+						Containers: int(gardenCapacity.MaxContainers) - 1,
 					}))
 				})
 			})
@@ -467,47 +402,36 @@ var _ = Describe("Executor", func() {
 				}
 
 				Context("when the container can be created", func() {
-					var gardenContainer *gfakes.FakeContainer
+					var gardenContainer garden.Container
 
-					BeforeEach(func() {
-						gardenContainer = setupFakeContainer(guid)
-
-						process := new(gfakes.FakeProcess)
-						process.WaitReturns(0, nil)
-
-						gardenContainer.RunReturns(process, nil)
+					JustBeforeEach(func() {
+						gardenContainer = findGardenContainer(guid)
 					})
 
 					It("returns no error", func() {
 						Ω(runErr).ShouldNot(HaveOccurred())
 					})
 
-					It("creates it with the tags as namespaced properties", func() {
-						Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
-
-						created := fakeBackend.CreateArgsForCall(0)
-						Ω(created.Properties).Should(HaveKeyWithValue("tag:some-tag", "some-value"))
-					})
-
 					It("creates it with the configured owner", func() {
-						Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
+						info, err := gardenContainer.Info()
+						Ω(err).ShouldNot(HaveOccurred())
 
-						created := fakeBackend.CreateArgsForCall(0)
-						ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-						Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
+						Ω(info.Properties["executor:owner"]).Should(Equal(ownerName))
 					})
 
-					It("propagates global environment variables to each run action", func() {
-						Eventually(gardenContainer.RunCallCount, 10).Should(Equal(1))
+					It("sets global environment variables on the container", func() {
+						output := gbytes.NewBuffer()
 
-						spec, _ := gardenContainer.RunArgsForCall(0)
-						Ω(spec.Path).Should(Equal("ls"))
-						Ω(spec.Env).Should(Equal([]string{
-							"ENV1=val1",
-							"ENV2=val2",
-							"RUN_ENV1=run_val1",
-							"RUN_ENV2=run_val2",
-						}))
+						process, err := gardenContainer.Run(garden.ProcessSpec{
+							Path: "env",
+						}, garden.ProcessIO{
+							Stdout: output,
+						})
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(process.Wait()).Should(Equal(0))
+
+						Ω(output.Contents()).Should(ContainSubstring("ENV1=val1"))
+						Ω(output.Contents()).Should(ContainSubstring("ENV2=val2"))
 					})
 
 					It("saves the succeeded run result", func() {
@@ -516,7 +440,7 @@ var _ = Describe("Executor", func() {
 						Eventually(func() executor.State {
 							container = getContainer(guid)
 							return container.State
-						}).Should(Equal(executor.StateCompleted))
+						}, 10).Should(Equal(executor.StateCompleted))
 
 						Ω(container.RunResult.Failed).Should(BeFalse())
 						Ω(container.RunResult.FailureReason).Should(BeEmpty())
@@ -551,100 +475,155 @@ var _ = Describe("Executor", func() {
 						})
 					})
 
-					Context("when created with memory, disk, cpu, and inode limits", func() {
-						BeforeEach(func() {
-							container.MemoryMB = 256
-							container.DiskMB = 256
-							container.CPUWeight = 50
-						})
+					Context("when created without a monitor action", func() {
+						Context("while the action is running", func() {
+							BeforeEach(func() {
+								container.Action = &models.ExecutorAction{
+									models.RunAction{
+										Path: "sh",
+										Args: []string{"-c", "while true; do sleep 1; done"},
+									},
+								}
+							})
 
-						It("applies them to the container", func() {
-							Eventually(gardenContainer.LimitMemoryCallCount).Should(Equal(1))
-							Eventually(gardenContainer.LimitDiskCallCount).Should(Equal(1))
-							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(1))
-
-							limitedMemory := gardenContainer.LimitMemoryArgsForCall(0)
-							Ω(limitedMemory.LimitInBytes).Should(Equal(uint64(256 * 1024 * 1024)))
-
-							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
-							Ω(limitedDisk.ByteHard).Should(Equal(uint64(256 * 1024 * 1024)))
-							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-
-							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
-							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(512)))
+							It("reports the health as 'unmonitored'", func() {
+								Eventually(func() executor.Health {
+									container := getContainer(guid)
+									return container.Health
+								}, 10).Should(Equal(executor.HealthUnmonitored))
+							})
 						})
 					})
 
-					Context("when the container was allocated with a rootfs", func() {
-						var expectedRootFS = "docker:///docker.com/my-image"
+					Context("when created with a monitor action", func() {
+						itFailsOnlyIfMonitoringSucceedsAndThenFails := func() {
+							Context("when monitoring succeeds", func() {
+								BeforeEach(func() {
+									container.Monitor = &models.ExecutorAction{
+										models.RunAction{
+											Path: "true",
+										},
+									}
+								})
 
-						BeforeEach(func() {
-							container.RootFSPath = expectedRootFS
+								It("reports the health as 'up'", func() {
+									Eventually(func() executor.Health {
+										container := getContainer(guid)
+										return container.Health
+									}, 10).Should(Equal(executor.HealthUp))
+								})
+							})
+
+							Context("when monitoring fails", func() {
+								BeforeEach(func() {
+									container.Monitor = &models.ExecutorAction{
+										models.RunAction{
+											Path: "false",
+										},
+									}
+								})
+
+								It("reports the health as 'down'", func() {
+									Ω(getContainer(guid).Health).Should(Equal(executor.HealthDown))
+								})
+
+								It("does not stop the container", func() {
+									Consistently(func() executor.State {
+										container := getContainer(guid)
+										return container.State
+									}, 5).ShouldNot(Equal(executor.StateCompleted))
+								})
+							})
+
+							Context("when monitoring succeeds and then fails", func() {
+								BeforeEach(func() {
+									container.Monitor = &models.ExecutorAction{
+										models.RunAction{
+											Path: "sh",
+											Args: []string{
+												"-c",
+												`
+													if [ -f already_ran ]; then
+														exit 1
+													else
+														touch already_ran
+													fi
+												`,
+											},
+										},
+									}
+								})
+
+								It("reports the health as 'down'", func() {
+									Ω(getContainer(guid).Health).Should(Equal(executor.HealthDown))
+								})
+
+								It("stops the container", func() {
+									Eventually(func() executor.State {
+										container := getContainer(guid)
+										return container.State
+									}, 10).Should(Equal(executor.StateCompleted))
+								})
+							})
+						}
+
+						Context("when the action succeeds", func() {
+							BeforeEach(func() {
+								container.Action = &models.ExecutorAction{
+									models.RunAction{
+										Path: "true",
+									},
+								}
+							})
+
+							itFailsOnlyIfMonitoringSucceedsAndThenFails()
 						})
 
-						It("creates it with the configured rootfs", func() {
-							Eventually(fakeBackend.CreateCallCount).Should(Equal(1))
+						Context("when the action fails", func() {
+							BeforeEach(func() {
+								container.Action = &models.ExecutorAction{
+									models.RunAction{
+										Path: "false",
+									},
+								}
+							})
 
-							created := fakeBackend.CreateArgsForCall(0)
-							Ω(created.RootFSPath).Should(Equal(expectedRootFS))
-						})
-					})
+							Context("even if the monitoring succeeds", func() {
+								BeforeEach(func() {
+									container.Monitor = &models.ExecutorAction{
+										models.RunAction{
+											Path: "true",
+										},
+									}
+								})
 
-					Context("when the container has no memory limits requested", func() {
-						BeforeEach(func() {
-							container.MemoryMB = 0
-						})
+								It("reports the health as 'down'", func() {
+									Eventually(func() executor.Health {
+										container := getContainer(guid)
+										return container.Health
+									}, 10).Should(Equal(executor.HealthDown))
+								})
 
-						It("does not enforce a zero-value memory limit", func() {
-							Consistently(gardenContainer.LimitMemoryCallCount).Should(Equal(0))
-						})
-					})
-
-					Context("when the container has no disk limits requested", func() {
-						BeforeEach(func() {
-							container.DiskMB = 0
-						})
-
-						It("enforces the inode limit, and a zero-value byte limit (which means unlimited)", func() {
-							Eventually(gardenContainer.LimitDiskCallCount).Should(Equal(1))
-
-							limitedDisk := gardenContainer.LimitDiskArgsForCall(0)
-							Ω(limitedDisk.ByteHard).Should(BeZero())
-							Ω(limitedDisk.InodeHard).Should(Equal(uint64(245000)))
-						})
-					})
-
-					Context("when the container has no CPU limits requested", func() {
-						BeforeEach(func() {
-							container.CPUWeight = 0
+								It("stops the container", func() {
+									Eventually(func() executor.State {
+										container := getContainer(guid)
+										return container.State
+									}, 10).Should(Equal(executor.StateCompleted))
+								})
+							})
 						})
 
-						It("enforce a 100-value limit instead", func() {
-							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(1))
+						Context("while the action is running", func() {
+							BeforeEach(func() {
+								container.Action = &models.ExecutorAction{
+									models.RunAction{
+										Path: "sh",
+										Args: []string{"-c", "while true; do sleep 1; done"},
+									},
+								}
+							})
 
-							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
-							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(1024)))
-						})
-					})
-
-					Context("when ports are exposed", func() {
-						BeforeEach(func() {
-							container.Ports = []executor.PortMapping{
-								{ContainerPort: 8080, HostPort: 0},
-								{ContainerPort: 8081, HostPort: 1234},
-							}
-						})
-
-						It("exposes the configured ports", func() {
-							Eventually(gardenContainer.NetInCallCount).Should(Equal(2))
-
-							netInH, netInC := gardenContainer.NetInArgsForCall(0)
-							Ω(netInH).Should(Equal(uint32(0)))
-							Ω(netInC).Should(Equal(uint32(8080)))
-
-							netInH, netInC = gardenContainer.NetInArgsForCall(1)
-							Ω(netInH).Should(Equal(uint32(1234)))
-							Ω(netInC).Should(Equal(uint32(8081)))
+							itFailsOnlyIfMonitoringSucceedsAndThenFails()
 						})
 					})
 
@@ -656,7 +635,7 @@ var _ = Describe("Executor", func() {
 								Eventually(func() executor.State {
 									container = getContainer(guid)
 									return container.State
-								}).Should(Equal(executor.StateCompleted))
+								}, 10).Should(Equal(executor.StateCompleted))
 
 								err := executorClient.DeleteContainer(guid)
 								Ω(err).ShouldNot(HaveOccurred())
@@ -666,10 +645,11 @@ var _ = Describe("Executor", func() {
 
 					Context("when running fails", func() {
 						BeforeEach(func() {
-							process := new(gfakes.FakeProcess)
-							process.WaitReturns(1, nil)
-
-							gardenContainer.RunReturns(process, nil)
+							container.Action = &models.ExecutorAction{
+								models.RunAction{
+									Path: "false",
+								},
+							}
 						})
 
 						It("saves the failed result and reason", func() {
@@ -678,7 +658,7 @@ var _ = Describe("Executor", func() {
 							Eventually(func() executor.State {
 								container = getContainer(guid)
 								return container.State
-							}).Should(Equal(executor.StateCompleted))
+							}, 10).Should(Equal(executor.StateCompleted))
 
 							Ω(container.RunResult.Failed).Should(BeTrue())
 							Ω(container.RunResult.FailureReason).Should(Equal("Exited with status 1"))
@@ -709,7 +689,7 @@ var _ = Describe("Executor", func() {
 
 				Context("when the container cannot be created", func() {
 					BeforeEach(func() {
-						fakeBackend.CreateReturns(nil, errors.New("oh no!"))
+						container.RootFSPath = "gopher://example.com"
 					})
 
 					It("does not immediately return an error", func() {
@@ -733,11 +713,11 @@ var _ = Describe("Executor", func() {
 							completeEvent := event.(executor.ContainerCompleteEvent)
 							Ω(completeEvent.Container.State).Should(Equal(executor.StateCompleted))
 							Ω(completeEvent.Container.RunResult.Failed).Should(BeTrue())
-							Ω(completeEvent.Container.RunResult.FailureReason).Should(Equal("failed to initialize container: oh no!"))
+							Ω(completeEvent.Container.RunResult.FailureReason).Should(Equal("failed to initialize container: unknown rootfs provider"))
 						})
 					})
 
-					itCompletesWithFailure("failed to initialize container: oh no!")
+					itCompletesWithFailure("failed to initialize container: unknown rootfs provider")
 				})
 			})
 		})
@@ -765,9 +745,9 @@ var _ = Describe("Executor", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 
 					Eventually(executorClient.RemainingResources).Should(Equal(executor.ExecutorResources{
-						MemoryMB:   1024,
-						DiskMB:     1024,
-						Containers: 1024,
+						MemoryMB:   int(gardenCapacity.MemoryInBytes / 1024 / 1024),
+						DiskMB:     int(gardenCapacity.DiskInBytes / 1024 / 1024),
+						Containers: int(gardenCapacity.MaxContainers),
 					}))
 				})
 			})
@@ -783,145 +763,118 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		Context("while the container is initializing", func() {
-			var guid string
-
-			var createdContainer chan struct{}
-
-			BeforeEach(func() {
-				guid = allocNewContainer(executor.Container{})
-
-				fakeContainer := new(gfakes.FakeContainer)
-				fakeContainer.HandleReturns(guid)
-
-				creating := make(chan struct{})
-
-				createdContainer = make(chan struct{})
-
-				fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
-					close(creating)
-					<-createdContainer
-
-					fakeBackend.LookupReturns(fakeContainer, nil)
-					fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
-
-					return fakeContainer, nil
-				}
-
-				err := executorClient.RunContainer(guid)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Eventually(creating).Should(BeClosed())
-			})
-
-			AfterEach(func() {
-				select {
-				case <-createdContainer:
-				default:
-					// un-hang garden
-					close(createdContainer)
-				}
-			})
-
-			Describe("deleting it", func() {
-				It("destroys the garden container after creating it", func() {
-					err := executorClient.DeleteContainer(guid)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
-
-					close(createdContainer)
-
-					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
-				})
-
-				It("removes the container from the registry", func() {
-					err := executorClient.DeleteContainer(guid)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					_, err = executorClient.GetContainer(guid)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				})
-			})
-
-			Describe("listing containers", func() {
-				It("shows up in the container list in initializing state", func() {
-					containers, err := executorClient.ListContainers(nil)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(containers).Should(HaveLen(1))
-					Ω(containers[0].Guid).Should(Equal(guid))
-					Ω(containers[0].State).Should(Equal(executor.StateInitializing))
-				})
-			})
-		})
+		// Context("while the container is initializing", func() {
+		// 	var guid string
+		//
+		// 	var createdContainer chan struct{}
+		//
+		// 	BeforeEach(func() {
+		// 		guid = allocNewContainer(executor.Container{})
+		//
+		// 		fakeContainer := new(gfakes.FakeContainer)
+		// 		fakeContainer.HandleReturns(guid)
+		//
+		// 		creating := make(chan struct{})
+		//
+		// 		createdContainer = make(chan struct{})
+		//
+		// 		fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
+		// 			close(creating)
+		// 			<-createdContainer
+		//
+		// 			fakeBackend.LookupReturns(fakeContainer, nil)
+		// 			fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
+		//
+		// 			return fakeContainer, nil
+		// 		}
+		//
+		// 		err := executorClient.RunContainer(guid)
+		// 		Ω(err).ShouldNot(HaveOccurred())
+		//
+		// 		Eventually(creating).Should(BeClosed())
+		// 	})
+		//
+		// 	AfterEach(func() {
+		// 		select {
+		// 		case <-createdContainer:
+		// 		default:
+		// 			// un-hang garden
+		// 			close(createdContainer)
+		// 		}
+		// 	})
+		//
+		// 	Describe("deleting it", func() {
+		// 		It("destroys the garden container after creating it", func() {
+		// 			err := executorClient.DeleteContainer(guid)
+		// 			Ω(err).ShouldNot(HaveOccurred())
+		//
+		// 			Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
+		//
+		// 			close(createdContainer)
+		//
+		// 			Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
+		// 			Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
+		// 		})
+		//
+		// 		It("removes the container from the registry", func() {
+		// 			err := executorClient.DeleteContainer(guid)
+		// 			Ω(err).ShouldNot(HaveOccurred())
+		//
+		// 			_, err = executorClient.GetContainer(guid)
+		// 			Ω(err).Should(Equal(executor.ErrContainerNotFound))
+		// 		})
+		// 	})
+		//
+		// 	Describe("listing containers", func() {
+		// 		It("shows up in the container list in initializing state", func() {
+		// 			containers, err := executorClient.ListContainers(nil)
+		// 			Ω(err).ShouldNot(HaveOccurred())
+		// 			Ω(containers).Should(HaveLen(1))
+		// 			Ω(containers[0].Guid).Should(Equal(guid))
+		// 			Ω(containers[0].State).Should(Equal(executor.StateInitializing))
+		// 		})
+		// 	})
+		// })
 
 		Context("while it is running", func() {
-			var (
-				guid           string
-				cleanup        chan struct{}
-				finishStopping chan struct{}
-
-				fakeContainer *gfakes.FakeContainer
-			)
+			var guid string
 
 			BeforeEach(func() {
 				guid = allocNewContainer(executor.Container{
 					MemoryMB: 64,
 					DiskMB:   64,
 
-					Actions: []models.ExecutorAction{
-						{Action: models.RunAction{Path: "ls"}},
+					Action: &models.ExecutorAction{
+						models.RunAction{
+							Path: "sh",
+							Args: []string{"-c", "while true; do sleep 1; done"},
+						},
 					},
 				})
-
-				fakeContainer = setupFakeContainer(guid)
-
-				waiting := make(chan struct{})
-				cleanup = make(chan struct{})
-				finishStopping = make(chan struct{})
-
-				process := new(gfakes.FakeProcess)
-				process.WaitStub = func() (int, error) {
-					close(waiting)
-					<-cleanup
-					return 123, nil
-				}
-
-				fakeContainer.RunReturns(process, nil)
 
 				err := executorClient.RunContainer(guid)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				fakeContainer.StopStub = func(bool) error {
-					<-finishStopping
-					return nil
-				}
-
-				Eventually(waiting).Should(BeClosed())
-			})
-
-			AfterEach(func() {
-				close(cleanup)
+				Eventually(func() executor.State {
+					container := getContainer(guid)
+					return container.State
+				}, 10).Should(Equal(executor.StateCreated))
 			})
 
 			Describe("deleting it", func() {
 				It("does not return an error", func() {
-					close(finishStopping)
 					err := executorClient.DeleteContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				It("deletes the container after cancelling its actions", func() {
-					go executorClient.DeleteContainer(guid)
+				It("deletes the container", func() {
+					err := executorClient.DeleteContainer(guid)
+					Ω(err).ShouldNot(HaveOccurred())
 
-					Eventually(fakeContainer.StopCallCount).Should(Equal(1))
-					Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
-
-					close(finishStopping)
-
-					Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-					Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
+					Eventually(func() error {
+						_, err := gardenClient.Lookup(guid)
+						return err
+					}, 10).Should(HaveOccurred())
 				})
 			})
 
@@ -940,23 +893,23 @@ var _ = Describe("Executor", func() {
 					remaining, err := executorClient.RemainingResources()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Ω(remaining.MemoryMB).Should(Equal(1024 - 64))
-					Ω(remaining.DiskMB).Should(Equal(1024 - 64))
+					Ω(remaining.MemoryMB).Should(Equal(int(gardenCapacity.MemoryInBytes/1024/1024) - 64))
+					Ω(remaining.DiskMB).Should(Equal(int(gardenCapacity.DiskInBytes/1024/1024) - 64))
 				})
 
 				Context("when the container disappears", func() {
 					It("eventually goes back to the total resources", func() {
-						fakeBackend.ContainersReturns(nil, nil)
+						// wait for the container to be present
+						findGardenContainer(guid)
 
-						Eventually(func() executor.ExecutorResources {
-							resources, err := executorClient.RemainingResources()
-							Ω(err).ShouldNot(HaveOccurred())
+						// kill it
+						err := gardenClient.Destroy(guid)
+						Ω(err).ShouldNot(HaveOccurred())
 
-							return resources
-						}).Should(Equal(executor.ExecutorResources{
-							MemoryMB:   1024,
-							DiskMB:     1024,
-							Containers: 1024,
+						Eventually(executorClient.RemainingResources).Should(Equal(executor.ExecutorResources{
+							MemoryMB:   int(gardenCapacity.MemoryInBytes / 1024 / 1024),
+							DiskMB:     int(gardenCapacity.DiskInBytes / 1024 / 1024),
+							Containers: int(gardenCapacity.MaxContainers),
 						}))
 					})
 				})
@@ -988,67 +941,46 @@ var _ = Describe("Executor", func() {
 				})
 			})
 
-			Context("when the container has been initialized", func() {
-				var fakeContainer *gfakes.FakeContainer
+			Context("when the container is running", func() {
+				var container garden.Container
 
 				BeforeEach(func() {
 					guid = allocNewContainer(executor.Container{
-						Actions: []models.ExecutorAction{
-							{
-								models.RunAction{
-									Path: "ls",
+						Action: &models.ExecutorAction{
+							models.RunAction{
+								Path: "sh",
+								Args: []string{
+									"-c", `while true; do	sleep 1; done`,
 								},
 							},
 						},
 					})
 
-					fakeContainer = setupFakeContainer(guid)
-
-					process := new(gfakes.FakeProcess)
-					fakeContainer.RunReturns(process, nil)
-
 					err := executorClient.RunContainer(guid)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Eventually(fakeContainer.RunCallCount).Should(Equal(1))
+					container = findGardenContainer(guid)
+
+					process, err := container.Run(garden.ProcessSpec{
+						Path: "sh",
+						Args: []string{"-c", "mkdir some; echo hello > some/path"},
+					}, garden.ProcessIO{})
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(process.Wait()).Should(Equal(0))
 				})
 
-				Context("when streaming out the file succeeds", func() {
-					var (
-						streamedOut *gbytes.Buffer
-					)
-
-					BeforeEach(func() {
-						streamedOut = gbytes.BufferWithBytes([]byte{1, 2, 3})
-
-						fakeContainer.StreamOutReturns(streamedOut, nil)
-					})
-
-					It("does not error", func() {
-						Ω(streamErr).ShouldNot(HaveOccurred())
-					})
-
-					It("streams out the requested path", func() {
-						requestedPath := fakeContainer.StreamOutArgsForCall(0)
-						Ω(requestedPath).Should(Equal("some/path"))
-					})
-
-					It("returns a stream of the contents of the file", func() {
-						contents, err := ioutil.ReadAll(stream)
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(contents).Should(Equal(streamedOut.Contents()))
-					})
+				It("does not error", func() {
+					Ω(streamErr).ShouldNot(HaveOccurred())
 				})
 
-				Context("when streaming out the file fails", func() {
-					BeforeEach(func() {
-						fakeContainer.StreamOutReturns(nil, errors.New("oh no!"))
-					})
+				It("returns a stream of the contents of the file", func() {
+					tarReader := tar.NewReader(stream)
 
-					It("returns an error", func() {
-						Ω(streamErr).Should(HaveOccurred())
-						Ω(streamErr.Error()).Should(ContainSubstring("status: 500"))
-					})
+					header, err := tarReader.Next()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(header.FileInfo().Name()).Should(Equal("path"))
+					Ω(ioutil.ReadAll(tarReader)).Should(Equal([]byte("hello\n")))
 				})
 			})
 		})
@@ -1108,7 +1040,10 @@ var _ = Describe("Executor", func() {
 
 				Context("without tags", func() {
 					It("includes the allocated container", func() {
-
+						containers, err := executorClient.ListContainers(nil)
+						Ω(err).ShouldNot(HaveOccurred())
+						Ω(containers).Should(HaveLen(1))
+						Ω(containers[0].Guid).Should(Equal(guid))
 					})
 				})
 
@@ -1159,26 +1094,17 @@ var _ = Describe("Executor", func() {
 		})
 	})
 
-	Describe("when gardenserver is unavailable", func() {
+	Describe("when Garden is unavailable", func() {
 		BeforeEach(func() {
+			stopProcess(gardenProcess)
+
 			runner.StartCheck = ""
 			process = ginkgomon.Invoke(runner)
 		})
 
 		Context("and gardenserver starts up later", func() {
-			var started chan struct{}
 			BeforeEach(func() {
-				started = make(chan struct{})
-				go func() {
-					time.Sleep(50 * time.Millisecond)
-					err := gardenServer.Start()
-					Ω(err).ShouldNot(HaveOccurred())
-					close(started)
-				}()
-			})
-
-			AfterEach(func() {
-				<-started
+				gardenProcess = ginkgomon.Invoke(gardenRunner)
 			})
 
 			It("should connect", func() {
@@ -1187,6 +1113,10 @@ var _ = Describe("Executor", func() {
 		})
 
 		Context("and never starts", func() {
+			AfterEach(func() {
+				gardenProcess = ginkgomon.Invoke(gardenRunner)
+			})
+
 			It("should not exit and continue waiting for a connection", func() {
 				Consistently(runner.Buffer()).ShouldNot(gbytes.Say("started"))
 				Ω(runner).ShouldNot(gexec.Exit())

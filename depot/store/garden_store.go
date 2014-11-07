@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/codependant_step"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/monitor_step"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
@@ -26,10 +29,12 @@ var (
 type GardenStore struct {
 	logger lager.Logger
 
-	gardenClient          garden.Client
-	containerOwnerName    string
-	containerMaxCPUShares uint64
-	containerInodeLimit   uint64
+	gardenClient       garden.Client
+	exchanger          Exchanger
+	containerOwnerName string
+
+	healthyMonitoringInterval   time.Duration
+	unhealthyMonitoringInterval time.Duration
 
 	logEmitter  logemitter.Emitter
 	transformer *transformer.Transformer
@@ -55,6 +60,8 @@ func NewGardenStore(
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
 	containerInodeLimit uint64,
+	healthyMonitoringInterval time.Duration,
+	unhealthyMonitoringInterval time.Duration,
 	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
 	timer timer.Timer,
@@ -64,13 +71,16 @@ func NewGardenStore(
 	return &GardenStore{
 		logger: logger,
 
-		gardenClient:          gardenClient,
-		containerInodeLimit:   containerInodeLimit,
-		containerMaxCPUShares: containerMaxCPUShares,
-		containerOwnerName:    containerOwnerName,
-		logEmitter:            logEmitter,
-		transformer:           transformer,
-		timer:                 timer,
+		gardenClient:       gardenClient,
+		exchanger:          NewExchanger(containerOwnerName, containerMaxCPUShares, containerInodeLimit),
+		containerOwnerName: containerOwnerName,
+
+		healthyMonitoringInterval:   healthyMonitoringInterval,
+		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
+
+		logEmitter:  logEmitter,
+		transformer: transformer,
+		timer:       timer,
 
 		tracker: tracker,
 
@@ -86,8 +96,7 @@ func (store *GardenStore) Lookup(guid string) (executor.Container, error) {
 		return executor.Container{}, ErrContainerNotFound
 	}
 
-	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
-	return exchanger.Garden2Executor(gardenContainer)
+	return store.exchanger.Garden2Executor(gardenContainer)
 }
 
 func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error) {
@@ -104,11 +113,10 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 		return nil, ErrContainerNotFound
 	}
 
-	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
 	result := make([]executor.Container, 0, len(gardenContainers))
 
 	for _, gardenContainer := range gardenContainers {
-		container, err := exchanger.Garden2Executor(gardenContainer)
+		container, err := store.exchanger.Garden2Executor(gardenContainer)
 		if err != nil {
 			store.logger.Error("failed-to-get-container-info", err, lager.Data{
 				"handle": gardenContainer.Handle(),
@@ -124,11 +132,9 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 }
 
 func (store *GardenStore) Create(container executor.Container) (executor.Container, error) {
-	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
-
 	container.State = executor.StateCreated
 
-	_, err := exchanger.Executor2Garden(store.gardenClient, container)
+	_, err := store.exchanger.Executor2Garden(store.gardenClient, container)
 	if err != nil {
 		return executor.Container{}, err
 	}
@@ -180,9 +186,7 @@ func (store *GardenStore) Complete(guid string, result executor.ContainerRunResu
 		return err
 	}
 
-	exchanger := NewExchanger(store.containerOwnerName, store.containerMaxCPUShares, store.containerInodeLimit)
-
-	executorContainer, err := exchanger.Garden2Executor(gardenContainer)
+	executorContainer, err := store.exchanger.Garden2Executor(gardenContainer)
 	if err != nil {
 		return err
 	}
@@ -220,32 +224,79 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		store.logEmitter,
 	)
 
-	steps, err := store.transformer.StepsFor(
-		logStreamer,
-		container.Actions,
-		container.Env,
-		gardenContainer,
-	)
+	seq := []sequence.Step{}
 
-	if err != nil {
-		return executor.ErrStepsInvalid
+	if container.Setup != nil {
+		seq = append(seq, store.transformer.StepFor(
+			logStreamer,
+			*container.Setup,
+			gardenContainer,
+		))
 	}
+
+	parallelSequence := []sequence.Step{}
+	if container.Action != nil {
+		parallelSequence = append(parallelSequence, store.transformer.StepFor(
+			logStreamer,
+			*container.Action,
+			gardenContainer,
+		))
+	}
+
+	monitorEvents := make(chan monitor_step.HealthEvent)
+
+	if container.Monitor != nil {
+		monitoredStep := store.transformer.StepFor(
+			logStreamer,
+			*container.Monitor,
+			gardenContainer,
+		)
+
+		parallelSequence = append(parallelSequence, monitor_step.New(
+			monitoredStep,
+			monitorEvents,
+			store.logger.Session("monitor"),
+			timer.NewTimer(),
+			store.healthyMonitoringInterval,
+			store.unhealthyMonitoringInterval,
+		))
+	}
+
+	seq = append(seq, codependant_step.New(parallelSequence))
+
+	log.Printf("SEQUENCE:\n %#v\n%#v\n", seq, parallelSequence)
+
+	step := sequence.New(seq)
 
 	process := ifrit.Invoke(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		seqComplete := make(chan error)
-		seq := sequence.New(steps)
-
-		go func() {
-			seqComplete <- seq.Perform()
-		}()
 
 		close(ready)
+
+		go func() {
+			seqComplete <- step.Perform()
+		}()
 
 		for {
 			select {
 			case <-signals:
 				signals = nil
-				seq.Cancel()
+				step.Cancel()
+
+			case healthEvent := <-monitorEvents:
+				var health executor.Health
+				if healthEvent == monitor_step.Healthy {
+					health = executor.HealthUp
+				} else {
+					health = executor.HealthDown
+				}
+
+				log.Println("TYRFHTDRFHYGTRFGHYJTRDFHYGTRFGHYNHGNFRTCTRFYGHJ", health)
+
+				err = gardenContainer.SetProperty(ContainerHealthProperty, string(health))
+				if err != nil {
+					return err
+				}
 
 			case seqErr := <-seqComplete:
 				result := executor.ContainerRunResult{}

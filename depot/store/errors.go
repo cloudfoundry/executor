@@ -10,6 +10,14 @@ func (err InvalidStateError) Error() string {
 	return fmt.Sprintf("invalid state: %s", err.State)
 }
 
+type InvalidHealthError struct {
+	Health string
+}
+
+func (err InvalidHealthError) Error() string {
+	return fmt.Sprintf("invalid health: %s", err.Health)
+}
+
 type MalformedPropertyError struct {
 	Property string
 	Value    string
