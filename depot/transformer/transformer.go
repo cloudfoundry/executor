@@ -5,15 +5,9 @@ import (
 	"fmt"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/sequence"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/download_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/emit_progress_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/parallel_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/run_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/try_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/upload_step"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
@@ -53,29 +47,29 @@ func NewTransformer(
 func (transformer *Transformer) StepFor(
 	logStreamer log_streamer.LogStreamer,
 	action models.ExecutorAction,
-	container garden_api.Container,
-) sequence.Step {
+	container garden.Container,
+) steps.Step {
 	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
 	})
 
 	switch actionModel := action.Action.(type) {
 	case models.RunAction:
-		return run_step.New(
+		return steps.NewRun(
 			container,
 			actionModel,
 			logStreamer,
 			logger,
 		)
 	case models.DownloadAction:
-		return download_step.New(
+		return steps.NewDownload(
 			container,
 			actionModel,
 			transformer.cachedDownloader,
 			logger,
 		)
 	case models.UploadAction:
-		return upload_step.New(
+		return steps.NewUpload(
 			container,
 			actionModel,
 			transformer.uploader,
@@ -85,7 +79,7 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 	case models.EmitProgressAction:
-		return emit_progress_step.New(
+		return steps.NewEmitProgress(
 			transformer.StepFor(
 				logStreamer,
 				actionModel.Action,
@@ -98,7 +92,7 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 	case models.TryAction:
-		return try_step.New(
+		return steps.NewTry(
 			transformer.StepFor(
 				logStreamer,
 				actionModel.Action,
@@ -107,16 +101,16 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 	case models.ParallelAction:
-		steps := make([]sequence.Step, len(actionModel.Actions))
+		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			steps[i] = transformer.StepFor(
+			subSteps[i] = transformer.StepFor(
 				logStreamer,
 				action,
 				container,
 			)
 		}
 
-		return parallel_step.New(steps)
+		return steps.NewParallel(subSteps)
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))

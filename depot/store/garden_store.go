@@ -4,16 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/sequence"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/codependant_step"
-	"github.com/cloudfoundry-incubator/executor/depot/steps/monitor_step"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
@@ -224,7 +221,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		store.logEmitter,
 	)
 
-	seq := []sequence.Step{}
+	seq := []steps.Step{}
 
 	if container.Setup != nil {
 		seq = append(seq, store.transformer.StepFor(
@@ -234,7 +231,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		))
 	}
 
-	parallelSequence := []sequence.Step{}
+	parallelSequence := []steps.Step{}
 	if container.Action != nil {
 		parallelSequence = append(parallelSequence, store.transformer.StepFor(
 			logStreamer,
@@ -243,7 +240,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		))
 	}
 
-	monitorEvents := make(chan monitor_step.HealthEvent)
+	monitorEvents := make(chan steps.HealthEvent)
 
 	if container.Monitor != nil {
 		monitoredStep := store.transformer.StepFor(
@@ -252,7 +249,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			gardenContainer,
 		)
 
-		parallelSequence = append(parallelSequence, monitor_step.New(
+		parallelSequence = append(parallelSequence, steps.NewMonitor(
 			monitoredStep,
 			monitorEvents,
 			store.logger.Session("monitor"),
@@ -262,11 +259,9 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		))
 	}
 
-	seq = append(seq, codependant_step.New(parallelSequence))
+	seq = append(seq, steps.NewCodependant(parallelSequence))
 
-	log.Printf("SEQUENCE:\n %#v\n%#v\n", seq, parallelSequence)
-
-	step := sequence.New(seq)
+	step := steps.NewSerial(seq)
 
 	process := ifrit.Invoke(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		seqComplete := make(chan error)
@@ -285,13 +280,11 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 
 			case healthEvent := <-monitorEvents:
 				var health executor.Health
-				if healthEvent == monitor_step.Healthy {
+				if healthEvent == steps.Healthy {
 					health = executor.HealthUp
 				} else {
 					health = executor.HealthDown
 				}
-
-				log.Println("TYRFHTDRFHYGTRFGHYJTRDFHYGTRFGHYNHGNFRTCTRFYGHJ", health)
 
 				err = gardenContainer.SetProperty(ContainerHealthProperty, string(health))
 				if err != nil {
