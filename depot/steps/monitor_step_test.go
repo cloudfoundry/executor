@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
-
-	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/pivotal-golang/timer/fake_timer"
 
@@ -21,8 +20,8 @@ var _ = Describe("MonitorStep", func() {
 		receivedEvents <-chan HealthEvent
 		timer          *fake_timer.FakeTimer
 
-		healthyInterval   = 500 * time.Microsecond
-		unhealthyInterval = 1 * time.Microsecond
+		healthyInterval   = 1 * time.Second
+		unhealthyInterval = 500 * time.Millisecond
 
 		step Step
 	)
@@ -46,6 +45,8 @@ var _ = Describe("MonitorStep", func() {
 
 	Describe("Perform", func() {
 		var (
+			checkResults chan<- error
+
 			performErr     chan error
 			donePerforming *sync.WaitGroup
 		)
@@ -61,6 +62,21 @@ var _ = Describe("MonitorStep", func() {
 		}
 
 		BeforeEach(func() {
+			results := make(chan error, 10)
+			checkResults = results
+
+			var currentResult error
+			check.PerformStub = func() error {
+				select {
+				case currentResult = <-results:
+				default:
+				}
+
+				return currentResult
+			}
+		})
+
+		JustBeforeEach(func() {
 			performErr = make(chan error, 1)
 			donePerforming = new(sync.WaitGroup)
 
@@ -78,11 +94,11 @@ var _ = Describe("MonitorStep", func() {
 
 		Context("when the check succeeds", func() {
 			BeforeEach(func() {
-				check.PerformReturns(nil)
+				checkResults <- nil
 			})
 
 			Context("and the unhealthy interval passes", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					expectCheckAfterInterval(unhealthyInterval)
 				})
 
@@ -91,7 +107,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				Context("and the healthy interval passes", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						Eventually(receivedEvents).Should(Receive(Equal(Healthy)))
 						expectCheckAfterInterval(healthyInterval)
 					})
@@ -105,11 +121,11 @@ var _ = Describe("MonitorStep", func() {
 					disaster := errors.New("oh no!")
 
 					BeforeEach(func() {
-						check.PerformReturns(disaster)
+						checkResults <- disaster
 					})
 
 					Context("and the healthy interval passes", func() {
-						BeforeEach(func() {
+						JustBeforeEach(func() {
 							expectCheckAfterInterval(healthyInterval)
 						})
 
@@ -127,11 +143,11 @@ var _ = Describe("MonitorStep", func() {
 
 		Context("when the check is failing immediately", func() {
 			BeforeEach(func() {
-				check.PerformReturns(errors.New("not up yet!"))
+				checkResults <- errors.New("not up yet!")
 			})
 
 			Context("and the unhealthy interval passes", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					expectCheckAfterInterval(unhealthyInterval)
 				})
 
@@ -144,7 +160,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				Context("and the unhealthy interval passes again", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						expectCheckAfterInterval(unhealthyInterval)
 					})
 

@@ -597,13 +597,6 @@ var _ = Describe("Executor", func() {
 									}
 								})
 
-								It("reports the health as 'down'", func() {
-									Eventually(func() executor.Health {
-										container := getContainer(guid)
-										return container.Health
-									}, 10).Should(Equal(executor.HealthDown))
-								})
-
 								It("stops the container", func() {
 									Eventually(func() executor.State {
 										container := getContainer(guid)
