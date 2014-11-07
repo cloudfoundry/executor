@@ -619,8 +619,11 @@ var _ = Describe("Executor", func() {
 							container.CPUWeight = 0
 						})
 
-						It("does not enforce a zero-value limit", func() {
-							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(0))
+						It("enforce a 100-value limit instead", func() {
+							Eventually(gardenContainer.LimitCPUCallCount).Should(Equal(1))
+
+							limitedCPU := gardenContainer.LimitCPUArgsForCall(0)
+							Ω(limitedCPU.LimitInShares).Should(Equal(uint64(1024)))
 						})
 					})
 
