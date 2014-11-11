@@ -46,6 +46,7 @@ var _ = Describe("RunAction", func() {
 			ResourceLimits: models.ResourceLimits{
 				Nofile: &fileDescriptorLimit,
 			},
+			Privileged: true,
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
@@ -101,6 +102,7 @@ var _ = Describe("RunAction", func() {
 				Ω(spec.Args).Should(Equal([]string{"reboot"}))
 				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
 				Ω(spec.Env).Should(Equal([]string{"A=1", "B=2"}))
+				Ω(spec.Privileged).Should(BeTrue())
 			})
 		})
 

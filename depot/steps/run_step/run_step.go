@@ -58,9 +58,10 @@ func (step *RunStep) Perform() error {
 
 	step.logger.Info("creating-process")
 	process, err := step.container.Run(garden_api.ProcessSpec{
-		Path: step.model.Path,
-		Args: step.model.Args,
-		Env:  convertEnvironmentVariables(step.model.Env),
+		Path:       step.model.Path,
+		Args:       step.model.Args,
+		Env:        convertEnvironmentVariables(step.model.Env),
+		Privileged: step.model.Privileged,
 
 		Limits: garden_api.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
 	}, garden_api.ProcessIO{
