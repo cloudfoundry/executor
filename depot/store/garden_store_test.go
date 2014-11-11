@@ -572,7 +572,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				It("creates it with the owner property", func() {
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties["executor:owner"]).Should(Equal(ownerName))
+					Ω(containerSpec.Properties[store.ContainerOwnerProperty]).Should(Equal(ownerName))
 				})
 
 				It("creates it with the guid as the handle", func() {

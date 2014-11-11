@@ -17,6 +17,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/testrunner"
+	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -238,7 +239,7 @@ var _ = Describe("Executor", func() {
 				fakeContainer2.HandleReturns("handle-2")
 
 				fakeBackend.ContainersStub = func(ps garden.Properties) ([]garden.Container, error) {
-					if reflect.DeepEqual(ps, garden.Properties{"executor:owner": ownerName}) {
+					if reflect.DeepEqual(ps, garden.Properties{store.ContainerOwnerProperty: ownerName}) {
 						return []garden.Container{fakeContainer1, fakeContainer2}, nil
 					} else {
 						return nil, nil
@@ -494,7 +495,7 @@ var _ = Describe("Executor", func() {
 
 						created := fakeBackend.CreateArgsForCall(0)
 						ownerName := fmt.Sprintf("executor-on-node-%d", config.GinkgoConfig.ParallelNode)
-						Ω(created.Properties["executor:owner"]).Should(Equal(ownerName))
+						Ω(created.Properties[store.ContainerOwnerProperty]).Should(Equal(ownerName))
 					})
 
 					It("propagates global environment variables to each run action", func() {
