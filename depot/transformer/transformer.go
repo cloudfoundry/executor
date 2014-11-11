@@ -34,6 +34,7 @@ type Transformer struct {
 	extractor        extractor.Extractor
 	compressor       compressor.Compressor
 	downloadLimiter  chan struct{}
+	uploadLimiter    chan struct{}
 	logger           lager.Logger
 	tempDir          string
 }
@@ -44,6 +45,7 @@ func NewTransformer(
 	extractor extractor.Extractor,
 	compressor compressor.Compressor,
 	downloadLimiter chan struct{},
+	uploadLimiter chan struct{},
 	logger lager.Logger,
 	tempDir string,
 ) *Transformer {
@@ -53,6 +55,7 @@ func NewTransformer(
 		extractor:        extractor,
 		compressor:       compressor,
 		downloadLimiter:  downloadLimiter,
+		uploadLimiter:    uploadLimiter,
 		logger:           logger,
 		tempDir:          tempDir,
 	}
@@ -122,6 +125,7 @@ func (transformer *Transformer) convertAction(
 			transformer.compressor,
 			transformer.tempDir,
 			logStreamer,
+			transformer.uploadLimiter,
 			logger,
 		), nil
 	case models.EmitProgressAction:

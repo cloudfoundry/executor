@@ -22,7 +22,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/emittable_error"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps/upload_step"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/upload_step"
 	Uploader "github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader/fake_uploader"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
@@ -50,6 +50,17 @@ func (b *ClosableBuffer) IsClosed() bool {
 	default:
 		return false
 	}
+}
+
+type fakeUploader struct {
+	ready   chan<- struct{}
+	barrier <-chan struct{}
+}
+
+func (u *fakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int64, error) {
+	u.ready <- struct{}{}
+	<-u.barrier
+	return 0, nil
 }
 
 var _ = Describe("UploadStep", func() {
@@ -122,13 +133,14 @@ var _ = Describe("UploadStep", func() {
 		container, err := gardenClient.Create(garden_api.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		step = New(
+		step = upload_step.New(
 			container,
 			*uploadAction,
 			uploader,
 			compressor,
 			tempDir,
 			fakeStreamer,
+			make(chan struct{}, 1),
 			logger,
 		)
 	})
@@ -232,7 +244,7 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(emittable_error.New(errStream, ErrEstablishStream)))
+				Ω(err).Should(MatchError(emittable_error.New(errStream, upload_step.ErrEstablishStream)))
 			})
 		})
 
@@ -245,8 +257,121 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(emittable_error.New(errStream, ErrReadTar)))
+				Ω(err).Should(MatchError(emittable_error.New(errStream, upload_step.ErrReadTar)))
 			})
+		})
+	})
+
+	Describe("the uploads are rate limited", func() {
+		var container garden_api.Container
+
+		BeforeEach(func() {
+			var err error
+			container, err = gardenClient.Create(garden_api.ContainerSpec{
+				Handle: handle,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+				buffer := NewClosableBuffer()
+				tarWriter := tar.NewWriter(buffer)
+
+				err := tarWriter.WriteHeader(&tar.Header{
+					Name: "./does-not-matter.txt",
+					Size: int64(0),
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				return buffer, nil
+			}
+		})
+
+		It("allows only N concurrent uploads", func() {
+			rateLimiter := make(chan struct{}, 2)
+
+			ready := make(chan struct{}, 3)
+			barrier := make(chan struct{})
+			uploader := &fakeUploader{
+				ready:   ready,
+				barrier: barrier,
+			}
+
+			uploadAction1 := models.UploadAction{
+				To:   "http://mybucket.mf",
+				From: "./foo1.txt",
+			}
+
+			step1 := upload_step.New(
+				container,
+				uploadAction1,
+				uploader,
+				compressor,
+				tempDir,
+				fakeStreamer,
+				rateLimiter,
+				logger,
+			)
+
+			uploadAction2 := models.UploadAction{
+				To:   "http://mybucket.mf",
+				From: "./foo2.txt",
+			}
+
+			step2 := upload_step.New(
+				container,
+				uploadAction2,
+				uploader,
+				compressor,
+				tempDir,
+				fakeStreamer,
+				rateLimiter,
+				logger,
+			)
+
+			uploadAction3 := models.UploadAction{
+				To:   "http://mybucket.mf",
+				From: "./foo3.txt",
+			}
+
+			step3 := upload_step.New(
+				container,
+				uploadAction3,
+				uploader,
+				compressor,
+				tempDir,
+				fakeStreamer,
+				rateLimiter,
+				logger,
+			)
+
+			go func() {
+				defer GinkgoRecover()
+
+				err := step1.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
+			go func() {
+				defer GinkgoRecover()
+
+				err := step2.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
+			go func() {
+				defer GinkgoRecover()
+
+				err := step3.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
+
+			Eventually(ready).Should(Receive())
+			Eventually(ready).Should(Receive())
+			Consistently(ready).ShouldNot(Receive())
+
+			barrier <- struct{}{}
+
+			Eventually(ready).Should(Receive())
+
+			close(barrier)
 		})
 	})
 })

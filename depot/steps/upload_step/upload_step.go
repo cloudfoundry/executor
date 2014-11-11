@@ -19,13 +19,14 @@ import (
 )
 
 type UploadStep struct {
-	container  garden_api.Container
-	model      models.UploadAction
-	uploader   uploader.Uploader
-	compressor compressor.Compressor
-	tempDir    string
-	streamer   log_streamer.LogStreamer
-	logger     lager.Logger
+	container   garden_api.Container
+	model       models.UploadAction
+	uploader    uploader.Uploader
+	compressor  compressor.Compressor
+	tempDir     string
+	streamer    log_streamer.LogStreamer
+	rateLimiter chan struct{}
+	logger      lager.Logger
 }
 
 func New(
@@ -35,6 +36,7 @@ func New(
 	compressor compressor.Compressor,
 	tempDir string,
 	streamer log_streamer.LogStreamer,
+	rateLimiter chan struct{},
 	logger lager.Logger,
 ) *UploadStep {
 	logger = logger.Session("UploadAction", lager.Data{
@@ -42,13 +44,14 @@ func New(
 	})
 
 	return &UploadStep{
-		container:  container,
-		model:      model,
-		uploader:   uploader,
-		compressor: compressor,
-		tempDir:    tempDir,
-		streamer:   streamer,
-		logger:     logger,
+		container:   container,
+		model:       model,
+		uploader:    uploader,
+		compressor:  compressor,
+		tempDir:     tempDir,
+		streamer:    streamer,
+		rateLimiter: rateLimiter,
+		logger:      logger,
 	}
 }
 
@@ -61,6 +64,11 @@ const (
 )
 
 func (step *UploadStep) Perform() (err error) {
+	step.rateLimiter <- struct{}{}
+	defer func() {
+		<-step.rateLimiter
+	}()
+
 	step.logger.Info("upload-starting")
 
 	url, err := url.ParseRequestURI(step.model.To)

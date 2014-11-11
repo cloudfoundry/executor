@@ -138,6 +138,12 @@ var maxConcurrentDownloads = flag.Uint(
 	"maximum in-flight downloads",
 )
 
+var maxConcurrentUploads = flag.Uint(
+	"maxConcurrentUploads",
+	5,
+	"maximum in-flight uploads",
+)
+
 var gardenSyncInterval = flag.Duration(
 	"gardenSyncInterval",
 	30*time.Second,
@@ -190,6 +196,7 @@ func main() {
 		workDir,
 		*maxCacheSizeInBytes,
 		*maxConcurrentDownloads,
+		*maxConcurrentUploads,
 	)
 
 	tallyman := tallyman.NewTallyman()
@@ -327,7 +334,7 @@ func initializeTransformer(
 	logger lager.Logger,
 	cachePath, workDir string,
 	maxCacheSizeInBytes uint64,
-	maxConcurrentDownloads uint,
+	maxConcurrentDownloads, maxConcurrentUploads uint,
 ) *transformer.Transformer {
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8))
 	uploader := uploader.New(10*time.Minute, logger)
@@ -340,6 +347,7 @@ func initializeTransformer(
 		extractor,
 		compressor,
 		make(chan struct{}, maxConcurrentDownloads),
+		make(chan struct{}, maxConcurrentUploads),
 		logger,
 		workDir,
 	)
