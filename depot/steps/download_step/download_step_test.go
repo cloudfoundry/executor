@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"reflect"
 
@@ -20,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/depot/sequence"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps/download_step"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/download_step"
 	archiveHelper "github.com/pivotal-golang/archiver/extractor/test_helper"
 )
 
@@ -63,10 +64,11 @@ var _ = Describe("DownloadAction", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			step = New(
+			step = download_step.New(
 				container,
 				downloadAction,
 				cache,
+				make(chan struct{}, 1),
 				logger,
 			)
 
@@ -162,6 +164,85 @@ var _ = Describe("DownloadAction", func() {
 			It("returns an error", func() {
 				Ω(stepErr.Error()).Should(ContainSubstring("Downloading failed"))
 			})
+		})
+
+	})
+
+	Describe("the downloads are rate limited", func() {
+		var container garden_api.Container
+
+		BeforeEach(func() {
+			var err error
+			container, err = gardenClient.Create(garden_api.ContainerSpec{
+				Handle: handle,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		It("allows only N concurrent downloads", func() {
+			rateLimiter := make(chan struct{}, 2)
+
+			downloadAction1 := models.DownloadAction{
+				From: "http://mr_jones1",
+				To:   "/tmp/Antarctica",
+			}
+
+			step1 := download_step.New(
+				container,
+				downloadAction1,
+				cache,
+				rateLimiter,
+				logger,
+			)
+
+			downloadAction2 := models.DownloadAction{
+				From: "http://mr_jones2",
+				To:   "/tmp/Antarctica",
+			}
+
+			step2 := download_step.New(
+				container,
+				downloadAction2,
+				cache,
+				rateLimiter,
+				logger,
+			)
+
+			downloadAction3 := models.DownloadAction{
+				From: "http://mr_jones3",
+				To:   "/tmp/Antarctica",
+			}
+
+			step3 := download_step.New(
+				container,
+				downloadAction3,
+				cache,
+				rateLimiter,
+				logger,
+			)
+
+			fetchCh := make(chan struct{}, 3)
+			barrier := make(chan struct{})
+			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
+			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer) (io.ReadCloser, error) {
+				fetchCh <- struct{}{}
+				<-barrier
+				return nopCloser, nil
+			}
+
+			go step1.Perform()
+			go step2.Perform()
+			go step3.Perform()
+
+			Eventually(fetchCh).Should(Receive())
+			Eventually(fetchCh).Should(Receive())
+			Consistently(fetchCh).ShouldNot(Receive())
+
+			barrier <- struct{}{}
+
+			Eventually(fetchCh).Should(Receive())
+
+			close(barrier)
 		})
 	})
 })

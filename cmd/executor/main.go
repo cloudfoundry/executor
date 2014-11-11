@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -328,7 +329,7 @@ func initializeTransformer(
 	maxCacheSizeInBytes uint64,
 	maxConcurrentDownloads uint,
 ) *transformer.Transformer {
-	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(maxConcurrentDownloads))
+	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8))
 	uploader := uploader.New(10*time.Minute, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -338,6 +339,7 @@ func initializeTransformer(
 		uploader,
 		extractor,
 		compressor,
+		make(chan struct{}, maxConcurrentDownloads),
 		logger,
 		workDir,
 	)

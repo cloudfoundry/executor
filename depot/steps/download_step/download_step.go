@@ -15,6 +15,7 @@ type DownloadStep struct {
 	container        garden_api.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
+	rateLimiter      chan struct{}
 	logger           lager.Logger
 }
 
@@ -22,6 +23,7 @@ func New(
 	container garden_api.Container,
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
+	rateLimiter chan struct{},
 	logger lager.Logger,
 ) *DownloadStep {
 	logger = logger.Session("DownloadAction", lager.Data{
@@ -33,11 +35,17 @@ func New(
 		container:        container,
 		model:            model,
 		cachedDownloader: cachedDownloader,
+		rateLimiter:      rateLimiter,
 		logger:           logger,
 	}
 }
 
 func (step *DownloadStep) Perform() error {
+	step.rateLimiter <- struct{}{}
+	defer func() {
+		<-step.rateLimiter
+	}()
+
 	step.logger.Info("starting")
 
 	downloadedFile, err := step.download()
