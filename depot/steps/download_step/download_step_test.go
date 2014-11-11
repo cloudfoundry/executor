@@ -230,9 +230,24 @@ var _ = Describe("DownloadAction", func() {
 				return nopCloser, nil
 			}
 
-			go step1.Perform()
-			go step2.Perform()
-			go step3.Perform()
+			go func() {
+				defer GinkgoRecover()
+
+				err := step1.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
+			go func() {
+				defer GinkgoRecover()
+
+				err := step2.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
+			go func() {
+				defer GinkgoRecover()
+
+				err := step3.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+			}()
 
 			Eventually(fetchCh).Should(Receive())
 			Eventually(fetchCh).Should(Receive())
