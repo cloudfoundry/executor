@@ -63,6 +63,17 @@ func (u *fakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int
 	return 0, nil
 }
 
+func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
+	fakeStreamer := new(fake_log_streamer.FakeLogStreamer)
+
+	stdoutBuffer := new(bytes.Buffer)
+	stderrBuffer := new(bytes.Buffer)
+	fakeStreamer.StdoutReturns(stdoutBuffer)
+	fakeStreamer.StderrReturns(stderrBuffer)
+
+	return fakeStreamer
+}
+
 var _ = Describe("UploadStep", func() {
 	var step sequence.Step
 	var result chan error
@@ -77,8 +88,6 @@ var _ = Describe("UploadStep", func() {
 	var currentUser *user.User
 	var uploadTarget *httptest.Server
 	var uploadedPayload []byte
-	var stdoutBuffer *bytes.Buffer
-	var stderrBuffer *bytes.Buffer
 
 	BeforeEach(func() {
 		var err error
@@ -109,15 +118,10 @@ var _ = Describe("UploadStep", func() {
 		compressor = Compressor.NewTgz()
 		uploader = Uploader.New(5*time.Second, logger)
 
-		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
+		fakeStreamer = newFakeStreamer()
 
 		currentUser, err = user.Current()
 		Ω(err).ShouldNot(HaveOccurred())
-
-		stdoutBuffer = new(bytes.Buffer)
-		stderrBuffer = new(bytes.Buffer)
-		fakeStreamer.StdoutReturns(stdoutBuffer)
-		fakeStreamer.StderrReturns(stderrBuffer)
 	})
 
 	AfterEach(func() {
@@ -197,14 +201,16 @@ var _ = Describe("UploadStep", func() {
 					err := step.Perform()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Ω(stdoutBuffer.String()).Should(ContainSubstring("Uploaded (1K)"))
+					stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+					Ω(stdout.String()).Should(ContainSubstring("Uploaded (1K)"))
 				})
 
 				It("does not stream an error", func() {
 					err := step.Perform()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					Ω(stderrBuffer.String()).Should(Equal(""))
+					stderr := fakeStreamer.Stderr().(*bytes.Buffer)
+					Ω(stderr.String()).Should(Equal(""))
 				})
 			})
 
@@ -307,7 +313,7 @@ var _ = Describe("UploadStep", func() {
 				uploader,
 				compressor,
 				tempDir,
-				fakeStreamer,
+				newFakeStreamer(),
 				rateLimiter,
 				logger,
 			)
@@ -323,7 +329,7 @@ var _ = Describe("UploadStep", func() {
 				uploader,
 				compressor,
 				tempDir,
-				fakeStreamer,
+				newFakeStreamer(),
 				rateLimiter,
 				logger,
 			)
@@ -339,7 +345,7 @@ var _ = Describe("UploadStep", func() {
 				uploader,
 				compressor,
 				tempDir,
-				fakeStreamer,
+				newFakeStreamer(),
 				rateLimiter,
 				logger,
 			)
