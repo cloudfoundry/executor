@@ -134,7 +134,7 @@ var metricsReportInterval = flag.Duration(
 
 var maxConcurrentDownloads = flag.Uint(
 	"maxConcurrentDownloads",
-	20,
+	5,
 	"maximum in-flight downloads",
 )
 
