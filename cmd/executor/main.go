@@ -368,20 +368,24 @@ func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client) execut
 }
 
 func destroyContainers(gardenClient garden.Client, containersFetcher *executorContainers, logger lager.Logger) {
+	logger.Info("executor-fetching-containers-to-destroy")
 	containers, err := containersFetcher.Containers()
 	if err != nil {
-		logger.Fatal("failed-to-get-containers", err)
+		logger.Fatal("executor-failed-to-get-containers", err)
 		return
+	} else {
+		logger.Info("executor-fetched-containers-to-destroy", lager.Data{"num-containers": len(containers)})
 	}
 
 	for _, container := range containers {
+		logger.Info("executor-destroying-container", lager.Data{"container-handle": container.Handle()})
 		err := gardenClient.Destroy(container.Handle())
 		if err != nil {
-			logger.Fatal("failed-to-destroy-container", err, lager.Data{
+			logger.Fatal("executor-failed-to-destroy-container", err, lager.Data{
 				"handle": container.Handle(),
 			})
 		} else {
-			logger.Info("destroyed-stray-container", lager.Data{
+			logger.Info("executor-destroyed-stray-container", lager.Data{
 				"handle": container.Handle(),
 			})
 		}
