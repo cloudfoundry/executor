@@ -4,30 +4,40 @@ package fake_log_streamer
 import (
 	"io"
 	"sync"
+
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 )
 
 type FakeLogStreamer struct {
 	StdoutStub        func() io.Writer
 	stdoutMutex       sync.RWMutex
 	stdoutArgsForCall []struct{}
-	stdoutReturns     struct {
+	stdoutReturns struct {
 		result1 io.Writer
 	}
 	StderrStub        func() io.Writer
 	stderrMutex       sync.RWMutex
 	stderrArgsForCall []struct{}
-	stderrReturns     struct {
+	stderrReturns struct {
 		result1 io.Writer
 	}
 	FlushStub        func()
 	flushMutex       sync.RWMutex
 	flushArgsForCall []struct{}
+	WithSourceStub        func(sourceName string) log_streamer.LogStreamer
+	withSourceMutex       sync.RWMutex
+	withSourceArgsForCall []struct {
+		sourceName string
+	}
+	withSourceReturns struct {
+		result1 log_streamer.LogStreamer
+	}
 }
 
 func (fake *FakeLogStreamer) Stdout() io.Writer {
 	fake.stdoutMutex.Lock()
-	defer fake.stdoutMutex.Unlock()
 	fake.stdoutArgsForCall = append(fake.stdoutArgsForCall, struct{}{})
+	fake.stdoutMutex.Unlock()
 	if fake.StdoutStub != nil {
 		return fake.StdoutStub()
 	} else {
@@ -42,6 +52,7 @@ func (fake *FakeLogStreamer) StdoutCallCount() int {
 }
 
 func (fake *FakeLogStreamer) StdoutReturns(result1 io.Writer) {
+	fake.StdoutStub = nil
 	fake.stdoutReturns = struct {
 		result1 io.Writer
 	}{result1}
@@ -49,8 +60,8 @@ func (fake *FakeLogStreamer) StdoutReturns(result1 io.Writer) {
 
 func (fake *FakeLogStreamer) Stderr() io.Writer {
 	fake.stderrMutex.Lock()
-	defer fake.stderrMutex.Unlock()
 	fake.stderrArgsForCall = append(fake.stderrArgsForCall, struct{}{})
+	fake.stderrMutex.Unlock()
 	if fake.StderrStub != nil {
 		return fake.StderrStub()
 	} else {
@@ -65,6 +76,7 @@ func (fake *FakeLogStreamer) StderrCallCount() int {
 }
 
 func (fake *FakeLogStreamer) StderrReturns(result1 io.Writer) {
+	fake.StderrStub = nil
 	fake.stderrReturns = struct {
 		result1 io.Writer
 	}{result1}
@@ -72,8 +84,8 @@ func (fake *FakeLogStreamer) StderrReturns(result1 io.Writer) {
 
 func (fake *FakeLogStreamer) Flush() {
 	fake.flushMutex.Lock()
-	defer fake.flushMutex.Unlock()
 	fake.flushArgsForCall = append(fake.flushArgsForCall, struct{}{})
+	fake.flushMutex.Unlock()
 	if fake.FlushStub != nil {
 		fake.FlushStub()
 	}
@@ -84,3 +96,37 @@ func (fake *FakeLogStreamer) FlushCallCount() int {
 	defer fake.flushMutex.RUnlock()
 	return len(fake.flushArgsForCall)
 }
+
+func (fake *FakeLogStreamer) WithSource(sourceName string) log_streamer.LogStreamer {
+	fake.withSourceMutex.Lock()
+	fake.withSourceArgsForCall = append(fake.withSourceArgsForCall, struct {
+		sourceName string
+	}{sourceName})
+	fake.withSourceMutex.Unlock()
+	if fake.WithSourceStub != nil {
+		return fake.WithSourceStub(sourceName)
+	} else {
+		return fake.withSourceReturns.result1
+	}
+}
+
+func (fake *FakeLogStreamer) WithSourceCallCount() int {
+	fake.withSourceMutex.RLock()
+	defer fake.withSourceMutex.RUnlock()
+	return len(fake.withSourceArgsForCall)
+}
+
+func (fake *FakeLogStreamer) WithSourceArgsForCall(i int) string {
+	fake.withSourceMutex.RLock()
+	defer fake.withSourceMutex.RUnlock()
+	return fake.withSourceArgsForCall[i].sourceName
+}
+
+func (fake *FakeLogStreamer) WithSourceReturns(result1 log_streamer.LogStreamer) {
+	fake.WithSourceStub = nil
+	fake.withSourceReturns = struct {
+		result1 log_streamer.LogStreamer
+	}{result1}
+}
+
+var _ log_streamer.LogStreamer = new(FakeLogStreamer)

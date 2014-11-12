@@ -109,7 +109,7 @@ func (transformer *Transformer) convertAction(
 		return run_step.New(
 			container,
 			actionModel,
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 			transformer.allowPrivileged,
 		), nil
@@ -128,13 +128,13 @@ func (transformer *Transformer) convertAction(
 			transformer.uploader,
 			transformer.compressor,
 			transformer.tempDir,
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			transformer.uploadLimiter,
 			logger,
 		), nil
 	case models.EmitProgressAction:
 		subStep, err := transformer.convertAction(
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -148,12 +148,12 @@ func (transformer *Transformer) convertAction(
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
 			actionModel.FailureMessage,
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		), nil
 	case models.TryAction:
 		subStep, err := transformer.convertAction(
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -192,7 +192,7 @@ func (transformer *Transformer) convertAction(
 		}
 
 		check, err := transformer.convertAction(
-			logStreamer,
+			logStreamer.WithSource(actionModel.LogSource),
 			actionModel.Action,
 			globalEnv,
 			container,
@@ -216,7 +216,7 @@ func (transformer *Transformer) convertAction(
 			var err error
 
 			steps[i], err = transformer.convertAction(
-				logStreamer,
+				logStreamer.WithSource(actionModel.LogSource),
 				action,
 				globalEnv,
 				container,

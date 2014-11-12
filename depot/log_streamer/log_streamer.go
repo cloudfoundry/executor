@@ -15,6 +15,8 @@ type LogStreamer interface {
 	Stderr() io.Writer
 
 	Flush()
+
+	WithSource(sourceName string) LogStreamer
 }
 
 type logStreamer struct {
@@ -62,4 +64,15 @@ func (e *logStreamer) Stderr() io.Writer {
 func (e *logStreamer) Flush() {
 	e.stdout.flush()
 	e.stderr.flush()
+}
+
+func (e *logStreamer) WithSource(sourceName string) LogStreamer {
+	if sourceName == "" {
+		return e
+	}
+
+	return &logStreamer{
+		stdout: e.stdout.withSource(sourceName),
+		stderr: e.stderr.withSource(sourceName),
+	}
 }

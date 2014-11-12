@@ -37,6 +37,7 @@ var _ = Describe("LogStreamer", func() {
 
 				emission := loggregatorEmitter.Emissions()[0]
 				Ω(emission.GetAppId()).Should(Equal(guid))
+				Ω(emission.GetSourceType()).Should(Equal(sourceName))
 				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
 				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
 				Ω(emission.GetSourceInstance()).Should(Equal("11"))
@@ -48,6 +49,33 @@ var _ = Describe("LogStreamer", func() {
 				Ω(string(emission.GetMessage())).Should(Equal("this is another log"))
 				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
 				Ω(*emission.Timestamp).Should(BeNumerically("~", time.Now().UnixNano(), 10*time.Millisecond))
+			})
+		})
+
+		Describe("WithSource", func() {
+			Context("when a new log source is provided", func() {
+				It("should emit a message with the new log source", func() {
+					newSourceName := "new-source-name"
+					streamer = streamer.WithSource(newSourceName)
+					fmt.Fprintln(streamer.Stdout(), "this is a log")
+
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
+
+					emission := loggregatorEmitter.Emissions()[0]
+					Ω(emission.GetSourceType()).Should(Equal(newSourceName))
+				})
+			})
+
+			Context("when no log source is provided", func() {
+				It("should emit a message with the existing log source", func() {
+					streamer = streamer.WithSource("")
+					fmt.Fprintln(streamer.Stdout(), "this is a log")
+
+					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
+
+					emission := loggregatorEmitter.Emissions()[0]
+					Ω(emission.GetSourceType()).Should(Equal(sourceName))
+				})
 			})
 		})
 

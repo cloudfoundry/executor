@@ -117,3 +117,7 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 	destination.buffer = append(destination.buffer, []byte(message)...)
 	return ""
 }
+
+func (d *streamDestination) withSource(sourceName string) *streamDestination {
+	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType, d.emitter)
+}
