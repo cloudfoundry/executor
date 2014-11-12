@@ -17,20 +17,16 @@ var _ = Describe("TryStep", func() {
 	var step sequence.Step
 	var subStep sequence.Step
 	var thingHappened bool
-	var cleanedUp bool
 	var cancelled bool
 	var logger *lagertest.TestLogger
 
 	BeforeEach(func() {
-		thingHappened, cleanedUp, cancelled = false, false, false
+		thingHappened, cancelled = false, false
 
 		subStep = &fake_step.FakeStep{
 			PerformStub: func() error {
 				thingHappened = true
 				return nil
-			},
-			CleanupStub: func() {
-				cleanedUp = true
 			},
 			CancelStub: func() {
 				cancelled = true
@@ -73,14 +69,6 @@ var _ = Describe("TryStep", func() {
 
 			Ω(logger.TestSink.Buffer).Should(gbytes.Say("failed"))
 			Ω(logger.TestSink.Buffer).Should(gbytes.Say("oh no!"))
-		})
-	})
-
-	Context("when told to clean up", func() {
-		It("passes the message along", func() {
-			Ω(cleanedUp).Should(BeFalse())
-			step.Cleanup()
-			Ω(cleanedUp).Should(BeTrue())
 		})
 	})
 

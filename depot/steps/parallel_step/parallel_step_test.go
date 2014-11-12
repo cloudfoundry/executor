@@ -18,12 +18,10 @@ var _ = Describe("ParallelStep", func() {
 	var subStep2 sequence.Step
 
 	var thingHappened chan bool
-	var cleanedUp chan bool
 	var cancelled chan bool
 
 	BeforeEach(func() {
 		thingHappened = make(chan bool, 2)
-		cleanedUp = make(chan bool, 2)
 		cancelled = make(chan bool, 2)
 
 		running := new(sync.WaitGroup)
@@ -36,9 +34,6 @@ var _ = Describe("ParallelStep", func() {
 				thingHappened <- true
 				return nil
 			},
-			CleanupStub: func() {
-				cleanedUp <- true
-			},
 			CancelStub: func() {
 				cancelled <- true
 			},
@@ -50,9 +45,6 @@ var _ = Describe("ParallelStep", func() {
 				running.Wait()
 				thingHappened <- true
 				return nil
-			},
-			CleanupStub: func() {
-				cleanedUp <- true
 			},
 			CancelStub: func() {
 				cancelled <- true
@@ -111,15 +103,6 @@ var _ = Describe("ParallelStep", func() {
 
 			Eventually(step2Completed).Should(BeClosed())
 			Eventually(errs).Should(Receive(Equal(disaster)))
-		})
-	})
-
-	Context("when told to clean up", func() {
-		It("passes the message along to all steps", func() {
-			step.Cleanup()
-
-			Eventually(cleanedUp).Should(Receive())
-			Eventually(cleanedUp).Should(Receive())
 		})
 	})
 

@@ -133,6 +133,3 @@ func backoffForHealthyCount(healthyCount uint) time.Duration {
 func (step *monitorStep) Cancel() {
 	step.cancel <- struct{}{}
 }
-
-func (step *monitorStep) Cleanup() {
-}

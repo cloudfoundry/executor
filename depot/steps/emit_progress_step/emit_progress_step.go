@@ -54,7 +54,3 @@ func (step *EmitProgressStep) Perform() error {
 func (step *EmitProgressStep) Cancel() {
 	step.substep.Cancel()
 }
-
-func (step *EmitProgressStep) Cleanup() {
-	step.substep.Cleanup()
-}

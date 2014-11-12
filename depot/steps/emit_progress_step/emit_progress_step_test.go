@@ -19,7 +19,6 @@ import (
 var _ = Describe("EmitProgressStep", func() {
 	var step sequence.Step
 	var subStep sequence.Step
-	var cleanedUp bool
 	var cancelled bool
 	var errorToReturn error
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -33,7 +32,7 @@ var _ = Describe("EmitProgressStep", func() {
 		stdoutBuffer = new(bytes.Buffer)
 		errorToReturn = nil
 		startMessage, successMessage, failureMessage = "", "", ""
-		cleanedUp, cancelled = false, false
+		cancelled = false
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 
 		fakeStreamer.StderrReturns(stderrBuffer)
@@ -43,9 +42,6 @@ var _ = Describe("EmitProgressStep", func() {
 			PerformStub: func() error {
 				fakeStreamer.Stdout().Write([]byte("RUNNING\n"))
 				return errorToReturn
-			},
-			CleanupStub: func() {
-				cleanedUp = true
 			},
 			CancelStub: func() {
 				cancelled = true
@@ -140,14 +136,6 @@ var _ = Describe("EmitProgressStep", func() {
 					Ω(stderrBuffer.String()).Should(BeEmpty())
 				})
 			})
-		})
-	})
-
-	Context("when told to clean up", func() {
-		It("passes the message along", func() {
-			Ω(cleanedUp).Should(BeFalse())
-			step.Cleanup()
-			Ω(cleanedUp).Should(BeTrue())
 		})
 	})
 
