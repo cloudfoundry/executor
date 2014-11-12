@@ -37,6 +37,7 @@ type Transformer struct {
 	uploadLimiter    chan struct{}
 	logger           lager.Logger
 	tempDir          string
+	allowPrivileged  bool
 }
 
 func NewTransformer(
@@ -48,6 +49,7 @@ func NewTransformer(
 	uploadLimiter chan struct{},
 	logger lager.Logger,
 	tempDir string,
+	allowPrivileged bool,
 ) *Transformer {
 	return &Transformer{
 		cachedDownloader: cachedDownloader,
@@ -58,6 +60,7 @@ func NewTransformer(
 		uploadLimiter:    uploadLimiter,
 		logger:           logger,
 		tempDir:          tempDir,
+		allowPrivileged:  allowPrivileged,
 	}
 }
 
@@ -108,6 +111,7 @@ func (transformer *Transformer) convertAction(
 			actionModel,
 			logStreamer,
 			logger,
+			transformer.allowPrivileged,
 		), nil
 	case models.DownloadAction:
 		return download_step.New(

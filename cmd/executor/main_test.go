@@ -86,6 +86,7 @@ var _ = Describe("Executor", func() {
 			debugAddr,
 			ownerName,
 			pruningInterval,
+			false,
 		)
 	})
 

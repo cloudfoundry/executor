@@ -20,6 +20,7 @@ func New(
 	debugAddr,
 	containerOwnerName string,
 	pruneInterval time.Duration,
+	allowPrivileged bool,
 ) *ginkgomon.Runner {
 
 	return ginkgomon.New(ginkgomon.Config{
@@ -43,6 +44,7 @@ func New(
 			"-pruneInterval", pruneInterval.String(),
 			"-debugAddr", debugAddr,
 			"-gardenSyncInterval", "1s",
+			"-allowPrivileged="+strconv.FormatBool(allowPrivileged),
 		),
 	})
 }

@@ -162,6 +162,12 @@ var dropsondeDestination = flag.String(
 	"Destination for dropsonde-emitted metrics.",
 )
 
+var allowPrivileged = flag.Bool(
+	"allowPrivileged",
+	false,
+	"allow creation of privileged containers",
+)
+
 func main() {
 	flag.Parse()
 
@@ -197,6 +203,7 @@ func main() {
 		*maxCacheSizeInBytes,
 		*maxConcurrentDownloads,
 		*maxConcurrentUploads,
+		*allowPrivileged,
 	)
 
 	tallyman := tallyman.NewTallyman()
@@ -335,6 +342,7 @@ func initializeTransformer(
 	cachePath, workDir string,
 	maxCacheSizeInBytes uint64,
 	maxConcurrentDownloads, maxConcurrentUploads uint,
+	allowPrivileged bool,
 ) *transformer.Transformer {
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8))
 	uploader := uploader.New(10*time.Minute, logger)
@@ -350,6 +358,7 @@ func initializeTransformer(
 		make(chan struct{}, maxConcurrentUploads),
 		logger,
 		workDir,
+		allowPrivileged,
 	)
 }
 

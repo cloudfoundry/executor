@@ -1,6 +1,7 @@
 package run_step
 
 import (
+	"errors"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
@@ -11,10 +12,11 @@ import (
 )
 
 type RunStep struct {
-	container garden_api.Container
-	model     models.RunAction
-	streamer  log_streamer.LogStreamer
-	logger    lager.Logger
+	container       garden_api.Container
+	model           models.RunAction
+	streamer        log_streamer.LogStreamer
+	logger          lager.Logger
+	allowPrivileged bool
 }
 
 func New(
@@ -22,13 +24,15 @@ func New(
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
+	allowPrivileged bool,
 ) *RunStep {
 	logger = logger.Session("RunAction")
 	return &RunStep{
-		container: container,
-		model:     model,
-		streamer:  streamer,
-		logger:    logger,
+		container:       container,
+		model:           model,
+		streamer:        streamer,
+		logger:          logger,
+		allowPrivileged: allowPrivileged,
 	}
 }
 
@@ -44,6 +48,10 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 
 func (step *RunStep) Perform() error {
 	step.logger.Info("running")
+
+	if step.model.Privileged && !step.allowPrivileged {
+		return errors.New("privileged-action-denied")
+	}
 
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)

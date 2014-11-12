@@ -29,6 +29,7 @@ var _ = Describe("RunAction", func() {
 	var gardenClient *fake_api_client.FakeClient
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
+	var allowPrivileged bool
 
 	var spawnedProcess *gfakes.FakeProcess
 	var runError error
@@ -46,7 +47,7 @@ var _ = Describe("RunAction", func() {
 			ResourceLimits: models.ResourceLimits{
 				Nofile: &fileDescriptorLimit,
 			},
-			Privileged: true,
+			Privileged: false,
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
@@ -54,6 +55,8 @@ var _ = Describe("RunAction", func() {
 		gardenClient = fake_api_client.New()
 
 		logger = lagertest.NewTestLogger("test")
+
+		allowPrivileged = false
 
 		spawnedProcess = new(gfakes.FakeProcess)
 		runError = nil
@@ -76,6 +79,7 @@ var _ = Describe("RunAction", func() {
 			runAction,
 			fakeStreamer,
 			logger,
+			allowPrivileged,
 		)
 	})
 
@@ -84,6 +88,36 @@ var _ = Describe("RunAction", func() {
 
 		JustBeforeEach(func() {
 			stepErr = step.Perform()
+		})
+
+		Context("with a privileged action", func() {
+			BeforeEach(func() {
+				runAction.Privileged = true
+			})
+			Context("with allowPrivileged set to false", func() {
+				BeforeEach(func() {
+					allowPrivileged = false
+				})
+
+				It("errors when trying to execute a privileged run action", func() {
+					Ω(stepErr).Should(HaveOccurred())
+				})
+			})
+
+			Context("with allowPrivileged set to true", func() {
+				BeforeEach(func() {
+					allowPrivileged = true
+				})
+
+				It("does not error when trying to execute a privileged run action", func() {
+					Ω(stepErr).ShouldNot(HaveOccurred())
+				})
+
+				It("creates a privileged container", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Ω(spec.Privileged).Should(BeTrue())
+				})
+			})
 		})
 
 		Context("when the script succeeds", func() {
@@ -102,7 +136,7 @@ var _ = Describe("RunAction", func() {
 				Ω(spec.Args).Should(Equal([]string{"reboot"}))
 				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
 				Ω(spec.Env).Should(Equal([]string{"A=1", "B=2"}))
-				Ω(spec.Privileged).Should(BeTrue())
+				Ω(spec.Privileged).Should(BeFalse())
 			})
 		})
 
