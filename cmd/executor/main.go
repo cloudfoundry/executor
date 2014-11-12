@@ -168,6 +168,12 @@ var allowPrivileged = flag.Bool(
 	"allow creation of privileged containers",
 )
 
+var skipCertVerify = flag.Bool(
+	"skipCertVerify",
+	false,
+	"skip SSL certificate verification",
+)
+
 func main() {
 	flag.Parse()
 
@@ -204,6 +210,7 @@ func main() {
 		*maxConcurrentDownloads,
 		*maxConcurrentUploads,
 		*allowPrivileged,
+		*skipCertVerify,
 	)
 
 	tallyman := tallyman.NewTallyman()
@@ -343,9 +350,10 @@ func initializeTransformer(
 	maxCacheSizeInBytes uint64,
 	maxConcurrentDownloads, maxConcurrentUploads uint,
 	allowPrivileged bool,
+	skipSSLVerification bool,
 ) *transformer.Transformer {
-	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8))
-	uploader := uploader.New(10*time.Minute, logger)
+	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification)
+	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 

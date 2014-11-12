@@ -33,7 +33,7 @@ var _ = Describe("Uploader", func() {
 		serverRequests = []*http.Request{}
 		logger = lagertest.NewTestLogger("test")
 
-		uploader = New(100*time.Millisecond, logger)
+		uploader = New(100*time.Millisecond, false, logger)
 	})
 
 	Describe("upload", func() {

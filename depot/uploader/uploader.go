@@ -2,9 +2,11 @@ package uploader
 
 import (
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,13 +24,23 @@ type URLUploader struct {
 	logger     lager.Logger
 }
 
-func New(timeout time.Duration, logger lager.Logger) Uploader {
-	httpTransport := &http.Transport{
+func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) Uploader {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: skipSSLVerification,
+			MinVersion:         tls.VersionTLS10,
+		},
 		ResponseHeaderTimeout: timeout,
 	}
 
 	httpClient := &http.Client{
-		Transport: httpTransport,
+		Transport: transport,
 	}
 
 	return &URLUploader{
