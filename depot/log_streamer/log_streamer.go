@@ -8,7 +8,11 @@ import (
 	"github.com/cloudfoundry/dropsonde/events"
 )
 
-const MAX_MESSAGE_SIZE = 4096
+const (
+	MAX_MESSAGE_SIZE = 4096
+
+	DefaultLogSource = "LOG"
+)
 
 type LogStreamer interface {
 	Stdout() io.Writer
@@ -27,6 +31,10 @@ type logStreamer struct {
 func New(guid string, sourceName string, index *int, loggregatorEmitter logemitter.Emitter) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
+	}
+
+	if sourceName == "" {
+		sourceName = DefaultLogSource
 	}
 
 	sourceIndex := "0"

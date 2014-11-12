@@ -242,6 +242,18 @@ var _ = Describe("LogStreamer", func() {
 		})
 	})
 
+	Context("when there is no log source", func() {
+		It("defaults to LOG", func() {
+			streamer = New(guid, "", nil, loggregatorEmitter)
+
+			streamer.Stdout().Write([]byte("hi"))
+			streamer.Flush()
+
+			Ω(loggregatorEmitter.Emissions()[0].GetSourceType()).Should(Equal(DefaultLogSource))
+
+		})
+	})
+
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
 			streamer = New(guid, sourceName, nil, loggregatorEmitter)
