@@ -40,7 +40,7 @@ type Container struct {
 	Log        LogConfig     `json:"log"`
 
 	Setup   *models.ExecutorAction `json:"setup"`
-	Action  *models.ExecutorAction `json:"run"`
+	Action  models.ExecutorAction  `json:"run"`
 	Monitor *models.ExecutorAction `json:"monitor"`
 
 	Env []EnvironmentVariable `json:"env,omitempty"`

@@ -47,6 +47,12 @@ var _ = Describe("Api", func() {
 
 	var i = 0
 
+	action := models.ExecutorAction{
+		models.RunAction{
+			Path: "ls",
+		},
+	}
+
 	BeforeEach(func() {
 		containerGuid = "container-guid"
 
@@ -97,6 +103,7 @@ var _ = Describe("Api", func() {
 			BeforeEach(func() {
 				expectedContainer = executor.Container{
 					Guid:     containerGuid,
+					Action:   action,
 					MemoryMB: 123,
 					DiskMB:   456,
 				}
@@ -144,6 +151,7 @@ var _ = Describe("Api", func() {
 
 		BeforeEach(func() {
 			reserveRequestBody = MarshalledPayload(executor.Container{
+				Action:    action,
 				MemoryMB:  64,
 				DiskMB:    512,
 				CPUWeight: 50,
@@ -171,6 +179,7 @@ var _ = Describe("Api", func() {
 			BeforeEach(func() {
 				expectedContainer = executor.Container{
 					Guid:        containerGuid,
+					Action:      action,
 					MemoryMB:    64,
 					DiskMB:      512,
 					State:       "reserved",
@@ -243,7 +252,7 @@ var _ = Describe("Api", func() {
 				DiskMB:    512,
 				CPUWeight: 50,
 
-				Action: &expectedAction,
+				Action: expectedAction,
 				Env:    expectedEnv,
 			})
 
@@ -287,8 +296,8 @@ var _ = Describe("Api", func() {
 
 			BeforeEach(func() {
 				expectedContainers = []executor.Container{
-					executor.Container{Guid: "first-container"},
-					executor.Container{Guid: "second-container"},
+					executor.Container{Guid: "first-container", Action: action},
+					executor.Container{Guid: "second-container", Action: action},
 				}
 
 				depotClient.ListContainersReturns(expectedContainers, nil)
@@ -366,6 +375,7 @@ var _ = Describe("Api", func() {
 		Context("when the container exists", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(executor.Container{
+					Action:   action,
 					MemoryMB: 64,
 					DiskMB:   512,
 				})
@@ -431,6 +441,7 @@ var _ = Describe("Api", func() {
 		Context("when the container exists", func() {
 			BeforeEach(func() {
 				allocRequestBody := MarshalledPayload(executor.Container{
+					Action:   action,
 					MemoryMB: 64,
 					DiskMB:   512,
 				})
@@ -639,7 +650,8 @@ var _ = Describe("Api", func() {
 		Context("when the depot emits events", func() {
 			event1 := executor.ContainerCompleteEvent{
 				executor.Container{
-					Guid: "the-guid",
+					Guid:   "the-guid",
+					Action: action,
 
 					RunResult: executor.ContainerRunResult{
 						Failed:        true,
@@ -650,7 +662,8 @@ var _ = Describe("Api", func() {
 
 			event2 := executor.ContainerCompleteEvent{
 				executor.Container{
-					Guid: "a-guid",
+					Guid:   "a-guid",
+					Action: action,
 
 					RunResult: executor.ContainerRunResult{
 						Failed: false,

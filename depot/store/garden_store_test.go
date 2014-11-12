@@ -36,6 +36,12 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeTimer *fake_timer.FakeTimer
 	)
 
+	action := models.ExecutorAction{
+		models.RunAction{
+			Path: "ls",
+		},
+	}
+
 	BeforeEach(func() {
 		fakeTimer = fake_timer.NewFakeTimer(time.Now())
 		tracker = new(fakes.FakeInitializedTracker)
@@ -350,12 +356,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Context("when the container has an executor:action property", func() {
 				Context("and the action is valid", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
-					}
-
 					BeforeEach(func() {
 						payload, err := json.Marshal(action)
 						Ω(err).ShouldNot(HaveOccurred())
@@ -368,7 +368,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("has it as its action", func() {
-						Ω(*executorContainer.Action).Should(Equal(action))
+						Ω(executorContainer.Action).Should(Equal(action))
 					})
 				})
 
@@ -659,9 +659,17 @@ var _ = Describe("GardenContainerStore", func() {
 			createErr        error
 		)
 
+		action := models.ExecutorAction{
+			models.RunAction{
+				Path: "ls",
+			},
+		}
+
 		BeforeEach(func() {
 			executorContainer = executor.Container{
 				Guid: "some-guid",
+
+				Action: action,
 			}
 
 			fakeGardenContainer = new(gfakes.FakeContainer)
@@ -706,6 +714,14 @@ var _ = Describe("GardenContainerStore", func() {
 				It("creates it with the guid as the handle", func() {
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Handle).Should(Equal("some-guid"))
+				})
+
+				It("creates it with the executor:action property", func() {
+					payload, err := json.Marshal(action)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+					Ω(containerSpec.Properties["executor:action"]).To(MatchJSON(payload))
 				})
 
 				Context("when the Executor container has health", func() {
@@ -763,26 +779,6 @@ var _ = Describe("GardenContainerStore", func() {
 					It("creates it with the executor:rootfs property", func() {
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:rootfs"]).To(Equal("some/root/path"))
-					})
-				})
-
-				Context("when the Executor container has an Action", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
-					}
-
-					BeforeEach(func() {
-						executorContainer.Action = &action
-					})
-
-					It("creates it with the executor:action property", func() {
-						payload, err := json.Marshal(action)
-						Ω(err).ShouldNot(HaveOccurred())
-
-						containerSpec := fakeGardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:action"]).To(MatchJSON(payload))
 					})
 				})
 
@@ -1313,11 +1309,13 @@ var _ = Describe("GardenContainerStore", func() {
 
 			_, err := gardenStore.Create(executor.Container{
 				MemoryMB: 2,
+				Action:   action,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
 			_, err = gardenStore.Create(executor.Container{
 				MemoryMB: 5,
+				Action:   action,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 

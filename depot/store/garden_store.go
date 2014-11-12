@@ -231,13 +231,12 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		))
 	}
 
-	parallelSequence := []steps.Step{}
-	if container.Action != nil {
-		parallelSequence = append(parallelSequence, store.transformer.StepFor(
+	parallelSequence := []steps.Step{
+		store.transformer.StepFor(
 			logStreamer,
-			*container.Action,
+			container.Action,
 			gardenContainer,
-		))
+		),
 	}
 
 	monitorEvents := make(chan steps.HealthEvent)

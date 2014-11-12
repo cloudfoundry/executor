@@ -61,6 +61,7 @@ func (transformer *Transformer) StepFor(
 			logStreamer,
 			logger,
 		)
+
 	case models.DownloadAction:
 		return steps.NewDownload(
 			container,
@@ -68,6 +69,7 @@ func (transformer *Transformer) StepFor(
 			transformer.cachedDownloader,
 			logger,
 		)
+
 	case models.UploadAction:
 		return steps.NewUpload(
 			container,
@@ -78,6 +80,7 @@ func (transformer *Transformer) StepFor(
 			logStreamer,
 			logger,
 		)
+
 	case models.EmitProgressAction:
 		return steps.NewEmitProgress(
 			transformer.StepFor(
@@ -91,6 +94,7 @@ func (transformer *Transformer) StepFor(
 			logStreamer,
 			logger,
 		)
+
 	case models.TryAction:
 		return steps.NewTry(
 			transformer.StepFor(
@@ -100,6 +104,7 @@ func (transformer *Transformer) StepFor(
 			),
 			logger,
 		)
+
 	case models.ParallelAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
@@ -109,8 +114,18 @@ func (transformer *Transformer) StepFor(
 				container,
 			)
 		}
-
 		return steps.NewParallel(subSteps)
+
+	case models.SerialAction:
+		subSteps := make([]steps.Step, len(actionModel.Actions))
+		for i, action := range actionModel.Actions {
+			subSteps[i] = transformer.StepFor(
+				logStreamer,
+				action,
+				container,
+			)
+		}
+		return steps.NewSerial(subSteps)
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))

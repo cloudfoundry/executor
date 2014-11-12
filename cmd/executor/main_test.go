@@ -221,7 +221,7 @@ var _ = Describe("Executor", func() {
 
 			Context("when Garden returns an error", func() {
 				BeforeEach(func() {
-					stopProcess(gardenProcess)
+					ginkgomon.Interrupt(gardenProcess)
 				})
 
 				AfterEach(func() {
@@ -280,7 +280,7 @@ var _ = Describe("Executor", func() {
 						{Name: "ENV2", Value: "val2"},
 					},
 
-					Action: &models.ExecutorAction{
+					Action: models.ExecutorAction{
 						models.RunAction{
 							Path: "true",
 							Env: []models.EnvironmentVariable{
@@ -478,7 +478,7 @@ var _ = Describe("Executor", func() {
 					Context("when created without a monitor action", func() {
 						Context("while the action is running", func() {
 							BeforeEach(func() {
-								container.Action = &models.ExecutorAction{
+								container.Action = models.ExecutorAction{
 									models.RunAction{
 										Path: "sh",
 										Args: []string{"-c", "while true; do sleep 1; done"},
@@ -569,7 +569,7 @@ var _ = Describe("Executor", func() {
 
 						Context("when the action succeeds", func() {
 							BeforeEach(func() {
-								container.Action = &models.ExecutorAction{
+								container.Action = models.ExecutorAction{
 									models.RunAction{
 										Path: "true",
 									},
@@ -581,7 +581,7 @@ var _ = Describe("Executor", func() {
 
 						Context("when the action fails", func() {
 							BeforeEach(func() {
-								container.Action = &models.ExecutorAction{
+								container.Action = models.ExecutorAction{
 									models.RunAction{
 										Path: "false",
 									},
@@ -608,7 +608,7 @@ var _ = Describe("Executor", func() {
 
 						Context("while the action is running", func() {
 							BeforeEach(func() {
-								container.Action = &models.ExecutorAction{
+								container.Action = models.ExecutorAction{
 									models.RunAction{
 										Path: "sh",
 										Args: []string{"-c", "while true; do sleep 1; done"},
@@ -638,7 +638,7 @@ var _ = Describe("Executor", func() {
 
 					Context("when running fails", func() {
 						BeforeEach(func() {
-							container.Action = &models.ExecutorAction{
+							container.Action = models.ExecutorAction{
 								models.RunAction{
 									Path: "false",
 								},
@@ -756,79 +756,6 @@ var _ = Describe("Executor", func() {
 			})
 		})
 
-		// Context("while the container is initializing", func() {
-		// 	var guid string
-		//
-		// 	var createdContainer chan struct{}
-		//
-		// 	BeforeEach(func() {
-		// 		guid = allocNewContainer(executor.Container{})
-		//
-		// 		fakeContainer := new(gfakes.FakeContainer)
-		// 		fakeContainer.HandleReturns(guid)
-		//
-		// 		creating := make(chan struct{})
-		//
-		// 		createdContainer = make(chan struct{})
-		//
-		// 		fakeBackend.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
-		// 			close(creating)
-		// 			<-createdContainer
-		//
-		// 			fakeBackend.LookupReturns(fakeContainer, nil)
-		// 			fakeBackend.ContainersReturns([]garden.Container{fakeContainer}, nil)
-		//
-		// 			return fakeContainer, nil
-		// 		}
-		//
-		// 		err := executorClient.RunContainer(guid)
-		// 		Ω(err).ShouldNot(HaveOccurred())
-		//
-		// 		Eventually(creating).Should(BeClosed())
-		// 	})
-		//
-		// 	AfterEach(func() {
-		// 		select {
-		// 		case <-createdContainer:
-		// 		default:
-		// 			// un-hang garden
-		// 			close(createdContainer)
-		// 		}
-		// 	})
-		//
-		// 	Describe("deleting it", func() {
-		// 		It("destroys the garden container after creating it", func() {
-		// 			err := executorClient.DeleteContainer(guid)
-		// 			Ω(err).ShouldNot(HaveOccurred())
-		//
-		// 			Consistently(fakeBackend.DestroyCallCount).Should(BeZero())
-		//
-		// 			close(createdContainer)
-		//
-		// 			Eventually(fakeBackend.DestroyCallCount).Should(Equal(1))
-		// 			Ω(fakeBackend.DestroyArgsForCall(0)).Should(Equal(guid))
-		// 		})
-		//
-		// 		It("removes the container from the registry", func() {
-		// 			err := executorClient.DeleteContainer(guid)
-		// 			Ω(err).ShouldNot(HaveOccurred())
-		//
-		// 			_, err = executorClient.GetContainer(guid)
-		// 			Ω(err).Should(Equal(executor.ErrContainerNotFound))
-		// 		})
-		// 	})
-		//
-		// 	Describe("listing containers", func() {
-		// 		It("shows up in the container list in initializing state", func() {
-		// 			containers, err := executorClient.ListContainers(nil)
-		// 			Ω(err).ShouldNot(HaveOccurred())
-		// 			Ω(containers).Should(HaveLen(1))
-		// 			Ω(containers[0].Guid).Should(Equal(guid))
-		// 			Ω(containers[0].State).Should(Equal(executor.StateInitializing))
-		// 		})
-		// 	})
-		// })
-
 		Context("while it is running", func() {
 			var guid string
 
@@ -837,7 +764,7 @@ var _ = Describe("Executor", func() {
 					MemoryMB: 64,
 					DiskMB:   64,
 
-					Action: &models.ExecutorAction{
+					Action: models.ExecutorAction{
 						models.RunAction{
 							Path: "sh",
 							Args: []string{"-c", "while true; do sleep 1; done"},
@@ -939,7 +866,7 @@ var _ = Describe("Executor", func() {
 
 				BeforeEach(func() {
 					guid = allocNewContainer(executor.Container{
-						Action: &models.ExecutorAction{
+						Action: models.ExecutorAction{
 							models.RunAction{
 								Path: "sh",
 								Args: []string{
@@ -1089,7 +1016,7 @@ var _ = Describe("Executor", func() {
 
 	Describe("when Garden is unavailable", func() {
 		BeforeEach(func() {
-			stopProcess(gardenProcess)
+			ginkgomon.Interrupt(gardenProcess)
 
 			runner.StartCheck = ""
 			process = ginkgomon.Invoke(runner)
