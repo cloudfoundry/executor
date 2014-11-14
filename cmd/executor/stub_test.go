@@ -1,3 +1,7 @@
+/*
+Executor component tests require garden-linux to be running, and can be found
+in github.com/cloudfoundry-incubator/inigo
+*/
 package main_test
 
 import (
