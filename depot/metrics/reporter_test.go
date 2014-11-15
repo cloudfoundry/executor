@@ -4,11 +4,14 @@ import (
 	"errors"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
 	"github.com/cloudfoundry-incubator/executor"
-	. "github.com/cloudfoundry-incubator/executor/depot/metrics"
+	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
+	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
@@ -30,7 +33,7 @@ var _ = Describe("Reporter", func() {
 		executorClient = new(fakes.FakeClient)
 
 		sender = fake.NewFakeMetricSender()
-		metrics.Initialize(sender)
+		dropsonde_metrics.Initialize(sender)
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
@@ -52,7 +55,7 @@ var _ = Describe("Reporter", func() {
 	})
 
 	JustBeforeEach(func() {
-		reporter = ifrit.Envoke(&Reporter{
+		reporter = ifrit.Envoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
 			Interval:       reportInterval,
 			Logger:         lagertest.NewTestLogger("test"),
