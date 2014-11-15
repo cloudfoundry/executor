@@ -3,7 +3,6 @@ package steps
 import (
 	"time"
 
-
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/timer"
 )

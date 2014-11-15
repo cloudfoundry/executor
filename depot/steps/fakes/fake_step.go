@@ -11,12 +11,12 @@ type FakeStep struct {
 	PerformStub        func() error
 	performMutex       sync.RWMutex
 	performArgsForCall []struct{}
-	performReturns struct {
+	performReturns     struct {
 		result1 error
 	}
-	CancelStub        func()
-	cancelMutex       sync.RWMutex
-	cancelArgsForCall []struct{}
+	CancelStub         func()
+	cancelMutex        sync.RWMutex
+	cancelArgsForCall  []struct{}
 	CleanupStub        func()
 	cleanupMutex       sync.RWMutex
 	cleanupArgsForCall []struct{}

@@ -8,8 +8,8 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 
-	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

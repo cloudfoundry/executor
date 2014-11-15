@@ -1,7 +1,6 @@
 package steps
 
 import (
-
 	"github.com/pivotal-golang/lager"
 )
 

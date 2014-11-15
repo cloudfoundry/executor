@@ -8,9 +8,8 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/pivotal-golang/lager/lagertest"
 
-
-	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
 var _ = Describe("TryStep", func() {

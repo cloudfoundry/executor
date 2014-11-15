@@ -7,9 +7,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-
-	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
 var _ = Describe("ParallelStep", func() {
