@@ -87,6 +87,7 @@ const (
 	EventTypeInvalid EventType = ""
 
 	EventTypeContainerComplete EventType = "container_complete"
+	EventTypeContainerHealth   EventType = "container_health"
 )
 
 type ContainerCompleteEvent struct {
@@ -94,3 +95,10 @@ type ContainerCompleteEvent struct {
 }
 
 func (ContainerCompleteEvent) EventType() EventType { return EventTypeContainerComplete }
+
+type ContainerHealthEvent struct {
+	Container Container `json:"container"`
+	Health    Health    `json:"health"`
+}
+
+func (ContainerHealthEvent) EventType() EventType { return EventTypeContainerHealth }

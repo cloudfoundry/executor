@@ -278,14 +278,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 				step.Cancel()
 
 			case healthEvent := <-monitorEvents:
-				var health executor.Health
-				if healthEvent == steps.Healthy {
-					health = executor.HealthUp
-				} else {
-					health = executor.HealthDown
-				}
-
-				err = gardenContainer.SetProperty(ContainerHealthProperty, string(health))
+				err := updateHealth(store, container, gardenContainer, healthEvent)
 				if err != nil {
 					return err
 				}
@@ -310,6 +303,28 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 	store.processesL.Lock()
 	store.runningProcesses[container.Guid] = process
 	store.processesL.Unlock()
+
+	return nil
+}
+
+func updateHealth(store *GardenStore, executorContainer executor.Container, gardenContainer garden.Container, healthEvent steps.HealthEvent) error {
+	var health executor.Health
+
+	if healthEvent == steps.Healthy {
+		health = executor.HealthUp
+	} else {
+		health = executor.HealthDown
+	}
+
+	err := gardenContainer.SetProperty(ContainerHealthProperty, string(health))
+	if err != nil {
+		return err
+	}
+
+	store.eventEmitter.EmitEvent(executor.ContainerHealthEvent{
+		Container: executorContainer,
+		Health:    health,
+	})
 
 	return nil
 }

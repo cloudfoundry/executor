@@ -10,9 +10,11 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/cloudfoundry-incubator/executor/depot/store/fakes"
+	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/pivotal-golang/timer/fake_timer"
 	"github.com/tedsuo/ifrit"
@@ -28,6 +30,7 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeGardenClient *gfakes.FakeClient
 		tracker          *fakes.FakeInitializedTracker
 		emitter          *fakes.FakeEventEmitter
+		logger           lager.Logger
 
 		ownerName           = "some-owner-name"
 		inodeLimit   uint64 = 2000000
@@ -38,7 +41,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 	action := models.ExecutorAction{
 		models.RunAction{
-			Path: "ls",
+			Path: "true",
 		},
 	}
 
@@ -46,18 +49,19 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeTimer = fake_timer.NewFakeTimer(time.Now())
 		tracker = new(fakes.FakeInitializedTracker)
 		emitter = new(fakes.FakeEventEmitter)
+		logger = lagertest.NewTestLogger("test")
 
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
-			lagertest.NewTestLogger("test"),
+			logger,
 			fakeGardenClient,
 			ownerName,
 			maxCPUShares,
 			inodeLimit,
-			5*time.Second,
+			100*time.Millisecond,
 			100*time.Millisecond,
 			nil,
-			nil,
+			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, logger, os.TempDir(), false),
 			fakeTimer,
 			tracker,
 			emitter,
@@ -1341,6 +1345,97 @@ var _ = Describe("GardenContainerStore", func() {
 
 			process.Signal(os.Interrupt)
 			Eventually(process.Wait()).Should(Receive())
+		})
+	})
+
+	Describe("Health", func() {
+		Context("when the health of the garden container changes", func() {
+			var runAction = models.ExecutorAction{
+				models.RunAction{
+					Path: "run",
+				},
+			}
+			var monitorAction = models.ExecutorAction{
+				models.RunAction{
+					Path: "monitor",
+				},
+			}
+			var executorContainer = executor.Container{
+				Action:  runAction,
+				Monitor: &monitorAction,
+				Guid:    "some-container-handle",
+			}
+
+			var (
+				processes           map[string]*gfakes.FakeProcess
+				containerProperties map[string]string
+				gardenContainer     *gfakes.FakeContainer
+			)
+
+			BeforeEach(func() {
+				processes = make(map[string]*gfakes.FakeProcess)
+				processes["run"] = new(gfakes.FakeProcess)
+				processes["monitor"] = new(gfakes.FakeProcess)
+
+				containerProperties = make(map[string]string)
+
+				gardenContainer = new(gfakes.FakeContainer)
+				gardenContainer.HandleReturns("some-container-handle")
+				gardenContainer.SetPropertyStub = func(key, value string) error {
+					containerProperties[key] = value
+					return nil
+				}
+				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, _ garden.ProcessIO) (garden.Process, error) {
+					return processes[processSpec.Path], nil
+				}
+
+				fakeGardenClient.LookupReturns(gardenContainer, nil)
+			})
+
+			It("updates the health of the container", func() {
+				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+
+				containerHealth := func() string { return containerProperties[store.ContainerHealthProperty] }
+
+				Eventually(containerHealth).Should(Equal(string(executor.HealthUp)))
+				Consistently(containerHealth).Should(Equal(string(executor.HealthUp)))
+
+				processes["monitor"].WaitReturns(1, nil)
+
+				Eventually(containerHealth).Should(Equal(string(executor.HealthDown)))
+				Consistently(containerHealth).Should(Equal(string(executor.HealthDown)))
+			})
+
+			It("emits events to the event hub", func() {
+				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+
+				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
+				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.ContainerHealthEvent{
+					Container: executorContainer,
+					Health:    executor.HealthUp,
+				}))
+
+				processes["monitor"].WaitReturns(1, nil)
+
+				Eventually(emitter.EmitEventCallCount).Should(Equal(2))
+				Ω(emitter.EmitEventArgsForCall(1)).Should(Equal(executor.ContainerHealthEvent{
+					Container: executorContainer,
+					Health:    executor.HealthDown,
+				}))
+			})
+
+			Context("when setting the health fails", func() {
+				BeforeEach(func() {
+					gardenContainer.SetPropertyStub = nil
+					gardenContainer.SetPropertyReturns(errors.New("uh-oh"))
+				})
+
+				It("does not emit a health update event", func() {
+					gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+
+					Consistently(emitter.EmitEventCallCount).Should(BeZero())
+				})
+			})
 		})
 	})
 })
