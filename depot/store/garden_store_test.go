@@ -1350,26 +1350,22 @@ var _ = Describe("GardenContainerStore", func() {
 
 	Describe("Health", func() {
 		Context("when the health of the garden container changes", func() {
-			var runAction = models.ExecutorAction{
-				models.RunAction{
-					Path: "run",
-				},
-			}
-			var monitorAction = models.ExecutorAction{
-				models.RunAction{
-					Path: "monitor",
-				},
-			}
-			var executorContainer = executor.Container{
-				Action:  runAction,
-				Monitor: &monitorAction,
-				Guid:    "some-container-handle",
-			}
-
 			var (
 				processes           map[string]*gfakes.FakeProcess
 				containerProperties map[string]string
 				gardenContainer     *gfakes.FakeContainer
+
+				runAction = models.ExecutorAction{
+					models.RunAction{Path: "run"},
+				}
+				monitorAction = models.ExecutorAction{
+					models.RunAction{Path: "monitor"},
+				}
+				executorContainer = executor.Container{
+					Action:  runAction,
+					Monitor: &monitorAction,
+					Guid:    "some-container-handle",
+				}
 			)
 
 			BeforeEach(func() {
