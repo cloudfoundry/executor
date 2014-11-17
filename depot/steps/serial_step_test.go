@@ -123,7 +123,6 @@ var _ = Describe("SerialStep", func() {
 						seq <- 3
 						return nil
 					},
-
 				},
 			})
 

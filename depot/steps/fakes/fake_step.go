@@ -14,9 +14,9 @@ type FakeStep struct {
 	performReturns     struct {
 		result1 error
 	}
-	CancelStub         func()
-	cancelMutex        sync.RWMutex
-	cancelArgsForCall  []struct{}
+	CancelStub        func()
+	cancelMutex       sync.RWMutex
+	cancelArgsForCall []struct{}
 }
 
 func (fake *FakeStep) Perform() error {
