@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -1354,6 +1355,7 @@ var _ = Describe("GardenContainerStore", func() {
 				processes           map[string]*gfakes.FakeProcess
 				containerProperties map[string]string
 				gardenContainer     *gfakes.FakeContainer
+				waitReturnValue     int
 
 				runAction = models.ExecutorAction{
 					models.RunAction{Path: "run"},
@@ -1366,22 +1368,38 @@ var _ = Describe("GardenContainerStore", func() {
 					Monitor: &monitorAction,
 					Guid:    "some-container-handle",
 				}
+
+				mutex = &sync.Mutex{}
 			)
 
 			BeforeEach(func() {
+				mutex.Lock()
+				defer mutex.Unlock()
+
+				waitReturnValue = 0
+
 				processes = make(map[string]*gfakes.FakeProcess)
 				processes["run"] = new(gfakes.FakeProcess)
 				processes["monitor"] = new(gfakes.FakeProcess)
+				processes["monitor"].WaitStub = func() (int, error) {
+					mutex.Lock()
+					defer mutex.Unlock()
+					return waitReturnValue, nil
+				}
 
 				containerProperties = make(map[string]string)
 
 				gardenContainer = new(gfakes.FakeContainer)
 				gardenContainer.HandleReturns("some-container-handle")
 				gardenContainer.SetPropertyStub = func(key, value string) error {
+					mutex.Lock()
 					containerProperties[key] = value
+					mutex.Unlock()
 					return nil
 				}
 				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, _ garden.ProcessIO) (garden.Process, error) {
+					mutex.Lock()
+					defer mutex.Unlock()
 					return processes[processSpec.Path], nil
 				}
 
@@ -1391,12 +1409,18 @@ var _ = Describe("GardenContainerStore", func() {
 			It("updates the health of the container", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
 
-				containerHealth := func() string { return containerProperties[store.ContainerHealthProperty] }
+				containerHealth := func() string {
+					mutex.Lock()
+					defer mutex.Unlock()
+					return containerProperties[store.ContainerHealthProperty]
+				}
 
 				Eventually(containerHealth).Should(Equal(string(executor.HealthUp)))
 				Consistently(containerHealth).Should(Equal(string(executor.HealthUp)))
 
-				processes["monitor"].WaitReturns(1, nil)
+				mutex.Lock()
+				waitReturnValue = 1
+				mutex.Unlock()
 
 				Eventually(containerHealth).Should(Equal(string(executor.HealthDown)))
 				Consistently(containerHealth).Should(Equal(string(executor.HealthDown)))
@@ -1411,7 +1435,9 @@ var _ = Describe("GardenContainerStore", func() {
 					Health:    executor.HealthUp,
 				}))
 
-				processes["monitor"].WaitReturns(1, nil)
+				mutex.Lock()
+				waitReturnValue = 1
+				mutex.Unlock()
 
 				Eventually(emitter.EmitEventCallCount).Should(Equal(2))
 				Ω(emitter.EmitEventArgsForCall(1)).Should(Equal(executor.ContainerHealthEvent{
