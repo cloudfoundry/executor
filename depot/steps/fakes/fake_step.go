@@ -17,9 +17,6 @@ type FakeStep struct {
 	CancelStub         func()
 	cancelMutex        sync.RWMutex
 	cancelArgsForCall  []struct{}
-	CleanupStub        func()
-	cleanupMutex       sync.RWMutex
-	cleanupArgsForCall []struct{}
 }
 
 func (fake *FakeStep) Perform() error {
@@ -59,21 +56,6 @@ func (fake *FakeStep) CancelCallCount() int {
 	fake.cancelMutex.RLock()
 	defer fake.cancelMutex.RUnlock()
 	return len(fake.cancelArgsForCall)
-}
-
-func (fake *FakeStep) Cleanup() {
-	fake.cleanupMutex.Lock()
-	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct{}{})
-	fake.cleanupMutex.Unlock()
-	if fake.CleanupStub != nil {
-		fake.CleanupStub()
-	}
-}
-
-func (fake *FakeStep) CleanupCallCount() int {
-	fake.cleanupMutex.RLock()
-	defer fake.cleanupMutex.RUnlock()
-	return len(fake.cleanupArgsForCall)
 }
 
 var _ steps.Step = new(FakeStep)

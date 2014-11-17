@@ -88,6 +88,3 @@ func (step *monitorStep) Perform() error {
 func (step *monitorStep) Cancel() {
 	close(step.cancel)
 }
-
-func (step *monitorStep) Cleanup() {
-}

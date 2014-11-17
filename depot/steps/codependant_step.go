@@ -51,12 +51,6 @@ func (step *CodependantStep) Cancel() {
 	<-step.done
 }
 
-func (step *CodependantStep) Cleanup() {
-	for _, step := range step.substeps {
-		step.Cleanup()
-	}
-}
-
 func (step *CodependantStep) actuallyCancel() {
 	canceled := new(sync.WaitGroup)
 

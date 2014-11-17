@@ -35,9 +35,3 @@ func (step *ParallelStep) Cancel() {
 		step.Cancel()
 	}
 }
-
-func (step *ParallelStep) Cleanup() {
-	for _, step := range step.substeps {
-		step.Cleanup()
-	}
-}

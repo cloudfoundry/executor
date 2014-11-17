@@ -69,8 +69,6 @@ func (step *DownloadStep) download() (io.ReadCloser, error) {
 
 func (step *DownloadStep) Cancel() {}
 
-func (step *DownloadStep) Cleanup() {}
-
 func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {
 	err := step.container.StreamIn(destination, reader)
 	if err != nil {

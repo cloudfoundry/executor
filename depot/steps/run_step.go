@@ -129,5 +129,3 @@ func (step *RunStep) Perform() error {
 func (step *RunStep) Cancel() {
 	step.container.Stop(false)
 }
-
-func (step *RunStep) Cleanup() {}

@@ -31,7 +31,3 @@ func (step *TryStep) Perform() error {
 func (step *TryStep) Cancel() {
 	step.substep.Cancel()
 }
-
-func (step *TryStep) Cleanup() {
-	step.substep.Cleanup()
-}

@@ -20,11 +20,6 @@ func NewSerial(steps []Step) *SerialStep {
 }
 
 func (runner *SerialStep) Perform() error {
-	var performResult error
-
-	cleanups := []func(){}
-
-steps:
 	for _, action := range runner.steps {
 		subactionResult := make(chan error, 1)
 
@@ -35,28 +30,18 @@ steps:
 		select {
 		case err := <-subactionResult:
 			if err != nil {
-				performResult = err
-				break steps
-			} else {
-				cleanups = append(cleanups, action.Cleanup)
+				return err
 			}
 
 		case <-runner.cancel:
 			action.Cancel()
-			performResult = CancelledError
-			break steps
+			return CancelledError
 		}
 	}
 
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
-	}
-
-	return performResult
+	return nil
 }
 
 func (runner *SerialStep) Cancel() {
 	close(runner.cancel)
 }
-
-func (runner *SerialStep) Cleanup() {}

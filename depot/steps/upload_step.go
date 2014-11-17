@@ -122,5 +122,3 @@ func (step *UploadStep) Perform() (err error) {
 }
 
 func (step *UploadStep) Cancel() {}
-
-func (step *UploadStep) Cleanup() {}
