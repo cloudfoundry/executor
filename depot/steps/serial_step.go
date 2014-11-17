@@ -4,22 +4,22 @@ import (
 	"errors"
 )
 
-type SerialStep struct {
+type serialStep struct {
 	steps  []Step
 	cancel chan struct{}
 }
 
 var CancelledError = errors.New("steps cancelled")
 
-func NewSerial(steps []Step) *SerialStep {
-	return &SerialStep{
+func NewSerial(steps []Step) *serialStep {
+	return &serialStep{
 		steps: steps,
 
 		cancel: make(chan struct{}),
 	}
 }
 
-func (runner *SerialStep) Perform() error {
+func (runner *serialStep) Perform() error {
 	for _, action := range runner.steps {
 		subactionResult := make(chan error, 1)
 
@@ -42,6 +42,6 @@ func (runner *SerialStep) Perform() error {
 	return nil
 }
 
-func (runner *SerialStep) Cancel() {
+func (runner *serialStep) Cancel() {
 	close(runner.cancel)
 }

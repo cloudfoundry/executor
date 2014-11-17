@@ -9,7 +9,7 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type RunStep struct {
+type runStep struct {
 	container       garden_api.Container
 	model           models.RunAction
 	streamer        log_streamer.LogStreamer
@@ -23,9 +23,9 @@ func NewRun(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 	allowPrivileged bool,
-) *RunStep {
+) *runStep {
 	logger = logger.Session("RunAction")
-	return &RunStep{
+	return &runStep{
 		container:       container,
 		model:           model,
 		streamer:        streamer,
@@ -44,7 +44,7 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 	return converted
 }
 
-func (step *RunStep) Perform() error {
+func (step *runStep) Perform() error {
 	step.logger.Info("running")
 
 	if step.model.Privileged && !step.allowPrivileged {
@@ -113,6 +113,6 @@ func (step *RunStep) Perform() error {
 	panic("unreachable")
 }
 
-func (step *RunStep) Cancel() {
+func (step *runStep) Cancel() {
 	step.container.Stop(false)
 }

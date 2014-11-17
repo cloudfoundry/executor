@@ -258,7 +258,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		))
 	}
 
-	seq = append(seq, steps.NewCodependant(parallelSequence))
+	seq = append(seq, steps.NewCodependent(parallelSequence))
 
 	step := steps.NewSerial(seq)
 

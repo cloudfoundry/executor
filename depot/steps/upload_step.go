@@ -17,7 +17,7 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type UploadStep struct {
+type uploadStep struct {
 	container   garden_api.Container
 	model       models.UploadAction
 	uploader    uploader.Uploader
@@ -37,12 +37,12 @@ func NewUpload(
 	streamer log_streamer.LogStreamer,
 	rateLimiter chan struct{},
 	logger lager.Logger,
-) *UploadStep {
+) *uploadStep {
 	logger = logger.Session("UploadAction", lager.Data{
 		"from": model.From,
 	})
 
-	return &UploadStep{
+	return &uploadStep{
 		container:   container,
 		model:       model,
 		uploader:    uploader,
@@ -62,7 +62,7 @@ const (
 	ErrCopyStreamToTmp = "Failed to copy stream contents into temp file"
 )
 
-func (step *UploadStep) Perform() (err error) {
+func (step *uploadStep) Perform() (err error) {
 	step.rateLimiter <- struct{}{}
 	defer func() {
 		<-step.rateLimiter
@@ -121,4 +121,4 @@ func (step *UploadStep) Perform() (err error) {
 	return nil
 }
 
-func (step *UploadStep) Cancel() {}
+func (step *uploadStep) Cancel() {}

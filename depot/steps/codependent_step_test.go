@@ -11,7 +11,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
-var _ = Describe("CodependantStep", func() {
+var _ = Describe("CodependentStep", func() {
 	var step Step
 	var subStep1 Step
 	var subStep2 Step
@@ -52,7 +52,7 @@ var _ = Describe("CodependantStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = NewCodependant([]Step{subStep1, subStep2})
+		step = NewCodependent([]Step{subStep1, subStep2})
 	})
 
 	It("performs its substeps in parallel", func(done Done) {

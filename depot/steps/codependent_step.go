@@ -2,15 +2,15 @@ package steps
 
 import "sync"
 
-type CodependantStep struct {
+type codependentStep struct {
 	substeps []Step
 
 	cancel chan struct{}
 	done   chan struct{}
 }
 
-func NewCodependant(substeps []Step) *CodependantStep {
-	return &CodependantStep{
+func NewCodependent(substeps []Step) *codependentStep {
+	return &codependentStep{
 		substeps: substeps,
 
 		cancel: make(chan struct{}),
@@ -18,7 +18,7 @@ func NewCodependant(substeps []Step) *CodependantStep {
 	}
 }
 
-func (step *CodependantStep) Perform() error {
+func (step *codependentStep) Perform() error {
 	defer close(step.done)
 
 	errs := make(chan error, len(step.substeps))
@@ -46,12 +46,12 @@ func (step *CodependantStep) Perform() error {
 	return nil
 }
 
-func (step *CodependantStep) Cancel() {
+func (step *codependentStep) Cancel() {
 	close(step.cancel)
 	<-step.done
 }
 
-func (step *CodependantStep) actuallyCancel() {
+func (step *codependentStep) actuallyCancel() {
 	canceled := new(sync.WaitGroup)
 
 	canceled.Add(len(step.substeps))

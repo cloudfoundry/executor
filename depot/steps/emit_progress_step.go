@@ -6,7 +6,7 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type EmitProgressStep struct {
+type emitProgressStep struct {
 	substep        Step
 	logger         lager.Logger
 	startMessage   string
@@ -22,9 +22,9 @@ func NewEmitProgress(
 	failureMessage string,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
-) *EmitProgressStep {
+) *emitProgressStep {
 	logger = logger.Session("EmitProgressAction")
-	return &EmitProgressStep{
+	return &emitProgressStep{
 		substep:        substep,
 		logger:         logger,
 		startMessage:   startMessage,
@@ -34,7 +34,7 @@ func NewEmitProgress(
 	}
 }
 
-func (step *EmitProgressStep) Perform() error {
+func (step *emitProgressStep) Perform() error {
 	if step.startMessage != "" {
 		step.streamer.Stdout().Write([]byte(step.startMessage + "\n"))
 	}
@@ -57,6 +57,6 @@ func (step *EmitProgressStep) Perform() error {
 	return err
 }
 
-func (step *EmitProgressStep) Cancel() {
+func (step *emitProgressStep) Cancel() {
 	step.substep.Cancel()
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type DownloadStep struct {
+type downloadStep struct {
 	container        garden_api.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
@@ -24,13 +24,13 @@ func NewDownload(
 	cachedDownloader cacheddownloader.CachedDownloader,
 	rateLimiter chan struct{},
 	logger lager.Logger,
-) *DownloadStep {
+) *downloadStep {
 	logger = logger.Session("DownloadAction", lager.Data{
 		"to":       model.To,
 		"cacheKey": model.CacheKey,
 	})
 
-	return &DownloadStep{
+	return &downloadStep{
 		container:        container,
 		model:            model,
 		cachedDownloader: cachedDownloader,
@@ -39,7 +39,7 @@ func NewDownload(
 	}
 }
 
-func (step *DownloadStep) Perform() error {
+func (step *downloadStep) Perform() error {
 	step.rateLimiter <- struct{}{}
 	defer func() {
 		<-step.rateLimiter
@@ -57,7 +57,7 @@ func (step *DownloadStep) Perform() error {
 	return step.streamIn(step.model.To, downloadedFile)
 }
 
-func (step *DownloadStep) download() (io.ReadCloser, error) {
+func (step *downloadStep) download() (io.ReadCloser, error) {
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		step.logger.Error("parse-request-uri-error", err)
@@ -67,9 +67,9 @@ func (step *DownloadStep) download() (io.ReadCloser, error) {
 	return step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform)
 }
 
-func (step *DownloadStep) Cancel() {}
+func (step *downloadStep) Cancel() {}
 
-func (step *DownloadStep) streamIn(destination string, reader io.Reader) error {
+func (step *downloadStep) streamIn(destination string, reader io.Reader) error {
 	err := step.container.StreamIn(destination, reader)
 	if err != nil {
 		step.logger.Error("failed-to-stream-in", err, lager.Data{
