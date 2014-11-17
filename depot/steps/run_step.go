@@ -2,7 +2,6 @@ package steps
 
 import (
 	"errors"
-	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -54,14 +53,6 @@ func (step *RunStep) Perform() error {
 
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
-
-	var timeoutChan <-chan time.Time
-
-	if step.model.Timeout != 0 {
-		timer := time.NewTimer(step.model.Timeout)
-		timeoutChan = timer.C
-		defer timer.Stop()
-	}
 
 	step.logger.Info("creating-process")
 	process, err := step.container.Run(garden_api.ProcessSpec{
@@ -117,10 +108,6 @@ func (step *RunStep) Perform() error {
 	case err := <-errChan:
 		logger.Error("running-error", err)
 		return err
-
-	case <-timeoutChan:
-		logger.Info("running-timed-out")
-		return NewEmittableError(nil, "Timed out after %s", step.model.Timeout)
 	}
 
 	panic("unreachable")

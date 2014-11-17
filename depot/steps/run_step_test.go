@@ -2,7 +2,6 @@ package steps_test
 
 import (
 	"errors"
-	"time"
 
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -169,50 +168,6 @@ var _ = Describe("RunAction", func() {
 
 			It("returns the error", func() {
 				Ω(stepErr).Should(Equal(disaster))
-			})
-		})
-
-		Context("when the step does not have a timeout", func() {
-			BeforeEach(func() {
-				spawnedProcess.WaitStub = func() (int, error) {
-					time.Sleep(100 * time.Millisecond)
-					return 0, nil
-				}
-			})
-
-			It("does not enforce one (i.e. zero-value time.Duration)", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
-			})
-		})
-
-		Context("when the step has a timeout", func() {
-			BeforeEach(func() {
-				runActionWithTimeout := runAction
-				runActionWithTimeout.Timeout = 100 * time.Millisecond
-				runAction = runActionWithTimeout
-			})
-
-			Context("and the script completes in time", func() {
-				BeforeEach(func() {
-					spawnedProcess.WaitReturns(0, nil)
-				})
-
-				It("succeeds", func() {
-					Ω(stepErr).ShouldNot(HaveOccurred())
-				})
-			})
-
-			Context("and the script takes longer than the timeout", func() {
-				BeforeEach(func() {
-					spawnedProcess.WaitStub = func() (int, error) {
-						time.Sleep(1 * time.Second)
-						return 0, nil
-					}
-				})
-
-				It("returns an emittable error", func() {
-					Ω(stepErr).Should(MatchError(NewEmittableError(nil, "Timed out after 100ms")))
-				})
 			})
 		})
 
