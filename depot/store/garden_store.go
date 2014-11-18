@@ -226,7 +226,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 	if container.Setup != nil {
 		seq = append(seq, store.transformer.StepFor(
 			logStreamer,
-			*container.Setup,
+			container.Setup,
 			gardenContainer,
 		))
 	}
@@ -244,7 +244,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 	if container.Monitor != nil {
 		monitoredStep := store.transformer.StepFor(
 			logStreamer,
-			*container.Monitor,
+			container.Monitor,
 			gardenContainer,
 		)
 

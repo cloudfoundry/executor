@@ -1,6 +1,10 @@
 package executor
 
-import "github.com/cloudfoundry-incubator/runtime-schema/models"
+import (
+	"encoding/json"
+
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
+)
 
 type State string
 
@@ -39,13 +43,91 @@ type Container struct {
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
-	Setup   *models.ExecutorAction `json:"setup"`
-	Action  models.ExecutorAction  `json:"run"`
-	Monitor *models.ExecutorAction `json:"monitor"`
+	Setup   models.Action `json:"setup"`
+	Action  models.Action `json:"run"`
+	Monitor models.Action `json:"monitor"`
 
 	Env []EnvironmentVariable `json:"env,omitempty"`
 
 	RunResult ContainerRunResult `json:"run_result"`
+}
+
+type InnerContainer Container
+
+type mContainer struct {
+	SetupRaw   *json.RawMessage `json:"setup"`
+	ActionRaw  json.RawMessage  `json:"run"`
+	MonitorRaw *json.RawMessage `json:"monitor"`
+
+	*InnerContainer
+}
+
+func (container *Container) UnmarshalJSON(payload []byte) error {
+	mCon := &mContainer{InnerContainer: (*InnerContainer)(container)}
+	err := json.Unmarshal(payload, mCon)
+	if err != nil {
+		return err
+	}
+
+	a, err := models.UnmarshalAction(mCon.ActionRaw)
+	if err != nil {
+		return err
+	}
+	container.Action = a
+
+	if mCon.SetupRaw != nil {
+		a, err = models.UnmarshalAction(*mCon.SetupRaw)
+		if err != nil {
+			return err
+		}
+		container.Setup = a
+	}
+
+	if mCon.MonitorRaw != nil {
+		a, err = models.UnmarshalAction(*mCon.MonitorRaw)
+		if err != nil {
+			return err
+		}
+		container.Monitor = a
+	}
+
+	return nil
+}
+
+func (container Container) MarshalJSON() ([]byte, error) {
+	actionRaw, err := models.MarshalAction(container.Action)
+	if err != nil {
+		return nil, err
+	}
+
+	var setupRaw, monitorRaw *json.RawMessage
+	if container.Setup != nil {
+		raw, err := models.MarshalAction(container.Setup)
+		if err != nil {
+			return nil, err
+		}
+		rm := json.RawMessage(raw)
+		setupRaw = &rm
+	}
+	if container.Monitor != nil {
+		raw, err := models.MarshalAction(container.Monitor)
+		if err != nil {
+			return nil, err
+		}
+		rm := json.RawMessage(raw)
+		monitorRaw = &rm
+	}
+
+	innerContainer := InnerContainer(container)
+
+	mCon := &mContainer{
+		SetupRaw:       setupRaw,
+		ActionRaw:      actionRaw,
+		MonitorRaw:     monitorRaw,
+		InnerContainer: &innerContainer,
+	}
+
+	return json.Marshal(mCon)
 }
 
 type EnvironmentVariable struct {

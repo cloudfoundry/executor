@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	garden "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 type GardenClient interface {
@@ -106,7 +107,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		case ContainerRootfsProperty:
 			executorContainer.RootFSPath = value
 		case ContainerSetupProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Setup)
+			executorContainer.Setup, err = models.UnmarshalAction([]byte(value))
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -115,7 +116,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 				}
 			}
 		case ContainerActionProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Action)
+			executorContainer.Action, err = models.UnmarshalAction([]byte(value))
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -124,7 +125,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 				}
 			}
 		case ContainerMonitorProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Monitor)
+			executorContainer.Monitor, err = models.UnmarshalAction([]byte(value))
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -212,17 +213,17 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
-	setupJson, err := json.Marshal(executorContainer.Setup)
+	setupJson, err := models.MarshalAction(executorContainer.Setup)
 	if err != nil {
 		return nil, err
 	}
 
-	actionJson, err := json.Marshal(executorContainer.Action)
+	actionJson, err := models.MarshalAction(executorContainer.Action)
 	if err != nil {
 		return nil, err
 	}
 
-	monitorJson, err := json.Marshal(executorContainer.Monitor)
+	monitorJson, err := models.MarshalAction(executorContainer.Monitor)
 	if err != nil {
 		return nil, err
 	}

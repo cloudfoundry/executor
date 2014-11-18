@@ -47,10 +47,8 @@ var _ = Describe("Api", func() {
 
 	var i = 0
 
-	action := models.ExecutorAction{
-		models.RunAction{
-			Path: "ls",
-		},
+	action := &models.RunAction{
+		Path: "ls",
 	}
 
 	BeforeEach(func() {
@@ -228,40 +226,22 @@ var _ = Describe("Api", func() {
 		var runRequestBody io.Reader
 		var runResponse *http.Response
 
-		var expectedAction models.ExecutorAction
+		var expectedAction models.Action
 		var expectedEnv []executor.EnvironmentVariable
 
 		BeforeEach(func() {
 			runRequestBody = nil
 			runResponse = nil
 
-			expectedAction = models.ExecutorAction{
-				models.RunAction{
-					Path: "ls",
-					Args: []string{"-al"},
-				},
+			expectedAction = &models.RunAction{
+				Path: "ls",
+				Args: []string{"-al"},
 			}
 
 			expectedEnv = []executor.EnvironmentVariable{
 				{Name: "ENV1", Value: "val1"},
 				{Name: "ENV2", Value: "val2"},
 			}
-
-			allocRequestBody := MarshalledPayload(executor.Container{
-				MemoryMB:  64,
-				DiskMB:    512,
-				CPUWeight: 50,
-
-				Action: expectedAction,
-				Env:    expectedEnv,
-			})
-
-			allocResponse := DoRequest(generator.CreateRequest(
-				ehttp.AllocateContainer,
-				rata.Params{"guid": containerGuid},
-				allocRequestBody,
-			))
-			Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
 		})
 
 		JustBeforeEach(func() {
@@ -373,21 +353,6 @@ var _ = Describe("Api", func() {
 		})
 
 		Context("when the container exists", func() {
-			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(executor.Container{
-					Action:   action,
-					MemoryMB: 64,
-					DiskMB:   512,
-				})
-
-				allocResponse := DoRequest(generator.CreateRequest(
-					ehttp.AllocateContainer,
-					rata.Params{"guid": containerGuid},
-					allocRequestBody,
-				))
-				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-			})
-
 			It("returns 200 OK", func() {
 				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
 			})
@@ -439,21 +404,6 @@ var _ = Describe("Api", func() {
 		})
 
 		Context("when the container exists", func() {
-			BeforeEach(func() {
-				allocRequestBody := MarshalledPayload(executor.Container{
-					Action:   action,
-					MemoryMB: 64,
-					DiskMB:   512,
-				})
-
-				allocResponse := DoRequest(generator.CreateRequest(
-					ehttp.AllocateContainer,
-					rata.Params{"guid": containerGuid},
-					allocRequestBody,
-				))
-				Ω(allocResponse.StatusCode).Should(Equal(http.StatusCreated))
-			})
-
 			Context("when streaming out of the container succeeds", func() {
 				var responseStream *gbytes.Buffer
 

@@ -19,10 +19,8 @@ var _ = Describe("Client", func() {
 	var client executor.Client
 	var containerGuid string
 
-	action := models.ExecutorAction{
-		models.RunAction{
-			Path: "ls",
-		},
+	action := &models.RunAction{
+		Path: "ls",
 	}
 
 	BeforeEach(func() {
@@ -121,6 +119,9 @@ var _ = Describe("Client", func() {
 							{ "container_port": 8080, "host_port": 1234 },
 							{ "container_port": 8081, "host_port": 1235 }
 						],
+						"run": {
+							"run": {"path": "ls"}
+						},
             "log": {
               "guid":"some-guid",
               "source_name":"XYZ",
@@ -144,6 +145,9 @@ var _ = Describe("Client", func() {
 					Ports: []executor.PortMapping{
 						{ContainerPort: 8080, HostPort: 1234},
 						{ContainerPort: 8081, HostPort: 1235},
+					},
+					Action: &models.RunAction{
+						Path: "ls",
 					},
 
 					Log: executor.LogConfig{

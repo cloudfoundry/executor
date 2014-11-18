@@ -40,10 +40,8 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeTimer *fake_timer.FakeTimer
 	)
 
-	action := models.ExecutorAction{
-		models.RunAction{
-			Path: "true",
-		},
+	action := &models.RunAction{
+		Path: "true",
 	}
 
 	BeforeEach(func() {
@@ -362,7 +360,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Context("when the container has an executor:action property", func() {
 				Context("and the action is valid", func() {
 					BeforeEach(func() {
-						payload, err := json.Marshal(action)
+						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
@@ -397,14 +395,12 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Context("when the container has an executor:setup property", func() {
 				Context("and the action is valid", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					action := &models.RunAction{
+						Path: "ls",
 					}
 
 					BeforeEach(func() {
-						payload, err := json.Marshal(action)
+						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
@@ -415,7 +411,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("has it as its setup", func() {
-						Ω(*executorContainer.Setup).Should(Equal(action))
+						Ω(executorContainer.Setup).Should(Equal(action))
 					})
 				})
 
@@ -439,14 +435,12 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Context("when the container has an executor:monitor property", func() {
 				Context("and the action is valid", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					action := &models.RunAction{
+						Path: "ls",
 					}
 
 					BeforeEach(func() {
-						payload, err := json.Marshal(action)
+						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
@@ -457,7 +451,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("has it as its monitor", func() {
-						Ω(*executorContainer.Monitor).Should(Equal(action))
+						Ω(executorContainer.Monitor).Should(Equal(action))
 					})
 				})
 
@@ -664,10 +658,8 @@ var _ = Describe("GardenContainerStore", func() {
 			createErr        error
 		)
 
-		action := models.ExecutorAction{
-			models.RunAction{
-				Path: "ls",
-			},
+		action := &models.RunAction{
+			Path: "ls",
 		}
 
 		BeforeEach(func() {
@@ -722,7 +714,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("creates it with the executor:action property", func() {
-					payload, err := json.Marshal(action)
+					payload, err := models.MarshalAction(action)
 					Ω(err).ShouldNot(HaveOccurred())
 
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
@@ -788,18 +780,16 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when the Executor container has a Setup", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					action := &models.RunAction{
+						Path: "ls",
 					}
 
 					BeforeEach(func() {
-						executorContainer.Setup = &action
+						executorContainer.Setup = action
 					})
 
-					It("creates it with the executor:action property", func() {
-						payload, err := json.Marshal(action)
+					It("creates it with the executor:setup property", func() {
+						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
@@ -808,18 +798,16 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when the Executor container has a Monitor", func() {
-					action := models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					action := &models.RunAction{
+						Path: "ls",
 					}
 
 					BeforeEach(func() {
-						executorContainer.Monitor = &action
+						executorContainer.Monitor = action
 					})
 
-					It("creates it with the executor:action property", func() {
-						payload, err := json.Marshal(action)
+					It("creates it with the executor:monitor property", func() {
+						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
@@ -1357,15 +1345,11 @@ var _ = Describe("GardenContainerStore", func() {
 				gardenContainer     *gfakes.FakeContainer
 				waitReturnValue     int
 
-				runAction = models.ExecutorAction{
-					models.RunAction{Path: "run"},
-				}
-				monitorAction = models.ExecutorAction{
-					models.RunAction{Path: "monitor"},
-				}
+				runAction         = &models.RunAction{Path: "run"}
+				monitorAction     = &models.RunAction{Path: "monitor"}
 				executorContainer = executor.Container{
 					Action:  runAction,
-					Monitor: &monitorAction,
+					Monitor: monitorAction,
 					Guid:    "some-container-handle",
 				}
 

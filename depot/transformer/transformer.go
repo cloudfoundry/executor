@@ -55,36 +55,36 @@ func NewTransformer(
 
 func (transformer *Transformer) StepFor(
 	logStreamer log_streamer.LogStreamer,
-	action models.ExecutorAction,
+	action models.Action,
 	container garden.Container,
 ) steps.Step {
 	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
 	})
 
-	switch actionModel := action.Action.(type) {
-	case models.RunAction:
+	switch actionModel := action.(type) {
+	case *models.RunAction:
 		return steps.NewRun(
 			container,
-			actionModel,
+			*actionModel,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 			transformer.allowPrivileged,
 		)
 
-	case models.DownloadAction:
+	case *models.DownloadAction:
 		return steps.NewDownload(
 			container,
-			actionModel,
+			*actionModel,
 			transformer.cachedDownloader,
 			transformer.downloadLimiter,
 			logger,
 		)
 
-	case models.UploadAction:
+	case *models.UploadAction:
 		return steps.NewUpload(
 			container,
-			actionModel,
+			*actionModel,
 			transformer.uploader,
 			transformer.compressor,
 			transformer.tempDir,
@@ -93,7 +93,7 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 
-	case models.EmitProgressAction:
+	case *models.EmitProgressAction:
 		return steps.NewEmitProgress(
 			transformer.StepFor(
 				logStreamer,
@@ -107,7 +107,7 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 
-	case models.TimeoutAction:
+	case *models.TimeoutAction:
 		return steps.NewTimeout(
 			transformer.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
@@ -117,7 +117,7 @@ func (transformer *Transformer) StepFor(
 			actionModel.Timeout,
 		)
 
-	case models.TryAction:
+	case *models.TryAction:
 		return steps.NewTry(
 			transformer.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
@@ -127,7 +127,7 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 
-	case models.ParallelAction:
+	case *models.ParallelAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
 			subSteps[i] = transformer.StepFor(
@@ -138,7 +138,7 @@ func (transformer *Transformer) StepFor(
 		}
 		return steps.NewParallel(subSteps)
 
-	case models.SerialAction:
+	case *models.SerialAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
 			subSteps[i] = transformer.StepFor(
