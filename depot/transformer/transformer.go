@@ -107,6 +107,16 @@ func (transformer *Transformer) StepFor(
 			logger,
 		)
 
+	case models.TimeoutAction:
+		return steps.NewTimeout(
+			transformer.StepFor(
+				logStreamer.WithSource(actionModel.LogSource),
+				actionModel.Action,
+				container,
+			),
+			actionModel.Timeout,
+		)
+
 	case models.TryAction:
 		return steps.NewTry(
 			transformer.StepFor(
