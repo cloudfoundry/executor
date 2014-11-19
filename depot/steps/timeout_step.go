@@ -35,7 +35,7 @@ func (step *timeoutStep) Perform() error {
 		case <-timer.C:
 			step.substep.Cancel()
 			err := <-resultChan
-			return TimeoutError{err}
+			return TimeoutError{step.timeout, err}
 		case <-step.cancelChan:
 			step.substep.Cancel()
 			err := <-resultChan
@@ -49,11 +49,12 @@ func (step *timeoutStep) Cancel() {
 }
 
 type TimeoutError struct {
+	timeout      time.Duration
 	SubstepError error
 }
 
 func (te TimeoutError) Error() string {
-	return "Step sequence exceeded timeout; " + cancelledSubstepErrorMessage(te.SubstepError)
+	return "Substep exceeded " + te.timeout.String() + " timeout; " + cancelledSubstepErrorMessage(te.SubstepError)
 }
 
 type CancelError struct {
@@ -61,7 +62,7 @@ type CancelError struct {
 }
 
 func (ce CancelError) Error() string {
-	return "Step was cancelled; " + cancelledSubstepErrorMessage(ce.SubstepError)
+	return "Substep was cancelled; " + cancelledSubstepErrorMessage(ce.SubstepError)
 }
 
 func cancelledSubstepErrorMessage(err error) string {
