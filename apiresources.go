@@ -40,6 +40,7 @@ type Container struct {
 	AllocatedAt int64 `json:"allocated_at"`
 
 	RootFSPath string        `json:"root_fs"`
+	ExternalIP string        `json:"external_ip"`
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 

@@ -20,7 +20,7 @@ type GardenClient interface {
 
 type Exchanger interface {
 	Garden2Executor(garden.Container) (executor.Container, error)
-	Executor2Garden(GardenClient, executor.Container) (garden.Container, error)
+	CreateInGarden(GardenClient, executor.Container) (executor.Container, error)
 }
 
 const (
@@ -68,9 +68,10 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 	}
 
 	executorContainer := executor.Container{
-		Guid:  gardenContainer.Handle(),
-		Tags:  executor.Tags{},
-		Ports: make([]executor.PortMapping, len(info.MappedPorts)),
+		Guid:       gardenContainer.Handle(),
+		Tags:       executor.Tags{},
+		Ports:      make([]executor.PortMapping, len(info.MappedPorts)),
+		ExternalIP: info.ExternalIP,
 	}
 
 	for key, value := range info.Properties {
@@ -207,7 +208,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 	return executorContainer, nil
 }
 
-func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorContainer executor.Container) (garden.Container, error) {
+func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     executorContainer.Guid,
 		RootFSPath: executorContainer.RootFSPath,
@@ -215,32 +216,32 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 
 	setupJson, err := models.MarshalAction(executorContainer.Setup)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	actionJson, err := models.MarshalAction(executorContainer.Action)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	monitorJson, err := models.MarshalAction(executorContainer.Monitor)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	envJson, err := json.Marshal(executorContainer.Env)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	logJson, err := json.Marshal(executorContainer.Log)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	resultJson, err := json.Marshal(executorContainer.RunResult)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	containerSpec.Properties = garden.Properties{
@@ -270,14 +271,23 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 
 	gardenContainer, err := gardenClient.Create(containerSpec)
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
-	for _, ports := range executorContainer.Ports {
-		_, _, err := gardenContainer.NetIn(ports.HostPort, ports.ContainerPort)
-		if err != nil {
-			return nil, err
+	if executorContainer.Ports != nil {
+		actualPortMappings := make([]executor.PortMapping, len(executorContainer.Ports))
+
+		for i, ports := range executorContainer.Ports {
+			actualHostPort, actualContainerPort, err := gardenContainer.NetIn(ports.HostPort, ports.ContainerPort)
+			if err != nil {
+				return executor.Container{}, err
+			}
+
+			actualPortMappings[i].ContainerPort = actualContainerPort
+			actualPortMappings[i].HostPort = actualHostPort
 		}
+
+		executorContainer.Ports = actualPortMappings
 	}
 
 	if executorContainer.MemoryMB != 0 {
@@ -285,7 +295,7 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 			LimitInBytes: uint64(executorContainer.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
-			return nil, err
+			return executor.Container{}, err
 		}
 	}
 
@@ -294,15 +304,22 @@ func (exchanger exchanger) Executor2Garden(gardenClient GardenClient, executorCo
 		InodeHard: exchanger.containerInodeLimit,
 	})
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
 	err = gardenContainer.LimitCPU(garden.CPULimits{
 		LimitInShares: uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0),
 	})
 	if err != nil {
-		return nil, err
+		return executor.Container{}, err
 	}
 
-	return gardenContainer, nil
+	info, err := gardenContainer.Info()
+	if err != nil {
+		return executor.Container{}, err
+	}
+
+	executorContainer.ExternalIP = info.ExternalIP
+
+	return executorContainer, nil
 }

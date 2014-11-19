@@ -551,6 +551,18 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
+			Context("when the Garden container has an external IP", func() {
+				BeforeEach(func() {
+					gardenContainer.InfoReturns(garden.ContainerInfo{
+						ExternalIP: "1.2.3.4",
+					}, nil)
+				})
+
+				It("has the ports", func() {
+					Ω(executorContainer.ExternalIP).Should(Equal("1.2.3.4"))
+				})
+			})
+
 			Context("when the Garden container has a log config", func() {
 				Context("and the log is valid", func() {
 					index := 1
@@ -920,6 +932,21 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(createErr).Should(Equal(disaster))
 					})
 				})
+
+				Context("when mapping ports succeeds", func() {
+					BeforeEach(func() {
+						fakeGardenContainer.NetInStub = func(hostPort, containerPort uint32) (uint32, uint32, error) {
+							return hostPort + 1, containerPort + 1, nil
+						}
+					})
+
+					It("updates the port mappings on the returned container with what was actually mapped", func() {
+						Ω(createdContainer.Ports).Should(Equal([]executor.PortMapping{
+							{HostPort: 1235, ContainerPort: 5679},
+							{HostPort: 4322, ContainerPort: 8766},
+						}))
+					})
+				})
 			})
 
 			Context("when a memory limit is set", func() {
@@ -1016,6 +1043,30 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(fakeGardenContainer.LimitCPUArgsForCall(0)).Should(Equal(garden.CPULimits{
 						LimitInShares: 512,
 					}))
+				})
+			})
+
+			Context("when gardenContainer.Info succeeds", func() {
+				BeforeEach(func() {
+					fakeGardenContainer.InfoReturns(garden.ContainerInfo{
+						ExternalIP: "fake-ip",
+					}, nil)
+				})
+
+				It("sets the external IP on the returned container", func() {
+					Ω(createdContainer.ExternalIP).Should(Equal("fake-ip"))
+				})
+			})
+
+			Context("when gardenContainer.Info fails", func() {
+				var gardenError = errors.New("garden error")
+
+				BeforeEach(func() {
+					fakeGardenContainer.InfoReturns(garden.ContainerInfo{}, gardenError)
+				})
+
+				It("propagates the error", func() {
+					Ω(createErr).Should(Equal(gardenError))
 				})
 			})
 		})
