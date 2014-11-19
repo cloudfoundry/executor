@@ -429,10 +429,20 @@ var _ = Describe("Client", func() {
 
 						flusher.Flush()
 
-						firstEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{container1})
+						firstEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{
+							Container: container1,
+						})
 						Ω(err).ShouldNot(HaveOccurred())
 
-						secondEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{container2})
+						secondEventPayload, err := json.Marshal(executor.ContainerCompleteEvent{
+							Container: container2,
+						})
+						Ω(err).ShouldNot(HaveOccurred())
+
+						thirdEventPayload, err := json.Marshal(executor.ContainerHealthEvent{
+							Container: container1,
+							Health:    executor.HealthUp,
+						})
 						Ω(err).ShouldNot(HaveOccurred())
 
 						result := sse.Event{
@@ -456,6 +466,17 @@ var _ = Describe("Client", func() {
 						Ω(err).ShouldNot(HaveOccurred())
 
 						flusher.Flush()
+
+						result = sse.Event{
+							ID:   "2",
+							Name: string(executor.EventTypeContainerHealth),
+							Data: thirdEventPayload,
+						}
+
+						err = result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						flusher.Flush()
 					},
 				))
 			})
@@ -470,6 +491,11 @@ var _ = Describe("Client", func() {
 
 				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerCompleteEvent{
 					Container: container2,
+				})))
+
+				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerHealthEvent{
+					Container: container1,
+					Health:    executor.HealthUp,
 				})))
 
 				Eventually(eventChannel).Should(BeClosed())

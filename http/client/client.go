@@ -184,6 +184,14 @@ func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 				if err == nil {
 					events <- event
 				}
+
+			case executor.EventTypeContainerHealth:
+				event := executor.ContainerHealthEvent{}
+
+				err := json.Unmarshal(sseEvent.Data, &event)
+				if err == nil {
+					events <- event
+				}
 			}
 		}
 	}()
