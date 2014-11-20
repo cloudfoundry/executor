@@ -19,15 +19,16 @@ import (
 var ErrNoCheck = errors.New("no check configured")
 
 type Transformer struct {
-	cachedDownloader cacheddownloader.CachedDownloader
-	uploader         uploader.Uploader
-	extractor        extractor.Extractor
-	compressor       compressor.Compressor
-	downloadLimiter  chan struct{}
-	uploadLimiter    chan struct{}
-	logger           lager.Logger
-	tempDir          string
-	allowPrivileged  bool
+	cachedDownloader     cacheddownloader.CachedDownloader
+	uploader             uploader.Uploader
+	extractor            extractor.Extractor
+	compressor           compressor.Compressor
+	downloadLimiter      chan struct{}
+	uploadLimiter        chan struct{}
+	logger               lager.Logger
+	tempDir              string
+	allowPrivileged      bool
+	exportNetworkEnvVars bool
 }
 
 func NewTransformer(
@@ -40,17 +41,19 @@ func NewTransformer(
 	logger lager.Logger,
 	tempDir string,
 	allowPrivileged bool,
+	exportNetworkEnvVars bool,
 ) *Transformer {
 	return &Transformer{
-		cachedDownloader: cachedDownloader,
-		uploader:         uploader,
-		extractor:        extractor,
-		compressor:       compressor,
-		downloadLimiter:  downloadLimiter,
-		uploadLimiter:    uploadLimiter,
-		logger:           logger,
-		tempDir:          tempDir,
-		allowPrivileged:  allowPrivileged,
+		cachedDownloader:     cachedDownloader,
+		uploader:             uploader,
+		extractor:            extractor,
+		compressor:           compressor,
+		downloadLimiter:      downloadLimiter,
+		uploadLimiter:        uploadLimiter,
+		logger:               logger,
+		tempDir:              tempDir,
+		allowPrivileged:      allowPrivileged,
+		exportNetworkEnvVars: exportNetworkEnvVars,
 	}
 }
 
@@ -75,6 +78,7 @@ func (transformer *Transformer) StepFor(
 			transformer.allowPrivileged,
 			externalIP,
 			ports,
+			transformer.exportNetworkEnvVars,
 		)
 
 	case *models.DownloadAction:

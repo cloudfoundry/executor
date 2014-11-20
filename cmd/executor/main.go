@@ -186,6 +186,12 @@ var unhealthyMonitoringInterval = flag.Duration(
 	"interval on which to check unhealthy containers",
 )
 
+var exportNetworkEnvVars = flag.Bool(
+	"exportNetworkEnvVars",
+	false,
+	"export network environment variables into container (e.g. CF_INSTANCE_IP, CF_INSTANCE_PORT)",
+)
+
 func main() {
 	flag.Parse()
 
@@ -223,6 +229,7 @@ func main() {
 		*maxConcurrentUploads,
 		*allowPrivileged,
 		*skipCertVerify,
+		*exportNetworkEnvVars,
 	)
 
 	tallyman := tallyman.NewTallyman()
@@ -369,6 +376,7 @@ func initializeTransformer(
 	maxConcurrentDownloads, maxConcurrentUploads uint,
 	allowPrivileged bool,
 	skipSSLVerification bool,
+	exportNetworkEnvVars bool,
 ) *transformer.Transformer {
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification)
 	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
@@ -385,6 +393,7 @@ func initializeTransformer(
 		logger,
 		workDir,
 		allowPrivileged,
+		exportNetworkEnvVars,
 	)
 }
 

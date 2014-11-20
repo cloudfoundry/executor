@@ -13,13 +13,14 @@ import (
 )
 
 type runStep struct {
-	container       garden_api.Container
-	model           models.RunAction
-	streamer        log_streamer.LogStreamer
-	logger          lager.Logger
-	allowPrivileged bool
-	externalIP      string
-	portMappings    []executor.PortMapping
+	container            garden_api.Container
+	model                models.RunAction
+	streamer             log_streamer.LogStreamer
+	logger               lager.Logger
+	allowPrivileged      bool
+	externalIP           string
+	portMappings         []executor.PortMapping
+	exportNetworkEnvVars bool
 }
 
 func NewRun(
@@ -30,16 +31,18 @@ func NewRun(
 	allowPrivileged bool,
 	externalIP string,
 	portMappings []executor.PortMapping,
+	exportNetworkEnvVars bool,
 ) *runStep {
 	logger = logger.Session("RunAction")
 	return &runStep{
-		container:       container,
-		model:           model,
-		streamer:        streamer,
-		logger:          logger,
-		allowPrivileged: allowPrivileged,
-		externalIP:      externalIP,
-		portMappings:    portMappings,
+		container:            container,
+		model:                model,
+		streamer:             streamer,
+		logger:               logger,
+		allowPrivileged:      allowPrivileged,
+		externalIP:           externalIP,
+		portMappings:         portMappings,
+		exportNetworkEnvVars: exportNetworkEnvVars,
 	}
 }
 
@@ -52,7 +55,9 @@ func (step *runStep) Perform() error {
 
 	envVars := convertEnvironmentVariables(step.model.Env)
 
-	envVars = append(envVars, step.networkingEnvVars()...)
+	if step.exportNetworkEnvVars {
+		envVars = append(envVars, step.networkingEnvVars()...)
+	}
 
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
