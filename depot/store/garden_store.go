@@ -214,6 +214,10 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		return ErrContainerNotFound
 	}
 
+	logger := store.logger.WithData(lager.Data{
+		"handle": gardenContainer.Handle(),
+	})
+
 	logStreamer := log_streamer.New(
 		container.Log.Guid,
 		container.Log.SourceName,
@@ -230,6 +234,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			gardenContainer,
 			container.ExternalIP,
 			container.Ports,
+			logger,
 		))
 	}
 
@@ -240,6 +245,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			gardenContainer,
 			container.ExternalIP,
 			container.Ports,
+			logger,
 		),
 	}
 
@@ -252,13 +258,15 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			gardenContainer,
 			container.ExternalIP,
 			container.Ports,
+			logger,
 		)
 
 		parallelSequence = append(parallelSequence, steps.NewMonitor(
 			monitoredStep,
 			monitorEvents,
-			store.logger.Session("monitor"),
+			logger.Session("monitor"),
 			timer.NewTimer(),
+			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
 		))

@@ -20,16 +20,23 @@ var _ = Describe("MonitorStep", func() {
 		receivedEvents <-chan HealthEvent
 		timer          *fake_timer.FakeTimer
 
-		healthyInterval   = 1 * time.Second
-		unhealthyInterval = 500 * time.Millisecond
+		startTimeout      time.Duration
+		healthyInterval   time.Duration
+		unhealthyInterval time.Duration
 
 		step Step
 	)
 
 	BeforeEach(func() {
+		startTimeout = 0
+		healthyInterval = 1 * time.Second
+		unhealthyInterval = 500 * time.Millisecond
+
 		timer = fake_timer.NewFakeTimer(time.Now())
 		check = new(fakes.FakeStep)
+	})
 
+	JustBeforeEach(func() {
 		events := make(chan HealthEvent, 1000)
 		receivedEvents = events
 
@@ -38,6 +45,7 @@ var _ = Describe("MonitorStep", func() {
 			events,
 			lagertest.NewTestLogger("test"),
 			timer,
+			startTimeout,
 			healthyInterval,
 			unhealthyInterval,
 		)
@@ -144,6 +152,20 @@ var _ = Describe("MonitorStep", func() {
 		Context("when the check is failing immediately", func() {
 			BeforeEach(func() {
 				checkResults <- errors.New("not up yet!")
+			})
+
+			Context("and the start timeout is exceeded", func() {
+				BeforeEach(func() {
+					startTimeout = 50 * time.Millisecond
+					unhealthyInterval = 30 * time.Millisecond
+				})
+
+				It("completes with failure", func() {
+					expectCheckAfterInterval(unhealthyInterval)
+					Consistently(performErr).ShouldNot(Receive())
+					expectCheckAfterInterval(unhealthyInterval)
+					Eventually(performErr).Should(Receive(MatchError("not up yet!")))
+				})
 			})
 
 			Context("and the unhealthy interval passes", func() {

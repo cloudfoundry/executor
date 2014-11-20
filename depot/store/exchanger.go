@@ -27,20 +27,21 @@ const (
 	tagPropertyPrefix      = "tag:"
 	executorPropertyPrefix = "executor:"
 
-	ContainerOwnerProperty       = executorPropertyPrefix + "owner"
-	ContainerStateProperty       = executorPropertyPrefix + "state"
-	ContainerHealthProperty      = executorPropertyPrefix + "health"
-	ContainerAllocatedAtProperty = executorPropertyPrefix + "allocated-at"
-	ContainerRootfsProperty      = executorPropertyPrefix + "rootfs"
-	ContainerActionProperty      = executorPropertyPrefix + "action"
-	ContainerSetupProperty       = executorPropertyPrefix + "setup"
-	ContainerMonitorProperty     = executorPropertyPrefix + "monitor"
-	ContainerEnvProperty         = executorPropertyPrefix + "env"
-	ContainerLogProperty         = executorPropertyPrefix + "log"
-	ContainerResultProperty      = executorPropertyPrefix + "result"
-	ContainerMemoryMBProperty    = executorPropertyPrefix + "memory-mb"
-	ContainerDiskMBProperty      = executorPropertyPrefix + "disk-mb"
-	ContainerCPUWeightProperty   = executorPropertyPrefix + "cpu-weight"
+	ContainerOwnerProperty        = executorPropertyPrefix + "owner"
+	ContainerStateProperty        = executorPropertyPrefix + "state"
+	ContainerHealthProperty       = executorPropertyPrefix + "health"
+	ContainerAllocatedAtProperty  = executorPropertyPrefix + "allocated-at"
+	ContainerRootfsProperty       = executorPropertyPrefix + "rootfs"
+	ContainerActionProperty       = executorPropertyPrefix + "action"
+	ContainerSetupProperty        = executorPropertyPrefix + "setup"
+	ContainerMonitorProperty      = executorPropertyPrefix + "monitor"
+	ContainerEnvProperty          = executorPropertyPrefix + "env"
+	ContainerLogProperty          = executorPropertyPrefix + "log"
+	ContainerResultProperty       = executorPropertyPrefix + "result"
+	ContainerMemoryMBProperty     = executorPropertyPrefix + "memory-mb"
+	ContainerDiskMBProperty       = executorPropertyPrefix + "disk-mb"
+	ContainerCPUWeightProperty    = executorPropertyPrefix + "cpu-weight"
+	ContainerStartTimeoutProperty = executorPropertyPrefix + "start-timeout"
 )
 
 func NewExchanger(
@@ -191,6 +192,17 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 
 			executorContainer.CPUWeight = uint(cpuWeight)
+		case ContainerStartTimeoutProperty:
+			startTimeout, err := strconv.Atoi(value)
+			if err != nil {
+				return executor.Container{}, MalformedPropertyError{
+					Property: key,
+					Value:    value,
+				}
+			}
+
+			executorContainer.StartTimeout = uint(startTimeout)
+
 		default:
 			if strings.HasPrefix(key, tagPropertyPrefix) {
 				executorContainer.Tags[key[len(tagPropertyPrefix):]] = value
@@ -245,20 +257,21 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 	}
 
 	containerSpec.Properties = garden.Properties{
-		ContainerOwnerProperty:       exchanger.containerOwnerName,
-		ContainerStateProperty:       string(executorContainer.State),
-		ContainerHealthProperty:      string(executorContainer.Health),
-		ContainerAllocatedAtProperty: fmt.Sprintf("%d", executorContainer.AllocatedAt),
-		ContainerRootfsProperty:      executorContainer.RootFSPath,
-		ContainerSetupProperty:       string(setupJson),
-		ContainerActionProperty:      string(actionJson),
-		ContainerMonitorProperty:     string(monitorJson),
-		ContainerEnvProperty:         string(envJson),
-		ContainerLogProperty:         string(logJson),
-		ContainerResultProperty:      string(resultJson),
-		ContainerMemoryMBProperty:    fmt.Sprintf("%d", executorContainer.MemoryMB),
-		ContainerDiskMBProperty:      fmt.Sprintf("%d", executorContainer.DiskMB),
-		ContainerCPUWeightProperty:   fmt.Sprintf("%d", executorContainer.CPUWeight),
+		ContainerOwnerProperty:        exchanger.containerOwnerName,
+		ContainerStateProperty:        string(executorContainer.State),
+		ContainerHealthProperty:       string(executorContainer.Health),
+		ContainerAllocatedAtProperty:  fmt.Sprintf("%d", executorContainer.AllocatedAt),
+		ContainerStartTimeoutProperty: fmt.Sprintf("%d", executorContainer.StartTimeout),
+		ContainerRootfsProperty:       executorContainer.RootFSPath,
+		ContainerSetupProperty:        string(setupJson),
+		ContainerActionProperty:       string(actionJson),
+		ContainerMonitorProperty:      string(monitorJson),
+		ContainerEnvProperty:          string(envJson),
+		ContainerLogProperty:          string(logJson),
+		ContainerResultProperty:       string(resultJson),
+		ContainerMemoryMBProperty:     fmt.Sprintf("%d", executorContainer.MemoryMB),
+		ContainerDiskMBProperty:       fmt.Sprintf("%d", executorContainer.DiskMB),
+		ContainerCPUWeightProperty:    fmt.Sprintf("%d", executorContainer.CPUWeight),
 	}
 
 	for name, value := range executorContainer.Tags {

@@ -63,10 +63,8 @@ func (transformer *Transformer) StepFor(
 	container garden.Container,
 	externalIP string,
 	ports []executor.PortMapping,
+	logger lager.Logger,
 ) steps.Step {
-	logger := transformer.logger.WithData(lager.Data{
-		"handle": container.Handle(),
-	})
 
 	switch actionModel := action.(type) {
 	case *models.RunAction:
@@ -110,6 +108,7 @@ func (transformer *Transformer) StepFor(
 				container,
 				externalIP,
 				ports,
+				logger,
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
@@ -126,6 +125,7 @@ func (transformer *Transformer) StepFor(
 				container,
 				externalIP,
 				ports,
+				logger,
 			),
 			actionModel.Timeout,
 		)
@@ -138,6 +138,7 @@ func (transformer *Transformer) StepFor(
 				container,
 				externalIP,
 				ports,
+				logger,
 			),
 			logger,
 		)
@@ -151,6 +152,7 @@ func (transformer *Transformer) StepFor(
 				container,
 				externalIP,
 				ports,
+				logger,
 			)
 		}
 		return steps.NewParallel(subSteps)
@@ -164,6 +166,7 @@ func (transformer *Transformer) StepFor(
 				container,
 				externalIP,
 				ports,
+				logger,
 			)
 		}
 		return steps.NewSerial(subSteps)

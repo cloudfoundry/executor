@@ -197,12 +197,11 @@ func main() {
 
 	logger := cf_lager.New("executor")
 
-	initializeDropsonde(logger)
-
-	if *containerMaxCpuShares == 0 {
-		logger.Error("max-cpu-shares-invalid", nil)
+	if !validate(logger) {
 		os.Exit(1)
 	}
+
+	initializeDropsonde(logger)
 
 	logger.Info("starting")
 
@@ -287,6 +286,27 @@ func main() {
 	}
 
 	logger.Info("exited")
+}
+
+func validate(logger lager.Logger) bool {
+	valid := true
+
+	if *containerMaxCpuShares == 0 {
+		logger.Error("max-cpu-shares-invalid", nil)
+		valid = false
+	}
+
+	if *healthyMonitoringInterval <= 0 {
+		logger.Error("healthy-monitoring-interval-invalid", nil)
+		valid = false
+	}
+
+	if *unhealthyMonitoringInterval <= 0 {
+		logger.Error("unhealthy-monitoring-interval-invalid", nil)
+		valid = false
+	}
+
+	return valid
 }
 
 func drainHub(hub event.Hub) ifrit.Runner {

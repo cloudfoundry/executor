@@ -44,9 +44,10 @@ type Container struct {
 	Ports      []PortMapping `json:"ports"`
 	Log        LogConfig     `json:"log"`
 
-	Setup   models.Action `json:"setup"`
-	Action  models.Action `json:"run"`
-	Monitor models.Action `json:"monitor"`
+	StartTimeout uint          `json:"start_timeout"`
+	Setup        models.Action `json:"setup"`
+	Action       models.Action `json:"run"`
+	Monitor      models.Action `json:"monitor"`
 
 	Env []EnvironmentVariable `json:"env,omitempty"`
 
