@@ -1,8 +1,11 @@
 package steps
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -15,6 +18,8 @@ type runStep struct {
 	streamer        log_streamer.LogStreamer
 	logger          lager.Logger
 	allowPrivileged bool
+	externalIP      string
+	portMappings    []executor.PortMapping
 }
 
 func NewRun(
@@ -23,6 +28,8 @@ func NewRun(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 	allowPrivileged bool,
+	externalIP string,
+	portMappings []executor.PortMapping,
 ) *runStep {
 	logger = logger.Session("RunAction")
 	return &runStep{
@@ -31,17 +38,9 @@ func NewRun(
 		streamer:        streamer,
 		logger:          logger,
 		allowPrivileged: allowPrivileged,
+		externalIP:      externalIP,
+		portMappings:    portMappings,
 	}
-}
-
-func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {
-	converted := []string{}
-
-	for _, env := range environmentVariables {
-		converted = append(converted, env.Name+"="+env.Value)
-	}
-
-	return converted
 }
 
 func (step *runStep) Perform() error {
@@ -51,6 +50,10 @@ func (step *runStep) Perform() error {
 		return errors.New("privileged-action-denied")
 	}
 
+	envVars := convertEnvironmentVariables(step.model.Env)
+
+	envVars = append(envVars, step.networkingEnvVars()...)
+
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
 
@@ -58,7 +61,7 @@ func (step *runStep) Perform() error {
 	process, err := step.container.Run(garden_api.ProcessSpec{
 		Path:       step.model.Path,
 		Args:       step.model.Args,
-		Env:        convertEnvironmentVariables(step.model.Env),
+		Env:        envVars,
 		Privileged: step.model.Privileged,
 
 		Limits: garden_api.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
@@ -115,4 +118,40 @@ func (step *runStep) Perform() error {
 
 func (step *runStep) Cancel() {
 	step.container.Stop(false)
+}
+
+func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {
+	converted := []string{}
+
+	for _, env := range environmentVariables {
+		converted = append(converted, env.Name+"="+env.Value)
+	}
+
+	return converted
+}
+
+func (step *runStep) networkingEnvVars() []string {
+	var envVars []string
+
+	envVars = append(envVars, "CF_INSTANCE_IP="+step.externalIP)
+
+	if len(step.portMappings) > 0 {
+		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))
+		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
+
+		buffer := bytes.NewBufferString("CF_INSTANCE_PORTS=")
+		for i, portMapping := range step.portMappings {
+			if i > 0 {
+				buffer.WriteString(",")
+			}
+			buffer.WriteString(fmt.Sprintf("%d:%d", portMapping.HostPort, portMapping.ContainerPort))
+		}
+		envVars = append(envVars, buffer.String())
+	} else {
+		envVars = append(envVars, "CF_INSTANCE_PORT=")
+		envVars = append(envVars, "CF_INSTANCE_ADDR=")
+		envVars = append(envVars, "CF_INSTANCE_PORTS=")
+	}
+
+	return envVars
 }

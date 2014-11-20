@@ -228,6 +228,8 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			logStreamer,
 			container.Setup,
 			gardenContainer,
+			container.ExternalIP,
+			container.Ports,
 		))
 	}
 
@@ -236,6 +238,8 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			logStreamer,
 			container.Action,
 			gardenContainer,
+			container.ExternalIP,
+			container.Ports,
 		),
 	}
 
@@ -246,6 +250,8 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			logStreamer,
 			container.Monitor,
 			gardenContainer,
+			container.ExternalIP,
+			container.Ports,
 		)
 
 		parallelSequence = append(parallelSequence, steps.NewMonitor(

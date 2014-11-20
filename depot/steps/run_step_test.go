@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 )
@@ -27,6 +28,8 @@ var _ = Describe("RunAction", func() {
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
 	var allowPrivileged bool
+	var externalIP string
+	var portMappings []executor.PortMapping
 
 	var spawnedProcess *gfakes.FakeProcess
 	var runError error
@@ -61,6 +64,8 @@ var _ = Describe("RunAction", func() {
 		gardenClient.Connection.RunStub = func(string, garden_api.ProcessSpec, garden_api.ProcessIO) (garden_api.Process, error) {
 			return spawnedProcess, runError
 		}
+		externalIP = "external-ip"
+		portMappings = nil
 	})
 
 	handle := "some-container-handle"
@@ -77,6 +82,8 @@ var _ = Describe("RunAction", func() {
 			fakeStreamer,
 			logger,
 			allowPrivileged,
+			externalIP,
+			portMappings,
 		)
 	})
 
@@ -132,8 +139,45 @@ var _ = Describe("RunAction", func() {
 				Ω(spec.Path).Should(Equal("sudo"))
 				Ω(spec.Args).Should(Equal([]string{"reboot"}))
 				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
-				Ω(spec.Env).Should(Equal([]string{"A=1", "B=2"}))
+				Ω(spec.Env).Should(ContainElement("A=1"))
+				Ω(spec.Env).Should(ContainElement("B=2"))
 				Ω(spec.Privileged).Should(BeFalse())
+			})
+		})
+
+		Context("CF_INSTANCE_* networking env vars", func() {
+			It("sets CF_INSTANCE_IP on the container", func() {
+				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+				Ω(spec.Env).Should(ContainElement("CF_INSTANCE_IP=external-ip"))
+			})
+
+			Context("when the container has port mappings configured", func() {
+				BeforeEach(func() {
+					portMappings = []executor.PortMapping{
+						{HostPort: 1, ContainerPort: 2},
+						{HostPort: 3, ContainerPort: 4},
+					}
+				})
+
+				It("sets CF_INSTANCE_* networking env vars", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT=1"))
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS=1:2,3:4"))
+				})
+			})
+
+			Context("when the container does not have any port mappings configured", func() {
+				BeforeEach(func() {
+					portMappings = []executor.PortMapping{}
+				})
+
+				It("sets all port-related env vars to the empty string", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT="))
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR="))
+					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS="))
+				})
 			})
 		})
 

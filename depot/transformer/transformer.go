@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
@@ -57,6 +58,8 @@ func (transformer *Transformer) StepFor(
 	logStreamer log_streamer.LogStreamer,
 	action models.Action,
 	container garden.Container,
+	externalIP string,
+	ports []executor.PortMapping,
 ) steps.Step {
 	logger := transformer.logger.WithData(lager.Data{
 		"handle": container.Handle(),
@@ -70,6 +73,8 @@ func (transformer *Transformer) StepFor(
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 			transformer.allowPrivileged,
+			externalIP,
+			ports,
 		)
 
 	case *models.DownloadAction:
@@ -99,6 +104,8 @@ func (transformer *Transformer) StepFor(
 				logStreamer,
 				actionModel.Action,
 				container,
+				externalIP,
+				ports,
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
@@ -113,6 +120,8 @@ func (transformer *Transformer) StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
+				externalIP,
+				ports,
 			),
 			actionModel.Timeout,
 		)
@@ -123,6 +132,8 @@ func (transformer *Transformer) StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
+				externalIP,
+				ports,
 			),
 			logger,
 		)
@@ -134,6 +145,8 @@ func (transformer *Transformer) StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				action,
 				container,
+				externalIP,
+				ports,
 			)
 		}
 		return steps.NewParallel(subSteps)
@@ -145,6 +158,8 @@ func (transformer *Transformer) StepFor(
 				logStreamer,
 				action,
 				container,
+				externalIP,
+				ports,
 			)
 		}
 		return steps.NewSerial(subSteps)
