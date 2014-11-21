@@ -54,6 +54,25 @@ type Container struct {
 	RunResult ContainerRunResult `json:"run_result"`
 }
 
+func (c *Container) HasTags(tags Tags) bool {
+	if c.Tags == nil {
+		return tags == nil
+	}
+
+	if tags == nil {
+		return false
+	}
+
+	for key, val := range tags {
+		v, ok := c.Tags[key]
+		if !ok || val != v {
+			return false
+		}
+	}
+
+	return true
+}
+
 type InnerContainer Container
 
 type mContainer struct {
