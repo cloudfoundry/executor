@@ -1432,6 +1432,19 @@ var _ = Describe("GardenContainerStore", func() {
 					mutex.Unlock()
 					return nil
 				}
+				gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
+					mutex.Lock()
+					defer mutex.Unlock()
+
+					props := map[string]string{}
+					for k, v := range containerProperties {
+						props[k] = v
+					}
+
+					return garden.ContainerInfo{
+						Properties: props,
+					}, nil
+				}
 				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, _ garden.ProcessIO) (garden.Process, error) {
 					mutex.Lock()
 					defer mutex.Unlock()
@@ -1465,20 +1478,26 @@ var _ = Describe("GardenContainerStore", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
 
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
-				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.ContainerHealthEvent{
-					Container: executorContainer,
-					Health:    executor.HealthUp,
-				}))
+
+				healthEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerHealthEvent)
+				Ω(ok).Should(BeTrue())
+
+				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthUp))
+				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
+				Ω(healthEvent.Health).Should(Equal(executor.HealthUp))
 
 				mutex.Lock()
 				waitReturnValue = 1
 				mutex.Unlock()
 
 				Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-				Ω(emitter.EmitEventArgsForCall(1)).Should(Equal(executor.ContainerHealthEvent{
-					Container: executorContainer,
-					Health:    executor.HealthDown,
-				}))
+
+				healthEvent, ok = emitter.EmitEventArgsForCall(1).(executor.ContainerHealthEvent)
+				Ω(ok).Should(BeTrue())
+
+				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthDown))
+				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
+				Ω(healthEvent.Health).Should(Equal(executor.HealthDown))
 			})
 
 			Context("when setting the health fails", func() {

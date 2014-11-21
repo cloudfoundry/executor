@@ -335,6 +335,11 @@ func updateHealth(store *GardenStore, executorContainer executor.Container, gard
 		return err
 	}
 
+	executorContainer, err = store.exchanger.Garden2Executor(gardenContainer)
+	if err != nil {
+		return err
+	}
+
 	store.eventEmitter.EmitEvent(executor.ContainerHealthEvent{
 		Container: executorContainer,
 		Health:    health,
