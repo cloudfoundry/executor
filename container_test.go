@@ -12,6 +12,12 @@ var _ = Describe("Container", func() {
 		var container Container
 
 		Context("when tags are nil", func() {
+			BeforeEach(func() {
+				container = Container{
+					Tags: nil,
+				}
+			})
+
 			It("returns true if requested tags are nil", func() {
 				Ω(container.HasTags(nil)).Should(BeTrue())
 			})
