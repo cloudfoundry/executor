@@ -210,12 +210,14 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	//garden containers as a member of latter is uninitialized until its
 	//counterpart in the former is gone and we don't want to publicize containers that
 	//are in a half-baked state
-	combinedContainers := append(gardenContainers, allocatedContainers...)
-	for _, gardenContainer := range combinedContainers {
+	for _, gardenContainer := range gardenContainers {
+		containersByHandle[gardenContainer.Guid] = gardenContainer
+	}
+	for _, gardenContainer := range allocatedContainers {
 		containersByHandle[gardenContainer.Guid] = gardenContainer
 	}
 
-	var containers []executor.Container
+	containers := make([]executor.Container, 0, len(containersByHandle))
 	for _, container := range containersByHandle {
 		containers = append(containers, container)
 	}

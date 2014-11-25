@@ -700,6 +700,7 @@ var _ = Describe("GardenContainerStore", func() {
 			It("returns a created container", func() {
 				expectedCreatedContainer := executorContainer
 				expectedCreatedContainer.State = executor.StateCreated
+				expectedCreatedContainer.Health = executor.HealthUnmonitored
 
 				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
 			})
@@ -712,7 +713,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Describe("the exchanged Garden container", func() {
 				It("creates it with the state as 'created'", func() {
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties["executor:state"]).Should(Equal(string(executor.StateCreated)))
+					Ω(containerSpec.Properties[store.ContainerStateProperty]).Should(Equal(string(executor.StateCreated)))
 				})
 
 				It("creates it with the owner property", func() {
@@ -730,17 +731,30 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties["executor:action"]).To(MatchJSON(payload))
+					Ω(containerSpec.Properties[store.ContainerActionProperty]).To(MatchJSON(payload))
 				})
 
-				Context("when the Executor container has health", func() {
-					BeforeEach(func() {
-						executorContainer.Health = executor.HealthDown
+				Context("the Executor container's health", func() {
+					Context("with a MonitorAction", func() {
+						BeforeEach(func() {
+							executorContainer.Monitor = &models.RunAction{Path: "monitor"}
+						})
+
+						It("creates it with the health property as down", func() {
+							containerSpec := fakeGardenClient.CreateArgsForCall(0)
+							Ω(containerSpec.Properties[store.ContainerHealthProperty]).Should(Equal(string(executor.HealthDown)))
+						})
 					})
 
-					It("creates it with the health as a property", func() {
-						containerSpec := fakeGardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:health"]).Should(Equal(string(executor.HealthDown)))
+					Context("without a MonitorAction", func() {
+						BeforeEach(func() {
+							executorContainer.Monitor = nil
+						})
+
+						It("creates it with the health property as unmonitored", func() {
+							containerSpec := fakeGardenClient.CreateArgsForCall(0)
+							Ω(containerSpec.Properties[store.ContainerHealthProperty]).Should(Equal(string(executor.HealthUnmonitored)))
+						})
 					})
 				})
 
@@ -1389,71 +1403,98 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("Health", func() {
-		Context("when the health of the garden container changes", func() {
-			var (
-				processes           map[string]*gfakes.FakeProcess
-				containerProperties map[string]string
-				gardenContainer     *gfakes.FakeContainer
-				waitReturnValue     int
+		var (
+			processes           map[string]*gfakes.FakeProcess
+			containerProperties map[string]string
+			gardenContainer     *gfakes.FakeContainer
+			waitReturnValue     int
+			executorContainer   executor.Container
 
-				runAction         = &models.RunAction{Path: "run"}
-				monitorAction     = &models.RunAction{Path: "monitor"}
-				executorContainer = executor.Container{
-					Action:  runAction,
-					Monitor: monitorAction,
-					Guid:    "some-container-handle",
-				}
+			runAction     = &models.RunAction{Path: "run"}
+			monitorAction = &models.RunAction{Path: "monitor"}
+			mutex         = &sync.Mutex{}
+		)
 
-				mutex = &sync.Mutex{}
-			)
+		BeforeEach(func() {
+			mutex.Lock()
+			defer mutex.Unlock()
 
-			BeforeEach(func() {
+			waitReturnValue = 0
+
+			executorContainer = executor.Container{
+				Action:  runAction,
+				Monitor: monitorAction,
+				Guid:    "some-container-handle",
+			}
+
+			processes = make(map[string]*gfakes.FakeProcess)
+			processes["run"] = new(gfakes.FakeProcess)
+			processes["monitor"] = new(gfakes.FakeProcess)
+			processes["monitor"].WaitStub = func() (int, error) {
+				mutex.Lock()
+				defer mutex.Unlock()
+				return waitReturnValue, nil
+			}
+
+			containerProperties = make(map[string]string)
+
+			gardenContainer = new(gfakes.FakeContainer)
+			gardenContainer.HandleReturns("some-container-handle")
+			gardenContainer.SetPropertyStub = func(key, value string) error {
+				mutex.Lock()
+				containerProperties[key] = value
+				mutex.Unlock()
+				return nil
+			}
+			gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
 				mutex.Lock()
 				defer mutex.Unlock()
 
-				waitReturnValue = 0
-
-				processes = make(map[string]*gfakes.FakeProcess)
-				processes["run"] = new(gfakes.FakeProcess)
-				processes["monitor"] = new(gfakes.FakeProcess)
-				processes["monitor"].WaitStub = func() (int, error) {
-					mutex.Lock()
-					defer mutex.Unlock()
-					return waitReturnValue, nil
+				props := map[string]string{}
+				for k, v := range containerProperties {
+					props[k] = v
 				}
 
-				containerProperties = make(map[string]string)
+				return garden.ContainerInfo{
+					Properties: props,
+				}, nil
+			}
+			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, _ garden.ProcessIO) (garden.Process, error) {
+				mutex.Lock()
+				defer mutex.Unlock()
+				return processes[processSpec.Path], nil
+			}
 
-				gardenContainer = new(gfakes.FakeContainer)
-				gardenContainer.HandleReturns("some-container-handle")
-				gardenContainer.SetPropertyStub = func(key, value string) error {
-					mutex.Lock()
-					containerProperties[key] = value
-					mutex.Unlock()
-					return nil
-				}
-				gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
-					mutex.Lock()
-					defer mutex.Unlock()
+			fakeGardenClient.LookupReturns(gardenContainer, nil)
+			fakeGardenClient.CreateReturns(gardenContainer, nil)
+		})
 
-					props := map[string]string{}
-					for k, v := range containerProperties {
-						props[k] = v
-					}
+		JustBeforeEach(func() {
+			var err error
+			executorContainer, err = gardenStore.Create(executorContainer)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
 
-					return garden.ContainerInfo{
-						Properties: props,
-					}, nil
-				}
-				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, _ garden.ProcessIO) (garden.Process, error) {
-					mutex.Lock()
-					defer mutex.Unlock()
-					return processes[processSpec.Path], nil
-				}
-
-				fakeGardenClient.LookupReturns(gardenContainer, nil)
+		Context("when there is no monitor action", func() {
+			BeforeEach(func() {
+				executorContainer.Monitor = nil
 			})
 
+			It("emits the health as unmonitored", func() {
+				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+
+				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
+
+				healthEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerHealthEvent)
+				Ω(ok).Should(BeTrue())
+
+				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthUnmonitored))
+				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
+				Ω(healthEvent.Health).Should(Equal(executor.HealthUnmonitored))
+			})
+		})
+
+		Context("when the health of the garden container changes", func() {
 			It("updates the health of the container", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
 

@@ -131,6 +131,12 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 func (store *GardenStore) Create(container executor.Container) (executor.Container, error) {
 	container.State = executor.StateCreated
 
+	if container.Monitor == nil {
+		container.Health = executor.HealthUnmonitored
+	} else {
+		container.Health = executor.HealthDown
+	}
+
 	container, err := store.exchanger.CreateInGarden(store.gardenClient, container)
 	if err != nil {
 		return executor.Container{}, err
@@ -284,6 +290,13 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 		go func() {
 			seqComplete <- step.Perform()
 		}()
+
+		if container.Monitor == nil {
+			store.eventEmitter.EmitEvent(executor.ContainerHealthEvent{
+				Container: container,
+				Health:    container.Health,
+			})
+		}
 
 		for {
 			select {

@@ -92,11 +92,6 @@ func (store *AllocationStore) Create(container executor.Container) (executor.Con
 	container.State = executor.StateReserved
 	container.AllocatedAt = store.timeProvider.Time().UnixNano()
 
-	if container.Monitor == nil {
-		container.Health = executor.HealthUnmonitored
-	} else {
-		container.Health = executor.HealthDown
-	}
 	store.tracker.Allocate(container)
 
 	store.containers[container.Guid] = container
