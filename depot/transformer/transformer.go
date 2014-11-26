@@ -112,7 +112,7 @@ func (transformer *Transformer) StepFor(
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
-			actionModel.FailureMessage,
+			actionModel.FailureMessagePrefix,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		)

@@ -118,7 +118,7 @@ var _ = Describe("EmitProgressStep", func() {
 						step.Perform()
 
 						Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
-						Ω(stderrBuffer.String()).Should(Equal("FAIL\nFailed to reticulate\n"))
+						Ω(stderrBuffer.String()).Should(Equal("FAIL: Failed to reticulate\n"))
 					})
 				})
 			})
