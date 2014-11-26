@@ -20,13 +20,9 @@ func NewEmittableError(wrappedError error, message string, args ...interface{}) 
 }
 
 func (e *EmittableError) Error() string {
-	if e.wrappedError == nil {
-		return e.EmittableError()
-	}
-
-	return fmt.Sprintf("%s\n%s", e.msg, e.wrappedError.Error())
+	return e.msg
 }
 
-func (e *EmittableError) EmittableError() string {
-	return e.msg
+func (e *EmittableError) WrappedError() error {
+	return e.wrappedError
 }

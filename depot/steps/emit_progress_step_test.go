@@ -120,6 +120,17 @@ var _ = Describe("EmitProgressStep", func() {
 						Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
 						Ω(stderrBuffer.String()).Should(Equal("FAIL: Failed to reticulate\n"))
 					})
+
+					It("logs the error", func() {
+						step.Perform()
+
+						logs := logger.TestSink.Logs()
+						Ω(logs).Should(HaveLen(1))
+
+						Ω(logs[0].Message).Should(ContainSubstring("errored"))
+						Ω(logs[0].Data["wrapped-error"]).Should(Equal("bam!"))
+						Ω(logs[0].Data["message-emitted"]).Should(Equal("Failed to reticulate"))
+					})
 				})
 			})
 

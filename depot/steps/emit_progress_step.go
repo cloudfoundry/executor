@@ -43,9 +43,15 @@ func (step *emitProgressStep) Perform() error {
 	if err != nil {
 		if step.failureMessage != "" {
 			step.streamer.Stderr().Write([]byte(step.failureMessage))
+
 			if emittableError, ok := err.(*EmittableError); ok {
 				step.streamer.Stderr().Write([]byte(": "))
-				step.streamer.Stderr().Write([]byte(emittableError.EmittableError()))
+				step.streamer.Stderr().Write([]byte(emittableError.Error()))
+
+				step.logger.Info("errored", lager.Data{
+					"wrapped-error":   emittableError.WrappedError().Error(),
+					"message-emitted": emittableError.Error(),
+				})
 			}
 
 			step.streamer.Stderr().Write([]byte("\n"))
