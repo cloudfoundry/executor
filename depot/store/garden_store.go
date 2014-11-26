@@ -214,15 +214,16 @@ func (store *GardenStore) Ping() error {
 	return store.gardenClient.Ping()
 }
 
-func (store *GardenStore) Run(container executor.Container, callback func(executor.ContainerRunResult)) error {
+func (store *GardenStore) Run(container executor.Container, callback func(executor.ContainerRunResult)) {
+	logger := store.logger.WithData(lager.Data{
+		"container": container.Guid,
+	})
+
 	gardenContainer, err := store.gardenClient.Lookup(container.Guid)
 	if err != nil {
-		return ErrContainerNotFound
+		logger.Debug("container-deleted-just-before-running")
+		return
 	}
-
-	logger := store.logger.WithData(lager.Data{
-		"handle": gardenContainer.Handle(),
-	})
 
 	logStreamer := log_streamer.New(
 		container.Log.Guid,
@@ -330,8 +331,6 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 	store.processesL.Lock()
 	store.runningProcesses[container.Guid] = process
 	store.processesL.Unlock()
-
-	return nil
 }
 
 func updateHealth(store *GardenStore, executorContainer executor.Container, gardenContainer garden.Container, healthEvent steps.HealthEvent) error {

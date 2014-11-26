@@ -1,7 +1,6 @@
 package depot
 
 import (
-	"fmt"
 	"io"
 	"sync"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-const ContainerInitializationFailedMessage = "failed to initialize container: %s"
+const ContainerInitializationFailedMessage = "failed to initialize container"
 
 type AllocationsTracker interface {
 	Allocations() []executor.Container
@@ -48,7 +47,7 @@ type GardenStore interface {
 
 	Store
 
-	Run(executor.Container, func(executor.ContainerRunResult)) error
+	Run(executor.Container, func(executor.ContainerRunResult))
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
@@ -143,7 +142,7 @@ func (c *client) RunContainer(guid string) error {
 
 			c.allocationStore.Complete(guid, executor.ContainerRunResult{
 				Failed:        true,
-				FailureReason: fmt.Sprintf(ContainerInitializationFailedMessage, err.Error()),
+				FailureReason: ContainerInitializationFailedMessage,
 			})
 
 			return
@@ -166,28 +165,13 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		err = c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
+		c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
 			err := c.gardenStore.Complete(container.Guid, result)
 			if err != nil {
 				// not a lot we can do here
 				logger.Error("failed-to-save-result-upon-completion", err)
 			}
 		})
-
-		if err == store.ErrContainerNotFound {
-			logger.Debug("container-deleted-just-before-running")
-			return
-		} else if err != nil {
-			err := c.gardenStore.Complete(container.Guid, executor.ContainerRunResult{
-				Failed:        true,
-				FailureReason: fmt.Sprintf("failed to start running: %s", err.Error()),
-			})
-			if err != nil {
-				// not a lot we can do here
-				logger.Error("failed-to-save-result-when-handling-run-error", err)
-			}
-			return
-		}
 	}()
 
 	return nil
