@@ -48,8 +48,13 @@ func (step *emitProgressStep) Perform() error {
 				step.streamer.Stderr().Write([]byte(": "))
 				step.streamer.Stderr().Write([]byte(emittableError.Error()))
 
+				wrappedMessage := ""
+				if emittableError.WrappedError() != nil {
+					wrappedMessage = emittableError.WrappedError().Error()
+				}
+
 				step.logger.Info("errored", lager.Data{
-					"wrapped-error":   emittableError.WrappedError().Error(),
+					"wrapped-error":   wrappedMessage,
 					"message-emitted": emittableError.Error(),
 				})
 			}

@@ -131,6 +131,30 @@ var _ = Describe("EmitProgressStep", func() {
 						Ω(logs[0].Data["wrapped-error"]).Should(Equal("bam!"))
 						Ω(logs[0].Data["message-emitted"]).Should(Equal("Failed to reticulate"))
 					})
+
+					Context("without a wrapped error", func() {
+						BeforeEach(func() {
+							errorToReturn = NewEmittableError(nil, "Failed to reticulate")
+						})
+
+						It("should print out the emittable error", func() {
+							step.Perform()
+
+							Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
+							Ω(stderrBuffer.String()).Should(Equal("FAIL: Failed to reticulate\n"))
+						})
+
+						It("logs the error", func() {
+							step.Perform()
+
+							logs := logger.TestSink.Logs()
+							Ω(logs).Should(HaveLen(1))
+
+							Ω(logs[0].Message).Should(ContainSubstring("errored"))
+							Ω(logs[0].Data["wrapped-error"]).Should(BeEmpty())
+							Ω(logs[0].Data["message-emitted"]).Should(Equal("Failed to reticulate"))
+						})
+					})
 				})
 			})
 
