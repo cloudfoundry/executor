@@ -18,6 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -32,6 +33,7 @@ var _ = Describe("DownloadAction", func() {
 	var downloadAction models.DownloadAction
 	var cache *cdfakes.FakeCachedDownloader
 	var gardenClient *fake_api_client.FakeClient
+	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var logger *lagertest.TestLogger
 
 	handle := "some-container-handle"
@@ -44,6 +46,7 @@ var _ = Describe("DownloadAction", func() {
 
 		gardenClient = fake_api_client.New()
 
+		fakeStreamer = newFakeStreamer()
 		logger = lagertest.NewTestLogger("test")
 	})
 
@@ -69,6 +72,7 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction,
 				cache,
 				make(chan struct{}, 1),
+				fakeStreamer,
 				logger,
 			)
 
@@ -88,6 +92,54 @@ var _ = Describe("DownloadAction", func() {
 			expectedVal := reflect.ValueOf(cacheddownloader.TarTransform)
 
 			Ω(tVal.Pointer()).Should(Equal(expectedVal.Pointer()))
+		})
+
+		Context("when an artifact is not specified", func() {
+			It("does not stream the download information", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+				Ω(stdout.String()).Should(BeEmpty())
+			})
+		})
+
+		Context("when an artifact is specified", func() {
+			BeforeEach(func() {
+				downloadAction.Artifact = "artifact"
+			})
+
+			Context("streams the downloaded filesize", func() {
+				It("streams unknown when the Fetch does not return a File", func() {
+					Ω(stepErr).ShouldNot(HaveOccurred())
+
+					stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+					Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (unknown)"))
+				})
+
+				Context("with a file", func() {
+					var tempFile *os.File
+
+					BeforeEach(func() {
+						var err error
+						tempFile, err = ioutil.TempFile("", "download-step")
+						Ω(err).ShouldNot(HaveOccurred())
+						ioutil.WriteFile(tempFile.Name(), []byte("data"), os.ModePerm)
+						cache.FetchReturns(cacheddownloader.NewFileCloser(tempFile, func(string) {}), nil)
+					})
+
+					AfterEach(func() {
+						os.Remove(tempFile.Name())
+					})
+
+					It("streams the size when the Fetch returns a File", func() {
+						Ω(stepErr).ShouldNot(HaveOccurred())
+
+						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+						Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (4)"))
+					})
+				})
+			})
 		})
 
 		Context("when there is an error parsing the download url", func() {
@@ -192,6 +244,7 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction1,
 				cache,
 				rateLimiter,
+				fakeStreamer,
 				logger,
 			)
 
@@ -205,6 +258,7 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction2,
 				cache,
 				rateLimiter,
+				fakeStreamer,
 				logger,
 			)
 
@@ -218,6 +272,7 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction3,
 				cache,
 				rateLimiter,
+				fakeStreamer,
 				logger,
 			)
 

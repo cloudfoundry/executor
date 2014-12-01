@@ -1,11 +1,14 @@
 package steps
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
 )
@@ -14,6 +17,7 @@ type downloadStep struct {
 	container        garden_api.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
+	streamer         log_streamer.LogStreamer
 	rateLimiter      chan struct{}
 	logger           lager.Logger
 }
@@ -23,6 +27,7 @@ func NewDownload(
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	rateLimiter chan struct{},
+	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *downloadStep {
 	logger = logger.Session("DownloadAction", lager.Data{
@@ -35,6 +40,7 @@ func NewDownload(
 		model:            model,
 		cachedDownloader: cachedDownloader,
 		rateLimiter:      rateLimiter,
+		streamer:         streamer,
 		logger:           logger,
 	}
 }
@@ -46,13 +52,26 @@ func (step *downloadStep) Perform() error {
 	}()
 
 	step.logger.Info("starting")
+	step.emit("Downloading %s...\n", step.model.Artifact)
 
 	downloadedFile, err := step.download()
 	if err != nil {
+		step.emit("Failed to download %s\n", step.model.Artifact)
 		return NewEmittableError(err, "Downloading failed")
 	}
-
 	defer downloadedFile.Close()
+
+	downloadSize := "unknown"
+
+	if f, ok := downloadedFile.(*cacheddownloader.CachedFile); ok {
+		fi, err := f.Stat()
+		if err != nil {
+			return NewEmittableError(err, "Unable to obtain download size")
+		}
+		downloadSize = bytefmt.ByteSize(uint64(fi.Size()))
+	}
+
+	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize)
 
 	return step.streamIn(step.model.To, downloadedFile)
 }
@@ -79,4 +98,10 @@ func (step *downloadStep) streamIn(destination string, reader io.Reader) error {
 	}
 
 	return err
+}
+
+func (step *downloadStep) emit(format string, a ...interface{}) {
+	if step.model.Artifact != "" {
+		fmt.Fprintf(step.streamer.Stdout(), format, a...)
+	}
 }

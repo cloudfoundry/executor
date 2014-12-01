@@ -85,6 +85,7 @@ func (transformer *Transformer) StepFor(
 			*actionModel,
 			transformer.cachedDownloader,
 			transformer.downloadLimiter,
+			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		)
 

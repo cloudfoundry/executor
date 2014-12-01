@@ -69,6 +69,7 @@ func (step *uploadStep) Perform() (err error) {
 	}()
 
 	step.logger.Info("upload-starting")
+	step.emit("Uploading %s...\n", step.model.Artifact)
 
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
@@ -112,13 +113,20 @@ func (step *uploadStep) Perform() (err error) {
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
 	if err != nil {
 		// Do not emit error in case it leaks sensitive data in URL
+		step.emit("Failed to upload %s\n", step.model.Artifact)
 		return err
 	}
 
-	fmt.Fprintf(step.streamer.Stdout(), fmt.Sprintf("Uploaded (%s)\n", bytefmt.ByteSize(uint64(uploadedBytes))))
+	step.emit("Uploaded %s (%s)\n", step.model.Artifact, bytefmt.ByteSize(uint64(uploadedBytes)))
 
 	step.logger.Info("upload-successful")
 	return nil
 }
 
 func (step *uploadStep) Cancel() {}
+
+func (step *uploadStep) emit(format string, a ...interface{}) {
+	if step.model.Artifact != "" {
+		fmt.Fprintf(step.streamer.Stdout(), format, a...)
+	}
+}

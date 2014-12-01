@@ -195,12 +195,28 @@ var _ = Describe("UploadStep", func() {
 					uploader = fakeUploader
 				})
 
-				It("streams the upload filesize", func() {
-					err := step.Perform()
-					Ω(err).ShouldNot(HaveOccurred())
+				Context("when an artifact is specified", func() {
+					BeforeEach(func() {
+						uploadAction.Artifact = "artifact"
+					})
 
-					stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-					Ω(stdout.String()).Should(ContainSubstring("Uploaded (1K)"))
+					It("streams the upload filesize", func() {
+						err := step.Perform()
+						Ω(err).ShouldNot(HaveOccurred())
+
+						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+						Ω(stdout.String()).Should(ContainSubstring("Uploaded artifact (1K)"))
+					})
+				})
+
+				Context("when an artifact is not specified", func() {
+					It("does not stream the upload information", func() {
+						err := step.Perform()
+						Ω(err).ShouldNot(HaveOccurred())
+
+						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
+						Ω(stdout.String()).Should(BeEmpty())
+					})
 				})
 
 				It("does not stream an error", func() {
