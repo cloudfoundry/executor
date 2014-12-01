@@ -5,7 +5,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"code.google.com/p/goprotobuf/proto"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/dropsonde/events"
