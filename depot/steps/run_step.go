@@ -138,13 +138,13 @@ func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariab
 func (step *runStep) networkingEnvVars() []string {
 	var envVars []string
 
-	envVars = append(envVars, "CF_INSTANCE_IP="+step.externalIP)
+	envVars = append(envVars, "INSTANCE_IP="+step.externalIP)
 
 	if len(step.portMappings) > 0 {
-		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))
-		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
+		envVars = append(envVars, fmt.Sprintf("INSTANCE_PORT=%d", step.portMappings[0].HostPort))
+		envVars = append(envVars, fmt.Sprintf("INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
 
-		buffer := bytes.NewBufferString("CF_INSTANCE_PORTS=")
+		buffer := bytes.NewBufferString("INSTANCE_PORTS=")
 		for i, portMapping := range step.portMappings {
 			if i > 0 {
 				buffer.WriteString(",")
@@ -153,9 +153,9 @@ func (step *runStep) networkingEnvVars() []string {
 		}
 		envVars = append(envVars, buffer.String())
 	} else {
-		envVars = append(envVars, "CF_INSTANCE_PORT=")
-		envVars = append(envVars, "CF_INSTANCE_ADDR=")
-		envVars = append(envVars, "CF_INSTANCE_PORTS=")
+		envVars = append(envVars, "INSTANCE_PORT=")
+		envVars = append(envVars, "INSTANCE_ADDR=")
+		envVars = append(envVars, "INSTANCE_PORTS=")
 	}
 
 	return envVars

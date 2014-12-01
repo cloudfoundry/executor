@@ -148,15 +148,15 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("CF_INSTANCE_* networking env vars", func() {
+		Context("INSTANCE_* networking env vars", func() {
 			Context("when exportNetworkEnvVars is set to true", func() {
 				BeforeEach(func() {
 					exportNetworkEnvVars = true
 				})
 
-				It("sets CF_INSTANCE_IP on the container", func() {
+				It("sets INSTANCE_IP on the container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Ω(spec.Env).Should(ContainElement("INSTANCE_IP=external-ip"))
 				})
 
 				Context("when the container has port mappings configured", func() {
@@ -167,11 +167,11 @@ var _ = Describe("RunAction", func() {
 						}
 					})
 
-					It("sets CF_INSTANCE_* networking env vars", func() {
+					It("sets INSTANCE_* networking env vars", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT=1"))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS=1:2,3:4"))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_PORT=1"))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_ADDR=external-ip:1"))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_PORTS=1:2,3:4"))
 					})
 				})
 
@@ -182,9 +182,9 @@ var _ = Describe("RunAction", func() {
 
 					It("sets all port-related env vars to the empty string", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT="))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR="))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS="))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_PORT="))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_ADDR="))
+						Ω(spec.Env).Should(ContainElement("INSTANCE_PORTS="))
 					})
 				})
 			})
@@ -194,9 +194,9 @@ var _ = Describe("RunAction", func() {
 					exportNetworkEnvVars = false
 				})
 
-				It("does not set CF_INSTANCE_IP on the container", func() {
+				It("does not set INSTANCE_IP on the container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Ω(spec.Env).ShouldNot(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Ω(spec.Env).ShouldNot(ContainElement("INSTANCE_IP=external-ip"))
 				})
 			})
 		})

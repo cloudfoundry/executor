@@ -189,7 +189,7 @@ var unhealthyMonitoringInterval = flag.Duration(
 var exportNetworkEnvVars = flag.Bool(
 	"exportNetworkEnvVars",
 	false,
-	"export network environment variables into container (e.g. CF_INSTANCE_IP, CF_INSTANCE_PORT)",
+	"export network environment variables into container (e.g. INSTANCE_IP, INSTANCE_PORT)",
 )
 
 func main() {
