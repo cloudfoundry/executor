@@ -1,6 +1,10 @@
 package executor
 
-import "io"
+import (
+	"io"
+
+	"github.com/pivotal-golang/lager"
+)
 
 type Client interface {
 	Ping() error
@@ -13,4 +17,8 @@ type Client interface {
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)
 	SubscribeToEvents() (<-chan Event, error)
+}
+
+type ClientProvider interface {
+	WithLogger(logger lager.Logger) Client
 }

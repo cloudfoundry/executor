@@ -8,14 +8,24 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
+type Generator struct {
+	depotClientProvider executor.ClientProvider
+}
+
 type handler struct {
 	depotClient executor.Client
 	logger      lager.Logger
 }
 
-func New(depotClient executor.Client, logger lager.Logger) http.Handler {
+func New(depotClientProvider executor.ClientProvider) *Generator {
+	return &Generator{
+		depotClientProvider: depotClientProvider,
+	}
+}
+
+func (generator *Generator) WithLogger(logger lager.Logger) http.Handler {
 	return &handler{
-		depotClient: depotClient,
+		depotClient: generator.depotClientProvider.WithLogger(logger),
 		logger:      logger,
 	}
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"os"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -22,9 +23,13 @@ import (
 )
 
 type Server struct {
-	Address     string
-	DepotClient executor.Client
-	Logger      lager.Logger
+	Address             string
+	DepotClientProvider executor.ClientProvider
+	Logger              lager.Logger
+}
+
+type HandlerProvider interface {
+	WithLogger(lager.Logger) http.Handler
 }
 
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
@@ -33,6 +38,11 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 		if key != ehttp.Ping {
 			handlers[key] = LogWrap(handler, s.Logger)
 		}
+	}
+
+	handlerProviders := s.NewHandlerProviders()
+	for key, provider := range handlerProviders {
+		handlers[key] = LogWrapGenerate(provider, s.Logger)
 	}
 
 	router, err := rata.NewRouter(ehttp.Routes, handlers)
@@ -62,16 +72,22 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 
 func (s *Server) NewHandlers() rata.Handlers {
 	return rata.Handlers{
-		ehttp.Ping:                  ping.New(s.DepotClient),
-		ehttp.Events:                events.New(s.DepotClient),
-		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClient, s.Logger),
+		ehttp.Ping:   ping.New(s.DepotClientProvider.WithLogger(s.Logger)),
+		ehttp.Events: events.New(s.DepotClientProvider.WithLogger(s.Logger)),
+	}
+}
 
-		ehttp.AllocateContainer: allocate_container.New(s.DepotClient, s.Logger),
-		ehttp.GetContainer:      get_container.New(s.DepotClient, s.Logger),
-		ehttp.ListContainers:    list_containers.New(s.DepotClient, s.Logger),
-		ehttp.DeleteContainer:   delete_container.New(s.DepotClient, s.Logger),
-		ehttp.GetTotalResources: total_resources.New(s.DepotClient, s.Logger),
-		ehttp.RunContainer:      run_actions.New(s.DepotClient, s.Logger),
-		ehttp.GetFiles:          get_files.New(s.DepotClient, s.Logger),
+func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
+	return map[string]HandlerProvider{
+		ehttp.AllocateContainer: allocate_container.New(s.DepotClientProvider),
+		ehttp.GetContainer:      get_container.New(s.DepotClientProvider),
+		ehttp.ListContainers:    list_containers.New(s.DepotClientProvider),
+		ehttp.RunContainer:      run_actions.New(s.DepotClientProvider),
+		ehttp.DeleteContainer:   delete_container.New(s.DepotClientProvider),
+
+		ehttp.GetTotalResources:     total_resources.New(s.DepotClientProvider),
+		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClientProvider),
+
+		ehttp.GetFiles: get_files.New(s.DepotClientProvider),
 	}
 }

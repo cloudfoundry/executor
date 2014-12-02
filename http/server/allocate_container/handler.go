@@ -9,19 +9,29 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type Handler struct {
+type Provider struct {
+	depotClientProvider executor.ClientProvider
+}
+
+type handler struct {
 	depotClient executor.Client
 	logger      lager.Logger
 }
 
-func New(depotClient executor.Client, logger lager.Logger) *Handler {
-	return &Handler{
-		depotClient: depotClient,
+func New(depotClientProvider executor.ClientProvider) *Provider {
+	return &Provider{
+		depotClientProvider: depotClientProvider,
+	}
+}
+
+func (provider *Provider) WithLogger(logger lager.Logger) http.Handler {
+	return &handler{
+		depotClient: provider.depotClientProvider.WithLogger(logger),
 		logger:      logger,
 	}
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	allocLog := h.logger.Session("allocate-handler")
 
 	req := executor.Container{}

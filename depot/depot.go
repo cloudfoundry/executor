@@ -17,8 +17,11 @@ type AllocationsTracker interface {
 }
 
 type client struct {
+	*clientProvider
 	logger lager.Logger
+}
 
+type clientProvider struct {
 	totalCapacity   executor.ExecutorResources
 	gardenStore     GardenStore
 	allocationStore AllocationStore
@@ -47,25 +50,30 @@ type GardenStore interface {
 
 	Store
 
-	Run(executor.Container, func(executor.ContainerRunResult))
+	Run(executor.Container, lager.Logger, func(executor.ContainerRunResult))
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
-func NewClient(
+func NewClientProvider(
 	totalCapacity executor.ExecutorResources,
 	gardenStore GardenStore,
 	allocationStore AllocationStore,
 	tracker AllocationsTracker,
 	eventHub event.Hub,
-	logger lager.Logger,
-) executor.Client {
-	return &client{
+) executor.ClientProvider {
+	return &clientProvider{
 		totalCapacity:   totalCapacity,
 		gardenStore:     gardenStore,
 		allocationStore: allocationStore,
 		tracker:         tracker,
 		eventHub:        eventHub,
-		logger:          logger.Session("depot-client"),
+	}
+}
+
+func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client {
+	return &client{
+		provider,
+		logger.Session("depot-client"),
 	}
 }
 
@@ -165,7 +173,7 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		c.gardenStore.Run(container, func(result executor.ContainerRunResult) {
+		c.gardenStore.Run(container, logger, func(result executor.ContainerRunResult) {
 			err := c.gardenStore.Complete(container.Guid, result)
 			if err != nil {
 				// not a lot we can do here

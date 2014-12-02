@@ -250,27 +250,28 @@ func main() {
 		hub,
 	)
 
-	depotClient := depot.NewClient(
+	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),
 		gardenStore,
 		allocationStore,
 		tallyman,
 		hub,
-		logger,
 	)
+
+	metricsLogger := logger.Session("metrics-reporter")
 
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
 		{"api-server", &server.Server{
-			Address:     *listenAddr,
-			Logger:      logger,
-			DepotClient: depotClient,
+			Address:             *listenAddr,
+			Logger:              logger,
+			DepotClientProvider: depotClientProvider,
 		}},
 		{"metrics-reporter", &metrics.Reporter{
-			ExecutorSource: depotClient,
+			ExecutorSource: depotClientProvider.WithLogger(metricsLogger),
 			Interval:       *metricsReportInterval,
-			Logger:         logger.Session("metrics-reporter"),
+			Logger:         metricsLogger,
 		}},
-		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval)},
+		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval, logger)},
 		{"hub-drainer", drainHub(hub)},
 	})
 
@@ -364,7 +365,6 @@ func initializeStores(
 	}
 
 	gardenStore := store.NewGardenStore(
-		logger.Session("garden-store"),
 		gardenClient,
 		containerOwnerName,
 		containerMaxCpuShares,

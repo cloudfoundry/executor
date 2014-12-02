@@ -52,7 +52,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
-			logger,
 			fakeGardenClient,
 			ownerName,
 			maxCPUShares,
@@ -1363,7 +1362,7 @@ var _ = Describe("GardenContainerStore", func() {
 				},
 			}, nil)
 
-			runner := gardenStore.TrackContainers(2 * time.Second)
+			runner := gardenStore.TrackContainers(2*time.Second, logger)
 
 			_, err := gardenStore.Create(executor.Container{
 				MemoryMB: 2,
@@ -1481,7 +1480,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			It("emits the health as unmonitored", func() {
-				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
 
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
 
@@ -1496,7 +1495,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when the health of the garden container changes", func() {
 			It("updates the health of the container", func() {
-				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				containerHealth := func() string {
@@ -1517,7 +1516,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			It("emits events to the event hub", func() {
-				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				timeProvider.Increment(time.Second)
@@ -1552,7 +1551,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("does not emit a health update event", func() {
-					gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+					gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
 
 					Consistently(emitter.EmitEventCallCount).Should(BeZero())
 				})

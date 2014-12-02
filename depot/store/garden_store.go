@@ -24,8 +24,6 @@ var (
 )
 
 type GardenStore struct {
-	logger lager.Logger
-
 	gardenClient       garden.Client
 	exchanger          Exchanger
 	containerOwnerName string
@@ -52,7 +50,6 @@ type InitializedTracker interface {
 }
 
 func NewGardenStore(
-	logger lager.Logger,
 	gardenClient garden.Client,
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
@@ -66,8 +63,6 @@ func NewGardenStore(
 	eventEmitter EventEmitter,
 ) *GardenStore {
 	return &GardenStore{
-		logger: logger,
-
 		gardenClient:       gardenClient,
 		exchanger:          NewExchanger(containerOwnerName, containerMaxCPUShares, containerInodeLimit),
 		containerOwnerName: containerOwnerName,
@@ -115,10 +110,6 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 	for _, gardenContainer := range gardenContainers {
 		container, err := store.exchanger.Garden2Executor(gardenContainer)
 		if err != nil {
-			store.logger.Error("failed-to-get-container-info", err, lager.Data{
-				"handle": gardenContainer.Handle(),
-			})
-
 			continue
 		}
 
@@ -214,8 +205,8 @@ func (store *GardenStore) Ping() error {
 	return store.gardenClient.Ping()
 }
 
-func (store *GardenStore) Run(container executor.Container, callback func(executor.ContainerRunResult)) {
-	logger := store.logger.WithData(lager.Data{
+func (store *GardenStore) Run(container executor.Container, logger lager.Logger, callback func(executor.ContainerRunResult)) {
+	logger = logger.WithData(lager.Data{
 		"container": container.Guid,
 	})
 
@@ -360,7 +351,9 @@ func updateHealth(store *GardenStore, executorContainer executor.Container, gard
 	return nil
 }
 
-func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
+func (store *GardenStore) TrackContainers(interval time.Duration, logger lager.Logger) ifrit.Runner {
+	logger = logger.Session("garden-store-track-containers")
+
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		ticker := store.timeProvider.NewTicker(interval)
 		defer ticker.Stop()
@@ -376,7 +369,7 @@ func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 			case <-ticker.C():
 				containers, err := store.List(nil)
 				if err != nil {
-					store.logger.Error("failed-to-list-containers", err)
+					logger.Error("failed-to-list-containers", err)
 					continue
 				}
 

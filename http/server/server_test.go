@@ -39,11 +39,13 @@ func MarshalledPayload(payload interface{}) io.Reader {
 }
 
 var _ = Describe("Api", func() {
+	var depotClientProvider *fakes.FakeClientProvider
 	var depotClient *fakes.FakeClient
 	var containerGuid string
 
 	var server ifrit.Process
 	var generator *rata.RequestGenerator
+	var logger *lagertest.TestLogger
 
 	var i = 0
 
@@ -54,17 +56,19 @@ var _ = Describe("Api", func() {
 	BeforeEach(func() {
 		containerGuid = "container-guid"
 
-		logger := lagertest.NewTestLogger("test")
+		logger = lagertest.NewTestLogger("test")
 
-		address := fmt.Sprintf("127.0.0.1:%d", 3150+i+(config.GinkgoConfig.ParallelNode*100))
+		address := fmt.Sprintf("127.0.0.1:%d", 13150+i+(config.GinkgoConfig.ParallelNode*100))
 		i++
 
+		depotClientProvider = new(fakes.FakeClientProvider)
 		depotClient = new(fakes.FakeClient)
+		depotClientProvider.WithLoggerReturns(depotClient)
 
 		server = ginkgomon.Invoke(&Server{
-			Address:     address,
-			Logger:      logger,
-			DepotClient: depotClient,
+			Address:             address,
+			Logger:              logger,
+			DepotClientProvider: depotClientProvider,
 		})
 
 		generator = rata.NewRequestGenerator("http://"+address, ehttp.Routes)
@@ -120,6 +124,13 @@ var _ = Describe("Api", func() {
 
 				Ω(container).Should(Equal(expectedContainer))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when the container does not exist", func() {
@@ -130,6 +141,14 @@ var _ = Describe("Api", func() {
 			It("returns 404 Not Found", func() {
 				Ω(getResponse.StatusCode).Should(Equal(http.StatusNotFound))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.get-handler.failed-to-get-container",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when the container's existence cannot be determined", func() {
@@ -139,6 +158,14 @@ var _ = Describe("Api", func() {
 
 			It("returns 500 Internal Error", func() {
 				Ω(getResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.get-handler.failed-to-get-container",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -199,6 +226,13 @@ var _ = Describe("Api", func() {
 			It("returns a container", func() {
 				Ω(reservedContainer).Should(Equal(expectedContainer))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when the container cannot be reserved because the guid is already taken", func() {
@@ -209,6 +243,14 @@ var _ = Describe("Api", func() {
 			It("returns 400", func() {
 				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusBadRequest))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.allocate-handler.failed-to-allocate-container",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when the container cannot be reserved because there is no room", func() {
@@ -218,6 +260,14 @@ var _ = Describe("Api", func() {
 
 			It("returns 503", func() {
 				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusServiceUnavailable))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.allocate-handler.failed-to-allocate-container",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -263,6 +313,31 @@ var _ = Describe("Api", func() {
 			guid := depotClient.RunContainerArgsForCall(0)
 			Ω(guid).Should(Equal(containerGuid))
 		})
+
+		It("logs the request", func() {
+			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				"test.request.serving",
+				"test.request.done",
+			}))
+		})
+
+		Context("when the run action fails", func() {
+			BeforeEach(func() {
+				depotClient.RunContainerReturns(executor.ErrContainerNotFound)
+			})
+
+			It("returns 404", func() {
+				Ω(runResponse.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.run-handler.run-actions-failed",
+					"test.request.done",
+				}))
+			})
+		})
 	})
 
 	Describe("GET /containers", func() {
@@ -306,6 +381,13 @@ var _ = Describe("Api", func() {
 				Ω(containers).Should(Equal(expectedContainers))
 			})
 
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
+
 			Context("and tags are specified", func() {
 				BeforeEach(func() {
 					listRequest.URL.RawQuery = url.Values{
@@ -338,6 +420,14 @@ var _ = Describe("Api", func() {
 			It("returns 500", func() {
 				Ω(listResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.list-handler.failed-to-list-container",
+					"test.request.done",
+				}))
+			})
 		})
 	})
 
@@ -362,6 +452,13 @@ var _ = Describe("Api", func() {
 				Ω(depotClient.DeleteContainerArgsForCall(0)).Should(Equal(containerGuid))
 			})
 
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
+
 			Context("when deleting the container fails", func() {
 				BeforeEach(func() {
 					depotClient.DeleteContainerReturns(errors.New("oh no!"))
@@ -380,6 +477,14 @@ var _ = Describe("Api", func() {
 
 			It("returns a 404", func() {
 				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.delete-handler.failed-to-delete-container",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -439,6 +544,13 @@ var _ = Describe("Api", func() {
 					Ω(responseStream.Closed()).Should(BeTrue())
 				})
 
+				It("logs the request", func() {
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.request.serving",
+						"test.request.done",
+					}))
+				})
+
 				Context("when a source query param is specified", func() {
 					BeforeEach(func() {
 						request.URL.RawQuery = url.Values{
@@ -464,6 +576,14 @@ var _ = Describe("Api", func() {
 				It("returns a 500", func() {
 					Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
 				})
+
+				It("logs the request", func() {
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.request.serving",
+						"test.request.get-files-handler.failed-to-get-container",
+						"test.request.done",
+					}))
+				})
 			})
 		})
 
@@ -474,6 +594,14 @@ var _ = Describe("Api", func() {
 
 			It("returns a 404", func() {
 				Ω(response.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.get-files-handler.failed-to-get-container",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -513,6 +641,13 @@ var _ = Describe("Api", func() {
 				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
 				Ω(resources).Should(Equal(expectedExecutorResources))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when we cannot determine remaining resources", func() {
@@ -522,6 +657,14 @@ var _ = Describe("Api", func() {
 
 			It("returns 500", func() {
 				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.remaining-resources-handler.failed-to-get-remaining-resources",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -559,6 +702,13 @@ var _ = Describe("Api", func() {
 
 				Ω(resources).Should(Equal(expectedTotalResources))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when we cannot determine the total resources", func() {
@@ -568,6 +718,14 @@ var _ = Describe("Api", func() {
 
 			It("returns 500", func() {
 				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.total-resources-handler.failed-to-get-total-resources",
+					"test.request.done",
+				}))
 			})
 		})
 	})
@@ -582,6 +740,10 @@ var _ = Describe("Api", func() {
 				response := DoRequest(generator.CreateRequest(ehttp.Ping, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 			})
+
+			It("does not log the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(BeEmpty())
+			})
 		})
 
 		Context("when Garden returns an error", func() {
@@ -593,10 +755,16 @@ var _ = Describe("Api", func() {
 				response := DoRequest(generator.CreateRequest(ehttp.Ping, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
 			})
+
+			It("does not log the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(BeEmpty())
+			})
 		})
 	})
 
 	Describe("GET /events", func() {
+		var response *http.Response
+
 		Context("when the depot emits events", func() {
 			event1 := executor.ContainerCompleteEvent{
 				executor.Container{
@@ -630,8 +798,11 @@ var _ = Describe("Api", func() {
 				depotClient.SubscribeToEventsReturns(events, nil)
 			})
 
+			JustBeforeEach(func() {
+				response = DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
+			})
+
 			It("response with the appropriate SSE headers", func() {
-				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 
 				Ω(response.Header.Get("Content-Type")).Should(Equal("text/event-stream; charset=utf-8"))
@@ -640,7 +811,6 @@ var _ = Describe("Api", func() {
 			})
 
 			It("emits the events via SSE and ends when the channel closes", func() {
-				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 
 				reader := sse.NewReader(response.Body)
@@ -666,15 +836,22 @@ var _ = Describe("Api", func() {
 				_, err = reader.Next()
 				Ω(err).Should(Equal(io.EOF))
 			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.done",
+				}))
+			})
 		})
 
 		Context("when the depot returns an error", func() {
 			BeforeEach(func() {
 				depotClient.SubscribeToEventsReturns(nil, errors.New("oh no!"))
+				response = DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
 			})
 
 			It("should 502", func() {
-				response := DoRequest(generator.CreateRequest(ehttp.Events, nil, nil))
 				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
 			})
 		})

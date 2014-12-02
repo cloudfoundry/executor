@@ -9,19 +9,29 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type Handler struct {
+type Generator struct {
+	depotClientProvider executor.ClientProvider
+}
+
+type handler struct {
 	depotClient executor.Client
 	logger      lager.Logger
 }
 
-func New(depotClient executor.Client, logger lager.Logger) *Handler {
-	return &Handler{
-		depotClient: depotClient,
+func New(depotClientProvider executor.ClientProvider) *Generator {
+	return &Generator{
+		depotClientProvider: depotClientProvider,
+	}
+}
+
+func (generator *Generator) WithLogger(logger lager.Logger) http.Handler {
+	return &handler{
+		depotClient: generator.depotClientProvider.WithLogger(logger),
 		logger:      logger,
 	}
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rLog := h.logger.Session("remaining-resources-handler")
 
 	resources, err := h.depotClient.RemainingResources()
