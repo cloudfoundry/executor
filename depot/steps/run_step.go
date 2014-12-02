@@ -94,6 +94,7 @@ func (step *runStep) Perform() error {
 	select {
 	case exitStatus := <-exitStatusChan:
 		logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
+		step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
 		step.streamer.Flush()
 
 		if exitStatus != 0 {

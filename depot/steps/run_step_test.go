@@ -52,7 +52,7 @@ var _ = Describe("RunAction", func() {
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
-
+		fakeStreamer.StdoutReturns(noOpWriter{})
 		gardenClient = fake_api_client.New()
 
 		logger = lagertest.NewTestLogger("test")
@@ -271,7 +271,7 @@ var _ = Describe("RunAction", func() {
 					_, err = io.Stderr.Write([]byte("hi err"))
 					Ω(err).ShouldNot(HaveOccurred())
 
-					return 0, nil
+					return 34, nil
 				}
 			})
 
@@ -282,6 +282,10 @@ var _ = Describe("RunAction", func() {
 
 			It("should flush the output when the code exits", func() {
 				Ω(fakeStreamer.FlushCallCount()).Should(Equal(1))
+			})
+
+			It("emits the exit status code", func() {
+				Ω(stdoutBuffer).Should(gbytes.Say("Exit status 34"))
 			})
 		})
 	})
@@ -300,3 +304,7 @@ var _ = Describe("RunAction", func() {
 		})
 	})
 })
+
+type noOpWriter struct{}
+
+func (w noOpWriter) Write(b []byte) (int, error) { return len(b), nil }
