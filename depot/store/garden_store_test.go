@@ -1497,6 +1497,7 @@ var _ = Describe("GardenContainerStore", func() {
 		Context("when the health of the garden container changes", func() {
 			It("updates the health of the container", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				containerHealth := func() string {
 					mutex.Lock()
@@ -1517,6 +1518,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 			It("emits events to the event hub", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
+				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				timeProvider.Increment(time.Second)
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
