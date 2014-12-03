@@ -96,8 +96,8 @@ var _ = Describe("DownloadAction", func() {
 
 		It("logs the step", func() {
 			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-				"test.DownloadAction.starting-download",
-				"test.DownloadAction.finished-download",
+				"test.download-step.starting-download",
+				"test.download-step.finished-download",
 			}))
 		})
 
@@ -160,8 +160,8 @@ var _ = Describe("DownloadAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.DownloadAction.starting-download",
-					"test.DownloadAction.parse-request-uri-error",
+					"test.download-step.starting-download",
+					"test.download-step.parse-request-uri-error",
 				}))
 			})
 		})
@@ -222,9 +222,9 @@ var _ = Describe("DownloadAction", func() {
 
 				It("logs the step", func() {
 					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-						"test.DownloadAction.starting-download",
-						"test.DownloadAction.finished-download",
-						"test.DownloadAction.failed-to-stream-in",
+						"test.download-step.starting-download",
+						"test.download-step.finished-download",
+						"test.download-step.failed-to-stream-in",
 					}))
 				})
 			})
@@ -241,8 +241,8 @@ var _ = Describe("DownloadAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.DownloadAction.starting-download",
-					"test.DownloadAction.failed-to-fetch",
+					"test.download-step.starting-download",
+					"test.download-step.failed-to-fetch",
 				}))
 			})
 		})

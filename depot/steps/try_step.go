@@ -10,7 +10,7 @@ type tryStep struct {
 }
 
 func NewTry(substep Step, logger lager.Logger) *tryStep {
-	logger = logger.Session("TryAction")
+	logger = logger.Session("try-step")
 	return &tryStep{
 		substep: substep,
 		logger:  logger,

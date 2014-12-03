@@ -192,9 +192,9 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.UploadAction.upload-starting",
+					"test.upload-step.upload-starting",
 					"test.URLUploader.attempt",
-					"test.UploadAction.upload-successful",
+					"test.upload-step.upload-successful",
 				}))
 			})
 
@@ -256,8 +256,8 @@ var _ = Describe("UploadStep", func() {
 					err := step.Perform()
 					Ω(err).Should(HaveOccurred())
 					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-						"test.UploadAction.upload-starting",
-						"test.UploadAction.failed-to-upload",
+						"test.upload-step.upload-starting",
+						"test.upload-step.failed-to-upload",
 					}))
 				})
 			})
@@ -277,8 +277,8 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.UploadAction.upload-starting",
-					"test.UploadAction.failed-to-parse-url",
+					"test.upload-step.upload-starting",
+					"test.upload-step.failed-to-parse-url",
 				}))
 			})
 		})
@@ -299,8 +299,8 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.UploadAction.upload-starting",
-					"test.UploadAction.failed-to-stream-out",
+					"test.upload-step.upload-starting",
+					"test.upload-step.failed-to-stream-out",
 				}))
 			})
 		})
@@ -321,8 +321,8 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(HaveOccurred())
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.UploadAction.upload-starting",
-					"test.UploadAction.failed-to-read-stream",
+					"test.upload-step.upload-starting",
+					"test.upload-step.failed-to-read-stream",
 				}))
 			})
 		})

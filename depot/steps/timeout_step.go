@@ -19,7 +19,7 @@ func NewTimeout(substep Step, timeout time.Duration, logger lager.Logger) *timeo
 		substep:    substep,
 		timeout:    timeout,
 		cancelChan: make(chan struct{}),
-		logger:     logger.Session("TimeoutAction"),
+		logger:     logger.Session("timeout-step"),
 	}
 }
 

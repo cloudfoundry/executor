@@ -38,7 +38,7 @@ func NewUpload(
 	rateLimiter chan struct{},
 	logger lager.Logger,
 ) *uploadStep {
-	logger = logger.Session("UploadAction", lager.Data{
+	logger = logger.Session("upload-step", lager.Data{
 		"from": model.From,
 	})
 

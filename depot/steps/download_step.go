@@ -30,7 +30,7 @@ func NewDownload(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *downloadStep {
-	logger = logger.Session("DownloadAction", lager.Data{
+	logger = logger.Session("download-step", lager.Data{
 		"to":       model.To,
 		"cacheKey": model.CacheKey,
 	})

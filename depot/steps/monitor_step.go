@@ -42,7 +42,7 @@ func NewMonitor(
 	healthyInterval time.Duration,
 	unhealthyInterval time.Duration,
 ) Step {
-	logger = logger.Session("MonitorAction")
+	logger = logger.Session("monitor-step")
 
 	return &monitorStep{
 		check:             check,

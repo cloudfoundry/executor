@@ -23,7 +23,7 @@ func NewEmitProgress(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *emitProgressStep {
-	logger = logger.Session("EmitProgressAction")
+	logger = logger.Session("emit-progress-step")
 	return &emitProgressStep{
 		substep:        substep,
 		logger:         logger,

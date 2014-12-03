@@ -33,7 +33,7 @@ func NewRun(
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
 ) *runStep {
-	logger = logger.Session("RunAction")
+	logger = logger.Session("run-step")
 	return &runStep{
 		container:            container,
 		model:                model,

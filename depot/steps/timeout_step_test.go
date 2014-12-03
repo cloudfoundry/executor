@@ -99,7 +99,7 @@ var _ = Describe("TimeoutStep", func() {
 
 			It("logs the timeout", func() {
 				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.TimeoutAction.timed-out",
+					"test.timeout-step.timed-out",
 				}))
 			})
 
@@ -202,7 +202,7 @@ var _ = Describe("TimeoutStep", func() {
 
 			It("logs the cancellation", func() {
 				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.TimeoutAction.cancelling",
+					"test.timeout-step.cancelling",
 				}))
 			})
 

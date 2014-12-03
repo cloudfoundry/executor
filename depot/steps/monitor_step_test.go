@@ -118,7 +118,7 @@ var _ = Describe("MonitorStep", func() {
 
 				It("logs the step", func() {
 					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-						"test.MonitorAction.transitioned-to-healthy",
+						"test.monitor-step.transitioned-to-healthy",
 					}))
 				})
 
@@ -151,8 +151,8 @@ var _ = Describe("MonitorStep", func() {
 
 						It("logs the step", func() {
 							Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-								"test.MonitorAction.transitioned-to-healthy",
-								"test.MonitorAction.transitioned-to-unhealthy",
+								"test.monitor-step.transitioned-to-healthy",
+								"test.monitor-step.transitioned-to-unhealthy",
 							}))
 						})
 
@@ -185,7 +185,7 @@ var _ = Describe("MonitorStep", func() {
 				It("logs the step", func() {
 					timeProvider.Increment(startTimeout + time.Millisecond)
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-						"test.MonitorAction.timed-out-before-healthy",
+						"test.monitor-step.timed-out-before-healthy",
 					}))
 				})
 			})
@@ -223,17 +223,12 @@ var _ = Describe("MonitorStep", func() {
 	Describe("Cancel", func() {
 		It("interrupts the monitoring", func() {
 			performResult := make(chan error)
-			go func() { performResult <- step.Perform() }()
-			step.Cancel()
+			s := step
+			go func() { performResult <- s.Perform() }()
+			s.Cancel()
 			Eventually(performResult).Should(Receive())
-		})
-
-		It("logs the step", func() {
-			performResult := make(chan error)
-			go func() { performResult <- step.Perform() }()
-			step.Cancel()
-			Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-				"test.MonitorAction.cancelling",
+			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				"test.monitor-step.cancelling",
 			}))
 		})
 	})

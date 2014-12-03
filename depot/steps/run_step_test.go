@@ -113,8 +113,8 @@ var _ = Describe("RunAction", func() {
 
 				It("logs the step", func() {
 					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-						"test.RunAction.running",
-						"test.RunAction.privileged-action-denied",
+						"test.run-step.running",
+						"test.run-step.privileged-action-denied",
 					}))
 				})
 			})
@@ -157,10 +157,10 @@ var _ = Describe("RunAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.RunAction.running",
-					"test.RunAction.creating-process",
-					"test.RunAction.successful-process-create",
-					"test.RunAction.process-exit",
+					"test.run-step.running",
+					"test.run-step.creating-process",
+					"test.run-step.successful-process-create",
+					"test.run-step.process-exit",
 				}))
 			})
 		})
@@ -179,10 +179,10 @@ var _ = Describe("RunAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.RunAction.running",
-					"test.RunAction.creating-process",
-					"test.RunAction.successful-process-create",
-					"test.RunAction.running-error",
+					"test.run-step.running",
+					"test.run-step.creating-process",
+					"test.run-step.successful-process-create",
+					"test.run-step.running-error",
 				}))
 			})
 		})
@@ -275,9 +275,9 @@ var _ = Describe("RunAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.RunAction.running",
-					"test.RunAction.creating-process",
-					"test.RunAction.failed-creating-process",
+					"test.run-step.running",
+					"test.run-step.creating-process",
+					"test.run-step.failed-creating-process",
 				}))
 			})
 		})
@@ -307,11 +307,11 @@ var _ = Describe("RunAction", func() {
 
 			It("logs the step", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-					"test.RunAction.running",
-					"test.RunAction.creating-process",
-					"test.RunAction.successful-process-create",
-					"test.RunAction.process-exit",
-					"test.RunAction.failed-to-get-info",
+					"test.run-step.running",
+					"test.run-step.creating-process",
+					"test.run-step.successful-process-create",
+					"test.run-step.process-exit",
+					"test.run-step.failed-to-get-info",
 				}))
 			})
 		})
