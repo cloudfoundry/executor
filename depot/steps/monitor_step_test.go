@@ -183,7 +183,8 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("logs the step", func() {
-					timeProvider.Increment(startTimeout + time.Millisecond)
+					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(unhealthyInterval)
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.monitor-step.timed-out-before-healthy",
 					}))
