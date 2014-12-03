@@ -409,7 +409,6 @@ func initializeTransformer(
 		compressor,
 		make(chan struct{}, maxConcurrentDownloads),
 		make(chan struct{}, maxConcurrentUploads),
-		logger,
 		workDir,
 		allowPrivileged,
 		exportNetworkEnvVars,

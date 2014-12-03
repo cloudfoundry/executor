@@ -59,7 +59,7 @@ var _ = Describe("GardenContainerStore", func() {
 			100*time.Millisecond,
 			100*time.Millisecond,
 			nil,
-			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, logger, os.TempDir(), false, false),
+			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false),
 			timeProvider,
 			tracker,
 			emitter,

@@ -137,6 +137,8 @@ var _ = Describe("Uploader", func() {
 				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("attempt"))
 				Eventually(requestInitiated).Should(Receive())
 
+				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("failed-upload"))
+
 				Ω(<-errs).Should(HaveOccurred())
 			})
 		})

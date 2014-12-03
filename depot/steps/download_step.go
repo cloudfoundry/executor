@@ -51,7 +51,7 @@ func (step *downloadStep) Perform() error {
 		<-step.rateLimiter
 	}()
 
-	step.logger.Info("starting")
+	step.logger.Info("starting-download")
 	step.emit("Downloading %s...\n", step.model.Artifact)
 
 	downloadedFile, err := step.download()
@@ -71,6 +71,7 @@ func (step *downloadStep) Perform() error {
 		downloadSize = bytefmt.ByteSize(uint64(fi.Size()))
 	}
 
+	step.logger.Info("finished-download")
 	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize)
 
 	return step.streamIn(step.model.To, downloadedFile)
@@ -83,7 +84,13 @@ func (step *downloadStep) download() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	return step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform)
+	fetcher, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform)
+	if err != nil {
+		step.logger.Error("failed-to-fetch", err)
+		return nil, err
+	}
+
+	return fetcher, nil
 }
 
 func (step *downloadStep) Cancel() {}

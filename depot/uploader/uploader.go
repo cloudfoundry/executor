@@ -63,11 +63,9 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 		var sourceFile *os.File
 		var fileInfo os.FileInfo
 
-		if logger != nil {
-			logger.Info("attempt", lager.Data{
-				"attempt": attempt,
-			})
-		}
+		logger.Info("attempt", lager.Data{
+			"attempt": attempt,
+		})
 
 		sourceFile, err = os.Open(fileLocation)
 		if err != nil {

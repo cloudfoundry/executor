@@ -73,6 +73,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
+		step.logger.Info("failed-to-parse-url")
 		// Do not emit error in case it leaks sensitive data in URL
 		return err
 	}
@@ -86,6 +87,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	outStream, err := step.container.StreamOut(step.model.From)
 	if err != nil {
+		step.logger.Info("failed-to-stream-out")
 		return NewEmittableError(err, ErrEstablishStream)
 	}
 	defer outStream.Close()
@@ -93,6 +95,7 @@ func (step *uploadStep) Perform() (err error) {
 	tarStream := tar.NewReader(outStream)
 	_, err = tarStream.Next()
 	if err != nil {
+		step.logger.Info("failed-to-read-stream")
 		return NewEmittableError(err, ErrReadTar)
 	}
 
@@ -112,6 +115,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
 	if err != nil {
+		step.logger.Info("failed-to-upload")
 		// Do not emit error in case it leaks sensitive data in URL
 		step.emit("Failed to upload %s\n", step.model.Artifact)
 		return err

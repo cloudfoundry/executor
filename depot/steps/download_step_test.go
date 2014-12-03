@@ -94,6 +94,13 @@ var _ = Describe("DownloadAction", func() {
 			Ω(tVal.Pointer()).Should(Equal(expectedVal.Pointer()))
 		})
 
+		It("logs the step", func() {
+			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				"test.DownloadAction.starting-download",
+				"test.DownloadAction.finished-download",
+			}))
+		})
+
 		Context("when an artifact is not specified", func() {
 			It("does not stream the download information", func() {
 				err := step.Perform()
@@ -150,6 +157,13 @@ var _ = Describe("DownloadAction", func() {
 			It("returns an error", func() {
 				Ω(stepErr).Should(HaveOccurred())
 			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.DownloadAction.starting-download",
+					"test.DownloadAction.parse-request-uri-error",
+				}))
+			})
 		})
 
 		Context("and the fetched bits are a valid tarball", func() {
@@ -205,6 +219,14 @@ var _ = Describe("DownloadAction", func() {
 				It("returns an error", func() {
 					Ω(stepErr.Error()).Should(ContainSubstring("Copying into the container failed"))
 				})
+
+				It("logs the step", func() {
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.DownloadAction.starting-download",
+						"test.DownloadAction.finished-download",
+						"test.DownloadAction.failed-to-stream-in",
+					}))
+				})
 			})
 		})
 
@@ -215,6 +237,13 @@ var _ = Describe("DownloadAction", func() {
 
 			It("returns an error", func() {
 				Ω(stepErr.Error()).Should(ContainSubstring("Downloading failed"))
+			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.DownloadAction.starting-download",
+					"test.DownloadAction.failed-to-fetch",
+				}))
 			})
 		})
 

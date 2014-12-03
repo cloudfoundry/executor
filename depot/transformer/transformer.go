@@ -25,7 +25,6 @@ type Transformer struct {
 	compressor           compressor.Compressor
 	downloadLimiter      chan struct{}
 	uploadLimiter        chan struct{}
-	logger               lager.Logger
 	tempDir              string
 	allowPrivileged      bool
 	exportNetworkEnvVars bool
@@ -38,7 +37,6 @@ func NewTransformer(
 	compressor compressor.Compressor,
 	downloadLimiter chan struct{},
 	uploadLimiter chan struct{},
-	logger lager.Logger,
 	tempDir string,
 	allowPrivileged bool,
 	exportNetworkEnvVars bool,
@@ -50,7 +48,6 @@ func NewTransformer(
 		compressor:           compressor,
 		downloadLimiter:      downloadLimiter,
 		uploadLimiter:        uploadLimiter,
-		logger:               logger,
 		tempDir:              tempDir,
 		allowPrivileged:      allowPrivileged,
 		exportNetworkEnvVars: exportNetworkEnvVars,
@@ -129,6 +126,7 @@ func (transformer *Transformer) StepFor(
 				logger,
 			),
 			actionModel.Timeout,
+			logger,
 		)
 
 	case *models.TryAction:

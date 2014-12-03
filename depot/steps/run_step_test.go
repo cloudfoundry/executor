@@ -101,6 +101,7 @@ var _ = Describe("RunAction", func() {
 			BeforeEach(func() {
 				runAction.Privileged = true
 			})
+
 			Context("with allowPrivileged set to false", func() {
 				BeforeEach(func() {
 					allowPrivileged = false
@@ -108,6 +109,13 @@ var _ = Describe("RunAction", func() {
 
 				It("errors when trying to execute a privileged run action", func() {
 					Ω(stepErr).Should(HaveOccurred())
+				})
+
+				It("logs the step", func() {
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.RunAction.running",
+						"test.RunAction.privileged-action-denied",
+					}))
 				})
 			})
 
@@ -145,6 +153,37 @@ var _ = Describe("RunAction", func() {
 				Ω(spec.Env).Should(ContainElement("A=1"))
 				Ω(spec.Env).Should(ContainElement("B=2"))
 				Ω(spec.Privileged).Should(BeFalse())
+			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.RunAction.running",
+					"test.RunAction.creating-process",
+					"test.RunAction.successful-process-create",
+					"test.RunAction.process-exit",
+				}))
+			})
+		})
+
+		Context("when the script fails", func() {
+			var waitErr error
+
+			BeforeEach(func() {
+				waitErr = errors.New("wait-error")
+				spawnedProcess.WaitReturns(0, waitErr)
+			})
+
+			It("returns an error", func() {
+				Ω(stepErr).Should(MatchError(waitErr))
+			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.RunAction.running",
+					"test.RunAction.creating-process",
+					"test.RunAction.successful-process-create",
+					"test.RunAction.running-error",
+				}))
 			})
 		})
 
@@ -233,6 +272,14 @@ var _ = Describe("RunAction", func() {
 			It("returns the error", func() {
 				Ω(stepErr).Should(Equal(disaster))
 			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.RunAction.running",
+					"test.RunAction.creating-process",
+					"test.RunAction.failed-creating-process",
+				}))
+			})
 		})
 
 		Context("regardless of status code, when an out of memory event has occured", func() {
@@ -249,6 +296,23 @@ var _ = Describe("RunAction", func() {
 
 			It("returns an emittable error", func() {
 				Ω(stepErr).Should(MatchError(NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+			})
+		})
+
+		Context("when container info cannot be retrieved", func() {
+			BeforeEach(func() {
+				gardenClient.Connection.InfoReturns(garden_api.ContainerInfo{}, errors.New("info-error"))
+				spawnedProcess.WaitReturns(19, nil)
+			})
+
+			It("logs the step", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.RunAction.running",
+					"test.RunAction.creating-process",
+					"test.RunAction.successful-process-create",
+					"test.RunAction.process-exit",
+					"test.RunAction.failed-to-get-info",
+				}))
 			})
 		})
 

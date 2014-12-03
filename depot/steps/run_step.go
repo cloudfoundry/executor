@@ -50,6 +50,7 @@ func (step *runStep) Perform() error {
 	step.logger.Info("running")
 
 	if step.model.Privileged && !step.allowPrivileged {
+		step.logger.Info("privileged-action-denied")
 		return errors.New("privileged-action-denied")
 	}
 

@@ -188,6 +188,16 @@ var _ = Describe("UploadStep", func() {
 				Ω(string(uploadedPayload)).Should(Equal("expected-contents"))
 			})
 
+			It("logs the step", func() {
+				err := step.Perform()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.UploadAction.upload-starting",
+					"test.URLUploader.attempt",
+					"test.UploadAction.upload-successful",
+				}))
+			})
+
 			Describe("streaming logs for uploads", func() {
 				BeforeEach(func() {
 					fakeUploader := new(fake_uploader.FakeUploader)
@@ -241,6 +251,15 @@ var _ = Describe("UploadStep", func() {
 					err := step.Perform()
 					Ω(err).Should(MatchError(errUploadFailed))
 				})
+
+				It("logs the step", func() {
+					err := step.Perform()
+					Ω(err).Should(HaveOccurred())
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.UploadAction.upload-starting",
+						"test.UploadAction.failed-to-upload",
+					}))
+				})
 			})
 		})
 
@@ -252,6 +271,15 @@ var _ = Describe("UploadStep", func() {
 			It("returns the appropriate error", func() {
 				err := step.Perform()
 				Ω(err).Should(BeAssignableToTypeOf(&url.Error{}))
+			})
+
+			It("logs the step", func() {
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.UploadAction.upload-starting",
+					"test.UploadAction.failed-to-parse-url",
+				}))
 			})
 		})
 
@@ -266,6 +294,15 @@ var _ = Describe("UploadStep", func() {
 				err := step.Perform()
 				Ω(err).Should(MatchError(NewEmittableError(errStream, ErrEstablishStream)))
 			})
+
+			It("logs the step", func() {
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.UploadAction.upload-starting",
+					"test.UploadAction.failed-to-stream-out",
+				}))
+			})
 		})
 
 		Context("when there is an error in reading the data from the stream", func() {
@@ -278,6 +315,15 @@ var _ = Describe("UploadStep", func() {
 			It("returns the appropriate error", func() {
 				err := step.Perform()
 				Ω(err).Should(MatchError(NewEmittableError(errStream, ErrReadTar)))
+			})
+
+			It("logs the step", func() {
+				err := step.Perform()
+				Ω(err).Should(HaveOccurred())
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.UploadAction.upload-starting",
+					"test.UploadAction.failed-to-read-stream",
+				}))
 			})
 		})
 	})

@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -20,6 +21,7 @@ var _ = Describe("TimeoutStep", func() {
 		substep             *fakes.FakeStep
 
 		timeout time.Duration
+		logger  *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
@@ -34,13 +36,15 @@ var _ = Describe("TimeoutStep", func() {
 				return substepPerformError
 			},
 		}
+
+		logger = lagertest.NewTestLogger("test")
 	})
 
 	Describe("Perform", func() {
 		var err error
 
 		JustBeforeEach(func() {
-			err = steps.NewTimeout(substep, timeout).Perform()
+			err = steps.NewTimeout(substep, timeout, logger).Perform()
 		})
 
 		Context("When the substep finishes before the timeout expires", func() {
@@ -93,6 +97,12 @@ var _ = Describe("TimeoutStep", func() {
 				Ω(substepFinishedChan).Should(BeClosed())
 			})
 
+			It("logs the timeout", func() {
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+					"test.TimeoutAction.timed-out",
+				}))
+			})
+
 			Context("when the substep does not error", func() {
 				BeforeEach(func() {
 					substepPerformError = nil
@@ -128,7 +138,7 @@ var _ = Describe("TimeoutStep", func() {
 		var err error
 
 		JustBeforeEach(func() {
-			step := steps.NewTimeout(substep, timeout)
+			step := steps.NewTimeout(substep, timeout, logger)
 			errChan := make(chan error, 1)
 
 			go func() {
@@ -188,6 +198,12 @@ var _ = Describe("TimeoutStep", func() {
 
 			It("waits until the substep completes performing", func() {
 				Ω(substepFinishedChan).Should(BeClosed())
+			})
+
+			It("logs the cancellation", func() {
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+					"test.TimeoutAction.cancelling",
+				}))
 			})
 
 			Context("when the substep does not error", func() {

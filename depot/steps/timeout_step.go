@@ -3,19 +3,23 @@ package steps
 import (
 	"fmt"
 	"time"
+
+	"github.com/pivotal-golang/lager"
 )
 
 type timeoutStep struct {
 	substep    Step
 	timeout    time.Duration
 	cancelChan chan struct{}
+	logger     lager.Logger
 }
 
-func NewTimeout(substep Step, timeout time.Duration) *timeoutStep {
+func NewTimeout(substep Step, timeout time.Duration, logger lager.Logger) *timeoutStep {
 	return &timeoutStep{
 		substep:    substep,
 		timeout:    timeout,
 		cancelChan: make(chan struct{}),
+		logger:     logger.Session("TimeoutAction"),
 	}
 }
 
@@ -35,7 +39,12 @@ func (step *timeoutStep) Perform() error {
 		case <-timer.C:
 			step.substep.Cancel()
 			err := <-resultChan
-			return TimeoutError{step.timeout, err}
+			timeoutErr := TimeoutError{
+				timeout:      step.timeout,
+				SubstepError: err,
+			}
+			step.logger.Error("timed-out", timeoutErr)
+			return timeoutErr
 		case <-step.cancelChan:
 			step.substep.Cancel()
 			err := <-resultChan
@@ -45,6 +54,7 @@ func (step *timeoutStep) Perform() error {
 }
 
 func (step *timeoutStep) Cancel() {
+	step.logger.Info("cancelling")
 	close(step.cancelChan)
 }
 

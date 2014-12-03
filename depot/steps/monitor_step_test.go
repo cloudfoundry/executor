@@ -24,7 +24,8 @@ var _ = Describe("MonitorStep", func() {
 		healthyInterval   time.Duration
 		unhealthyInterval time.Duration
 
-		step Step
+		step   Step
+		logger *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
@@ -34,6 +35,7 @@ var _ = Describe("MonitorStep", func() {
 
 		timeProvider = faketimeprovider.New(time.Now())
 		check = new(fakes.FakeStep)
+		logger = lagertest.NewTestLogger("test")
 	})
 
 	JustBeforeEach(func() {
@@ -43,7 +45,7 @@ var _ = Describe("MonitorStep", func() {
 		step = NewMonitor(
 			check,
 			events,
-			lagertest.NewTestLogger("test"),
+			logger,
 			timeProvider,
 			startTimeout,
 			healthyInterval,
@@ -114,6 +116,12 @@ var _ = Describe("MonitorStep", func() {
 					Eventually(receivedEvents).Should(Receive(Equal(Healthy)))
 				})
 
+				It("logs the step", func() {
+					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+						"test.MonitorAction.transitioned-to-healthy",
+					}))
+				})
+
 				Context("and the healthy interval passes", func() {
 					JustBeforeEach(func() {
 						Eventually(receivedEvents).Should(Receive(Equal(Healthy)))
@@ -141,6 +149,13 @@ var _ = Describe("MonitorStep", func() {
 							Eventually(receivedEvents).Should(Receive(Equal(Unhealthy)))
 						})
 
+						It("logs the step", func() {
+							Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+								"test.MonitorAction.transitioned-to-healthy",
+								"test.MonitorAction.transitioned-to-unhealthy",
+							}))
+						})
+
 						It("completes with failure", func() {
 							Eventually(performErr).Should(Receive(Equal(disaster)))
 						})
@@ -165,6 +180,13 @@ var _ = Describe("MonitorStep", func() {
 					Consistently(performErr).ShouldNot(Receive())
 					expectCheckAfterInterval(unhealthyInterval)
 					Eventually(performErr).Should(Receive(MatchError("not up yet!")))
+				})
+
+				It("logs the step", func() {
+					timeProvider.Increment(startTimeout + time.Millisecond)
+					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+						"test.MonitorAction.timed-out-before-healthy",
+					}))
 				})
 			})
 
@@ -201,12 +223,18 @@ var _ = Describe("MonitorStep", func() {
 	Describe("Cancel", func() {
 		It("interrupts the monitoring", func() {
 			performResult := make(chan error)
-
 			go func() { performResult <- step.Perform() }()
-
 			step.Cancel()
-
 			Eventually(performResult).Should(Receive())
+		})
+
+		It("logs the step", func() {
+			performResult := make(chan error)
+			go func() { performResult <- step.Perform() }()
+			step.Cancel()
+			Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+				"test.MonitorAction.cancelling",
+			}))
 		})
 	})
 })
