@@ -90,7 +90,7 @@ func (store *AllocationStore) Create(container executor.Container) (executor.Con
 	}
 
 	container.State = executor.StateReserved
-	container.AllocatedAt = store.timeProvider.Time().UnixNano()
+	container.AllocatedAt = store.timeProvider.Now().UnixNano()
 
 	store.tracker.Allocate(container)
 
@@ -164,7 +164,7 @@ func (store *AllocationStore) reapExpiredAllocations(expirationTime time.Duratio
 				continue
 			}
 
-			lifespan := store.timeProvider.Time().Sub(time.Unix(0, container.AllocatedAt))
+			lifespan := store.timeProvider.Now().Sub(time.Unix(0, container.AllocatedAt))
 
 			if lifespan >= expirationTime {
 				expiredAllocations = append(expiredAllocations, guid)

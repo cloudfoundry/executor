@@ -71,7 +71,7 @@ func (step *monitorStep) Perform() error {
 
 	var startBy *time.Time
 	if step.startTimeout > 0 {
-		t := step.timeProvider.Time().Add(step.startTimeout)
+		t := step.timeProvider.Now().Add(step.startTimeout)
 		startBy = &t
 	}
 

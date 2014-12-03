@@ -47,7 +47,7 @@ var _ = Describe("AllocationStore", func() {
 		})
 
 		It("tracks the container's allocated at time", func() {
-			Ω(createdContainer.AllocatedAt).Should(Equal(timeProvider.Time().UnixNano()))
+			Ω(createdContainer.AllocatedAt).Should(Equal(timeProvider.Now().UnixNano()))
 		})
 
 		It("tracks the container's resource usage", func() {
