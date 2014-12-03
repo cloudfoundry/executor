@@ -118,16 +118,6 @@ func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	if response.StatusCode >= 300 {
 		response.Body.Close()
 
-		executorError := response.Header.Get("X-Executor-Error")
-		if len(executorError) > 0 {
-			err, found := executor.Errors[executorError]
-			if !found {
-				return nil, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
-			}
-
-			return nil, err
-		}
-
 		return nil, fmt.Errorf("Request failed with status: %d", response.StatusCode)
 	}
 
