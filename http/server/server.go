@@ -33,16 +33,13 @@ type HandlerProvider interface {
 }
 
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
-	handlers := s.NewHandlers()
-	for key, handler := range handlers {
-		if key != ehttp.Ping {
-			handlers[key] = LogWrap(handler, s.Logger)
-		}
+	handlers := rata.Handlers{
+		ehttp.Ping: ping.New(s.DepotClientProvider.WithLogger(s.Logger)),
 	}
 
 	handlerProviders := s.NewHandlerProviders()
 	for key, provider := range handlerProviders {
-		handlers[key] = LogWrapGenerate(provider, s.Logger)
+		handlers[key] = LogWrap(provider, s.Logger)
 	}
 
 	router, err := rata.NewRouter(ehttp.Routes, handlers)
@@ -70,15 +67,9 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 	}
 }
 
-func (s *Server) NewHandlers() rata.Handlers {
-	return rata.Handlers{
-		ehttp.Ping:   ping.New(s.DepotClientProvider.WithLogger(s.Logger)),
-		ehttp.Events: events.New(s.DepotClientProvider.WithLogger(s.Logger)),
-	}
-}
-
 func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
 	return map[string]HandlerProvider{
+		ehttp.Events:            events.New(s.DepotClientProvider),
 		ehttp.AllocateContainer: allocate_container.New(s.DepotClientProvider),
 		ehttp.GetContainer:      get_container.New(s.DepotClientProvider),
 		ehttp.ListContainers:    list_containers.New(s.DepotClientProvider),

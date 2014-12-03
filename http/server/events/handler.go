@@ -6,16 +6,27 @@ import (
 	"strconv"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/pivotal-golang/lager"
 	"github.com/vito/go-sse/sse"
 )
+
+type Generator struct {
+	depotClientProvider executor.ClientProvider
+}
 
 type handler struct {
 	depotClient executor.Client
 }
 
-func New(depotClient executor.Client) http.Handler {
+func New(depotClientProvider executor.ClientProvider) *Generator {
+	return &Generator{
+		depotClientProvider: depotClientProvider,
+	}
+}
+
+func (generator *Generator) WithLogger(logger lager.Logger) http.Handler {
 	return &handler{
-		depotClient: depotClient,
+		depotClient: generator.depotClientProvider.WithLogger(logger),
 	}
 }
 
