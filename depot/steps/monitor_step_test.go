@@ -65,7 +65,7 @@ var _ = Describe("MonitorStep", func() {
 			timeProvider.Increment(d - 1*time.Microsecond)
 			Consistently(check.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
-			timeProvider.Increment(2 * time.Microsecond)
+			timeProvider.Increment(d)
 			Eventually(check.PerformCallCount).Should(Equal(previousCheckCount + 1))
 		}
 
