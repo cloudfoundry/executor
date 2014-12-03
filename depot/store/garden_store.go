@@ -14,8 +14,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/timer"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -33,9 +33,9 @@ type GardenStore struct {
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 
-	logEmitter  logemitter.Emitter
-	transformer *transformer.Transformer
-	timer       timer.Timer
+	logEmitter   logemitter.Emitter
+	transformer  *transformer.Transformer
+	timeProvider timeprovider.TimeProvider
 
 	tracker InitializedTracker
 
@@ -61,7 +61,7 @@ func NewGardenStore(
 	unhealthyMonitoringInterval time.Duration,
 	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
-	timer timer.Timer,
+	timeProvider timeprovider.TimeProvider,
 	tracker InitializedTracker,
 	eventEmitter EventEmitter,
 ) *GardenStore {
@@ -75,9 +75,9 @@ func NewGardenStore(
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 
-		logEmitter:  logEmitter,
-		transformer: transformer,
-		timer:       timer,
+		logEmitter:   logEmitter,
+		transformer:  transformer,
+		timeProvider: timeProvider,
 
 		tracker: tracker,
 
@@ -272,7 +272,7 @@ func (store *GardenStore) Run(container executor.Container, callback func(execut
 			monitoredStep,
 			monitorEvents,
 			logger.Session("monitor"),
-			timer.NewTimer(),
+			store.timeProvider,
 			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
@@ -362,7 +362,9 @@ func updateHealth(store *GardenStore, executorContainer executor.Container, gard
 
 func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		ticker := store.timer.Every(interval)
+		ticker := store.timeProvider.NewTicker(interval)
+		defer ticker.Stop()
+
 		close(ready)
 
 	dance:
@@ -371,7 +373,7 @@ func (store *GardenStore) TrackContainers(interval time.Duration) ifrit.Runner {
 			case <-signals:
 				break dance
 
-			case <-ticker:
+			case <-ticker.C():
 				containers, err := store.List(nil)
 				if err != nil {
 					store.logger.Error("failed-to-list-containers", err)

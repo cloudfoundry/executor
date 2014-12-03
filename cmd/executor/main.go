@@ -33,7 +33,6 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/timer"
 )
 
 var listenAddr = flag.String(
@@ -374,7 +373,7 @@ func initializeStores(
 		unhealthyMonitoringInterval,
 		logEmitter,
 		transformer,
-		timer.NewTimer(),
+		timeprovider.NewTimeProvider(),
 		tallyman,
 		emitter,
 	)

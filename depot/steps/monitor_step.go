@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/timer"
 )
 
 type HealthEvent bool
@@ -23,8 +23,8 @@ type monitorStep struct {
 	check  Step
 	events chan<- HealthEvent
 
-	logger lager.Logger
-	timer  timer.Timer
+	logger       lager.Logger
+	timeProvider timeprovider.TimeProvider
 
 	startTimeout      time.Duration
 	healthyInterval   time.Duration
@@ -37,7 +37,7 @@ func NewMonitor(
 	check Step,
 	events chan<- HealthEvent,
 	logger lager.Logger,
-	timer timer.Timer,
+	timeProvider timeprovider.TimeProvider,
 	startTimeout time.Duration,
 	healthyInterval time.Duration,
 	unhealthyInterval time.Duration,
@@ -48,7 +48,7 @@ func NewMonitor(
 		check:             check,
 		events:            events,
 		logger:            logger,
-		timer:             timer,
+		timeProvider:      timeProvider,
 		startTimeout:      startTimeout,
 		healthyInterval:   healthyInterval,
 		unhealthyInterval: unhealthyInterval,
@@ -75,11 +75,12 @@ func (step *monitorStep) Perform() error {
 		startBy = &t
 	}
 
-	for {
-		timer := step.timer.After(interval)
+	timer := step.timeProvider.NewTimer(interval)
+	defer timer.Stop()
 
+	for {
 		select {
-		case now := <-timer:
+		case now := <-timer.C():
 			stepErr := step.check.Perform()
 			nowHealthy := stepErr == nil
 
@@ -106,6 +107,8 @@ func (step *monitorStep) Perform() error {
 		case <-step.cancel:
 			return nil
 		}
+
+		timer.Reset(interval)
 	}
 
 	return nil

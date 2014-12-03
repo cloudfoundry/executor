@@ -15,9 +15,9 @@ import (
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
-	"github.com/pivotal-golang/timer/fake_timer"
 	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
@@ -37,7 +37,7 @@ var _ = Describe("GardenContainerStore", func() {
 		inodeLimit   uint64 = 2000000
 		maxCPUShares uint64 = 1024
 
-		fakeTimer *fake_timer.FakeTimer
+		timeProvider *faketimeprovider.FakeTimeProvider
 	)
 
 	action := &models.RunAction{
@@ -45,7 +45,7 @@ var _ = Describe("GardenContainerStore", func() {
 	}
 
 	BeforeEach(func() {
-		fakeTimer = fake_timer.NewFakeTimer(time.Now())
+		timeProvider = faketimeprovider.New(time.Now())
 		tracker = new(fakes.FakeInitializedTracker)
 		emitter = new(fakes.FakeEventEmitter)
 		logger = lagertest.NewTestLogger("test")
@@ -61,7 +61,7 @@ var _ = Describe("GardenContainerStore", func() {
 			100*time.Millisecond,
 			nil,
 			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, logger, os.TempDir(), false, false),
-			fakeTimer,
+			timeProvider,
 			tracker,
 			emitter,
 		)
@@ -1381,7 +1381,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Ω(tracker.SyncInitializedCallCount()).Should(Equal(0))
 
-			fakeTimer.Elapse(2 * time.Second)
+			timeProvider.Increment(2 * time.Second)
 
 			By("syncing the current set of containers")
 			Eventually(tracker.SyncInitializedCallCount).Should(Equal(1))
@@ -1389,7 +1389,7 @@ var _ = Describe("GardenContainerStore", func() {
 				{Guid: "some-handle", MemoryMB: 2, Ports: []executor.PortMapping{}, Tags: executor.Tags{}},
 			}))
 
-			fakeTimer.Elapse(2 * time.Second)
+			timeProvider.Increment(2 * time.Second)
 
 			By("syncing the current set of containers. again.")
 			Eventually(tracker.SyncInitializedCallCount).Should(Equal(2))
@@ -1504,20 +1504,21 @@ var _ = Describe("GardenContainerStore", func() {
 					return containerProperties[store.ContainerHealthProperty]
 				}
 
+				timeProvider.Increment(time.Second)
 				Eventually(containerHealth).Should(Equal(string(executor.HealthUp)))
-				Consistently(containerHealth).Should(Equal(string(executor.HealthUp)))
 
 				mutex.Lock()
 				waitReturnValue = 1
 				mutex.Unlock()
 
+				timeProvider.Increment(time.Second)
 				Eventually(containerHealth).Should(Equal(string(executor.HealthDown)))
-				Consistently(containerHealth).Should(Equal(string(executor.HealthDown)))
 			})
 
 			It("emits events to the event hub", func() {
 				gardenStore.Run(executorContainer, func(executor.ContainerRunResult) {})
 
+				timeProvider.Increment(time.Second)
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
 
 				healthEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerHealthEvent)
@@ -1531,6 +1532,7 @@ var _ = Describe("GardenContainerStore", func() {
 				waitReturnValue = 1
 				mutex.Unlock()
 
+				timeProvider.Increment(time.Second)
 				Eventually(emitter.EmitEventCallCount).Should(Equal(2))
 
 				healthEvent, ok = emitter.EmitEventArgsForCall(1).(executor.ContainerHealthEvent)

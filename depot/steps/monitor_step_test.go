@@ -7,8 +7,8 @@ import (
 
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
-	"github.com/pivotal-golang/timer/fake_timer"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,7 +18,7 @@ var _ = Describe("MonitorStep", func() {
 	var (
 		check          *fakes.FakeStep
 		receivedEvents <-chan HealthEvent
-		timer          *fake_timer.FakeTimer
+		timeProvider   *faketimeprovider.FakeTimeProvider
 
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
@@ -32,7 +32,7 @@ var _ = Describe("MonitorStep", func() {
 		healthyInterval = 1 * time.Second
 		unhealthyInterval = 500 * time.Millisecond
 
-		timer = fake_timer.NewFakeTimer(time.Now())
+		timeProvider = faketimeprovider.New(time.Now())
 		check = new(fakes.FakeStep)
 	})
 
@@ -44,7 +44,7 @@ var _ = Describe("MonitorStep", func() {
 			check,
 			events,
 			lagertest.NewTestLogger("test"),
-			timer,
+			timeProvider,
 			startTimeout,
 			healthyInterval,
 			unhealthyInterval,
@@ -62,10 +62,10 @@ var _ = Describe("MonitorStep", func() {
 		expectCheckAfterInterval := func(d time.Duration) {
 			previousCheckCount := check.PerformCallCount()
 
-			timer.Elapse(d - 1*time.Microsecond)
+			timeProvider.Increment(d - 1*time.Microsecond)
 			Consistently(check.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
-			timer.Elapse(1 * time.Microsecond)
+			timeProvider.Increment(2 * time.Microsecond)
 			Eventually(check.PerformCallCount).Should(Equal(previousCheckCount + 1))
 		}
 
