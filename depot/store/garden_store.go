@@ -153,39 +153,6 @@ func (store *GardenStore) Destroy(guid string) error {
 	return nil
 }
 
-func (store *GardenStore) Complete(guid string, result executor.ContainerRunResult) error {
-	gardenContainer, err := store.gardenClient.Lookup(guid)
-	if err != nil {
-		return ErrContainerNotFound
-	}
-
-	resultJson, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-
-	err = gardenContainer.SetProperty(ContainerResultProperty, string(resultJson))
-	if err != nil {
-		return err
-	}
-
-	err = gardenContainer.SetProperty(ContainerStateProperty, string(executor.StateCompleted))
-	if err != nil {
-		return err
-	}
-
-	executorContainer, err := store.exchanger.Garden2Executor(gardenContainer)
-	if err != nil {
-		return err
-	}
-
-	store.eventEmitter.EmitEvent(executor.ContainerCompleteEvent{
-		Container: executorContainer,
-	})
-
-	return nil
-}
-
 func (store *GardenStore) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	container, err := store.gardenClient.Lookup(guid)
 	if err != nil {
@@ -199,7 +166,7 @@ func (store *GardenStore) Ping() error {
 	return store.gardenClient.Ping()
 }
 
-func (store *GardenStore) Run(container executor.Container, logger lager.Logger, callback func(executor.ContainerRunResult)) {
+func (store *GardenStore) Run(container executor.Container, logger lager.Logger) {
 	logger = logger.WithData(lager.Data{
 		"container": container.Guid,
 	})
@@ -293,6 +260,7 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 				hasStartedRunning = nil
 				err := store.transitionToRunning(gardenContainer)
 				if err != nil {
+					logger.Error("failed-to-transition-to-running", err)
 					result.Failed = true
 					result.FailureReason = err.Error()
 					break OUTER_LOOP
@@ -307,7 +275,11 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 			}
 		}
 
-		callback(result)
+		err := store.transitionToComplete(gardenContainer, result)
+
+		if err != nil {
+			logger.Error("failed-to-transition-to-complete", err)
+		}
 
 		return nil
 	}))
@@ -329,6 +301,34 @@ func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) 
 	}
 
 	store.eventEmitter.EmitEvent(executor.ContainerRunningEvent{
+		Container: executorContainer,
+	})
+
+	return nil
+}
+
+func (store *GardenStore) transitionToComplete(gardenContainer garden.Container, result executor.ContainerRunResult) error {
+	resultJson, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+
+	err = gardenContainer.SetProperty(ContainerResultProperty, string(resultJson))
+	if err != nil {
+		return err
+	}
+
+	err = gardenContainer.SetProperty(ContainerStateProperty, string(executor.StateCompleted))
+	if err != nil {
+		return err
+	}
+
+	executorContainer, err := store.exchanger.Garden2Executor(gardenContainer)
+	if err != nil {
+		return err
+	}
+
+	store.eventEmitter.EmitEvent(executor.ContainerCompleteEvent{
 		Container: executorContainer,
 	})
 

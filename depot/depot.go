@@ -36,21 +36,20 @@ type Store interface {
 	Lookup(guid string) (executor.Container, error)
 	List(executor.Tags) ([]executor.Container, error)
 	Destroy(guid string) error
-	Complete(guid string, result executor.ContainerRunResult) error
 }
 
 type AllocationStore interface {
 	Store
 
 	StartInitializing(guid string) error
+	Complete(guid string, result executor.ContainerRunResult) error
 }
 
 type GardenStore interface {
-	Ping() error
-
 	Store
 
-	Run(executor.Container, lager.Logger, func(executor.ContainerRunResult))
+	Ping() error
+	Run(executor.Container, lager.Logger)
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
@@ -173,13 +172,7 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		c.gardenStore.Run(container, logger, func(result executor.ContainerRunResult) {
-			err := c.gardenStore.Complete(container.Guid, result)
-			if err != nil {
-				// not a lot we can do here
-				logger.Error("failed-to-save-result-upon-completion", err)
-			}
-		})
+		c.gardenStore.Run(container, logger)
 	}()
 
 	return nil
