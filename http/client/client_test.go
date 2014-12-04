@@ -3,6 +3,7 @@ package client_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"github.com/cloudfoundry-incubator/executor"
 	httpclient "github.com/cloudfoundry-incubator/executor/http/client"
@@ -342,6 +343,47 @@ var _ = Describe("Client", func() {
 			response, err := client.RemainingResources()
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(response).Should(Equal(remainingResourcesResponse))
+		})
+	})
+
+	Describe("GetFiles", func() {
+		var response http.HandlerFunc
+
+		JustBeforeEach(func() {
+			v := url.Values{}
+			v.Add("source", "path")
+
+			fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/containers/guid-123/files", v.Encode()),
+				response),
+			)
+		})
+
+		Context("when the call succeeds", func() {
+			BeforeEach(func() {
+				response = ghttp.RespondWith(http.StatusOK, "")
+			})
+
+			It("does not return an error", func() {
+				stream, err := client.GetFiles("guid-123", "path")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(stream).ShouldNot(BeNil())
+				stream.Close()
+			})
+		})
+
+		Context("when the call fails", func() {
+			BeforeEach(func() {
+				response = ghttp.RespondWith(executor.ErrContainerNotFound.HttpCode(), "", http.Header{
+					"X-Executor-Error": []string{executor.ErrContainerNotFound.Name()},
+				})
+			})
+
+			It("returns an error", func() {
+				stream, err := client.GetFiles("guid-123", "path")
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Ω(stream).Should(BeNil())
+			})
 		})
 	})
 
