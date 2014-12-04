@@ -118,7 +118,7 @@ func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	if response.StatusCode >= 300 {
 		response.Body.Close()
 
-		return nil, fmt.Errorf("Request failed with status: %d", response.StatusCode)
+		return nil, getError(response)
 	}
 
 	return response.Body, nil
@@ -243,18 +243,22 @@ func (c client) doRequest(handlerName string, params rata.Params, payload interf
 	if response.StatusCode >= 300 {
 		response.Body.Close()
 
-		executorError := response.Header.Get("X-Executor-Error")
-		if len(executorError) > 0 {
-			err, found := executor.Errors[executorError]
-			if !found {
-				return nil, fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
-			}
-
-			return nil, err
-		}
-
-		return nil, fmt.Errorf("Request failed with status: %d", response.StatusCode)
+		return nil, getError(response)
 	}
 
 	return response, nil
+}
+
+func getError(response *http.Response) error {
+	executorError := response.Header.Get("X-Executor-Error")
+	if len(executorError) > 0 {
+		err, found := executor.Errors[executorError]
+		if !found {
+			return fmt.Errorf("Unrecognized X-Executor-Error value: %s", executorError)
+		}
+
+		return err
+	}
+
+	return fmt.Errorf("Request failed with status: %d", response.StatusCode)
 }
