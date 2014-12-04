@@ -481,9 +481,8 @@ var _ = Describe("Client", func() {
 						})
 						Ω(err).ShouldNot(HaveOccurred())
 
-						thirdEventPayload, err := json.Marshal(executor.ContainerHealthEvent{
+						thirdEventPayload, err := json.Marshal(executor.ContainerRunningEvent{
 							Container: container1,
-							Health:    executor.HealthUp,
 						})
 						Ω(err).ShouldNot(HaveOccurred())
 
@@ -511,7 +510,7 @@ var _ = Describe("Client", func() {
 
 						result = sse.Event{
 							ID:   "2",
-							Name: string(executor.EventTypeContainerHealth),
+							Name: string(executor.EventTypeContainerRunning),
 							Data: thirdEventPayload,
 						}
 
@@ -535,9 +534,8 @@ var _ = Describe("Client", func() {
 					Container: container2,
 				})))
 
-				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerHealthEvent{
+				Eventually(eventChannel).Should(Receive(Equal(executor.ContainerRunningEvent{
 					Container: container1,
-					Health:    executor.HealthUp,
 				})))
 
 				Eventually(eventChannel).Should(BeClosed())

@@ -13,23 +13,14 @@ const (
 	StateReserved     State = "reserved"
 	StateInitializing State = "initializing"
 	StateCreated      State = "created"
+	StateRunning      State = "running"
 	StateCompleted    State = "completed"
-)
-
-type Health string
-
-const (
-	HealthInvalid     Health = ""
-	HealthUnmonitored Health = "unmonitored"
-	HealthUp          Health = "up"
-	HealthDown        Health = "down"
 )
 
 type Container struct {
 	Guid string `json:"guid"`
 
-	State  State  `json:"state"`
-	Health Health `json:"health"`
+	State State `json:"state"`
 
 	MemoryMB  int  `json:"memory_mb"`
 	DiskMB    int  `json:"disk_mb"`
@@ -190,7 +181,7 @@ const (
 	EventTypeInvalid EventType = ""
 
 	EventTypeContainerComplete EventType = "container_complete"
-	EventTypeContainerHealth   EventType = "container_health"
+	EventTypeContainerRunning  EventType = "container_running"
 )
 
 type ContainerCompleteEvent struct {
@@ -199,9 +190,8 @@ type ContainerCompleteEvent struct {
 
 func (ContainerCompleteEvent) EventType() EventType { return EventTypeContainerComplete }
 
-type ContainerHealthEvent struct {
+type ContainerRunningEvent struct {
 	Container Container `json:"container"`
-	Health    Health    `json:"health"`
 }
 
-func (ContainerHealthEvent) EventType() EventType { return EventTypeContainerHealth }
+func (ContainerRunningEvent) EventType() EventType { return EventTypeContainerRunning }

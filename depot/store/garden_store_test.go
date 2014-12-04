@@ -151,6 +151,20 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 				})
 
+				Context("and it's Running", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:state": string(executor.StateRunning),
+							},
+						}, nil)
+					})
+
+					It("has it as its state", func() {
+						Ω(executorContainer.State).Should(Equal(executor.StateRunning))
+					})
+				})
+
 				Context("and it's Completed", func() {
 					BeforeEach(func() {
 						gardenContainer.InfoReturns(garden.ContainerInfo{
@@ -176,50 +190,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("returns an InvalidStateError", func() {
 						Ω(lookupErr).Should(Equal(store.InvalidStateError{"bogus-state"}))
-					})
-				})
-			})
-
-			Context("when the container has an executor:health property", func() {
-				Context("and it's Up", func() {
-					BeforeEach(func() {
-						gardenContainer.InfoReturns(garden.ContainerInfo{
-							Properties: garden.Properties{
-								"executor:health": string(executor.HealthUp),
-							},
-						}, nil)
-					})
-
-					It("has it as its health", func() {
-						Ω(executorContainer.Health).Should(Equal(executor.HealthUp))
-					})
-				})
-
-				Context("and it's Down", func() {
-					BeforeEach(func() {
-						gardenContainer.InfoReturns(garden.ContainerInfo{
-							Properties: garden.Properties{
-								"executor:health": string(executor.HealthDown),
-							},
-						}, nil)
-					})
-
-					It("has it as its health", func() {
-						Ω(executorContainer.Health).Should(Equal(executor.HealthDown))
-					})
-				})
-
-				Context("when it's some other state", func() {
-					BeforeEach(func() {
-						gardenContainer.InfoReturns(garden.ContainerInfo{
-							Properties: garden.Properties{
-								"executor:health": "bogus-state",
-							},
-						}, nil)
-					})
-
-					It("returns an InvalidStateError", func() {
-						Ω(lookupErr).Should(Equal(store.InvalidHealthError{"bogus-state"}))
 					})
 				})
 			})
@@ -699,7 +669,6 @@ var _ = Describe("GardenContainerStore", func() {
 			It("returns a created container", func() {
 				expectedCreatedContainer := executorContainer
 				expectedCreatedContainer.State = executor.StateCreated
-				expectedCreatedContainer.Health = executor.HealthUnmonitored
 
 				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
 			})
@@ -731,30 +700,6 @@ var _ = Describe("GardenContainerStore", func() {
 
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties[store.ContainerActionProperty]).To(MatchJSON(payload))
-				})
-
-				Context("the Executor container's health", func() {
-					Context("with a MonitorAction", func() {
-						BeforeEach(func() {
-							executorContainer.Monitor = &models.RunAction{Path: "monitor"}
-						})
-
-						It("creates it with the health property as down", func() {
-							containerSpec := fakeGardenClient.CreateArgsForCall(0)
-							Ω(containerSpec.Properties[store.ContainerHealthProperty]).Should(Equal(string(executor.HealthDown)))
-						})
-					})
-
-					Context("without a MonitorAction", func() {
-						BeforeEach(func() {
-							executorContainer.Monitor = nil
-						})
-
-						It("creates it with the health property as unmonitored", func() {
-							containerSpec := fakeGardenClient.CreateArgsForCall(0)
-							Ω(containerSpec.Properties[store.ContainerHealthProperty]).Should(Equal(string(executor.HealthUnmonitored)))
-						})
-					})
 				})
 
 				Context("when the Executor container has container-wide env", func() {
@@ -1408,6 +1353,7 @@ var _ = Describe("GardenContainerStore", func() {
 			gardenContainer     *gfakes.FakeContainer
 			waitReturnValue     int
 			executorContainer   executor.Container
+			err                 error
 
 			runAction     = &models.RunAction{Path: "run"}
 			monitorAction = &models.RunAction{Path: "monitor"}
@@ -1436,6 +1382,7 @@ var _ = Describe("GardenContainerStore", func() {
 			}
 
 			containerProperties = make(map[string]string)
+			containerProperties[store.ContainerStateProperty] = string(executor.StateCreated)
 
 			gardenContainer = new(gfakes.FakeContainer)
 			gardenContainer.HandleReturns("some-container-handle")
@@ -1468,93 +1415,111 @@ var _ = Describe("GardenContainerStore", func() {
 			fakeGardenClient.CreateReturns(gardenContainer, nil)
 		})
 
-		JustBeforeEach(func() {
-			var err error
-			executorContainer, err = gardenStore.Create(executorContainer)
-			Ω(err).ShouldNot(HaveOccurred())
-		})
+		containerStateGetter := func() string {
+			mutex.Lock()
+			defer mutex.Unlock()
+			return containerProperties[store.ContainerStateProperty]
+		}
 
 		Context("when there is no monitor action", func() {
 			BeforeEach(func() {
 				executorContainer.Monitor = nil
+				executorContainer, err = gardenStore.Create(executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("emits the health as unmonitored", func() {
+			It("transitions to running as soon as it starts running", func() {
 				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
 
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
 
-				healthEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerHealthEvent)
+				runningEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerRunningEvent)
 				Ω(ok).Should(BeTrue())
 
-				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthUnmonitored))
-				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
-				Ω(healthEvent.Health).Should(Equal(executor.HealthUnmonitored))
+				Ω(runningEvent.Container.State).Should(Equal(executor.StateRunning))
+				Ω(runningEvent.Container.Guid).Should(Equal(executorContainer.Guid))
 			})
 		})
 
-		Context("when the health of the garden container changes", func() {
-			It("updates the health of the container", func() {
-				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
+		Context("when there is a monitor action", func() {
+			var resultChan chan executor.ContainerRunResult
+
+			BeforeEach(func() {
+				resultChan = make(chan executor.ContainerRunResult, 1)
+
+				executorContainer, err = gardenStore.Create(executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				gardenStore.Run(executorContainer, logger, func(result executor.ContainerRunResult) {
+					resultChan <- result
+				})
+
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
-
-				containerHealth := func() string {
-					mutex.Lock()
-					defer mutex.Unlock()
-					return containerProperties[store.ContainerHealthProperty]
-				}
-
-				timeProvider.Increment(time.Second)
-				Eventually(containerHealth).Should(Equal(string(executor.HealthUp)))
-
-				mutex.Lock()
-				waitReturnValue = 1
-				mutex.Unlock()
-
-				timeProvider.Increment(time.Second)
-				Eventually(containerHealth).Should(Equal(string(executor.HealthDown)))
 			})
 
-			It("emits events to the event hub", func() {
-				gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
-				Eventually(timeProvider.WatcherCount).Should(Equal(1))
-
+			It("marks the container as running when the monitor step succeeds and emits an event", func() {
 				timeProvider.Increment(time.Second)
+				Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
+
 				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
 
-				healthEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerHealthEvent)
+				runningEvent, ok := emitter.EmitEventArgsForCall(0).(executor.ContainerRunningEvent)
 				Ω(ok).Should(BeTrue())
 
-				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthUp))
-				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
-				Ω(healthEvent.Health).Should(Equal(executor.HealthUp))
-
-				mutex.Lock()
-				waitReturnValue = 1
-				mutex.Unlock()
-
-				timeProvider.Increment(time.Second)
-				Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-
-				healthEvent, ok = emitter.EmitEventArgsForCall(1).(executor.ContainerHealthEvent)
-				Ω(ok).Should(BeTrue())
-
-				Ω(healthEvent.Container.Health).Should(Equal(executor.HealthDown))
-				Ω(healthEvent.Container.Guid).Should(Equal(executorContainer.Guid))
-				Ω(healthEvent.Health).Should(Equal(executor.HealthDown))
+				Ω(runningEvent.Container.State).Should(Equal(executor.StateRunning))
+				Ω(runningEvent.Container.Guid).Should(Equal(executorContainer.Guid))
 			})
 
-			Context("when setting the health fails", func() {
+			Context("when the monitor step subsequently fails", func() {
 				BeforeEach(func() {
-					gardenContainer.SetPropertyStub = nil
-					gardenContainer.SetPropertyReturns(errors.New("uh-oh"))
+					By("first have the callback succeed")
+					timeProvider.Increment(time.Second)
+					Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
+
+					By("then set it up for failure")
+					mutex.Lock()
+					waitReturnValue = 1
+					mutex.Unlock()
+
+					timeProvider.Increment(time.Second)
 				})
 
-				It("does not emit a health update event", func() {
-					gardenStore.Run(executorContainer, logger, func(executor.ContainerRunResult) {})
-
-					Consistently(emitter.EmitEventCallCount).Should(BeZero())
+				It("calls the callback", func() {
+					var result executor.ContainerRunResult
+					Eventually(resultChan).Should(Receive(&result))
+					Ω(result.Failed).Should(BeTrue())
 				})
+			})
+
+		})
+
+		Context("when there is a monitor action, but setting the state fails", func() {
+			var resultChan chan executor.ContainerRunResult
+
+			BeforeEach(func() {
+				resultChan = make(chan executor.ContainerRunResult, 1)
+
+				gardenContainer.SetPropertyStub = nil
+				gardenContainer.SetPropertyReturns(errors.New("uh-oh"))
+
+				executorContainer, err = gardenStore.Create(executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+				gardenStore.Run(executorContainer, logger, func(result executor.ContainerRunResult) {
+					resultChan <- result
+				})
+
+				Eventually(timeProvider.WatcherCount).Should(Equal(1))
+			})
+
+			It("does not emit a health update event", func() {
+				Consistently(emitter.EmitEventCallCount, time.Second).Should(BeZero())
+			})
+
+			It("calls the callback with a failure", func() {
+				timeProvider.Increment(time.Second)
+				var result executor.ContainerRunResult
+				Eventually(resultChan).Should(Receive(&result))
+				Ω(result.Failed).Should(BeTrue())
 			})
 		})
 	})
