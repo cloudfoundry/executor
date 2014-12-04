@@ -120,6 +120,7 @@ func (store *AllocationStore) Complete(guid string, result executor.ContainerRun
 	if container, found := store.containers[guid]; found {
 		container.State = executor.StateCompleted
 		container.RunResult = result
+		container.Health = executor.HealthDown
 
 		store.emitter.EmitEvent(executor.ContainerCompleteEvent{
 			Container: container,

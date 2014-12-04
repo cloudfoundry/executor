@@ -91,8 +91,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		case ContainerHealthProperty:
 			health := executor.Health(value)
 
-			if health == executor.HealthUnmonitored ||
-				health == executor.HealthUp ||
+			if health == executor.HealthUp ||
 				health == executor.HealthDown {
 				executorContainer.Health = health
 			} else {

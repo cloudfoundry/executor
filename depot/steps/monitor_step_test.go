@@ -16,9 +16,9 @@ import (
 
 var _ = Describe("MonitorStep", func() {
 	var (
-		check          *fakes.FakeStep
-		receivedEvents <-chan HealthEvent
-		timeProvider   *faketimeprovider.FakeTimeProvider
+		check            *fakes.FakeStep
+		hasBecomeHealthy <-chan struct{}
+		timeProvider     *faketimeprovider.FakeTimeProvider
 
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
@@ -39,12 +39,12 @@ var _ = Describe("MonitorStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		events := make(chan HealthEvent, 1000)
-		receivedEvents = events
+		hasBecomeHealthyChannel := make(chan struct{}, 1000)
+		hasBecomeHealthy = hasBecomeHealthyChannel
 
 		step = NewMonitor(
 			check,
-			events,
+			hasBecomeHealthyChannel,
 			logger,
 			timeProvider,
 			startTimeout,
@@ -113,7 +113,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("emits a healthy event", func() {
-					Eventually(receivedEvents).Should(Receive(Equal(Healthy)))
+					Eventually(hasBecomeHealthy).Should(Receive())
 				})
 
 				It("logs the step", func() {
@@ -124,12 +124,12 @@ var _ = Describe("MonitorStep", func() {
 
 				Context("and the healthy interval passes", func() {
 					JustBeforeEach(func() {
-						Eventually(receivedEvents).Should(Receive(Equal(Healthy)))
+						Eventually(hasBecomeHealthy).Should(Receive())
 						expectCheckAfterInterval(healthyInterval)
 					})
 
 					It("does not emit another healthy event", func() {
-						Consistently(receivedEvents).ShouldNot(Receive())
+						Consistently(hasBecomeHealthy).ShouldNot(Receive())
 					})
 				})
 
@@ -142,11 +142,12 @@ var _ = Describe("MonitorStep", func() {
 
 					Context("and the healthy interval passes", func() {
 						JustBeforeEach(func() {
+							Eventually(hasBecomeHealthy).Should(Receive())
 							expectCheckAfterInterval(healthyInterval)
 						})
 
-						It("emits an unhealthy event", func() {
-							Eventually(receivedEvents).Should(Receive(Equal(Unhealthy)))
+						It("emits nothing", func() {
+							Consistently(hasBecomeHealthy).ShouldNot(Receive())
 						})
 
 						It("logs the step", func() {
@@ -197,7 +198,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("does not emit an unhealthy event", func() {
-					Consistently(receivedEvents).ShouldNot(Receive())
+					Consistently(hasBecomeHealthy).ShouldNot(Receive())
 				})
 
 				It("does not exit", func() {
@@ -210,7 +211,7 @@ var _ = Describe("MonitorStep", func() {
 					})
 
 					It("does not emit an unhealthy event", func() {
-						Consistently(receivedEvents).ShouldNot(Receive())
+						Consistently(hasBecomeHealthy).ShouldNot(Receive())
 					})
 
 					It("does not exit", func() {

@@ -19,10 +19,9 @@ const (
 type Health string
 
 const (
-	HealthInvalid     Health = ""
-	HealthUnmonitored Health = "unmonitored"
-	HealthUp          Health = "up"
-	HealthDown        Health = "down"
+	HealthInvalid Health = ""
+	HealthUp      Health = "up"
+	HealthDown    Health = "down"
 )
 
 type Container struct {

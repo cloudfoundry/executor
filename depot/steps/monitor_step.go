@@ -8,20 +8,13 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type HealthEvent bool
-
-const (
-	Healthy   HealthEvent = true
-	Unhealthy HealthEvent = false
-)
-
 func invalidInterval(field string, interval time.Duration) error {
 	return fmt.Errorf("The %s interval, %s, is not positive.", field, interval.String())
 }
 
 type monitorStep struct {
-	check  Step
-	events chan<- HealthEvent
+	check            Step
+	hasBecomeHealthy chan<- struct{}
 
 	logger       lager.Logger
 	timeProvider timeprovider.TimeProvider
@@ -35,7 +28,7 @@ type monitorStep struct {
 
 func NewMonitor(
 	check Step,
-	events chan<- HealthEvent,
+	hasBecomeHealthy chan<- struct{},
 	logger lager.Logger,
 	timeProvider timeprovider.TimeProvider,
 	startTimeout time.Duration,
@@ -46,7 +39,7 @@ func NewMonitor(
 
 	return &monitorStep{
 		check:             check,
-		events:            events,
+		hasBecomeHealthy:  hasBecomeHealthy,
 		logger:            logger,
 		timeProvider:      timeProvider,
 		startTimeout:      startTimeout,
@@ -86,12 +79,11 @@ func (step *monitorStep) Perform() error {
 
 			if healthy && !nowHealthy {
 				step.logger.Info("transitioned-to-unhealthy")
-				step.events <- Unhealthy
 				return stepErr
 			} else if !healthy && nowHealthy {
 				step.logger.Info("transitioned-to-healthy")
 				healthy = true
-				step.events <- Healthy
+				step.hasBecomeHealthy <- struct{}{}
 				interval = step.healthyInterval
 				startBy = nil
 			}
@@ -99,7 +91,6 @@ func (step *monitorStep) Perform() error {
 			if startBy != nil && now.After(*startBy) {
 				if !healthy {
 					step.logger.Info("timed-out-before-healthy")
-					step.events <- Unhealthy
 					return stepErr
 				}
 				startBy = nil
