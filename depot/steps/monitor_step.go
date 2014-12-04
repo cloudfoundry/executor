@@ -13,8 +13,8 @@ func invalidInterval(field string, interval time.Duration) error {
 }
 
 type monitorStep struct {
-	check            Step
-	hasBecomeHealthy chan<- struct{}
+	check             Step
+	hasStartedRunning chan<- struct{}
 
 	logger       lager.Logger
 	timeProvider timeprovider.TimeProvider
@@ -28,7 +28,7 @@ type monitorStep struct {
 
 func NewMonitor(
 	check Step,
-	hasBecomeHealthy chan<- struct{},
+	hasStartedRunning chan<- struct{},
 	logger lager.Logger,
 	timeProvider timeprovider.TimeProvider,
 	startTimeout time.Duration,
@@ -39,7 +39,7 @@ func NewMonitor(
 
 	return &monitorStep{
 		check:             check,
-		hasBecomeHealthy:  hasBecomeHealthy,
+		hasStartedRunning: hasStartedRunning,
 		logger:            logger,
 		timeProvider:      timeProvider,
 		startTimeout:      startTimeout,
@@ -83,7 +83,7 @@ func (step *monitorStep) Perform() error {
 			} else if !healthy && nowHealthy {
 				step.logger.Info("transitioned-to-healthy")
 				healthy = true
-				step.hasBecomeHealthy <- struct{}{}
+				step.hasStartedRunning <- struct{}{}
 				interval = step.healthyInterval
 				startBy = nil
 			}

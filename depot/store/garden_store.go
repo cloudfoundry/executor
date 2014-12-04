@@ -121,7 +121,6 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 
 func (store *GardenStore) Create(container executor.Container) (executor.Container, error) {
 	container.State = executor.StateCreated
-	container.Health = executor.HealthDown
 
 	container, err := store.exchanger.CreateInGarden(store.gardenClient, container)
 	if err != nil {
@@ -171,11 +170,6 @@ func (store *GardenStore) Complete(guid string, result executor.ContainerRunResu
 	}
 
 	err = gardenContainer.SetProperty(ContainerStateProperty, string(executor.StateCompleted))
-	if err != nil {
-		return err
-	}
-
-	err = gardenContainer.SetProperty(ContainerHealthProperty, string(executor.HealthDown))
 	if err != nil {
 		return err
 	}
@@ -247,7 +241,7 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 		),
 	}
 
-	hasBecomeHealthy := make(chan struct{}, 1)
+	hasStartedRunning := make(chan struct{}, 1)
 
 	if container.Monitor != nil {
 		monitoredStep := store.transformer.StepFor(
@@ -261,7 +255,7 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 
 		parallelSequence = append(parallelSequence, steps.NewMonitor(
 			monitoredStep,
-			hasBecomeHealthy,
+			hasStartedRunning,
 			logger.Session("monitor"),
 			store.timeProvider,
 			time.Duration(container.StartTimeout)*time.Second,
@@ -269,8 +263,8 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 			store.unhealthyMonitoringInterval,
 		))
 	} else {
-		// this container isn't monitored, so we mark it healthy right away
-		hasBecomeHealthy <- struct{}{}
+		// this container isn't monitored, so we mark it running right away
+		hasStartedRunning <- struct{}{}
 	}
 
 	seq = append(seq, steps.NewCodependent(parallelSequence))
@@ -295,9 +289,9 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 				signals = nil
 				step.Cancel()
 
-			case <-hasBecomeHealthy:
-				hasBecomeHealthy = nil
-				err := store.markHealthy(gardenContainer)
+			case <-hasStartedRunning:
+				hasStartedRunning = nil
+				err := store.transitionToRunning(gardenContainer)
 				if err != nil {
 					result.Failed = true
 					result.FailureReason = err.Error()
@@ -323,8 +317,8 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger,
 	store.processesL.Unlock()
 }
 
-func (store *GardenStore) markHealthy(gardenContainer garden.Container) error {
-	err := gardenContainer.SetProperty(ContainerHealthProperty, string(executor.HealthUp))
+func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) error {
+	err := gardenContainer.SetProperty(ContainerStateProperty, string(executor.StateRunning))
 	if err != nil {
 		return err
 	}
@@ -334,9 +328,8 @@ func (store *GardenStore) markHealthy(gardenContainer garden.Container) error {
 		return err
 	}
 
-	store.eventEmitter.EmitEvent(executor.ContainerHealthEvent{
+	store.eventEmitter.EmitEvent(executor.ContainerRunningEvent{
 		Container: executorContainer,
-		Health:    executor.HealthUp,
 	})
 
 	return nil

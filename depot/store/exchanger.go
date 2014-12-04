@@ -29,7 +29,6 @@ const (
 
 	ContainerOwnerProperty        = executorPropertyPrefix + "owner"
 	ContainerStateProperty        = executorPropertyPrefix + "state"
-	ContainerHealthProperty       = executorPropertyPrefix + "health"
 	ContainerAllocatedAtProperty  = executorPropertyPrefix + "allocated-at"
 	ContainerRootfsProperty       = executorPropertyPrefix + "rootfs"
 	ContainerActionProperty       = executorPropertyPrefix + "action"
@@ -83,19 +82,11 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			if state == executor.StateReserved ||
 				state == executor.StateInitializing ||
 				state == executor.StateCreated ||
+				state == executor.StateRunning ||
 				state == executor.StateCompleted {
 				executorContainer.State = state
 			} else {
 				return executor.Container{}, InvalidStateError{value}
-			}
-		case ContainerHealthProperty:
-			health := executor.Health(value)
-
-			if health == executor.HealthUp ||
-				health == executor.HealthDown {
-				executorContainer.Health = health
-			} else {
-				return executor.Container{}, InvalidHealthError{value}
 			}
 		case ContainerAllocatedAtProperty:
 			_, err := fmt.Sscanf(value, "%d", &executorContainer.AllocatedAt)
@@ -258,7 +249,6 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 	containerSpec.Properties = garden.Properties{
 		ContainerOwnerProperty:        exchanger.containerOwnerName,
 		ContainerStateProperty:        string(executorContainer.State),
-		ContainerHealthProperty:       string(executorContainer.Health),
 		ContainerAllocatedAtProperty:  fmt.Sprintf("%d", executorContainer.AllocatedAt),
 		ContainerStartTimeoutProperty: fmt.Sprintf("%d", executorContainer.StartTimeout),
 		ContainerRootfsProperty:       executorContainer.RootFSPath,

@@ -108,7 +108,6 @@ var _ = Describe("AllocationStore", func() {
 				completedContainer := createdContainer
 				completedContainer.State = executor.StateCompleted
 				completedContainer.RunResult = runResult
-				completedContainer.Health = executor.HealthDown
 
 				Consistently(func() interface{} {
 					containers, err := allocationStore.List(nil)
@@ -195,7 +194,7 @@ var _ = Describe("AllocationStore", func() {
 				Ω(completeErr).ShouldNot(HaveOccurred())
 			})
 
-			It("updates the container's state, result, and health", func() {
+			It("updates the container's state and result", func() {
 				container, err := allocationStore.Lookup("the-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -204,8 +203,6 @@ var _ = Describe("AllocationStore", func() {
 					Failed:        true,
 					FailureReason: "because this is a test",
 				}))
-
-				Ω(container.Health).Should(Equal(executor.HealthDown))
 			})
 
 			It("emits a container complete event", func() {
