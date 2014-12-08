@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -19,6 +20,7 @@ type downloadStep struct {
 	cachedDownloader cacheddownloader.CachedDownloader
 	streamer         log_streamer.LogStreamer
 	rateLimiter      chan struct{}
+	cancelChan       chan struct{}
 	logger           lager.Logger
 }
 
@@ -35,18 +37,29 @@ func NewDownload(
 		"cacheKey": model.CacheKey,
 	})
 
+	cancelChan := make(chan struct{})
+
 	return &downloadStep{
 		container:        container,
 		model:            model,
 		cachedDownloader: cachedDownloader,
-		rateLimiter:      rateLimiter,
 		streamer:         streamer,
+		rateLimiter:      rateLimiter,
+		cancelChan:       cancelChan,
 		logger:           logger,
 	}
 }
 
+func (step *downloadStep) Cancel() {
+	close(step.cancelChan)
+}
+
 func (step *downloadStep) Perform() error {
-	step.rateLimiter <- struct{}{}
+	select {
+	case step.rateLimiter <- struct{}{}:
+	case <-step.cancelChan:
+		return CancelError{}
+	}
 	defer func() {
 		<-step.rateLimiter
 	}()
@@ -54,12 +67,22 @@ func (step *downloadStep) Perform() error {
 	step.logger.Info("starting-download")
 	step.emit("Downloading %s...\n", step.model.Artifact)
 
+	closeMutex := &sync.Mutex{}
+	completeChan := make(chan struct{})
+	defer close(completeChan)
+
 	downloadedFile, err := step.download()
 	if err != nil {
+		select {
+		case <-step.cancelChan:
+			err = CancelError{}
+		default:
+			err = NewEmittableError(err, "Downloading failed")
+		}
 		step.emit("Failed to download %s\n", step.model.Artifact)
-		return NewEmittableError(err, "Downloading failed")
+		return err
 	}
-	defer downloadedFile.Close()
+	defer synchronizedClose(downloadedFile, closeMutex)
 
 	downloadSize := "unknown"
 
@@ -74,7 +97,24 @@ func (step *downloadStep) Perform() error {
 	step.logger.Info("finished-download")
 	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize)
 
-	return step.streamIn(step.model.To, downloadedFile)
+	go func() {
+		select {
+		case <-completeChan:
+		case <-step.cancelChan:
+			synchronizedClose(downloadedFile, closeMutex)
+		}
+	}()
+
+	err = step.streamIn(step.model.To, downloadedFile)
+	if err != nil {
+		select {
+		case <-step.cancelChan:
+			err = CancelError{}
+		default:
+		}
+	}
+
+	return err
 }
 
 func (step *downloadStep) download() (io.ReadCloser, error) {
@@ -84,16 +124,14 @@ func (step *downloadStep) download() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	fetcher, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform)
+	tarStream, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.cancelChan)
 	if err != nil {
 		step.logger.Error("failed-to-fetch", err)
 		return nil, err
 	}
 
-	return fetcher, nil
+	return tarStream, nil
 }
-
-func (step *downloadStep) Cancel() {}
 
 func (step *downloadStep) streamIn(destination string, reader io.Reader) error {
 	err := step.container.StreamIn(destination, reader)
@@ -111,4 +149,12 @@ func (step *downloadStep) emit(format string, a ...interface{}) {
 	if step.model.Artifact != "" {
 		fmt.Fprintf(step.streamer.Stdout(), format, a...)
 	}
+}
+
+func synchronizedClose(closer io.Closer, mutex *sync.Mutex) error {
+	mutex.Lock()
+	err := closer.Close()
+	mutex.Unlock()
+
+	return err
 }
