@@ -35,6 +35,7 @@ var _ = Describe("DownloadAction", func() {
 	var gardenClient *fake_api_client.FakeClient
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var logger *lagertest.TestLogger
+	var rateLimiter chan struct{}
 
 	handle := "some-container-handle"
 
@@ -48,6 +49,8 @@ var _ = Describe("DownloadAction", func() {
 
 		fakeStreamer = newFakeStreamer()
 		logger = lagertest.NewTestLogger("test")
+
+		rateLimiter = make(chan struct{}, 1)
 	})
 
 	Describe("Perform", func() {
@@ -71,7 +74,7 @@ var _ = Describe("DownloadAction", func() {
 				container,
 				downloadAction,
 				cache,
-				make(chan struct{}, 1),
+				rateLimiter,
 				fakeStreamer,
 				logger,
 			)
@@ -84,9 +87,10 @@ var _ = Describe("DownloadAction", func() {
 		It("downloads via the cache with a tar transformer", func() {
 			Ω(cache.FetchCallCount()).Should(Equal(1))
 
-			url, cacheKey, transformer := cache.FetchArgsForCall(0)
+			url, cacheKey, transformer, cancelChan := cache.FetchArgsForCall(0)
 			Ω(url.Host).Should(ContainSubstring("mr_jones"))
 			Ω(cacheKey).Should(Equal("the-cache-key"))
+			Ω(cancelChan).ShouldNot(BeNil())
 
 			tVal := reflect.ValueOf(transformer)
 			expectedVal := reflect.ValueOf(cacheddownloader.TarTransform)
@@ -168,19 +172,19 @@ var _ = Describe("DownloadAction", func() {
 
 		Context("and the fetched bits are a valid tarball", func() {
 			BeforeEach(func() {
-				tmpFile, err := ioutil.TempFile("", "some-tar")
+				tarFile, err := ioutil.TempFile("", "some-tar")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				defer os.Remove(tmpFile.Name())
-				archiveHelper.CreateTarArchive(tmpFile.Name(), []archiveHelper.ArchiveFile{
+				defer os.Remove(tarFile.Name())
+				archiveHelper.CreateTarArchive(tarFile.Name(), []archiveHelper.ArchiveFile{
 					{
 						Name: "file1",
 					},
 				})
 
-				tmpFile.Seek(0, 0)
+				tarFile.Seek(0, 0)
 
-				cache.FetchReturns(tmpFile, nil)
+				cache.FetchReturns(tarFile, nil)
 			})
 
 			Context("and streaming in succeeds", func() {
@@ -249,6 +253,120 @@ var _ = Describe("DownloadAction", func() {
 
 	})
 
+	Describe("Cancel", func() {
+		var errCh chan error
+
+		JustBeforeEach(func() {
+			errCh = make(chan error, 1)
+
+			container, err := gardenClient.Create(garden_api.ContainerSpec{
+				Handle: handle,
+			})
+			Ω(err).ShouldNot(HaveOccurred())
+
+			downloadAction = models.DownloadAction{
+				From:     "http://mr_jones",
+				To:       "/tmp/Antarctica",
+				CacheKey: "the-cache-key",
+			}
+
+			step = NewDownload(
+				container,
+				downloadAction,
+				cache,
+				rateLimiter,
+				fakeStreamer,
+				logger,
+			)
+
+			go func() {
+				errCh <- step.Perform()
+			}()
+		})
+
+		Context("when waiting on the rate limiter", func() {
+			BeforeEach(func() {
+				rateLimiter <- struct{}{}
+			})
+
+			It("cancels the wait", func() {
+				step.Cancel()
+				Eventually(errCh).Should(Receive(MatchError(CancelError{})))
+			})
+
+			It("does not fetch the download artifact", func() {
+				step.Cancel()
+				Consistently(cache.FetchCallCount).Should(Equal(0))
+			})
+		})
+
+		Context("when streaming the file into the container", func() {
+			var writer *waitingWriter
+
+			BeforeEach(func() {
+				tarFile, err := ioutil.TempFile("", "some-tar")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				defer os.Remove(tarFile.Name())
+
+				archiveHelper.CreateTarArchive(
+					tarFile.Name(),
+					[]archiveHelper.ArchiveFile{{Name: "file1"}},
+				)
+				tarFile.Seek(0, 0)
+				cache.FetchReturns(tarFile, nil)
+
+				writer = &waitingWriter{
+					calledChan:  make(chan struct{}),
+					releaseChan: make(chan struct{}),
+				}
+
+				gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+					_, err = io.Copy(writer, tarStream)
+					return err
+				}
+			})
+
+			It("aborts the streaming", func() {
+				Eventually(cache.FetchCallCount).Should(Equal(1))
+				Eventually(writer.calledChan).Should(BeClosed())
+
+				step.Cancel()
+
+				writer.releaseChan <- struct{}{}
+
+				Eventually(errCh).Should(Receive(MatchError(CancelError{})))
+			})
+
+		})
+
+		Context("when fetching the file from the cached downloader", func() {
+			var waitCh chan struct{}
+
+			BeforeEach(func() {
+				waitCh = make(chan struct{})
+				cache.FetchStub = func(
+					urlToFetch *url.URL,
+					cacheKey string,
+					transformer cacheddownloader.CacheTransformer,
+					cancelChan <-chan struct{}) (io.ReadCloser, error) {
+					<-waitCh
+					return nil, cacheddownloader.ErrDownloadCancelled
+				}
+			})
+
+			It("aborts the fetch", func() {
+				Eventually(cache.FetchCallCount).Should(Equal(1))
+
+				step.Cancel()
+
+				waitCh <- struct{}{}
+
+				Eventually(errCh).Should(Receive(MatchError(CancelError{})))
+			})
+		})
+	})
+
 	Describe("the downloads are rate limited", func() {
 		var container garden_api.Container
 
@@ -308,7 +426,7 @@ var _ = Describe("DownloadAction", func() {
 			fetchCh := make(chan struct{}, 3)
 			barrier := make(chan struct{})
 			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
-			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer) (io.ReadCloser, error) {
+			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer, cancelChan <-chan struct{}) (io.ReadCloser, error) {
 				fetchCh <- struct{}{}
 				<-barrier
 				return nopCloser, nil
@@ -345,3 +463,14 @@ var _ = Describe("DownloadAction", func() {
 		})
 	})
 })
+
+type waitingWriter struct {
+	calledChan  chan struct{}
+	releaseChan chan struct{}
+}
+
+func (d *waitingWriter) Write(p []byte) (int, error) {
+	close(d.calledChan)
+	<-d.releaseChan
+	return 0, nil
+}
