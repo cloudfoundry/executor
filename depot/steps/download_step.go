@@ -1,11 +1,9 @@
 package steps
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
-	"sync/atomic"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -65,60 +63,39 @@ func (step *downloadStep) Perform() error {
 		<-step.rateLimiter
 	}()
 
-	step.logger.Info("starting-download")
-	step.emit("Downloading %s...\n", step.model.Artifact)
-
-	completeChan := make(chan struct{})
-	defer close(completeChan)
-
-	downloadedFile, err := step.download()
+	err := step.perform()
 	if err != nil {
 		select {
 		case <-step.cancelChan:
-			err = CancelError{}
+			return CancelError{}
 		default:
-			err = NewEmittableError(err, "Downloading failed")
+			return err
 		}
-		step.emit("Failed to download %s\n", step.model.Artifact)
-		return err
-	}
-	closer := &oneTimeCloser{closer: downloadedFile}
-	defer closer.Close()
-
-	downloadSize := "unknown"
-
-	if f, ok := downloadedFile.(*cacheddownloader.CachedFile); ok {
-		fi, err := f.Stat()
-		if err != nil {
-			return NewEmittableError(err, "Unable to obtain download size")
-		}
-		downloadSize = bytefmt.ByteSize(uint64(fi.Size()))
 	}
 
-	step.logger.Info("finished-download")
-	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize)
+	return nil
+}
 
-	go func() {
-		select {
-		case <-completeChan:
-		case <-step.cancelChan:
-			closer.Close()
-		}
-	}()
+func (step *downloadStep) perform() error {
+	step.emit("Downloading %s...\n", step.model.Artifact)
+
+	downloadedFile, err := step.fetch()
+	if err != nil {
+		return NewEmittableError(err, "Downloading failed")
+	}
+	defer downloadedFile.Close()
 
 	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
-		select {
-		case <-step.cancelChan:
-			err = CancelError{}
-		default:
-		}
+		return NewEmittableError(err, "Copying into the container failed")
 	}
 
-	return err
+	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize(downloadedFile))
+	return nil
 }
 
-func (step *downloadStep) download() (io.ReadCloser, error) {
+func (step *downloadStep) fetch() (io.ReadCloser, error) {
+	step.logger.Info("fetch-starting")
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		step.logger.Error("parse-request-uri-error", err)
@@ -127,23 +104,26 @@ func (step *downloadStep) download() (io.ReadCloser, error) {
 
 	tarStream, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.cancelChan)
 	if err != nil {
-		step.logger.Error("failed-to-fetch", err)
+		step.logger.Error("fetch-failed", err)
 		return nil, err
 	}
 
+	step.logger.Info("fetch-complete")
 	return tarStream, nil
 }
 
 func (step *downloadStep) streamIn(destination string, reader io.Reader) error {
+	step.logger.Info("stream-in-starting")
 	err := step.container.StreamIn(destination, reader)
 	if err != nil {
-		step.logger.Error("failed-to-stream-in", err, lager.Data{
+		step.logger.Error("stream-in-failed", err, lager.Data{
 			"destination": destination,
 		})
-		return NewEmittableError(err, "Copying into the container failed")
+		return err
 	}
 
-	return err
+	step.logger.Info("stream-in-complete")
+	return nil
 }
 
 func (step *downloadStep) emit(format string, a ...interface{}) {
@@ -152,16 +132,14 @@ func (step *downloadStep) emit(format string, a ...interface{}) {
 	}
 }
 
-type oneTimeCloser struct {
-	closer io.Closer
-	closed int32
-}
-
-var AlreadyClosedError = errors.New("Already closed")
-
-func (c *oneTimeCloser) Close() error {
-	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
-		return c.closer.Close()
+func downloadSize(downloadedFile interface{}) string {
+	if f, ok := downloadedFile.(*cacheddownloader.CachedFile); ok {
+		fi, err := f.Stat()
+		if err != nil {
+			return "unknown"
+		}
+		return bytefmt.ByteSize(uint64(fi.Size()))
 	}
-	return AlreadyClosedError
+
+	return "unknown"
 }
