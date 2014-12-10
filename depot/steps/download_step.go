@@ -1,10 +1,11 @@
 package steps
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
-	"sync"
+	"sync/atomic"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	garden_api "github.com/cloudfoundry-incubator/garden/api"
@@ -67,7 +68,6 @@ func (step *downloadStep) Perform() error {
 	step.logger.Info("starting-download")
 	step.emit("Downloading %s...\n", step.model.Artifact)
 
-	closeMutex := &sync.Mutex{}
 	completeChan := make(chan struct{})
 	defer close(completeChan)
 
@@ -82,7 +82,8 @@ func (step *downloadStep) Perform() error {
 		step.emit("Failed to download %s\n", step.model.Artifact)
 		return err
 	}
-	defer synchronizedClose(downloadedFile, closeMutex)
+	closer := &oneTimeCloser{closer: downloadedFile}
+	defer closer.Close()
 
 	downloadSize := "unknown"
 
@@ -101,7 +102,7 @@ func (step *downloadStep) Perform() error {
 		select {
 		case <-completeChan:
 		case <-step.cancelChan:
-			synchronizedClose(downloadedFile, closeMutex)
+			closer.Close()
 		}
 	}()
 
@@ -151,10 +152,16 @@ func (step *downloadStep) emit(format string, a ...interface{}) {
 	}
 }
 
-func synchronizedClose(closer io.Closer, mutex *sync.Mutex) error {
-	mutex.Lock()
-	err := closer.Close()
-	mutex.Unlock()
+type oneTimeCloser struct {
+	closer io.Closer
+	closed int32
+}
 
-	return err
+var AlreadyClosedError = errors.New("Already closed")
+
+func (c *oneTimeCloser) Close() error {
+	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+		return c.closer.Close()
+	}
+	return AlreadyClosedError
 }
