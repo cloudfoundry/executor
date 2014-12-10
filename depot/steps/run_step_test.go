@@ -41,6 +41,7 @@ var _ = Describe("RunAction", func() {
 		runAction = models.RunAction{
 			Path: "sudo",
 			Args: []string{"reboot"},
+			Dir:  "/some-dir",
 			Env: []models.EnvironmentVariable{
 				{Name: "A", Value: "1"},
 				{Name: "B", Value: "2"},
@@ -149,6 +150,7 @@ var _ = Describe("RunAction", func() {
 				Ω(ranHandle).Should(Equal(handle))
 				Ω(spec.Path).Should(Equal("sudo"))
 				Ω(spec.Args).Should(Equal([]string{"reboot"}))
+				Ω(spec.Dir).Should(Equal("/some-dir"))
 				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
 				Ω(spec.Env).Should(ContainElement("A=1"))
 				Ω(spec.Env).Should(ContainElement("B=2"))

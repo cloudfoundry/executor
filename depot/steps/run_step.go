@@ -67,6 +67,7 @@ func (step *runStep) Perform() error {
 	process, err := step.container.Run(garden_api.ProcessSpec{
 		Path:       step.model.Path,
 		Args:       step.model.Args,
+		Dir:        step.model.Dir,
 		Env:        envVars,
 		Privileged: step.model.Privileged,
 
