@@ -4,23 +4,28 @@ import (
 	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/pivotal-golang/lager"
 )
 
+var ErrUploadCancelled = errors.New("upload cancelled")
+
 type Uploader interface {
-	Upload(fileLocation string, destinationUrl *url.URL) (int64, error)
+	Upload(fileLocation string, destinationUrl *url.URL, cancel <-chan struct{}) (int64, error)
 }
 
 type URLUploader struct {
 	httpClient *http.Client
+	transport  *http.Transport
 	logger     lager.Logger
 }
 
@@ -45,11 +50,12 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 
 	return &URLUploader{
 		httpClient: httpClient,
+		transport:  transport,
 		logger:     logger.Session("URLUploader"),
 	}
 }
 
-func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, error) {
+func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, cancel <-chan struct{}) (int64, error) {
 	var resp *http.Response
 	var err error
 	var uploadedBytes int64
@@ -93,6 +99,24 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 		}
 
 		request, err = http.NewRequest("POST", url.String(), sourceFile)
+		if err != nil {
+			logger.Error("somehow-failed-to-create-request", err)
+			return 0, err
+		}
+
+		finished := make(chan struct{})
+
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case <-cancel:
+				uploader.transport.CancelRequest(request)
+			case <-finished:
+			}
+		}()
 
 		uploadedBytes = fileInfo.Size()
 		request.ContentLength = uploadedBytes
@@ -100,9 +124,20 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL) (int64, e
 		request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(contentHash.Sum(nil)))
 
 		resp, err = uploader.httpClient.Do(request)
+
+		close(finished)
+		wg.Wait()
+
 		if err == nil {
 			defer resp.Body.Close()
 			break
+		}
+
+		select {
+		case <-cancel:
+			logger.Info("canceled-upload")
+			return 0, ErrUploadCancelled
+		default:
 		}
 	}
 

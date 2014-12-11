@@ -26,6 +26,7 @@ type uploadStep struct {
 	streamer    log_streamer.LogStreamer
 	rateLimiter chan struct{}
 	logger      lager.Logger
+	cancel      chan struct{}
 }
 
 func NewUpload(
@@ -51,6 +52,8 @@ func NewUpload(
 		streamer:    streamer,
 		rateLimiter: rateLimiter,
 		logger:      logger,
+
+		cancel: make(chan struct{}),
 	}
 }
 
@@ -113,7 +116,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url)
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.cancel)
 	if err != nil {
 		step.logger.Info("failed-to-upload")
 		// Do not emit error in case it leaks sensitive data in URL
@@ -127,7 +130,9 @@ func (step *uploadStep) Perform() (err error) {
 	return nil
 }
 
-func (step *uploadStep) Cancel() {}
+func (step *uploadStep) Cancel() {
+	close(step.cancel)
+}
 
 func (step *uploadStep) emit(format string, a ...interface{}) {
 	if step.model.Artifact != "" {

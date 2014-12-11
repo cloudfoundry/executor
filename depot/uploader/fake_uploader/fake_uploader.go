@@ -9,11 +9,12 @@ import (
 )
 
 type FakeUploader struct {
-	UploadStub        func(fileLocation string, destinationUrl *url.URL) (int64, error)
+	UploadStub        func(fileLocation string, destinationUrl *url.URL, cancel <-chan struct{}) (int64, error)
 	uploadMutex       sync.RWMutex
 	uploadArgsForCall []struct {
 		fileLocation   string
 		destinationUrl *url.URL
+		cancel         <-chan struct{}
 	}
 	uploadReturns struct {
 		result1 int64
@@ -21,15 +22,16 @@ type FakeUploader struct {
 	}
 }
 
-func (fake *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int64, error) {
+func (fake *FakeUploader) Upload(fileLocation string, destinationUrl *url.URL, cancel <-chan struct{}) (int64, error) {
 	fake.uploadMutex.Lock()
 	fake.uploadArgsForCall = append(fake.uploadArgsForCall, struct {
 		fileLocation   string
 		destinationUrl *url.URL
-	}{fileLocation, destinationUrl})
+		cancel         <-chan struct{}
+	}{fileLocation, destinationUrl, cancel})
 	fake.uploadMutex.Unlock()
 	if fake.UploadStub != nil {
-		return fake.UploadStub(fileLocation, destinationUrl)
+		return fake.UploadStub(fileLocation, destinationUrl, cancel)
 	} else {
 		return fake.uploadReturns.result1, fake.uploadReturns.result2
 	}
@@ -41,10 +43,10 @@ func (fake *FakeUploader) UploadCallCount() int {
 	return len(fake.uploadArgsForCall)
 }
 
-func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL) {
+func (fake *FakeUploader) UploadArgsForCall(i int) (string, *url.URL, <-chan struct{}) {
 	fake.uploadMutex.RLock()
 	defer fake.uploadMutex.RUnlock()
-	return fake.uploadArgsForCall[i].fileLocation, fake.uploadArgsForCall[i].destinationUrl
+	return fake.uploadArgsForCall[i].fileLocation, fake.uploadArgsForCall[i].destinationUrl, fake.uploadArgsForCall[i].cancel
 }
 
 func (fake *FakeUploader) UploadReturns(result1 int64, result2 error) {

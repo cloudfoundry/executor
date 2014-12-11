@@ -55,7 +55,7 @@ type fakeUploader struct {
 	barrier <-chan struct{}
 }
 
-func (u *fakeUploader) Upload(fileLocation string, destinationUrl *url.URL) (int64, error) {
+func (u *fakeUploader) Upload(fileLocation string, destinationUrl *url.URL, cancel <-chan struct{}) (int64, error) {
 	u.ready <- struct{}{}
 	<-u.barrier
 	return 0, nil
@@ -196,6 +196,39 @@ var _ = Describe("UploadStep", func() {
 					"test.URLUploader.attempt",
 					"test.upload-step.upload-successful",
 				}))
+			})
+
+			Describe("Cancel", func() {
+				cancelledErr := errors.New("cancelled")
+
+				var fakeUploader *fake_uploader.FakeUploader
+
+				BeforeEach(func() {
+					fakeUploader = new(fake_uploader.FakeUploader)
+
+					fakeUploader.UploadStub = func(from string, dest *url.URL, cancel <-chan struct{}) (int64, error) {
+						<-cancel
+						return 0, cancelledErr
+					}
+
+					uploader = fakeUploader
+				})
+
+				It("cancels any in-flight upload", func() {
+					errs := make(chan error)
+
+					go func() {
+						errs <- step.Perform()
+					}()
+
+					Eventually(fakeUploader.UploadCallCount).Should(Equal(1))
+
+					Consistently(errs).ShouldNot(Receive())
+
+					step.Cancel()
+
+					Eventually(errs).Should(Receive(Equal(cancelledErr)))
+				})
 			})
 
 			Describe("streaming logs for uploads", func() {

@@ -36,7 +36,7 @@ var _ = Describe("Uploader", func() {
 		uploader = New(100*time.Millisecond, false, logger)
 	})
 
-	Describe("upload", func() {
+	Describe("Upload", func() {
 		var url *url.URL
 		var file *os.File
 		var expectedBytes int
@@ -78,7 +78,7 @@ var _ = Describe("Uploader", func() {
 			var err error
 			var numBytes int64
 			JustBeforeEach(func() {
-				numBytes, err = uploader.Upload(file.Name(), url)
+				numBytes, err = uploader.Upload(file.Name(), url, nil)
 			})
 
 			It("uploads the file to the url", func() {
@@ -103,6 +103,43 @@ var _ = Describe("Uploader", func() {
 			})
 		})
 
+		Context("when the upload is canceled", func() {
+			var flushRequests chan struct{}
+
+			BeforeEach(func() {
+				flushRequests = make(chan struct{})
+
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					<-flushRequests
+				}))
+
+				serverUrl := testServer.URL + "/somepath"
+				url, _ = url.Parse(serverUrl)
+			})
+
+			AfterEach(func() {
+				close(flushRequests)
+			})
+
+			It("interrupts the client and returns an error", func() {
+				uploaderWithoutTimeout := New(0, false, logger)
+
+				cancel := make(chan struct{})
+				errs := make(chan error)
+
+				go func() {
+					_, err := uploaderWithoutTimeout.Upload(file.Name(), url, cancel)
+					errs <- err
+				}()
+
+				Consistently(errs).ShouldNot(Receive())
+
+				close(cancel)
+
+				Eventually(errs).Should(Receive(Equal(ErrUploadCancelled)))
+			})
+		})
+
 		Context("when the upload times out", func() {
 			var requestInitiated chan struct{}
 
@@ -124,7 +161,7 @@ var _ = Describe("Uploader", func() {
 				errs := make(chan error)
 
 				go func() {
-					_, err := uploader.Upload(file.Name(), url)
+					_, err := uploader.Upload(file.Name(), url, nil)
 					errs <- err
 				}()
 
@@ -152,7 +189,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -166,7 +203,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url)
+				_, err := uploader.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})
