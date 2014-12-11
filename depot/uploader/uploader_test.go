@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/depot/uploader"
@@ -105,11 +106,14 @@ var _ = Describe("Uploader", func() {
 
 		Context("when the upload is canceled", func() {
 			var flushRequests chan struct{}
+			var requestsInFlight *sync.WaitGroup
 
 			BeforeEach(func() {
 				flushRequests = make(chan struct{})
 
+				requestsInFlight = new(sync.WaitGroup)
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					defer requestsInFlight.Done()
 					<-flushRequests
 				}))
 
@@ -119,6 +123,7 @@ var _ = Describe("Uploader", func() {
 
 			AfterEach(func() {
 				close(flushRequests)
+				requestsInFlight.Wait()
 			})
 
 			It("interrupts the client and returns an error", func() {
@@ -126,6 +131,8 @@ var _ = Describe("Uploader", func() {
 
 				cancel := make(chan struct{})
 				errs := make(chan error)
+
+				requestsInFlight.Add(1)
 
 				go func() {
 					_, err := uploaderWithoutTimeout.Upload(file.Name(), url, cancel)
