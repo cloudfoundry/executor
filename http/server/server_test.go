@@ -838,6 +838,9 @@ var _ = Describe("Api", func() {
 			})
 
 			It("logs the request", func() {
+				_, err := ioutil.ReadAll(response.Body)
+				Ω(err).ShouldNot(HaveOccurred())
+
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
