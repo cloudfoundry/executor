@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/pivotal-golang/lager"
@@ -56,88 +56,23 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 }
 
 func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, cancel <-chan struct{}) (int64, error) {
-	var resp *http.Response
-	var err error
-	var uploadedBytes int64
-
 	logger := uploader.logger.WithData(lager.Data{
 		"fileLocation": fileLocation,
 	})
 
-	for attempt := 0; attempt < 3; attempt++ {
-		var request *http.Request
-		var sourceFile *os.File
-		var fileInfo os.FileInfo
+	sourceFile, bytesToUpload, contentMD5, err := uploader.prepareFileForUpload(fileLocation, logger)
+	if err != nil {
+		return 0, err
+	}
+	defer sourceFile.Close()
 
+	for attempt := 0; attempt < 3; attempt++ {
 		logger.Info("attempt", lager.Data{
 			"attempt": attempt,
 		})
-
-		sourceFile, err = os.Open(fileLocation)
-		if err != nil {
-			logger.Error("failed-open", err)
-			return 0, err
-		}
-
-		fileInfo, err = sourceFile.Stat()
-		if err != nil {
-			logger.Error("failed-stat", err)
-			return 0, err
-		}
-
-		contentHash := md5.New()
-		_, err = io.Copy(contentHash, sourceFile)
-		if err != nil {
-			logger.Error("failed-copy", err)
-			return 0, err
-		}
-
-		_, err = sourceFile.Seek(0, 0)
-		if err != nil {
-			logger.Error("failed-seek", err)
-			return 0, err
-		}
-
-		request, err = http.NewRequest("POST", url.String(), sourceFile)
-		if err != nil {
-			logger.Error("somehow-failed-to-create-request", err)
-			return 0, err
-		}
-
-		finished := make(chan struct{})
-
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			select {
-			case <-cancel:
-				uploader.transport.CancelRequest(request)
-			case <-finished:
-			}
-		}()
-
-		uploadedBytes = fileInfo.Size()
-		request.ContentLength = uploadedBytes
-		request.Header.Set("Content-Type", "application/octet-stream")
-		request.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(contentHash.Sum(nil)))
-
-		resp, err = uploader.httpClient.Do(request)
-
-		close(finished)
-		wg.Wait()
-
-		if err == nil {
-			defer resp.Body.Close()
+		err = uploader.attemptUpload(sourceFile, bytesToUpload, contentMD5, url.String(), cancel, logger)
+		if err == nil || err == ErrUploadCancelled {
 			break
-		}
-
-		select {
-		case <-cancel:
-			logger.Info("canceled-upload")
-			return 0, ErrUploadCancelled
-		default:
 		}
 	}
 
@@ -146,9 +81,84 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, cancel <-
 		return 0, err
 	}
 
-	if resp.StatusCode >= 400 {
-		return 0, fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
+	return int64(bytesToUpload), nil
+}
+
+func (uploader *URLUploader) prepareFileForUpload(fileLocation string, logger lager.Logger) (*os.File, int64, string, error) {
+	sourceFile, err := os.Open(fileLocation)
+	if err != nil {
+		logger.Error("failed-open", err)
+		return nil, 0, "", err
 	}
 
-	return int64(uploadedBytes), nil
+	fileInfo, err := sourceFile.Stat()
+	if err != nil {
+		logger.Error("failed-stat", err)
+		return nil, 0, "", err
+	}
+
+	contentHash := md5.New()
+	_, err = io.Copy(contentHash, sourceFile)
+	if err != nil {
+		logger.Error("failed-copy", err)
+		return nil, 0, "", err
+	}
+
+	contentMD5 := base64.StdEncoding.EncodeToString(contentHash.Sum(nil))
+
+	return sourceFile, fileInfo.Size(), contentMD5, nil
+}
+
+func (uploader *URLUploader) attemptUpload(
+	sourceFile *os.File,
+	bytesToUpload int64,
+	contentMD5 string,
+	url string,
+	cancelCh <-chan struct{},
+	logger lager.Logger,
+) error {
+	_, err := sourceFile.Seek(0, 0)
+	if err != nil {
+		logger.Error("failed-seek", err)
+		return err
+	}
+
+	request, err := http.NewRequest("POST", url, ioutil.NopCloser(sourceFile))
+	if err != nil {
+		logger.Error("somehow-failed-to-create-request", err)
+		return err
+	}
+
+	request.ContentLength = bytesToUpload
+	request.Header.Set("Content-Type", "application/octet-stream")
+	request.Header.Set("Content-MD5", contentMD5)
+
+	var resp *http.Response
+	reqComplete := make(chan error)
+	go func() {
+		var err error
+		resp, err = uploader.httpClient.Do(request)
+		reqComplete <- err
+	}()
+
+	select {
+	case <-cancelCh:
+		logger.Info("canceled-upload")
+		uploader.transport.CancelRequest(request)
+		<-reqComplete
+		return ErrUploadCancelled
+	case err := <-reqComplete:
+		if err != nil {
+			return err
+		}
+	}
+
+	// access to resp has been syncronized via reqComplete
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("Upload failed: Status code %d", resp.StatusCode)
+	}
+
+	return nil
 }
