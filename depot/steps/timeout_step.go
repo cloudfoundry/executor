@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/pivotal-golang/lager"
@@ -36,15 +35,15 @@ func (step *timeoutStep) Perform() error {
 		select {
 		case err := <-resultChan:
 			return err
+
 		case <-timer.C:
+			step.logger.Error("timed-out", nil)
+
 			step.substep.Cancel()
+
 			err := <-resultChan
-			timeoutErr := TimeoutError{
-				timeout:      step.timeout,
-				SubstepError: err,
-			}
-			step.logger.Error("timed-out", timeoutErr)
-			return timeoutErr
+			return NewEmittableError(err, emittableMessage(step.timeout, err))
+
 		case <-step.cancelChan:
 			step.substep.Cancel()
 			err := <-resultChan
@@ -58,19 +57,12 @@ func (step *timeoutStep) Cancel() {
 	close(step.cancelChan)
 }
 
-type TimeoutError struct {
-	timeout      time.Duration
-	SubstepError error
-}
+func emittableMessage(timeout time.Duration, substepErr error) string {
+	message := "exceeded " + timeout.String() + " timeout"
 
-func (te TimeoutError) Error() string {
-	return "Substep exceeded " + te.timeout.String() + " timeout; " + cancelledSubstepErrorMessage(te.SubstepError)
-}
-
-func cancelledSubstepErrorMessage(err error) string {
-	if err == nil {
-		return "cancelled substep did not return error"
+	if emittable, ok := substepErr.(*EmittableError); ok {
+		message += "; " + emittable.Error()
 	}
 
-	return fmt.Sprintf("cancelled substep error: %s", err)
+	return message
 }

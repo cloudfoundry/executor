@@ -108,22 +108,37 @@ var _ = Describe("TimeoutStep", func() {
 					substepPerformError = nil
 				})
 
-				It("returns a timeout error", func() {
+				It("returns an emittable error", func() {
 					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(BeAssignableToTypeOf(steps.TimeoutError{}))
+					Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
 				})
 			})
 
 			Context("when the substep returns an error", func() {
-				BeforeEach(func() {
-					substepPerformError = errors.New("some error")
+				Context("when the error is not emittable", func() {
+					BeforeEach(func() {
+						substepPerformError = errors.New("some error")
+					})
+
+					It("returns a timeout error which does not include the error returned by the substep", func() {
+						Ω(err).Should(HaveOccurred())
+						Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
+						Ω(err.Error()).ShouldNot(ContainSubstring("some error"))
+						Ω(err.(*steps.EmittableError).WrappedError()).Should(Equal(substepPerformError))
+					})
 				})
 
-				It("returns a timeout error which includes the error returned by the substep", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(BeAssignableToTypeOf(steps.TimeoutError{}))
-					timeoutErr := err.(steps.TimeoutError)
-					Ω(timeoutErr.SubstepError).Should(Equal(substepPerformError))
+				Context("when the error is emittable", func() {
+					BeforeEach(func() {
+						substepPerformError = steps.NewEmittableError(nil, "some error")
+					})
+
+					It("returns a timeout error which includes the error returned by the substep", func() {
+						Ω(err).Should(HaveOccurred())
+						Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
+						Ω(err.Error()).Should(ContainSubstring("some error"))
+						Ω(err.(*steps.EmittableError).WrappedError()).Should(Equal(substepPerformError))
+					})
 				})
 			})
 		})
