@@ -223,8 +223,8 @@ var _ = Describe("TimeoutStep", func() {
 
 				It("returns a cancel error which includes the error returned by the substep", func() {
 					Ω(err).Should(BeAssignableToTypeOf(steps.CancelError{}))
-					timeoutErr := err.(steps.CancelError)
-					Ω(timeoutErr.SubstepError).Should(Equal(substepPerformError))
+					cancelErr := err.(steps.CancelError)
+					Ω(cancelErr.WrappedError).Should(Equal(substepPerformError))
 				})
 			})
 		})

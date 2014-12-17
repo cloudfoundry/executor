@@ -67,14 +67,6 @@ func (te TimeoutError) Error() string {
 	return "Substep exceeded " + te.timeout.String() + " timeout; " + cancelledSubstepErrorMessage(te.SubstepError)
 }
 
-type CancelError struct {
-	SubstepError error
-}
-
-func (ce CancelError) Error() string {
-	return "Substep was cancelled; " + cancelledSubstepErrorMessage(ce.SubstepError)
-}
-
 func cancelledSubstepErrorMessage(err error) string {
 	if err == nil {
 		return "cancelled substep did not return error"
