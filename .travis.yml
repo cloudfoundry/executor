@@ -5,7 +5,7 @@ go:
 
 install:
   - go get -v github.com/cloudfoundry-incubator/garden; pushd $HOME/gopath/src/github.com/cloudfoundry-incubator/garden && git checkout 0eceab52842f4d238c3caf2ec2ef0ada30e8dacd && popd
-  - go get -t -v ./...
+  - go get -t -u -v ./...
   - go install github.com/onsi/ginkgo/ginkgo
   - curl -L https://github.com/coreos/etcd/releases/download/v0.4.6/etcd-v0.4.6-linux-amd64.tar.gz | tar zxf - -C /tmp
   - mv /tmp/etcd-v0.4.6-linux-amd64/etcd $HOME/gopath/bin
