@@ -5,7 +5,7 @@ go:
 
 install:
   - mkdir -p $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
-  - git clone git://github.com/cloudfoundry-incubator/garden.git --recursive $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
+  - git clone https://github.com/cloudfoundry-incubator/garden --recursive $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
   - pushd $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
   - git checkout 56735f8e803495acbf302c10a279229aae35bdc0
   - go get -u -v -t ./...
