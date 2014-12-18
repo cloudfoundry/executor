@@ -4,7 +4,12 @@ go:
   - 1.3
 
 install:
-  - mkdir -p $HOME/gopath/src/github.com/cloudfoundry-incubator/garden && git clone git://github.com/cloudfoundry-incubator/garden.git --recursive && pushd $HOME/gopath/src/github.com/cloudfoundry-incubator/garden $HOME/gopath/src/github.com/cloudfoundry-incubator/garden && git checkout 56735f8e803495acbf302c10a279229aae35bdc0 && go get -u -v -t ./... && popd
+  - mkdir -p $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
+  - git clone git://github.com/cloudfoundry-incubator/garden.git --recursive $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
+  - pushd $HOME/gopath/src/github.com/cloudfoundry-incubator/garden
+  - git checkout 56735f8e803495acbf302c10a279229aae35bdc0
+  - go get -u -v -t ./...
+  - popd
   - go get -t -u -v ./...
   - go install github.com/onsi/ginkgo/ginkgo
   - curl -L https://github.com/coreos/etcd/releases/download/v0.4.6/etcd-v0.4.6-linux-amd64.tar.gz | tar zxf - -C /tmp
