@@ -37,6 +37,7 @@ func registerError(name string, message string, status int) Error {
 
 var (
 	ErrContainerGuidNotAvailable      = registerError("ContainerGuidNotAvailable", "container guid not available", http.StatusBadRequest)
+	ErrContainerNotCompleted          = registerError("ContainerNotCompleted", "container must be stopped before it can be deleted", http.StatusBadRequest)
 	ErrInsufficientResourcesAvailable = registerError("InsufficientResourcesAvailable", "insufficient resources available", http.StatusServiceUnavailable)
 	ErrContainerNotFound              = registerError("ContainerNotFound", "container not found", http.StatusNotFound)
 	ErrStepsInvalid                   = registerError("StepsInvalid", "steps invalid", http.StatusBadRequest)

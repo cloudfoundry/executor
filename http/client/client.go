@@ -70,6 +70,15 @@ func (c client) RunContainer(allocationGuid string) error {
 	return response.Body.Close()
 }
 
+func (c client) StopContainer(allocationGuid string) error {
+	response, err := c.doRequest(ehttp.StopContainer, rata.Params{"guid": allocationGuid}, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	return response.Body.Close()
+}
+
 func (c client) DeleteContainer(allocationGuid string) error {
 	response, err := c.doRequest(ehttp.DeleteContainer, rata.Params{"guid": allocationGuid}, nil, nil)
 	if err != nil {

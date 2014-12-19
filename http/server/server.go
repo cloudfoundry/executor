@@ -15,6 +15,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/http/server/ping"
 	"github.com/cloudfoundry-incubator/executor/http/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/http/server/run_actions"
+	"github.com/cloudfoundry-incubator/executor/http/server/stop_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/total_resources"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -74,6 +75,7 @@ func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
 		ehttp.GetContainer:      get_container.New(s.DepotClientProvider),
 		ehttp.ListContainers:    list_containers.New(s.DepotClientProvider),
 		ehttp.RunContainer:      run_actions.New(s.DepotClientProvider),
+		ehttp.StopContainer:     stop_container.New(s.DepotClientProvider),
 		ehttp.DeleteContainer:   delete_container.New(s.DepotClientProvider),
 
 		ehttp.GetTotalResources:     total_resources.New(s.DepotClientProvider),

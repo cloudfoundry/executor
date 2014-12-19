@@ -1362,6 +1362,7 @@ var _ = Describe("GardenContainerStore", func() {
 		AfterEach(func() {
 			close(monitorReturns)
 			close(runReturns)
+			gardenStore.Stop("some-container-handle")
 			gardenStore.Destroy("some-container-handle")
 		})
 
