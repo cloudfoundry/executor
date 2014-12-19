@@ -12,7 +12,7 @@ type FakeClient struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns     struct {
+	pingReturns struct {
 		result1 error
 	}
 	AllocateContainerStub        func(request executor.Container) (executor.Container, error)
@@ -41,6 +41,14 @@ type FakeClient struct {
 	runContainerReturns struct {
 		result1 error
 	}
+	StopContainerStub        func(guid string) error
+	stopContainerMutex       sync.RWMutex
+	stopContainerArgsForCall []struct {
+		guid string
+	}
+	stopContainerReturns struct {
+		result1 error
+	}
 	DeleteContainerStub        func(guid string) error
 	deleteContainerMutex       sync.RWMutex
 	deleteContainerArgsForCall []struct {
@@ -61,14 +69,14 @@ type FakeClient struct {
 	RemainingResourcesStub        func() (executor.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns     struct {
+	remainingResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (executor.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns     struct {
+	totalResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
@@ -85,7 +93,7 @@ type FakeClient struct {
 	SubscribeToEventsStub        func() (<-chan executor.Event, error)
 	subscribeToEventsMutex       sync.RWMutex
 	subscribeToEventsArgsForCall []struct{}
-	subscribeToEventsReturns     struct {
+	subscribeToEventsReturns struct {
 		result1 <-chan executor.Event
 		result2 error
 	}
@@ -209,6 +217,38 @@ func (fake *FakeClient) RunContainerArgsForCall(i int) string {
 func (fake *FakeClient) RunContainerReturns(result1 error) {
 	fake.RunContainerStub = nil
 	fake.runContainerReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) StopContainer(guid string) error {
+	fake.stopContainerMutex.Lock()
+	fake.stopContainerArgsForCall = append(fake.stopContainerArgsForCall, struct {
+		guid string
+	}{guid})
+	fake.stopContainerMutex.Unlock()
+	if fake.StopContainerStub != nil {
+		return fake.StopContainerStub(guid)
+	} else {
+		return fake.stopContainerReturns.result1
+	}
+}
+
+func (fake *FakeClient) StopContainerCallCount() int {
+	fake.stopContainerMutex.RLock()
+	defer fake.stopContainerMutex.RUnlock()
+	return len(fake.stopContainerArgsForCall)
+}
+
+func (fake *FakeClient) StopContainerArgsForCall(i int) string {
+	fake.stopContainerMutex.RLock()
+	defer fake.stopContainerMutex.RUnlock()
+	return fake.stopContainerArgsForCall[i].guid
+}
+
+func (fake *FakeClient) StopContainerReturns(result1 error) {
+	fake.StopContainerStub = nil
+	fake.stopContainerReturns = struct {
 		result1 error
 	}{result1}
 }

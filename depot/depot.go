@@ -50,6 +50,7 @@ type GardenStore interface {
 
 	Ping() error
 	Run(executor.Container, lager.Logger)
+	Stop(guid string) error
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
@@ -210,6 +211,15 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	return containers, nil
 }
 
+func (c *client) StopContainer(guid string) error {
+	logger := c.logger.Session("stop", lager.Data{
+		"guid": guid,
+	})
+
+	logger.Info("stopping-container")
+	return c.gardenStore.Stop(guid)
+}
+
 func (c *client) DeleteContainer(guid string) error {
 	logger := c.logger.Session("delete", lager.Data{
 		"guid": guid,
@@ -220,7 +230,18 @@ func (c *client) DeleteContainer(guid string) error {
 		return nil
 	}
 
-	err := c.gardenStore.Destroy(guid)
+	container, err := c.gardenStore.Lookup(guid)
+	if err != nil {
+		logger.Error("container-not-found", err)
+		return err
+	}
+
+	if container.State != executor.StateCompleted {
+		logger.Error("container-not-completed", err)
+		return executor.ErrContainerNotCompleted
+	}
+
+	err = c.gardenStore.Destroy(guid)
 	if err != nil {
 		logger.Error("failed-to-destroy", err)
 		return executor.ErrContainerNotFound

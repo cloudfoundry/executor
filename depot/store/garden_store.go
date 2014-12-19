@@ -132,17 +132,23 @@ func (store *GardenStore) Create(container executor.Container) (executor.Contain
 	return container, nil
 }
 
-func (store *GardenStore) Destroy(guid string) error {
+func (store *GardenStore) Stop(guid string) error {
 	store.processesL.Lock()
 	process, found := store.runningProcesses[guid]
 	delete(store.runningProcesses, guid)
 	store.processesL.Unlock()
 
-	if found {
-		process.Signal(os.Interrupt)
-		<-process.Wait()
+	if !found {
+		return ErrContainerNotFound
 	}
 
+	process.Signal(os.Interrupt)
+	<-process.Wait()
+
+	return nil
+}
+
+func (store *GardenStore) Destroy(guid string) error {
 	err := store.gardenClient.Destroy(guid)
 	if err != nil {
 		return err
