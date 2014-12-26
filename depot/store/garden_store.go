@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -31,7 +30,6 @@ type GardenStore struct {
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 
-	logEmitter   logemitter.Emitter
 	transformer  *transformer.Transformer
 	timeProvider timeprovider.TimeProvider
 
@@ -56,7 +54,6 @@ func NewGardenStore(
 	containerInodeLimit uint64,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
-	logEmitter logemitter.Emitter,
 	transformer *transformer.Transformer,
 	timeProvider timeprovider.TimeProvider,
 	tracker InitializedTracker,
@@ -70,7 +67,6 @@ func NewGardenStore(
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 
-		logEmitter:   logEmitter,
 		transformer:  transformer,
 		timeProvider: timeProvider,
 
@@ -187,7 +183,6 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 		container.Log.Guid,
 		container.Log.SourceName,
 		container.Log.Index,
-		store.logEmitter,
 	)
 
 	seq := []steps.Step{}

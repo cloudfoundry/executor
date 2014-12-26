@@ -28,7 +28,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/http/server"
 	"github.com/cloudfoundry/dropsonde"
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -75,18 +74,6 @@ var tempDir = flag.String(
 	"tempDir",
 	"/tmp",
 	"location to store temporary assets",
-)
-
-var loggregatorServer = flag.String(
-	"loggregatorServer",
-	"",
-	"loggregator server to emit logs to",
-)
-
-var loggregatorSecret = flag.String(
-	"loggregatorSecret",
-	"",
-	"secret for the loggregator server",
 )
 
 var drainTimeout = flag.Duration(
@@ -241,8 +228,6 @@ func main() {
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
-		*loggregatorServer,
-		*loggregatorSecret,
 		*registryPruningInterval,
 		*healthyMonitoringInterval,
 		*unhealthyMonitoringInterval,
@@ -350,20 +335,12 @@ func initializeStores(
 	containerOwnerName string,
 	containerMaxCpuShares uint64,
 	containerInodeLimit uint64,
-	loggregatorServer string,
-	loggregatorSecret string,
 	registryPruningInterval time.Duration,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	tallyman *tallyman.Tallyman,
 	emitter store.EventEmitter,
 ) (*store.GardenStore, *store.AllocationStore) {
-	os.Setenv("LOGGREGATOR_SHARED_SECRET", loggregatorSecret)
-	logEmitter, err := logemitter.NewEmitter(loggregatorServer, "", "", false)
-	if err != nil {
-		panic(err)
-	}
-
 	gardenStore := store.NewGardenStore(
 		gardenClient,
 		containerOwnerName,
@@ -371,7 +348,6 @@ func initializeStores(
 		containerInodeLimit,
 		healthyMonitoringInterval,
 		unhealthyMonitoringInterval,
-		logEmitter,
 		transformer,
 		timeprovider.NewTimeProvider(),
 		tallyman,

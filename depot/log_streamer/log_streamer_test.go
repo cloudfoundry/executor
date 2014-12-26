@@ -4,25 +4,28 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	. "github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry/dropsonde/events"
+	"github.com/cloudfoundry/dropsonde/log_sender/fake"
+	"github.com/cloudfoundry/dropsonde/logs"
 )
 
 var _ = Describe("LogStreamer", func() {
-	var loggregatorEmitter *FakeLoggregatorEmitter
+	var fakeSender *fake.FakeLogSender
 	var streamer LogStreamer
 	guid := "the-guid"
 	sourceName := "the-source-name"
 	index := 11
 
 	BeforeEach(func() {
-		loggregatorEmitter = NewFakeLoggregatorEmmitter()
-		streamer = New(guid, sourceName, &index, loggregatorEmitter)
+		fakeSender = fake.NewFakeLogSender()
+		logs.Initialize(fakeSender)
+
+		streamer = New(guid, sourceName, &index)
 	})
 
 	Context("when told to emit", func() {
@@ -33,22 +36,23 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should emit that message", func() {
-				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+				logs := fakeSender.GetLogs()
 
-				emission := loggregatorEmitter.Emissions()[0]
-				Ω(emission.GetAppId()).Should(Equal(guid))
-				Ω(emission.GetSourceType()).Should(Equal(sourceName))
-				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
-				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
-				Ω(emission.GetSourceInstance()).Should(Equal("11"))
+				Ω(logs).Should(HaveLen(2))
 
-				emission = loggregatorEmitter.Emissions()[1]
-				Ω(emission.GetAppId()).Should(Equal(guid))
-				Ω(emission.GetSourceType()).Should(Equal(sourceName))
-				Ω(emission.GetSourceInstance()).Should(Equal("11"))
-				Ω(string(emission.GetMessage())).Should(Equal("this is another log"))
-				Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_OUT))
-				Ω(*emission.Timestamp).Should(BeNumerically("~", time.Now().UnixNano(), 10*time.Millisecond))
+				emission := logs[0]
+				Ω(emission.AppId).Should(Equal(guid))
+				Ω(emission.SourceType).Should(Equal(sourceName))
+				Ω(string(emission.Message)).Should(Equal("this is a log"))
+				Ω(emission.MessageType).Should(Equal("OUT"))
+				Ω(emission.SourceInstance).Should(Equal("11"))
+
+				emission = logs[1]
+				Ω(emission.AppId).Should(Equal(guid))
+				Ω(emission.SourceType).Should(Equal(sourceName))
+				Ω(emission.SourceInstance).Should(Equal("11"))
+				Ω(string(emission.Message)).Should(Equal("this is another log"))
+				Ω(emission.MessageType).Should(Equal("OUT"))
 			})
 		})
 
@@ -59,10 +63,11 @@ var _ = Describe("LogStreamer", func() {
 					streamer = streamer.WithSource(newSourceName)
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
 
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
+					logs := fakeSender.GetLogs()
+					Ω(logs).Should(HaveLen(1))
 
-					emission := loggregatorEmitter.Emissions()[0]
-					Ω(emission.GetSourceType()).Should(Equal(newSourceName))
+					emission := logs[0]
+					Ω(emission.SourceType).Should(Equal(newSourceName))
 				})
 			})
 
@@ -71,10 +76,11 @@ var _ = Describe("LogStreamer", func() {
 					streamer = streamer.WithSource("")
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
 
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
+					logs := fakeSender.GetLogs()
+					Ω(logs).Should(HaveLen(1))
 
-					emission := loggregatorEmitter.Emissions()[0]
-					Ω(emission.GetSourceType()).Should(Equal(sourceName))
+					emission := logs[0]
+					Ω(emission.SourceType).Should(Equal(sourceName))
 				})
 			})
 		})
@@ -85,9 +91,10 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should do the right thing", func() {
-				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(7))
+				logs := fakeSender.GetLogs()
+				Ω(logs).Should(HaveLen(7))
 				for i, expectedString := range []string{"A", "B", "C", "D", "E", "F", "G"} {
-					Ω(string(loggregatorEmitter.Emissions()[i].GetMessage())).Should(Equal(expectedString))
+					Ω(string(logs[i].Message)).Should(Equal(expectedString))
 				}
 			})
 		})
@@ -101,10 +108,10 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("concatenates them, until a new-line is received, and then emits that", func() {
-				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
-
-				emission := loggregatorEmitter.Emissions()[0]
-				Ω(string(emission.GetMessage())).Should(Equal("this is a log it is made of wood - and it is longerthan it seems"))
+				logs := fakeSender.GetLogs()
+				Ω(logs).Should(HaveLen(1))
+				emission := fakeSender.GetLogs()[0]
+				Ω(string(emission.Message)).Should(Equal("this is a log it is made of wood - and it is longerthan it seems"))
 			})
 		})
 
@@ -114,13 +121,13 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should break the message up into multiple loggings", func() {
-				Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+				Ω(fakeSender.GetLogs()).Should(HaveLen(2))
 
-				emission := loggregatorEmitter.Emissions()[0]
-				Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
+				emission := fakeSender.GetLogs()[0]
+				Ω(string(emission.Message)).Should(Equal("this is a log"))
 
-				emission = loggregatorEmitter.Emissions()[1]
-				Ω(string(emission.GetMessage())).Should(Equal("and this is another"))
+				emission = fakeSender.GetLogs()[1]
+				Ω(string(emission.Message)).Should(Equal("and this is another"))
 			})
 		})
 
@@ -135,9 +142,9 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(1))
-					emission := loggregatorEmitter.Emissions()[0]
-					Ω(string(emission.GetMessage())).Should(Equal(message))
+					Ω(fakeSender.GetLogs()).Should(HaveLen(1))
+					emission := fakeSender.GetLogs()[0]
+					Ω(string(emission.Message)).Should(Equal(message))
 				})
 			})
 
@@ -151,11 +158,11 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(4))
-					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal(strings.Repeat("8", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions()[2].GetMessage())).Should(Equal(strings.Repeat("9", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions()[3].GetMessage())).Should(Equal("hello"))
+					Ω(fakeSender.GetLogs()).Should(HaveLen(4))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal(strings.Repeat("8", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[2].Message)).Should(Equal(strings.Repeat("9", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[3].Message)).Should(Equal("hello"))
 				})
 			})
 
@@ -167,9 +174,9 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
-					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE-1)))
-					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal("\u0623"))
+					Ω(fakeSender.GetLogs()).Should(HaveLen(2))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE-1)))
+					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal("\u0623"))
 				})
 			})
 
@@ -181,9 +188,9 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
-					Ω(string(loggregatorEmitter.Emissions()[0].GetMessage())).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
-					Ω(string(loggregatorEmitter.Emissions()[1].GetMessage())).Should(Equal("8888"))
+					Ω(fakeSender.GetLogs()).Should(HaveLen(2))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal("8888"))
 				})
 			})
 		})
@@ -192,26 +199,26 @@ var _ = Describe("LogStreamer", func() {
 	Context("when told to emit stderr", func() {
 		It("should handle short messages", func() {
 			fmt.Fprintf(streamer.Stderr(), "this is a log\nand this is another\nand this one isn't done yet...")
-			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+			Ω(fakeSender.GetLogs()).Should(HaveLen(2))
 
-			emission := loggregatorEmitter.Emissions()[0]
-			Ω(string(emission.GetMessage())).Should(Equal("this is a log"))
-			Ω(emission.GetSourceType()).Should(Equal(sourceName))
-			Ω(emission.GetMessageType()).Should(Equal(events.LogMessage_ERR))
+			emission := fakeSender.GetLogs()[0]
+			Ω(string(emission.Message)).Should(Equal("this is a log"))
+			Ω(emission.SourceType).Should(Equal(sourceName))
+			Ω(emission.MessageType).Should(Equal("ERR"))
 
-			emission = loggregatorEmitter.Emissions()[1]
-			Ω(string(emission.GetMessage())).Should(Equal("and this is another"))
+			emission = fakeSender.GetLogs()[1]
+			Ω(string(emission.Message)).Should(Equal("and this is another"))
 		})
 
 		It("should handle long messages", func() {
 			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", MAX_MESSAGE_SIZE+1)+"\n")
-			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
+			Ω(fakeSender.GetLogs()).Should(HaveLen(2))
 
-			emission := loggregatorEmitter.Emissions()[0]
-			Ω(string(emission.GetMessage())).Should(Equal(strings.Repeat("e", MAX_MESSAGE_SIZE)))
+			emission := fakeSender.GetLogs()[0]
+			Ω(string(emission.Message)).Should(Equal(strings.Repeat("e", MAX_MESSAGE_SIZE)))
 
-			emission = loggregatorEmitter.Emissions()[1]
-			Ω(string(emission.GetMessage())).Should(Equal("e"))
+			emission = fakeSender.GetLogs()[1]
+			Ω(string(emission.Message)).Should(Equal("e"))
 		})
 	})
 
@@ -220,48 +227,48 @@ var _ = Describe("LogStreamer", func() {
 			fmt.Fprintf(streamer.Stdout(), "this is a stdout")
 			fmt.Fprintf(streamer.Stderr(), "this is a stderr")
 
-			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(0))
+			Ω(fakeSender.GetLogs()).Should(HaveLen(0))
 
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions()).Should(HaveLen(2))
-			Ω(loggregatorEmitter.Emissions()[0].GetMessageType()).Should(Equal(events.LogMessage_OUT))
-			Ω(loggregatorEmitter.Emissions()[1].GetMessageType()).Should(Equal(events.LogMessage_ERR))
+			Ω(fakeSender.GetLogs()).Should(HaveLen(2))
+			Ω(fakeSender.GetLogs()[0].MessageType).Should(Equal("OUT"))
+			Ω(fakeSender.GetLogs()[1].MessageType).Should(Equal("ERR"))
 		})
 	})
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = New("", sourceName, &index, loggregatorEmitter)
+			streamer = New("", sourceName, &index)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions()).Should(BeEmpty())
+			Ω(fakeSender.GetLogs()).Should(BeEmpty())
 		})
 	})
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = New(guid, "", nil, loggregatorEmitter)
+			streamer = New(guid, "", nil)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions()[0].GetSourceType()).Should(Equal(DefaultLogSource))
+			Ω(fakeSender.GetLogs()[0].SourceType).Should(Equal(DefaultLogSource))
 
 		})
 	})
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = New(guid, sourceName, nil, loggregatorEmitter)
+			streamer = New(guid, sourceName, nil)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(loggregatorEmitter.Emissions()[0].GetSourceInstance()).Should(Equal("0"))
+			Ω(fakeSender.GetLogs()[0].SourceInstance).Should(Equal("0"))
 		})
 	})
 
@@ -286,7 +293,7 @@ var _ = Describe("LogStreamer", func() {
 		})
 
 		It("does not trigger data races", func() {
-			Eventually(loggregatorEmitter.Emissions).Should(HaveLen(2))
+			Eventually(fakeSender.GetLogs).Should(HaveLen(2))
 		})
 	})
 })

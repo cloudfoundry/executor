@@ -2,13 +2,10 @@ package log_streamer
 
 import (
 	"sync"
-	"time"
 	"unicode/utf8"
 
-	"github.com/golang/protobuf/proto"
-
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/dropsonde/events"
+	"github.com/cloudfoundry/dropsonde/logs"
 )
 
 type streamDestination struct {
@@ -16,18 +13,16 @@ type streamDestination struct {
 	sourceName  string
 	sourceId    string
 	messageType events.LogMessage_MessageType
-	emitter     logemitter.Emitter
 	buffer      []byte
 	bufferLock  sync.Mutex
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, em logemitter.Emitter) *streamDestination {
+func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType) *streamDestination {
 	return &streamDestination{
 		guid:        guid,
 		sourceName:  sourceName,
 		sourceId:    sourceId,
 		messageType: messageType,
-		emitter:     em,
 		buffer:      make([]byte, 0, MAX_MESSAGE_SIZE),
 	}
 }
@@ -41,14 +36,12 @@ func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
 	if len(msg) > 0 {
-		destination.emitter.EmitLogMessage(&events.LogMessage{
-			AppId:          &destination.guid,
-			SourceType:     &destination.sourceName,
-			SourceInstance: &destination.sourceId,
-			Message:        msg,
-			MessageType:    &destination.messageType,
-			Timestamp:      proto.Int64(time.Now().UnixNano()),
-		})
+		switch destination.messageType {
+		case events.LogMessage_OUT:
+			logs.SendAppLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+		case events.LogMessage_ERR:
+			logs.SendAppErrorLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+		}
 	}
 }
 
@@ -119,5 +112,5 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 }
 
 func (d *streamDestination) withSource(sourceName string) *streamDestination {
-	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType, d.emitter)
+	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType)
 }

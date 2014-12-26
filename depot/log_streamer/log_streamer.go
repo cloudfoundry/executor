@@ -4,7 +4,6 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/cloudfoundry/dropsonde/emitter/logemitter"
 	"github.com/cloudfoundry/dropsonde/events"
 )
 
@@ -28,7 +27,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index *int, loggregatorEmitter logemitter.Emitter) LogStreamer {
+func New(guid string, sourceName string, index *int) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -48,7 +47,6 @@ func New(guid string, sourceName string, index *int, loggregatorEmitter logemitt
 			sourceName,
 			sourceIndex,
 			events.LogMessage_OUT,
-			loggregatorEmitter,
 		),
 
 		stderr: newStreamDestination(
@@ -56,7 +54,6 @@ func New(guid string, sourceName string, index *int, loggregatorEmitter logemitt
 			sourceName,
 			sourceIndex,
 			events.LogMessage_ERR,
-			loggregatorEmitter,
 		),
 	}
 }
