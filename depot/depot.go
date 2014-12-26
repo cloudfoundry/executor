@@ -182,12 +182,20 @@ func (c *client) RunContainer(guid string) error {
 func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
 	containersByHandle := make(map[string]executor.Container)
 
-	gardenContainers, err := c.gardenStore.List(tags)
+	// order here is important; listing containers from garden takes time, and in
+	// that time a container may transition from allocation store to garden
+	// store.
+	//
+	// in this case, if the garden store were fetched first, the container would
+	// not be listed anywhere. this ordering guarantees that it will at least
+	// show up allocated.
+
+	allocatedContainers, err := c.allocationStore.List(tags)
 	if err != nil {
 		return nil, err
 	}
 
-	allocatedContainers, err := c.allocationStore.List(tags)
+	gardenContainers, err := c.gardenStore.List(tags)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +207,7 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	for _, gardenContainer := range gardenContainers {
 		containersByHandle[gardenContainer.Guid] = gardenContainer
 	}
+
 	for _, gardenContainer := range allocatedContainers {
 		containersByHandle[gardenContainer.Guid] = gardenContainer
 	}
