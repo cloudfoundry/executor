@@ -40,12 +40,6 @@ var listenAddr = flag.String(
 	"host:port to serve API requests on",
 )
 
-var containerOwnerName = flag.String(
-	"containerOwnerName",
-	"executor",
-	"name to track containers created by this executor; they will be reaped on start",
-)
-
 var gardenNetwork = flag.String(
 	"gardenNetwork",
 	"unix",
@@ -112,42 +106,6 @@ var maxCacheSizeInBytes = flag.Uint64(
 	"maximum size of the cache (in bytes) - you should include a healthy amount of overhead",
 )
 
-var metricsReportInterval = flag.Duration(
-	"metricsReportInterval",
-	1*time.Minute,
-	"interval on which to report metrics",
-)
-
-var maxConcurrentDownloads = flag.Uint(
-	"maxConcurrentDownloads",
-	5,
-	"maximum in-flight downloads",
-)
-
-var maxConcurrentUploads = flag.Uint(
-	"maxConcurrentUploads",
-	5,
-	"maximum in-flight uploads",
-)
-
-var gardenSyncInterval = flag.Duration(
-	"gardenSyncInterval",
-	30*time.Second,
-	"interval on which to poll Garden's containers to ensure usage is in sync",
-)
-
-var dropsondeOrigin = flag.String(
-	"dropsondeOrigin",
-	"executor",
-	"Origin identifier for dropsonde-emitted metrics.",
-)
-
-var dropsondeDestination = flag.String(
-	"dropsondeDestination",
-	"localhost:3457",
-	"Destination for dropsonde-emitted metrics.",
-)
-
 var allowPrivileged = flag.Bool(
 	"allowPrivileged",
 	false,
@@ -178,6 +136,21 @@ var exportNetworkEnvVars = flag.Bool(
 	"export network environment variables into container (e.g. INSTANCE_IP, INSTANCE_PORT)",
 )
 
+var gardenSyncInterval = flag.Duration(
+	"gardenSyncInterval",
+	30*time.Second,
+	"interval on which to poll Garden's containers to ensure usage is in sync",
+)
+
+const (
+	containerOwnerName     = "executor"
+	dropsondeDestination   = "localhost:3457"
+	dropsondeOrigin        = "executor"
+	maxConcurrentDownloads = 5
+	maxConcurrentUploads   = 5
+	metricsReportInterval  = 1 * time.Minute
+)
+
 func main() {
 	flag.Parse()
 
@@ -198,7 +171,7 @@ func main() {
 
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
-		owner:        *containerOwnerName,
+		owner:        containerOwnerName,
 	}
 
 	destroyContainers(gardenClient, containersFetcher, logger)
@@ -210,8 +183,8 @@ func main() {
 		*cachePath,
 		workDir,
 		*maxCacheSizeInBytes,
-		*maxConcurrentDownloads,
-		*maxConcurrentUploads,
+		maxConcurrentDownloads,
+		maxConcurrentUploads,
 		*allowPrivileged,
 		*skipCertVerify,
 		*exportNetworkEnvVars,
@@ -225,7 +198,6 @@ func main() {
 		logger,
 		gardenClient,
 		transformer,
-		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
 		*registryPruningInterval,
@@ -253,7 +225,7 @@ func main() {
 		}},
 		{"metrics-reporter", &metrics.Reporter{
 			ExecutorSource: depotClientProvider.WithLogger(metricsLogger),
-			Interval:       *metricsReportInterval,
+			Interval:       metricsReportInterval,
 			Logger:         metricsLogger,
 		}},
 		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval, logger)},
@@ -322,7 +294,7 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 }
 
 func initializeDropsonde(logger lager.Logger) {
-	err := dropsonde.Initialize(*dropsondeDestination, *dropsondeOrigin)
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
 	}
@@ -332,7 +304,6 @@ func initializeStores(
 	logger lager.Logger,
 	gardenClient garden.Client,
 	transformer *transformer.Transformer,
-	containerOwnerName string,
 	containerMaxCpuShares uint64,
 	containerInodeLimit uint64,
 	registryPruningInterval time.Duration,

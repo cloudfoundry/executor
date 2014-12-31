@@ -18,7 +18,6 @@ func New(
 	cachePath,
 	tmpDir,
 	debugAddr,
-	containerOwnerName string,
 	pruneInterval time.Duration,
 	allowPrivileged bool,
 ) *ginkgomon.Runner {
@@ -39,7 +38,6 @@ func New(
 			"-containerMaxCpuShares", "1024",
 			"-cachePath", cachePath,
 			"-tempDir", tmpDir,
-			"-containerOwnerName", containerOwnerName,
 			"-containerInodeLimit", strconv.Itoa(245000),
 			"-pruneInterval", pruneInterval.String(),
 			"-debugAddr", debugAddr,
