@@ -649,6 +649,7 @@ var _ = Describe("GardenContainerStore", func() {
 			}
 
 			fakeGardenContainer = new(gfakes.FakeContainer)
+			fakeGardenContainer.HandleReturns("some-guid")
 		})
 
 		JustBeforeEach(func() {
@@ -887,6 +888,11 @@ var _ = Describe("GardenContainerStore", func() {
 					It("returns the error", func() {
 						Ω(createErr).Should(Equal(disaster))
 					})
+
+					It("deletes the container from Garden", func() {
+						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("some-guid"))
+					})
 				})
 
 				Context("when mapping ports succeeds", func() {
@@ -932,6 +938,11 @@ var _ = Describe("GardenContainerStore", func() {
 					It("returns the error", func() {
 						Ω(createErr).Should(Equal(disaster))
 					})
+
+					It("deletes the container from Garden", func() {
+						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal(executorContainer.Guid))
+					})
 				})
 			})
 
@@ -973,6 +984,11 @@ var _ = Describe("GardenContainerStore", func() {
 					It("returns the error", func() {
 						Ω(createErr).Should(Equal(disaster))
 					})
+
+					It("deletes the container from Garden", func() {
+						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal(executorContainer.Guid))
+					})
 				})
 			})
 
@@ -1000,6 +1016,23 @@ var _ = Describe("GardenContainerStore", func() {
 						LimitInShares: 512,
 					}))
 				})
+
+				Context("and limiting CPU fails", func() {
+					disaster := errors.New("oh no!")
+
+					BeforeEach(func() {
+						fakeGardenContainer.LimitCPUReturns(disaster)
+					})
+
+					It("returns the error", func() {
+						Ω(createErr).Should(Equal(disaster))
+					})
+
+					It("deletes the container from Garden", func() {
+						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal(executorContainer.Guid))
+					})
+				})
 			})
 
 			Context("when gardenContainer.Info succeeds", func() {
@@ -1023,6 +1056,11 @@ var _ = Describe("GardenContainerStore", func() {
 
 				It("propagates the error", func() {
 					Ω(createErr).Should(Equal(gardenError))
+				})
+
+				It("deletes the container from Garden", func() {
+					Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+					Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal(executorContainer.Guid))
 				})
 			})
 		})

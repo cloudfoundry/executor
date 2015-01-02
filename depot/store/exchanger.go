@@ -282,6 +282,7 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		for i, ports := range executorContainer.Ports {
 			actualHostPort, actualContainerPort, err := gardenContainer.NetIn(ports.HostPort, ports.ContainerPort)
 			if err != nil {
+				gardenClient.Destroy(gardenContainer.Handle())
 				return executor.Container{}, err
 			}
 
@@ -297,6 +298,7 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 			LimitInBytes: uint64(executorContainer.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
+			gardenClient.Destroy(gardenContainer.Handle())
 			return executor.Container{}, err
 		}
 	}
@@ -306,6 +308,7 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		InodeHard: exchanger.containerInodeLimit,
 	})
 	if err != nil {
+		gardenClient.Destroy(gardenContainer.Handle())
 		return executor.Container{}, err
 	}
 
@@ -313,11 +316,13 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		LimitInShares: uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0),
 	})
 	if err != nil {
+		gardenClient.Destroy(gardenContainer.Handle())
 		return executor.Container{}, err
 	}
 
 	info, err := gardenContainer.Info()
 	if err != nil {
+		gardenClient.Destroy(gardenContainer.Handle())
 		return executor.Container{}, err
 	}
 
