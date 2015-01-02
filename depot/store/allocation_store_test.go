@@ -326,4 +326,106 @@ var _ = Describe("AllocationStore", func() {
 			})
 		})
 	})
+
+	Describe("Transitions", func() {
+		assertions := []transitionAssertion{
+			{to: "reserve", from: "non-existent", err: "does not occur"},
+			{to: "reserve", from: "reserved", err: "occurs"},
+			{to: "reserve", from: "initializing", err: "occurs"},
+			{to: "reserve", from: "completed", err: "occurs"},
+
+			{to: "initialize", from: "non-existent", err: "occurs"},
+			{to: "initialize", from: "reserved", err: "does not occur"},
+			{to: "initialize", from: "initializing", err: "occurs"},
+			{to: "initialize", from: "completed", err: "occurs"},
+
+			{to: "complete", from: "non-existent", err: "occurs"},
+			{to: "complete", from: "reserved", err: "does not occur"},
+			{to: "complete", from: "initializing", err: "does not occur"},
+			{to: "complete", from: "completed", err: "occurs"},
+
+			{to: "destroy", from: "non-existent", err: "occurs"},
+			{to: "destroy", from: "reserved", err: "does not occur"},
+			{to: "destroy", from: "initializing", err: "does not occur"},
+			{to: "destroy", from: "completed", err: "does not occur"},
+		}
+
+		for _, assertion := range assertions {
+			assertion := assertion
+			It("error "+assertion.err+" when transitioning from "+assertion.from+" to "+assertion.to, func() {
+				container := executor.Container{Guid: "some-guid"}
+				assertion.fromFunc(allocationStore, container)
+				err := assertion.toFunc(allocationStore, container)
+				assertion.errFunc(err)
+			})
+		}
+	})
 })
+
+type transitionAssertion struct {
+	from string
+	to   string
+	err  string
+}
+
+func (ta transitionAssertion) fromFunc(allocationStore *store.AllocationStore, container executor.Container) {
+	switch ta.from {
+	case "non-existent":
+
+	case "reserved":
+		_, err := allocationStore.Create(container)
+		Ω(err).ShouldNot(HaveOccurred())
+
+	case "initializing":
+		_, err := allocationStore.Create(container)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		err = allocationStore.StartInitializing(container.Guid)
+		Ω(err).ShouldNot(HaveOccurred())
+
+	case "completed":
+		_, err := allocationStore.Create(container)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		err = allocationStore.StartInitializing(container.Guid)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		err = allocationStore.Complete(container.Guid, executor.ContainerRunResult{})
+		Ω(err).ShouldNot(HaveOccurred())
+
+	default:
+		Fail("unknown 'from' state: " + ta.from)
+	}
+}
+
+func (ta transitionAssertion) toFunc(allocationStore *store.AllocationStore, container executor.Container) error {
+	switch ta.to {
+	case "reserve":
+		_, err := allocationStore.Create(container)
+		return err
+
+	case "initialize":
+		return allocationStore.StartInitializing(container.Guid)
+
+	case "complete":
+		return allocationStore.Complete(container.Guid, executor.ContainerRunResult{})
+
+	case "destroy":
+		return allocationStore.Destroy(container.Guid)
+
+	default:
+		Fail("unknown 'to' state: " + ta.to)
+		return nil
+	}
+}
+
+func (ta transitionAssertion) errFunc(err error) {
+	switch ta.err {
+	case "occurs":
+		Ω(err).Should(HaveOccurred())
+	case "does not occur":
+		Ω(err).ShouldNot(HaveOccurred())
+	default:
+		Fail("unknown 'err' expectation: " + ta.err)
+	}
+}

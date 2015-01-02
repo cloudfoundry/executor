@@ -119,6 +119,9 @@ func (store *AllocationStore) Complete(guid string, result executor.ContainerRun
 	defer store.lock.Unlock()
 
 	if container, found := store.containers[guid]; found {
+		if container.State == executor.StateCompleted {
+			return executor.ErrInvalidTransition
+		}
 		container.State = executor.StateCompleted
 		container.RunResult = result
 
@@ -139,6 +142,9 @@ func (store *AllocationStore) StartInitializing(guid string) error {
 	defer store.lock.Unlock()
 
 	if container, found := store.containers[guid]; found {
+		if container.State != executor.StateReserved {
+			return executor.ErrInvalidTransition
+		}
 		container.State = executor.StateInitializing
 		store.containers[guid] = container
 	} else {
