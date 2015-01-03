@@ -152,6 +152,7 @@ const (
 )
 
 func main() {
+	cf_debug_server.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
@@ -163,8 +164,6 @@ func main() {
 	initializeDropsonde(logger)
 
 	logger.Info("starting")
-
-	cf_debug_server.Run()
 
 	gardenClient := GardenClient.New(GardenConnection.New(*gardenNetwork, *gardenAddr))
 	waitForGarden(logger, gardenClient)
@@ -217,7 +216,7 @@ func main() {
 
 	metricsLogger := logger.Session("metrics-reporter")
 
-	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
+	members := grouper.Members{
 		{"api-server", &server.Server{
 			Address:             *listenAddr,
 			Logger:              logger,
@@ -230,7 +229,15 @@ func main() {
 		}},
 		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval, logger)},
 		{"hub-drainer", drainHub(hub)},
-	})
+	}
+
+	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
+		members = append(grouper.Members{
+			{"debug-server", cf_debug_server.Runner(dbgAddr)},
+		}, members...)
+	}
+
+	group := grouper.NewOrdered(os.Interrupt, members)
 
 	monitor := ifrit.Invoke(sigmon.New(group))
 
