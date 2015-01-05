@@ -16,7 +16,6 @@ import (
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
-	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -31,7 +30,7 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeGardenClient *gfakes.FakeClient
 		tracker          *fakes.FakeInitializedTracker
 		emitter          *fakes.FakeEventEmitter
-		logger           lager.Logger
+		logger           *lagertest.TestLogger
 
 		ownerName           = "some-owner-name"
 		inodeLimit   uint64 = 2000000
@@ -1429,7 +1428,7 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 
 		Context("when there is a monitor action", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -1439,7 +1438,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			Context("when the monitor action succeeds", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					timeProvider.Increment(time.Second)
 					monitorReturns <- 0
 				})
@@ -1451,7 +1450,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when the monitor action subsequently fails", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
 						timeProvider.Increment(time.Second)
 						monitorReturns <- 1
@@ -1464,10 +1463,24 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(containerResult().Failed).Should(BeTrue())
 					})
 				})
+
+				Context("when Stop is called", func() {
+					BeforeEach(func() {
+						gardenContainer.StopStub = func(kill bool) error {
+							defer GinkgoRecover()
+							Ω(logger.LogMessages()).Should(ContainElement("test.monitor.monitor-step.cancelling"))
+							return nil
+						}
+					})
+
+					It("stops the monitor first", func() {
+						gardenStore.Stop(executorContainer.Guid)
+					})
+				})
 			})
 
 			Context("when monitor persistently fails", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					timeProvider.Increment(time.Second)
 					monitorReturns <- 1
 				})
@@ -1478,7 +1491,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when the time to start elapses", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						By("ticking out to 3 seconds (note we had just ticked once)")
 						for i := 0; i < 3; i++ {
 							//ugh, got to wait until the timer is being read from before we increment time

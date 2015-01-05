@@ -211,6 +211,8 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 
 	hasStartedRunning := make(chan struct{}, 1)
 
+	var monitorStep steps.Step
+
 	if container.Monitor != nil {
 		monitoredStep := store.transformer.StepFor(
 			logStreamer,
@@ -221,7 +223,7 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 			logger,
 		)
 
-		parallelSequence = append(parallelSequence, steps.NewMonitor(
+		monitorStep = steps.NewMonitor(
 			monitoredStep,
 			hasStartedRunning,
 			logger.Session("monitor"),
@@ -229,7 +231,8 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
-		))
+		)
+		parallelSequence = append(parallelSequence, monitorStep)
 	} else {
 		// this container isn't monitored, so we mark it running right away
 		hasStartedRunning <- struct{}{}
@@ -255,6 +258,9 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 			select {
 			case <-signals:
 				signals = nil
+				if monitorStep != nil {
+					monitorStep.Cancel()
+				}
 				step.Cancel()
 
 			case <-hasStartedRunning:

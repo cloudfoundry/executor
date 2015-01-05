@@ -2,6 +2,7 @@ package steps
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/cloudfoundry/gunk/timeprovider"
@@ -23,7 +24,8 @@ type monitorStep struct {
 	healthyInterval   time.Duration
 	unhealthyInterval time.Duration
 
-	cancel chan struct{}
+	cancelled int32
+	cancel    chan struct{}
 }
 
 func NewMonitor(
@@ -106,6 +108,10 @@ func (step *monitorStep) Perform() error {
 }
 
 func (step *monitorStep) Cancel() {
+	if !atomic.CompareAndSwapInt32(&step.cancelled, 0, 1) {
+		return
+	}
+
 	step.logger.Info("cancelling")
 	close(step.cancel)
 }
