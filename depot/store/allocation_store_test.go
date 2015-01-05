@@ -94,33 +94,6 @@ var _ = Describe("AllocationStore", func() {
 			})
 		})
 
-		Context("and then completing it", func() {
-			It("prevents the container from expiring", func() {
-				Ω(allocationStore.List(nil)).Should(ContainElement(createdContainer))
-
-				runResult := executor.ContainerRunResult{
-					Failed:        true,
-					FailureReason: "boom",
-				}
-
-				err := allocationStore.Complete(createdContainer.Guid, runResult)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				timeProvider.Increment(expirationTime + 1)
-
-				completedContainer := createdContainer
-				completedContainer.State = executor.StateCompleted
-				completedContainer.RunResult = runResult
-
-				Consistently(func() interface{} {
-					containers, err := allocationStore.List(nil)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					return containers
-				}, expirationTime).Should(ContainElement(completedContainer))
-			})
-		})
-
 		Context("when the guid is already taken", func() {
 			It("returns an error", func() {
 				_, err := allocationStore.Create(createdContainer)
@@ -190,6 +163,9 @@ var _ = Describe("AllocationStore", func() {
 					Guid:  "the-guid",
 					State: executor.StateReserved,
 				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = allocationStore.StartInitializing(createdContainer.Guid)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -340,7 +316,7 @@ var _ = Describe("AllocationStore", func() {
 			{to: "initialize", from: "completed", err: "occurs"},
 
 			{to: "complete", from: "non-existent", err: "occurs"},
-			{to: "complete", from: "reserved", err: "does not occur"},
+			{to: "complete", from: "reserved", err: "occurs"},
 			{to: "complete", from: "initializing", err: "does not occur"},
 			{to: "complete", from: "completed", err: "occurs"},
 
