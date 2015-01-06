@@ -130,7 +130,7 @@ var _ = Describe("AllocationStore", func() {
 
 				It("returns a container-not-found error", func() {
 					_, err := allocationStore.Lookup("the-guid")
-					Ω(err).Should(Equal(store.ErrContainerNotFound))
+					Ω(err).Should(Equal(executor.ErrContainerNotFound))
 				})
 			})
 		})
@@ -138,7 +138,7 @@ var _ = Describe("AllocationStore", func() {
 		Context("when the container doesn't exist", func() {
 			It("returns a container-not-found error", func() {
 				_, err := allocationStore.Lookup("the-guid")
-				Ω(err).Should(Equal(store.ErrContainerNotFound))
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})
@@ -197,7 +197,7 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("when the container doesn't exist", func() {
 			It("returns a container-not-found error", func() {
-				Ω(completeErr).Should(Equal(store.ErrContainerNotFound))
+				Ω(completeErr).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})
@@ -298,7 +298,7 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("when the container does not exist", func() {
 			It("returns a container-not-found error", func() {
-				Ω(destroyErr).Should(Equal(store.ErrContainerNotFound))
+				Ω(destroyErr).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})

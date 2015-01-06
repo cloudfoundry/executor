@@ -80,7 +80,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			It("returns a container-not-found error", func() {
-				Ω(lookupErr).Should(Equal(store.ErrContainerNotFound))
+				Ω(lookupErr).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
@@ -1260,7 +1260,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 			It("returns a container-not-found error", func() {
 				_, err := gardenStore.GetFiles("the-guid", "the-path")
-				Ω(err).Should(Equal(store.ErrContainerNotFound))
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})

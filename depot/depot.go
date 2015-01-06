@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -157,7 +156,7 @@ func (c *client) RunContainer(guid string) error {
 		}
 
 		err = c.allocationStore.Destroy(logger, guid)
-		if err == store.ErrContainerNotFound {
+		if err == executor.ErrContainerNotFound {
 			logger.Debug("container-deleted-while-initilizing")
 
 			err := c.gardenStore.Destroy(logger, container.Guid)

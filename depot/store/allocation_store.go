@@ -54,7 +54,7 @@ func (store *AllocationStore) Lookup(guid string) (executor.Container, error) {
 	if ok {
 		return container, nil
 	} else {
-		return executor.Container{}, ErrContainerNotFound
+		return executor.Container{}, executor.ErrContainerNotFound
 	}
 }
 
@@ -108,7 +108,7 @@ func (store *AllocationStore) Destroy(logger lager.Logger, guid string) error {
 		delete(store.containers, guid)
 		store.tracker.Deallocate(guid)
 	} else {
-		return ErrContainerNotFound
+		return executor.ErrContainerNotFound
 	}
 
 	return nil
@@ -131,7 +131,7 @@ func (store *AllocationStore) Complete(guid string, result executor.ContainerRun
 
 		store.containers[guid] = container
 	} else {
-		return ErrContainerNotFound
+		return executor.ErrContainerNotFound
 	}
 
 	return nil
@@ -148,7 +148,7 @@ func (store *AllocationStore) StartInitializing(guid string) error {
 		container.State = executor.StateInitializing
 		store.containers[guid] = container
 	} else {
-		return ErrContainerNotFound
+		return executor.ErrContainerNotFound
 	}
 
 	return nil

@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"sync"
@@ -16,10 +15,6 @@ import (
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
-)
-
-var (
-	ErrContainerNotFound = errors.New("container not found")
 )
 
 type GardenStore struct {
@@ -81,7 +76,7 @@ func NewGardenStore(
 func (store *GardenStore) Lookup(guid string) (executor.Container, error) {
 	gardenContainer, err := store.gardenClient.Lookup(guid)
 	if err != nil {
-		return executor.Container{}, ErrContainerNotFound
+		return executor.Container{}, executor.ErrContainerNotFound
 	}
 
 	return store.exchanger.Garden2Executor(gardenContainer)
@@ -98,7 +93,7 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 
 	gardenContainers, err := store.gardenClient.Containers(filter)
 	if err != nil {
-		return nil, ErrContainerNotFound
+		return nil, executor.ErrContainerNotFound
 	}
 
 	result := make([]executor.Container, 0, len(gardenContainers))
@@ -148,7 +143,7 @@ func (store *GardenStore) freeStepProcess(guid string) (ifrit.Process, bool) {
 func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 	process, found := store.freeStepProcess(guid)
 	if !found {
-		return ErrContainerNotFound
+		return executor.ErrContainerNotFound
 	}
 
 	<-process.Wait()
@@ -172,7 +167,7 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 func (store *GardenStore) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	container, err := store.gardenClient.Lookup(guid)
 	if err != nil {
-		return nil, ErrContainerNotFound
+		return nil, executor.ErrContainerNotFound
 	}
 
 	return container.StreamOut(sourcePath)
