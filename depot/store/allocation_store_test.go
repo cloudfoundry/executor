@@ -304,48 +304,43 @@ var _ = Describe("AllocationStore", func() {
 	})
 
 	Describe("Transitions", func() {
-		assertions := []transitionAssertion{
-			{to: "reserve", from: "non-existent", err: "does not occur"},
-			{to: "reserve", from: "reserved", err: "occurs"},
-			{to: "reserve", from: "initializing", err: "occurs"},
-			{to: "reserve", from: "completed", err: "occurs"},
+		expectations := []allocationStoreTransitionExpectation{
+			{to: "reserve", from: "non-existent", assertError: "does not occur"},
+			{to: "reserve", from: "reserved", assertError: "occurs"},
+			{to: "reserve", from: "initializing", assertError: "occurs"},
+			{to: "reserve", from: "completed", assertError: "occurs"},
 
-			{to: "initialize", from: "non-existent", err: "occurs"},
-			{to: "initialize", from: "reserved", err: "does not occur"},
-			{to: "initialize", from: "initializing", err: "occurs"},
-			{to: "initialize", from: "completed", err: "occurs"},
+			{to: "initialize", from: "non-existent", assertError: "occurs"},
+			{to: "initialize", from: "reserved", assertError: "does not occur"},
+			{to: "initialize", from: "initializing", assertError: "occurs"},
+			{to: "initialize", from: "completed", assertError: "occurs"},
 
-			{to: "complete", from: "non-existent", err: "occurs"},
-			{to: "complete", from: "reserved", err: "occurs"},
-			{to: "complete", from: "initializing", err: "does not occur"},
-			{to: "complete", from: "completed", err: "occurs"},
-
-			{to: "destroy", from: "non-existent", err: "occurs"},
-			{to: "destroy", from: "reserved", err: "does not occur"},
-			{to: "destroy", from: "initializing", err: "does not occur"},
-			{to: "destroy", from: "completed", err: "does not occur"},
+			{to: "complete", from: "non-existent", assertError: "occurs"},
+			{to: "complete", from: "reserved", assertError: "occurs"},
+			{to: "complete", from: "initializing", assertError: "does not occur"},
+			{to: "complete", from: "completed", assertError: "occurs"},
 		}
 
-		for _, assertion := range assertions {
-			assertion := assertion
-			It("error "+assertion.err+" when transitioning from "+assertion.from+" to "+assertion.to, func() {
+		for _, expectation := range expectations {
+			expectation := expectation
+			It("error "+expectation.assertError+" when transitioning from "+expectation.from+" to "+expectation.to, func() {
 				container := executor.Container{Guid: "some-guid"}
-				assertion.fromFunc(allocationStore, container)
-				err := assertion.toFunc(allocationStore, container)
-				assertion.errFunc(err)
+				expectation.driveFromState(allocationStore, container)
+				err := expectation.transitionToState(allocationStore, container)
+				expectation.checkErrorResult(err)
 			})
 		}
 	})
 })
 
-type transitionAssertion struct {
-	from string
-	to   string
-	err  string
+type allocationStoreTransitionExpectation struct {
+	from        string
+	to          string
+	assertError string
 }
 
-func (ta transitionAssertion) fromFunc(allocationStore *store.AllocationStore, container executor.Container) {
-	switch ta.from {
+func (expectation allocationStoreTransitionExpectation) driveFromState(allocationStore *store.AllocationStore, container executor.Container) {
+	switch expectation.from {
 	case "non-existent":
 
 	case "reserved":
@@ -370,12 +365,12 @@ func (ta transitionAssertion) fromFunc(allocationStore *store.AllocationStore, c
 		Ω(err).ShouldNot(HaveOccurred())
 
 	default:
-		Fail("unknown 'from' state: " + ta.from)
+		Fail("unknown 'from' state: " + expectation.from)
 	}
 }
 
-func (ta transitionAssertion) toFunc(allocationStore *store.AllocationStore, container executor.Container) error {
-	switch ta.to {
+func (expectation allocationStoreTransitionExpectation) transitionToState(allocationStore *store.AllocationStore, container executor.Container) error {
+	switch expectation.to {
 	case "reserve":
 		_, err := allocationStore.Create(container)
 		return err
@@ -386,22 +381,19 @@ func (ta transitionAssertion) toFunc(allocationStore *store.AllocationStore, con
 	case "complete":
 		return allocationStore.Complete(container.Guid, executor.ContainerRunResult{})
 
-	case "destroy":
-		return allocationStore.Destroy(container.Guid)
-
 	default:
-		Fail("unknown 'to' state: " + ta.to)
+		Fail("unknown 'to' state: " + expectation.to)
 		return nil
 	}
 }
 
-func (ta transitionAssertion) errFunc(err error) {
-	switch ta.err {
+func (expectation allocationStoreTransitionExpectation) checkErrorResult(err error) {
+	switch expectation.assertError {
 	case "occurs":
 		Ω(err).Should(HaveOccurred())
 	case "does not occur":
 		Ω(err).ShouldNot(HaveOccurred())
 	default:
-		Fail("unknown 'err' expectation: " + ta.err)
+		Fail("unknown 'assertErr' expectation: " + expectation.assertError)
 	}
 }
