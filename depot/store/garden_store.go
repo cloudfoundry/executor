@@ -128,23 +128,34 @@ func (store *GardenStore) Create(container executor.Container) (executor.Contain
 	return container, nil
 }
 
-func (store *GardenStore) Stop(guid string) error {
+func (store *GardenStore) freeStepProcess(guid string) (ifrit.Process, bool) {
 	store.processesL.Lock()
 	process, found := store.runningProcesses[guid]
 	delete(store.runningProcesses, guid)
 	store.processesL.Unlock()
 
 	if !found {
-		return ErrContainerNotFound
+		return nil, false
 	}
 
 	process.Signal(os.Interrupt)
+	return process, true
+}
+
+func (store *GardenStore) Stop(guid string) error {
+	process, found := store.freeStepProcess(guid)
+	if !found {
+		return ErrContainerNotFound
+	}
+
 	<-process.Wait()
 
 	return nil
 }
 
 func (store *GardenStore) Destroy(guid string) error {
+	store.freeStepProcess(guid)
+
 	err := store.gardenClient.Destroy(guid)
 	if err != nil {
 		return err
@@ -242,6 +253,17 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 
 	step := steps.NewSerial(seq)
 
+	store.runStepProcess(logger, step, monitorStep, hasStartedRunning, gardenContainer, container.Guid)
+}
+
+func (store *GardenStore) runStepProcess(
+	logger lager.Logger,
+	step steps.Step,
+	monitorStep steps.Step,
+	hasStartedRunning <-chan struct{},
+	gardenContainer garden.Container,
+	guid string,
+) {
 	process := ifrit.Invoke(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		seqComplete := make(chan error)
 
@@ -292,7 +314,7 @@ func (store *GardenStore) Run(container executor.Container, logger lager.Logger)
 	}))
 
 	store.processesL.Lock()
-	store.runningProcesses[container.Guid] = process
+	store.runningProcesses[guid] = process
 	store.processesL.Unlock()
 }
 
