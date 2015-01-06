@@ -643,8 +643,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 		BeforeEach(func() {
 			executorContainer = executor.Container{
-				Guid: "some-guid",
-
+				Guid:   "some-guid",
+				State:  executor.StateInitializing,
 				Action: action,
 			}
 
@@ -1311,11 +1311,13 @@ var _ = Describe("GardenContainerStore", func() {
 			_, err := gardenStore.Create(executor.Container{
 				MemoryMB: 2,
 				Action:   action,
+				State:    executor.StateInitializing,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
 			_, err = gardenStore.Create(executor.Container{
 				MemoryMB: 5,
+				State:    executor.StateInitializing,
 				Action:   action,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
@@ -1376,6 +1378,7 @@ var _ = Describe("GardenContainerStore", func() {
 			executorContainer = executor.Container{
 				Action:       runAction,
 				Monitor:      monitorAction,
+				State:        executor.StateInitializing,
 				Guid:         "some-container-handle",
 				StartTimeout: 3,
 			}
@@ -1456,7 +1459,8 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(logger, executorContainer)
+				err = gardenStore.Run(logger, executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("transitions to running as soon as it starts running", func() {
@@ -1502,7 +1506,8 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(logger, executorContainer)
+				err = gardenStore.Run(logger, executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 			})
@@ -1586,7 +1591,8 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(logger, executorContainer)
+				err = gardenStore.Run(logger, executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				timeProvider.Increment(time.Second)
@@ -1607,4 +1613,103 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 		})
 	})
+
+	Describe("Transitions", func() {
+		var executorContainer executor.Container
+
+		BeforeEach(func() {
+			executorContainer = executor.Container{
+				Action:  action,
+				Monitor: action,
+				Guid:    "some-container-handle",
+			}
+
+			gardenContainer := new(gfakes.FakeContainer)
+			gardenContainer.RunReturns(new(gfakes.FakeProcess), nil)
+
+			fakeGardenClient.LookupReturns(gardenContainer, nil)
+			fakeGardenClient.CreateReturns(gardenContainer, nil)
+		})
+
+		expectations := []gardenStoreTransitionExpectation{
+			{to: "create", from: "non-existent", assertError: "occurs"},
+			{to: "create", from: "reserved", assertError: "occurs"},
+			{to: "create", from: "initializing", assertError: "does not occur"},
+			{to: "create", from: "created", assertError: "occurs"},
+			{to: "create", from: "running", assertError: "occurs"},
+			{to: "create", from: "completed", assertError: "occurs"},
+
+			{to: "run", from: "non-existent", assertError: "occurs"},
+			{to: "run", from: "reserved", assertError: "occurs"},
+			{to: "run", from: "initializing", assertError: "occurs"},
+			{to: "run", from: "created", assertError: "does not occur"},
+			{to: "run", from: "running", assertError: "occurs"},
+			{to: "run", from: "completed", assertError: "occurs"},
+		}
+
+		for _, expectation := range expectations {
+			expectation := expectation
+			It("error "+expectation.assertError+" when transitioning from "+expectation.from+" to "+expectation.to, func() {
+				expectation.driveFromState(&executorContainer)
+				err := expectation.transitionToState(gardenStore, executorContainer)
+				expectation.checkErrorResult(err)
+			})
+		}
+	})
 })
+
+type gardenStoreTransitionExpectation struct {
+	from        string
+	to          string
+	assertError string
+}
+
+func (expectation gardenStoreTransitionExpectation) driveFromState(container *executor.Container) {
+	switch expectation.from {
+	case "non-existent":
+
+	case "reserved":
+		container.State = executor.StateReserved
+
+	case "initializing":
+		container.State = executor.StateInitializing
+
+	case "created":
+		container.State = executor.StateCreated
+
+	case "running":
+		container.State = executor.StateRunning
+
+	case "completed":
+		container.State = executor.StateCompleted
+
+	default:
+		Fail("unknown 'from' state: " + expectation.from)
+	}
+}
+
+func (expectation gardenStoreTransitionExpectation) transitionToState(gardenStore *store.GardenStore, container executor.Container) error {
+	switch expectation.to {
+	case "create":
+		_, err := gardenStore.Create(container)
+		return err
+
+	case "run":
+		return gardenStore.Run(lagertest.NewTestLogger("test"), container)
+
+	default:
+		Fail("unknown 'to' state: " + expectation.to)
+		return nil
+	}
+}
+
+func (expectation gardenStoreTransitionExpectation) checkErrorResult(err error) {
+	switch expectation.assertError {
+	case "occurs":
+		Ω(err).Should(HaveOccurred())
+	case "does not occur":
+		Ω(err).ShouldNot(HaveOccurred())
+	default:
+		Fail("unknown 'assertErr' expectation: " + expectation.assertError)
+	}
+}

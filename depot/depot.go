@@ -49,7 +49,7 @@ type GardenStore interface {
 	Store
 
 	Ping() error
-	Run(lager.Logger, executor.Container)
+	Run(lager.Logger, executor.Container) error
 	Stop(logger lager.Logger, guid string) error
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
@@ -131,20 +131,20 @@ func (c *client) RunContainer(guid string) error {
 		"guid": guid,
 	})
 
-	container, err := c.allocationStore.Lookup(guid)
-	if err != nil {
-		logger.Error("failed-to-find-container", err)
-		return executor.ErrContainerNotFound
-	}
-
-	err = c.allocationStore.StartInitializing(container.Guid)
+	err := c.allocationStore.StartInitializing(guid)
 	if err != nil {
 		logger.Error("failed-to-initialize-container", err)
 		return executor.ErrContainerNotFound
 	}
 
 	go func() {
-		container, err := c.gardenStore.Create(container)
+		container, err := c.allocationStore.Lookup(guid)
+		if err != nil {
+			logger.Error("failed-to-find-container", err)
+			return
+		}
+
+		container, err = c.gardenStore.Create(container)
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 
@@ -173,7 +173,10 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		c.gardenStore.Run(logger, container)
+		err = c.gardenStore.Run(logger, container)
+		if err != nil {
+			logger.Error("failed-to-run-newly-created-container", err)
+		}
 	}()
 
 	return nil

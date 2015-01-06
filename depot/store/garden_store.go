@@ -116,6 +116,9 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 }
 
 func (store *GardenStore) Create(container executor.Container) (executor.Container, error) {
+	if container.State != executor.StateInitializing {
+		return executor.Container{}, executor.ErrInvalidTransition
+	}
 	container.State = executor.StateCreated
 
 	container, err := store.exchanger.CreateInGarden(store.gardenClient, container)
@@ -179,15 +182,19 @@ func (store *GardenStore) Ping() error {
 	return store.gardenClient.Ping()
 }
 
-func (store *GardenStore) Run(logger lager.Logger, container executor.Container) {
+func (store *GardenStore) Run(logger lager.Logger, container executor.Container) error {
 	logger = logger.WithData(lager.Data{
 		"container": container.Guid,
 	})
 
+	if container.State != executor.StateCreated {
+		return executor.ErrInvalidTransition
+	}
+
 	gardenContainer, err := store.gardenClient.Lookup(container.Guid)
 	if err != nil {
 		logger.Debug("container-deleted-just-before-running")
-		return
+		return err
 	}
 
 	logStreamer := log_streamer.New(
@@ -254,6 +261,8 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 	step := steps.NewSerial(seq)
 
 	store.runStepProcess(logger, step, monitorStep, hasStartedRunning, gardenContainer, container.Guid)
+
+	return nil
 }
 
 func (store *GardenStore) runStepProcess(
