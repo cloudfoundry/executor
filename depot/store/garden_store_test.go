@@ -679,16 +679,19 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Describe("the exchanged Garden container", func() {
 				It("creates it with the state as 'created'", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties[store.ContainerStateProperty]).Should(Equal(string(executor.StateCreated)))
 				})
 
 				It("creates it with the owner property", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties[store.ContainerOwnerProperty]).Should(Equal(ownerName))
 				})
 
 				It("creates it with the guid as the handle", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Handle).Should(Equal("some-guid"))
 				})
@@ -697,6 +700,7 @@ var _ = Describe("GardenContainerStore", func() {
 					payload, err := models.MarshalAction(action)
 					Ω(err).ShouldNot(HaveOccurred())
 
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties[store.ContainerActionProperty]).To(MatchJSON(payload))
 				})
@@ -710,6 +714,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("creates the container with the env", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Env).Should(Equal([]string{"GLOBAL1=VALUE1", "GLOBAL2=VALUE2"}))
 					})
@@ -721,6 +726,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("creates it with the rootfs", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.RootFSPath).Should(Equal("focker:///some-rootfs"))
 					})
@@ -732,6 +738,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("creates it with the executor:allocated-at property", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:allocated-at"]).To(Equal("123456789"))
 					})
@@ -743,6 +750,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("creates it with the executor:rootfs property", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:rootfs"]).To(Equal("some/root/path"))
 					})
@@ -761,6 +769,7 @@ var _ = Describe("GardenContainerStore", func() {
 						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:setup"]).To(MatchJSON(payload))
 					})
@@ -779,6 +788,7 @@ var _ = Describe("GardenContainerStore", func() {
 						payload, err := models.MarshalAction(action)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:monitor"]).To(MatchJSON(payload))
 					})
@@ -797,6 +807,7 @@ var _ = Describe("GardenContainerStore", func() {
 						payload, err := json.Marshal(env)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:env"]).To(MatchJSON(payload))
 					})
@@ -818,6 +829,7 @@ var _ = Describe("GardenContainerStore", func() {
 						payload, err := json.Marshal(log)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:log"]).To(MatchJSON(payload))
 					})
@@ -837,6 +849,7 @@ var _ = Describe("GardenContainerStore", func() {
 						payload, err := json.Marshal(runResult)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:result"]).To(MatchJSON(payload))
 					})
@@ -852,6 +865,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("creates it with the tag properties", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties["tag:tag-one"]).To(Equal("one"))
 					Ω(containerSpec.Properties["tag:tag-two"]).To(Equal("two"))
@@ -924,6 +938,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("creates it with the executor:memory-mb property", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties["executor:memory-mb"]).To(Equal("64"))
 				})
@@ -970,6 +985,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("creates it with the executor:disk-mb property", func() {
+					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Ω(containerSpec.Properties["executor:disk-mb"]).To(Equal("64"))
 				})
