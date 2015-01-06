@@ -1204,6 +1204,22 @@ var _ = Describe("GardenContainerStore", func() {
 		It("destroys the container", func() {
 			Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
 		})
+
+		Context("when the Garden client fails to destroy the given container", func() {
+			var gardenDestroyErr = errors.New("destroy-err")
+
+			BeforeEach(func() {
+				fakeGardenClient.DestroyReturns(gardenDestroyErr)
+			})
+
+			It("returns the Garden error", func() {
+				Ω(destroyErr).Should(Equal(gardenDestroyErr))
+			})
+
+			It("does not release the resource consumption", func() {
+				Ω(tracker.DeinitializeCallCount()).Should(Equal(0))
+			})
+		})
 	})
 
 	Describe("GetFiles", func() {
