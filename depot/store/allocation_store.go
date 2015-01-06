@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/lager"
 )
 
 type AllocationStore struct {
@@ -99,7 +100,7 @@ func (store *AllocationStore) Create(container executor.Container) (executor.Con
 	return container, nil
 }
 
-func (store *AllocationStore) Destroy(guid string) error {
+func (store *AllocationStore) Destroy(logger lager.Logger, guid string) error {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 

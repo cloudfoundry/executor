@@ -142,7 +142,7 @@ func (store *GardenStore) freeStepProcess(guid string) (ifrit.Process, bool) {
 	return process, true
 }
 
-func (store *GardenStore) Stop(guid string) error {
+func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 	process, found := store.freeStepProcess(guid)
 	if !found {
 		return ErrContainerNotFound
@@ -153,7 +153,7 @@ func (store *GardenStore) Stop(guid string) error {
 	return nil
 }
 
-func (store *GardenStore) Destroy(guid string) error {
+func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 	store.freeStepProcess(guid)
 
 	err := store.gardenClient.Destroy(guid)
@@ -179,7 +179,7 @@ func (store *GardenStore) Ping() error {
 	return store.gardenClient.Ping()
 }
 
-func (store *GardenStore) Run(container executor.Container, logger lager.Logger) {
+func (store *GardenStore) Run(logger lager.Logger, container executor.Container) {
 	logger = logger.WithData(lager.Data{
 		"container": container.Guid,
 	})

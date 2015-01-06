@@ -1135,7 +1135,7 @@ var _ = Describe("GardenContainerStore", func() {
 		var destroyErr error
 
 		JustBeforeEach(func() {
-			destroyErr = gardenStore.Destroy("the-guid")
+			destroyErr = gardenStore.Destroy(logger, "the-guid")
 		})
 
 		It("doesn't return an error", func() {
@@ -1360,8 +1360,8 @@ var _ = Describe("GardenContainerStore", func() {
 		AfterEach(func() {
 			close(monitorReturns)
 			close(runReturns)
-			gardenStore.Stop("some-container-handle")
-			gardenStore.Destroy("some-container-handle")
+			gardenStore.Stop(logger, "some-container-handle")
+			gardenStore.Destroy(logger, "some-container-handle")
 		})
 
 		containerStateGetter := func() string {
@@ -1386,7 +1386,7 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(executorContainer, logger)
+				gardenStore.Run(logger, executorContainer)
 			})
 
 			It("transitions to running as soon as it starts running", func() {
@@ -1432,7 +1432,7 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(executorContainer, logger)
+				gardenStore.Run(logger, executorContainer)
 
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 			})
@@ -1474,7 +1474,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("stops the monitor first", func() {
-						gardenStore.Stop(executorContainer.Guid)
+						gardenStore.Stop(logger, executorContainer.Guid)
 					})
 				})
 			})
@@ -1516,7 +1516,7 @@ var _ = Describe("GardenContainerStore", func() {
 				executorContainer, err = gardenStore.Create(executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				gardenStore.Run(executorContainer, logger)
+				gardenStore.Run(logger, executorContainer)
 				Eventually(timeProvider.WatcherCount).Should(Equal(1))
 
 				timeProvider.Increment(time.Second)

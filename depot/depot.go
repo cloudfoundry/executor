@@ -35,7 +35,7 @@ type Store interface {
 	Create(executor.Container) (executor.Container, error)
 	Lookup(guid string) (executor.Container, error)
 	List(executor.Tags) ([]executor.Container, error)
-	Destroy(guid string) error
+	Destroy(logger lager.Logger, guid string) error
 }
 
 type AllocationStore interface {
@@ -49,8 +49,8 @@ type GardenStore interface {
 	Store
 
 	Ping() error
-	Run(executor.Container, lager.Logger)
-	Stop(guid string) error
+	Run(lager.Logger, executor.Container)
+	Stop(logger lager.Logger, guid string) error
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
@@ -156,11 +156,11 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		err = c.allocationStore.Destroy(guid)
+		err = c.allocationStore.Destroy(logger, guid)
 		if err == store.ErrContainerNotFound {
 			logger.Debug("container-deleted-while-initilizing")
 
-			err := c.gardenStore.Destroy(container.Guid)
+			err := c.gardenStore.Destroy(logger, container.Guid)
 			if err != nil {
 				logger.Error("failed-to-destroy-newly-initialized-container", err)
 			}
@@ -173,7 +173,7 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		c.gardenStore.Run(container, logger)
+		c.gardenStore.Run(logger, container)
 	}()
 
 	return nil
@@ -226,7 +226,7 @@ func (c *client) StopContainer(guid string) error {
 	})
 
 	logger.Info("stopping-container")
-	return c.gardenStore.Stop(guid)
+	return c.gardenStore.Stop(logger, guid)
 }
 
 func (c *client) DeleteContainer(guid string) error {
@@ -234,7 +234,7 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	if err := c.allocationStore.Destroy(guid); err == nil {
+	if err := c.allocationStore.Destroy(logger, guid); err == nil {
 		logger.Info("deleted-allocation")
 		return nil
 	}
@@ -250,7 +250,7 @@ func (c *client) DeleteContainer(guid string) error {
 		return executor.ErrContainerNotCompleted
 	}
 
-	err = c.gardenStore.Destroy(guid)
+	err = c.gardenStore.Destroy(logger, guid)
 	if err != nil {
 		logger.Error("failed-to-destroy", err)
 		return executor.ErrContainerNotFound

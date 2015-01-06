@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/cloudfoundry-incubator/executor/depot/store/fakes"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,6 +19,7 @@ var _ = Describe("AllocationStore", func() {
 		expirationTime time.Duration
 		tracker        *fakes.FakeAllocationTracker
 		emitter        *fakes.FakeEventEmitter
+		logger         *lagertest.TestLogger
 
 		allocationStore *store.AllocationStore
 	)
@@ -27,6 +29,7 @@ var _ = Describe("AllocationStore", func() {
 		expirationTime = 1 * time.Second
 		tracker = new(fakes.FakeAllocationTracker)
 		emitter = new(fakes.FakeEventEmitter)
+		logger = lagertest.NewTestLogger("test")
 
 		allocationStore = store.NewAllocationStore(
 			timeProvider,
@@ -148,7 +151,7 @@ var _ = Describe("AllocationStore", func() {
 
 			Context("and then is destroyed", func() {
 				BeforeEach(func() {
-					err := allocationStore.Destroy("the-guid")
+					err := allocationStore.Destroy(logger, "the-guid")
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -243,7 +246,7 @@ var _ = Describe("AllocationStore", func() {
 					container2,
 				}))
 
-				err = allocationStore.Destroy("guid-1")
+				err = allocationStore.Destroy(logger, "guid-1")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(allocationStore.List(nil)).Should(ConsistOf([]executor.Container{
@@ -298,7 +301,7 @@ var _ = Describe("AllocationStore", func() {
 		var destroyErr error
 
 		JustBeforeEach(func() {
-			destroyErr = allocationStore.Destroy("the-guid")
+			destroyErr = allocationStore.Destroy(logger, "the-guid")
 		})
 
 		Context("when the container exists", func() {
