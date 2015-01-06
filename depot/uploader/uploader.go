@@ -41,11 +41,11 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 			InsecureSkipVerify: skipSSLVerification,
 			MinVersion:         tls.VersionTLS10,
 		},
-		ResponseHeaderTimeout: timeout,
 	}
 
 	httpClient := &http.Client{
 		Transport: transport,
+		Timeout:   timeout,
 	}
 
 	return &URLUploader{
