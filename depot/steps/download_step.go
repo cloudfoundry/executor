@@ -85,12 +85,13 @@ func (step *downloadStep) perform() error {
 	}
 	defer downloadedFile.Close()
 
+	size := downloadSize(downloadedFile)
 	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
 		return NewEmittableError(err, "Copying into the container failed")
 	}
 
-	step.emit("Downloaded %s (%s)\n", step.model.Artifact, downloadSize(downloadedFile))
+	step.emit("Downloaded %s (%s)\n", step.model.Artifact, size)
 	return nil
 }
 
@@ -112,8 +113,10 @@ func (step *downloadStep) fetch() (io.ReadCloser, error) {
 	return tarStream, nil
 }
 
-func (step *downloadStep) streamIn(destination string, reader io.Reader) error {
+func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
 	step.logger.Info("stream-in-starting")
+
+	// StreamIn will close the reader
 	err := step.container.StreamIn(destination, reader)
 	if err != nil {
 		step.logger.Error("stream-in-failed", err, lager.Data{
