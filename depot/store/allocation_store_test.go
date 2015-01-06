@@ -45,7 +45,7 @@ var _ = Describe("AllocationStore", func() {
 		BeforeEach(func() {
 			var err error
 
-			createdContainer, err = allocationStore.Create(executor.Container{Guid: "some-guid"})
+			createdContainer, err = allocationStore.Create(logger, executor.Container{Guid: "some-guid"})
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -96,7 +96,7 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("when the guid is already taken", func() {
 			It("returns an error", func() {
-				_, err := allocationStore.Create(createdContainer)
+				_, err := allocationStore.Create(logger, createdContainer)
 				Ω(err).Should(Equal(executor.ErrContainerGuidNotAvailable))
 			})
 		})
@@ -109,7 +109,7 @@ var _ = Describe("AllocationStore", func() {
 			BeforeEach(func() {
 				var err error
 
-				createdContainer, err = allocationStore.Create(executor.Container{
+				createdContainer, err = allocationStore.Create(logger, executor.Container{
 					Guid:  "the-guid",
 					State: executor.StateReserved,
 				})
@@ -159,7 +159,7 @@ var _ = Describe("AllocationStore", func() {
 			BeforeEach(func() {
 				var err error
 
-				createdContainer, err = allocationStore.Create(executor.Container{
+				createdContainer, err = allocationStore.Create(logger, executor.Container{
 					Guid:  "the-guid",
 					State: executor.StateReserved,
 				})
@@ -205,13 +205,13 @@ var _ = Describe("AllocationStore", func() {
 	Describe("List", func() {
 		Context("with no tags", func() {
 			It("returns all of the containers", func() {
-				container1, err := allocationStore.Create(executor.Container{
+				container1, err := allocationStore.Create(logger, executor.Container{
 					Guid:  "guid-1",
 					State: executor.StateReserved,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				container2, err := allocationStore.Create(executor.Container{
+				container2, err := allocationStore.Create(logger, executor.Container{
 					Guid:  "guid-2",
 					State: executor.StateReserved,
 				})
@@ -233,21 +233,21 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("with tags", func() {
 			It("returns only containers matching the given tags", func() {
-				container1, err := allocationStore.Create(executor.Container{
+				container1, err := allocationStore.Create(logger, executor.Container{
 					Guid:  "guid-1",
 					State: executor.StateReserved,
 					Tags:  executor.Tags{"a": "b"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				container2, err := allocationStore.Create(executor.Container{
+				container2, err := allocationStore.Create(logger, executor.Container{
 					Guid:  "guid-2",
 					State: executor.StateReserved,
 					Tags:  executor.Tags{"a": "b", "c": "d"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				container3, err := allocationStore.Create(executor.Container{
+				container3, err := allocationStore.Create(logger, executor.Container{
 					Guid:  "guid-3",
 					State: executor.StateReserved,
 					Tags:  executor.Tags{"c": "d"},
@@ -282,7 +282,7 @@ var _ = Describe("AllocationStore", func() {
 
 		Context("when the container exists", func() {
 			BeforeEach(func() {
-				_, err := allocationStore.Create(executor.Container{Guid: "the-guid"})
+				_, err := allocationStore.Create(logger, executor.Container{Guid: "the-guid"})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -344,18 +344,18 @@ func (expectation allocationStoreTransitionExpectation) driveFromState(allocatio
 	case "non-existent":
 
 	case "reserved":
-		_, err := allocationStore.Create(container)
+		_, err := allocationStore.Create(lagertest.NewTestLogger("test"), container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 	case "initializing":
-		_, err := allocationStore.Create(container)
+		_, err := allocationStore.Create(lagertest.NewTestLogger("test"), container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		err = allocationStore.StartInitializing(container.Guid)
 		Ω(err).ShouldNot(HaveOccurred())
 
 	case "completed":
-		_, err := allocationStore.Create(container)
+		_, err := allocationStore.Create(lagertest.NewTestLogger("test"), container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		err = allocationStore.StartInitializing(container.Guid)
@@ -372,7 +372,7 @@ func (expectation allocationStoreTransitionExpectation) driveFromState(allocatio
 func (expectation allocationStoreTransitionExpectation) transitionToState(allocationStore *store.AllocationStore, container executor.Container) error {
 	switch expectation.to {
 	case "reserve":
-		_, err := allocationStore.Create(container)
+		_, err := allocationStore.Create(lagertest.NewTestLogger("test"), container)
 		return err
 
 	case "initialize":

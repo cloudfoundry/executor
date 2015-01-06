@@ -115,13 +115,13 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 	return result, nil
 }
 
-func (store *GardenStore) Create(container executor.Container) (executor.Container, error) {
+func (store *GardenStore) Create(logger lager.Logger, container executor.Container) (executor.Container, error) {
 	if container.State != executor.StateInitializing {
 		return executor.Container{}, executor.ErrInvalidTransition
 	}
 	container.State = executor.StateCreated
 
-	container, err := store.exchanger.CreateInGarden(store.gardenClient, container)
+	container, err := store.exchanger.CreateInGarden(logger, store.gardenClient, container)
 	if err != nil {
 		return executor.Container{}, err
 	}

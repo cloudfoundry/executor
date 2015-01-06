@@ -32,7 +32,7 @@ type clientProvider struct {
 }
 
 type Store interface {
-	Create(executor.Container) (executor.Container, error)
+	Create(lager.Logger, executor.Container) (executor.Container, error)
 	Lookup(guid string) (executor.Container, error)
 	List(executor.Tags) ([]executor.Container, error)
 	Destroy(logger lager.Logger, guid string) error
@@ -100,7 +100,7 @@ func (c *client) AllocateContainer(executorContainer executor.Container) (execut
 		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
 	}
 
-	createdContainer, err := c.allocationStore.Create(executorContainer)
+	createdContainer, err := c.allocationStore.Create(logger, executorContainer)
 	if err != nil {
 		logger.Error("container-allocation-failed", err)
 		return executor.Container{}, err
@@ -144,7 +144,7 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		container, err = c.gardenStore.Create(container)
+		container, err = c.gardenStore.Create(logger, container)
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 

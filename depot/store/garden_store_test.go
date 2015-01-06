@@ -653,7 +653,7 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 
 		JustBeforeEach(func() {
-			createdContainer, createErr = gardenStore.Create(executorContainer)
+			createdContainer, createErr = gardenStore.Create(logger, executorContainer)
 		})
 
 		Context("when creating the container succeeds", func() {
@@ -1308,14 +1308,14 @@ var _ = Describe("GardenContainerStore", func() {
 
 			runner := gardenStore.TrackContainers(2*time.Second, logger)
 
-			_, err := gardenStore.Create(executor.Container{
+			_, err := gardenStore.Create(logger, executor.Container{
 				MemoryMB: 2,
 				Action:   action,
 				State:    executor.StateInitializing,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, err = gardenStore.Create(executor.Container{
+			_, err = gardenStore.Create(logger, executor.Container{
 				MemoryMB: 5,
 				State:    executor.StateInitializing,
 				Action:   action,
@@ -1456,7 +1456,7 @@ var _ = Describe("GardenContainerStore", func() {
 		Context("when there is no monitor action", func() {
 			BeforeEach(func() {
 				executorContainer.Monitor = nil
-				executorContainer, err = gardenStore.Create(executorContainer)
+				executorContainer, err = gardenStore.Create(logger, executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				err = gardenStore.Run(logger, executorContainer)
@@ -1503,7 +1503,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when there is a monitor action", func() {
 			JustBeforeEach(func() {
-				executorContainer, err = gardenStore.Create(executorContainer)
+				executorContainer, err = gardenStore.Create(logger, executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				err = gardenStore.Run(logger, executorContainer)
@@ -1588,7 +1588,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when marking the task as complete", func() {
 			BeforeEach(func() {
-				executorContainer, err = gardenStore.Create(executorContainer)
+				executorContainer, err = gardenStore.Create(logger, executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				err = gardenStore.Run(logger, executorContainer)
@@ -1691,7 +1691,7 @@ func (expectation gardenStoreTransitionExpectation) driveFromState(container *ex
 func (expectation gardenStoreTransitionExpectation) transitionToState(gardenStore *store.GardenStore, container executor.Container) error {
 	switch expectation.to {
 	case "create":
-		_, err := gardenStore.Create(container)
+		_, err := gardenStore.Create(lagertest.NewTestLogger("test"), container)
 		return err
 
 	case "run":

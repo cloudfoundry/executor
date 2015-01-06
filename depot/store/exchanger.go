@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/pivotal-golang/lager"
 )
 
 type GardenClient interface {
@@ -20,7 +21,7 @@ type GardenClient interface {
 
 type Exchanger interface {
 	Garden2Executor(garden.Container) (executor.Container, error)
-	CreateInGarden(GardenClient, executor.Container) (executor.Container, error)
+	CreateInGarden(lager.Logger, GardenClient, executor.Container) (executor.Container, error)
 }
 
 const (
@@ -210,7 +211,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 	return executorContainer, nil
 }
 
-func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
+func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     executorContainer.Guid,
 		RootFSPath: executorContainer.RootFSPath,
@@ -218,31 +219,37 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 
 	setupJson, err := models.MarshalAction(executorContainer.Setup)
 	if err != nil {
+		logger.Error("failed-marshal-setup", err)
 		return executor.Container{}, err
 	}
 
 	actionJson, err := models.MarshalAction(executorContainer.Action)
 	if err != nil {
+		logger.Error("failed-marshal-action", err)
 		return executor.Container{}, err
 	}
 
 	monitorJson, err := models.MarshalAction(executorContainer.Monitor)
 	if err != nil {
+		logger.Error("failed-marshal-monitor", err)
 		return executor.Container{}, err
 	}
 
 	envJson, err := json.Marshal(executorContainer.Env)
 	if err != nil {
+		logger.Error("failed-marshal-env", err)
 		return executor.Container{}, err
 	}
 
 	logJson, err := json.Marshal(executorContainer.Log)
 	if err != nil {
+		logger.Error("failed-marshal-log", err)
 		return executor.Container{}, err
 	}
 
 	resultJson, err := json.Marshal(executorContainer.RunResult)
 	if err != nil {
+		logger.Error("failed-marshal-run-result", err)
 		return executor.Container{}, err
 	}
 
@@ -273,6 +280,7 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 
 	gardenContainer, err := gardenClient.Create(containerSpec)
 	if err != nil {
+		logger.Error("failed-create-garden", err)
 		return executor.Container{}, err
 	}
 
@@ -282,7 +290,13 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		for i, ports := range executorContainer.Ports {
 			actualHostPort, actualContainerPort, err := gardenContainer.NetIn(ports.HostPort, ports.ContainerPort)
 			if err != nil {
-				gardenClient.Destroy(gardenContainer.Handle())
+				logger.Error("failed-setup-ports", err)
+
+				gardenErr := gardenClient.Destroy(gardenContainer.Handle())
+				if gardenErr != nil {
+					logger.Error("failed-destroy-garden-container", gardenErr)
+				}
+
 				return executor.Container{}, err
 			}
 
@@ -298,7 +312,13 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 			LimitInBytes: uint64(executorContainer.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
-			gardenClient.Destroy(gardenContainer.Handle())
+			logger.Error("failed-setup-memory-limits", err)
+
+			gardenErr := gardenClient.Destroy(gardenContainer.Handle())
+			if gardenErr != nil {
+				logger.Error("failed-destroy-garden-container", gardenErr)
+			}
+
 			return executor.Container{}, err
 		}
 	}
@@ -308,7 +328,13 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		InodeHard: exchanger.containerInodeLimit,
 	})
 	if err != nil {
-		gardenClient.Destroy(gardenContainer.Handle())
+		logger.Error("failed-setup-disk-limits", err)
+
+		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
+		if gardenErr != nil {
+			logger.Error("failed-destroy-garden-container", gardenErr)
+		}
+
 		return executor.Container{}, err
 	}
 
@@ -316,13 +342,25 @@ func (exchanger exchanger) CreateInGarden(gardenClient GardenClient, executorCon
 		LimitInShares: uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0),
 	})
 	if err != nil {
-		gardenClient.Destroy(gardenContainer.Handle())
+		logger.Error("failed-setup-cpu", err)
+
+		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
+		if gardenErr != nil {
+			logger.Error("failed-destroy-garden-container", gardenErr)
+		}
+
 		return executor.Container{}, err
 	}
 
 	info, err := gardenContainer.Info()
 	if err != nil {
-		gardenClient.Destroy(gardenContainer.Handle())
+		logger.Error("failed-garden-container-info", err)
+
+		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
+		if gardenErr != nil {
+			logger.Error("failed-destroy-garden-container", gardenErr)
+		}
+
 		return executor.Container{}, err
 	}
 

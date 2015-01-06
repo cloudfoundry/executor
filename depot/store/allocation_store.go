@@ -82,7 +82,7 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 	return true
 }
 
-func (store *AllocationStore) Create(container executor.Container) (executor.Container, error) {
+func (store *AllocationStore) Create(logger lager.Logger, container executor.Container) (executor.Container, error) {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
