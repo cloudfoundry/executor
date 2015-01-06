@@ -66,8 +66,8 @@ var _ = Describe("TryStep", func() {
 			err := step.Perform()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(logger.TestSink.Buffer).Should(gbytes.Say("failed"))
-			Ω(logger.TestSink.Buffer).Should(gbytes.Say("oh no!"))
+			Ω(logger).Should(gbytes.Say("failed"))
+			Ω(logger).Should(gbytes.Say("oh no!"))
 		})
 	})
 
