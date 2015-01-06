@@ -134,7 +134,7 @@ func (c *client) RunContainer(guid string) error {
 	err := c.allocationStore.StartInitializing(guid)
 	if err != nil {
 		logger.Error("failed-to-initialize-container", err)
-		return executor.ErrContainerNotFound
+		return err
 	}
 
 	go func() {
@@ -237,26 +237,17 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	if err := c.allocationStore.Destroy(logger, guid); err == nil {
-		logger.Info("deleted-allocation")
-		return nil
+	allocationStoreErr := c.allocationStore.Destroy(logger, guid)
+	if allocationStoreErr != nil {
+		logger.Debug("did-not-delete-allocation-container", lager.Data{"message": allocationStoreErr.Error()})
 	}
 
-	container, err := c.gardenStore.Lookup(guid)
-	if err != nil {
-		logger.Error("container-not-found", err)
+	if _, err := c.gardenStore.Lookup(guid); err != nil {
+		logger.Debug("garden-container-not-found", lager.Data{"message": err.Error()})
+		return allocationStoreErr
+	} else if err := c.gardenStore.Destroy(logger, guid); err != nil {
+		logger.Error("failed-to-delete-garden-container", err)
 		return err
-	}
-
-	if container.State != executor.StateCompleted {
-		logger.Error("container-not-completed", err)
-		return executor.ErrContainerNotCompleted
-	}
-
-	err = c.gardenStore.Destroy(logger, guid)
-	if err != nil {
-		logger.Error("failed-to-destroy", err)
-		return executor.ErrContainerNotFound
 	}
 
 	return nil

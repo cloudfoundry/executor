@@ -187,14 +187,30 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 		"container": container.Guid,
 	})
 
-	if container.State != executor.StateCreated {
-		return executor.ErrInvalidTransition
-	}
-
 	gardenContainer, err := store.gardenClient.Lookup(container.Guid)
 	if err != nil {
 		logger.Debug("container-deleted-just-before-running")
 		return err
+	}
+
+	if container.State != executor.StateCreated {
+		logger.Debug("container-invalid-state-transition", lager.Data{
+			"current-state":  container.State,
+			"required-state": executor.StateCreated,
+		})
+
+		transitionErr := executor.ErrInvalidTransition
+		result := executor.ContainerRunResult{
+			Failed:        true,
+			FailureReason: transitionErr.Error(),
+		}
+
+		err := store.transitionToComplete(gardenContainer, result)
+		if err != nil {
+			logger.Error("failed-transition-to-complete", err)
+		}
+
+		return transitionErr
 	}
 
 	logStreamer := log_streamer.New(
