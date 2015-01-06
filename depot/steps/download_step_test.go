@@ -144,7 +144,7 @@ var _ = Describe("DownloadAction", func() {
 						Ω(stepErr).ShouldNot(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-						Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (4)"))
+						Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (4B)"))
 					})
 				})
 			})
