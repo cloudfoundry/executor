@@ -97,6 +97,8 @@ func (store *AllocationStore) Create(logger lager.Logger, container executor.Con
 
 	store.containers[container.Guid] = container
 
+	store.emitter.EmitEvent(executor.NewContainerReservedEvent(container))
+
 	return container, nil
 }
 

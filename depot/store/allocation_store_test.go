@@ -58,6 +58,11 @@ var _ = Describe("AllocationStore", func() {
 			Ω(tracker.AllocateArgsForCall(0)).Should(Equal(createdContainer))
 		})
 
+		It("emits a container reserved event", func() {
+			Ω(emitter.EmitEventCallCount()).Should(Equal(1))
+			Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.NewContainerReservedEvent(createdContainer)))
+		})
+
 		Context("when the expiration time passes", func() {
 			It("reaps the reserved container", func() {
 				Ω(allocationStore.List(nil)).Should(ContainElement(createdContainer))
@@ -188,8 +193,8 @@ var _ = Describe("AllocationStore", func() {
 				container, err := allocationStore.Lookup("the-guid")
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(emitter.EmitEventCallCount()).Should(Equal(1))
-				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.NewContainerCompleteEvent(container)))
+				Ω(emitter.EmitEventCallCount()).Should(Equal(2))
+				Ω(emitter.EmitEventArgsForCall(1)).Should(Equal(executor.NewContainerCompleteEvent(container)))
 			})
 		})
 

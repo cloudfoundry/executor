@@ -190,6 +190,14 @@ func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 				if err == nil {
 					events <- event
 				}
+
+			case executor.EventTypeContainerReserved:
+				event := executor.ContainerReservedEvent{}
+
+				err := json.Unmarshal(sseEvent.Data, &event)
+				if err == nil {
+					events <- event
+				}
 			}
 		}
 	}()

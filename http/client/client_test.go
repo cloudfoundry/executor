@@ -480,6 +480,9 @@ var _ = Describe("Client", func() {
 						thirdEventPayload, err := json.Marshal(executor.NewContainerRunningEvent(container1))
 						Ω(err).ShouldNot(HaveOccurred())
 
+						fourthEventPayload, err := json.Marshal(executor.NewContainerReservedEvent(container1))
+						Ω(err).ShouldNot(HaveOccurred())
+
 						result := sse.Event{
 							ID:   "0",
 							Name: string(executor.EventTypeContainerComplete),
@@ -511,6 +514,15 @@ var _ = Describe("Client", func() {
 						err = result.Write(w)
 						Ω(err).ShouldNot(HaveOccurred())
 
+						result = sse.Event{
+							ID:   "3",
+							Name: string(executor.EventTypeContainerReserved),
+							Data: fourthEventPayload,
+						}
+
+						err = result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
 						flusher.Flush()
 					},
 				))
@@ -530,6 +542,9 @@ var _ = Describe("Client", func() {
 
 				Eventually(eventChannel).Should(Receive(&ev))
 				Ω(ev).Should(Equal(executor.NewContainerRunningEvent(container1)))
+
+				Eventually(eventChannel).Should(Receive(&ev))
+				Ω(ev).Should(Equal(executor.NewContainerReservedEvent(container1)))
 
 				Eventually(eventChannel).Should(BeClosed())
 			})

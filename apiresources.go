@@ -183,7 +183,13 @@ const (
 
 	EventTypeContainerComplete EventType = "container_complete"
 	EventTypeContainerRunning  EventType = "container_running"
+	EventTypeContainerReserved EventType = "container_reserved"
 )
+
+type LifecycleEvent interface {
+	Container() Container
+	lifecycleEvent()
+}
 
 type ContainerCompleteEvent struct {
 	RawContainer Container `json:"container"`
@@ -213,7 +219,16 @@ func (ContainerRunningEvent) EventType() EventType   { return EventTypeContainer
 func (e ContainerRunningEvent) Container() Container { return e.RawContainer }
 func (ContainerRunningEvent) lifecycleEvent()        {}
 
-type LifecycleEvent interface {
-	Container() Container
-	lifecycleEvent()
+type ContainerReservedEvent struct {
+	RawContainer Container `json:"container"`
 }
+
+func NewContainerReservedEvent(container Container) ContainerReservedEvent {
+	return ContainerReservedEvent{
+		RawContainer: container,
+	}
+}
+
+func (ContainerReservedEvent) EventType() EventType   { return EventTypeContainerReserved }
+func (e ContainerReservedEvent) Container() Container { return e.RawContainer }
+func (ContainerReservedEvent) lifecycleEvent()        {}
