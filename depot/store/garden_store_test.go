@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
+	gardenclient "github.com/cloudfoundry-incubator/garden/client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -1186,6 +1187,8 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("Destroy", func() {
+		const destroySessionPrefix = "test.destroying-container."
+		const freeProcessSessionPrefix = destroySessionPrefix + "freeing-step-process."
 		var destroyErr error
 
 		JustBeforeEach(func() {
@@ -1205,6 +1208,13 @@ var _ = Describe("GardenContainerStore", func() {
 			Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
 		})
 
+		It("logs its lifecycle", func() {
+			Ω(logger).Should(gbytes.Say(destroySessionPrefix + "started"))
+			Ω(logger).Should(gbytes.Say(freeProcessSessionPrefix + "started"))
+			Ω(logger).Should(gbytes.Say(freeProcessSessionPrefix + "finished"))
+			Ω(logger).Should(gbytes.Say(destroySessionPrefix + "succeeded"))
+		})
+
 		Context("when the Garden client fails to destroy the given container", func() {
 			var gardenDestroyErr = errors.New("destroy-err")
 
@@ -1218,6 +1228,10 @@ var _ = Describe("GardenContainerStore", func() {
 
 			It("does not release the resource consumption", func() {
 				Ω(tracker.DeinitializeCallCount()).Should(Equal(0))
+			})
+
+			It("logs the error", func() {
+				Ω(logger).Should(gbytes.Say(destroySessionPrefix + "failed-to-destroy-garden-container"))
 			})
 		})
 	})
@@ -1348,6 +1362,11 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("Run", func() {
+		const (
+			runSessionPrefix  = "test.running-container."
+			stepSessionPrefix = runSessionPrefix + "running-step-process."
+		)
+
 		var (
 			processes                    map[string]*gfakes.FakeProcess
 			containerProperties          map[string]string
@@ -1453,6 +1472,43 @@ var _ = Describe("GardenContainerStore", func() {
 			return result
 		}
 
+		Context("when the garden container lookup fails", func() {
+			JustBeforeEach(func() {
+				executorContainer, err = gardenStore.Create(logger, executorContainer)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				gardenStore.Run(logger, executorContainer)
+			})
+
+			Context("when the lookup fails because the container is not found", func() {
+				BeforeEach(func() {
+					fakeGardenClient.LookupReturns(gardenContainer, gardenclient.ErrContainerNotFound)
+				})
+
+				It("logs that the container was not found", func() {
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "garden-container-not-found"))
+				})
+
+				It("does not run the container", func() {
+					Consistently(gardenContainer.RunCallCount).Should(Equal(0))
+				})
+			})
+
+			Context("when the lookup fails for some other reason", func() {
+				BeforeEach(func() {
+					fakeGardenClient.LookupReturns(gardenContainer, errors.New("whoops"))
+				})
+
+				It("logs the error", func() {
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "failed-to-lookup-garden-container"))
+				})
+
+				It("does not run the container", func() {
+					Consistently(gardenContainer.RunCallCount).Should(Equal(0))
+				})
+			})
+		})
+
 		Context("when there is no monitor action", func() {
 			BeforeEach(func() {
 				executorContainer.Monitor = nil
@@ -1482,6 +1538,12 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 					Ω(containerResult().Failed).Should(BeFalse())
 				})
+
+				It("logs the successful exit and the transition to complete", func() {
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "step-finished-normally"))
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "transitioning-to-complete"))
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "succeeded-transitioning-to-complete"))
+				})
 			})
 
 			Context("when the running action exits unsuccesfully", func() {
@@ -1497,6 +1559,10 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 					Ω(containerResult().Failed).Should(BeTrue())
 					Ω(containerResult().FailureReason).Should(ContainSubstring("Exited with status 1"))
+				})
+
+				It("logs the unsuccessful exit", func() {
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "step-finished-with-error"))
 				})
 			})
 		})
@@ -1524,6 +1590,19 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(emitter.EmitEventArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerRunning))
 				})
 
+				It("logs the run session lifecycle", func() {
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "started"))
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "found-garden-container"))
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "stored-step-process"))
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "finished"))
+				})
+
+				It("logs that the step process started and transitioned to running", func() {
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "started"))
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "transitioning-to-running"))
+					Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "succeeded-transitioning-to-running"))
+				})
+
 				Context("when the monitor action subsequently fails", func() {
 					JustBeforeEach(func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
@@ -1540,16 +1619,38 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when Stop is called", func() {
-					BeforeEach(func() {
-						gardenContainer.StopStub = func(kill bool) error {
-							defer GinkgoRecover()
-							Ω(logger.LogMessages()).Should(ContainElement("test.monitor.monitor-step.cancelling"))
-							return nil
-						}
+					const stopSessionPrefix = "test.stopping-container."
+
+					JustBeforeEach(func() {
+						gardenStore.Stop(logger, executorContainer.Guid)
 					})
 
-					It("stops the monitor first", func() {
-						gardenStore.Stop(logger, executorContainer.Guid)
+					It("logs that the step process was signaled and then finished, and was freed", func() {
+						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "signaled"))
+						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "finished"))
+					})
+
+					It("logs that the step process was freed", func() {
+						freeSessionPrefix := stopSessionPrefix + "freeing-step-process."
+						Ω(logger).Should(gbytes.Say(stopSessionPrefix + "started"))
+						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "started"))
+						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "interrupting-process"))
+						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "finished"))
+						Ω(logger).Should(gbytes.Say(stopSessionPrefix + "finished"))
+					})
+
+					Context("when cancelling the steps", func() {
+						BeforeEach(func() {
+							gardenContainer.StopStub = func(kill bool) error {
+								defer GinkgoRecover()
+								Ω(logger).Should(gbytes.Say(runSessionPrefix + "monitor.monitor-step.cancelling"))
+								return nil
+							}
+						})
+
+						It("stops the monitor first", func() {
+							// monitor assertion contained in garden container Stop stub
+						})
 					})
 				})
 			})

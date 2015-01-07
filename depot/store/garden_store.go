@@ -12,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
+	gardenclient "github.com/cloudfoundry-incubator/garden/client"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -126,7 +127,11 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 	return container, nil
 }
 
-func (store *GardenStore) freeStepProcess(guid string) (ifrit.Process, bool) {
+func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifrit.Process, bool) {
+	logger = logger.Session("freeing-step-process")
+	logger.Info("started")
+	defer logger.Info("finished")
+
 	store.processesL.Lock()
 	process, found := store.runningProcesses[guid]
 	delete(store.runningProcesses, guid)
@@ -136,31 +141,40 @@ func (store *GardenStore) freeStepProcess(guid string) (ifrit.Process, bool) {
 		return nil, false
 	}
 
+	logger.Info("interrupting-process")
 	process.Signal(os.Interrupt)
 	return process, true
 }
 
 func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
-	process, found := store.freeStepProcess(guid)
+	logger = logger.Session("stopping-container", lager.Data{"container-guid": guid})
+	logger.Info("started")
+	defer logger.Info("finished")
+
+	process, found := store.freeStepProcess(logger, guid)
 	if !found {
 		return executor.ErrContainerNotFound
 	}
 
 	<-process.Wait()
-
 	return nil
 }
 
 func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
-	store.freeStepProcess(guid)
+	logger = logger.Session("destroying-container", lager.Data{"container-guid": guid})
+	logger.Info("started")
+
+	store.freeStepProcess(logger, guid)
 
 	err := store.gardenClient.Destroy(guid)
 	if err != nil {
+		logger.Error("failed-to-destroy-garden-container", err)
 		return err
 	}
 
 	store.tracker.Deinitialize(guid)
 
+	logger.Info("succeeded")
 	return nil
 }
 
@@ -178,15 +192,21 @@ func (store *GardenStore) Ping() error {
 }
 
 func (store *GardenStore) Run(logger lager.Logger, container executor.Container) error {
-	logger = logger.WithData(lager.Data{
+	logger = logger.Session("running-container", lager.Data{
 		"container": container.Guid,
 	})
+	logger.Info("started")
+	defer logger.Info("finished")
 
 	gardenContainer, err := store.gardenClient.Lookup(container.Guid)
-	if err != nil {
-		logger.Debug("container-deleted-just-before-running")
+	if err == gardenclient.ErrContainerNotFound {
+		logger.Error("garden-container-not-found", nil)
+		return err
+	} else if err != nil {
+		logger.Error("failed-to-lookup-garden-container", err)
 		return err
 	}
+	logger.Debug("found-garden-container")
 
 	if container.State != executor.StateCreated {
 		logger.Debug("container-invalid-state-transition", lager.Data{
@@ -285,6 +305,9 @@ func (store *GardenStore) runStepProcess(
 	guid string,
 ) {
 	process := ifrit.Invoke(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		logger := logger.Session("running-step-process")
+		logger.Info("started")
+		defer logger.Info("finished")
 		seqComplete := make(chan error)
 
 		close(ready)
@@ -300,6 +323,7 @@ func (store *GardenStore) runStepProcess(
 			select {
 			case <-signals:
 				signals = nil
+				logger.Debug("signaled")
 				if monitorStep != nil {
 					monitorStep.Cancel()
 				}
@@ -307,16 +331,21 @@ func (store *GardenStore) runStepProcess(
 
 			case <-hasStartedRunning:
 				hasStartedRunning = nil
+				logger.Debug("transitioning-to-running")
 				err := store.transitionToRunning(gardenContainer)
 				if err != nil {
-					logger.Error("failed-to-transition-to-running", err)
+					logger.Error("failed-transitioning-to-running", err)
 					result.Failed = true
 					result.FailureReason = err.Error()
 					break OUTER_LOOP
 				}
+				logger.Debug("succeeded-transitioning-to-running")
 
 			case err := <-seqComplete:
-				if err != nil {
+				if err == nil {
+					logger.Debug("step-finished-normally")
+				} else {
+					logger.Debug("step-finished-with-error", lager.Data{"error": err.Error()})
 					result.Failed = true
 					result.FailureReason = err.Error()
 				}
@@ -324,18 +353,23 @@ func (store *GardenStore) runStepProcess(
 			}
 		}
 
+		logger.Debug("transitioning-to-complete")
 		err := store.transitionToComplete(gardenContainer, result)
-
 		if err != nil {
-			logger.Error("failed-to-transition-to-complete", err)
+			logger.Error("failed-transitioning-to-complete", err)
+			return nil
 		}
+		logger.Debug("succeeded-transitioning-to-complete")
 
 		return nil
 	}))
 
 	store.processesL.Lock()
 	store.runningProcesses[guid] = process
+	numProcesses := len(store.runningProcesses)
 	store.processesL.Unlock()
+
+	logger.Debug("stored-step-process", lager.Data{"num-step-processes": numProcesses})
 }
 
 func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) error {
