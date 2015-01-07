@@ -1,4 +1,4 @@
-package allocate_container
+package allocate_containers
 
 import (
 	"encoding/json"
@@ -34,7 +34,7 @@ func (provider *Provider) WithLogger(logger lager.Logger) http.Handler {
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	allocLog := h.logger.Session("allocate-handler")
 
-	req := executor.Container{}
+	req := []executor.Container{}
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		allocLog.Error("failed-to-unmarshal-payload", err)
@@ -42,19 +42,21 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	container, err := h.depotClient.AllocateContainer(req)
+	errMessageMap, err := h.depotClient.AllocateContainers(req)
 	if err != nil {
-		allocLog.Error("failed-to-allocate-container", err)
+		allocLog.Error("failed-to-allocate-containers", err)
 		error_headers.Write(err, w)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	for guid, errMessage := range errMessageMap {
+		allocLog.Info("failed-to-allocate-container", lager.Data{"guid": guid, "message": errMessage})
+	}
 
-	err = json.NewEncoder(w).Encode(container)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(errMessageMap)
 	if err != nil {
 		allocLog.Error("failed-to-marshal-response", err)
-		return
 	}
 }

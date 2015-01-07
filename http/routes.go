@@ -6,7 +6,7 @@ const (
 	Ping                  = "Ping"
 	Events                = "Events"
 	GetContainer          = "GetContainer"
-	AllocateContainer     = "AllocateContainer"
+	AllocateContainers    = "AllocateContainers"
 	RunContainer          = "RunContainer"
 	StopContainer         = "StopContainer"
 	DeleteContainer       = "DeleteContainer"
@@ -20,7 +20,7 @@ var Routes = rata.Routes{
 	{Path: "/ping", Method: "GET", Name: Ping},
 	{Path: "/events", Method: "GET", Name: Events},
 	{Path: "/containers", Method: "GET", Name: ListContainers},
-	{Path: "/containers", Method: "POST", Name: AllocateContainer},
+	{Path: "/containers", Method: "POST", Name: AllocateContainers},
 	{Path: "/containers/:guid", Method: "GET", Name: GetContainer},
 	{Path: "/containers/:guid/run", Method: "POST", Name: RunContainer},
 	{Path: "/containers/:guid/files", Method: "GET", Name: GetFiles},

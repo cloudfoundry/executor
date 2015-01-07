@@ -1,6 +1,7 @@
 package depot
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
@@ -11,10 +12,6 @@ import (
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
 
-type AllocationsTracker interface {
-	Allocations() []executor.Container
-}
-
 type client struct {
 	*clientProvider
 	logger lager.Logger
@@ -24,48 +21,44 @@ type clientProvider struct {
 	totalCapacity   executor.ExecutorResources
 	gardenStore     GardenStore
 	allocationStore AllocationStore
-	tracker         AllocationsTracker
 	eventHub        event.Hub
-
-	resourcesL sync.Mutex
-}
-
-type Store interface {
-	Create(lager.Logger, executor.Container) (executor.Container, error)
-	Lookup(guid string) (executor.Container, error)
-	List(executor.Tags) ([]executor.Container, error)
-	Destroy(logger lager.Logger, guid string) error
+	lockMap         map[string]*sync.Mutex
+	resourcesLock   *sync.Mutex
 }
 
 type AllocationStore interface {
-	Store
-
-	StartInitializing(guid string) error
-	Complete(guid string, result executor.ContainerRunResult) error
+	List() []executor.Container
+	Lookup(guid string) (executor.Container, error)
+	Allocate(logger lager.Logger, container executor.Container) error
+	Initialize(logger lager.Logger, guid string) error
+	Fail(logger lager.Logger, guid string, reason string) error
+	Deallocate(logger lager.Logger, guid string) error
 }
 
 type GardenStore interface {
-	Store
-
+	Create(logger lager.Logger, container executor.Container) (executor.Container, error)
+	Lookup(guid string) (executor.Container, error)
+	List(tags executor.Tags) ([]executor.Container, error)
+	Destroy(logger lager.Logger, guid string) error
 	Ping() error
-	Run(lager.Logger, executor.Container) error
+	Run(logger lager.Logger, container executor.Container) error
 	Stop(logger lager.Logger, guid string) error
 	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
 }
 
 func NewClientProvider(
 	totalCapacity executor.ExecutorResources,
-	gardenStore GardenStore,
 	allocationStore AllocationStore,
-	tracker AllocationsTracker,
+	gardenStore GardenStore,
 	eventHub event.Hub,
 ) executor.ClientProvider {
 	return &clientProvider{
 		totalCapacity:   totalCapacity,
-		gardenStore:     gardenStore,
 		allocationStore: allocationStore,
-		tracker:         tracker,
+		gardenStore:     gardenStore,
 		eventHub:        eventHub,
+		lockMap:         map[string]*sync.Mutex{},
+		resourcesLock:   new(sync.Mutex),
 	}
 }
 
@@ -76,42 +69,77 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 	}
 }
 
-func (c *client) AllocateContainer(executorContainer executor.Container) (executor.Container, error) {
-	if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
-		return executor.Container{}, executor.ErrLimitsInvalid
-	} else if executorContainer.CPUWeight == 0 {
-		executorContainer.CPUWeight = 100
+func (c *client) lock(guid string) {
+	if _, found := c.lockMap[guid]; !found {
+		c.lockMap[guid] = new(sync.Mutex)
 	}
 
-	if executorContainer.Guid == "" {
-		return executor.Container{}, executor.ErrGuidNotSpecified
+	lock := c.lockMap[guid]
+	lock.Lock()
+}
+
+func (c *client) unlock(guid string) error {
+	if _, found := c.lockMap[guid]; !found {
+		return fmt.Errorf("no lock for guid '%s'", guid)
 	}
 
-	logger := c.logger.Session("allocate", lager.Data{
-		"guid": executorContainer.Guid,
-	})
+	lock := c.lockMap[guid]
+	lock.Unlock()
+	return nil
+}
 
-	c.resourcesL.Lock()
-	defer c.resourcesL.Unlock()
+func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
+	logger := c.logger.Session("allocate")
 
-	if !c.hasSpace(executorContainer) {
-		logger.Info("full")
-		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
+	errMessageMap := map[string]string{}
+	eligibleContainers := make([]executor.Container, 0, len(executorContainers))
+
+	for _, executorContainer := range executorContainers {
+		if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
+			errMessageMap[executorContainer.Guid] = executor.ErrLimitsInvalid.Error()
+			continue
+		} else if executorContainer.CPUWeight == 0 {
+			executorContainer.CPUWeight = 100
+		}
+
+		if executorContainer.Guid == "" {
+			errMessageMap[executorContainer.Guid] = executor.ErrGuidNotSpecified.Error()
+			continue
+		}
+
+		eligibleContainers = append(eligibleContainers, executorContainer)
 	}
 
-	createdContainer, err := c.allocationStore.Create(logger, executorContainer)
+	c.resourcesLock.Lock()
+	defer c.resourcesLock.Unlock()
+
+	allocatableContainers, unallocatableContainers, err := c.checkSpace(eligibleContainers)
 	if err != nil {
-		logger.Error("container-allocation-failed", err)
-		return executor.Container{}, err
+		return nil, executor.ErrFailureToCheckSpace
 	}
 
-	return createdContainer, nil
+	for _, allocatableContainer := range allocatableContainers {
+		if err = c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
+			errMessageMap[allocatableContainer.Guid] = err.Error()
+		} else {
+			c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
+		}
+	}
+
+	for _, unallocatableContainer := range unallocatableContainers {
+		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
+	}
+
+	return errMessageMap, nil
 }
 
 func (c *client) GetContainer(guid string) (executor.Container, error) {
 	logger := c.logger.Session("get", lager.Data{
 		"guid": guid,
 	})
+
+	c.lock(guid)
+	defer c.unlock(guid)
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
@@ -130,13 +158,16 @@ func (c *client) RunContainer(guid string) error {
 		"guid": guid,
 	})
 
-	err := c.allocationStore.StartInitializing(guid)
+	err := c.allocationStore.Initialize(logger, guid)
 	if err != nil {
 		logger.Error("failed-to-initialize-container", err)
 		return err
 	}
 
 	go func() {
+		c.lock(guid)
+		defer c.unlock(guid)
+
 		container, err := c.allocationStore.Lookup(guid)
 		if err != nil {
 			logger.Error("failed-to-find-container", err)
@@ -147,28 +178,26 @@ func (c *client) RunContainer(guid string) error {
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 
-			c.allocationStore.Complete(guid, executor.ContainerRunResult{
-				Failed:        true,
-				FailureReason: ContainerInitializationFailedMessage,
-			})
+			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
+			c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(container))
 
 			return
 		}
 
-		err = c.allocationStore.Destroy(logger, guid)
+		err = c.allocationStore.Deallocate(logger, guid)
 		if err == executor.ErrContainerNotFound {
 			logger.Debug("container-deleted-while-initilizing")
 
-			err := c.gardenStore.Destroy(logger, container.Guid)
+			err := c.gardenStore.Destroy(logger, guid)
 			if err != nil {
 				logger.Error("failed-to-destroy-newly-initialized-container", err)
+			} else {
+				logger.Info("destroyed-newly-initialized-container")
 			}
-
-			logger.Info("destroyed-newly-initialized-container")
 
 			return
 		} else if err != nil {
-			logger.Error("failed-to-remove-allocated-container-for-some-reason", err)
+			logger.Error("failed-to-remove-allocated-container-for-unknown-reason", err)
 			return
 		}
 
@@ -181,41 +210,50 @@ func (c *client) RunContainer(guid string) error {
 	return nil
 }
 
-func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
-	containersByHandle := make(map[string]executor.Container)
+func tagsMatch(needles, haystack executor.Tags) bool {
+	for k, v := range needles {
+		if haystack[k] != v {
+			return false
+		}
+	}
 
-	// order here is important; listing containers from garden takes time, and in
+	return true
+}
+
+func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
+	// Order here is important; listing containers from garden takes time, and in
 	// that time a container may transition from allocation store to garden
 	// store.
 	//
-	// in this case, if the garden store were fetched first, the container would
-	// not be listed anywhere. this ordering guarantees that it will at least
+	// In this case, if the garden store were fetched first, the container would
+	// not be listed anywhere. This ordering guarantees that it will at least
 	// show up allocated.
-
-	allocatedContainers, err := c.allocationStore.List(tags)
-	if err != nil {
-		return nil, err
+	allAllocatedContainers := c.allocationStore.List()
+	allocatedContainers := make([]executor.Container, 0, len(allAllocatedContainers))
+	for _, container := range allAllocatedContainers {
+		if tagsMatch(tags, container.Tags) {
+			allocatedContainers = append(allocatedContainers, container)
+		}
 	}
-
 	gardenContainers, err := c.gardenStore.List(tags)
 	if err != nil {
 		return nil, err
 	}
 
-	//the ordering here is important.  we want allocated containers to override
-	//garden containers as a member of latter is uninitialized until its
-	//counterpart in the former is gone and we don't want to publicize containers that
-	//are in a half-baked state
+	// Order here is important; we want allocated containers to override garden
+	// containers as a member of latter is uninitialized until its counterpart
+	// in the former is gone and we don't want to publicize containers that are
+	// in a half-baked state.
+	containersByGuid := map[string]executor.Container{}
 	for _, gardenContainer := range gardenContainers {
-		containersByHandle[gardenContainer.Guid] = gardenContainer
+		containersByGuid[gardenContainer.Guid] = gardenContainer
+	}
+	for _, allocatedContainer := range allocatedContainers {
+		containersByGuid[allocatedContainer.Guid] = allocatedContainer
 	}
 
-	for _, gardenContainer := range allocatedContainers {
-		containersByHandle[gardenContainer.Guid] = gardenContainer
-	}
-
-	containers := make([]executor.Container, 0, len(containersByHandle))
-	for _, container := range containersByHandle {
+	containers := make([]executor.Container, 0, len(containersByGuid))
+	for _, container := range containersByGuid {
 		containers = append(containers, container)
 	}
 
@@ -236,7 +274,10 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	allocationStoreErr := c.allocationStore.Destroy(logger, guid)
+	c.lock(guid)
+	defer c.unlock(guid)
+
+	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
 	if allocationStoreErr != nil {
 		logger.Debug("did-not-delete-allocation-container", lager.Data{"message": allocationStoreErr.Error()})
 	}
@@ -252,19 +293,38 @@ func (c *client) DeleteContainer(guid string) error {
 	return nil
 }
 
-func (c *client) RemainingResources() (executor.ExecutorResources, error) {
+func (c *client) remainingResources() (executor.ExecutorResources, error) {
 	remainingResources, err := c.TotalResources()
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
 
-	for _, allocation := range c.tracker.Allocations() {
+	allocatedContainers := c.allocationStore.List()
+	for _, allocation := range allocatedContainers {
 		remainingResources.Containers--
 		remainingResources.DiskMB -= allocation.DiskMB
 		remainingResources.MemoryMB -= allocation.MemoryMB
 	}
 
+	gardenContainers, err := c.gardenStore.List(nil)
+	if err != nil {
+		return executor.ExecutorResources{}, err
+	}
+
+	for _, gardenContainer := range gardenContainers {
+		remainingResources.Containers--
+		remainingResources.DiskMB -= gardenContainer.DiskMB
+		remainingResources.MemoryMB -= gardenContainer.MemoryMB
+	}
+
 	return remainingResources, nil
+}
+
+func (c *client) RemainingResources() (executor.ExecutorResources, error) {
+	c.resourcesLock.Lock()
+	defer c.resourcesLock.Unlock()
+
+	return c.remainingResources()
 }
 
 func (c *client) Ping() error {
@@ -289,8 +349,43 @@ func (c *client) SubscribeToEvents() (<-chan executor.Event, error) {
 	return c.eventHub.Subscribe(), nil
 }
 
+func (c *client) checkSpace(containers []executor.Container) ([]executor.Container, []executor.Container, error) {
+	remainingResources, err := c.remainingResources()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	allocatableContainers := make([]executor.Container, 0, len(containers))
+	unallocatableContainers := make([]executor.Container, 0, len(containers))
+
+	// Can be optimized to select containers such that maximum number of containers can be allocated
+	for _, container := range containers {
+		if remainingResources.MemoryMB < container.MemoryMB {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		if remainingResources.DiskMB < container.DiskMB {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		if remainingResources.Containers < 1 {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		remainingResources.MemoryMB -= container.MemoryMB
+		remainingResources.DiskMB -= container.DiskMB
+		remainingResources.Containers--
+		allocatableContainers = append(allocatableContainers, container)
+	}
+
+	return allocatableContainers, unallocatableContainers, nil
+}
+
 func (c *client) hasSpace(container executor.Container) bool {
-	remainingResources, err := c.RemainingResources()
+	remainingResources, err := c.remainingResources()
 	if err != nil {
 		panic("welp")
 	}

@@ -44,4 +44,5 @@ var (
 	ErrLimitsInvalid                  = registerError("LimitsInvalid", "container limits invalid", http.StatusBadRequest)
 	ErrGuidNotSpecified               = registerError("GuidNotSpecified", "container guid not specified", http.StatusBadRequest)
 	ErrInvalidTransition              = registerError("InvalidStateTransition", "container cannot transition to given state", http.StatusConflict)
+	ErrFailureToCheckSpace            = registerError("ErrFailureToCheckSpace", "failed to check available space", http.StatusInternalServerError)
 )

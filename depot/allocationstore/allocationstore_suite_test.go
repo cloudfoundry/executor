@@ -1,4 +1,4 @@
-package tallyman_test
+package allocationstore_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestTallyman(t *testing.T) {
+func TestAllocationstore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Tallyman Suite")
+	RunSpecs(t, "Allocationstore Suite")
 }

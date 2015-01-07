@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
-	"github.com/cloudfoundry-incubator/executor/http/server/allocate_container"
+	"github.com/cloudfoundry-incubator/executor/http/server/allocate_containers"
 	"github.com/cloudfoundry-incubator/executor/http/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/events"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
@@ -70,13 +70,13 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 
 func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
 	return map[string]HandlerProvider{
-		ehttp.Events:            events.New(s.DepotClientProvider),
-		ehttp.AllocateContainer: allocate_container.New(s.DepotClientProvider),
-		ehttp.GetContainer:      get_container.New(s.DepotClientProvider),
-		ehttp.ListContainers:    list_containers.New(s.DepotClientProvider),
-		ehttp.RunContainer:      run_actions.New(s.DepotClientProvider),
-		ehttp.StopContainer:     stop_container.New(s.DepotClientProvider),
-		ehttp.DeleteContainer:   delete_container.New(s.DepotClientProvider),
+		ehttp.Events:             events.New(s.DepotClientProvider),
+		ehttp.AllocateContainers: allocate_containers.New(s.DepotClientProvider),
+		ehttp.GetContainer:       get_container.New(s.DepotClientProvider),
+		ehttp.ListContainers:     list_containers.New(s.DepotClientProvider),
+		ehttp.RunContainer:       run_actions.New(s.DepotClientProvider),
+		ehttp.StopContainer:      stop_container.New(s.DepotClientProvider),
+		ehttp.DeleteContainer:    delete_container.New(s.DepotClientProvider),
 
 		ehttp.GetTotalResources:     total_resources.New(s.DepotClientProvider),
 		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClientProvider),
