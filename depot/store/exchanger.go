@@ -214,6 +214,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     executorContainer.Guid,
+		Privileged: executorContainer.Privileged,
 		RootFSPath: executorContainer.RootFSPath,
 	}
 

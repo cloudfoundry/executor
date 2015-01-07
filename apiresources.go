@@ -22,9 +22,10 @@ type Container struct {
 
 	State State `json:"state"`
 
-	MemoryMB  int  `json:"memory_mb"`
-	DiskMB    int  `json:"disk_mb"`
-	CPUWeight uint `json:"cpu_weight"`
+	MemoryMB   int  `json:"memory_mb"`
+	Privileged bool `json:"privileged"`
+	DiskMB     int  `json:"disk_mb"`
+	CPUWeight  uint `json:"cpu_weight"`
 
 	Tags Tags `json:"tags,omitempty"`
 

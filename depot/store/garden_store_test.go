@@ -706,6 +706,30 @@ var _ = Describe("GardenContainerStore", func() {
 					Ω(containerSpec.Properties[store.ContainerActionProperty]).To(MatchJSON(payload))
 				})
 
+				Context("when the executorContainer is Privileged", func() {
+					BeforeEach(func() {
+						executorContainer.Privileged = true
+					})
+
+					It("creates a privileged garden container spec", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Privileged).Should(BeTrue())
+					})
+				})
+
+				Context("when the executorContainer is not Privileged", func() {
+					BeforeEach(func() {
+						executorContainer.Privileged = false
+					})
+
+					It("creates a privileged garden container spec", func() {
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Privileged).Should(BeFalse())
+					})
+				})
+
 				Context("when the Executor container has container-wide env", func() {
 					BeforeEach(func() {
 						executorContainer.Env = []executor.EnvironmentVariable{
