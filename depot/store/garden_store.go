@@ -28,18 +28,10 @@ type GardenStore struct {
 	transformer  *transformer.Transformer
 	timeProvider timeprovider.TimeProvider
 
-	tracker InitializedTracker
-
 	eventEmitter EventEmitter
 
 	runningProcesses map[string]ifrit.Process
 	processesL       sync.Mutex
-}
-
-type InitializedTracker interface {
-	Initialize(executor.Container)
-	Deinitialize(string)
-	SyncInitialized([]executor.Container)
 }
 
 func NewGardenStore(
@@ -51,7 +43,6 @@ func NewGardenStore(
 	unhealthyMonitoringInterval time.Duration,
 	transformer *transformer.Transformer,
 	timeProvider timeprovider.TimeProvider,
-	tracker InitializedTracker,
 	eventEmitter EventEmitter,
 ) *GardenStore {
 	return &GardenStore{
@@ -64,8 +55,6 @@ func NewGardenStore(
 
 		transformer:  transformer,
 		timeProvider: timeProvider,
-
-		tracker: tracker,
 
 		eventEmitter: eventEmitter,
 
@@ -121,8 +110,6 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 		return executor.Container{}, err
 	}
 
-	store.tracker.Initialize(container)
-
 	return container, nil
 }
 
@@ -158,8 +145,6 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 	if err != nil {
 		return err
 	}
-
-	store.tracker.Deinitialize(guid)
 
 	return nil
 }
@@ -382,34 +367,4 @@ func (store *GardenStore) transitionToComplete(gardenContainer garden.Container,
 	})
 
 	return nil
-}
-
-func (store *GardenStore) TrackContainers(interval time.Duration, logger lager.Logger) ifrit.Runner {
-	logger = logger.Session("garden-store-track-containers")
-
-	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		ticker := store.timeProvider.NewTicker(interval)
-		defer ticker.Stop()
-
-		close(ready)
-
-	dance:
-		for {
-			select {
-			case <-signals:
-				break dance
-
-			case <-ticker.C():
-				containers, err := store.List(nil)
-				if err != nil {
-					logger.Error("failed-to-list-containers", err)
-					continue
-				}
-
-				store.tracker.SyncInitialized(containers)
-			}
-		}
-
-		return nil
-	})
 }

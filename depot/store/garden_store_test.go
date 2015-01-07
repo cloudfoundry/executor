@@ -17,7 +17,6 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
-	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,17 +25,16 @@ import (
 
 var _ = Describe("GardenContainerStore", func() {
 	var (
-		gardenStore      *store.GardenStore
 		fakeGardenClient *gfakes.FakeClient
-		tracker          *fakes.FakeInitializedTracker
+		ownerName               = "some-owner-name"
+		maxCPUShares     uint64 = 1024
+		inodeLimit       uint64 = 2000000
+		timeProvider     *faketimeprovider.FakeTimeProvider
 		emitter          *fakes.FakeEventEmitter
-		logger           *lagertest.TestLogger
 
-		ownerName           = "some-owner-name"
-		inodeLimit   uint64 = 2000000
-		maxCPUShares uint64 = 1024
+		logger *lagertest.TestLogger
 
-		timeProvider *faketimeprovider.FakeTimeProvider
+		gardenStore *store.GardenStore
 	)
 
 	action := &models.RunAction{
@@ -44,12 +42,12 @@ var _ = Describe("GardenContainerStore", func() {
 	}
 
 	BeforeEach(func() {
+		fakeGardenClient = new(gfakes.FakeClient)
 		timeProvider = faketimeprovider.New(time.Now())
-		tracker = new(fakes.FakeInitializedTracker)
 		emitter = new(fakes.FakeEventEmitter)
+
 		logger = lagertest.NewTestLogger("test")
 
-		fakeGardenClient = new(gfakes.FakeClient)
 		gardenStore = store.NewGardenStore(
 			fakeGardenClient,
 			ownerName,
@@ -59,7 +57,6 @@ var _ = Describe("GardenContainerStore", func() {
 			100*time.Millisecond,
 			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false),
 			timeProvider,
-			tracker,
 			emitter,
 		)
 	})
@@ -1283,67 +1280,6 @@ var _ = Describe("GardenContainerStore", func() {
 			It("returns a container-not-found error", func() {
 				Ω(gardenStore.Ping()).Should(Equal(disaster))
 			})
-		})
-	})
-
-	Describe("TrackContainers", func() {
-		It("keeps the consumed resources in sync with garden", func() {
-			fakeGardenClient.CreateReturns(&gfakes.FakeContainer{}, nil)
-
-			fakeGardenClient.ContainersReturns([]garden.Container{
-				&gfakes.FakeContainer{
-					HandleStub: func() string {
-						return "some-handle"
-					},
-
-					InfoStub: func() (garden.ContainerInfo, error) {
-						return garden.ContainerInfo{
-							Properties: garden.Properties{
-								"executor:memory-mb": "2",
-							},
-						}, nil
-					},
-				},
-			}, nil)
-
-			runner := gardenStore.TrackContainers(2*time.Second, logger)
-
-			_, err := gardenStore.Create(logger, executor.Container{
-				MemoryMB: 2,
-				Action:   action,
-				State:    executor.StateInitializing,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			_, err = gardenStore.Create(logger, executor.Container{
-				MemoryMB: 5,
-				State:    executor.StateInitializing,
-				Action:   action,
-			})
-			Ω(err).ShouldNot(HaveOccurred())
-
-			process := ifrit.Invoke(runner)
-
-			Ω(tracker.SyncInitializedCallCount()).Should(Equal(0))
-
-			timeProvider.Increment(2 * time.Second)
-
-			By("syncing the current set of containers")
-			Eventually(tracker.SyncInitializedCallCount).Should(Equal(1))
-			Ω(tracker.SyncInitializedArgsForCall(0)).Should(Equal([]executor.Container{
-				{Guid: "some-handle", MemoryMB: 2, Ports: []executor.PortMapping{}, Tags: executor.Tags{}},
-			}))
-
-			timeProvider.Increment(2 * time.Second)
-
-			By("syncing the current set of containers. again.")
-			Eventually(tracker.SyncInitializedCallCount).Should(Equal(2))
-			Ω(tracker.SyncInitializedArgsForCall(1)).Should(Equal([]executor.Container{
-				{Guid: "some-handle", MemoryMB: 2, Ports: []executor.PortMapping{}, Tags: executor.Tags{}},
-			}))
-
-			process.Signal(os.Interrupt)
-			Eventually(process.Wait()).Should(Receive())
 		})
 	})
 

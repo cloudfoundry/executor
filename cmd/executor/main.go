@@ -136,12 +136,6 @@ var exportNetworkEnvVars = flag.Bool(
 	"export network environment variables into container (e.g. INSTANCE_IP, INSTANCE_PORT)",
 )
 
-var gardenSyncInterval = flag.Duration(
-	"gardenSyncInterval",
-	30*time.Second,
-	"interval on which to poll Garden's containers to ensure usage is in sync",
-)
-
 const (
 	containerOwnerName     = "executor"
 	dropsondeDestination   = "localhost:3457"
@@ -189,28 +183,26 @@ func main() {
 		*exportNetworkEnvVars,
 	)
 
-	tallyman := tallyman.NewTallyman()
-
 	hub := event.NewHub()
+	timeProvider := timeprovider.NewTimeProvider()
+	tallyman := tallyman.NewTallyman(timeProvider)
 
-	gardenStore, allocationStore := initializeStores(
-		logger,
+	gardenStore := store.NewGardenStore(
 		gardenClient,
-		transformer,
+		containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
-		*registryPruningInterval,
 		*healthyMonitoringInterval,
 		*unhealthyMonitoringInterval,
-		tallyman,
+		transformer,
+		timeProvider,
 		hub,
 	)
 
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),
-		gardenStore,
-		allocationStore,
 		tallyman,
+		gardenStore,
 		hub,
 	)
 
@@ -227,8 +219,8 @@ func main() {
 			Interval:       metricsReportInterval,
 			Logger:         metricsLogger,
 		}},
-		{"garden-syncer", gardenStore.TrackContainers(*gardenSyncInterval, logger)},
 		{"hub-drainer", drainHub(hub)},
+		{"registry-pruner", tallyman.RegistryPruner(logger, *registryPruningInterval)},
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
@@ -305,41 +297,6 @@ func initializeDropsonde(logger lager.Logger) {
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
 	}
-}
-
-func initializeStores(
-	logger lager.Logger,
-	gardenClient garden.Client,
-	transformer *transformer.Transformer,
-	containerMaxCpuShares uint64,
-	containerInodeLimit uint64,
-	registryPruningInterval time.Duration,
-	healthyMonitoringInterval time.Duration,
-	unhealthyMonitoringInterval time.Duration,
-	tallyman *tallyman.Tallyman,
-	emitter store.EventEmitter,
-) (*store.GardenStore, *store.AllocationStore) {
-	gardenStore := store.NewGardenStore(
-		gardenClient,
-		containerOwnerName,
-		containerMaxCpuShares,
-		containerInodeLimit,
-		healthyMonitoringInterval,
-		unhealthyMonitoringInterval,
-		transformer,
-		timeprovider.NewTimeProvider(),
-		tallyman,
-		emitter,
-	)
-
-	allocationStore := store.NewAllocationStore(
-		timeprovider.NewTimeProvider(),
-		registryPruningInterval,
-		tallyman,
-		emitter,
-	)
-
-	return gardenStore, allocationStore
 }
 
 func initializeTransformer(
