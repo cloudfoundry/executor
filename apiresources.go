@@ -186,13 +186,34 @@ const (
 )
 
 type ContainerCompleteEvent struct {
-	Container Container `json:"container"`
+	RawContainer Container `json:"container"`
 }
 
-func (ContainerCompleteEvent) EventType() EventType { return EventTypeContainerComplete }
+func NewContainerCompleteEvent(container Container) ContainerCompleteEvent {
+	return ContainerCompleteEvent{
+		RawContainer: container,
+	}
+}
+
+func (ContainerCompleteEvent) EventType() EventType   { return EventTypeContainerComplete }
+func (e ContainerCompleteEvent) Container() Container { return e.RawContainer }
+func (ContainerCompleteEvent) lifecycleEvent()        {}
 
 type ContainerRunningEvent struct {
-	Container Container `json:"container"`
+	RawContainer Container `json:"container"`
 }
 
-func (ContainerRunningEvent) EventType() EventType { return EventTypeContainerRunning }
+func NewContainerRunningEvent(container Container) ContainerRunningEvent {
+	return ContainerRunningEvent{
+		RawContainer: container,
+	}
+}
+
+func (ContainerRunningEvent) EventType() EventType   { return EventTypeContainerRunning }
+func (e ContainerRunningEvent) Container() Container { return e.RawContainer }
+func (ContainerRunningEvent) lifecycleEvent()        {}
+
+type LifecycleEvent interface {
+	Container() Container
+	lifecycleEvent()
+}

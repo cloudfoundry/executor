@@ -125,9 +125,7 @@ func (store *AllocationStore) Complete(guid string, result executor.ContainerRun
 		container.State = executor.StateCompleted
 		container.RunResult = result
 
-		store.emitter.EmitEvent(executor.ContainerCompleteEvent{
-			Container: container,
-		})
+		store.emitter.EmitEvent(executor.NewContainerCompleteEvent(container))
 
 		store.containers[guid] = container
 	} else {

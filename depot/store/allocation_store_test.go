@@ -189,9 +189,7 @@ var _ = Describe("AllocationStore", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(emitter.EmitEventCallCount()).Should(Equal(1))
-				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.ContainerCompleteEvent{
-					Container: container,
-				}))
+				Ω(emitter.EmitEventArgsForCall(0)).Should(Equal(executor.NewContainerCompleteEvent(container)))
 			})
 		})
 

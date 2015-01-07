@@ -383,9 +383,7 @@ func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) 
 		return err
 	}
 
-	store.eventEmitter.EmitEvent(executor.ContainerRunningEvent{
-		Container: executorContainer,
-	})
+	store.eventEmitter.EmitEvent(executor.NewContainerRunningEvent(executorContainer))
 
 	return nil
 }
@@ -411,9 +409,7 @@ func (store *GardenStore) transitionToComplete(gardenContainer garden.Container,
 		return err
 	}
 
-	store.eventEmitter.EmitEvent(executor.ContainerCompleteEvent{
-		Container: executorContainer,
-	})
+	store.eventEmitter.EmitEvent(executor.NewContainerCompleteEvent(executorContainer))
 
 	return nil
 }
