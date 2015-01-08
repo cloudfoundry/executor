@@ -1,4 +1,4 @@
-package tallyman
+package allocationstore
 
 import (
 	"os"
@@ -11,61 +11,61 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
-type Tallyman struct {
+type AllocationStore struct {
 	allocated    map[string]executor.Container
 	timeProvider timeprovider.TimeProvider
 	lock         sync.RWMutex
 }
 
-func NewTallyman(timeProvider timeprovider.TimeProvider) *Tallyman {
-	return &Tallyman{
+func NewAllocationStore(timeProvider timeprovider.TimeProvider) *AllocationStore {
+	return &AllocationStore{
 		allocated:    map[string]executor.Container{},
 		timeProvider: timeProvider,
 	}
 }
 
-func (t *Tallyman) List() []executor.Container {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
+func (a *AllocationStore) List() []executor.Container {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
 
-	containers := make([]executor.Container, 0, len(t.allocated))
+	containers := make([]executor.Container, 0, len(a.allocated))
 
-	for _, container := range t.allocated {
+	for _, container := range a.allocated {
 		containers = append(containers, container)
 	}
 
 	return containers
 }
 
-func (t *Tallyman) Lookup(guid string) (executor.Container, error) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
+func (a *AllocationStore) Lookup(guid string) (executor.Container, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
 
-	return t.lookup(guid)
+	return a.lookup(guid)
 }
 
-func (t *Tallyman) Allocate(logger lager.Logger, container executor.Container) (executor.Container, error) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Container) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
-	if _, err := t.lookup(container.Guid); err == nil {
+	if _, err := a.lookup(container.Guid); err == nil {
 		logger.Error("failed-allocating-container", err)
-		return executor.Container{}, executor.ErrContainerGuidNotAvailable
+		return executor.ErrContainerGuidNotAvailable
 	}
 	logger.Debug("allocating-container", lager.Data{"container": container})
 
 	container.State = executor.StateReserved
-	container.AllocatedAt = t.timeProvider.Now().UnixNano()
-	t.allocated[container.Guid] = container
+	container.AllocatedAt = a.timeProvider.Now().UnixNano()
+	a.allocated[container.Guid] = container
 
-	return container, nil
+	return nil
 }
 
-func (t *Tallyman) Initialize(logger lager.Logger, guid string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
-	container, err := t.lookup(guid)
+	container, err := a.lookup(guid)
 	if err != nil {
 		logger.Error("failed-initializing-container", err)
 		return err
@@ -85,16 +85,16 @@ func (t *Tallyman) Initialize(logger lager.Logger, guid string) error {
 	}
 
 	container.State = executor.StateInitializing
-	t.allocated[guid] = container
+	a.allocated[guid] = container
 
 	return nil
 }
 
-func (t *Tallyman) Fail(logger lager.Logger, guid string, reason string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
-	container, err := t.lookup(guid)
+	container, err := a.lookup(guid)
 	if err != nil {
 		logger.Error("failed-completing-container", err)
 		return err
@@ -118,28 +118,28 @@ func (t *Tallyman) Fail(logger lager.Logger, guid string, reason string) error {
 		Failed:        true,
 		FailureReason: reason,
 	}
-	t.allocated[guid] = container
+	a.allocated[guid] = container
 
 	return nil
 }
 
-func (t *Tallyman) Deallocate(logger lager.Logger, guid string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 
-	_, err := t.lookup(guid)
+	_, err := a.lookup(guid)
 	if err != nil {
 		logger.Error("failed-deallocating-container", err)
 		return err
 	}
 	logger.Debug("deallocating-container", lager.Data{"guid": guid})
 	// Do we need to perform any state validations here?
-	delete(t.allocated, guid)
+	delete(a.allocated, guid)
 	return nil
 }
 
-func (t *Tallyman) lookup(guid string) (executor.Container, error) {
-	container, found := t.allocated[guid]
+func (a *AllocationStore) lookup(guid string) (executor.Container, error) {
+	container, found := a.allocated[guid]
 	if !found {
 		return executor.Container{}, executor.ErrContainerNotFound
 	}
@@ -147,11 +147,11 @@ func (t *Tallyman) lookup(guid string) (executor.Container, error) {
 	return container, nil
 }
 
-func (t *Tallyman) RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner {
+func (a *AllocationStore) RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner {
 	logger = logger.Session("allocation-store-pruner")
 
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		ticker := t.timeProvider.NewTicker(expirationTime / 2)
+		ticker := a.timeProvider.NewTicker(expirationTime / 2)
 		defer ticker.Stop()
 
 		close(ready)
@@ -166,15 +166,15 @@ func (t *Tallyman) RegistryPruner(logger lager.Logger, expirationTime time.Durat
 				logger.Debug("checking-for-expired-containers")
 				expiredAllocations := []string{}
 
-				t.lock.Lock()
+				a.lock.Lock()
 
-				for guid, container := range t.allocated {
+				for guid, container := range a.allocated {
 					if container.State != executor.StateReserved {
 						// only prune reserved containers
 						continue
 					}
 
-					lifespan := t.timeProvider.Now().Sub(time.Unix(0, container.AllocatedAt))
+					lifespan := a.timeProvider.Now().Sub(time.Unix(0, container.AllocatedAt))
 
 					if lifespan >= expirationTime {
 						logger.Info("reserved-container-expired", lager.Data{"guid": guid, "lifespan": lifespan})
@@ -190,10 +190,10 @@ func (t *Tallyman) RegistryPruner(logger lager.Logger, expirationTime time.Durat
 
 				for _, guid := range expiredAllocations {
 					logger.Info("deleting-expired-container", lager.Data{"guid": guid})
-					delete(t.allocated, guid)
+					delete(a.allocated, guid)
 				}
 
-				t.lock.Unlock()
+				a.lock.Unlock()
 			}
 		}
 
