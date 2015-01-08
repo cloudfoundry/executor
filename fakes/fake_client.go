@@ -15,13 +15,13 @@ type FakeClient struct {
 	pingReturns struct {
 		result1 error
 	}
-	AllocateContainerStub        func(request executor.Container) (executor.Container, error)
-	allocateContainerMutex       sync.RWMutex
-	allocateContainerArgsForCall []struct {
-		request executor.Container
+	AllocateContainersStub        func(requests []executor.Container) (map[string]string, error)
+	allocateContainersMutex       sync.RWMutex
+	allocateContainersArgsForCall []struct {
+		requests []executor.Container
 	}
-	allocateContainerReturns struct {
-		result1 executor.Container
+	allocateContainersReturns struct {
+		result1 map[string]string
 		result2 error
 	}
 	GetContainerStub        func(guid string) (executor.Container, error)
@@ -123,35 +123,35 @@ func (fake *FakeClient) PingReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeClient) AllocateContainer(request executor.Container) (executor.Container, error) {
-	fake.allocateContainerMutex.Lock()
-	fake.allocateContainerArgsForCall = append(fake.allocateContainerArgsForCall, struct {
-		request executor.Container
-	}{request})
-	fake.allocateContainerMutex.Unlock()
-	if fake.AllocateContainerStub != nil {
-		return fake.AllocateContainerStub(request)
+func (fake *FakeClient) AllocateContainers(requests []executor.Container) (map[string]string, error) {
+	fake.allocateContainersMutex.Lock()
+	fake.allocateContainersArgsForCall = append(fake.allocateContainersArgsForCall, struct {
+		requests []executor.Container
+	}{requests})
+	fake.allocateContainersMutex.Unlock()
+	if fake.AllocateContainersStub != nil {
+		return fake.AllocateContainersStub(requests)
 	} else {
-		return fake.allocateContainerReturns.result1, fake.allocateContainerReturns.result2
+		return fake.allocateContainersReturns.result1, fake.allocateContainersReturns.result2
 	}
 }
 
-func (fake *FakeClient) AllocateContainerCallCount() int {
-	fake.allocateContainerMutex.RLock()
-	defer fake.allocateContainerMutex.RUnlock()
-	return len(fake.allocateContainerArgsForCall)
+func (fake *FakeClient) AllocateContainersCallCount() int {
+	fake.allocateContainersMutex.RLock()
+	defer fake.allocateContainersMutex.RUnlock()
+	return len(fake.allocateContainersArgsForCall)
 }
 
-func (fake *FakeClient) AllocateContainerArgsForCall(i int) executor.Container {
-	fake.allocateContainerMutex.RLock()
-	defer fake.allocateContainerMutex.RUnlock()
-	return fake.allocateContainerArgsForCall[i].request
+func (fake *FakeClient) AllocateContainersArgsForCall(i int) []executor.Container {
+	fake.allocateContainersMutex.RLock()
+	defer fake.allocateContainersMutex.RUnlock()
+	return fake.allocateContainersArgsForCall[i].requests
 }
 
-func (fake *FakeClient) AllocateContainerReturns(result1 executor.Container, result2 error) {
-	fake.AllocateContainerStub = nil
-	fake.allocateContainerReturns = struct {
-		result1 executor.Container
+func (fake *FakeClient) AllocateContainersReturns(result1 map[string]string, result2 error) {
+	fake.AllocateContainersStub = nil
+	fake.allocateContainersReturns = struct {
+		result1 map[string]string
 		result2 error
 	}{result1, result2}
 }

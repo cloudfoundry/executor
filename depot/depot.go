@@ -22,7 +22,8 @@ type clientProvider struct {
 	gardenStore     GardenStore
 	allocationStore AllocationStore
 	eventHub        event.Hub
-	multiStoreLock  sync.Mutex
+	lockMap         map[string]*sync.Mutex
+	resourcesLock   *sync.Mutex
 }
 
 type AllocationStore interface {
@@ -56,6 +57,8 @@ func NewClientProvider(
 		allocationStore: allocationStore,
 		gardenStore:     gardenStore,
 		eventHub:        eventHub,
+		lockMap:         map[string]*sync.Mutex{},
+		resourcesLock:   new(sync.Mutex),
 	}
 }
 
@@ -66,36 +69,66 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 	}
 }
 
-func (c *client) AllocateContainer(executorContainer executor.Container) (executor.Container, error) {
-	if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
-		return executor.Container{}, executor.ErrLimitsInvalid
-	} else if executorContainer.CPUWeight == 0 {
-		executorContainer.CPUWeight = 100
+func (c *client) lock(guid string) {
+	if _, found := c.lockMap[guid]; !found {
+		c.lockMap[guid] = new(sync.Mutex)
 	}
 
-	if executorContainer.Guid == "" {
-		return executor.Container{}, executor.ErrGuidNotSpecified
+	lock := c.lockMap[guid]
+	lock.Lock()
+}
+
+func (c *client) unlock(guid string) error {
+	if _, found := c.lockMap[guid]; !found {
+		return fmt.Errorf("no lock for guid '%s'", guid)
 	}
 
-	logger := c.logger.Session("allocate", lager.Data{
-		"guid": executorContainer.Guid,
-	})
+	lock := c.lockMap[guid]
+	lock.Unlock()
+	return nil
+}
 
-	c.multiStoreLock.Lock()
-	defer c.multiStoreLock.Unlock()
+func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
+	logger := c.logger.Session("allocate")
 
-	if !c.hasSpace(executorContainer) {
-		logger.Info("full")
-		return executor.Container{}, executor.ErrInsufficientResourcesAvailable
+	errMessageMap := map[string]string{}
+	eligibleContainers := make([]executor.Container, 0, len(executorContainers))
+
+	for _, executorContainer := range executorContainers {
+		if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
+			errMessageMap[executorContainer.Guid] = executor.ErrLimitsInvalid.Error()
+			continue
+		} else if executorContainer.CPUWeight == 0 {
+			executorContainer.CPUWeight = 100
+		}
+
+		if executorContainer.Guid == "" {
+			errMessageMap[executorContainer.Guid] = executor.ErrGuidNotSpecified.Error()
+			continue
+		}
+
+		eligibleContainers = append(eligibleContainers, executorContainer)
 	}
 
-	createdContainer, err := c.allocationStore.Allocate(logger, executorContainer)
+	c.resourcesLock.Lock()
+	defer c.resourcesLock.Unlock()
+
+	allocatableContainers, unallocatableContainers, err := c.checkSpace(eligibleContainers)
 	if err != nil {
-		logger.Error("container-allocation-failed", err)
-		return executor.Container{}, err
+		return nil, executor.ErrFailureToCheckSpace
 	}
 
-	return createdContainer, nil
+	for _, allocatableContainer := range allocatableContainers {
+		if _, err := c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
+			errMessageMap[allocatableContainer.Guid] = err.Error()
+		}
+	}
+
+	for _, unallocatableContainer := range unallocatableContainers {
+		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
+	}
+
+	return errMessageMap, nil
 }
 
 func (c *client) GetContainer(guid string) (executor.Container, error) {
@@ -103,8 +136,8 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		"guid": guid,
 	})
 
-	c.multiStoreLock.Lock()
-	defer c.multiStoreLock.Unlock()
+	c.lock(guid)
+	defer c.unlock(guid)
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
@@ -130,8 +163,8 @@ func (c *client) RunContainer(guid string) error {
 	}
 
 	go func() {
-		c.multiStoreLock.Lock()
-		defer c.multiStoreLock.Unlock()
+		c.lock(guid)
+		defer c.unlock(guid)
 
 		container, err := c.allocationStore.Lookup(guid)
 		if err != nil {
@@ -185,9 +218,6 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 }
 
 func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
-	c.multiStoreLock.Lock()
-	defer c.multiStoreLock.Unlock()
-
 	// Order here is important; listing containers from garden takes time, and in
 	// that time a container may transition from allocation store to garden
 	// store.
@@ -241,8 +271,8 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	c.multiStoreLock.Lock()
-	defer c.multiStoreLock.Unlock()
+	c.lock(guid)
+	defer c.unlock(guid)
 
 	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
 	if allocationStoreErr != nil {
@@ -267,40 +297,29 @@ func (c *client) remainingResources() (executor.ExecutorResources, error) {
 	}
 
 	allocatedContainers := c.allocationStore.List()
-	fmt.Printf("number of allocated containers:%d\n", len(allocatedContainers))
 	for _, allocation := range allocatedContainers {
-		fmt.Printf("allocated container guid:%s\n", allocation.Guid)
-		fmt.Printf("allocated container disk MB:%d\n", allocation.DiskMB)
-		fmt.Printf("allocated container memory MB:%d\n", allocation.MemoryMB)
 		remainingResources.Containers--
 		remainingResources.DiskMB -= allocation.DiskMB
 		remainingResources.MemoryMB -= allocation.MemoryMB
-		fmt.Printf("remaining disk MB:%d\n", remainingResources.DiskMB)
-		fmt.Printf("remaining memory MB:%d\n", remainingResources.MemoryMB)
 	}
 
 	gardenContainers, err := c.gardenStore.List(nil)
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
-	fmt.Printf("number of garden containers:%d\n", len(gardenContainers))
 
 	for _, gardenContainer := range gardenContainers {
-		fmt.Printf("garden container disk MB:%d\n", gardenContainer.DiskMB)
-		fmt.Printf("garden container memory MB:%d\n", gardenContainer.MemoryMB)
 		remainingResources.Containers--
 		remainingResources.DiskMB -= gardenContainer.DiskMB
 		remainingResources.MemoryMB -= gardenContainer.MemoryMB
-		fmt.Printf("remaining disk MB:%d\n", remainingResources.DiskMB)
-		fmt.Printf("remaining memory MB:%d\n", remainingResources.MemoryMB)
 	}
 
 	return remainingResources, nil
 }
 
 func (c *client) RemainingResources() (executor.ExecutorResources, error) {
-	c.multiStoreLock.Lock()
-	defer c.multiStoreLock.Unlock()
+	c.resourcesLock.Lock()
+	defer c.resourcesLock.Unlock()
 
 	return c.remainingResources()
 }
@@ -325,6 +344,41 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 
 func (c *client) SubscribeToEvents() (<-chan executor.Event, error) {
 	return c.eventHub.Subscribe(), nil
+}
+
+func (c *client) checkSpace(containers []executor.Container) ([]executor.Container, []executor.Container, error) {
+	remainingResources, err := c.remainingResources()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	allocatableContainers := make([]executor.Container, 0, len(containers))
+	unallocatableContainers := make([]executor.Container, 0, len(containers))
+
+	// Can be optimized to select containers such that maximum number of containers can be allocated
+	for _, container := range containers {
+		if remainingResources.MemoryMB < container.MemoryMB {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		if remainingResources.DiskMB < container.DiskMB {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		if remainingResources.Containers < 1 {
+			unallocatableContainers = append(unallocatableContainers, container)
+			continue
+		}
+
+		remainingResources.MemoryMB -= container.MemoryMB
+		remainingResources.DiskMB -= container.DiskMB
+		remainingResources.Containers--
+		allocatableContainers = append(allocatableContainers, container)
+	}
+
+	return allocatableContainers, unallocatableContainers, nil
 }
 
 func (c *client) hasSpace(container executor.Container) bool {

@@ -27,26 +27,29 @@ type client struct {
 	httpClient *http.Client
 }
 
-func (c client) AllocateContainer(request executor.Container) (executor.Container, error) {
-	container := executor.Container{}
-
-	response, err := c.doRequest(ehttp.AllocateContainer, nil, request, nil)
+func (c client) AllocateContainers(request []executor.Container) (map[string]string, error) {
+	response, err := c.doRequest(ehttp.AllocateContainers, nil, request, nil)
 	if err != nil {
-		return container, err
+		return nil, err
 	}
 
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusServiceUnavailable {
-		return container, fmt.Errorf("Resources %v unavailable", request)
+		return nil, fmt.Errorf("Resources %v unavailable", request)
 	}
 
-	err = json.NewDecoder(response.Body).Decode(&container)
+	if response.StatusCode == http.StatusInternalServerError {
+		return nil, fmt.Errorf("Internal server error")
+	}
+
+	errMessageMap := map[string]string{}
+	err = json.NewDecoder(response.Body).Decode(&errMessageMap)
 	if err != nil {
-		return container, err
+		return nil, err
 	}
 
-	return container, nil
+	return errMessageMap, nil
 }
 
 func (c client) GetContainer(allocationGuid string) (executor.Container, error) {

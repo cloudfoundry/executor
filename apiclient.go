@@ -10,7 +10,7 @@ import (
 
 type Client interface {
 	Ping() error
-	AllocateContainer(request Container) (Container, error)
+	AllocateContainers(requests []Container) (map[string]string, error)
 	GetContainer(guid string) (Container, error)
 	RunContainer(guid string) error
 	StopContainer(guid string) error
