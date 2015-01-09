@@ -1,4 +1,4 @@
-package gardenstore_test
+package depot_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestStore(t *testing.T) {
+func TestAllocationstore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Container Store Suite")
+	RunSpecs(t, "Depot Suite")
 }

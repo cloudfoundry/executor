@@ -11,8 +11,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
+	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
-	"github.com/cloudfoundry-incubator/executor/depot/store"
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -23,7 +23,7 @@ import (
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
-	"github.com/cloudfoundry-incubator/executor/depot/tallyman"
+
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/http/server"
@@ -187,7 +187,7 @@ func main() {
 	timeProvider := timeprovider.NewTimeProvider()
 	tallyman := tallyman.NewTallyman(timeProvider)
 
-	gardenStore := store.NewGardenStore(
+	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
 		containerOwnerName,
 		*containerMaxCpuShares,

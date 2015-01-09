@@ -1,4 +1,4 @@
-package store
+package gardenstore
 
 import (
 	"encoding/json"
@@ -158,7 +158,7 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 		logger.Error("failed-to-destroy-garden-container", err)
 		return err
 	}
-
+	logger.Info("succeeded")
 	return nil
 }
 
