@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/store"
+	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 )
 
 type FakeEventEmitter struct {
@@ -39,4 +39,4 @@ func (fake *FakeEventEmitter) EmitEventArgsForCall(i int) executor.Event {
 	return fake.emitEventArgsForCall[i].arg1
 }
 
-var _ store.EventEmitter = new(FakeEventEmitter)
+var _ gardenstore.EventEmitter = new(FakeEventEmitter)

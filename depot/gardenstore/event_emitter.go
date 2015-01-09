@@ -1,4 +1,4 @@
-package store
+package gardenstore
 
 import "github.com/cloudfoundry-incubator/executor"
 

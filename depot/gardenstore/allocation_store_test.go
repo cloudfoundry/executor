@@ -1,4 +1,4 @@
-package store_test
+package gardenstore_test
 
 // import (
 // 	"time"

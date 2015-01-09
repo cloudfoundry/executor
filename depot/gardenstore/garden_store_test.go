@@ -1,4 +1,4 @@
-package store_test
+package gardenstore_test
 
 import (
 	"encoding/json"
@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/store"
-	"github.com/cloudfoundry-incubator/executor/depot/store/fakes"
+
+	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
+	"github.com/cloudfoundry-incubator/executor/depot/gardenstore/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	garden "github.com/cloudfoundry-incubator/garden/api"
 	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
@@ -34,7 +35,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		logger *lagertest.TestLogger
 
-		gardenStore *store.GardenStore
+		gardenStore *gardenstore.GardenStore
 	)
 
 	action := &models.RunAction{
@@ -48,7 +49,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		logger = lagertest.NewTestLogger("test")
 
-		gardenStore = store.NewGardenStore(
+		gardenStore = gardenstore.NewGardenStore(
 			fakeGardenClient,
 			ownerName,
 			maxCPUShares,
@@ -184,7 +185,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("returns an InvalidStateError", func() {
-						Ω(lookupErr).Should(Equal(store.InvalidStateError{"bogus-state"}))
+						Ω(lookupErr).Should(Equal(gardenstore.InvalidStateError{"bogus-state"}))
 					})
 				})
 			})
@@ -214,7 +215,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("returns a MalformedPropertyError", func() {
-						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+						Ω(lookupErr).Should(Equal(gardenstore.MalformedPropertyError{
 							Property: "executor:allocated-at",
 							Value:    "some-bogus-timestamp",
 						}))
@@ -247,7 +248,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("returns a MalformedPropertyError", func() {
-						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+						Ω(lookupErr).Should(Equal(gardenstore.MalformedPropertyError{
 							Property: "executor:memory-mb",
 							Value:    "some-bogus-integer",
 						}))
@@ -280,7 +281,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("returns a MalformedPropertyError", func() {
-						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+						Ω(lookupErr).Should(Equal(gardenstore.MalformedPropertyError{
 							Property: "executor:disk-mb",
 							Value:    "some-bogus-integer",
 						}))
@@ -313,7 +314,7 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("returns a MalformedPropertyError", func() {
-						Ω(lookupErr).Should(Equal(store.MalformedPropertyError{
+						Ω(lookupErr).Should(Equal(gardenstore.MalformedPropertyError{
 							Property: "executor:cpu-weight",
 							Value:    "some-bogus-integer",
 						}))
@@ -669,22 +670,17 @@ var _ = Describe("GardenContainerStore", func() {
 				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
 			})
 
-			It("records its resource consumption", func() {
-				Ω(tracker.InitializeCallCount()).Should(Equal(1))
-				Ω(tracker.InitializeArgsForCall(0)).Should(Equal(createdContainer))
-			})
-
 			Describe("the exchanged Garden container", func() {
 				It("creates it with the state as 'created'", func() {
 					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties[store.ContainerStateProperty]).Should(Equal(string(executor.StateCreated)))
+					Ω(containerSpec.Properties[gardenstore.ContainerStateProperty]).Should(Equal(string(executor.StateCreated)))
 				})
 
 				It("creates it with the owner property", func() {
 					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties[store.ContainerOwnerProperty]).Should(Equal(ownerName))
+					Ω(containerSpec.Properties[gardenstore.ContainerOwnerProperty]).Should(Equal(ownerName))
 				})
 
 				It("creates it with the guid as the handle", func() {
@@ -699,7 +695,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 					Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
-					Ω(containerSpec.Properties[store.ContainerActionProperty]).To(MatchJSON(payload))
+					Ω(containerSpec.Properties[gardenstore.ContainerActionProperty]).To(MatchJSON(payload))
 				})
 
 				Context("when the Executor container has container-wide env", func() {
@@ -1105,7 +1101,7 @@ var _ = Describe("GardenContainerStore", func() {
 				InfoStub: func() (garden.ContainerInfo, error) {
 					return garden.ContainerInfo{
 						Properties: garden.Properties{
-							store.ContainerStateProperty: string(executor.StateCreated),
+							gardenstore.ContainerStateProperty: string(executor.StateCreated),
 						},
 					}, nil
 				},
@@ -1119,7 +1115,7 @@ var _ = Describe("GardenContainerStore", func() {
 				InfoStub: func() (garden.ContainerInfo, error) {
 					return garden.ContainerInfo{
 						Properties: garden.Properties{
-							store.ContainerStateProperty: string(executor.StateCreated),
+							gardenstore.ContainerStateProperty: string(executor.StateCreated),
 						},
 					}, nil
 				},
@@ -1148,7 +1144,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
-				store.ContainerOwnerProperty: ownerName,
+				gardenstore.ContainerOwnerProperty: ownerName,
 			}))
 		})
 
@@ -1158,7 +1154,7 @@ var _ = Describe("GardenContainerStore", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
-					store.ContainerOwnerProperty: ownerName,
+					gardenstore.ContainerOwnerProperty: ownerName,
 					"tag:a": "b",
 					"tag:c": "d",
 				}))
@@ -1193,11 +1189,6 @@ var _ = Describe("GardenContainerStore", func() {
 			Ω(destroyErr).ShouldNot(HaveOccurred())
 		})
 
-		It("releases its resource consumption", func() {
-			Ω(tracker.DeinitializeCallCount()).Should(Equal(1))
-			Ω(tracker.DeinitializeArgsForCall(0)).Should(Equal("the-guid"))
-		})
-
 		It("destroys the container", func() {
 			Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("the-guid"))
 		})
@@ -1213,9 +1204,6 @@ var _ = Describe("GardenContainerStore", func() {
 				Ω(destroyErr).Should(Equal(gardenDestroyErr))
 			})
 
-			It("does not release the resource consumption", func() {
-				Ω(tracker.DeinitializeCallCount()).Should(Equal(0))
-			})
 		})
 	})
 
@@ -1331,7 +1319,7 @@ var _ = Describe("GardenContainerStore", func() {
 			}
 
 			containerProperties = make(map[string]string)
-			containerProperties[store.ContainerStateProperty] = string(executor.StateCreated)
+			containerProperties[gardenstore.ContainerStateProperty] = string(executor.StateCreated)
 
 			orderInWhichPropertiesAreSet = []string{}
 			gardenContainer = new(gfakes.FakeContainer)
@@ -1376,13 +1364,13 @@ var _ = Describe("GardenContainerStore", func() {
 		containerStateGetter := func() string {
 			mutex.Lock()
 			defer mutex.Unlock()
-			return containerProperties[store.ContainerStateProperty]
+			return containerProperties[gardenstore.ContainerStateProperty]
 		}
 
 		containerResult := func() executor.ContainerRunResult {
 			mutex.Lock()
 			defer mutex.Unlock()
-			resultJSON := containerProperties[store.ContainerResultProperty]
+			resultJSON := containerProperties[gardenstore.ContainerResultProperty]
 			result := executor.ContainerRunResult{}
 			err := json.Unmarshal([]byte(resultJSON), &result)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -1544,8 +1532,8 @@ var _ = Describe("GardenContainerStore", func() {
 				mutex.Lock()
 				defer mutex.Unlock()
 				n := len(orderInWhichPropertiesAreSet)
-				Ω(orderInWhichPropertiesAreSet[n-2]).Should(Equal(store.ContainerResultProperty))
-				Ω(orderInWhichPropertiesAreSet[n-1]).Should(Equal(store.ContainerStateProperty))
+				Ω(orderInWhichPropertiesAreSet[n-2]).Should(Equal(gardenstore.ContainerResultProperty))
+				Ω(orderInWhichPropertiesAreSet[n-1]).Should(Equal(gardenstore.ContainerStateProperty))
 			})
 		})
 	})
@@ -1624,7 +1612,7 @@ func (expectation gardenStoreTransitionExpectation) driveFromState(container *ex
 	}
 }
 
-func (expectation gardenStoreTransitionExpectation) transitionToState(gardenStore *store.GardenStore, container executor.Container) error {
+func (expectation gardenStoreTransitionExpectation) transitionToState(gardenStore *gardenstore.GardenStore, container executor.Container) error {
 	switch expectation.to {
 	case "create":
 		_, err := gardenStore.Create(lagertest.NewTestLogger("test"), container)

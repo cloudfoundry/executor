@@ -1,4 +1,4 @@
-package store
+package gardenstore
 
 import (
 	"encoding/json"

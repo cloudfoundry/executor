@@ -115,6 +115,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 
 	allocatableContainers, unallocatableContainers, err := c.checkSpace(eligibleContainers)
 	if err != nil {
+		// TODO logger here
 		return nil, executor.ErrFailureToCheckSpace
 	}
 
@@ -122,7 +123,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 		if err = c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
 			errMessageMap[allocatableContainer.Guid] = err.Error()
 		} else {
-			c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
+			//c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
 		}
 	}
 
@@ -179,7 +180,7 @@ func (c *client) RunContainer(guid string) error {
 			logger.Error("failed-to-create-container", err)
 
 			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
-			c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(container))
+			//c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(container))
 
 			return
 		}
@@ -382,25 +383,4 @@ func (c *client) checkSpace(containers []executor.Container) ([]executor.Contain
 	}
 
 	return allocatableContainers, unallocatableContainers, nil
-}
-
-func (c *client) hasSpace(container executor.Container) bool {
-	remainingResources, err := c.remainingResources()
-	if err != nil {
-		panic("welp")
-	}
-
-	if remainingResources.MemoryMB < container.MemoryMB {
-		return false
-	}
-
-	if remainingResources.DiskMB < container.DiskMB {
-		return false
-	}
-
-	if remainingResources.Containers < 1 {
-		return false
-	}
-
-	return true
 }
