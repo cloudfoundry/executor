@@ -109,7 +109,7 @@ var maxCacheSizeInBytes = flag.Uint64(
 var allowPrivileged = flag.Bool(
 	"allowPrivileged",
 	false,
-	"allow creation of privileged containers",
+	"allow execution of privileged run actions",
 )
 
 var skipCertVerify = flag.Bool(
