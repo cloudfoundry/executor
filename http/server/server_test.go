@@ -170,61 +170,54 @@ var _ = Describe("Api", func() {
 		})
 	})
 
-	Describe("POST /containers/:guid", func() {
+	Describe("POST /containers", func() {
 		var reserveRequestBody io.Reader
 		var reserveResponse *http.Response
 
 		BeforeEach(func() {
-			reserveRequestBody = MarshalledPayload(executor.Container{
-				Action:    action,
-				MemoryMB:  64,
-				DiskMB:    512,
-				CPUWeight: 50,
-				Ports: []executor.PortMapping{
-					{ContainerPort: 8080, HostPort: 0},
-					{ContainerPort: 8081, HostPort: 1234},
-				},
-			})
+			reserveRequestBody = MarshalledPayload([]executor.Container{
+				{
+					Action:    action,
+					MemoryMB:  64,
+					DiskMB:    512,
+					CPUWeight: 50,
+					Ports: []executor.PortMapping{
+						{ContainerPort: 8080, HostPort: 0},
+						{ContainerPort: 8081, HostPort: 1234},
+					},
+				}})
 
 			reserveResponse = nil
 		})
 
 		JustBeforeEach(func() {
 			reserveResponse = DoRequest(generator.CreateRequest(
-				ehttp.AllocateContainer,
+				ehttp.AllocateContainers,
 				rata.Params{"guid": containerGuid},
 				reserveRequestBody,
 			))
+
 		})
 
 		Context("when there are containers available", func() {
-			var reservedContainer executor.Container
-			var expectedContainer executor.Container
-
-			BeforeEach(func() {
-				expectedContainer = executor.Container{
-					Guid:        containerGuid,
-					Action:      action,
-					MemoryMB:    64,
-					DiskMB:      512,
-					State:       "reserved",
-					AllocatedAt: time.Now().UnixNano(),
-				}
-
-				depotClient.AllocateContainerReturns(expectedContainer, nil)
-			})
+			var errMessageMap map[string]string
 
 			JustBeforeEach(func() {
-				err := json.NewDecoder(reserveResponse.Body).Decode(&reservedContainer)
+				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("returns 201", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusCreated))
+			BeforeEach(func() {
+				depotClient.AllocateContainersReturns(map[string]string{}, nil)
+				errMessageMap = map[string]string{}
 			})
 
-			It("returns a container", func() {
-				Ω(reservedContainer).Should(Equal(expectedContainer))
+			It("returns 200", func() {
+				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("returns empty error map", func() {
+				Ω(errMessageMap).Should(BeEmpty())
 			})
 
 			It("logs the request", func() {
@@ -236,36 +229,78 @@ var _ = Describe("Api", func() {
 		})
 
 		Context("when the container cannot be reserved because the guid is already taken", func() {
+			var errMessageMap map[string]string
+
+			JustBeforeEach(func() {
+				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
 			BeforeEach(func() {
-				depotClient.AllocateContainerReturns(executor.Container{}, executor.ErrContainerGuidNotAvailable)
+				depotClient.AllocateContainersReturns(map[string]string{
+					containerGuid: executor.ErrContainerGuidNotAvailable.Error(),
+				}, nil)
 			})
 
-			It("returns 400", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusBadRequest))
+			It("returns 200", func() {
+				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("returns error map with appropriate error message", func() {
+				Ω(errMessageMap[containerGuid]).Should(Equal(executor.ErrContainerGuidNotAvailable.Error()))
 			})
 
 			It("logs the request", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
 					"test.request.serving",
-					"test.request.allocate-handler.failed-to-allocate-container",
+					"test.request.allocate-handler.failed-to-allocate-containers",
 					"test.request.done",
 				}))
 			})
 		})
 
 		Context("when the container cannot be reserved because there is no room", func() {
+			var errMessageMap map[string]string
+
+			JustBeforeEach(func() {
+				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
 			BeforeEach(func() {
-				depotClient.AllocateContainerReturns(executor.Container{}, executor.ErrInsufficientResourcesAvailable)
+				depotClient.AllocateContainersReturns(map[string]string{
+					containerGuid: executor.ErrInsufficientResourcesAvailable.Error(),
+				}, nil)
 			})
 
-			It("returns 503", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusServiceUnavailable))
+			It("returns 200", func() {
+				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("returns error map with appropriate error message", func() {
+				Ω(errMessageMap[containerGuid]).Should(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 			})
 
 			It("logs the request", func() {
 				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
 					"test.request.serving",
-					"test.request.allocate-handler.failed-to-allocate-container",
+					"test.request.allocate-handler.failed-to-allocate-containers",
+					"test.request.done",
+				}))
+			})
+		})
+
+		Context("when the container cannot be reserved because depot client returns an error", func() {
+			BeforeEach(func() {
+				depotClient.AllocateContainersReturns(map[string]string{}, executor.ErrFailureToCheckSpace)
+			})
+
+			It("returns 500", func() {
+				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.allocate-handler.failed-to-allocate-containers",
 					"test.request.done",
 				}))
 			})

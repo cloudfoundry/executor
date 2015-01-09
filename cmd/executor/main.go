@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
@@ -185,7 +186,6 @@ func main() {
 
 	hub := event.NewHub()
 	timeProvider := timeprovider.NewTimeProvider()
-	tallyman := tallyman.NewTallyman(timeProvider)
 
 	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
@@ -198,10 +198,11 @@ func main() {
 		timeProvider,
 		hub,
 	)
+	allocationStore := allocationstore.NewAllocationStore(timeProvider)
 
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),
-		tallyman,
+		allocationStore,
 		gardenStore,
 		hub,
 	)
@@ -220,7 +221,7 @@ func main() {
 			Logger:         metricsLogger,
 		}},
 		{"hub-drainer", drainHub(hub)},
-		{"registry-pruner", tallyman.RegistryPruner(logger, *registryPruningInterval)},
+		{"registry-pruner", allocationStore.RegistryPruner(logger, *registryPruningInterval)},
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {

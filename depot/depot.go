@@ -96,6 +96,10 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 
 	for _, executorContainer := range executorContainers {
 		if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
+			logger.Debug("invalid-cpu-weight", lager.Data{
+				"guid":      executorContainer.Guid,
+				"cpuweight": executorContainer.CPUWeight,
+			})
 			errMessageMap[executorContainer.Guid] = executor.ErrLimitsInvalid.Error()
 			continue
 		} else if executorContainer.CPUWeight == 0 {
@@ -103,6 +107,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 		}
 
 		if executorContainer.Guid == "" {
+			logger.Debug("empty-guid")
 			errMessageMap[executorContainer.Guid] = executor.ErrGuidNotSpecified.Error()
 			continue
 		}
@@ -115,12 +120,13 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 
 	allocatableContainers, unallocatableContainers, err := c.checkSpace(eligibleContainers)
 	if err != nil {
-		// TODO logger here
+		logger.Error("failed-to-allocate-containers", err)
 		return nil, executor.ErrFailureToCheckSpace
 	}
 
 	for _, allocatableContainer := range allocatableContainers {
 		if err = c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
+			logger.Debug("failed-to-allocate-container", err, lager.Data{"guid": allocatableContainer.Guid})
 			errMessageMap[allocatableContainer.Guid] = err.Error()
 		} else {
 			//c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
@@ -128,6 +134,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 	}
 
 	for _, unallocatableContainer := range unallocatableContainers {
+		logger.Debug("failed-to-allocate-container", executor.ErrInsufficientResourcesAvailable, lager.Data{"guid": unallocatableContainer.Guid})
 		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
 	}
 
