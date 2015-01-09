@@ -1,7 +1,6 @@
 package depot
 
 import (
-	"fmt"
 	"io"
 	"sync"
 
@@ -23,6 +22,7 @@ type clientProvider struct {
 	allocationStore AllocationStore
 	eventHub        event.Hub
 	lockMap         map[string]*sync.Mutex
+	lockForLockMap  *sync.Mutex
 	resourcesLock   *sync.Mutex
 }
 
@@ -58,6 +58,7 @@ func NewClientProvider(
 		gardenStore:     gardenStore,
 		eventHub:        eventHub,
 		lockMap:         map[string]*sync.Mutex{},
+		lockForLockMap:  new(sync.Mutex),
 		resourcesLock:   new(sync.Mutex),
 	}
 }
@@ -69,23 +70,26 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 	}
 }
 
-func (c *client) lock(guid string) {
-	if _, found := c.lockMap[guid]; !found {
-		c.lockMap[guid] = new(sync.Mutex)
+func (c *client) getLock(guid string) *sync.Mutex {
+	var lock *sync.Mutex
+	var found bool
+
+	if lock, found = c.lockMap[guid]; !found {
+		c.lockForLockMap.Lock()
+		if lock, found = c.lockMap[guid]; !found {
+			lock = new(sync.Mutex)
+			c.lockMap[guid] = lock
+		}
+		c.lockForLockMap.Unlock()
 	}
 
-	lock := c.lockMap[guid]
-	lock.Lock()
+	return lock
 }
 
-func (c *client) unlock(guid string) error {
-	if _, found := c.lockMap[guid]; !found {
-		return fmt.Errorf("no lock for guid '%s'", guid)
-	}
-
-	lock := c.lockMap[guid]
-	lock.Unlock()
-	return nil
+func (c *client) removeLockFromMap(guid string) {
+	c.lockForLockMap.Lock()
+	defer c.lockForLockMap.Unlock()
+	delete(c.lockMap, guid)
 }
 
 func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
@@ -126,15 +130,28 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 
 	for _, allocatableContainer := range allocatableContainers {
 		if err = c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
-			logger.Debug("failed-to-allocate-container", err, lager.Data{"guid": allocatableContainer.Guid})
+			logger.Debug(
+				"failed-to-allocate-container",
+				lager.Data{
+					"guid":         allocatableContainer.Guid,
+					"errormessage": err.Error(),
+				},
+			)
 			errMessageMap[allocatableContainer.Guid] = err.Error()
 		} else {
+			// TODO
 			//c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
 		}
 	}
 
 	for _, unallocatableContainer := range unallocatableContainers {
-		logger.Debug("failed-to-allocate-container", executor.ErrInsufficientResourcesAvailable, lager.Data{"guid": unallocatableContainer.Guid})
+		logger.Debug(
+			"failed-to-allocate-container",
+			lager.Data{
+				"guid":         unallocatableContainer.Guid,
+				"errormessage": executor.ErrInsufficientResourcesAvailable.Error(),
+			},
+		)
 		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
 	}
 
@@ -146,8 +163,9 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		"guid": guid,
 	})
 
-	c.lock(guid)
-	defer c.unlock(guid)
+	lock := c.getLock(guid)
+	lock.Lock()
+	defer lock.Unlock()
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
@@ -173,8 +191,9 @@ func (c *client) RunContainer(guid string) error {
 	}
 
 	go func() {
-		c.lock(guid)
-		defer c.unlock(guid)
+		lock := c.getLock(guid)
+		lock.Lock()
+		defer lock.Unlock()
 
 		container, err := c.allocationStore.Lookup(guid)
 		if err != nil {
@@ -282,8 +301,9 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	c.lock(guid)
-	defer c.unlock(guid)
+	lock := c.getLock(guid)
+	lock.Lock()
+	defer lock.Unlock()
 
 	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
 	if allocationStoreErr != nil {
@@ -292,12 +312,14 @@ func (c *client) DeleteContainer(guid string) error {
 
 	if _, err := c.gardenStore.Lookup(guid); err != nil {
 		logger.Debug("garden-container-not-found", lager.Data{"message": err.Error()})
+		c.removeLockFromMap(guid)
 		return allocationStoreErr
 	} else if err := c.gardenStore.Destroy(logger, guid); err != nil {
 		logger.Error("failed-to-delete-garden-container", err)
 		return err
 	}
 
+	c.removeLockFromMap(guid)
 	return nil
 }
 

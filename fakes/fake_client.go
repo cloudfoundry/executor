@@ -12,7 +12,7 @@ type FakeClient struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns struct {
+	pingReturns     struct {
 		result1 error
 	}
 	AllocateContainersStub        func(requests []executor.Container) (map[string]string, error)
@@ -69,14 +69,14 @@ type FakeClient struct {
 	RemainingResourcesStub        func() (executor.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns struct {
+	remainingResourcesReturns     struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (executor.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns struct {
+	totalResourcesReturns     struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
@@ -93,7 +93,7 @@ type FakeClient struct {
 	SubscribeToEventsStub        func() (<-chan executor.Event, error)
 	subscribeToEventsMutex       sync.RWMutex
 	subscribeToEventsArgsForCall []struct{}
-	subscribeToEventsReturns struct {
+	subscribeToEventsReturns     struct {
 		result1 <-chan executor.Event
 		result2 error
 	}
