@@ -50,7 +50,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for guid, errMessage := range errMessageMap {
-		allocLog.Info("failed-to-allocate-container", lager.Data{"guid": guid, "message": errMessage})
+		allocLog.Info("failed-to-allocate-containers", lager.Data{"guid": guid, "message": errMessage})
 	}
 
 	w.WriteHeader(http.StatusOK)

@@ -31,31 +31,28 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Allocate", func() {
-		var validRequest executor.Container
-		var validResponse executor.Container
+		var validRequest []executor.Container
+		var validResponse map[string]string
 
 		BeforeEach(func() {
 			zero := 0
 
-			validRequest = executor.Container{
-				Guid:      containerGuid,
-				Action:    action,
-				MemoryMB:  64,
-				DiskMB:    1024,
-				CPUWeight: 5,
-				Log: executor.LogConfig{
-					Guid:       "some-guid",
-					SourceName: "XYZ",
-					Index:      &zero,
+			validRequest = []executor.Container{
+				{
+					Guid:      containerGuid,
+					Action:    action,
+					MemoryMB:  64,
+					DiskMB:    1024,
+					CPUWeight: 5,
+					Log: executor.LogConfig{
+						Guid:       "some-guid",
+						SourceName: "XYZ",
+						Index:      &zero,
+					},
 				},
 			}
 
-			validResponse = executor.Container{
-				Guid:     "guid-123",
-				Action:   action,
-				MemoryMB: 64,
-				DiskMB:   1024,
-			}
+			validResponse = map[string]string{}
 		})
 
 		Context("when the call succeeds", func() {
@@ -68,7 +65,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns a container", func() {
-				response, err := client.AllocateContainer(validRequest)
+				response, err := client.AllocateContainers(validRequest)
 
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(response).Should(Equal(validResponse))
@@ -84,7 +81,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(validRequest)
+				_, err := client.AllocateContainers(validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
@@ -98,7 +95,7 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := client.AllocateContainer(validRequest)
+				_, err := client.AllocateContainers(validRequest)
 				Ω(err).Should(HaveOccurred())
 			})
 		})
