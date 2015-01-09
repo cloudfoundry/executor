@@ -10,7 +10,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"
@@ -18,7 +18,7 @@ import (
 )
 
 type uploadStep struct {
-	container   garden_api.Container
+	container   garden.Container
 	model       models.UploadAction
 	uploader    uploader.Uploader
 	compressor  compressor.Compressor
@@ -30,7 +30,7 @@ type uploadStep struct {
 }
 
 func NewUpload(
-	container garden_api.Container,
+	container garden.Container,
 	model models.UploadAction,
 	uploader uploader.Uploader,
 	compressor compressor.Compressor,

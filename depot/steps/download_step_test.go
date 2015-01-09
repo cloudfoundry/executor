@@ -14,7 +14,7 @@ import (
 	cdfakes "github.com/pivotal-golang/cacheddownloader/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
@@ -60,7 +60,7 @@ var _ = Describe("DownloadAction", func() {
 		var stepErr error
 
 		JustBeforeEach(func() {
-			container, err := gardenClient.Create(garden_api.ContainerSpec{
+			container, err := gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
@@ -248,7 +248,7 @@ var _ = Describe("DownloadAction", func() {
 		BeforeEach(func() {
 			result = make(chan error)
 
-			container, err := gardenClient.Create(garden_api.ContainerSpec{
+			container, err := gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
@@ -350,11 +350,11 @@ var _ = Describe("DownloadAction", func() {
 	})
 
 	Describe("the downloads are rate limited", func() {
-		var container garden_api.Container
+		var container garden.Container
 
 		BeforeEach(func() {
 			var err error
-			container, err = gardenClient.Create(garden_api.ContainerSpec{
+			container, err = gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
 			Ω(err).ShouldNot(HaveOccurred())

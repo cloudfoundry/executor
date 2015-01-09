@@ -9,9 +9,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
-	gfakes "github.com/cloudfoundry-incubator/garden/api/fakes"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
+	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -63,7 +63,7 @@ var _ = Describe("RunAction", func() {
 		spawnedProcess = new(gfakes.FakeProcess)
 		runError = nil
 
-		gardenClient.Connection.RunStub = func(string, garden_api.ProcessSpec, garden_api.ProcessIO) (garden_api.Process, error) {
+		gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
 			return spawnedProcess, runError
 		}
 		externalIP = "external-ip"
@@ -76,7 +76,7 @@ var _ = Describe("RunAction", func() {
 	JustBeforeEach(func() {
 		gardenClient.Connection.CreateReturns(handle, nil)
 
-		container, err := gardenClient.Create(garden_api.ContainerSpec{})
+		container, err := gardenClient.Create(garden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = NewRun(
@@ -287,7 +287,7 @@ var _ = Describe("RunAction", func() {
 		Context("regardless of status code, when an out of memory event has occured", func() {
 			BeforeEach(func() {
 				gardenClient.Connection.InfoReturns(
-					garden_api.ContainerInfo{
+					garden.ContainerInfo{
 						Events: []string{"happy land", "out of memory", "another event"},
 					},
 					nil,
@@ -303,7 +303,7 @@ var _ = Describe("RunAction", func() {
 
 		Context("when container info cannot be retrieved", func() {
 			BeforeEach(func() {
-				gardenClient.Connection.InfoReturns(garden_api.ContainerInfo{}, errors.New("info-error"))
+				gardenClient.Connection.InfoReturns(garden.ContainerInfo{}, errors.New("info-error"))
 				spawnedProcess.WaitReturns(19, nil)
 			})
 

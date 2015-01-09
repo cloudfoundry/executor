@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/cloudfoundry-incubator/executor"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	garden_client "github.com/cloudfoundry-incubator/garden/client"
 )
 
@@ -43,7 +43,7 @@ func ConfigureCapacity(
 	}, nil
 }
 
-func memoryInMB(capacity garden_api.Capacity, memoryMBFlag string) (int, error) {
+func memoryInMB(capacity garden.Capacity, memoryMBFlag string) (int, error) {
 	if memoryMBFlag == Automatic {
 		return int(capacity.MemoryInBytes / (1024 * 1024)), nil
 	} else {
@@ -55,7 +55,7 @@ func memoryInMB(capacity garden_api.Capacity, memoryMBFlag string) (int, error) 
 	}
 }
 
-func diskInMB(capacity garden_api.Capacity, diskMBFlag string) (int, error) {
+func diskInMB(capacity garden.Capacity, diskMBFlag string) (int, error) {
 	if diskMBFlag == Automatic {
 		return int(capacity.DiskInBytes / (1024 * 1024)), nil
 	} else {

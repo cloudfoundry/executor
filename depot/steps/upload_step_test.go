@@ -13,7 +13,7 @@ import (
 	"os/user"
 	"time"
 
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
@@ -132,7 +132,7 @@ var _ = Describe("UploadStep", func() {
 	JustBeforeEach(func() {
 		gardenClient.Connection.CreateReturns(handle, nil)
 
-		container, err := gardenClient.Create(garden_api.ContainerSpec{})
+		container, err := gardenClient.Create(garden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
 		step = NewUpload(
@@ -362,11 +362,11 @@ var _ = Describe("UploadStep", func() {
 	})
 
 	Describe("the uploads are rate limited", func() {
-		var container garden_api.Container
+		var container garden.Container
 
 		BeforeEach(func() {
 			var err error
-			container, err = gardenClient.Create(garden_api.ContainerSpec{
+			container, err = gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
 			Ω(err).ShouldNot(HaveOccurred())

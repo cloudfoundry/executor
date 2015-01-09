@@ -7,13 +7,13 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
 )
 
 type runStep struct {
-	container            garden_api.Container
+	container            garden.Container
 	model                models.RunAction
 	streamer             log_streamer.LogStreamer
 	logger               lager.Logger
@@ -24,7 +24,7 @@ type runStep struct {
 }
 
 func NewRun(
-	container garden_api.Container,
+	container garden.Container,
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
@@ -64,15 +64,15 @@ func (step *runStep) Perform() error {
 	errChan := make(chan error, 1)
 
 	step.logger.Info("creating-process")
-	process, err := step.container.Run(garden_api.ProcessSpec{
+	process, err := step.container.Run(garden.ProcessSpec{
 		Path:       step.model.Path,
 		Args:       step.model.Args,
 		Dir:        step.model.Dir,
 		Env:        envVars,
 		Privileged: step.model.Privileged,
 
-		Limits: garden_api.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
-	}, garden_api.ProcessIO{
+		Limits: garden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
+	}, garden.ProcessIO{
 		Stdout: step.streamer.Stdout(),
 		Stderr: step.streamer.Stderr(),
 	})

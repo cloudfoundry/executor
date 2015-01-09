@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/cacheddownloader"
@@ -14,7 +14,7 @@ import (
 )
 
 type downloadStep struct {
-	container        garden_api.Container
+	container        garden.Container
 	model            models.DownloadAction
 	cachedDownloader cacheddownloader.CachedDownloader
 	streamer         log_streamer.LogStreamer
@@ -24,7 +24,7 @@ type downloadStep struct {
 }
 
 func NewDownload(
-	container garden_api.Container,
+	container garden.Container,
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	rateLimiter chan struct{},

@@ -2,16 +2,16 @@ package main
 
 import (
 	"github.com/cloudfoundry-incubator/executor/depot/store"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 )
 
 type executorContainers struct {
-	gardenClient garden_api.Client
+	gardenClient garden.Client
 	owner        string
 }
 
-func (containers *executorContainers) Containers() ([]garden_api.Container, error) {
-	return containers.gardenClient.Containers(garden_api.Properties{
+func (containers *executorContainers) Containers() ([]garden.Container, error) {
+	return containers.gardenClient.Containers(garden.Properties{
 		store.ContainerOwnerProperty: containers.owner,
 	})
 }

@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
-	garden_api "github.com/cloudfoundry-incubator/garden/api"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,7 +30,7 @@ var _ = Describe("configuration", func() {
 
 		Context("when getting the capacity fails", func() {
 			BeforeEach(func() {
-				gardenClient.Connection.CapacityReturns(garden_api.Capacity{}, errors.New("uh oh"))
+				gardenClient.Connection.CapacityReturns(garden.Capacity{}, errors.New("uh oh"))
 			})
 
 			It("returns an error", func() {
@@ -43,7 +43,7 @@ var _ = Describe("configuration", func() {
 				memLimit = "99"
 				diskLimit = "99"
 				gardenClient.Connection.CapacityReturns(
-					garden_api.Capacity{
+					garden.Capacity{
 						MemoryInBytes: 1024 * 1024 * 3,
 						DiskInBytes:   1024 * 1024 * 4,
 						MaxContainers: 5,
