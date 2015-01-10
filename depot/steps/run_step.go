@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 )
+
+const TERMINATE_TIMEOUT = 10 * time.Second
 
 type runStep struct {
 	container            garden.Container
@@ -21,6 +25,9 @@ type runStep struct {
 	externalIP           string
 	portMappings         []executor.PortMapping
 	exportNetworkEnvVars bool
+	timeProvider         timeprovider.TimeProvider
+
+	cancel chan struct{}
 }
 
 func NewRun(
@@ -32,6 +39,7 @@ func NewRun(
 	externalIP string,
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
+	timeProvider timeprovider.TimeProvider,
 ) *runStep {
 	logger = logger.Session("run-step")
 	return &runStep{
@@ -43,6 +51,9 @@ func NewRun(
 		externalIP:           externalIP,
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
+		timeProvider:         timeProvider,
+
+		cancel: make(chan struct{}),
 	}
 }
 
@@ -93,39 +104,66 @@ func (step *runStep) Perform() error {
 		}
 	}()
 
-	select {
-	case exitStatus := <-exitStatusChan:
-		logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
-		step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
-		step.streamer.Flush()
+	cancel := step.cancel
 
-		if exitStatus != 0 {
-			info, err := step.container.Info()
-			if err != nil {
-				logger.Error("failed-to-get-info", err)
-			} else {
-				for _, ev := range info.Events {
-					if ev == "out of memory" {
-						return NewEmittableError(nil, "Exited with status %d (out of memory)", exitStatus)
+	var killSwitch <-chan time.Time
+
+	for {
+		select {
+		case exitStatus := <-exitStatusChan:
+			logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
+			step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
+			step.streamer.Flush()
+
+			if exitStatus != 0 {
+				info, err := step.container.Info()
+				if err != nil {
+					logger.Error("failed-to-get-info", err)
+				} else {
+					for _, ev := range info.Events {
+						if ev == "out of memory" {
+							return NewEmittableError(nil, "Exited with status %d (out of memory)", exitStatus)
+						}
 					}
 				}
+
+				return NewEmittableError(nil, "Exited with status %d", exitStatus)
 			}
 
-			return NewEmittableError(nil, "Exited with status %d", exitStatus)
+			return nil
+
+		case err := <-errChan:
+			logger.Error("running-error", err)
+			return err
+
+		case <-cancel:
+			err := process.Signal(garden.SignalTerminate)
+			logger.Error("failed-to-signal-terminate", err)
+
+			cancel = nil
+
+			killTimer := step.timeProvider.NewTimer(TERMINATE_TIMEOUT)
+			defer killTimer.Stop()
+
+			killSwitch = killTimer.C()
+
+		case <-killSwitch:
+			err := process.Signal(garden.SignalKill)
+			logger.Error("failed-to-signal-kill", err)
+
+			killSwitch = nil
 		}
-
-		return nil
-
-	case err := <-errChan:
-		logger.Error("running-error", err)
-		return err
 	}
 
 	panic("unreachable")
 }
 
 func (step *runStep) Cancel() {
-	step.container.Stop(false)
+	select {
+	case <-step.cancel:
+	default:
+		close(step.cancel)
+	}
 }
 
 func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {

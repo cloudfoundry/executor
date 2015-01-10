@@ -2,6 +2,7 @@ package steps_test
 
 import (
 	"errors"
+	"time"
 
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
@@ -31,6 +33,7 @@ var _ = Describe("RunAction", func() {
 	var externalIP string
 	var portMappings []executor.PortMapping
 	var exportNetworkEnvVars bool
+	var fakeTimeProvider *faketimeprovider.FakeTimeProvider
 
 	var spawnedProcess *gfakes.FakeProcess
 	var runError error
@@ -66,9 +69,11 @@ var _ = Describe("RunAction", func() {
 		gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
 			return spawnedProcess, runError
 		}
+
 		externalIP = "external-ip"
 		portMappings = nil
 		exportNetworkEnvVars = false
+		fakeTimeProvider = faketimeprovider.New(time.Unix(123, 456))
 	})
 
 	handle := "some-container-handle"
@@ -88,6 +93,7 @@ var _ = Describe("RunAction", func() {
 			externalIP,
 			portMappings,
 			exportNetworkEnvVars,
+			fakeTimeProvider,
 		)
 	})
 
@@ -357,16 +363,64 @@ var _ = Describe("RunAction", func() {
 	})
 
 	Describe("Cancel", func() {
+		var (
+			performErr chan error
+
+			waiting    chan struct{}
+			waitExited chan int
+		)
+
+		BeforeEach(func() {
+			performErr = make(chan error)
+
+			waiting = make(chan struct{})
+			waitExited = make(chan int, 1)
+
+			spawnedProcess.WaitStub = func() (int, error) {
+				close(waiting)
+				return <-waitExited, nil
+			}
+		})
+
 		JustBeforeEach(func() {
+			go func() {
+				performErr <- step.Perform()
+				close(performErr)
+			}()
+
+			Eventually(waiting).Should(BeClosed())
 			step.Cancel()
 		})
 
-		It("stops the container", func() {
-			Ω(gardenClient.Connection.StopCallCount()).Should(Equal(1))
+		AfterEach(func() {
+			close(waitExited)
+			Eventually(performErr).Should(BeClosed())
+		})
 
-			stoppedHandle, kill := gardenClient.Connection.StopArgsForCall(0)
-			Ω(stoppedHandle).Should(Equal(handle))
-			Ω(kill).Should(BeFalse())
+		It("sends an interrupt to the process", func() {
+			Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+			Ω(spawnedProcess.SignalArgsForCall(0)).Should(Equal(garden.SignalTerminate))
+		})
+
+		Context("when the process exits", func() {
+			It("completes the perform without having sent kill", func() {
+				waitExited <- 0
+
+				Eventually(performErr).Should(Receive(BeNil()))
+
+				Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
+			})
+		})
+
+		Context("when the process does not exit after 10s", func() {
+			It("sends a kill signal to the process", func() {
+				Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+
+				fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+
+				Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
+				Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+			})
 		})
 	})
 })
