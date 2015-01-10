@@ -74,13 +74,12 @@ func (c *client) getLock(guid string) *sync.Mutex {
 	var lock *sync.Mutex
 	var found bool
 
+	c.lockForLockMap.Lock()
+	defer c.lockForLockMap.Unlock()
+
 	if lock, found = c.lockMap[guid]; !found {
-		c.lockForLockMap.Lock()
-		if lock, found = c.lockMap[guid]; !found {
-			lock = new(sync.Mutex)
-			c.lockMap[guid] = lock
-		}
-		c.lockForLockMap.Unlock()
+		lock = new(sync.Mutex)
+		c.lockMap[guid] = lock
 	}
 
 	return lock
