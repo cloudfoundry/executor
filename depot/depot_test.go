@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	. "github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
-	"github.com/cloudfoundry-incubator/executor/depot/event"
+	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager"
@@ -27,6 +27,7 @@ var _ = Describe("Depot", func() {
 		resources        executor.ExecutorResources
 		allocationStore  AllocationStore
 		gardenStore      *fakes.FakeGardenStore
+		eventHub         *efakes.FakeHub
 	)
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -41,7 +42,7 @@ var _ = Describe("Depot", func() {
 			DiskMB:     1024,
 			Containers: 3,
 		}
-		eventHub := event.NewHub()
+		eventHub = new(efakes.FakeHub)
 		depotClient = NewClientProvider(resources, allocationStore, gardenStore, eventHub).WithLogger(logger)
 	})
 
@@ -59,6 +60,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate the container", func() {
+				currentEventCount := eventHub.EmitEventCallCount()
 				errMessageMap, err := depotClient.AllocateContainers(containers)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(errMessageMap).Should(BeEmpty())
@@ -67,6 +69,8 @@ var _ = Describe("Depot", func() {
 				Ω(allocatedContainers[0].Guid).Should(Equal("guid-1"))
 				Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainers[0].CPUWeight).Should(Equal(uint(100)))
+				Ω(eventHub.EmitEventCallCount()).Should(Equal(currentEventCount + 1))
+				Ω(eventHub.EmitEventArgsForCall(currentEventCount)).Should(Equal(executor.NewContainerReservedEvent(allocatedContainers[0])))
 			})
 		})
 
@@ -419,6 +423,7 @@ var _ = Describe("Depot", func() {
 				gardenStore.CreateReturns(executor.Container{}, errors.New("some-error"))
 			})
 			It("should change container's state to failed", func() {
+				currentEventCount := eventHub.EmitEventCallCount()
 				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
 				err := depotClient.RunContainer(gardenStoreGuid)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -429,6 +434,8 @@ var _ = Describe("Depot", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(container.State).Should(Equal(executor.StateCompleted))
 				Ω(container.RunResult.Failed).Should(BeTrue())
+				Ω(eventHub.EmitEventCallCount()).Should(Equal(currentEventCount + 1))
+				Ω(eventHub.EmitEventArgsForCall(currentEventCount)).Should(Equal(executor.NewContainerCompleteEvent(container)))
 			})
 		})
 

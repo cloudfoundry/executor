@@ -44,13 +44,13 @@ func (a *AllocationStore) Lookup(guid string) (executor.Container, error) {
 	return a.lookup(guid)
 }
 
-func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Container) error {
+func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Container) (executor.Container, error) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
 	if _, err := a.lookup(container.Guid); err == nil {
 		logger.Error("failed-allocating-container", err)
-		return executor.ErrContainerGuidNotAvailable
+		return executor.Container{}, executor.ErrContainerGuidNotAvailable
 	}
 	logger.Debug("allocating-container", lager.Data{"container": container})
 
@@ -58,7 +58,7 @@ func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Conta
 	container.AllocatedAt = a.timeProvider.Now().UnixNano()
 	a.allocated[container.Guid] = container
 
-	return nil
+	return container, nil
 }
 
 func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
@@ -90,14 +90,14 @@ func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
 	return nil
 }
 
-func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) error {
+func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) (executor.Container, error) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
 	container, err := a.lookup(guid)
 	if err != nil {
 		logger.Error("failed-completing-container", err)
-		return err
+		return executor.Container{}, err
 	}
 
 	if container.State != executor.StateInitializing {
@@ -109,7 +109,7 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 				"expectedState": executor.StateInitializing,
 			},
 		)
-		return executor.ErrInvalidTransition
+		return executor.Container{}, executor.ErrInvalidTransition
 	}
 	logger.Debug("marking-container-completed-with-failure-reason", lager.Data{"guid": guid})
 
@@ -120,7 +120,7 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 	}
 	a.allocated[guid] = container
 
-	return nil
+	return container, nil
 }
 
 func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) error {

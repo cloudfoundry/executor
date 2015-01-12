@@ -8,6 +8,7 @@ import (
 
 const SUBSCRIBER_BUFFER = 1024
 
+//go:generate counterfeiter -o fakes/fake_hub.go . Hub
 type Hub interface {
 	EmitEvent(executor.Event)
 	Subscribe() <-chan executor.Event

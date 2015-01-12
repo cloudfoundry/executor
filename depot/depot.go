@@ -29,9 +29,9 @@ type clientProvider struct {
 type AllocationStore interface {
 	List() []executor.Container
 	Lookup(guid string) (executor.Container, error)
-	Allocate(logger lager.Logger, container executor.Container) error
+	Allocate(logger lager.Logger, container executor.Container) (executor.Container, error)
 	Initialize(logger lager.Logger, guid string) error
-	Fail(logger lager.Logger, guid string, reason string) error
+	Fail(logger lager.Logger, guid string, reason string) (executor.Container, error)
 	Deallocate(logger lager.Logger, guid string) error
 }
 
@@ -128,7 +128,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 	}
 
 	for _, allocatableContainer := range allocatableContainers {
-		if err = c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
+		if allocatedContainer, err := c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
 			logger.Debug(
 				"failed-to-allocate-container",
 				lager.Data{
@@ -138,8 +138,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 			)
 			errMessageMap[allocatableContainer.Guid] = err.Error()
 		} else {
-			// TODO
-			//c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatableContainer))
+			c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatedContainer))
 		}
 	}
 
@@ -204,8 +203,8 @@ func (c *client) RunContainer(guid string) error {
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
 
-			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
-			//c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(container))
+			failedContainer, _ := c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
+			c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(failedContainer))
 
 			return
 		}

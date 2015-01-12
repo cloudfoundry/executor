@@ -40,7 +40,7 @@ var _ = Describe("Allocation Store", func() {
 					DiskMB:   512,
 				}
 
-				err := allocationStore.Allocate(logger, container)
+				_, err := allocationStore.Allocate(logger, container)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -75,10 +75,7 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the guid is available", func() {
 			It("it is marked as RESERVED", func() {
-				err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
-
-				allocation, err := allocationStore.Lookup(container.Guid)
+				allocation, err := allocationStore.Allocate(logger, container)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(allocation.Guid).Should(Equal(container.Guid))
@@ -89,12 +86,12 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the guid is not available", func() {
 			BeforeEach(func() {
-				err := allocationStore.Allocate(logger, container)
+				_, err := allocationStore.Allocate(logger, container)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("errors and does not store the duplicate", func() {
-				err := allocationStore.Allocate(logger, container)
+				_, err := allocationStore.Allocate(logger, container)
 				Ω(err).Should(HaveOccurred())
 				Ω(allocationStore.List()).Should(HaveLen(1))
 			})
@@ -102,14 +99,14 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when adding multiple unique containers", func() {
 			It("they are added to the store", func() {
-				err := allocationStore.Allocate(logger, executor.Container{
+				_, err := allocationStore.Allocate(logger, executor.Container{
 					Guid:     "banana-1",
 					MemoryMB: 512,
 					DiskMB:   512,
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				err = allocationStore.Allocate(logger, executor.Container{
+				_, err = allocationStore.Allocate(logger, executor.Container{
 					Guid:     "banana-2",
 					MemoryMB: 512,
 					DiskMB:   512,
@@ -129,7 +126,7 @@ var _ = Describe("Allocation Store", func() {
 				MemoryMB: 512,
 				DiskMB:   512,
 			}
-			err := allocationStore.Allocate(logger, container)
+			_, err := allocationStore.Allocate(logger, container)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -163,7 +160,7 @@ var _ = Describe("Allocation Store", func() {
 				MemoryMB: 512,
 				DiskMB:   512,
 			}
-			err := allocationStore.Allocate(logger, container)
+			_, err := allocationStore.Allocate(logger, container)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
@@ -192,7 +189,7 @@ var _ = Describe("Allocation Store", func() {
 				MemoryMB: 512,
 				DiskMB:   512,
 			}
-			err := allocationStore.Allocate(logger, container)
+			_, err := allocationStore.Allocate(logger, container)
 			Ω(err).ShouldNot(HaveOccurred())
 			err = allocationStore.Initialize(logger, container.Guid)
 			Ω(err).ShouldNot(HaveOccurred())
@@ -200,10 +197,7 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the guid is available", func() {
 			It("it is marked as COMPLETED with failure reason", func() {
-				err := allocationStore.Fail(logger, container.Guid, "failure-reason")
-				Ω(err).ShouldNot(HaveOccurred())
-
-				allocation, err := allocationStore.Lookup(container.Guid)
+				allocation, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(allocation.Guid).Should(Equal(container.Guid))
@@ -217,7 +211,7 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the guid is not available", func() {
 			It("errors", func() {
-				err := allocationStore.Fail(logger, "doesnt-exist", "failure-response")
+				_, err := allocationStore.Fail(logger, "doesnt-exist", "failure-response")
 				Ω(err).Should(HaveOccurred())
 				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 			})
@@ -237,16 +231,17 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the guid is in the list", func() {
 			BeforeEach(func() {
-				err := allocationStore.Allocate(logger, container)
+				_, err := allocationStore.Allocate(logger, container)
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(allocationStore.List()).Should(HaveLen(1))
 			})
 
 			It("it is removed from the list", func() {
+				count := len(allocationStore.List())
+
 				err := allocationStore.Deallocate(logger, container.Guid)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(allocationStore.List()).Should(BeEmpty())
+				Ω(allocationStore.List()).Should(HaveLen(count - 1))
 			})
 		})
 
@@ -266,14 +261,14 @@ var _ = Describe("Allocation Store", func() {
 		)
 
 		BeforeEach(func() {
-			err := allocationStore.Allocate(logger, executor.Container{
+			_, err := allocationStore.Allocate(logger, executor.Container{
 				Guid:     "forever-reserved",
 				MemoryMB: 512,
 				DiskMB:   512,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = allocationStore.Allocate(logger, executor.Container{
+			_, err = allocationStore.Allocate(logger, executor.Container{
 				Guid:     "eventually-initialized",
 				MemoryMB: 512,
 				DiskMB:   512,
@@ -356,24 +351,24 @@ func (expectation transitionExpectation) driveFromState(allocationStore *allocat
 	case "non-existent":
 
 	case "reserved":
-		err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 	case "initializing":
-		err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		err = allocationStore.Initialize(logger, container.Guid)
 		Ω(err).ShouldNot(HaveOccurred())
 
 	case "failed":
-		err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, container)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		err = allocationStore.Initialize(logger, container.Guid)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		err = allocationStore.Fail(logger, container.Guid, "failure-reason")
+		_, err = allocationStore.Fail(logger, container.Guid, "failure-reason")
 		Ω(err).ShouldNot(HaveOccurred())
 
 	default:
@@ -384,13 +379,15 @@ func (expectation transitionExpectation) driveFromState(allocationStore *allocat
 func (expectation transitionExpectation) transitionToState(allocationStore *allocationstore.AllocationStore, container executor.Container) error {
 	switch expectation.to {
 	case "reserve":
-		return allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, container)
+		return err
 
 	case "initialize":
 		return allocationStore.Initialize(logger, container.Guid)
 
 	case "fail":
-		return allocationStore.Fail(logger, container.Guid, "failure-reason")
+		_, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
+		return err
 
 	default:
 		Fail("unknown 'to' state: " + expectation.to)
