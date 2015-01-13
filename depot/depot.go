@@ -35,6 +35,7 @@ type AllocationStore interface {
 	Deallocate(logger lager.Logger, guid string) error
 }
 
+//go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
 type GardenStore interface {
 	Create(logger lager.Logger, container executor.Container) (executor.Container, error)
 	Lookup(guid string) (executor.Container, error)
