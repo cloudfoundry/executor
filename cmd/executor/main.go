@@ -148,6 +148,7 @@ const (
 
 func main() {
 	cf_debug_server.AddFlags(flag.CommandLine)
+	cf_lager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	logger := cf_lager.New("executor")
