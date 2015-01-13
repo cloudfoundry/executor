@@ -136,7 +136,9 @@ func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifr
 
 	store.processesL.Lock()
 	process, found := store.runningProcesses[guid]
-	delete(store.runningProcesses, guid)
+	if found {
+		delete(store.runningProcesses, guid)
+	}
 	store.processesL.Unlock()
 
 	if !found {
