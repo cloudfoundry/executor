@@ -77,8 +77,8 @@ func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
 			"failed-initializing-container",
 			executor.ErrInvalidTransition,
 			lager.Data{
-				"currentState":  container.State,
-				"expectedState": executor.StateReserved,
+				"current_state":  container.State,
+				"expected_state": executor.StateReserved,
 			},
 		)
 		return executor.ErrInvalidTransition
@@ -105,13 +105,16 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 			"failed-completing-container",
 			executor.ErrInvalidTransition,
 			lager.Data{
-				"currentState":  container.State,
-				"expectedState": executor.StateInitializing,
+				"current_state":  container.State,
+				"expected_state": executor.StateInitializing,
 			},
 		)
 		return executor.Container{}, executor.ErrInvalidTransition
 	}
-	logger.Debug("marking-container-completed-with-failure-reason", lager.Data{"guid": guid})
+	logger.Debug("marking-container-completed-with-failure-reason", lager.Data{
+		"guid":           guid,
+		"failure_reason": reason,
+	})
 
 	container.State = executor.StateCompleted
 	container.RunResult = executor.ContainerRunResult{

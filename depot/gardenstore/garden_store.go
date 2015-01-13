@@ -134,7 +134,7 @@ func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifr
 }
 
 func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
-	logger = logger.Session("stopping-container", lager.Data{"container-guid": guid})
+	logger = logger.Session("stop", lager.Data{"guid": guid})
 	logger.Info("started")
 	defer logger.Info("finished")
 
@@ -148,7 +148,7 @@ func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 }
 
 func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
-	logger = logger.Session("destroying-container", lager.Data{"container-guid": guid})
+	logger = logger.Session("destroy", lager.Data{"guid": guid})
 	logger.Info("started")
 
 	store.freeStepProcess(logger, guid)
@@ -176,8 +176,8 @@ func (store *GardenStore) Ping() error {
 }
 
 func (store *GardenStore) Run(logger lager.Logger, container executor.Container) error {
-	logger = logger.Session("running-container", lager.Data{
-		"container": container.Guid,
+	logger = logger.Session("run", lager.Data{
+		"guid": container.Guid,
 	})
 	logger.Info("started")
 	defer logger.Info("finished")
@@ -194,8 +194,8 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 
 	if container.State != executor.StateCreated {
 		logger.Debug("container-invalid-state-transition", lager.Data{
-			"current-state":  container.State,
-			"required-state": executor.StateCreated,
+			"current_state":  container.State,
+			"expected_state": executor.StateCreated,
 		})
 
 		transitionErr := executor.ErrInvalidTransition
@@ -289,7 +289,7 @@ func (store *GardenStore) runStepProcess(
 	guid string,
 ) {
 	process := ifrit.Invoke(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		logger := logger.Session("running-step-process")
+		logger := logger.Session("run-step-process")
 		logger.Info("started")
 		defer logger.Info("finished")
 		seqComplete := make(chan error)

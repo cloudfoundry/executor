@@ -1204,7 +1204,7 @@ var _ = Describe("GardenContainerStore", func() {
 	})
 
 	Describe("Destroy", func() {
-		const destroySessionPrefix = "test.destroying-container."
+		const destroySessionPrefix = "test.destroy."
 		const freeProcessSessionPrefix = destroySessionPrefix + "freeing-step-process."
 		var destroyErr error
 
@@ -1311,8 +1311,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 	Describe("Run", func() {
 		const (
-			runSessionPrefix  = "test.running-container."
-			stepSessionPrefix = runSessionPrefix + "running-step-process."
+			runSessionPrefix  = "test.run."
+			stepSessionPrefix = runSessionPrefix + "run-step-process."
 		)
 
 		var (
@@ -1567,7 +1567,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when Stop is called", func() {
-					const stopSessionPrefix = "test.stopping-container."
+					const stopSessionPrefix = "test.stop."
 
 					JustBeforeEach(func() {
 						gardenStore.Stop(logger, executorContainer.Guid)

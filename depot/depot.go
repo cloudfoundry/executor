@@ -132,8 +132,8 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 			logger.Debug(
 				"failed-to-allocate-container",
 				lager.Data{
-					"guid":         allocatableContainer.Guid,
-					"errormessage": err.Error(),
+					"guid":  allocatableContainer.Guid,
+					"error": err.Error(),
 				},
 			)
 			errMessageMap[allocatableContainer.Guid] = err.Error()
@@ -146,8 +146,8 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 		logger.Debug(
 			"failed-to-allocate-container",
 			lager.Data{
-				"guid":         unallocatableContainer.Guid,
-				"errormessage": executor.ErrInsufficientResourcesAvailable.Error(),
+				"guid":  unallocatableContainer.Guid,
+				"error": executor.ErrInsufficientResourcesAvailable.Error(),
 			},
 		)
 		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
@@ -210,25 +210,24 @@ func (c *client) RunContainer(guid string) error {
 		}
 
 		err = c.allocationStore.Deallocate(logger, guid)
-		if err == executor.ErrContainerNotFound {
-			logger.Debug("container-deleted-while-initilizing")
-
-			err := c.gardenStore.Destroy(logger, guid)
-			if err != nil {
-				logger.Error("failed-to-destroy-newly-initialized-container", err)
+		if err != nil {
+			if err == executor.ErrContainerNotFound {
+				logger.Debug("container-already-deallocated")
 			} else {
-				logger.Info("destroyed-newly-initialized-container")
+				logger.Error("failed-to-deallocate", err)
 			}
 
-			return
-		} else if err != nil {
-			logger.Error("failed-to-remove-allocated-container-for-unknown-reason", err)
+			err = c.gardenStore.Destroy(logger, guid)
+			if err != nil {
+				logger.Error("failed-to-destroy", err)
+			}
+
 			return
 		}
 
 		err = c.gardenStore.Run(logger, container)
 		if err != nil {
-			logger.Error("failed-to-run-newly-created-container", err)
+			logger.Error("failed-to-run", err)
 		}
 	}()
 
@@ -305,7 +304,7 @@ func (c *client) DeleteContainer(guid string) error {
 
 	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
 	if allocationStoreErr != nil {
-		logger.Debug("did-not-delete-allocation-container", lager.Data{"message": allocationStoreErr.Error()})
+		logger.Debug("failed-to-deallocate-container", lager.Data{"error": allocationStoreErr.Error()})
 	}
 
 	if _, err := c.gardenStore.Lookup(guid); err != nil {
