@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
+	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -17,13 +18,12 @@ type client struct {
 }
 
 type clientProvider struct {
-	totalCapacity   executor.ExecutorResources
-	gardenStore     GardenStore
-	allocationStore AllocationStore
-	eventHub        event.Hub
-	lockMap         map[string]*sync.Mutex
-	lockForLockMap  *sync.Mutex
-	resourcesLock   *sync.Mutex
+	totalCapacity        executor.ExecutorResources
+	gardenStore          GardenStore
+	allocationStore      AllocationStore
+	eventHub             event.Hub
+	containerLockManager *keyed_lock.LockManager
+	resourcesLock        *sync.Mutex
 }
 
 type AllocationStore interface {
@@ -54,13 +54,12 @@ func NewClientProvider(
 	eventHub event.Hub,
 ) executor.ClientProvider {
 	return &clientProvider{
-		totalCapacity:   totalCapacity,
-		allocationStore: allocationStore,
-		gardenStore:     gardenStore,
-		eventHub:        eventHub,
-		lockMap:         map[string]*sync.Mutex{},
-		lockForLockMap:  new(sync.Mutex),
-		resourcesLock:   new(sync.Mutex),
+		totalCapacity:        totalCapacity,
+		allocationStore:      allocationStore,
+		gardenStore:          gardenStore,
+		eventHub:             eventHub,
+		containerLockManager: keyed_lock.NewLockManager(),
+		resourcesLock:        new(sync.Mutex),
 	}
 }
 
@@ -69,27 +68,6 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 		provider,
 		logger.Session("depot-client"),
 	}
-}
-
-func (c *client) getLock(guid string) *sync.Mutex {
-	var lock *sync.Mutex
-	var found bool
-
-	c.lockForLockMap.Lock()
-	defer c.lockForLockMap.Unlock()
-
-	if lock, found = c.lockMap[guid]; !found {
-		lock = new(sync.Mutex)
-		c.lockMap[guid] = lock
-	}
-
-	return lock
-}
-
-func (c *client) removeLockFromMap(guid string) {
-	c.lockForLockMap.Lock()
-	defer c.lockForLockMap.Unlock()
-	delete(c.lockMap, guid)
 }
 
 func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
@@ -162,9 +140,8 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		"guid": guid,
 	})
 
-	lock := c.getLock(guid)
-	lock.Lock()
-	defer lock.Unlock()
+	c.containerLockManager.Lock(guid)
+	defer c.containerLockManager.Unlock(guid)
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
@@ -189,9 +166,8 @@ func (c *client) RunContainer(guid string) error {
 	}
 
 	go func() {
-		lock := c.getLock(guid)
-		lock.Lock()
-		defer lock.Unlock()
+		c.containerLockManager.Lock(guid)
+		defer c.containerLockManager.Unlock(guid)
 
 		container, err := c.allocationStore.Lookup(guid)
 		if err != nil {
@@ -297,9 +273,8 @@ func (c *client) DeleteContainer(guid string) error {
 		"guid": guid,
 	})
 
-	lock := c.getLock(guid)
-	lock.Lock()
-	defer lock.Unlock()
+	c.containerLockManager.Lock(guid)
+	defer c.containerLockManager.Unlock(guid)
 
 	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
 	if allocationStoreErr != nil {
@@ -308,14 +283,12 @@ func (c *client) DeleteContainer(guid string) error {
 
 	if _, err := c.gardenStore.Lookup(logger, guid); err != nil {
 		logger.Debug("garden-container-not-found", lager.Data{"message": err.Error()})
-		c.removeLockFromMap(guid)
 		return allocationStoreErr
 	} else if err := c.gardenStore.Destroy(logger, guid); err != nil {
 		logger.Error("failed-to-delete-garden-container", err)
 		return err
 	}
 
-	c.removeLockFromMap(guid)
 	return nil
 }
 
