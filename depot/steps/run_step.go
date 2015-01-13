@@ -138,7 +138,9 @@ func (step *runStep) Perform() error {
 
 		case <-cancel:
 			err := process.Signal(garden.SignalTerminate)
-			logger.Error("failed-to-signal-terminate", err)
+			if err != nil {
+				logger.Error("failed-to-signal-terminate", err)
+			}
 
 			cancel = nil
 
@@ -149,7 +151,9 @@ func (step *runStep) Perform() error {
 
 		case <-killSwitch:
 			err := process.Signal(garden.SignalKill)
-			logger.Error("failed-to-signal-kill", err)
+			if err != nil {
+				logger.Error("failed-to-signal-kill", err)
+			}
 
 			killSwitch = nil
 		}
