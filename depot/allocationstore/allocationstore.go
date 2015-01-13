@@ -136,7 +136,7 @@ func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) error {
 		return err
 	}
 	logger.Debug("deallocating-container", lager.Data{"guid": guid})
-	// Do we need to perform any state validations here?
+
 	delete(a.allocated, guid)
 	return nil
 }
