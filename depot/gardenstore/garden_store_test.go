@@ -14,8 +14,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
-	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	gardenclient "github.com/cloudfoundry-incubator/garden/client"
+	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -70,16 +70,26 @@ var _ = Describe("GardenContainerStore", func() {
 		)
 
 		JustBeforeEach(func() {
-			executorContainer, lookupErr = gardenStore.Lookup("some-container-handle")
+			executorContainer, lookupErr = gardenStore.Lookup(logger, "some-container-handle")
 		})
 
 		Context("when the container doesn't exist", func() {
 			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, errors.New("didn't find it"))
+				fakeGardenClient.LookupReturns(nil, gardenclient.ErrContainerNotFound)
 			})
 
 			It("returns a container-not-found error", func() {
 				Ω(lookupErr).Should(Equal(executor.ErrContainerNotFound))
+			})
+		})
+
+		Context("when lookup fails", func() {
+			BeforeEach(func() {
+				fakeGardenClient.LookupReturns(nil, errors.New("didn't find it"))
+			})
+
+			It("returns the error", func() {
+				Ω(lookupErr).Should(MatchError(Equal("didn't find it")))
 			})
 		})
 
@@ -1153,7 +1163,7 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 
 		It("returns an executor container for each container in garden", func() {
-			containers, err := gardenStore.List(nil)
+			containers, err := gardenStore.List(logger, nil)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(containers).Should(HaveLen(2))
@@ -1165,7 +1175,7 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 
 		It("only queries garden for the containers with the right owner", func() {
-			_, err := gardenStore.List(nil)
+			_, err := gardenStore.List(logger, nil)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
@@ -1175,7 +1185,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when tags are specified", func() {
 			It("filters by the tag properties", func() {
-				_, err := gardenStore.List(executor.Tags{"a": "b", "c": "d"})
+				_, err := gardenStore.List(logger, executor.Tags{"a": "b", "c": "d"})
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(fakeGardenClient.ContainersArgsForCall(0)).Should(Equal(garden.Properties{
@@ -1192,7 +1202,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			It("excludes it from the result set", func() {
-				containers, err := gardenStore.List(nil)
+				containers, err := gardenStore.List(logger, nil)
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(containers).Should(HaveLen(1))
@@ -1262,7 +1272,7 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			It("gets the files", func() {
-				stream, err := gardenStore.GetFiles("the-guid", "the-path")
+				stream, err := gardenStore.GetFiles(logger, "the-guid", "the-path")
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(container.StreamOutArgsForCall(0)).Should(Equal("the-path"))
@@ -1278,11 +1288,11 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when the container doesn't exist", func() {
 			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, errors.New("shiiii"))
+				fakeGardenClient.LookupReturns(nil, gardenclient.ErrContainerNotFound)
 			})
 
 			It("returns a container-not-found error", func() {
-				_, err := gardenStore.GetFiles("the-guid", "the-path")
+				_, err := gardenStore.GetFiles(logger, "the-guid", "the-path")
 				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 			})
 		})
@@ -1434,7 +1444,8 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("logs that the container was not found", func() {
-					Ω(logger).Should(gbytes.Say(runSessionPrefix + "garden-container-not-found"))
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "lookup-failed"))
+					Ω(logger).Should(gbytes.Say("container not found"))
 				})
 
 				It("does not run the container", func() {
@@ -1448,7 +1459,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				It("logs the error", func() {
-					Ω(logger).Should(gbytes.Say(runSessionPrefix + "failed-to-lookup-garden-container"))
+					Ω(logger).Should(gbytes.Say(runSessionPrefix + "lookup-failed"))
 				})
 
 				It("does not run the container", func() {

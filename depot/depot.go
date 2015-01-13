@@ -38,13 +38,13 @@ type AllocationStore interface {
 //go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
 type GardenStore interface {
 	Create(logger lager.Logger, container executor.Container) (executor.Container, error)
-	Lookup(guid string) (executor.Container, error)
-	List(tags executor.Tags) ([]executor.Container, error)
+	Lookup(logger lager.Logger, guid string) (executor.Container, error)
+	List(logger lager.Logger, tags executor.Tags) ([]executor.Container, error)
 	Destroy(logger lager.Logger, guid string) error
 	Ping() error
 	Run(logger lager.Logger, container executor.Container) error
 	Stop(logger lager.Logger, guid string) error
-	GetFiles(guid, sourcePath string) (io.ReadCloser, error)
+	GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
 }
 
 func NewClientProvider(
@@ -122,7 +122,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 	c.resourcesLock.Lock()
 	defer c.resourcesLock.Unlock()
 
-	allocatableContainers, unallocatableContainers, err := c.checkSpace(eligibleContainers)
+	allocatableContainers, unallocatableContainers, err := c.checkSpace(logger, eligibleContainers)
 	if err != nil {
 		logger.Error("failed-to-allocate-containers", err)
 		return nil, executor.ErrFailureToCheckSpace
@@ -168,10 +168,9 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
-		container, err = c.gardenStore.Lookup(guid)
+		container, err = c.gardenStore.Lookup(logger, guid)
 		if err != nil {
-			logger.Error("container-not-found", err)
-			return executor.Container{}, executor.ErrContainerNotFound
+			return executor.Container{}, err
 		}
 	}
 
@@ -246,6 +245,10 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 }
 
 func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
+	logger := c.logger.Session("list", lager.Data{
+		"tags": tags,
+	})
+
 	// Order here is important; listing containers from garden takes time, and in
 	// that time a container may transition from allocation store to garden
 	// store.
@@ -260,7 +263,7 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 			allocatedContainers = append(allocatedContainers, container)
 		}
 	}
-	gardenContainers, err := c.gardenStore.List(tags)
+	gardenContainers, err := c.gardenStore.List(logger, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -286,12 +289,7 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 }
 
 func (c *client) StopContainer(guid string) error {
-	logger := c.logger.Session("stop", lager.Data{
-		"guid": guid,
-	})
-
-	logger.Info("stopping-container")
-	return c.gardenStore.Stop(logger, guid)
+	return c.gardenStore.Stop(c.logger, guid)
 }
 
 func (c *client) DeleteContainer(guid string) error {
@@ -308,7 +306,7 @@ func (c *client) DeleteContainer(guid string) error {
 		logger.Debug("failed-to-deallocate-container", lager.Data{"error": allocationStoreErr.Error()})
 	}
 
-	if _, err := c.gardenStore.Lookup(guid); err != nil {
+	if _, err := c.gardenStore.Lookup(logger, guid); err != nil {
 		logger.Debug("garden-container-not-found", lager.Data{"message": err.Error()})
 		c.removeLockFromMap(guid)
 		return allocationStoreErr
@@ -321,7 +319,7 @@ func (c *client) DeleteContainer(guid string) error {
 	return nil
 }
 
-func (c *client) remainingResources() (executor.ExecutorResources, error) {
+func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
 	remainingResources, err := c.TotalResources()
 	if err != nil {
 		return executor.ExecutorResources{}, err
@@ -334,7 +332,7 @@ func (c *client) remainingResources() (executor.ExecutorResources, error) {
 		remainingResources.MemoryMB -= allocation.MemoryMB
 	}
 
-	gardenContainers, err := c.gardenStore.List(nil)
+	gardenContainers, err := c.gardenStore.List(logger, nil)
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
@@ -352,7 +350,7 @@ func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 	c.resourcesLock.Lock()
 	defer c.resourcesLock.Unlock()
 
-	return c.remainingResources()
+	return c.remainingResources(c.logger)
 }
 
 func (c *client) Ping() error {
@@ -370,15 +368,19 @@ func (c *client) TotalResources() (executor.ExecutorResources, error) {
 }
 
 func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
-	return c.gardenStore.GetFiles(guid, sourcePath)
+	logger := c.logger.Session("get-files", lager.Data{
+		"guid": guid,
+	})
+
+	return c.gardenStore.GetFiles(logger, guid, sourcePath)
 }
 
 func (c *client) SubscribeToEvents() (<-chan executor.Event, error) {
 	return c.eventHub.Subscribe(), nil
 }
 
-func (c *client) checkSpace(containers []executor.Container) ([]executor.Container, []executor.Container, error) {
-	remainingResources, err := c.remainingResources()
+func (c *client) checkSpace(logger lager.Logger, containers []executor.Container) ([]executor.Container, []executor.Container, error) {
+	remainingResources, err := c.remainingResources(logger)
 	if err != nil {
 		return nil, nil, err
 	}

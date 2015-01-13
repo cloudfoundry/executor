@@ -21,19 +21,21 @@ type FakeGardenStore struct {
 		result1 executor.Container
 		result2 error
 	}
-	LookupStub        func(guid string) (executor.Container, error)
+	LookupStub        func(logger lager.Logger, guid string) (executor.Container, error)
 	lookupMutex       sync.RWMutex
 	lookupArgsForCall []struct {
-		guid string
+		logger lager.Logger
+		guid   string
 	}
 	lookupReturns struct {
 		result1 executor.Container
 		result2 error
 	}
-	ListStub        func(tags executor.Tags) ([]executor.Container, error)
+	ListStub        func(logger lager.Logger, tags executor.Tags) ([]executor.Container, error)
 	listMutex       sync.RWMutex
 	listArgsForCall []struct {
-		tags executor.Tags
+		logger lager.Logger
+		tags   executor.Tags
 	}
 	listReturns struct {
 		result1 []executor.Container
@@ -51,7 +53,7 @@ type FakeGardenStore struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns     struct {
+	pingReturns struct {
 		result1 error
 	}
 	RunStub        func(logger lager.Logger, container executor.Container) error
@@ -72,9 +74,10 @@ type FakeGardenStore struct {
 	stopReturns struct {
 		result1 error
 	}
-	GetFilesStub        func(guid, sourcePath string) (io.ReadCloser, error)
+	GetFilesStub        func(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
 	getFilesMutex       sync.RWMutex
 	getFilesArgsForCall []struct {
+		logger     lager.Logger
 		guid       string
 		sourcePath string
 	}
@@ -118,14 +121,15 @@ func (fake *FakeGardenStore) CreateReturns(result1 executor.Container, result2 e
 	}{result1, result2}
 }
 
-func (fake *FakeGardenStore) Lookup(guid string) (executor.Container, error) {
+func (fake *FakeGardenStore) Lookup(logger lager.Logger, guid string) (executor.Container, error) {
 	fake.lookupMutex.Lock()
 	fake.lookupArgsForCall = append(fake.lookupArgsForCall, struct {
-		guid string
-	}{guid})
+		logger lager.Logger
+		guid   string
+	}{logger, guid})
 	fake.lookupMutex.Unlock()
 	if fake.LookupStub != nil {
-		return fake.LookupStub(guid)
+		return fake.LookupStub(logger, guid)
 	} else {
 		return fake.lookupReturns.result1, fake.lookupReturns.result2
 	}
@@ -137,10 +141,10 @@ func (fake *FakeGardenStore) LookupCallCount() int {
 	return len(fake.lookupArgsForCall)
 }
 
-func (fake *FakeGardenStore) LookupArgsForCall(i int) string {
+func (fake *FakeGardenStore) LookupArgsForCall(i int) (lager.Logger, string) {
 	fake.lookupMutex.RLock()
 	defer fake.lookupMutex.RUnlock()
-	return fake.lookupArgsForCall[i].guid
+	return fake.lookupArgsForCall[i].logger, fake.lookupArgsForCall[i].guid
 }
 
 func (fake *FakeGardenStore) LookupReturns(result1 executor.Container, result2 error) {
@@ -151,14 +155,15 @@ func (fake *FakeGardenStore) LookupReturns(result1 executor.Container, result2 e
 	}{result1, result2}
 }
 
-func (fake *FakeGardenStore) List(tags executor.Tags) ([]executor.Container, error) {
+func (fake *FakeGardenStore) List(logger lager.Logger, tags executor.Tags) ([]executor.Container, error) {
 	fake.listMutex.Lock()
 	fake.listArgsForCall = append(fake.listArgsForCall, struct {
-		tags executor.Tags
-	}{tags})
+		logger lager.Logger
+		tags   executor.Tags
+	}{logger, tags})
 	fake.listMutex.Unlock()
 	if fake.ListStub != nil {
-		return fake.ListStub(tags)
+		return fake.ListStub(logger, tags)
 	} else {
 		return fake.listReturns.result1, fake.listReturns.result2
 	}
@@ -170,10 +175,10 @@ func (fake *FakeGardenStore) ListCallCount() int {
 	return len(fake.listArgsForCall)
 }
 
-func (fake *FakeGardenStore) ListArgsForCall(i int) executor.Tags {
+func (fake *FakeGardenStore) ListArgsForCall(i int) (lager.Logger, executor.Tags) {
 	fake.listMutex.RLock()
 	defer fake.listMutex.RUnlock()
-	return fake.listArgsForCall[i].tags
+	return fake.listArgsForCall[i].logger, fake.listArgsForCall[i].tags
 }
 
 func (fake *FakeGardenStore) ListReturns(result1 []executor.Container, result2 error) {
@@ -307,15 +312,16 @@ func (fake *FakeGardenStore) StopReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeGardenStore) GetFiles(guid string, sourcePath string) (io.ReadCloser, error) {
+func (fake *FakeGardenStore) GetFiles(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {
 	fake.getFilesMutex.Lock()
 	fake.getFilesArgsForCall = append(fake.getFilesArgsForCall, struct {
+		logger     lager.Logger
 		guid       string
 		sourcePath string
-	}{guid, sourcePath})
+	}{logger, guid, sourcePath})
 	fake.getFilesMutex.Unlock()
 	if fake.GetFilesStub != nil {
-		return fake.GetFilesStub(guid, sourcePath)
+		return fake.GetFilesStub(logger, guid, sourcePath)
 	} else {
 		return fake.getFilesReturns.result1, fake.getFilesReturns.result2
 	}
@@ -327,10 +333,10 @@ func (fake *FakeGardenStore) GetFilesCallCount() int {
 	return len(fake.getFilesArgsForCall)
 }
 
-func (fake *FakeGardenStore) GetFilesArgsForCall(i int) (string, string) {
+func (fake *FakeGardenStore) GetFilesArgsForCall(i int) (lager.Logger, string, string) {
 	fake.getFilesMutex.RLock()
 	defer fake.getFilesMutex.RUnlock()
-	return fake.getFilesArgsForCall[i].guid, fake.getFilesArgsForCall[i].sourcePath
+	return fake.getFilesArgsForCall[i].logger, fake.getFilesArgsForCall[i].guid, fake.getFilesArgsForCall[i].sourcePath
 }
 
 func (fake *FakeGardenStore) GetFilesReturns(result1 io.ReadCloser, result2 error) {

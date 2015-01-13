@@ -12,7 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
-	gardenclient "github.com/cloudfoundry-incubator/garden/client"
+	"github.com/cloudfoundry-incubator/garden/client"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -63,16 +63,30 @@ func NewGardenStore(
 	}
 }
 
-func (store *GardenStore) Lookup(guid string) (executor.Container, error) {
-	gardenContainer, err := store.gardenClient.Lookup(guid)
+func (store *GardenStore) Lookup(logger lager.Logger, guid string) (executor.Container, error) {
+	gardenContainer, err := store.lookup(logger, guid)
 	if err != nil {
-		return executor.Container{}, executor.ErrContainerNotFound
+		return executor.Container{}, err
 	}
 
 	return store.exchanger.Garden2Executor(gardenContainer)
 }
 
-func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error) {
+func (store *GardenStore) lookup(logger lager.Logger, guid string) (garden.Container, error) {
+	gardenContainer, err := store.gardenClient.Lookup(guid)
+	if err != nil {
+		logger.Error("lookup-failed", err, lager.Data{"guid": guid})
+		if err == client.ErrContainerNotFound {
+			err = executor.ErrContainerNotFound
+		}
+
+		return nil, err
+	}
+
+	return gardenContainer, err
+}
+
+func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]executor.Container, error) {
 	filter := garden.Properties{
 		ContainerOwnerProperty: store.containerOwnerName,
 	}
@@ -83,7 +97,8 @@ func (store *GardenStore) List(tags executor.Tags) ([]executor.Container, error)
 
 	gardenContainers, err := store.gardenClient.Containers(filter)
 	if err != nil {
-		return nil, executor.ErrContainerNotFound
+		logger.Error("list-failed", err, lager.Data{"filter": filter})
+		return nil, err
 	}
 
 	result := make([]executor.Container, 0, len(gardenContainers))
@@ -162,10 +177,10 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 	return nil
 }
 
-func (store *GardenStore) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
-	container, err := store.gardenClient.Lookup(guid)
+func (store *GardenStore) GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error) {
+	container, err := store.lookup(logger, guid)
 	if err != nil {
-		return nil, executor.ErrContainerNotFound
+		return nil, err
 	}
 
 	return container.StreamOut(sourcePath)
@@ -182,12 +197,8 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 	logger.Info("started")
 	defer logger.Info("finished")
 
-	gardenContainer, err := store.gardenClient.Lookup(container.Guid)
-	if err == gardenclient.ErrContainerNotFound {
-		logger.Error("garden-container-not-found", nil)
-		return err
-	} else if err != nil {
-		logger.Error("failed-to-lookup-garden-container", err)
+	gardenContainer, err := store.lookup(logger, container.Guid)
+	if err != nil {
 		return err
 	}
 	logger.Debug("found-garden-container")
