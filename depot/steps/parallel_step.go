@@ -1,5 +1,7 @@
 package steps
 
+import "github.com/hashicorp/go-multierror"
+
 type parallelStep struct {
 	substeps []Step
 }
@@ -19,15 +21,16 @@ func (step *parallelStep) Perform() error {
 		}(step)
 	}
 
-	var err error
+	var aggregate *multierror.Error
+
 	for _ = range step.substeps {
-		stepErr := <-errs
-		if stepErr != nil {
-			err = stepErr
+		err := <-errs
+		if err != nil {
+			aggregate = multierror.Append(aggregate, err)
 		}
 	}
 
-	return err
+	return aggregate.ErrorOrNil()
 }
 
 func (step *parallelStep) Cancel() {

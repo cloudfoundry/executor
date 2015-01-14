@@ -1,5 +1,7 @@
 package steps
 
+import "github.com/hashicorp/go-multierror"
+
 type codependentStep struct {
 	substeps []Step
 }
@@ -19,17 +21,22 @@ func (step *codependentStep) Perform() error {
 		}(step)
 	}
 
-	var firstFailure error
+	var aggregate *multierror.Error
+	var cancelled bool
 
 	for _ = range step.substeps {
 		err := <-errs
-		if err != nil && firstFailure == nil {
-			firstFailure = err
-			step.Cancel()
+		if err != nil {
+			aggregate = multierror.Append(aggregate, err)
+
+			if !cancelled {
+				cancelled = true
+				step.Cancel()
+			}
 		}
 	}
 
-	return firstFailure
+	return aggregate.ErrorOrNil()
 }
 
 func (step *codependentStep) Cancel() {

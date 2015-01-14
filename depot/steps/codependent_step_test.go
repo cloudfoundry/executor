@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/hashicorp/go-multierror"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -81,12 +82,12 @@ var _ = Describe("CodependentStep", func() {
 				}
 			})
 
-			It("returns the first failure", func() {
+			It("returns an aggregate of the failures", func() {
 				err := step.Perform()
-				Ω(err).Should(Equal(disaster))
+				Ω(err.(*multierror.Error).WrappedErrors()).Should(ConsistOf(disaster))
 			})
 
-			It("cancels all the step", func() {
+			It("cancels all the steps", func() {
 				step.Perform()
 
 				Ω(subStep1.CancelCallCount()).Should(Equal(1))

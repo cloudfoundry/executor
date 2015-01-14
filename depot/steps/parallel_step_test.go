@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/hashicorp/go-multierror"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -101,7 +102,10 @@ var _ = Describe("ParallelStep", func() {
 			close(triggerStep2)
 
 			Eventually(step2Completed).Should(BeClosed())
-			Eventually(errs).Should(Receive(Equal(disaster)))
+
+			var err error
+			Eventually(errs).Should(Receive(&err))
+			Ω(err.(*multierror.Error).WrappedErrors()).Should(ConsistOf(disaster))
 		})
 	})
 
