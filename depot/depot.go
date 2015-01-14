@@ -71,7 +71,7 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 }
 
 func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
-	logger := c.logger.Session("allocate")
+	logger := c.logger.Session("allocate-containers")
 
 	errMessageMap := map[string]string{}
 	eligibleContainers := make([]executor.Container, 0, len(executorContainers))
@@ -136,7 +136,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 }
 
 func (c *client) GetContainer(guid string) (executor.Container, error) {
-	logger := c.logger.Session("get", lager.Data{
+	logger := c.logger.Session("get-container", lager.Data{
 		"guid": guid,
 	})
 
@@ -155,7 +155,7 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 }
 
 func (c *client) RunContainer(guid string) error {
-	logger := c.logger.Session("run", lager.Data{
+	logger := c.logger.Session("run-container", lager.Data{
 		"guid": guid,
 	})
 
@@ -221,7 +221,7 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 }
 
 func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
-	logger := c.logger.Session("list", lager.Data{
+	logger := c.logger.Session("list-containers", lager.Data{
 		"tags": tags,
 	})
 
@@ -265,11 +265,15 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 }
 
 func (c *client) StopContainer(guid string) error {
-	return c.gardenStore.Stop(c.logger, guid)
+	logger := c.logger.Session("stop-container", lager.Data{
+		"guid": guid,
+	})
+
+	return c.gardenStore.Stop(logger, guid)
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	logger := c.logger.Session("delete", lager.Data{
+	logger := c.logger.Session("delete-container", lager.Data{
 		"guid": guid,
 	})
 
