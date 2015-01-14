@@ -495,6 +495,58 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
+			Context("when the container has an executor:security-group-rules property", func() {
+				Context("and the security group rule is valid", func() {
+					var (
+						securityGroupRule  models.SecurityGroupRule
+						securityGroupRules []models.SecurityGroupRule
+					)
+
+					BeforeEach(func() {
+						securityGroupRule = models.SecurityGroupRule{
+							Protocol:    "tcp",
+							Destination: "0.0.0.0/0",
+							PortRange: models.PortRange{
+								Start: 1,
+								End:   1024,
+							},
+						}
+
+						securityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+
+						payload, err := json.Marshal(securityGroupRules)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:security-group-rules": string(payload),
+							},
+						}, nil)
+					})
+
+					It("has it as its security group rules", func() {
+						Ω(executorContainer.SecurityGroupRules).Should(Equal(securityGroupRules))
+					})
+				})
+
+				Context("and the security group rules is invalid", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:security-group-rules": "ß",
+							},
+						}, nil)
+					})
+
+					It("returns an InvalidJSONError", func() {
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:security-group-rules"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
+					})
+				})
+			})
+
 			Context("when the Garden container has tags", func() {
 				BeforeEach(func() {
 					gardenContainer.InfoReturns(garden.ContainerInfo{
