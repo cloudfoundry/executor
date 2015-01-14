@@ -986,6 +986,77 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
+			Context("when the Executor container has security rules", func() {
+				var securityGroupRule models.SecurityGroupRule
+				BeforeEach(func() {
+					securityGroupRule = models.SecurityGroupRule{
+						Protocol:    "tcp",
+						Destination: "0.0.0.0/0",
+						PortRange: models.PortRange{
+							Start: 1,
+							End:   1024,
+						},
+					}
+					executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+				})
+
+				Context("when setting security rules succesful", func() {
+
+					It("creates it with the security rules", func() {
+						Ω(createErr).ShouldNot(HaveOccurred())
+					})
+					It("updates security rules on returned container", func() {
+						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
+						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
+						Ω(network).Should(Equal(securityGroupRule.Destination))
+						Ω(port).Should(Equal(uint32(0)))
+						Ω(icmpType).Should(Equal(int32(-1)))
+						Ω(icmpCode).Should(Equal(int32(0)))
+						Ω(protocol).Should(Equal(garden.ProtocolTCP))
+						Ω(portRange).Should(Equal("1-1024"))
+					})
+				})
+
+				Context("when security rule is invalid", func() {
+
+					BeforeEach(func() {
+						securityGroupRule = models.SecurityGroupRule{
+							Protocol:    "foo",
+							Destination: "0.0.0.0/0",
+							PortRange: models.PortRange{
+								Start: 1,
+								End:   1024,
+							},
+						}
+						executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+					})
+
+					It("returns the error", func() {
+						Ω(createErr).Should(HaveOccurred())
+						Ω(createErr).Should(Equal(executor.ErrInvalidSecurityGroup))
+					})
+
+				})
+
+				Context("when setting security rules fails", func() {
+					disaster := errors.New("NO SECURITY FOR YOU!!!")
+
+					BeforeEach(func() {
+						fakeGardenContainer.NetOutReturns(disaster)
+					})
+
+					It("returns the error", func() {
+						Ω(createErr).Should(HaveOccurred())
+					})
+
+					It("deletes the container from Garder", func() {
+						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("some-guid"))
+					})
+
+				})
+			})
+
 			Context("when a memory limit is set", func() {
 				BeforeEach(func() {
 					executorContainer.MemoryMB = 64
