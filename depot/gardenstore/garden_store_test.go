@@ -17,6 +17,8 @@ import (
 	gardenclient "github.com/cloudfoundry-incubator/garden/client"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/dropsonde/log_sender/fake"
+	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -33,6 +35,7 @@ var _ = Describe("GardenContainerStore", func() {
 		inodeLimit       uint64 = 2000000
 		timeProvider     *faketimeprovider.FakeTimeProvider
 		emitter          *fakes.FakeEventEmitter
+		fakeLogSender    *fake.FakeLogSender
 
 		logger *lagertest.TestLogger
 
@@ -47,6 +50,9 @@ var _ = Describe("GardenContainerStore", func() {
 		fakeGardenClient = new(gfakes.FakeClient)
 		timeProvider = faketimeprovider.New(time.Now())
 		emitter = new(fakes.FakeEventEmitter)
+
+		fakeLogSender = fake.NewFakeLogSender()
+		logs.Initialize(fakeLogSender)
 
 		logger = lagertest.NewTestLogger("test")
 
@@ -651,10 +657,17 @@ var _ = Describe("GardenContainerStore", func() {
 		}
 
 		BeforeEach(func() {
+			one := 1
 			executorContainer = executor.Container{
 				Guid:   "some-guid",
 				State:  executor.StateInitializing,
 				Action: action,
+
+				Log: executor.LogConfig{
+					Guid:       "log-guid",
+					SourceName: "some-source-name",
+					Index:      &one,
+				},
 			}
 
 			fakeGardenContainer = new(gfakes.FakeContainer)
@@ -679,6 +692,26 @@ var _ = Describe("GardenContainerStore", func() {
 				expectedCreatedContainer.State = executor.StateCreated
 
 				Ω(createdContainer).Should(Equal(expectedCreatedContainer))
+			})
+
+			It("emits to loggregator", func() {
+				logs := fakeLogSender.GetLogs()
+
+				Ω(logs).Should(HaveLen(2))
+
+				emission := logs[0]
+				Ω(emission.AppId).Should(Equal("log-guid"))
+				Ω(emission.SourceType).Should(Equal("some-source-name"))
+				Ω(emission.SourceInstance).Should(Equal("1"))
+				Ω(string(emission.Message)).Should(Equal("Creating container"))
+				Ω(emission.MessageType).Should(Equal("OUT"))
+
+				emission = logs[1]
+				Ω(emission.AppId).Should(Equal("log-guid"))
+				Ω(emission.SourceType).Should(Equal("some-source-name"))
+				Ω(emission.SourceInstance).Should(Equal("1"))
+				Ω(string(emission.Message)).Should(Equal("Successfully created container"))
+				Ω(emission.MessageType).Should(Equal("OUT"))
 			})
 
 			Describe("the exchanged Garden container", func() {
@@ -1118,6 +1151,26 @@ var _ = Describe("GardenContainerStore", func() {
 
 			It("returns the error", func() {
 				Ω(createErr).Should(Equal(disaster))
+			})
+
+			It("emits to loggregator", func() {
+				logs := fakeLogSender.GetLogs()
+
+				Ω(logs).Should(HaveLen(2))
+
+				emission := logs[0]
+				Ω(emission.AppId).Should(Equal("log-guid"))
+				Ω(emission.SourceType).Should(Equal("some-source-name"))
+				Ω(emission.SourceInstance).Should(Equal("1"))
+				Ω(string(emission.Message)).Should(Equal("Creating container"))
+				Ω(emission.MessageType).Should(Equal("OUT"))
+
+				emission = logs[1]
+				Ω(emission.AppId).Should(Equal("log-guid"))
+				Ω(emission.SourceType).Should(Equal("some-source-name"))
+				Ω(emission.SourceInstance).Should(Equal("1"))
+				Ω(string(emission.Message)).Should(Equal("Failed to create container"))
+				Ω(emission.MessageType).Should(Equal("ERR"))
 			})
 		})
 	})

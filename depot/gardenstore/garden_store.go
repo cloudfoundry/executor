@@ -2,6 +2,7 @@ package gardenstore
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -121,10 +122,21 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 	}
 	container.State = executor.StateCreated
 
+	logStreamer := log_streamer.New(
+		container.Log.Guid,
+		container.Log.SourceName,
+		container.Log.Index,
+	)
+
+	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
+
 	container, err := store.exchanger.CreateInGarden(logger, store.gardenClient, container)
 	if err != nil {
+		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
 		return executor.Container{}, err
 	}
+
+	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
 
 	return container, nil
 }
