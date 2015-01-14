@@ -199,7 +199,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			Describe("Cancel", func() {
-				cancelledErr := errors.New("cancelled")
+				cancelledErr := errors.New("upload cancelled")
 
 				var fakeUploader *fake_uploader.FakeUploader
 
@@ -227,7 +227,7 @@ var _ = Describe("UploadStep", func() {
 
 					step.Cancel()
 
-					Eventually(errs).Should(Receive(Equal(cancelledErr)))
+					Eventually(errs).Should(Receive(Equal(ErrCancelled)))
 				})
 			})
 

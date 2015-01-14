@@ -1,9 +1,5 @@
 package steps
 
-type CancelError struct {
-	WrappedError error
-}
+import "errors"
 
-func (ce CancelError) Error() string {
-	return "cancelled; " + ce.WrappedError.Error()
-}
+var ErrCancelled = errors.New("cancelled")

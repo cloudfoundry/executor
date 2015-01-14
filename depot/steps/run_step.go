@@ -115,6 +115,10 @@ func (step *runStep) Perform() error {
 			step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
 			step.streamer.Flush()
 
+			if cancel == nil {
+				return ErrCancelled
+			}
+
 			if exitStatus != 0 {
 				info, err := step.container.Info()
 				if err != nil {

@@ -13,8 +13,8 @@ import (
 
 var _ = Describe("CodependentStep", func() {
 	var step Step
-	var subStep1 Step
-	var subStep2 Step
+	var subStep1 *fakes.FakeStep
+	var subStep2 *fakes.FakeStep
 
 	var thingHappened chan bool
 	var cancelled chan bool
@@ -55,126 +55,59 @@ var _ = Describe("CodependentStep", func() {
 		step = NewCodependent([]Step{subStep1, subStep2})
 	})
 
-	It("performs its substeps in parallel", func(done Done) {
-		defer close(done)
+	Describe("Perform", func() {
+		It("performs its substeps in parallel", func() {
+			err := step.Perform()
+			Ω(err).ShouldNot(HaveOccurred())
 
-		err := step.Perform()
-		Ω(err).ShouldNot(HaveOccurred())
-
-		Eventually(thingHappened).Should(Receive())
-		Eventually(thingHappened).Should(Receive())
-	}, 2)
-
-	Context("when one of the substeps fails", func() {
-		disaster := errors.New("oh no!")
-
-		var step2Canceled chan struct{}
-
-		BeforeEach(func() {
-			step2Canceled = make(chan struct{})
-
-			subStep1 = &fakes.FakeStep{
-				PerformStub: func() error {
-					return disaster
-				},
-			}
-
-			subStep2 = &fakes.FakeStep{
-				PerformStub: func() error {
-					return nil
-				},
-
-				CancelStub: func() {
-					close(step2Canceled)
-				},
-			}
+			Eventually(thingHappened).Should(Receive())
+			Eventually(thingHappened).Should(Receive())
 		})
 
-		It("cancels the rest of the steps", func() {
-			err := step.Perform()
-			Ω(err).Should(Equal(disaster))
+		Context("when one of the substeps fails", func() {
+			disaster := errors.New("oh no!")
 
-			Eventually(step2Canceled).Should(BeClosed())
+			BeforeEach(func() {
+				subStep1 = &fakes.FakeStep{
+					PerformStub: func() error {
+						return disaster
+					},
+				}
+
+				subStep2 = &fakes.FakeStep{
+					PerformStub: func() error {
+						return nil
+					},
+				}
+			})
+
+			It("returns the first failure", func() {
+				err := step.Perform()
+				Ω(err).Should(Equal(disaster))
+			})
+
+			It("cancels all the step", func() {
+				step.Perform()
+
+				Ω(subStep1.CancelCallCount()).Should(Equal(1))
+				Ω(subStep2.CancelCallCount()).Should(Equal(1))
+			})
 		})
 	})
 
-	Context("when told to cancel", func() {
-		var (
-			step1Canceled   chan struct{}
-			step2Canceled   chan struct{}
-			finishCanceling chan struct{}
+	Describe("Cancel", func() {
+		It("cancels all sub-steps", func() {
+			step1 := &fakes.FakeStep{}
+			step2 := &fakes.FakeStep{}
+			step3 := &fakes.FakeStep{}
 
-			performing *sync.WaitGroup
-			canceled   chan struct{}
-		)
+			sequence := NewCodependent([]Step{step1, step2, step3})
 
-		BeforeEach(func() {
-			step1Canceled = make(chan struct{})
-			step2Canceled = make(chan struct{})
-			finishCanceling = make(chan struct{})
-			canceled = make(chan struct{})
+			sequence.Cancel()
 
-			performing = new(sync.WaitGroup)
-			performing.Add(2)
-
-			subStep1 = &fakes.FakeStep{
-				PerformStub: func() error {
-					performing.Done()
-					<-step1Canceled
-					return nil
-				},
-
-				CancelStub: func() {
-					close(step1Canceled)
-					<-finishCanceling
-				},
-			}
-
-			subStep2 = &fakes.FakeStep{
-				PerformStub: func() error {
-					performing.Done()
-					<-step2Canceled
-					return nil
-				},
-
-				CancelStub: func() {
-					close(step2Canceled)
-					<-finishCanceling
-				},
-			}
-		})
-
-		Context("while performing", func() {
-			var performErr <-chan error
-
-			JustBeforeEach(func() {
-				errs := make(chan error)
-				performErr = errs
-
-				go func() {
-					errs <- step.Perform()
-				}()
-
-				performing.Wait()
-
-				go func() {
-					step.Cancel()
-					close(canceled)
-				}()
-			})
-
-			It("cancels the running steps in parallel, and waits for them to complete before exiting", func() {
-				Eventually(step1Canceled).Should(BeClosed())
-				Eventually(step2Canceled).Should(BeClosed())
-
-				Consistently(performErr).ShouldNot(Receive())
-				Consistently(canceled).ShouldNot(BeClosed())
-
-				close(finishCanceling)
-
-				Eventually(performErr).Should(Receive())
-				Eventually(canceled).Should(BeClosed())
-			})
+			Ω(step1.CancelCallCount()).Should(Equal(1))
+			Ω(step2.CancelCallCount()).Should(Equal(1))
+			Ω(step3.CancelCallCount()).Should(Equal(1))
 		})
 	})
 })

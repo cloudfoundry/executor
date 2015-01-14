@@ -1,15 +1,9 @@
 package steps
 
-import (
-	"errors"
-)
-
 type serialStep struct {
 	steps  []Step
 	cancel chan struct{}
 }
-
-var CancelledError = errors.New("steps cancelled")
 
 func NewSerial(steps []Step) *serialStep {
 	return &serialStep{
@@ -21,21 +15,9 @@ func NewSerial(steps []Step) *serialStep {
 
 func (runner *serialStep) Perform() error {
 	for _, action := range runner.steps {
-		subactionResult := make(chan error, 1)
-
-		go func() {
-			subactionResult <- action.Perform()
-		}()
-
-		select {
-		case err := <-subactionResult:
-			if err != nil {
-				return err
-			}
-
-		case <-runner.cancel:
-			action.Cancel()
-			return CancelledError
+		err := action.Perform()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -43,5 +25,7 @@ func (runner *serialStep) Perform() error {
 }
 
 func (runner *serialStep) Cancel() {
-	close(runner.cancel)
+	for _, step := range runner.steps {
+		step.Cancel()
+	}
 }

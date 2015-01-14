@@ -118,10 +118,18 @@ func (step *uploadStep) Perform() (err error) {
 
 	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.cancel)
 	if err != nil {
-		step.logger.Info("failed-to-upload")
-		// Do not emit error in case it leaks sensitive data in URL
-		step.emit("Failed to upload %s\n", step.model.Artifact)
-		return err
+		select {
+		case <-step.cancel:
+			return ErrCancelled
+
+		default:
+			step.logger.Info("failed-to-upload")
+
+			// Do not emit error in case it leaks sensitive data in URL
+			step.emit("Failed to upload %s\n", step.model.Artifact)
+
+			return err
+		}
 	}
 
 	step.emit("Uploaded %s (%s)\n", step.model.Artifact, bytefmt.ByteSize(uint64(uploadedBytes)))
@@ -131,7 +139,11 @@ func (step *uploadStep) Perform() (err error) {
 }
 
 func (step *uploadStep) Cancel() {
-	close(step.cancel)
+	select {
+	case <-step.cancel:
+	default:
+		close(step.cancel)
+	}
 }
 
 func (step *uploadStep) emit(format string, a ...interface{}) {

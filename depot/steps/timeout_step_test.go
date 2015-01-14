@@ -145,103 +145,11 @@ var _ = Describe("TimeoutStep", func() {
 	})
 
 	Describe("Cancel", func() {
-		BeforeEach(func() {
-			timeout = 20 * time.Second // the timeout code path should not trigger in these tests
-		})
-
-		var durationBeforeCancel time.Duration
-		var err error
-
-		JustBeforeEach(func() {
+		It("cancels the nested step", func() {
 			step := steps.NewTimeout(substep, timeout, logger)
-			errChan := make(chan error, 1)
-
-			go func() {
-				defer GinkgoRecover()
-				errChan <- step.Perform()
-			}()
-
-			time.Sleep(durationBeforeCancel)
 			step.Cancel()
-			err = <-errChan
-		})
 
-		Context("When the substep finishes before the step is cancelled", func() {
-			BeforeEach(func() {
-				substepPerformTime = 10 * time.Millisecond
-				durationBeforeCancel = 100 * time.Millisecond
-			})
-
-			Context("when the substep returns an error", func() {
-				BeforeEach(func() {
-					substepPerformError = errors.New("some error")
-				})
-
-				It("performs the substep", func() {
-					Ω(substepFinishedChan).Should(BeClosed())
-				})
-
-				It("returns this error", func() {
-					Ω(err).Should(Equal(substepPerformError))
-				})
-			})
-
-			Context("when the substep does not error", func() {
-				BeforeEach(func() {
-					substepPerformError = nil
-				})
-
-				It("performs the substep", func() {
-					Ω(substepFinishedChan).Should(BeClosed())
-				})
-
-				It("does not error", func() {
-					Ω(err).ShouldNot(HaveOccurred())
-				})
-			})
-		})
-
-		Context("When the step is cancelled before the substep finishes", func() {
-			BeforeEach(func() {
-				substepPerformTime = 100 * time.Millisecond
-				durationBeforeCancel = 10 * time.Millisecond
-			})
-
-			It("cancels the substep", func() {
-				Ω(substep.CancelCallCount()).Should(Equal(1))
-			})
-
-			It("waits until the substep completes performing", func() {
-				Ω(substepFinishedChan).Should(BeClosed())
-			})
-
-			It("logs the cancellation", func() {
-				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.timeout-step.cancelling",
-				}))
-			})
-
-			Context("when the substep does not error", func() {
-				BeforeEach(func() {
-					substepPerformError = nil
-				})
-
-				It("returns a cancel error", func() {
-					Ω(err).Should(BeAssignableToTypeOf(steps.CancelError{}))
-				})
-			})
-
-			Context("when the substep returns an error", func() {
-				BeforeEach(func() {
-					substepPerformError = errors.New("some error")
-				})
-
-				It("returns a cancel error which includes the error returned by the substep", func() {
-					Ω(err).Should(BeAssignableToTypeOf(steps.CancelError{}))
-					cancelErr := err.(steps.CancelError)
-					Ω(cancelErr.WrappedError).Should(Equal(substepPerformError))
-				})
-			})
+			Ω(substep.CancelCallCount()).Should(Equal(1))
 		})
 	})
 })

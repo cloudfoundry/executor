@@ -1412,15 +1412,36 @@ var _ = Describe("GardenContainerStore", func() {
 				StartTimeout: 3,
 			}
 
+			runSignalled := make(chan struct{})
+			monitorSignalled := make(chan struct{})
+
 			processes = make(map[string]*gfakes.FakeProcess)
 			processes["run"] = new(gfakes.FakeProcess)
 			processes["run"].WaitStub = func() (int, error) {
-				return <-runReturns, nil
+				select {
+				case status := <-runReturns:
+					return status, nil
+				case <-runSignalled:
+					return 143, nil
+				}
+			}
+			processes["run"].SignalStub = func(garden.Signal) error {
+				close(runSignalled)
+				return nil
 			}
 
 			processes["monitor"] = new(gfakes.FakeProcess)
 			processes["monitor"].WaitStub = func() (int, error) {
-				return <-monitorReturns, nil
+				select {
+				case status := <-monitorReturns:
+					return status, nil
+				case <-monitorSignalled:
+					return 143, nil
+				}
+			}
+			processes["monitor"].SignalStub = func(garden.Signal) error {
+				close(monitorSignalled)
+				return nil
 			}
 
 			containerProperties = make(map[string]string)

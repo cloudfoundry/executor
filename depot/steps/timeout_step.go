@@ -43,18 +43,14 @@ func (step *timeoutStep) Perform() error {
 
 			err := <-resultChan
 			return NewEmittableError(err, emittableMessage(step.timeout, err))
-
-		case <-step.cancelChan:
-			step.substep.Cancel()
-			err := <-resultChan
-			return CancelError{err}
 		}
 	}
 }
 
 func (step *timeoutStep) Cancel() {
 	step.logger.Info("cancelling")
-	close(step.cancelChan)
+
+	step.substep.Cancel()
 }
 
 func emittableMessage(timeout time.Duration, substepErr error) string {

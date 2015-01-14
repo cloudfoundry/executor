@@ -404,9 +404,9 @@ var _ = Describe("RunAction", func() {
 
 		Context("when the process exits", func() {
 			It("completes the perform without having sent kill", func() {
-				waitExited <- 0
+				waitExited <- (128 + 15)
 
-				Eventually(performErr).Should(Receive(BeNil()))
+				Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
 
 				Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
 			})
@@ -420,6 +420,10 @@ var _ = Describe("RunAction", func() {
 
 				Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 				Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+
+				waitExited <- (128 + 9)
+
+				Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
 			})
 		})
 	})

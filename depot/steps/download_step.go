@@ -50,14 +50,18 @@ func NewDownload(
 }
 
 func (step *downloadStep) Cancel() {
-	close(step.cancelChan)
+	select {
+	case <-step.cancelChan:
+	default:
+		close(step.cancelChan)
+	}
 }
 
 func (step *downloadStep) Perform() error {
 	select {
 	case step.rateLimiter <- struct{}{}:
 	case <-step.cancelChan:
-		return CancelError{}
+		return ErrCancelled
 	}
 	defer func() {
 		<-step.rateLimiter
@@ -67,7 +71,7 @@ func (step *downloadStep) Perform() error {
 	if err != nil {
 		select {
 		case <-step.cancelChan:
-			return CancelError{}
+			return ErrCancelled
 		default:
 			return err
 		}
