@@ -45,4 +45,5 @@ var (
 	ErrGuidNotSpecified               = registerError("GuidNotSpecified", "container guid not specified", http.StatusBadRequest)
 	ErrInvalidTransition              = registerError("InvalidStateTransition", "container cannot transition to given state", http.StatusConflict)
 	ErrFailureToCheckSpace            = registerError("ErrFailureToCheckSpace", "failed to check available space", http.StatusInternalServerError)
+	ErrInvalidSecurityGroup           = registerError("ErrInvalidSecurityGroup", "security group has invalid values", http.StatusBadRequest)
 )

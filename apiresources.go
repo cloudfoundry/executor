@@ -44,6 +44,8 @@ type Container struct {
 	Env []EnvironmentVariable `json:"env,omitempty"`
 
 	RunResult ContainerRunResult `json:"run_result"`
+
+	SecurityGroupRules []models.SecurityGroupRule `json:"security_group_rules,omitempty"`
 }
 
 func (c *Container) HasTags(tags Tags) bool {
