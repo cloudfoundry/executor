@@ -130,14 +130,10 @@ func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) error {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	_, err := a.lookup(guid)
-	if err != nil {
-		logger.Error("failed-deallocating-container", err)
-		return err
-	}
 	logger.Debug("deallocating-container", lager.Data{"guid": guid})
 
 	delete(a.allocated, guid)
+
 	return nil
 }
 

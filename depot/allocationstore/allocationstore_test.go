@@ -246,10 +246,9 @@ var _ = Describe("Allocation Store", func() {
 		})
 
 		Context("when the guid is not in the list", func() {
-			It("errors", func() {
+			It("succeeds anyway", func() {
 				err := allocationStore.Deallocate(logger, "doesnt-exist")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
 	})
