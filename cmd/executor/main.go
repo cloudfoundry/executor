@@ -221,7 +221,7 @@ func main() {
 			Interval:       metricsReportInterval,
 			Logger:         metricsLogger,
 		}},
-		{"hub-drainer", drainHub(hub)},
+		{"hub-closer", closeHub(hub)},
 		{"registry-pruner", allocationStore.RegistryPruner(logger, *registryPruningInterval)},
 	}
 
@@ -267,7 +267,7 @@ func validate(logger lager.Logger) bool {
 	return valid
 }
 
-func drainHub(hub event.Hub) ifrit.Runner {
+func closeHub(hub event.Hub) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		<-signals
