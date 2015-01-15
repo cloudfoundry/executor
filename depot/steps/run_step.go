@@ -171,6 +171,10 @@ func (step *runStep) Perform() error {
 			exitTimeout = exitTimer.C()
 
 		case <-exitTimeout:
+			logger.Error("process-did-not-exit", nil, lager.Data{
+				"timeout": EXIT_TIMEOUT,
+			})
+
 			return ErrExitTimeout
 		}
 	}

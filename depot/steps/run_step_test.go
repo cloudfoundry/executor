@@ -442,6 +442,10 @@ var _ = Describe("RunAction", func() {
 					fakeTimeProvider.Increment(EXIT_TIMEOUT + 1*time.Second)
 
 					Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
+
+					Ω(logger.TestSink.LogMessages()).Should(ContainElement(
+						ContainSubstring("process-did-not-exit"),
+					))
 				})
 			})
 		})
