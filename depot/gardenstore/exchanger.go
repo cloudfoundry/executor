@@ -344,9 +344,9 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
 				return executor.Container{}, executor.ErrInvalidSecurityGroup
 			}
-			portRange := fmt.Sprintf("%d-%d", securityRule.PortRange.Start, securityRule.PortRange.End)
+			portRange := fmt.Sprintf("%d:%d", securityRule.PortRange.Start, securityRule.PortRange.End)
 
-			err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, -1, 0)
+			err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, -1, -1)
 			if err != nil {
 				logger.Error("failed-to-set-security-rules", err, lager.Data{"security_group_rule": securityRule})
 				exchanger.destroyContainer(logger, gardenClient, gardenContainer)

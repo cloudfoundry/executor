@@ -1062,9 +1062,9 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(network).Should(Equal(securityGroupRule.Destination))
 						Ω(port).Should(Equal(uint32(0)))
 						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(0)))
+						Ω(icmpCode).Should(Equal(int32(-1)))
 						Ω(protocol).Should(Equal(garden.ProtocolTCP))
-						Ω(portRange).Should(Equal("1-1024"))
+						Ω(portRange).Should(Equal("1:1024"))
 					})
 				})
 
