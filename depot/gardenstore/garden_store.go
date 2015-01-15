@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -77,7 +76,7 @@ func (store *GardenStore) lookup(logger lager.Logger, guid string) (garden.Conta
 	gardenContainer, err := store.gardenClient.Lookup(guid)
 	if err != nil {
 		logger.Error("lookup-failed", err, lager.Data{"guid": guid})
-		if err == client.ErrContainerNotFound {
+		if _, ok := err.(garden.ContainerNotFoundError); ok {
 			err = executor.ErrContainerNotFound
 		}
 

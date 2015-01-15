@@ -14,7 +14,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
-	gardenclient "github.com/cloudfoundry-incubator/garden/client"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/dropsonde/log_sender/fake"
@@ -81,7 +80,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when the container doesn't exist", func() {
 			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, gardenclient.ErrContainerNotFound)
+				fakeGardenClient.LookupReturns(nil, garden.ContainerNotFoundError{})
 			})
 
 			It("returns a container-not-found error", func() {
@@ -1341,7 +1340,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when the container doesn't exist", func() {
 			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, gardenclient.ErrContainerNotFound)
+				fakeGardenClient.LookupReturns(nil, garden.ContainerNotFoundError{})
 			})
 
 			It("returns a container-not-found error", func() {
@@ -1493,12 +1492,12 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Context("when the lookup fails because the container is not found", func() {
 				BeforeEach(func() {
-					fakeGardenClient.LookupReturns(gardenContainer, gardenclient.ErrContainerNotFound)
+					fakeGardenClient.LookupReturns(gardenContainer, garden.ContainerNotFoundError{"some-container-handle"})
 				})
 
 				It("logs that the container was not found", func() {
 					Ω(logger).Should(gbytes.Say(runSessionPrefix + "lookup-failed"))
-					Ω(logger).Should(gbytes.Say("container not found"))
+					Ω(logger).Should(gbytes.Say("unknown handle: some-container-handle"))
 				})
 
 				It("does not run the container", func() {
