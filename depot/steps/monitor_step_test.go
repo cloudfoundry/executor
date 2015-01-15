@@ -69,6 +69,16 @@ var _ = Describe("MonitorStep", func() {
 		)
 	})
 
+	expectCheckAfterInterval := func(fakeStep *fakes.FakeStep, d time.Duration) {
+		previousCheckCount := fakeStep.PerformCallCount()
+
+		timeProvider.Increment(d - 1*time.Microsecond)
+		Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
+
+		timeProvider.Increment(d)
+		Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
+	}
+
 	Describe("Perform", func() {
 		var (
 			checkResults chan<- error
@@ -76,16 +86,6 @@ var _ = Describe("MonitorStep", func() {
 			performErr     chan error
 			donePerforming *sync.WaitGroup
 		)
-
-		expectCheckAfterInterval := func(fakeStep *fakes.FakeStep, d time.Duration) {
-			previousCheckCount := fakeStep.PerformCallCount()
-
-			timeProvider.Increment(d - 1*time.Microsecond)
-			Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
-
-			timeProvider.Increment(d)
-			Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
-		}
 
 		BeforeEach(func() {
 			results := make(chan error, 10)
@@ -245,10 +245,45 @@ var _ = Describe("MonitorStep", func() {
 	Describe("Cancel", func() {
 		It("interrupts the monitoring", func() {
 			performResult := make(chan error)
-			s := step
-			go func() { performResult <- s.Perform() }()
-			s.Cancel()
-			Eventually(performResult).Should(Receive())
+			go func() { performResult <- step.Perform() }()
+			step.Cancel()
+			Eventually(performResult).Should(Receive(Equal(ErrCancelled)))
+		})
+
+		Context("while checking", func() {
+			var performing chan struct{}
+
+			BeforeEach(func() {
+				performing = make(chan struct{})
+				cancelled := make(chan struct{})
+
+				fakeStep1.PerformStub = func() error {
+					close(performing)
+
+					select {
+					case <-cancelled:
+						return ErrCancelled
+					}
+				}
+
+				fakeStep1.CancelStub = func() {
+					close(cancelled)
+				}
+			})
+
+			It("cancels the in-flight check", func() {
+				performResult := make(chan error)
+
+				go func() { performResult <- step.Perform() }()
+
+				expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+
+				Eventually(performing).Should(BeClosed())
+
+				step.Cancel()
+
+				Eventually(performResult).Should(Receive(Equal(ErrCancelled)))
+			})
 		})
 	})
 })

@@ -51,7 +51,6 @@ func NewMonitor(
 }
 
 func (step *monitorStep) Perform() error {
-
 	if step.healthyInterval <= 0 {
 		return invalidInterval("healthy", step.healthyInterval)
 	}
@@ -75,29 +74,45 @@ func (step *monitorStep) Perform() error {
 	for {
 		select {
 		case now := <-timer.C():
-			stepErr := step.checkFunc().Perform()
-			nowHealthy := stepErr == nil
+			stepResult := make(chan error)
 
-			if healthy && !nowHealthy {
-				step.logger.Info("transitioned-to-unhealthy")
-				return stepErr
-			} else if !healthy && nowHealthy {
-				step.logger.Info("transitioned-to-healthy")
-				healthy = true
-				step.hasStartedRunning <- struct{}{}
-				interval = step.healthyInterval
-				startBy = nil
-			}
+			check := step.checkFunc()
 
-			if startBy != nil && now.After(*startBy) {
-				if !healthy {
-					step.logger.Info("timed-out-before-healthy")
+			go func() {
+				stepResult <- check.Perform()
+			}()
+
+			select {
+			case stepErr := <-stepResult:
+				nowHealthy := stepErr == nil
+
+				if healthy && !nowHealthy {
+					step.logger.Info("transitioned-to-unhealthy")
 					return stepErr
+				} else if !healthy && nowHealthy {
+					step.logger.Info("transitioned-to-healthy")
+					healthy = true
+					step.hasStartedRunning <- struct{}{}
+					interval = step.healthyInterval
+					startBy = nil
 				}
-				startBy = nil
+
+				if startBy != nil && now.After(*startBy) {
+					if !healthy {
+						step.logger.Info("timed-out-before-healthy")
+						return stepErr
+					}
+
+					startBy = nil
+				}
+
+			case <-step.Cancelled():
+				check.Cancel()
+				return <-stepResult
 			}
+
 		case <-step.Cancelled():
-			return nil
+			return ErrCancelled
 		}
 
 		timer.Reset(interval)
