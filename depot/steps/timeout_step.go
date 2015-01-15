@@ -48,8 +48,6 @@ func (step *timeoutStep) Perform() error {
 }
 
 func (step *timeoutStep) Cancel() {
-	step.logger.Info("cancelling")
-
 	step.substep.Cancel()
 }
 
