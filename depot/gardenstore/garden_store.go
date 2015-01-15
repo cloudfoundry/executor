@@ -242,33 +242,29 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 		container.Log.Index,
 	)
 
-	seq := []steps.Step{}
+	var setupStep, actionStep, monitorStep steps.Step
 
 	if container.Setup != nil {
-		seq = append(seq, store.transformer.StepFor(
+		setupStep = store.transformer.StepFor(
 			logStreamer,
 			container.Setup,
 			gardenContainer,
 			container.ExternalIP,
 			container.Ports,
 			logger,
-		))
+		)
 	}
 
-	parallelSequence := []steps.Step{
-		store.transformer.StepFor(
-			logStreamer,
-			container.Action,
-			gardenContainer,
-			container.ExternalIP,
-			container.Ports,
-			logger,
-		),
-	}
+	actionStep = store.transformer.StepFor(
+		logStreamer,
+		container.Action,
+		gardenContainer,
+		container.ExternalIP,
+		container.Ports,
+		logger,
+	)
 
 	hasStartedRunning := make(chan struct{}, 1)
-
-	var monitorStep steps.Step
 
 	if container.Monitor != nil {
 		monitorStep = steps.NewMonitor(
@@ -289,15 +285,24 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
 		)
-		parallelSequence = append(parallelSequence, monitorStep)
+	}
+
+	var longLivedAction steps.Step
+	if monitorStep != nil {
+		longLivedAction = steps.NewCodependent([]steps.Step{actionStep, monitorStep})
 	} else {
+		longLivedAction = actionStep
+
 		// this container isn't monitored, so we mark it running right away
 		hasStartedRunning <- struct{}{}
 	}
 
-	seq = append(seq, steps.NewCodependent(parallelSequence))
-
-	step := steps.NewSerial(seq)
+	var step steps.Step
+	if setupStep != nil {
+		step = steps.NewSerial([]steps.Step{setupStep, longLivedAction})
+	} else {
+		step = longLivedAction
+	}
 
 	store.runStepProcess(logger, step, monitorStep, hasStartedRunning, gardenContainer, container.Guid)
 
