@@ -15,6 +15,9 @@ import (
 )
 
 const TERMINATE_TIMEOUT = 10 * time.Second
+const EXIT_TIMEOUT = 1 * time.Minute
+
+var ErrExitTimeout = errors.New("process did not exit")
 
 type runStep struct {
 	container            garden.Container
@@ -107,6 +110,7 @@ func (step *runStep) Perform() error {
 	cancel := step.Cancelled()
 
 	var killSwitch <-chan time.Time
+	var exitTimeout <-chan time.Time
 
 	for {
 		select {
@@ -160,6 +164,14 @@ func (step *runStep) Perform() error {
 			}
 
 			killSwitch = nil
+
+			exitTimer := step.timeProvider.NewTimer(EXIT_TIMEOUT)
+			defer exitTimer.Stop()
+
+			exitTimeout = exitTimer.C()
+
+		case <-exitTimeout:
+			return ErrExitTimeout
 		}
 	}
 

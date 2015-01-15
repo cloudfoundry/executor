@@ -425,6 +425,25 @@ var _ = Describe("RunAction", func() {
 
 				Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
 			})
+
+			Context("when the process *still* does not exit after 1m", func() {
+				It("finishes performing with failure", func() {
+					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+
+					fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+
+					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
+					Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+
+					fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+
+					Consistently(performErr).ShouldNot(Receive())
+
+					fakeTimeProvider.Increment(EXIT_TIMEOUT + 1*time.Second)
+
+					Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
+				})
+			})
 		})
 	})
 })
