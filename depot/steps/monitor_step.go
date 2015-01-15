@@ -23,7 +23,7 @@ type monitorStep struct {
 	healthyInterval   time.Duration
 	unhealthyInterval time.Duration
 
-	cancel chan struct{}
+	*canceller
 }
 
 func NewMonitor(
@@ -45,7 +45,8 @@ func NewMonitor(
 		startTimeout:      startTimeout,
 		healthyInterval:   healthyInterval,
 		unhealthyInterval: unhealthyInterval,
-		cancel:            make(chan struct{}),
+
+		canceller: newCanceller(),
 	}
 }
 
@@ -95,22 +96,12 @@ func (step *monitorStep) Perform() error {
 				}
 				startBy = nil
 			}
-		case <-step.cancel:
+		case <-step.Cancelled():
 			return nil
 		}
 
 		timer.Reset(interval)
 	}
 
-	return nil
-}
-
-func (step *monitorStep) Cancel() {
-	step.logger.Info("cancelling")
-
-	select {
-	case <-step.cancel:
-	default:
-		close(step.cancel)
-	}
+	panic("unreachable")
 }

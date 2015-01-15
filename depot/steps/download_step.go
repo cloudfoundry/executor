@@ -19,8 +19,9 @@ type downloadStep struct {
 	cachedDownloader cacheddownloader.CachedDownloader
 	streamer         log_streamer.LogStreamer
 	rateLimiter      chan struct{}
-	cancelChan       chan struct{}
 	logger           lager.Logger
+
+	*canceller
 }
 
 func NewDownload(
@@ -36,31 +37,22 @@ func NewDownload(
 		"cacheKey": model.CacheKey,
 	})
 
-	cancelChan := make(chan struct{})
-
 	return &downloadStep{
 		container:        container,
 		model:            model,
 		cachedDownloader: cachedDownloader,
 		streamer:         streamer,
 		rateLimiter:      rateLimiter,
-		cancelChan:       cancelChan,
 		logger:           logger,
-	}
-}
 
-func (step *downloadStep) Cancel() {
-	select {
-	case <-step.cancelChan:
-	default:
-		close(step.cancelChan)
+		canceller: newCanceller(),
 	}
 }
 
 func (step *downloadStep) Perform() error {
 	select {
 	case step.rateLimiter <- struct{}{}:
-	case <-step.cancelChan:
+	case <-step.Cancelled():
 		return ErrCancelled
 	}
 	defer func() {
@@ -70,7 +62,7 @@ func (step *downloadStep) Perform() error {
 	err := step.perform()
 	if err != nil {
 		select {
-		case <-step.cancelChan:
+		case <-step.Cancelled():
 			return ErrCancelled
 		default:
 			return err
@@ -107,7 +99,7 @@ func (step *downloadStep) fetch() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	tarStream, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.cancelChan)
+	tarStream, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.Cancelled())
 	if err != nil {
 		step.logger.Error("fetch-failed", err)
 		return nil, err

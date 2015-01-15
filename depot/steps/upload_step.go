@@ -26,7 +26,8 @@ type uploadStep struct {
 	streamer    log_streamer.LogStreamer
 	rateLimiter chan struct{}
 	logger      lager.Logger
-	cancel      chan struct{}
+
+	*canceller
 }
 
 func NewUpload(
@@ -53,7 +54,7 @@ func NewUpload(
 		rateLimiter: rateLimiter,
 		logger:      logger,
 
-		cancel: make(chan struct{}),
+		canceller: newCanceller(),
 	}
 }
 
@@ -116,10 +117,10 @@ func (step *uploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.cancel)
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.Cancelled())
 	if err != nil {
 		select {
-		case <-step.cancel:
+		case <-step.Cancelled():
 			return ErrCancelled
 
 		default:
@@ -136,14 +137,6 @@ func (step *uploadStep) Perform() (err error) {
 
 	step.logger.Info("upload-successful")
 	return nil
-}
-
-func (step *uploadStep) Cancel() {
-	select {
-	case <-step.cancel:
-	default:
-		close(step.cancel)
-	}
 }
 
 func (step *uploadStep) emit(format string, a ...interface{}) {

@@ -27,7 +27,7 @@ type runStep struct {
 	exportNetworkEnvVars bool
 	timeProvider         timeprovider.TimeProvider
 
-	cancel chan struct{}
+	*canceller
 }
 
 func NewRun(
@@ -53,7 +53,7 @@ func NewRun(
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		timeProvider:         timeProvider,
 
-		cancel: make(chan struct{}),
+		canceller: newCanceller(),
 	}
 }
 
@@ -104,7 +104,7 @@ func (step *runStep) Perform() error {
 		}
 	}()
 
-	cancel := step.cancel
+	cancel := step.Cancelled()
 
 	var killSwitch <-chan time.Time
 
@@ -164,14 +164,6 @@ func (step *runStep) Perform() error {
 	}
 
 	panic("unreachable")
-}
-
-func (step *runStep) Cancel() {
-	select {
-	case <-step.cancel:
-	default:
-		close(step.cancel)
-	}
 }
 
 func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {

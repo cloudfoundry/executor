@@ -229,9 +229,6 @@ var _ = Describe("MonitorStep", func() {
 			go func() { performResult <- s.Perform() }()
 			s.Cancel()
 			Eventually(performResult).Should(Receive())
-			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
-				"test.monitor-step.cancelling",
-			}))
 		})
 	})
 })
