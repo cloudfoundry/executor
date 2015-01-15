@@ -13,7 +13,7 @@ func invalidInterval(field string, interval time.Duration) error {
 }
 
 type monitorStep struct {
-	check             Step
+	checkFunc         func() Step
 	hasStartedRunning chan<- struct{}
 
 	logger       lager.Logger
@@ -27,7 +27,7 @@ type monitorStep struct {
 }
 
 func NewMonitor(
-	check Step,
+	checkFunc func() Step,
 	hasStartedRunning chan<- struct{},
 	logger lager.Logger,
 	timeProvider timeprovider.TimeProvider,
@@ -38,7 +38,7 @@ func NewMonitor(
 	logger = logger.Session("monitor-step")
 
 	return &monitorStep{
-		check:             check,
+		checkFunc:         checkFunc,
 		hasStartedRunning: hasStartedRunning,
 		logger:            logger,
 		timeProvider:      timeProvider,
@@ -75,7 +75,7 @@ func (step *monitorStep) Perform() error {
 	for {
 		select {
 		case now := <-timer.C():
-			stepErr := step.check.Perform()
+			stepErr := step.checkFunc().Perform()
 			nowHealthy := stepErr == nil
 
 			if healthy && !nowHealthy {

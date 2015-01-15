@@ -16,7 +16,12 @@ import (
 
 var _ = Describe("MonitorStep", func() {
 	var (
-		check            *fakes.FakeStep
+		fakeStep1 *fakes.FakeStep
+		fakeStep2 *fakes.FakeStep
+
+		checkSteps chan *fakes.FakeStep
+
+		checkFunc        func() Step
 		hasBecomeHealthy <-chan struct{}
 		timeProvider     *faketimeprovider.FakeTimeProvider
 
@@ -33,8 +38,19 @@ var _ = Describe("MonitorStep", func() {
 		healthyInterval = 1 * time.Second
 		unhealthyInterval = 500 * time.Millisecond
 
+		fakeStep1 = new(fakes.FakeStep)
+		fakeStep2 = new(fakes.FakeStep)
+
+		checkSteps = make(chan *fakes.FakeStep, 2)
+		checkSteps <- fakeStep1
+		checkSteps <- fakeStep2
+
 		timeProvider = faketimeprovider.New(time.Now())
-		check = new(fakes.FakeStep)
+
+		checkFunc = func() Step {
+			return <-checkSteps
+		}
+
 		logger = lagertest.NewTestLogger("test")
 	})
 
@@ -43,7 +59,7 @@ var _ = Describe("MonitorStep", func() {
 		hasBecomeHealthy = hasBecomeHealthyChannel
 
 		step = NewMonitor(
-			check,
+			checkFunc,
 			hasBecomeHealthyChannel,
 			logger,
 			timeProvider,
@@ -61,14 +77,14 @@ var _ = Describe("MonitorStep", func() {
 			donePerforming *sync.WaitGroup
 		)
 
-		expectCheckAfterInterval := func(d time.Duration) {
-			previousCheckCount := check.PerformCallCount()
+		expectCheckAfterInterval := func(fakeStep *fakes.FakeStep, d time.Duration) {
+			previousCheckCount := fakeStep.PerformCallCount()
 
 			timeProvider.Increment(d - 1*time.Microsecond)
-			Consistently(check.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
+			Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
 			timeProvider.Increment(d)
-			Eventually(check.PerformCallCount).Should(Equal(previousCheckCount + 1))
+			Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
 		}
 
 		BeforeEach(func() {
@@ -76,7 +92,8 @@ var _ = Describe("MonitorStep", func() {
 			checkResults = results
 
 			var currentResult error
-			check.PerformStub = func() error {
+
+			fakedResult := func() error {
 				select {
 				case currentResult = <-results:
 				default:
@@ -84,6 +101,9 @@ var _ = Describe("MonitorStep", func() {
 
 				return currentResult
 			}
+
+			fakeStep1.PerformStub = fakedResult
+			fakeStep2.PerformStub = fakedResult
 		})
 
 		JustBeforeEach(func() {
@@ -109,7 +129,7 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("and the unhealthy interval passes", func() {
 				JustBeforeEach(func() {
-					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 				})
 
 				It("emits a healthy event", func() {
@@ -125,7 +145,7 @@ var _ = Describe("MonitorStep", func() {
 				Context("and the healthy interval passes", func() {
 					JustBeforeEach(func() {
 						Eventually(hasBecomeHealthy).Should(Receive())
-						expectCheckAfterInterval(healthyInterval)
+						expectCheckAfterInterval(fakeStep2, healthyInterval)
 					})
 
 					It("does not emit another healthy event", func() {
@@ -143,7 +163,7 @@ var _ = Describe("MonitorStep", func() {
 					Context("and the healthy interval passes", func() {
 						JustBeforeEach(func() {
 							Eventually(hasBecomeHealthy).Should(Receive())
-							expectCheckAfterInterval(healthyInterval)
+							expectCheckAfterInterval(fakeStep2, healthyInterval)
 						})
 
 						It("emits nothing", func() {
@@ -177,15 +197,15 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("completes with failure", func() {
-					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					Consistently(performErr).ShouldNot(Receive())
-					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(performErr).Should(Receive(MatchError("not up yet!")))
 				})
 
 				It("logs the step", func() {
-					expectCheckAfterInterval(unhealthyInterval)
-					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.monitor-step.timed-out-before-healthy",
 					}))
@@ -194,7 +214,7 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("and the unhealthy interval passes", func() {
 				JustBeforeEach(func() {
-					expectCheckAfterInterval(unhealthyInterval)
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 				})
 
 				It("does not emit an unhealthy event", func() {
@@ -207,7 +227,7 @@ var _ = Describe("MonitorStep", func() {
 
 				Context("and the unhealthy interval passes again", func() {
 					JustBeforeEach(func() {
-						expectCheckAfterInterval(unhealthyInterval)
+						expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					})
 
 					It("does not emit an unhealthy event", func() {

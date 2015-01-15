@@ -271,17 +271,17 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 	var monitorStep steps.Step
 
 	if container.Monitor != nil {
-		monitoredStep := store.transformer.StepFor(
-			logStreamer,
-			container.Monitor,
-			gardenContainer,
-			container.ExternalIP,
-			container.Ports,
-			logger,
-		)
-
 		monitorStep = steps.NewMonitor(
-			monitoredStep,
+			func() steps.Step {
+				return store.transformer.StepFor(
+					logStreamer,
+					container.Monitor,
+					gardenContainer,
+					container.ExternalIP,
+					container.Ports,
+					logger,
+				)
+			},
 			hasStartedRunning,
 			logger.Session("monitor"),
 			store.timeProvider,
