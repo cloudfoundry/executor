@@ -126,15 +126,21 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 	return container, nil
 }
 
-func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) error {
+func (a *AllocationStore) Deallocate(logger lager.Logger, guid string) bool {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+
+	_, allocated := a.allocated[guid]
+	if !allocated {
+		logger.Debug("container-already-deallocated", lager.Data{"guid": guid})
+		return false
+	}
 
 	logger.Debug("deallocating-container", lager.Data{"guid": guid})
 
 	delete(a.allocated, guid)
 
-	return nil
+	return true
 }
 
 func (a *AllocationStore) lookup(guid string) (executor.Container, error) {

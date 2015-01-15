@@ -32,7 +32,7 @@ type AllocationStore interface {
 	Allocate(logger lager.Logger, container executor.Container) (executor.Container, error)
 	Initialize(logger lager.Logger, guid string) error
 	Fail(logger lager.Logger, guid string, reason string) (executor.Container, error)
-	Deallocate(logger lager.Logger, guid string) error
+	Deallocate(logger lager.Logger, guid string) bool
 }
 
 //go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
@@ -185,13 +185,8 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		err = c.allocationStore.Deallocate(logger, guid)
-		if err != nil {
-			if err == executor.ErrContainerNotFound {
-				logger.Debug("container-already-deallocated")
-			} else {
-				logger.Error("failed-to-deallocate", err)
-			}
+		if !c.allocationStore.Deallocate(logger, guid) {
+			logger.Info("container-deallocated-during-initialization")
 
 			err = c.gardenStore.Destroy(logger, guid)
 			if err != nil {
@@ -280,15 +275,10 @@ func (c *client) DeleteContainer(guid string) error {
 	c.containerLockManager.Lock(guid)
 	defer c.containerLockManager.Unlock(guid)
 
-	allocationStoreErr := c.allocationStore.Deallocate(logger, guid)
-	if allocationStoreErr != nil {
-		logger.Debug("failed-to-deallocate-container", lager.Data{"error": allocationStoreErr.Error()})
-	}
+	// don't care if we actually deallocated
+	c.allocationStore.Deallocate(logger, guid)
 
-	if _, err := c.gardenStore.Lookup(logger, guid); err != nil {
-		logger.Debug("garden-container-not-found", lager.Data{"message": err.Error()})
-		return allocationStoreErr
-	} else if err := c.gardenStore.Destroy(logger, guid); err != nil {
+	if err := c.gardenStore.Destroy(logger, guid); err != nil {
 		logger.Error("failed-to-delete-garden-container", err)
 		return err
 	}

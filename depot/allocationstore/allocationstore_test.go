@@ -52,8 +52,8 @@ var _ = Describe("Allocation Store", func() {
 
 			Context("and then deallocated", func() {
 				BeforeEach(func() {
-					err := allocationStore.Deallocate(logger, container.Guid)
-					Ω(err).ShouldNot(HaveOccurred())
+					deallocated := allocationStore.Deallocate(logger, container.Guid)
+					Ω(deallocated).Should(BeTrue())
 				})
 
 				It("is no longer in the list", func() {
@@ -235,20 +235,20 @@ var _ = Describe("Allocation Store", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("it is removed from the list", func() {
+			It("it is removed from the list, and returns true", func() {
 				count := len(allocationStore.List())
 
-				err := allocationStore.Deallocate(logger, container.Guid)
-				Ω(err).ShouldNot(HaveOccurred())
+				deallocated := allocationStore.Deallocate(logger, container.Guid)
+				Ω(deallocated).Should(BeTrue())
 
 				Ω(allocationStore.List()).Should(HaveLen(count - 1))
 			})
 		})
 
 		Context("when the guid is not in the list", func() {
-			It("succeeds anyway", func() {
-				err := allocationStore.Deallocate(logger, "doesnt-exist")
-				Ω(err).ShouldNot(HaveOccurred())
+			It("returns false", func() {
+				deallocated := allocationStore.Deallocate(logger, "doesnt-exist")
+				Ω(deallocated).Should(BeFalse())
 			})
 		})
 	})

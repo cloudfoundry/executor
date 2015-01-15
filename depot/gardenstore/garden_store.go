@@ -183,10 +183,17 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 
 	err := store.gardenClient.Destroy(guid)
 	if err != nil {
+		if _, ok := err.(garden.ContainerNotFoundError); ok {
+			logger.Info("container-not-found")
+			return nil
+		}
+
 		logger.Error("failed-to-destroy-garden-container", err)
 		return err
 	}
+
 	logger.Info("succeeded")
+
 	return nil
 }
 

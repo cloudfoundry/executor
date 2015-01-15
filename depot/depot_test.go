@@ -645,6 +645,7 @@ var _ = Describe("Depot", func() {
 
 	Describe("DeleteContainer", func() {
 		var containers []executor.Container
+
 		BeforeEach(func() {
 			containers = []executor.Container{
 				{
@@ -666,7 +667,6 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when container exists in allocation store", func() {
-
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -674,21 +674,25 @@ var _ = Describe("Depot", func() {
 				gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
 			})
 
-			It("should remove the container from allocation store", func() {
+			It("should remove the container from both allocation store, and attempt to remove it from the garden store", func() {
+				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+
 				err := depotClient.DeleteContainer("guid-1")
 				Ω(err).ShouldNot(HaveOccurred())
+
 				allocatedContainers := allocationStore.List()
 				Ω(allocatedContainers).Should(HaveLen(2))
 				allocatedContainersMap := convertSliceToMap(allocatedContainers)
 				Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-1"))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
+				_, guid := gardenStore.DestroyArgsForCall(0)
+				Ω(guid).Should(Equal("guid-1"))
 			})
 		})
 
 		Context("when container exists in garden store", func() {
-
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -700,10 +704,12 @@ var _ = Describe("Depot", func() {
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 			})
 
-			It("should remove the container from garden store", func() {
+			It("should remove the container from both allocation store and the garden store", func() {
 				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+
 				err := depotClient.DeleteContainer("guid-1")
 				Ω(err).ShouldNot(HaveOccurred())
+
 				allocatedContainers := allocationStore.List()
 				Ω(allocatedContainers).Should(HaveLen(2))
 				allocatedContainersMap := convertSliceToMap(allocatedContainers)
@@ -711,55 +717,6 @@ var _ = Describe("Depot", func() {
 				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-1"))
 				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
-				_, guid := gardenStore.DestroyArgsForCall(0)
-				Ω(guid).Should(Equal("guid-1"))
-			})
-
-		})
-
-		Context("when container does not exist", func() {
-
-			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
-				gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
-			})
-
-			It("should return an error", func() {
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
-				err := depotClient.DeleteContainer("nonexistent-guid")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				allocatedContainers := allocationStore.List()
-				Ω(allocatedContainers).Should(HaveLen(3))
-				allocatedContainersMap := convertSliceToMap(allocatedContainers)
-				Ω(allocatedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
-			})
-		})
-
-		Context("when container exists in both allocation and garden store", func() {
-
-			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
-			})
-
-			It("should remove the container from both allocation and garden store", func() {
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
-				err := depotClient.DeleteContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
-				allocatedContainers := allocationStore.List()
-				Ω(allocatedContainers).Should(HaveLen(2))
-				allocatedContainersMap := convertSliceToMap(allocatedContainers)
-				Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-1"))
 				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
 				_, guid := gardenStore.DestroyArgsForCall(0)
 				Ω(guid).Should(Equal("guid-1"))

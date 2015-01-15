@@ -1303,7 +1303,18 @@ var _ = Describe("GardenContainerStore", func() {
 			It("logs the error", func() {
 				Ω(logger).Should(gbytes.Say(destroySessionPrefix + "failed-to-destroy-garden-container"))
 			})
+		})
 
+		Context("when the Garden client returns ContainerNotFoundError", func() {
+			BeforeEach(func() {
+				fakeGardenClient.DestroyReturns(garden.ContainerNotFoundError{
+					Handle: "some-handle",
+				})
+			})
+
+			It("doesn't return an error", func() {
+				Ω(destroyErr).ShouldNot(HaveOccurred())
+			})
 		})
 	})
 
