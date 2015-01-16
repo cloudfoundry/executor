@@ -28,21 +28,21 @@ const (
 	tagPropertyPrefix      = "tag:"
 	executorPropertyPrefix = "executor:"
 
-	ContainerOwnerProperty              = executorPropertyPrefix + "owner"
-	ContainerStateProperty              = executorPropertyPrefix + "state"
-	ContainerAllocatedAtProperty        = executorPropertyPrefix + "allocated-at"
-	ContainerRootfsProperty             = executorPropertyPrefix + "rootfs"
-	ContainerActionProperty             = executorPropertyPrefix + "action"
-	ContainerSetupProperty              = executorPropertyPrefix + "setup"
-	ContainerMonitorProperty            = executorPropertyPrefix + "monitor"
-	ContainerEnvProperty                = executorPropertyPrefix + "env"
-	ContainerLogProperty                = executorPropertyPrefix + "log"
-	ContainerResultProperty             = executorPropertyPrefix + "result"
-	ContainerMemoryMBProperty           = executorPropertyPrefix + "memory-mb"
-	ContainerDiskMBProperty             = executorPropertyPrefix + "disk-mb"
-	ContainerCPUWeightProperty          = executorPropertyPrefix + "cpu-weight"
-	ContainerStartTimeoutProperty       = executorPropertyPrefix + "start-timeout"
-	ContainerSecurityGroupRulesProperty = executorPropertyPrefix + "security-group-rules"
+	ContainerOwnerProperty        = executorPropertyPrefix + "owner"
+	ContainerStateProperty        = executorPropertyPrefix + "state"
+	ContainerAllocatedAtProperty  = executorPropertyPrefix + "allocated-at"
+	ContainerRootfsProperty       = executorPropertyPrefix + "rootfs"
+	ContainerActionProperty       = executorPropertyPrefix + "action"
+	ContainerSetupProperty        = executorPropertyPrefix + "setup"
+	ContainerMonitorProperty      = executorPropertyPrefix + "monitor"
+	ContainerEnvProperty          = executorPropertyPrefix + "env"
+	ContainerLogProperty          = executorPropertyPrefix + "log"
+	ContainerResultProperty       = executorPropertyPrefix + "result"
+	ContainerMemoryMBProperty     = executorPropertyPrefix + "memory-mb"
+	ContainerDiskMBProperty       = executorPropertyPrefix + "disk-mb"
+	ContainerCPUWeightProperty    = executorPropertyPrefix + "cpu-weight"
+	ContainerStartTimeoutProperty = executorPropertyPrefix + "start-timeout"
+	ContainerEgressRulesProperty  = executorPropertyPrefix + "egress-rules"
 )
 
 func NewExchanger(
@@ -194,8 +194,8 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 
 			executorContainer.StartTimeout = uint(startTimeout)
-		case ContainerSecurityGroupRulesProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.SecurityGroupRules)
+		case ContainerEgressRulesProperty:
+			err := json.Unmarshal([]byte(value), &executorContainer.EgressRules)
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -271,28 +271,28 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		return executor.Container{}, err
 	}
 
-	securityGroupRuleJson, err := json.Marshal(executorContainer.SecurityGroupRules)
+	securityGroupRuleJson, err := json.Marshal(executorContainer.EgressRules)
 	if err != nil {
-		logger.Error("failed-marshal-security-group-rules", err)
+		logger.Error("failed-marshal-egress-rules", err)
 		return executor.Container{}, err
 	}
 
 	containerSpec.Properties = garden.Properties{
-		ContainerOwnerProperty:              exchanger.containerOwnerName,
-		ContainerStateProperty:              string(executorContainer.State),
-		ContainerAllocatedAtProperty:        fmt.Sprintf("%d", executorContainer.AllocatedAt),
-		ContainerStartTimeoutProperty:       fmt.Sprintf("%d", executorContainer.StartTimeout),
-		ContainerRootfsProperty:             executorContainer.RootFSPath,
-		ContainerSetupProperty:              string(setupJson),
-		ContainerActionProperty:             string(actionJson),
-		ContainerMonitorProperty:            string(monitorJson),
-		ContainerEnvProperty:                string(envJson),
-		ContainerLogProperty:                string(logJson),
-		ContainerResultProperty:             string(resultJson),
-		ContainerMemoryMBProperty:           fmt.Sprintf("%d", executorContainer.MemoryMB),
-		ContainerDiskMBProperty:             fmt.Sprintf("%d", executorContainer.DiskMB),
-		ContainerCPUWeightProperty:          fmt.Sprintf("%d", executorContainer.CPUWeight),
-		ContainerSecurityGroupRulesProperty: string(securityGroupRuleJson),
+		ContainerOwnerProperty:        exchanger.containerOwnerName,
+		ContainerStateProperty:        string(executorContainer.State),
+		ContainerAllocatedAtProperty:  fmt.Sprintf("%d", executorContainer.AllocatedAt),
+		ContainerStartTimeoutProperty: fmt.Sprintf("%d", executorContainer.StartTimeout),
+		ContainerRootfsProperty:       executorContainer.RootFSPath,
+		ContainerSetupProperty:        string(setupJson),
+		ContainerActionProperty:       string(actionJson),
+		ContainerMonitorProperty:      string(monitorJson),
+		ContainerEnvProperty:          string(envJson),
+		ContainerLogProperty:          string(logJson),
+		ContainerResultProperty:       string(resultJson),
+		ContainerMemoryMBProperty:     fmt.Sprintf("%d", executorContainer.MemoryMB),
+		ContainerDiskMBProperty:       fmt.Sprintf("%d", executorContainer.DiskMB),
+		ContainerCPUWeightProperty:    fmt.Sprintf("%d", executorContainer.CPUWeight),
+		ContainerEgressRulesProperty:  string(securityGroupRuleJson),
 	}
 
 	for name, value := range executorContainer.Tags {
@@ -302,7 +302,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	for _, env := range executorContainer.Env {
 		containerSpec.Env = append(containerSpec.Env, env.Name+"="+env.Value)
 	}
-	for _, securityRule := range executorContainer.SecurityGroupRules {
+	for _, securityRule := range executorContainer.EgressRules {
 		if err := securityRule.Validate(); err != nil {
 			logger.Error("invalid-security-rule", err, lager.Data{"security_group_rule": securityRule})
 			return executor.Container{}, executor.ErrInvalidSecurityGroup
@@ -333,7 +333,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		executorContainer.Ports = actualPortMappings
 	}
 
-	for _, securityRule := range executorContainer.SecurityGroupRules {
+	for _, securityRule := range executorContainer.EgressRules {
 		var protocol garden.Protocol
 		icmpType := int32(-1)
 		icmpCode := int32(-1)
@@ -344,8 +344,8 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 			protocol = garden.ProtocolUDP
 		case models.ICMPProtocol:
 			protocol = garden.ProtocolICMP
-			icmpType = securityRule.IcmpInfo.IcmpType
-			icmpCode = securityRule.IcmpInfo.IcmpCode
+			icmpType = securityRule.IcmpInfo.Type
+			icmpCode = securityRule.IcmpInfo.Code
 		case models.AllProtocol:
 			protocol = garden.ProtocolAll
 		}
@@ -357,7 +357,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 		err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, icmpType, icmpCode)
 		if err != nil {
-			logger.Error("failed-to-set-security-rules", err, lager.Data{"security_group_rule": securityRule})
+			logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
 			exchanger.destroyContainer(logger, gardenClient, gardenContainer)
 			return executor.Container{}, err
 		}

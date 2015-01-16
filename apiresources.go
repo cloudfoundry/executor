@@ -45,7 +45,7 @@ type Container struct {
 
 	RunResult ContainerRunResult `json:"run_result"`
 
-	SecurityGroupRules []models.SecurityGroupRule `json:"security_group_rules,omitempty"`
+	EgressRules []models.SecurityGroupRule `json:"egress_rules,omitempty"`
 }
 
 func (c *Container) HasTags(tags Tags) bool {

@@ -59,7 +59,7 @@ var _ = Describe("Container", func() {
 				    "setup":null,
 						"run":null,
 						"monitor":null,
-						"security_group_rules":[
+						"egress_rules":[
 		          {
 				        "protocol": "tcp",
 								"destination": "0.0.0.0/0",
@@ -80,12 +80,12 @@ var _ = Describe("Container", func() {
 			}
 		})
 
-		Context("when it has security group rules", func() {
-			It("unmarshals security group rules", func() {
+		Context("when it has egress rules", func() {
+			It("unmarshals egress rules", func() {
 				err := container.UnmarshalJSON([]byte(payload))
 				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.SecurityGroupRules).Should(HaveLen(1))
-				Ω(container.SecurityGroupRules[0]).Should(Equal(securityGroupRule))
+				Ω(container.EgressRules).Should(HaveLen(1))
+				Ω(container.EgressRules[0]).Should(Equal(securityGroupRule))
 			})
 		})
 	})

@@ -494,11 +494,11 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
-			Context("when the container has an executor:security-group-rules property", func() {
+			Context("when the container has an executor:egress-rules property", func() {
 				Context("and the security group rule is valid", func() {
 					var (
-						securityGroupRule  models.SecurityGroupRule
-						securityGroupRules []models.SecurityGroupRule
+						securityGroupRule models.SecurityGroupRule
+						egressRules       []models.SecurityGroupRule
 					)
 
 					BeforeEach(func() {
@@ -511,35 +511,35 @@ var _ = Describe("GardenContainerStore", func() {
 							},
 						}
 
-						securityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+						egressRules = []models.SecurityGroupRule{securityGroupRule}
 
-						payload, err := json.Marshal(securityGroupRules)
+						payload, err := json.Marshal(egressRules)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:security-group-rules": string(payload),
+								"executor:egress-rules": string(payload),
 							},
 						}, nil)
 					})
 
-					It("has it as its security group rules", func() {
-						Ω(executorContainer.SecurityGroupRules).Should(Equal(securityGroupRules))
+					It("has it as its egress rules", func() {
+						Ω(executorContainer.EgressRules).Should(Equal(egressRules))
 					})
 				})
 
-				Context("and the security group rules is invalid", func() {
+				Context("and the egress rules are invalid", func() {
 					BeforeEach(func() {
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:security-group-rules": "ß",
+								"executor:egress-rules": "ß",
 							},
 						}, nil)
 					})
 
 					It("returns an InvalidJSONError", func() {
 						Ω(lookupErr).Should(HaveOccurred())
-						Ω(lookupErr.Error()).Should(ContainSubstring("executor:security-group-rules"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:egress-rules"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
@@ -1037,7 +1037,7 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
-			Context("when the Executor container has security rules", func() {
+			Context("when the Executor container has egress rules", func() {
 				var securityGroupRule models.SecurityGroupRule
 				BeforeEach(func() {
 					securityGroupRule = models.SecurityGroupRule{
@@ -1048,15 +1048,15 @@ var _ = Describe("GardenContainerStore", func() {
 							End:   1024,
 						},
 					}
-					executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+					executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
 				})
 
-				Context("when setting security rules succesful", func() {
+				Context("when setting egress rules", func() {
 
-					It("creates it with the security rules", func() {
+					It("creates it with the egress rules", func() {
 						Ω(createErr).ShouldNot(HaveOccurred())
 					})
-					It("updates security rules on returned container", func() {
+					It("updates egress rules on returned container", func() {
 						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
 						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
 						Ω(network).Should(Equal(securityGroupRule.Destination))
@@ -1075,17 +1075,17 @@ var _ = Describe("GardenContainerStore", func() {
 							Protocol:    "icmp",
 							Destination: "0.0.0.0/0",
 							IcmpInfo: &models.ICMPInfo{
-								IcmpType: 1,
-								IcmpCode: 2,
+								Type: 1,
+								Code: 2,
 							},
 						}
-						executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+						executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
 					})
 
-					It("creates it with the security rules", func() {
+					It("creates it with the egress rules", func() {
 						Ω(createErr).ShouldNot(HaveOccurred())
 					})
-					It("updates security rules on returned container", func() {
+					It("updates egress rules on returned container", func() {
 						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
 						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
 						Ω(network).Should(Equal(securityGroupRule.Destination))
@@ -1108,7 +1108,7 @@ var _ = Describe("GardenContainerStore", func() {
 								End:   1024,
 							},
 						}
-						executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+						executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
 					})
 
 					It("returns the error", func() {
@@ -1118,7 +1118,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				})
 
-				Context("when setting security rules fails", func() {
+				Context("when setting egress rules fails", func() {
 					disaster := errors.New("NO SECURITY FOR YOU!!!")
 
 					BeforeEach(func() {
@@ -1129,7 +1129,7 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(createErr).Should(HaveOccurred())
 					})
 
-					It("deletes the container from Garder", func() {
+					It("deletes the container from Garden", func() {
 						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
 						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("some-guid"))
 					})
