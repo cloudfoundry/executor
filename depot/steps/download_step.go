@@ -79,7 +79,6 @@ func (step *downloadStep) perform() error {
 	if err != nil {
 		return NewEmittableError(err, "Downloading failed")
 	}
-	defer downloadedFile.Close()
 
 	size := downloadSize(downloadedFile)
 	err = step.streamIn(step.model.To, downloadedFile)
