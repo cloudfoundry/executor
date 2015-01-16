@@ -2,9 +2,11 @@ package steps_test
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
@@ -12,6 +14,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("MonitorStep", func() {
@@ -24,6 +27,7 @@ var _ = Describe("MonitorStep", func() {
 		checkFunc        func() Step
 		hasBecomeHealthy <-chan struct{}
 		timeProvider     *faketimeprovider.FakeTimeProvider
+		fakeStreamer     *fake_log_streamer.FakeLogStreamer
 
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
@@ -47,6 +51,8 @@ var _ = Describe("MonitorStep", func() {
 
 		timeProvider = faketimeprovider.New(time.Now())
 
+		fakeStreamer = newFakeStreamer()
+
 		checkFunc = func() Step {
 			return <-checkSteps
 		}
@@ -63,6 +69,7 @@ var _ = Describe("MonitorStep", func() {
 			hasBecomeHealthyChannel,
 			logger,
 			timeProvider,
+			fakeStreamer,
 			startTimeout,
 			healthyInterval,
 			unhealthyInterval,
@@ -209,6 +216,14 @@ var _ = Describe("MonitorStep", func() {
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.monitor-step.timed-out-before-healthy",
 					}))
+				})
+
+				It("emits a log message explaining the timeout", func() {
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
+					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
+						fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
+					))
 				})
 			})
 

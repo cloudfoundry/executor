@@ -288,6 +288,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			hasStartedRunning,
 			logger.Session("monitor"),
 			store.timeProvider,
+			logStreamer,
 			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
