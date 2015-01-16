@@ -22,6 +22,7 @@ import (
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
 	archiveHelper "github.com/pivotal-golang/archiver/extractor/test_helper"
 )
@@ -107,8 +108,8 @@ var _ = Describe("DownloadAction", func() {
 				err := step.Perform()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-				Ω(stdout.String()).Should(BeEmpty())
+				stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+				Ω(stdout.Contents()).Should(BeEmpty())
 			})
 		})
 
@@ -121,8 +122,8 @@ var _ = Describe("DownloadAction", func() {
 				It("streams unknown when the Fetch does not return a File", func() {
 					Ω(stepErr).ShouldNot(HaveOccurred())
 
-					stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-					Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (unknown)"))
+					stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+					Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (unknown)"))
 				})
 
 				Context("with a file", func() {
@@ -143,8 +144,8 @@ var _ = Describe("DownloadAction", func() {
 					It("streams the size when the Fetch returns a File", func() {
 						Ω(stepErr).ShouldNot(HaveOccurred())
 
-						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-						Ω(stdout.String()).Should(ContainSubstring("Downloaded artifact (4B)"))
+						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (4B)"))
 					})
 				})
 			})

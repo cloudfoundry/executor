@@ -2,7 +2,6 @@ package steps_test
 
 import (
 	"archive/tar"
-	"bytes"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
@@ -26,29 +26,6 @@ import (
 	Compressor "github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/lager/lagertest"
 )
-
-type ClosableBuffer struct {
-	bytes.Buffer
-	closed chan struct{}
-}
-
-func NewClosableBuffer() *ClosableBuffer {
-	return &ClosableBuffer{closed: make(chan struct{})}
-}
-
-func (b *ClosableBuffer) Close() error {
-	close(b.closed)
-	return nil
-}
-
-func (b *ClosableBuffer) IsClosed() bool {
-	select {
-	case <-b.closed:
-		return true
-	default:
-		return false
-	}
-}
 
 type fakeUploader struct {
 	ready   chan<- struct{}
@@ -64,8 +41,8 @@ func (u *fakeUploader) Upload(fileLocation string, destinationUrl *url.URL, canc
 func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
 	fakeStreamer := new(fake_log_streamer.FakeLogStreamer)
 
-	stdoutBuffer := new(bytes.Buffer)
-	stderrBuffer := new(bytes.Buffer)
+	stdoutBuffer := gbytes.NewBuffer()
+	stderrBuffer := gbytes.NewBuffer()
 	fakeStreamer.StdoutReturns(stdoutBuffer)
 	fakeStreamer.StderrReturns(stderrBuffer)
 
@@ -149,10 +126,11 @@ var _ = Describe("UploadStep", func() {
 
 	Describe("Perform", func() {
 		Context("when streaming out works", func() {
-			var buffer *ClosableBuffer
+			var buffer *gbytes.Buffer
 
 			BeforeEach(func() {
-				buffer = NewClosableBuffer()
+				buffer = gbytes.NewBuffer()
+
 				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 					Ω(src).Should(Equal("./expected-src.txt"))
 					Ω(handle).Should(Equal("some-container-handle"))
@@ -183,7 +161,7 @@ var _ = Describe("UploadStep", func() {
 
 				Ω(uploadedPayload).ShouldNot(BeZero())
 
-				Ω(buffer.IsClosed()).Should(BeTrue())
+				Ω(buffer.Closed()).Should(BeTrue())
 
 				Ω(string(uploadedPayload)).Should(Equal("expected-contents"))
 			})
@@ -247,8 +225,8 @@ var _ = Describe("UploadStep", func() {
 						err := step.Perform()
 						Ω(err).ShouldNot(HaveOccurred())
 
-						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-						Ω(stdout.String()).Should(ContainSubstring("Uploaded artifact (1K)"))
+						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+						Ω(stdout.Contents()).Should(ContainSubstring("Uploaded artifact (1K)"))
 					})
 				})
 
@@ -257,8 +235,8 @@ var _ = Describe("UploadStep", func() {
 						err := step.Perform()
 						Ω(err).ShouldNot(HaveOccurred())
 
-						stdout := fakeStreamer.Stdout().(*bytes.Buffer)
-						Ω(stdout.String()).Should(BeEmpty())
+						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+						Ω(stdout.Contents()).Should(BeEmpty())
 					})
 				})
 
@@ -266,8 +244,8 @@ var _ = Describe("UploadStep", func() {
 					err := step.Perform()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					stderr := fakeStreamer.Stderr().(*bytes.Buffer)
-					Ω(stderr.String()).Should(Equal(""))
+					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+					Ω(stderr.Contents()).Should(BeEmpty())
 				})
 			})
 
@@ -372,7 +350,7 @@ var _ = Describe("UploadStep", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
-				buffer := NewClosableBuffer()
+				buffer := gbytes.NewBuffer()
 				tarWriter := tar.NewWriter(buffer)
 
 				err := tarWriter.WriteHeader(&tar.Header{
