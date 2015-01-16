@@ -302,6 +302,12 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	for _, env := range executorContainer.Env {
 		containerSpec.Env = append(containerSpec.Env, env.Name+"="+env.Value)
 	}
+	for _, securityRule := range executorContainer.SecurityGroupRules {
+		if err := securityRule.Validate(); err != nil {
+			logger.Error("invalid-security-rule", err, lager.Data{"security_group_rule": securityRule})
+			return executor.Container{}, executor.ErrInvalidSecurityGroup
+		}
+	}
 
 	gardenContainer, err := gardenClient.Create(containerSpec)
 	if err != nil {
@@ -327,31 +333,33 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		executorContainer.Ports = actualPortMappings
 	}
 
-	if executorContainer.SecurityGroupRules != nil {
-		for _, securityRule := range executorContainer.SecurityGroupRules {
-			var protocol garden.Protocol
-			switch securityRule.Protocol {
-			case models.TCPProtocol:
-				protocol = garden.ProtocolTCP
-			case models.UDPProtocol:
-				protocol = garden.ProtocolUDP
-			case models.ICMPProtocol:
-				protocol = garden.ProtocolICMP
-			case models.AllProtocol:
-				protocol = garden.ProtocolAll
-			default:
-				logger.Error("invalid-protocol", executor.ErrInvalidSecurityGroup, lager.Data{"security_group_rule": securityRule})
-				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-				return executor.Container{}, executor.ErrInvalidSecurityGroup
-			}
-			portRange := fmt.Sprintf("%d:%d", securityRule.PortRange.Start, securityRule.PortRange.End)
+	for _, securityRule := range executorContainer.SecurityGroupRules {
+		var protocol garden.Protocol
+		icmpType := int32(-1)
+		icmpCode := int32(-1)
+		switch securityRule.Protocol {
+		case models.TCPProtocol:
+			protocol = garden.ProtocolTCP
+		case models.UDPProtocol:
+			protocol = garden.ProtocolUDP
+		case models.ICMPProtocol:
+			protocol = garden.ProtocolICMP
+			icmpType = securityRule.IcmpInfo.IcmpType
+			icmpCode = securityRule.IcmpInfo.IcmpCode
+		case models.AllProtocol:
+			protocol = garden.ProtocolAll
+		}
 
-			err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, -1, -1)
-			if err != nil {
-				logger.Error("failed-to-set-security-rules", err, lager.Data{"security_group_rule": securityRule})
-				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-				return executor.Container{}, err
-			}
+		var portRange string
+		if securityRule.PortRange != nil {
+			portRange = fmt.Sprintf("%d:%d", securityRule.PortRange.Start, securityRule.PortRange.End)
+		}
+
+		err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, icmpType, icmpCode)
+		if err != nil {
+			logger.Error("failed-to-set-security-rules", err, lager.Data{"security_group_rule": securityRule})
+			exchanger.destroyContainer(logger, gardenClient, gardenContainer)
+			return executor.Container{}, err
 		}
 	}
 

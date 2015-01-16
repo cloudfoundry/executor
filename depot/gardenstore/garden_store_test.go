@@ -505,7 +505,7 @@ var _ = Describe("GardenContainerStore", func() {
 						securityGroupRule = models.SecurityGroupRule{
 							Protocol:    "tcp",
 							Destination: "0.0.0.0/0",
-							PortRange: models.PortRange{
+							PortRange: &models.PortRange{
 								Start: 1,
 								End:   1024,
 							},
@@ -1043,7 +1043,7 @@ var _ = Describe("GardenContainerStore", func() {
 					securityGroupRule = models.SecurityGroupRule{
 						Protocol:    "tcp",
 						Destination: "0.0.0.0/0",
-						PortRange: models.PortRange{
+						PortRange: &models.PortRange{
 							Start: 1,
 							End:   1024,
 						},
@@ -1068,13 +1068,42 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 				})
 
+				Context("when security rule has icmp protocol", func() {
+
+					BeforeEach(func() {
+						securityGroupRule = models.SecurityGroupRule{
+							Protocol:    "icmp",
+							Destination: "0.0.0.0/0",
+							IcmpInfo: &models.ICMPInfo{
+								IcmpType: 1,
+								IcmpCode: 2,
+							},
+						}
+						executorContainer.SecurityGroupRules = []models.SecurityGroupRule{securityGroupRule}
+					})
+
+					It("creates it with the security rules", func() {
+						Ω(createErr).ShouldNot(HaveOccurred())
+					})
+					It("updates security rules on returned container", func() {
+						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
+						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
+						Ω(network).Should(Equal(securityGroupRule.Destination))
+						Ω(port).Should(Equal(uint32(0)))
+						Ω(icmpType).Should(Equal(int32(1)))
+						Ω(icmpCode).Should(Equal(int32(2)))
+						Ω(protocol).Should(Equal(garden.ProtocolICMP))
+						Ω(portRange).Should(BeEmpty())
+					})
+				})
+
 				Context("when security rule is invalid", func() {
 
 					BeforeEach(func() {
 						securityGroupRule = models.SecurityGroupRule{
 							Protocol:    "foo",
 							Destination: "0.0.0.0/0",
-							PortRange: models.PortRange{
+							PortRange: &models.PortRange{
 								Start: 1,
 								End:   1024,
 							},
