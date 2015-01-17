@@ -848,7 +848,7 @@ var _ = Describe("Api", func() {
 			It("emits the events via SSE and ends when the channel closes", func() {
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 
-				reader := sse.NewReader(response.Body)
+				reader := sse.NewReadCloser(response.Body)
 
 				payload1, err := json.Marshal(event1)
 				Ω(err).ShouldNot(HaveOccurred())
