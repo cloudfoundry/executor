@@ -16,6 +16,7 @@ import (
 
 const TERMINATE_TIMEOUT = 10 * time.Second
 const EXIT_TIMEOUT = 1 * time.Minute
+const DEFAULT_FILE_DESCRIPTOR_LIMIT = uint64(16384)
 
 var ErrExitTimeout = errors.New("process did not exit")
 
@@ -77,6 +78,11 @@ func (step *runStep) Perform() error {
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
 
+	fdLimit := DEFAULT_FILE_DESCRIPTOR_LIMIT
+	if step.model.ResourceLimits.Nofile != nil {
+		fdLimit = *step.model.ResourceLimits.Nofile
+	}
+
 	step.logger.Info("creating-process")
 	process, err := step.container.Run(garden.ProcessSpec{
 		Path:       step.model.Path,
@@ -85,7 +91,7 @@ func (step *runStep) Perform() error {
 		Env:        envVars,
 		Privileged: step.model.Privileged,
 
-		Limits: garden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
+		Limits: garden.ResourceLimits{Nofile: &fdLimit},
 	}, garden.ProcessIO{
 		Stdout: step.streamer.Stdout(),
 		Stderr: step.streamer.Stderr(),
