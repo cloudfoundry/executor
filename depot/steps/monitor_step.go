@@ -106,7 +106,11 @@ func (step *monitorStep) Perform() error {
 				if startBy != nil && now.After(*startBy) {
 					if !healthy {
 						fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
-						step.logger.Info("timed-out-before-healthy")
+
+						step.logger.Info("timed-out-before-healthy", lager.Data{
+							"step-error": stepErr.Error(),
+						})
+
 						return stepErr
 					}
 
