@@ -62,7 +62,7 @@ var _ = Describe("Container", func() {
 						"egress_rules":[
 		          {
 				        "protocol": "tcp",
-								"destination": "0.0.0.0/0",
+								"destinations": ["0.0.0.0/0"],
 				        "port_range": {
 					        "start": 1,
 					        "end": 1024
@@ -71,8 +71,8 @@ var _ = Describe("Container", func() {
 		        ]
 					}`
 			securityGroupRule = models.SecurityGroupRule{
-				Protocol:    "tcp",
-				Destination: "0.0.0.0/0",
+				Protocol:     "tcp",
+				Destinations: []string{"0.0.0.0/0"},
 				PortRange: &models.PortRange{
 					Start: 1,
 					End:   1024,
