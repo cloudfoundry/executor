@@ -248,17 +248,15 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when a file descriptor limit is not set", func() {
+		Context("when a file descriptor limit is not configured", func() {
 			BeforeEach(func() {
 				runAction.ResourceLimits.Nofile = nil
 				spawnedProcess.WaitReturns(0, nil)
 			})
 
-			It("sets a default value for the process", func() {
+			It("does not enforce it on the process", func() {
 				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-
-				Ω(spec.Limits.Nofile).ShouldNot(BeNil())
-				Ω(*spec.Limits.Nofile).Should(Equal(DEFAULT_FILE_DESCRIPTOR_LIMIT))
+				Ω(spec.Limits.Nofile).Should(BeNil())
 			})
 		})
 
