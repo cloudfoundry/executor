@@ -1894,18 +1894,11 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(logger).Should(gbytes.Say(stopSessionPrefix + "finished"))
 					})
 
-					Context("when cancelling the steps", func() {
-						BeforeEach(func() {
-							gardenContainer.StopStub = func(kill bool) error {
-								defer GinkgoRecover()
-								Ω(logger).Should(gbytes.Say(runSessionPrefix + "monitor.monitor-step.cancelling"))
-								return nil
-							}
-						})
-
-						It("stops the monitor first", func() {
-							// monitor assertion contained in garden container Stop stub
-						})
+					It("completes without failure", func() {
+						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
+						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
+						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Ω(containerResult().Failed).Should(BeFalse())
 					})
 				})
 			})

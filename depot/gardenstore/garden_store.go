@@ -312,7 +312,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 		step = longLivedAction
 	}
 
-	store.runStepProcess(logger, step, monitorStep, hasStartedRunning, gardenContainer, container.Guid)
+	store.runStepProcess(logger, step, hasStartedRunning, gardenContainer, container.Guid)
 
 	return nil
 }
@@ -320,7 +320,6 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 func (store *GardenStore) runStepProcess(
 	logger lager.Logger,
 	step steps.Step,
-	monitorStep steps.Step,
 	hasStartedRunning <-chan struct{},
 	gardenContainer garden.Container,
 	guid string,
@@ -339,20 +338,21 @@ func (store *GardenStore) runStepProcess(
 
 		result := executor.ContainerRunResult{}
 
+		toldToStop := false
+
 	OUTER_LOOP:
 		for {
 			select {
 			case <-signals:
 				signals = nil
-				logger.Debug("signaled")
-				if monitorStep != nil {
-					monitorStep.Cancel()
-				}
+				toldToStop = true
+
+				logger.Info("signaled")
 				step.Cancel()
 
 			case <-hasStartedRunning:
 				hasStartedRunning = nil
-				logger.Debug("transitioning-to-running")
+				logger.Info("transitioning-to-running")
 				err := store.transitionToRunning(gardenContainer)
 				if err != nil {
 					logger.Error("failed-transitioning-to-running", err)
@@ -360,27 +360,30 @@ func (store *GardenStore) runStepProcess(
 					result.FailureReason = err.Error()
 					break OUTER_LOOP
 				}
-				logger.Debug("succeeded-transitioning-to-running")
+				logger.Info("succeeded-transitioning-to-running")
 
 			case err := <-seqComplete:
 				if err == nil {
-					logger.Debug("step-finished-normally")
+					logger.Info("step-finished-normally")
+				} else if toldToStop {
+					logger.Info("step-cancelled")
 				} else {
-					logger.Debug("step-finished-with-error", lager.Data{"error": err.Error()})
+					logger.Info("step-finished-with-error", lager.Data{"error": err.Error()})
 					result.Failed = true
 					result.FailureReason = err.Error()
 				}
+
 				break OUTER_LOOP
 			}
 		}
 
-		logger.Debug("transitioning-to-complete")
+		logger.Info("transitioning-to-complete")
 		err := store.transitionToComplete(gardenContainer, result)
 		if err != nil {
 			logger.Error("failed-transitioning-to-complete", err)
 			return nil
 		}
-		logger.Debug("succeeded-transitioning-to-complete")
+		logger.Info("succeeded-transitioning-to-complete")
 
 		return nil
 	}))
@@ -390,7 +393,7 @@ func (store *GardenStore) runStepProcess(
 	numProcesses := len(store.runningProcesses)
 	store.processesL.Unlock()
 
-	logger.Debug("stored-step-process", lager.Data{"num-step-processes": numProcesses})
+	logger.Info("stored-step-process", lager.Data{"num-step-processes": numProcesses})
 }
 
 func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) error {
