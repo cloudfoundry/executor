@@ -505,10 +505,7 @@ var _ = Describe("GardenContainerStore", func() {
 						securityGroupRule = models.SecurityGroupRule{
 							Protocol:    "tcp",
 							Destination: "0.0.0.0/0",
-							PortRange: &models.PortRange{
-								Start: 1,
-								End:   1024,
-							},
+							Ports:       []uint16{443},
 						}
 
 						egressRules = []models.SecurityGroupRule{securityGroupRule}
@@ -1038,17 +1035,35 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			Context("when the Executor container has egress rules", func() {
-				var securityGroupRule models.SecurityGroupRule
+				var rules []models.SecurityGroupRule
+
 				BeforeEach(func() {
-					securityGroupRule = models.SecurityGroupRule{
-						Protocol:    "tcp",
-						Destination: "0.0.0.0/0",
-						PortRange: &models.PortRange{
-							Start: 1,
-							End:   1024,
+					rules = []models.SecurityGroupRule{
+						{
+							Protocol:    "udp",
+							Destination: "0.0.0.0/0",
+							PortRange: &models.PortRange{
+								Start: 1,
+								End:   1024,
+							},
+						},
+						{
+							Protocol:    "tcp",
+							Destination: "1.2.3.4-2.3.4.5",
+							Ports:       []uint16{80, 443},
+						},
+						{
+							Protocol:    "icmp",
+							Destination: "1.2.3.4",
+							IcmpInfo:    &models.ICMPInfo{Type: 1, Code: 2},
+						},
+						{
+							Protocol:    "all",
+							Destination: "9.8.7.6",
 						},
 					}
-					executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
+
+					executorContainer.EgressRules = rules
 				})
 
 				Context("when setting egress rules", func() {
@@ -1057,29 +1072,65 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(createErr).ShouldNot(HaveOccurred())
 					})
 					It("updates egress rules on returned container", func() {
-						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
+						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(5))
+
 						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
-						Ω(network).Should(Equal(securityGroupRule.Destination))
+						Ω(network).Should(Equal(rules[0].Destination))
 						Ω(port).Should(Equal(uint32(0)))
 						Ω(icmpType).Should(Equal(int32(-1)))
 						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolTCP))
+						Ω(protocol).Should(Equal(garden.ProtocolUDP))
 						Ω(portRange).Should(Equal("1:1024"))
+
+						network, port, portRange, protocol, icmpType, icmpCode = fakeGardenContainer.NetOutArgsForCall(1)
+						Ω(network).Should(Equal(rules[1].Destination))
+						Ω(port).Should(Equal(uint32(80)))
+						Ω(icmpType).Should(Equal(int32(-1)))
+						Ω(icmpCode).Should(Equal(int32(-1)))
+						Ω(protocol).Should(Equal(garden.ProtocolTCP))
+						Ω(portRange).Should(BeEmpty())
+
+						network, port, portRange, protocol, icmpType, icmpCode = fakeGardenContainer.NetOutArgsForCall(2)
+						Ω(network).Should(Equal(rules[1].Destination))
+						Ω(port).Should(Equal(uint32(443)))
+						Ω(icmpType).Should(Equal(int32(-1)))
+						Ω(icmpCode).Should(Equal(int32(-1)))
+						Ω(protocol).Should(Equal(garden.ProtocolTCP))
+						Ω(portRange).Should(BeEmpty())
+
+						network, port, portRange, protocol, icmpType, icmpCode = fakeGardenContainer.NetOutArgsForCall(3)
+						Ω(network).Should(Equal(rules[2].Destination))
+						Ω(port).Should(Equal(uint32(0)))
+						Ω(icmpType).Should(Equal(int32(1)))
+						Ω(icmpCode).Should(Equal(int32(2)))
+						Ω(protocol).Should(Equal(garden.ProtocolICMP))
+						Ω(portRange).Should(BeEmpty())
+
+						network, port, portRange, protocol, icmpType, icmpCode = fakeGardenContainer.NetOutArgsForCall(4)
+						Ω(network).Should(Equal(rules[3].Destination))
+						Ω(port).Should(Equal(uint32(0)))
+						Ω(icmpType).Should(Equal(int32(-1)))
+						Ω(icmpCode).Should(Equal(int32(-1)))
+						Ω(protocol).Should(Equal(garden.ProtocolAll))
+						Ω(portRange).Should(BeEmpty())
 					})
 				})
 
 				Context("when security rule has icmp protocol", func() {
 
 					BeforeEach(func() {
-						securityGroupRule = models.SecurityGroupRule{
-							Protocol:    "icmp",
-							Destination: "0.0.0.0/0",
-							IcmpInfo: &models.ICMPInfo{
-								Type: 1,
-								Code: 2,
+						rules = []models.SecurityGroupRule{
+							{
+								Protocol:    "icmp",
+								Destination: "0.0.0.0/0",
+								IcmpInfo: &models.ICMPInfo{
+									Type: 1,
+									Code: 2,
+								},
 							},
 						}
-						executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
+
+						executorContainer.EgressRules = rules
 					})
 
 					It("creates it with the egress rules", func() {
@@ -1088,7 +1139,7 @@ var _ = Describe("GardenContainerStore", func() {
 					It("updates egress rules on returned container", func() {
 						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
 						network, port, portRange, protocol, icmpType, icmpCode := fakeGardenContainer.NetOutArgsForCall(0)
-						Ω(network).Should(Equal(securityGroupRule.Destination))
+						Ω(network).Should(Equal(rules[0].Destination))
 						Ω(port).Should(Equal(uint32(0)))
 						Ω(icmpType).Should(Equal(int32(1)))
 						Ω(icmpCode).Should(Equal(int32(2)))
@@ -1098,17 +1149,18 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when security rule is invalid", func() {
-
 					BeforeEach(func() {
-						securityGroupRule = models.SecurityGroupRule{
-							Protocol:    "foo",
-							Destination: "0.0.0.0/0",
-							PortRange: &models.PortRange{
-								Start: 1,
-								End:   1024,
+						rules = []models.SecurityGroupRule{
+							{
+								Protocol:    "foo",
+								Destination: "0.0.0.0/0",
+								PortRange: &models.PortRange{
+									Start: 1,
+									End:   1024,
+								},
 							},
 						}
-						executorContainer.EgressRules = []models.SecurityGroupRule{securityGroupRule}
+						executorContainer.EgressRules = rules
 					})
 
 					It("returns the error", func() {

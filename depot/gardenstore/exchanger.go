@@ -353,13 +353,28 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		var portRange string
 		if securityRule.PortRange != nil {
 			portRange = fmt.Sprintf("%d:%d", securityRule.PortRange.Start, securityRule.PortRange.End)
-		}
-
-		err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, icmpType, icmpCode)
-		if err != nil {
-			logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
-			exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-			return executor.Container{}, err
+			err := gardenContainer.NetOut(securityRule.Destination, 0, portRange, protocol, icmpType, icmpCode)
+			if err != nil {
+				logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
+				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
+				return executor.Container{}, err
+			}
+		} else if securityRule.Ports != nil {
+			for _, port := range securityRule.Ports {
+				err := gardenContainer.NetOut(securityRule.Destination, uint32(port), "", protocol, icmpType, icmpCode)
+				if err != nil {
+					logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
+					exchanger.destroyContainer(logger, gardenClient, gardenContainer)
+					return executor.Container{}, err
+				}
+			}
+		} else {
+			err := gardenContainer.NetOut(securityRule.Destination, 0, "", protocol, icmpType, icmpCode)
+			if err != nil {
+				logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
+				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
+				return executor.Container{}, err
+			}
 		}
 	}
 
