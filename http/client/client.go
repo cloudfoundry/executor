@@ -15,16 +15,20 @@ import (
 	"github.com/tedsuo/rata"
 )
 
-func New(httpClient *http.Client, baseUrl string) executor.Client {
+func New(httpClient *http.Client, streamingHTTPClient *http.Client, baseUrl string) executor.Client {
 	return &client{
-		httpClient: httpClient,
-		reqGen:     rata.NewRequestGenerator(baseUrl, ehttp.Routes),
+		httpClient:          httpClient,
+		streamingHTTPClient: streamingHTTPClient,
+
+		reqGen: rata.NewRequestGenerator(baseUrl, ehttp.Routes),
 	}
 }
 
 type client struct {
-	reqGen     *rata.RequestGenerator
-	httpClient *http.Client
+	httpClient          *http.Client
+	streamingHTTPClient *http.Client
+
+	reqGen *rata.RequestGenerator
 }
 
 func (c client) AllocateContainers(request []executor.Container) (map[string]string, error) {
@@ -158,7 +162,7 @@ func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 	events := make(chan executor.Event)
 
 	source := &sse.EventSource{
-		Client: c.httpClient,
+		Client: c.streamingHTTPClient,
 		CreateRequest: func() *http.Request {
 			request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)
 			if err != nil {

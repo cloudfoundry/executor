@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	httpclient "github.com/cloudfoundry-incubator/executor/http/client"
@@ -16,9 +17,16 @@ import (
 )
 
 var _ = Describe("Client", func() {
-	var fakeExecutor *ghttp.Server
-	var client executor.Client
-	var containerGuid string
+	var (
+		fakeExecutor *ghttp.Server
+
+		nonStreamingClient *http.Client
+		streamingClient    *http.Client
+
+		client executor.Client
+
+		containerGuid string
+	)
 
 	action := &models.RunAction{
 		Path: "ls",
@@ -27,7 +35,11 @@ var _ = Describe("Client", func() {
 	BeforeEach(func() {
 		containerGuid = "container-guid"
 		fakeExecutor = ghttp.NewServer()
-		client = httpclient.New(http.DefaultClient, fakeExecutor.URL())
+
+		nonStreamingClient = &http.Client{}
+		streamingClient = &http.Client{}
+
+		client = httpclient.New(nonStreamingClient, streamingClient, fakeExecutor.URL())
 	})
 
 	Describe("Allocate", func() {
@@ -432,28 +444,28 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("SubscribeToEvents", func() {
+		container1 := executor.Container{
+			Guid: "the-guid",
+
+			Action: action,
+
+			RunResult: executor.ContainerRunResult{
+				Failed:        true,
+				FailureReason: "i hit my head",
+			},
+		}
+
+		container2 := executor.Container{
+			Guid: "a-guid",
+
+			Action: action,
+
+			RunResult: executor.ContainerRunResult{
+				Failed: false,
+			},
+		}
+
 		Context("when the server returns events", func() {
-			container1 := executor.Container{
-				Guid: "the-guid",
-
-				Action: action,
-
-				RunResult: executor.ContainerRunResult{
-					Failed:        true,
-					FailureReason: "i hit my head",
-				},
-			}
-
-			container2 := executor.Container{
-				Guid: "a-guid",
-
-				Action: action,
-
-				RunResult: executor.ContainerRunResult{
-					Failed: false,
-				},
-			}
-
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/events"),
@@ -542,6 +554,56 @@ var _ = Describe("Client", func() {
 
 				Eventually(eventChannel).Should(Receive(&ev))
 				Ω(ev).Should(Equal(executor.NewContainerReservedEvent(container1)))
+
+				Eventually(eventChannel).Should(BeClosed())
+			})
+		})
+
+		Context("when the event stream takes a longish time", func() {
+			BeforeEach(func() {
+				nonStreamingClient.Timeout = 100 * time.Millisecond
+				streamingClient.Timeout = 0
+
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/events"),
+					func(w http.ResponseWriter, r *http.Request) {
+						flusher := w.(http.Flusher)
+
+						w.Header().Add("Content-Type", "text/event-stream; charset=utf-8")
+						w.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
+						w.Header().Add("Connection", "keep-alive")
+
+						w.WriteHeader(http.StatusOK)
+
+						flusher.Flush()
+
+						firstEventPayload, err := json.Marshal(executor.NewContainerCompleteEvent(container1))
+						Ω(err).ShouldNot(HaveOccurred())
+
+						time.Sleep(2 * nonStreamingClient.Timeout)
+
+						result := sse.Event{
+							ID:   "0",
+							Name: string(executor.EventTypeContainerComplete),
+							Data: firstEventPayload,
+						}
+
+						err = result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						flusher.Flush()
+					},
+				))
+			})
+
+			It("does not enforce the non-streaming client's timeout", func() {
+				eventChannel, err := client.SubscribeToEvents()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				var ev executor.Event
+
+				Eventually(eventChannel).Should(Receive(&ev))
+				Ω(ev).Should(Equal(executor.NewContainerCompleteEvent(container1)))
 
 				Eventually(eventChannel).Should(BeClosed())
 			})
