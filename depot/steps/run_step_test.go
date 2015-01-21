@@ -373,12 +373,15 @@ var _ = Describe("RunAction", func() {
 		BeforeEach(func() {
 			performErr = make(chan error)
 
-			waiting = make(chan struct{})
-			waitExited = make(chan int, 1)
+			waitingCh := make(chan struct{})
+			waiting = waitingCh
+
+			waitExitedCh := make(chan int, 1)
+			waitExited = waitExitedCh
 
 			spawnedProcess.WaitStub = func() (int, error) {
-				close(waiting)
-				return <-waitExited, nil
+				close(waitingCh)
+				return <-waitExitedCh, nil
 			}
 		})
 
