@@ -172,6 +172,7 @@ func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 	}
 
 	<-process.Wait()
+
 	return nil
 }
 
@@ -179,7 +180,10 @@ func (store *GardenStore) Destroy(logger lager.Logger, guid string) error {
 	logger = logger.Session("destroy", lager.Data{"guid": guid})
 	logger.Info("started")
 
-	store.freeStepProcess(logger, guid)
+	process, found := store.freeStepProcess(logger, guid)
+	if found {
+		<-process.Wait()
+	}
 
 	err := store.gardenClient.Destroy(guid)
 	if err != nil {
