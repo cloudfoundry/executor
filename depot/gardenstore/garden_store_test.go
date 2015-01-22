@@ -1193,7 +1193,6 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
 						Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("some-guid"))
 					})
-
 				})
 			})
 
@@ -1876,8 +1875,17 @@ var _ = Describe("GardenContainerStore", func() {
 				Context("when Stop is called", func() {
 					const stopSessionPrefix = "test.stop."
 
+					var stopped chan struct{}
+
+					BeforeEach(func() {
+						stopped = make(chan struct{})
+					})
+
 					JustBeforeEach(func() {
-						gardenStore.Stop(logger, executorContainer.Guid)
+						go func() {
+							gardenStore.Stop(logger, executorContainer.Guid)
+							close(stopped)
+						}()
 					})
 
 					It("logs that the step process was signaled and then finished, and was freed", func() {
@@ -1887,11 +1895,11 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("logs that the step process was freed", func() {
 						freeSessionPrefix := stopSessionPrefix + "freeing-step-process."
-						Ω(logger).Should(gbytes.Say(stopSessionPrefix + "started"))
-						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "started"))
-						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "interrupting-process"))
-						Ω(logger).Should(gbytes.Say(freeSessionPrefix + "finished"))
-						Ω(logger).Should(gbytes.Say(stopSessionPrefix + "finished"))
+						Eventually(logger).Should(gbytes.Say(stopSessionPrefix + "started"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "started"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "interrupting-process"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "finished"))
+						Eventually(logger).Should(gbytes.Say(stopSessionPrefix + "finished"))
 					})
 
 					It("completes without failure", func() {
@@ -1899,6 +1907,80 @@ var _ = Describe("GardenContainerStore", func() {
 						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
 						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeFalse())
+					})
+
+					Context("when the step takes a while to complete", func() {
+						var exited chan int
+
+						BeforeEach(func() {
+							exited = make(chan int, 1)
+
+							processes["run"].WaitStub = func() (int, error) {
+								return <-exited, nil
+							}
+						})
+
+						It("waits", func() {
+							Consistently(stopped).ShouldNot(BeClosed())
+							exited <- 1
+							Eventually(stopped).ShouldNot(BeClosed())
+						})
+					})
+				})
+
+				Context("when Destroy is called", func() {
+					const destroySessionPrefix = "test.destroy."
+
+					var destroyed chan struct{}
+
+					BeforeEach(func() {
+						destroyed = make(chan struct{})
+					})
+
+					JustBeforeEach(func() {
+						go func() {
+							gardenStore.Destroy(logger, executorContainer.Guid)
+							close(destroyed)
+						}()
+					})
+
+					It("logs that the step process was signaled and then finished, and was freed", func() {
+						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "signaled"))
+						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "finished"))
+					})
+
+					It("logs that the step process was freed", func() {
+						freeSessionPrefix := destroySessionPrefix + "freeing-step-process."
+						Eventually(logger).Should(gbytes.Say(destroySessionPrefix + "started"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "started"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "interrupting-process"))
+						Eventually(logger).Should(gbytes.Say(freeSessionPrefix + "finished"))
+						Eventually(logger).Should(gbytes.Say(destroySessionPrefix + "succeeded"))
+					})
+
+					It("completes without failure", func() {
+						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
+						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
+						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Ω(containerResult().Failed).Should(BeFalse())
+					})
+
+					Context("when the step takes a while to complete", func() {
+						var exited chan int
+
+						BeforeEach(func() {
+							exited = make(chan int, 1)
+
+							processes["run"].WaitStub = func() (int, error) {
+								return <-exited, nil
+							}
+						})
+
+						It("waits", func() {
+							Consistently(destroyed).ShouldNot(BeClosed())
+							exited <- 1
+							Eventually(destroyed).ShouldNot(BeClosed())
+						})
 					})
 				})
 			})
