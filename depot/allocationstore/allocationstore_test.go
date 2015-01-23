@@ -5,6 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
+	"github.com/cloudfoundry-incubator/executor/depot/allocationstore/fakes"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -20,13 +21,15 @@ var _ = Describe("Allocation Store", func() {
 	var (
 		allocationStore  *allocationstore.AllocationStore
 		fakeTimeProvider *faketimeprovider.FakeTimeProvider
+		fakeEventEmitter *fakes.FakeEventEmitter
 		currentTime      time.Time
 	)
 
 	BeforeEach(func() {
 		currentTime = time.Now()
 		fakeTimeProvider = faketimeprovider.New(currentTime)
-		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider)
+		fakeEventEmitter = &fakes.FakeEventEmitter{}
+		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider, fakeEventEmitter)
 	})
 
 	Describe("List", func() {
@@ -61,6 +64,26 @@ var _ = Describe("Allocation Store", func() {
 				})
 			})
 		})
+
+		Context("when multiple containers are allocated", func() {
+			It("they are added to the store", func() {
+				_, err := allocationStore.Allocate(logger, executor.Container{
+					Guid:     "banana-1",
+					MemoryMB: 512,
+					DiskMB:   512,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = allocationStore.Allocate(logger, executor.Container{
+					Guid:     "banana-2",
+					MemoryMB: 512,
+					DiskMB:   512,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(allocationStore.List()).Should(HaveLen(2))
+			})
+		})
 	})
 
 	Describe("Allocate", func() {
@@ -81,6 +104,9 @@ var _ = Describe("Allocation Store", func() {
 				Ω(allocation.Guid).Should(Equal(container.Guid))
 				Ω(allocation.State).Should(Equal(executor.StateReserved))
 				Ω(allocation.AllocatedAt).Should(Equal(currentTime.UnixNano()))
+
+				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(1))
+				Ω(fakeEventEmitter.EmitEventArgsForCall(0)).Should(Equal(executor.NewContainerReservedEvent(allocation)))
 			})
 		})
 
@@ -94,26 +120,6 @@ var _ = Describe("Allocation Store", func() {
 				_, err := allocationStore.Allocate(logger, container)
 				Ω(err).Should(HaveOccurred())
 				Ω(allocationStore.List()).Should(HaveLen(1))
-			})
-		})
-
-		Context("when adding multiple unique containers", func() {
-			It("they are added to the store", func() {
-				_, err := allocationStore.Allocate(logger, executor.Container{
-					Guid:     "banana-1",
-					MemoryMB: 512,
-					DiskMB:   512,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				_, err = allocationStore.Allocate(logger, executor.Container{
-					Guid:     "banana-2",
-					MemoryMB: 512,
-					DiskMB:   512,
-				})
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(allocationStore.List()).Should(HaveLen(2))
 			})
 		})
 	})
@@ -189,14 +195,26 @@ var _ = Describe("Allocation Store", func() {
 				MemoryMB: 512,
 				DiskMB:   512,
 			}
-			_, err := allocationStore.Allocate(logger, container)
-			Ω(err).ShouldNot(HaveOccurred())
-			err = allocationStore.Initialize(logger, container.Guid)
-			Ω(err).ShouldNot(HaveOccurred())
 		})
 
-		Context("when the guid is available", func() {
+		Context("when the container is not in the allocation store", func() {
+			It("errors", func() {
+				_, err := allocationStore.Fail(logger, container.Guid, "failure-response")
+				Ω(err).Should(HaveOccurred())
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+
+				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(0))
+			})
+		})
+
+		Context("when the container is in the allocation store", func() {
+			BeforeEach(func() {
+				_, err := allocationStore.Allocate(logger, container)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
 			It("it is marked as COMPLETED with failure reason", func() {
+				emitCallCount := fakeEventEmitter.EmitEventCallCount()
 				allocation, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -206,14 +224,40 @@ var _ = Describe("Allocation Store", func() {
 					Failed:        true,
 					FailureReason: "failure-reason",
 				}))
-			})
-		})
 
-		Context("when the guid is not available", func() {
-			It("errors", func() {
-				_, err := allocationStore.Fail(logger, "doesnt-exist", "failure-response")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(emitCallCount + 1))
+				Ω(fakeEventEmitter.EmitEventArgsForCall(emitCallCount)).Should(Equal(executor.NewContainerCompleteEvent(allocation)))
+			})
+
+			It("remains in the allocation store as reserved", func() {
+				c, err := allocationStore.Lookup(container.Guid)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(c.State).Should(Equal(executor.StateReserved))
+			})
+
+			Context("when the container is already in the completed state", func() {
+				BeforeEach(func() {
+					err := allocationStore.Initialize(logger, container.Guid)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = allocationStore.Fail(logger, container.Guid, "force-completed")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("remains in the allocation store as completed", func() {
+					c, err := allocationStore.Lookup(container.Guid)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(c.State).Should(Equal(executor.StateCompleted))
+				})
+
+				It("fails with an invalid transition error", func() {
+					expectedEmitEventCount := fakeEventEmitter.EmitEventCallCount()
+
+					_, err := allocationStore.Fail(logger, container.Guid, "already-completed")
+					Ω(err).Should(Equal(executor.ErrInvalidTransition))
+
+					Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(expectedEmitEventCount))
+				})
 			})
 		})
 	})
@@ -322,7 +366,7 @@ var _ = Describe("Allocation Store", func() {
 			{to: "initialize", from: "failed", assertError: "occurs"},
 
 			{to: "fail", from: "non-existent", assertError: "occurs"},
-			{to: "fail", from: "reserved", assertError: "occurs"},
+			{to: "fail", from: "reserved", assertError: "does not occur"},
 			{to: "fail", from: "initializing", assertError: "does not occur"},
 			{to: "fail", from: "failed", assertError: "occurs"},
 		}

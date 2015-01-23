@@ -199,7 +199,7 @@ func main() {
 		timeProvider,
 		hub,
 	)
-	allocationStore := allocationstore.NewAllocationStore(timeProvider)
+	allocationStore := allocationstore.NewAllocationStore(timeProvider, hub)
 
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),

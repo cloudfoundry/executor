@@ -33,7 +33,10 @@ var _ = Describe("Depot", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		fakeTimeProvider = faketimeprovider.New(time.Now())
-		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider)
+
+		eventHub = new(efakes.FakeHub)
+
+		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider, eventHub)
 
 		gardenStore = new(fakes.FakeGardenStore)
 
@@ -42,7 +45,7 @@ var _ = Describe("Depot", func() {
 			DiskMB:     1024,
 			Containers: 3,
 		}
-		eventHub = new(efakes.FakeHub)
+
 		depotClient = NewClientProvider(resources, allocationStore, gardenStore, eventHub).WithLogger(logger)
 	})
 
@@ -60,7 +63,6 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate the container", func() {
-				currentEventCount := eventHub.EmitEventCallCount()
 				errMessageMap, err := depotClient.AllocateContainers(containers)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(errMessageMap).Should(BeEmpty())
@@ -69,8 +71,6 @@ var _ = Describe("Depot", func() {
 				Ω(allocatedContainers[0].Guid).Should(Equal("guid-1"))
 				Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
 				Ω(allocatedContainers[0].CPUWeight).Should(Equal(uint(100)))
-				Ω(eventHub.EmitEventCallCount()).Should(Equal(currentEventCount + 1))
-				Ω(eventHub.EmitEventArgsForCall(currentEventCount)).Should(Equal(executor.NewContainerReservedEvent(allocatedContainers[0])))
 			})
 		})
 
@@ -374,10 +374,9 @@ var _ = Describe("Depot", func() {
 		})
 	})
 
-	Describe("RunContainers", func() {
+	Describe("RunContainer", func() {
 		var (
-			containers []executor.Container
-
+			containers      []executor.Container
 			gardenStoreGuid string
 		)
 
@@ -391,14 +390,16 @@ var _ = Describe("Depot", func() {
 					DiskMB:   512,
 				},
 			}
+		})
 
+		JustBeforeEach(func() {
 			errMessageMap, err := depotClient.AllocateContainers(containers)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(errMessageMap).Should(BeEmpty())
 		})
 
 		Context("when the container is valid", func() {
-			It("should create garden container, run it and remove from allocation store", func() {
+			It("should create garden container, run it, and remove from allocation store", func() {
 				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
 				Ω(gardenStore.RunCallCount()).Should(Equal(0))
 				Ω(allocationStore.List()).Should(HaveLen(1))
@@ -410,7 +411,7 @@ var _ = Describe("Depot", func() {
 			})
 		})
 
-		Context("when it tries to run missing container", func() {
+		Context("when it tries to run a missing container", func() {
 			It("should return error", func() {
 				err := depotClient.RunContainer("missing-guid")
 				Ω(err).Should(HaveOccurred())
@@ -418,12 +419,47 @@ var _ = Describe("Depot", func() {
 			})
 		})
 
+		Context("when the allocation store container is not in the initializing state", func() {
+			var ready chan struct{}
+
+			BeforeEach(func() {
+				ready = make(chan struct{})
+
+				gardenStore.LookupStub = func(logger lager.Logger, guid string) (executor.Container, error) {
+					ready <- struct{}{}
+					Eventually(ready).Should(Receive())
+
+					allocationStore.Fail(logger, gardenStoreGuid, "failure-reason")
+					return executor.Container{}, nil
+				}
+
+				// GetContainer will allocate the lock for our guid
+				go func() {
+					defer GinkgoRecover()
+					depotClient.GetContainer(gardenStoreGuid)
+				}()
+
+				Eventually(ready).Should(Receive())
+			})
+
+			It("does not create a garden container", func() {
+				err := depotClient.RunContainer(gardenStoreGuid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				// Drop the lock on our guid
+				ready <- struct{}{}
+
+				Eventually(logger).Should(gbytes.Say("test.depot-client.run-container.container-state-invalid"))
+				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
+			})
+		})
+
 		Context("when garden container creation fails", func() {
 			BeforeEach(func() {
 				gardenStore.CreateReturns(executor.Container{}, errors.New("some-error"))
 			})
+
 			It("should change container's state to failed", func() {
-				currentEventCount := eventHub.EmitEventCallCount()
 				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
 				err := depotClient.RunContainer(gardenStoreGuid)
 				Ω(err).ShouldNot(HaveOccurred())
@@ -434,8 +470,6 @@ var _ = Describe("Depot", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(container.State).Should(Equal(executor.StateCompleted))
 				Ω(container.RunResult.Failed).Should(BeTrue())
-				Ω(eventHub.EmitEventCallCount()).Should(Equal(currentEventCount + 1))
-				Ω(eventHub.EmitEventArgsForCall(currentEventCount)).Should(Equal(executor.NewContainerCompleteEvent(container)))
 			})
 		})
 
@@ -482,12 +516,12 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when containers exist only allocation store", func() {
-
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(errMessageMap).Should(BeEmpty())
 			})
+
 			It("should return the containers from allocation store", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
 				Ω(err).ShouldNot(HaveOccurred())
@@ -740,11 +774,67 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("StopContainer", func() {
+		var stopError error
+		var stopGuid string
+
+		BeforeEach(func() {
+			stopGuid = "some-guid"
+		})
+
+		JustBeforeEach(func() {
+			stopError = depotClient.StopContainer(stopGuid)
+		})
+
+		Context("when the container doesn't exist in the allocation store", func() {
+			It("should stop the garden container", func() {
+				Ω(stopError).ShouldNot(HaveOccurred())
+				Ω(gardenStore.StopCallCount()).Should(Equal(1))
+			})
+		})
+
+		Context("when the container is in the allocation store", func() {
+			var container executor.Container
+
+			BeforeEach(func() {
+				container = executor.Container{
+					Guid:     stopGuid,
+					MemoryMB: 512,
+					DiskMB:   512,
+				}
+
+				_, err := allocationStore.Allocate(logger, container)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			Context("when the container is not completed", func() {
+				It("should fail the container", func() {
+					result, err := allocationStore.Lookup(stopGuid)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(result.State).Should(Equal(executor.StateCompleted))
+					Ω(result.RunResult.Failed).Should(BeTrue())
+					Ω(result.RunResult.FailureReason).Should(Equal(ContainerStoppedBeforeRunMessage))
+				})
+			})
+
+			Context("when the container is completed", func() {
+				BeforeEach(func() {
+					_, err := allocationStore.Fail(logger, stopGuid, "go away")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("the run result should remain unchanged", func() {
+					result, err := allocationStore.Lookup(stopGuid)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(result.State).Should(Equal(executor.StateCompleted))
+					Ω(result.RunResult.Failed).Should(BeTrue())
+					Ω(result.RunResult.FailureReason).Should(Equal("go away"))
+				})
+			})
+		})
+
 		Context("when the container is present in gardenStore", func() {
 			It("should successfully stop the container", func() {
-				Ω(gardenStore.StopCallCount()).Should(Equal(0))
-				err := depotClient.StopContainer("some-guid")
-				Ω(err).ShouldNot(HaveOccurred())
+				Ω(stopError).ShouldNot(HaveOccurred())
 				Ω(gardenStore.StopCallCount()).Should(Equal(1))
 			})
 		})
@@ -753,11 +843,10 @@ var _ = Describe("Depot", func() {
 			BeforeEach(func() {
 				gardenStore.StopReturns(errors.New("some-error"))
 			})
+
 			It("should fail and return an error", func() {
-				Ω(gardenStore.StopCallCount()).Should(Equal(0))
-				err := depotClient.StopContainer("some-guid")
-				Ω(err).Should(HaveOccurred())
-				Ω(err.Error()).Should(Equal("some-error"))
+				Ω(stopError).Should(HaveOccurred())
+				Ω(stopError.Error()).Should(Equal("some-error"))
 				Ω(gardenStore.StopCallCount()).Should(Equal(1))
 			})
 		})

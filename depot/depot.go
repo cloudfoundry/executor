@@ -11,6 +11,7 @@ import (
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
+const ContainerStoppedBeforeRunMessage = "Container stopped by user"
 
 type client struct {
 	*clientProvider
@@ -107,7 +108,7 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 	}
 
 	for _, allocatableContainer := range allocatableContainers {
-		if allocatedContainer, err := c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
+		if _, err := c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
 			logger.Debug(
 				"failed-to-allocate-container",
 				lager.Data{
@@ -116,8 +117,6 @@ func (c *client) AllocateContainers(executorContainers []executor.Container) (ma
 				},
 			)
 			errMessageMap[allocatableContainer.Guid] = err.Error()
-		} else {
-			c.eventHub.EmitEvent(executor.NewContainerReservedEvent(allocatedContainer))
 		}
 	}
 
@@ -175,13 +174,15 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
+		if container.State != executor.StateInitializing {
+			logger.Error("container-state-invalid", err, lager.Data{"state": container.State})
+			return
+		}
+
 		container, err = c.gardenStore.Create(logger, container)
 		if err != nil {
 			logger.Error("failed-to-create-container", err)
-
-			failedContainer, _ := c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
-			c.eventHub.EmitEvent(executor.NewContainerCompleteEvent(failedContainer))
-
+			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
 			return
 		}
 
@@ -264,7 +265,23 @@ func (c *client) StopContainer(guid string) error {
 		"guid": guid,
 	})
 
-	return c.gardenStore.Stop(logger, guid)
+	c.containerLockManager.Lock(guid)
+	defer c.containerLockManager.Unlock(guid)
+
+	container, err := c.allocationStore.Lookup(guid)
+	if err == executor.ErrContainerNotFound {
+		return c.gardenStore.Stop(logger, guid)
+	}
+	if err != nil {
+		logger.Error("failed-to-find-container", err)
+		return err
+	}
+
+	if container.State != executor.StateCompleted {
+		c.allocationStore.Fail(logger, guid, ContainerStoppedBeforeRunMessage)
+	}
+
+	return nil
 }
 
 func (c *client) DeleteContainer(guid string) error {

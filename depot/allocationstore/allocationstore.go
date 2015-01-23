@@ -14,13 +14,15 @@ import (
 type AllocationStore struct {
 	allocated    map[string]executor.Container
 	timeProvider timeprovider.TimeProvider
+	eventEmitter EventEmitter
 	lock         sync.RWMutex
 }
 
-func NewAllocationStore(timeProvider timeprovider.TimeProvider) *AllocationStore {
+func NewAllocationStore(timeProvider timeprovider.TimeProvider, eventEmitter EventEmitter) *AllocationStore {
 	return &AllocationStore{
 		allocated:    map[string]executor.Container{},
 		timeProvider: timeProvider,
+		eventEmitter: eventEmitter,
 	}
 }
 
@@ -57,6 +59,8 @@ func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Conta
 	container.State = executor.StateReserved
 	container.AllocatedAt = a.timeProvider.Now().UnixNano()
 	a.allocated[container.Guid] = container
+
+	a.eventEmitter.EmitEvent(executor.NewContainerReservedEvent(container))
 
 	return container, nil
 }
@@ -100,7 +104,7 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 		return executor.Container{}, err
 	}
 
-	if container.State != executor.StateInitializing {
+	if container.State == executor.StateCompleted {
 		logger.Error(
 			"failed-completing-container",
 			executor.ErrInvalidTransition,
@@ -111,6 +115,7 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 		)
 		return executor.Container{}, executor.ErrInvalidTransition
 	}
+
 	logger.Debug("marking-container-completed-with-failure-reason", lager.Data{
 		"guid":           guid,
 		"failure_reason": reason,
@@ -122,6 +127,8 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 		FailureReason: reason,
 	}
 	a.allocated[guid] = container
+
+	a.eventEmitter.EmitEvent(executor.NewContainerCompleteEvent(container))
 
 	return container, nil
 }
