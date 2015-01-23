@@ -413,6 +413,22 @@ var _ = Describe("Depot", func() {
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(BeEmpty())
 			})
+
+			It("allocates and drops the container lock", func() {
+				initialLockCount := lockManager.LockCallCount()
+				initialUnlockCount := lockManager.UnlockCallCount()
+
+				err := depotClient.RunContainer(gardenStoreGuid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Eventually(gardenStore.RunCallCount).Should(Equal(1))
+
+				Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount + 1))
+				Ω(lockManager.LockArgsForCall(initialLockCount)).Should(Equal(gardenStoreGuid))
+
+				Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount + 1))
+				Ω(lockManager.UnlockArgsForCall(initialUnlockCount)).Should(Equal(gardenStoreGuid))
+			})
 		})
 
 		Context("when it tries to run a missing container", func() {
@@ -420,6 +436,17 @@ var _ = Describe("Depot", func() {
 				err := depotClient.RunContainer("missing-guid")
 				Ω(err).Should(HaveOccurred())
 				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+			})
+
+			It("does not allocate and drop the container lock", func() {
+				initialLockCount := lockManager.LockCallCount()
+				initialUnlockCount := lockManager.UnlockCallCount()
+
+				err := depotClient.RunContainer("missing-guid")
+				Ω(err).Should(HaveOccurred())
+
+				Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount))
+				Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount))
 			})
 		})
 
@@ -475,7 +502,6 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("ListContainers", func() {
-
 		var containers []executor.Container
 
 		BeforeEach(func() {
@@ -686,6 +712,16 @@ var _ = Describe("Depot", func() {
 			}
 		})
 
+		It("allocates and drops the container lock", func() {
+			depotClient.DeleteContainer("guid-1")
+
+			Ω(lockManager.LockCallCount()).Should(Equal(1))
+			Ω(lockManager.LockArgsForCall(0)).Should(Equal("guid-1"))
+
+			Ω(lockManager.UnlockCallCount()).Should(Equal(1))
+			Ω(lockManager.UnlockArgsForCall(0)).Should(Equal("guid-1"))
+		})
+
 		Context("when container exists in allocation store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
@@ -771,6 +807,14 @@ var _ = Describe("Depot", func() {
 			stopError = depotClient.StopContainer(stopGuid)
 		})
 
+		It("allocates and drops the container lock", func() {
+			Ω(lockManager.LockCallCount()).Should(Equal(1))
+			Ω(lockManager.LockArgsForCall(0)).Should(Equal(stopGuid))
+
+			Ω(lockManager.UnlockCallCount()).Should(Equal(1))
+			Ω(lockManager.UnlockArgsForCall(0)).Should(Equal(stopGuid))
+		})
+
 		Context("when the container doesn't exist in the allocation store", func() {
 			It("should stop the garden container", func() {
 				Ω(stopError).ShouldNot(HaveOccurred())
@@ -839,7 +883,6 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("GetContainer", func() {
-
 		var (
 			containers []executor.Container
 
@@ -882,6 +925,20 @@ var _ = Describe("Depot", func() {
 			},
 				nil,
 			)
+		})
+
+		It("allocates and drops the container lock", func() {
+			initialLockCount := lockManager.LockCallCount()
+			initialUnlockCount := lockManager.UnlockCallCount()
+
+			_, err := depotClient.GetContainer(allocationStoreGuid)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount + 1))
+			Ω(lockManager.LockArgsForCall(initialLockCount)).Should(Equal(allocationStoreGuid))
+
+			Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount + 1))
+			Ω(lockManager.UnlockArgsForCall(initialUnlockCount)).Should(Equal(allocationStoreGuid))
 		})
 
 		Context("when container exists in allocation store", func() {

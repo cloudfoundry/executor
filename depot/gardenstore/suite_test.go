@@ -9,5 +9,5 @@ import (
 
 func TestStore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Container Store Suite")
+	RunSpecs(t, "Garden Store Suite")
 }
