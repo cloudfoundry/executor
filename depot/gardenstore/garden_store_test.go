@@ -1051,6 +1051,7 @@ var _ = Describe("GardenContainerStore", func() {
 							Protocol:     "tcp",
 							Destinations: []string{"1.2.3.4-2.3.4.5"},
 							Ports:        []uint16{80, 443},
+							Log:          true,
 						},
 						{
 							Protocol:     "icmp",
@@ -1060,6 +1061,7 @@ var _ = Describe("GardenContainerStore", func() {
 						{
 							Protocol:     "all",
 							Destinations: []string{"9.8.7.6", "8.7.6.5"},
+							Log:          true,
 						},
 					}
 
@@ -1067,10 +1069,10 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 
 				Context("when setting egress rules", func() {
-
 					It("creates it with the egress rules", func() {
 						Ω(createErr).ShouldNot(HaveOccurred())
 					})
+
 					It("updates egress rules on returned container", func() {
 						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(6))
 
@@ -1090,7 +1092,7 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(icmpCode).Should(Equal(int32(-1)))
 						Ω(protocol).Should(Equal(garden.ProtocolTCP))
 						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						Ω(netOutLog).Should(BeTrue())
 
 						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(2)
 						Ω(network).Should(Equal(rules[1].Destinations[0]))
@@ -1099,7 +1101,7 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(icmpCode).Should(Equal(int32(-1)))
 						Ω(protocol).Should(Equal(garden.ProtocolTCP))
 						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						Ω(netOutLog).Should(BeTrue())
 
 						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(3)
 						Ω(network).Should(Equal(rules[2].Destinations[0]))
@@ -1117,7 +1119,7 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(icmpCode).Should(Equal(int32(-1)))
 						Ω(protocol).Should(Equal(garden.ProtocolAll))
 						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						Ω(netOutLog).Should(BeTrue())
 
 						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(5)
 						Ω(network).Should(Equal(rules[3].Destinations[1]))
@@ -1126,7 +1128,7 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(icmpCode).Should(Equal(int32(-1)))
 						Ω(protocol).Should(Equal(garden.ProtocolAll))
 						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						Ω(netOutLog).Should(BeTrue())
 					})
 				})
 
