@@ -164,6 +164,8 @@ type PortMapping struct {
 type ContainerRunResult struct {
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
+
+	Stopped bool `json:"stopped"`
 }
 
 type ExecutorResources struct {

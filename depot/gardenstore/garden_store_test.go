@@ -1918,6 +1918,13 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(containerResult().Failed).Should(BeFalse())
 					})
 
+					It("reports in the result that it was stopped", func() {
+						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
+						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
+						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Ω(containerResult().Stopped).Should(BeTrue())
+					})
+
 					Context("when the step takes a while to complete", func() {
 						var exited chan int
 
@@ -1972,6 +1979,13 @@ var _ = Describe("GardenContainerStore", func() {
 						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
 						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeFalse())
+					})
+
+					It("reports in the result that it was stopped", func() {
+						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
+						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
+						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Ω(containerResult().Stopped).Should(BeTrue())
 					})
 
 					Context("when the step takes a while to complete", func() {

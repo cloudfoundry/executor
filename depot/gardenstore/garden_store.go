@@ -140,27 +140,6 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 	return container, nil
 }
 
-func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifrit.Process, bool) {
-	logger = logger.Session("freeing-step-process")
-	logger.Info("started")
-	defer logger.Info("finished")
-
-	store.processesL.Lock()
-	process, found := store.runningProcesses[guid]
-	if found {
-		delete(store.runningProcesses, guid)
-	}
-	store.processesL.Unlock()
-
-	if !found {
-		return nil, false
-	}
-
-	logger.Info("interrupting-process")
-	process.Signal(os.Interrupt)
-	return process, true
-}
-
 func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 	logger = logger.Session("stop", lager.Data{"guid": guid})
 	logger.Info("started")
@@ -371,6 +350,7 @@ func (store *GardenStore) runStepProcess(
 					logger.Info("step-finished-normally")
 				} else if toldToStop {
 					logger.Info("step-cancelled")
+					result.Stopped = true
 				} else {
 					logger.Info("step-finished-with-error", lager.Data{"error": err.Error()})
 					result.Failed = true
@@ -398,6 +378,27 @@ func (store *GardenStore) runStepProcess(
 	store.processesL.Unlock()
 
 	logger.Info("stored-step-process", lager.Data{"num-step-processes": numProcesses})
+}
+
+func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifrit.Process, bool) {
+	logger = logger.Session("freeing-step-process")
+	logger.Info("started")
+	defer logger.Info("finished")
+
+	store.processesL.Lock()
+	process, found := store.runningProcesses[guid]
+	if found {
+		delete(store.runningProcesses, guid)
+	}
+	store.processesL.Unlock()
+
+	if !found {
+		return nil, false
+	}
+
+	logger.Info("interrupting-process")
+	process.Signal(os.Interrupt)
+	return process, true
 }
 
 func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) error {
