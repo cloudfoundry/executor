@@ -12,7 +12,7 @@ import (
 )
 
 var _ = Describe("KeyedLock", func() {
-	var lockManager *keyed_lock.LockManager
+	var lockManager keyed_lock.LockManager
 
 	BeforeEach(func() {
 		lockManager = keyed_lock.NewLockManager()

@@ -5,7 +5,13 @@ import (
 	"sync"
 )
 
-type LockManager struct {
+//go:generate counterfeiter -o fakelockmanager/fake_lock_manager.go . LockManager
+type LockManager interface {
+	Lock(key string)
+	Unlock(key string)
+}
+
+type lockManager struct {
 	locks map[string]*lockEntry
 	mutex sync.Mutex
 }
@@ -15,14 +21,14 @@ type lockEntry struct {
 	count int
 }
 
-func NewLockManager() *LockManager {
+func NewLockManager() LockManager {
 	locks := map[string]*lockEntry{}
-	return &LockManager{
+	return &lockManager{
 		locks: locks,
 	}
 }
 
-func (m *LockManager) Lock(key string) {
+func (m *lockManager) Lock(key string) {
 	m.mutex.Lock()
 	entry, ok := m.locks[key]
 	if !ok {
@@ -37,7 +43,7 @@ func (m *LockManager) Lock(key string) {
 	entry.ch <- struct{}{}
 }
 
-func (m *LockManager) Unlock(key string) {
+func (m *lockManager) Unlock(key string) {
 	m.mutex.Lock()
 	entry, ok := m.locks[key]
 	if !ok {

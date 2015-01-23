@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
+	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
@@ -206,6 +207,7 @@ func main() {
 		allocationStore,
 		gardenStore,
 		hub,
+		keyed_lock.NewLockManager(),
 	)
 
 	metricsLogger := logger.Session("metrics-reporter")

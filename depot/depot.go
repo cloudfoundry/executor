@@ -23,7 +23,7 @@ type clientProvider struct {
 	gardenStore          GardenStore
 	allocationStore      AllocationStore
 	eventHub             event.Hub
-	containerLockManager *keyed_lock.LockManager
+	containerLockManager keyed_lock.LockManager
 	resourcesLock        *sync.Mutex
 }
 
@@ -53,13 +53,14 @@ func NewClientProvider(
 	allocationStore AllocationStore,
 	gardenStore GardenStore,
 	eventHub event.Hub,
+	lockManager keyed_lock.LockManager,
 ) executor.ClientProvider {
 	return &clientProvider{
 		totalCapacity:        totalCapacity,
 		allocationStore:      allocationStore,
 		gardenStore:          gardenStore,
 		eventHub:             eventHub,
-		containerLockManager: keyed_lock.NewLockManager(),
+		containerLockManager: lockManager,
 		resourcesLock:        new(sync.Mutex),
 	}
 }

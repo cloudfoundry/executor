@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
+	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock/fakelockmanager"
 	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -19,16 +20,17 @@ import (
 )
 
 var _ = Describe("Depot", func() {
-
 	var (
 		depotClient      executor.Client
-		fakeTimeProvider *faketimeprovider.FakeTimeProvider
 		logger           lager.Logger
-		resources        executor.ExecutorResources
+		fakeTimeProvider *faketimeprovider.FakeTimeProvider
+		eventHub         *efakes.FakeHub
 		allocationStore  AllocationStore
 		gardenStore      *fakes.FakeGardenStore
-		eventHub         *efakes.FakeHub
+		resources        executor.ExecutorResources
+		lockManager      *fakelockmanager.FakeLockManager
 	)
+
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
 
@@ -46,7 +48,9 @@ var _ = Describe("Depot", func() {
 			Containers: 3,
 		}
 
-		depotClient = NewClientProvider(resources, allocationStore, gardenStore, eventHub).WithLogger(logger)
+		lockManager = &fakelockmanager.FakeLockManager{}
+
+		depotClient = NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager).WithLogger(logger)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -420,34 +424,16 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when the allocation store container is not in the initializing state", func() {
-			var ready chan struct{}
-
 			BeforeEach(func() {
-				ready = make(chan struct{})
-
-				gardenStore.LookupStub = func(logger lager.Logger, guid string) (executor.Container, error) {
-					ready <- struct{}{}
-					Eventually(ready).Should(Receive())
-
+				// Fail the container as RunContainer allocates the lock
+				lockManager.LockStub = func(key string) {
 					allocationStore.Fail(logger, gardenStoreGuid, "failure-reason")
-					return executor.Container{}, nil
 				}
-
-				// GetContainer will allocate the lock for our guid
-				go func() {
-					defer GinkgoRecover()
-					depotClient.GetContainer(gardenStoreGuid)
-				}()
-
-				Eventually(ready).Should(Receive())
 			})
 
 			It("does not create a garden container", func() {
 				err := depotClient.RunContainer(gardenStoreGuid)
 				Ω(err).ShouldNot(HaveOccurred())
-
-				// Drop the lock on our guid
-				ready <- struct{}{}
 
 				Eventually(logger).Should(gbytes.Say("test.depot-client.run-container.container-state-invalid"))
 				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
