@@ -1892,6 +1892,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 					JustBeforeEach(func() {
 						go func() {
+							stopped := stopped
 							gardenStore.Stop(logger, executorContainer.Guid)
 							close(stopped)
 						}()
@@ -1955,6 +1956,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 					JustBeforeEach(func() {
 						go func() {
+							destroyed := destroyed
 							gardenStore.Destroy(logger, executorContainer.Guid)
 							close(destroyed)
 						}()
