@@ -10,7 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -28,7 +28,7 @@ type runStep struct {
 	externalIP           string
 	portMappings         []executor.PortMapping
 	exportNetworkEnvVars bool
-	timeProvider         timeprovider.TimeProvider
+	clock                clock.Clock
 
 	*canceller
 }
@@ -42,7 +42,7 @@ func NewRun(
 	externalIP string,
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
-	timeProvider timeprovider.TimeProvider,
+	clock clock.Clock,
 ) *runStep {
 	logger = logger.Session("run-step")
 	return &runStep{
@@ -54,7 +54,7 @@ func NewRun(
 		externalIP:           externalIP,
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
-		timeProvider:         timeProvider,
+		clock:                clock,
 
 		canceller: newCanceller(),
 	}
@@ -152,7 +152,7 @@ func (step *runStep) Perform() error {
 
 			cancel = nil
 
-			killTimer := step.timeProvider.NewTimer(TERMINATE_TIMEOUT)
+			killTimer := step.clock.NewTimer(TERMINATE_TIMEOUT)
 			defer killTimer.Stop()
 
 			killSwitch = killTimer.C()
@@ -165,7 +165,7 @@ func (step *runStep) Perform() error {
 
 			killSwitch = nil
 
-			exitTimer := step.timeProvider.NewTimer(EXIT_TIMEOUT)
+			exitTimer := step.clock.NewTimer(EXIT_TIMEOUT)
 			defer exitTimer.Stop()
 
 			exitTimeout = exitTimer.C()

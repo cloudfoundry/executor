@@ -6,7 +6,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore/fakes"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -20,16 +20,16 @@ var logger = lagertest.NewTestLogger("test")
 var _ = Describe("Allocation Store", func() {
 	var (
 		allocationStore  *allocationstore.AllocationStore
-		fakeTimeProvider *faketimeprovider.FakeTimeProvider
+		fakeClock        *fakeclock.FakeClock
 		fakeEventEmitter *fakes.FakeEventEmitter
 		currentTime      time.Time
 	)
 
 	BeforeEach(func() {
 		currentTime = time.Now()
-		fakeTimeProvider = faketimeprovider.New(currentTime)
+		fakeClock = fakeclock.NewFakeClock(currentTime)
 		fakeEventEmitter = &fakes.FakeEventEmitter{}
-		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider, fakeEventEmitter)
+		allocationStore = allocationstore.NewAllocationStore(fakeClock, fakeEventEmitter)
 	})
 
 	Describe("List", func() {
@@ -333,7 +333,7 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the elapsed time is less than expiration period", func() {
 			BeforeEach(func() {
-				fakeTimeProvider.Increment(expirationTime / 2)
+				fakeClock.Increment(expirationTime / 2)
 			})
 
 			It("all containers are still in the list", func() {
@@ -343,7 +343,7 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when the elapsed time is more than expiration period", func() {
 			BeforeEach(func() {
-				fakeTimeProvider.Increment(2 * expirationTime)
+				fakeClock.Increment(2 * expirationTime)
 			})
 
 			It("it removes only RESERVED containers from the list", func() {

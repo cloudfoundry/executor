@@ -6,22 +6,22 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
 
 type AllocationStore struct {
 	allocated    map[string]executor.Container
-	timeProvider timeprovider.TimeProvider
+	clock        clock.Clock
 	eventEmitter EventEmitter
 	lock         sync.RWMutex
 }
 
-func NewAllocationStore(timeProvider timeprovider.TimeProvider, eventEmitter EventEmitter) *AllocationStore {
+func NewAllocationStore(clock clock.Clock, eventEmitter EventEmitter) *AllocationStore {
 	return &AllocationStore{
 		allocated:    map[string]executor.Container{},
-		timeProvider: timeProvider,
+		clock:        clock,
 		eventEmitter: eventEmitter,
 	}
 }
@@ -57,7 +57,7 @@ func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Conta
 	logger.Debug("allocating-container", lager.Data{"container": container})
 
 	container.State = executor.StateReserved
-	container.AllocatedAt = a.timeProvider.Now().UnixNano()
+	container.AllocatedAt = a.clock.Now().UnixNano()
 	a.allocated[container.Guid] = container
 
 	a.eventEmitter.EmitEvent(executor.NewContainerReservedEvent(container))
@@ -163,7 +163,7 @@ func (a *AllocationStore) RegistryPruner(logger lager.Logger, expirationTime tim
 	logger = logger.Session("allocation-store-pruner")
 
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		ticker := a.timeProvider.NewTicker(expirationTime / 2)
+		ticker := a.clock.NewTicker(expirationTime / 2)
 		defer ticker.Stop()
 
 		close(ready)
@@ -186,7 +186,7 @@ func (a *AllocationStore) RegistryPruner(logger lager.Logger, expirationTime tim
 						continue
 					}
 
-					lifespan := a.timeProvider.Now().Sub(time.Unix(0, container.AllocatedAt))
+					lifespan := a.clock.Now().Sub(time.Unix(0, container.AllocatedAt))
 
 					if lifespan >= expirationTime {
 						logger.Info("reserved-container-expired", lager.Data{"guid": guid, "lifespan": lifespan})

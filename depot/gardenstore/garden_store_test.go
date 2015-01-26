@@ -18,7 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -32,7 +32,7 @@ var _ = Describe("GardenContainerStore", func() {
 		ownerName               = "some-owner-name"
 		maxCPUShares     uint64 = 1024
 		inodeLimit       uint64 = 2000000
-		timeProvider     *faketimeprovider.FakeTimeProvider
+		clock            *fakeclock.FakeClock
 		emitter          *fakes.FakeEventEmitter
 		fakeLogSender    *fake.FakeLogSender
 
@@ -47,7 +47,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 	BeforeEach(func() {
 		fakeGardenClient = new(gfakes.FakeClient)
-		timeProvider = faketimeprovider.New(time.Now())
+		clock = fakeclock.NewFakeClock(time.Now())
 		emitter = new(fakes.FakeEventEmitter)
 
 		fakeLogSender = fake.NewFakeLogSender()
@@ -63,7 +63,7 @@ var _ = Describe("GardenContainerStore", func() {
 			100*time.Millisecond,
 			100*time.Millisecond,
 			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false),
-			timeProvider,
+			clock,
 			emitter,
 		)
 	})
@@ -1838,12 +1838,12 @@ var _ = Describe("GardenContainerStore", func() {
 				err = gardenStore.Run(logger, executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Eventually(timeProvider.WatcherCount).Should(Equal(1))
+				Eventually(clock.WatcherCount).Should(Equal(1))
 			})
 
 			Context("when the monitor action succeeds", func() {
 				JustBeforeEach(func() {
-					timeProvider.Increment(time.Second)
+					clock.Increment(time.Second)
 					monitorReturns <- 0
 				})
 
@@ -1869,7 +1869,7 @@ var _ = Describe("GardenContainerStore", func() {
 				Context("when the monitor action subsequently fails", func() {
 					JustBeforeEach(func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
-						timeProvider.Increment(time.Second)
+						clock.Increment(time.Second)
 						monitorReturns <- 1
 					})
 
@@ -2012,7 +2012,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Context("when monitor persistently fails", func() {
 				JustBeforeEach(func() {
-					timeProvider.Increment(time.Second)
+					clock.Increment(time.Second)
 					monitorReturns <- 1
 				})
 
@@ -2027,7 +2027,7 @@ var _ = Describe("GardenContainerStore", func() {
 						for i := 0; i < 3; i++ {
 							//ugh, got to wait until the timer is being read from before we increment time
 							time.Sleep(10 * time.Millisecond)
-							timeProvider.Increment(time.Second)
+							clock.Increment(time.Second)
 							monitorReturns <- 1
 						}
 					})
@@ -2049,13 +2049,13 @@ var _ = Describe("GardenContainerStore", func() {
 
 				err = gardenStore.Run(logger, executorContainer)
 				Ω(err).ShouldNot(HaveOccurred())
-				Eventually(timeProvider.WatcherCount).Should(Equal(1))
+				Eventually(clock.WatcherCount).Should(Equal(1))
 
-				timeProvider.Increment(time.Second)
+				clock.Increment(time.Second)
 				monitorReturns <- 0
 				Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
 
-				timeProvider.Increment(time.Second)
+				clock.Increment(time.Second)
 				monitorReturns <- 1
 				Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
 			})

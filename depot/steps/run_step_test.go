@@ -14,7 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/clock/fakeclock"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
@@ -33,7 +33,7 @@ var _ = Describe("RunAction", func() {
 	var externalIP string
 	var portMappings []executor.PortMapping
 	var exportNetworkEnvVars bool
-	var fakeTimeProvider *faketimeprovider.FakeTimeProvider
+	var fakeClock *fakeclock.FakeClock
 
 	var spawnedProcess *gfakes.FakeProcess
 	var runError error
@@ -73,7 +73,7 @@ var _ = Describe("RunAction", func() {
 		externalIP = "external-ip"
 		portMappings = nil
 		exportNetworkEnvVars = false
-		fakeTimeProvider = faketimeprovider.New(time.Unix(123, 456))
+		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
 
 	handle := "some-container-handle"
@@ -93,7 +93,7 @@ var _ = Describe("RunAction", func() {
 			externalIP,
 			portMappings,
 			exportNetworkEnvVars,
-			fakeTimeProvider,
+			fakeClock,
 		)
 	})
 
@@ -419,7 +419,7 @@ var _ = Describe("RunAction", func() {
 			It("sends a kill signal to the process", func() {
 				Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-				fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+				fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
 
 				Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 				Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
@@ -433,16 +433,16 @@ var _ = Describe("RunAction", func() {
 				It("finishes performing with failure", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-					fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+					fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
 
-					fakeTimeProvider.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+					fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
 
 					Consistently(performErr).ShouldNot(Receive())
 
-					fakeTimeProvider.Increment(EXIT_TIMEOUT + 1*time.Second)
+					fakeClock.Increment(EXIT_TIMEOUT + 1*time.Second)
 
 					Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
 

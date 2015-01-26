@@ -13,7 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
@@ -26,8 +26,8 @@ type GardenStore struct {
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 
-	transformer  *transformer.Transformer
-	timeProvider timeprovider.TimeProvider
+	transformer *transformer.Transformer
+	clock       clock.Clock
 
 	eventEmitter EventEmitter
 
@@ -43,7 +43,7 @@ func NewGardenStore(
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	transformer *transformer.Transformer,
-	timeProvider timeprovider.TimeProvider,
+	clock clock.Clock,
 	eventEmitter EventEmitter,
 ) *GardenStore {
 	return &GardenStore{
@@ -54,8 +54,8 @@ func NewGardenStore(
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 
-		transformer:  transformer,
-		timeProvider: timeProvider,
+		transformer: transformer,
+		clock:       clock,
 
 		eventEmitter: eventEmitter,
 
@@ -270,7 +270,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			},
 			hasStartedRunning,
 			logger.Session("monitor"),
-			store.timeProvider,
+			store.clock,
 			logStreamer,
 			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,

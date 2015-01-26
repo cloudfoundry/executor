@@ -10,7 +10,7 @@ import (
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock/fakelockmanager"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -21,24 +21,24 @@ import (
 
 var _ = Describe("Depot", func() {
 	var (
-		depotClient      executor.Client
-		logger           lager.Logger
-		fakeTimeProvider *faketimeprovider.FakeTimeProvider
-		eventHub         *efakes.FakeHub
-		allocationStore  AllocationStore
-		gardenStore      *fakes.FakeGardenStore
-		resources        executor.ExecutorResources
-		lockManager      *fakelockmanager.FakeLockManager
+		depotClient     executor.Client
+		logger          lager.Logger
+		fakeClock       *fakeclock.FakeClock
+		eventHub        *efakes.FakeHub
+		allocationStore AllocationStore
+		gardenStore     *fakes.FakeGardenStore
+		resources       executor.ExecutorResources
+		lockManager     *fakelockmanager.FakeLockManager
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
 
-		fakeTimeProvider = faketimeprovider.New(time.Now())
+		fakeClock = fakeclock.NewFakeClock(time.Now())
 
 		eventHub = new(efakes.FakeHub)
 
-		allocationStore = allocationstore.NewAllocationStore(fakeTimeProvider, eventHub)
+		allocationStore = allocationstore.NewAllocationStore(fakeClock, eventHub)
 
 		gardenStore = new(fakes.FakeGardenStore)
 

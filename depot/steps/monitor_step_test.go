@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
-	"github.com/cloudfoundry/gunk/timeprovider/faketimeprovider"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -26,7 +26,7 @@ var _ = Describe("MonitorStep", func() {
 
 		checkFunc        func() Step
 		hasBecomeHealthy <-chan struct{}
-		timeProvider     *faketimeprovider.FakeTimeProvider
+		clock            *fakeclock.FakeClock
 		fakeStreamer     *fake_log_streamer.FakeLogStreamer
 
 		startTimeout      time.Duration
@@ -49,7 +49,7 @@ var _ = Describe("MonitorStep", func() {
 		checkSteps <- fakeStep1
 		checkSteps <- fakeStep2
 
-		timeProvider = faketimeprovider.New(time.Now())
+		clock = fakeclock.NewFakeClock(time.Now())
 
 		fakeStreamer = newFakeStreamer()
 
@@ -68,7 +68,7 @@ var _ = Describe("MonitorStep", func() {
 			checkFunc,
 			hasBecomeHealthyChannel,
 			logger,
-			timeProvider,
+			clock,
 			fakeStreamer,
 			startTimeout,
 			healthyInterval,
@@ -79,10 +79,10 @@ var _ = Describe("MonitorStep", func() {
 	expectCheckAfterInterval := func(fakeStep *fakes.FakeStep, d time.Duration) {
 		previousCheckCount := fakeStep.PerformCallCount()
 
-		timeProvider.Increment(d - 1*time.Microsecond)
+		clock.Increment(d - 1*time.Microsecond)
 		Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
-		timeProvider.Increment(d)
+		clock.Increment(d)
 		Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
 	}
 

@@ -18,7 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
-	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/clock"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
@@ -187,7 +187,7 @@ func main() {
 	)
 
 	hub := event.NewHub()
-	timeProvider := timeprovider.NewTimeProvider()
+	clock := clock.NewClock()
 
 	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
@@ -197,10 +197,10 @@ func main() {
 		*healthyMonitoringInterval,
 		*unhealthyMonitoringInterval,
 		transformer,
-		timeProvider,
+		clock,
 		hub,
 	)
-	allocationStore := allocationstore.NewAllocationStore(timeProvider, hub)
+	allocationStore := allocationstore.NewAllocationStore(clock, hub)
 
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),

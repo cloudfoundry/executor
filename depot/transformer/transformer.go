@@ -10,10 +10,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/cacheddownloader"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -75,7 +75,7 @@ func (transformer *Transformer) StepFor(
 			externalIP,
 			ports,
 			transformer.exportNetworkEnvVars,
-			timeprovider.NewTimeProvider(),
+			clock.NewClock(),
 		)
 
 	case *models.DownloadAction:

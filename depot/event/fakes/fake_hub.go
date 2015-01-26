@@ -17,7 +17,7 @@ type FakeHub struct {
 	SubscribeStub        func() <-chan executor.Event
 	subscribeMutex       sync.RWMutex
 	subscribeArgsForCall []struct{}
-	subscribeReturns struct {
+	subscribeReturns     struct {
 		result1 <-chan executor.Event
 	}
 	CloseStub        func()

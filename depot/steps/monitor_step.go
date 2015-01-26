@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -19,9 +19,9 @@ type monitorStep struct {
 	checkFunc         func() Step
 	hasStartedRunning chan<- struct{}
 
-	logger       lager.Logger
-	timeProvider timeprovider.TimeProvider
-	logStreamer  log_streamer.LogStreamer
+	logger      lager.Logger
+	clock       clock.Clock
+	logStreamer log_streamer.LogStreamer
 
 	startTimeout      time.Duration
 	healthyInterval   time.Duration
@@ -34,7 +34,7 @@ func NewMonitor(
 	checkFunc func() Step,
 	hasStartedRunning chan<- struct{},
 	logger lager.Logger,
-	timeProvider timeprovider.TimeProvider,
+	clock clock.Clock,
 	logStreamer log_streamer.LogStreamer,
 	startTimeout time.Duration,
 	healthyInterval time.Duration,
@@ -46,7 +46,7 @@ func NewMonitor(
 		checkFunc:         checkFunc,
 		hasStartedRunning: hasStartedRunning,
 		logger:            logger,
-		timeProvider:      timeProvider,
+		clock:             clock,
 		logStreamer:       logStreamer,
 		startTimeout:      startTimeout,
 		healthyInterval:   healthyInterval,
@@ -70,11 +70,11 @@ func (step *monitorStep) Perform() error {
 
 	var startBy *time.Time
 	if step.startTimeout > 0 {
-		t := step.timeProvider.Now().Add(step.startTimeout)
+		t := step.clock.Now().Add(step.startTimeout)
 		startBy = &t
 	}
 
-	timer := step.timeProvider.NewTimer(interval)
+	timer := step.clock.NewTimer(interval)
 	defer timer.Stop()
 
 	for {
