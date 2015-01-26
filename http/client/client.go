@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
@@ -161,16 +162,16 @@ func (c client) Ping() error {
 func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 	events := make(chan executor.Event)
 
-	source := &sse.EventSource{
-		Client: c.streamingHTTPClient,
-		CreateRequest: func() *http.Request {
-			request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)
-			if err != nil {
-				panic(err) // totally shouldn't happen
-			}
+	source, err := sse.Connect(c.streamingHTTPClient, time.Second, func() *http.Request {
+		request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)
+		if err != nil {
+			panic(err) // totally shouldn't happen
+		}
 
-			return request
-		},
+		return request
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	go func() {
