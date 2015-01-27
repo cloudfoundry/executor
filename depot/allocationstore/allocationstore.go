@@ -60,7 +60,7 @@ func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Conta
 	container.AllocatedAt = a.clock.Now().UnixNano()
 	a.allocated[container.Guid] = container
 
-	a.eventEmitter.EmitEvent(executor.NewContainerReservedEvent(container))
+	a.eventEmitter.Emit(executor.NewContainerReservedEvent(container))
 
 	return container, nil
 }
@@ -128,7 +128,7 @@ func (a *AllocationStore) Fail(logger lager.Logger, guid string, reason string) 
 	}
 	a.allocated[guid] = container
 
-	a.eventEmitter.EmitEvent(executor.NewContainerCompleteEvent(container))
+	a.eventEmitter.Emit(executor.NewContainerCompleteEvent(container))
 
 	return container, nil
 }

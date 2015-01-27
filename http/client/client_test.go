@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -538,24 +539,54 @@ var _ = Describe("Client", func() {
 			})
 
 			It("returns them over the channel", func() {
-				eventChannel, err := client.SubscribeToEvents()
+				source, err := client.SubscribeToEvents()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				var ev executor.Event
+				Ω(source.Next()).Should(Equal(executor.NewContainerCompleteEvent(container1)))
+				Ω(source.Next()).Should(Equal(executor.NewContainerCompleteEvent(container2)))
+				Ω(source.Next()).Should(Equal(executor.NewContainerRunningEvent(container1)))
+				Ω(source.Next()).Should(Equal(executor.NewContainerReservedEvent(container1)))
 
-				Eventually(eventChannel).Should(Receive(&ev))
-				Ω(ev).Should(Equal(executor.NewContainerCompleteEvent(container1)))
+				_, err = source.Next()
+				Ω(err).Should(Equal(io.EOF))
+			})
+		})
 
-				Eventually(eventChannel).Should(Receive(&ev))
-				Ω(ev).Should(Equal(executor.NewContainerCompleteEvent(container2)))
+		Context("when the server returns bogus events", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/events"),
+					func(w http.ResponseWriter, r *http.Request) {
+						flusher := w.(http.Flusher)
 
-				Eventually(eventChannel).Should(Receive(&ev))
-				Ω(ev).Should(Equal(executor.NewContainerRunningEvent(container1)))
+						w.Header().Add("Content-Type", "text/event-stream; charset=utf-8")
+						w.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
+						w.Header().Add("Connection", "keep-alive")
 
-				Eventually(eventChannel).Should(Receive(&ev))
-				Ω(ev).Should(Equal(executor.NewContainerReservedEvent(container1)))
+						w.WriteHeader(http.StatusOK)
 
-				Eventually(eventChannel).Should(BeClosed())
+						flusher.Flush()
+
+						result := sse.Event{
+							ID:   "0",
+							Name: "bogus",
+							Data: []byte(":3"),
+						}
+
+						err := result.Write(w)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						flusher.Flush()
+					},
+				))
+			})
+
+			It("returns ErrUnknownEventType", func() {
+				source, err := client.SubscribeToEvents()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = source.Next()
+				Ω(err).Should(Equal(executor.ErrUnknownEventType))
 			})
 		})
 
@@ -597,15 +628,12 @@ var _ = Describe("Client", func() {
 			})
 
 			It("does not enforce the non-streaming client's timeout", func() {
-				eventChannel, err := client.SubscribeToEvents()
+				eventSource, err := client.SubscribeToEvents()
 				Ω(err).ShouldNot(HaveOccurred())
 
-				var ev executor.Event
-
-				Eventually(eventChannel).Should(Receive(&ev))
-				Ω(ev).Should(Equal(executor.NewContainerCompleteEvent(container1)))
-
-				Eventually(eventChannel).Should(BeClosed())
+				event, err := eventSource.Next()
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(event).Should(Equal(executor.NewContainerCompleteEvent(container1)))
 			})
 		})
 	})

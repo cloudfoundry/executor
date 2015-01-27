@@ -1,75 +1,59 @@
 package event
 
 import (
-	"sync"
-
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/pivotal-golang/eventhub"
 )
 
 const SUBSCRIBER_BUFFER = 1024
 
 //go:generate counterfeiter -o fakes/fake_hub.go . Hub
 type Hub interface {
-	EmitEvent(executor.Event)
-	Subscribe() <-chan executor.Event
-	Close()
+	Emit(executor.Event)
+	Subscribe() (executor.EventSource, error)
+	Close() error
 }
 
 func NewHub() Hub {
-	return &hub{}
+	return &hub{
+		rawHub: eventhub.NewNonBlocking(SUBSCRIBER_BUFFER),
+	}
 }
 
 type hub struct {
-	subscribers []chan<- executor.Event
-	lock        sync.Mutex
-
-	closed bool
+	rawHub eventhub.Hub
 }
 
-func (hub *hub) EmitEvent(event executor.Event) {
-	hub.lock.Lock()
-
-	remainingSubscribers := []chan<- executor.Event{}
-
-	for _, sub := range hub.subscribers {
-		select {
-		case sub <- event:
-			remainingSubscribers = append(remainingSubscribers, sub)
-		default:
-			close(sub)
-		}
+func (hub *hub) Subscribe() (executor.EventSource, error) {
+	rawSource, err := hub.rawHub.Subscribe()
+	if err != nil {
+		return nil, err
 	}
 
-	hub.subscribers = remainingSubscribers
-
-	hub.lock.Unlock()
+	return executorSource{rawSource}, nil
 }
 
-func (hub *hub) Close() {
-	hub.lock.Lock()
-
-	for _, sub := range hub.subscribers {
-		close(sub)
-	}
-
-	hub.subscribers = nil
-	hub.closed = true
-
-	hub.lock.Unlock()
+func (hub *hub) Emit(ev executor.Event) {
+	hub.rawHub.Emit(ev)
 }
 
-func (hub *hub) Subscribe() <-chan executor.Event {
-	events := make(chan executor.Event, SUBSCRIBER_BUFFER)
+func (hub *hub) Close() error {
+	return hub.rawHub.Close()
+}
 
-	hub.lock.Lock()
+type executorSource struct {
+	rawSource eventhub.Source
+}
 
-	if hub.closed {
-		close(events)
-	} else {
-		hub.subscribers = append(hub.subscribers, events)
+func (source executorSource) Next() (executor.Event, error) {
+	ev, err := source.rawSource.Next()
+	if err != nil {
+		return nil, err
 	}
 
-	hub.lock.Unlock()
+	return ev.(executor.Event), nil
+}
 
-	return events
+func (source executorSource) Close() error {
+	return source.rawSource.Close()
 }

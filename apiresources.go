@@ -2,6 +2,7 @@ package executor
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -181,6 +182,8 @@ type Event interface {
 }
 
 type EventType string
+
+var ErrUnknownEventType = errors.New("unknown event type")
 
 const (
 	EventTypeInvalid EventType = ""

@@ -1784,21 +1784,21 @@ var _ = Describe("GardenContainerStore", func() {
 
 			It("transitions to running as soon as it starts running", func() {
 				Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
-				Eventually(emitter.EmitEventCallCount).Should(Equal(1))
-				Ω(emitter.EmitEventArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerRunning))
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerRunning))
 			})
 
 			Context("when the running action exits succesfully", func() {
 				BeforeEach(func() {
 					//wait for the run event to have gone through
-					Eventually(emitter.EmitEventCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
 					runReturns <- 0
 				})
 
 				It("transitions to complete and succeeded", func() {
 					Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-					Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-					Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 					Ω(containerResult().Failed).Should(BeFalse())
 				})
 
@@ -1812,14 +1812,14 @@ var _ = Describe("GardenContainerStore", func() {
 			Context("when the running action exits unsuccesfully", func() {
 				BeforeEach(func() {
 					//wait for the run event to have gone through
-					Eventually(emitter.EmitEventCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
 					runReturns <- 1
 				})
 
 				It("transitions to complete and failed", func() {
 					Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-					Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-					Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 					Ω(containerResult().Failed).Should(BeTrue())
 					Ω(containerResult().FailureReason).Should(ContainSubstring("Exited with status 1"))
 				})
@@ -1849,8 +1849,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 				It("marks the container as running and emits an event", func() {
 					Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateRunning))
-					Eventually(emitter.EmitEventCallCount).Should(Equal(1))
-					Ω(emitter.EmitEventArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerRunning))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Ω(emitter.EmitArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerRunning))
 				})
 
 				It("logs the run session lifecycle", func() {
@@ -1875,8 +1875,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("marks the container completed", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeTrue())
 					})
 				})
@@ -1914,15 +1914,15 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("completes without failure", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeFalse())
 					})
 
 					It("reports in the result that it was stopped", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Stopped).Should(BeTrue())
 					})
 
@@ -1978,15 +1978,15 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("completes without failure", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeFalse())
 					})
 
 					It("reports in the result that it was stopped", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(2))
-						Ω(emitter.EmitEventArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Stopped).Should(BeTrue())
 					})
 
@@ -2018,7 +2018,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				It("doesn't transition to running", func() {
 					Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCreated))
-					Eventually(emitter.EmitEventCallCount).Should(Equal(0))
+					Eventually(emitter.EmitCallCount).Should(Equal(0))
 				})
 
 				Context("when the time to start elapses", func() {
@@ -2034,8 +2034,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 					It("transitions to completed and failed", func() {
 						Eventually(containerStateGetter).Should(BeEquivalentTo(executor.StateCompleted))
-						Eventually(emitter.EmitEventCallCount).Should(Equal(1))
-						Ω(emitter.EmitEventArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerComplete))
+						Eventually(emitter.EmitCallCount).Should(Equal(1))
+						Ω(emitter.EmitArgsForCall(0).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Failed).Should(BeTrue())
 					})
 				})

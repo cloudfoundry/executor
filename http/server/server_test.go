@@ -801,6 +801,8 @@ var _ = Describe("Api", func() {
 		var response *http.Response
 
 		Context("when the depot emits events", func() {
+			var fakeEventSource *fakes.FakeEventSource
+
 			event1 := executor.ContainerCompleteEvent{
 				executor.Container{
 					Guid:   "the-guid",
@@ -830,7 +832,17 @@ var _ = Describe("Api", func() {
 				events <- event2
 				close(events)
 
-				depotClient.SubscribeToEventsReturns(events, nil)
+				fakeEventSource = new(fakes.FakeEventSource)
+				fakeEventSource.NextStub = func() (executor.Event, error) {
+					e, ok := <-events
+					if ok {
+						return e, nil
+					}
+
+					return nil, errors.New("nope")
+				}
+
+				depotClient.SubscribeToEventsReturns(fakeEventSource, nil)
 			})
 
 			JustBeforeEach(func() {
@@ -845,7 +857,7 @@ var _ = Describe("Api", func() {
 				Ω(response.Header.Get("Connection")).Should(Equal("keep-alive"))
 			})
 
-			It("emits the events via SSE and ends when the channel closes", func() {
+			It("emits the events via SSE and ends when the source returns an error", func() {
 				Ω(response.StatusCode).Should(Equal(http.StatusOK))
 
 				reader := sse.NewReadCloser(response.Body)
@@ -880,6 +892,14 @@ var _ = Describe("Api", func() {
 					"test.request.serving",
 					"test.request.done",
 				}))
+			})
+
+			Context("when the client goes away", func() {
+				It("closes the server's source", func() {
+					response.Body.Close()
+
+					Eventually(fakeEventSource.CloseCallCount).Should(Equal(1))
+				})
 			})
 		})
 

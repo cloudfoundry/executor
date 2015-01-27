@@ -105,8 +105,8 @@ var _ = Describe("Allocation Store", func() {
 				Ω(allocation.State).Should(Equal(executor.StateReserved))
 				Ω(allocation.AllocatedAt).Should(Equal(currentTime.UnixNano()))
 
-				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(1))
-				Ω(fakeEventEmitter.EmitEventArgsForCall(0)).Should(Equal(executor.NewContainerReservedEvent(allocation)))
+				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(1))
+				Ω(fakeEventEmitter.EmitArgsForCall(0)).Should(Equal(executor.NewContainerReservedEvent(allocation)))
 			})
 		})
 
@@ -203,7 +203,7 @@ var _ = Describe("Allocation Store", func() {
 				Ω(err).Should(HaveOccurred())
 				Ω(err).Should(Equal(executor.ErrContainerNotFound))
 
-				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(0))
+				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(0))
 			})
 		})
 
@@ -214,7 +214,7 @@ var _ = Describe("Allocation Store", func() {
 			})
 
 			It("it is marked as COMPLETED with failure reason", func() {
-				emitCallCount := fakeEventEmitter.EmitEventCallCount()
+				emitCallCount := fakeEventEmitter.EmitCallCount()
 				allocation, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -225,8 +225,8 @@ var _ = Describe("Allocation Store", func() {
 					FailureReason: "failure-reason",
 				}))
 
-				Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(emitCallCount + 1))
-				Ω(fakeEventEmitter.EmitEventArgsForCall(emitCallCount)).Should(Equal(executor.NewContainerCompleteEvent(allocation)))
+				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(emitCallCount + 1))
+				Ω(fakeEventEmitter.EmitArgsForCall(emitCallCount)).Should(Equal(executor.NewContainerCompleteEvent(allocation)))
 			})
 
 			It("remains in the allocation store as reserved", func() {
@@ -251,12 +251,12 @@ var _ = Describe("Allocation Store", func() {
 				})
 
 				It("fails with an invalid transition error", func() {
-					expectedEmitEventCount := fakeEventEmitter.EmitEventCallCount()
+					expectedEmitCount := fakeEventEmitter.EmitCallCount()
 
 					_, err := allocationStore.Fail(logger, container.Guid, "already-completed")
 					Ω(err).Should(Equal(executor.ErrInvalidTransition))
 
-					Ω(fakeEventEmitter.EmitEventCallCount()).Should(Equal(expectedEmitEventCount))
+					Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(expectedEmitCount))
 				})
 			})
 		})

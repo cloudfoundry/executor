@@ -12,7 +12,7 @@ type FakeClient struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns     struct {
+	pingReturns struct {
 		result1 error
 	}
 	AllocateContainersStub        func(requests []executor.Container) (map[string]string, error)
@@ -69,14 +69,14 @@ type FakeClient struct {
 	RemainingResourcesStub        func() (executor.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns     struct {
+	remainingResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (executor.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns     struct {
+	totalResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
@@ -90,11 +90,11 @@ type FakeClient struct {
 		result1 io.ReadCloser
 		result2 error
 	}
-	SubscribeToEventsStub        func() (<-chan executor.Event, error)
+	SubscribeToEventsStub        func() (executor.EventSource, error)
 	subscribeToEventsMutex       sync.RWMutex
 	subscribeToEventsArgsForCall []struct{}
-	subscribeToEventsReturns     struct {
-		result1 <-chan executor.Event
+	subscribeToEventsReturns struct {
+		result1 executor.EventSource
 		result2 error
 	}
 }
@@ -402,7 +402,7 @@ func (fake *FakeClient) GetFilesReturns(result1 io.ReadCloser, result2 error) {
 	}{result1, result2}
 }
 
-func (fake *FakeClient) SubscribeToEvents() (<-chan executor.Event, error) {
+func (fake *FakeClient) SubscribeToEvents() (executor.EventSource, error) {
 	fake.subscribeToEventsMutex.Lock()
 	fake.subscribeToEventsArgsForCall = append(fake.subscribeToEventsArgsForCall, struct{}{})
 	fake.subscribeToEventsMutex.Unlock()
@@ -419,10 +419,10 @@ func (fake *FakeClient) SubscribeToEventsCallCount() int {
 	return len(fake.subscribeToEventsArgsForCall)
 }
 
-func (fake *FakeClient) SubscribeToEventsReturns(result1 <-chan executor.Event, result2 error) {
+func (fake *FakeClient) SubscribeToEventsReturns(result1 executor.EventSource, result2 error) {
 	fake.SubscribeToEventsStub = nil
 	fake.subscribeToEventsReturns = struct {
-		result1 <-chan executor.Event
+		result1 executor.EventSource
 		result2 error
 	}{result1, result2}
 }

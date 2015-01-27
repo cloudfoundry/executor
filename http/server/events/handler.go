@@ -31,11 +31,15 @@ func (generator *Generator) WithLogger(logger lager.Logger) http.Handler {
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	events, err := h.depotClient.SubscribeToEvents()
+	closeNotify := w.(http.CloseNotifier).CloseNotify()
+
+	eventSource, err := h.depotClient.SubscribeToEvents()
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
+
+	defer eventSource.Close()
 
 	flusher := w.(http.Flusher)
 
@@ -47,8 +51,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	flusher.Flush()
 
+	go func() {
+		<-closeNotify
+		eventSource.Close()
+	}()
+
 	eventID := 0
-	for event := range events {
+	for {
+		event, err := eventSource.Next()
+		if err != nil {
+			return
+		}
+
 		payload, err := json.Marshal(event)
 		if err != nil {
 			return

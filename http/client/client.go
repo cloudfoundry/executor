@@ -159,9 +159,7 @@ func (c client) Ping() error {
 	return nil
 }
 
-func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
-	events := make(chan executor.Event)
-
+func (c client) SubscribeToEvents() (executor.EventSource, error) {
 	source, err := sse.Connect(c.streamingHTTPClient, time.Second, func() *http.Request {
 		request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)
 		if err != nil {
@@ -174,43 +172,7 @@ func (c client) SubscribeToEvents() (<-chan executor.Event, error) {
 		return nil, err
 	}
 
-	go func() {
-		for {
-			sseEvent, err := source.Next()
-			if err != nil {
-				close(events)
-				break
-			}
-
-			switch executor.EventType(sseEvent.Name) {
-			case executor.EventTypeContainerComplete:
-				event := executor.ContainerCompleteEvent{}
-
-				err := json.Unmarshal(sseEvent.Data, &event)
-				if err == nil {
-					events <- event
-				}
-
-			case executor.EventTypeContainerRunning:
-				event := executor.ContainerRunningEvent{}
-
-				err := json.Unmarshal(sseEvent.Data, &event)
-				if err == nil {
-					events <- event
-				}
-
-			case executor.EventTypeContainerReserved:
-				event := executor.ContainerReservedEvent{}
-
-				err := json.Unmarshal(sseEvent.Data, &event)
-				if err == nil {
-					events <- event
-				}
-			}
-		}
-	}()
-
-	return events, nil
+	return newExecutorEventSource(source), nil
 }
 
 func (c client) buildContainerFromApiResponse(response *http.Response) (executor.Container, error) {
@@ -284,4 +246,60 @@ func handleResponse(response *http.Response) (*http.Response, error) {
 	}
 
 	return response, nil
+}
+
+type executorEventSource struct {
+	rawSource *sse.EventSource
+}
+
+func newExecutorEventSource(rawSource *sse.EventSource) *executorEventSource {
+	return &executorEventSource{
+		rawSource: rawSource,
+	}
+}
+
+func (source *executorEventSource) Next() (executor.Event, error) {
+	sseEvent, err := source.rawSource.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	switch executor.EventType(sseEvent.Name) {
+	case executor.EventTypeContainerComplete:
+		event := executor.ContainerCompleteEvent{}
+
+		err := json.Unmarshal(sseEvent.Data, &event)
+		if err != nil {
+			return nil, err
+		}
+
+		return event, nil
+
+	case executor.EventTypeContainerRunning:
+		event := executor.ContainerRunningEvent{}
+
+		err := json.Unmarshal(sseEvent.Data, &event)
+		if err != nil {
+			return nil, err
+		}
+
+		return event, nil
+
+	case executor.EventTypeContainerReserved:
+		event := executor.ContainerReservedEvent{}
+
+		err := json.Unmarshal(sseEvent.Data, &event)
+		if err != nil {
+			return nil, err
+		}
+
+		return event, nil
+
+	default:
+		return nil, executor.ErrUnknownEventType
+	}
+}
+
+func (source *executorEventSource) Close() error {
+	return source.rawSource.Close()
 }

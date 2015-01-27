@@ -360,8 +360,8 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	return c.gardenStore.GetFiles(logger, guid, sourcePath)
 }
 
-func (c *client) SubscribeToEvents() (<-chan executor.Event, error) {
-	return c.eventHub.Subscribe(), nil
+func (c *client) SubscribeToEvents() (executor.EventSource, error) {
+	return c.eventHub.Subscribe()
 }
 
 func (c *client) checkSpace(logger lager.Logger, containers []executor.Container) ([]executor.Container, []executor.Container, error) {

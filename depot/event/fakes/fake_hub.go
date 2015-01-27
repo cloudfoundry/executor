@@ -9,53 +9,57 @@ import (
 )
 
 type FakeHub struct {
-	EmitEventStub        func(executor.Event)
-	emitEventMutex       sync.RWMutex
-	emitEventArgsForCall []struct {
+	EmitStub        func(executor.Event)
+	emitMutex       sync.RWMutex
+	emitArgsForCall []struct {
 		arg1 executor.Event
 	}
-	SubscribeStub        func() <-chan executor.Event
+	SubscribeStub        func() (executor.EventSource, error)
 	subscribeMutex       sync.RWMutex
 	subscribeArgsForCall []struct{}
 	subscribeReturns     struct {
-		result1 <-chan executor.Event
+		result1 executor.EventSource
+		result2 error
 	}
-	CloseStub        func()
+	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-}
-
-func (fake *FakeHub) EmitEvent(arg1 executor.Event) {
-	fake.emitEventMutex.Lock()
-	fake.emitEventArgsForCall = append(fake.emitEventArgsForCall, struct {
-		arg1 executor.Event
-	}{arg1})
-	fake.emitEventMutex.Unlock()
-	if fake.EmitEventStub != nil {
-		fake.EmitEventStub(arg1)
+	closeReturns     struct {
+		result1 error
 	}
 }
 
-func (fake *FakeHub) EmitEventCallCount() int {
-	fake.emitEventMutex.RLock()
-	defer fake.emitEventMutex.RUnlock()
-	return len(fake.emitEventArgsForCall)
+func (fake *FakeHub) Emit(arg1 executor.Event) {
+	fake.emitMutex.Lock()
+	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
+		arg1 executor.Event
+	}{arg1})
+	fake.emitMutex.Unlock()
+	if fake.EmitStub != nil {
+		fake.EmitStub(arg1)
+	}
 }
 
-func (fake *FakeHub) EmitEventArgsForCall(i int) executor.Event {
-	fake.emitEventMutex.RLock()
-	defer fake.emitEventMutex.RUnlock()
-	return fake.emitEventArgsForCall[i].arg1
+func (fake *FakeHub) EmitCallCount() int {
+	fake.emitMutex.RLock()
+	defer fake.emitMutex.RUnlock()
+	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeHub) Subscribe() <-chan executor.Event {
+func (fake *FakeHub) EmitArgsForCall(i int) executor.Event {
+	fake.emitMutex.RLock()
+	defer fake.emitMutex.RUnlock()
+	return fake.emitArgsForCall[i].arg1
+}
+
+func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	fake.subscribeMutex.Lock()
 	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct{}{})
 	fake.subscribeMutex.Unlock()
 	if fake.SubscribeStub != nil {
 		return fake.SubscribeStub()
 	} else {
-		return fake.subscribeReturns.result1
+		return fake.subscribeReturns.result1, fake.subscribeReturns.result2
 	}
 }
 
@@ -65,19 +69,22 @@ func (fake *FakeHub) SubscribeCallCount() int {
 	return len(fake.subscribeArgsForCall)
 }
 
-func (fake *FakeHub) SubscribeReturns(result1 <-chan executor.Event) {
+func (fake *FakeHub) SubscribeReturns(result1 executor.EventSource, result2 error) {
 	fake.SubscribeStub = nil
 	fake.subscribeReturns = struct {
-		result1 <-chan executor.Event
-	}{result1}
+		result1 executor.EventSource
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeHub) Close() {
+func (fake *FakeHub) Close() error {
 	fake.closeMutex.Lock()
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct{}{})
 	fake.closeMutex.Unlock()
 	if fake.CloseStub != nil {
-		fake.CloseStub()
+		return fake.CloseStub()
+	} else {
+		return fake.closeReturns.result1
 	}
 }
 
@@ -85,6 +92,13 @@ func (fake *FakeHub) CloseCallCount() int {
 	fake.closeMutex.RLock()
 	defer fake.closeMutex.RUnlock()
 	return len(fake.closeArgsForCall)
+}
+
+func (fake *FakeHub) CloseReturns(result1 error) {
+	fake.CloseStub = nil
+	fake.closeReturns = struct {
+		result1 error
+	}{result1}
 }
 
 var _ event.Hub = new(FakeHub)

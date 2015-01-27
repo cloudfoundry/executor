@@ -19,9 +19,16 @@ type Client interface {
 	RemainingResources() (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)
-	SubscribeToEvents() (<-chan Event, error)
+	SubscribeToEvents() (EventSource, error)
 }
 
 type ClientProvider interface {
 	WithLogger(logger lager.Logger) Client
+}
+
+//go:generate counterfeiter -o fakes/fake_event_source.go . EventSource
+
+type EventSource interface {
+	Next() (Event, error)
+	Close() error
 }

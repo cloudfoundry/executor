@@ -9,34 +9,34 @@ import (
 )
 
 type FakeEventEmitter struct {
-	EmitEventStub        func(executor.Event)
-	emitEventMutex       sync.RWMutex
-	emitEventArgsForCall []struct {
+	EmitStub        func(executor.Event)
+	emitMutex       sync.RWMutex
+	emitArgsForCall []struct {
 		arg1 executor.Event
 	}
 }
 
-func (fake *FakeEventEmitter) EmitEvent(arg1 executor.Event) {
-	fake.emitEventMutex.Lock()
-	fake.emitEventArgsForCall = append(fake.emitEventArgsForCall, struct {
+func (fake *FakeEventEmitter) Emit(arg1 executor.Event) {
+	fake.emitMutex.Lock()
+	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
 		arg1 executor.Event
 	}{arg1})
-	fake.emitEventMutex.Unlock()
-	if fake.EmitEventStub != nil {
-		fake.EmitEventStub(arg1)
+	fake.emitMutex.Unlock()
+	if fake.EmitStub != nil {
+		fake.EmitStub(arg1)
 	}
 }
 
-func (fake *FakeEventEmitter) EmitEventCallCount() int {
-	fake.emitEventMutex.RLock()
-	defer fake.emitEventMutex.RUnlock()
-	return len(fake.emitEventArgsForCall)
+func (fake *FakeEventEmitter) EmitCallCount() int {
+	fake.emitMutex.RLock()
+	defer fake.emitMutex.RUnlock()
+	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeEventEmitter) EmitEventArgsForCall(i int) executor.Event {
-	fake.emitEventMutex.RLock()
-	defer fake.emitEventMutex.RUnlock()
-	return fake.emitEventArgsForCall[i].arg1
+func (fake *FakeEventEmitter) EmitArgsForCall(i int) executor.Event {
+	fake.emitMutex.RLock()
+	defer fake.emitMutex.RUnlock()
+	return fake.emitArgsForCall[i].arg1
 }
 
 var _ allocationstore.EventEmitter = new(FakeEventEmitter)
