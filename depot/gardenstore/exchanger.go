@@ -2,7 +2,9 @@ package gardenstore
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -334,49 +336,17 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	}
 
 	for _, securityRule := range executorContainer.EgressRules {
-		var protocol garden.Protocol
-		icmpType := int32(-1)
-		icmpCode := int32(-1)
-		switch securityRule.Protocol {
-		case models.TCPProtocol:
-			protocol = garden.ProtocolTCP
-		case models.UDPProtocol:
-			protocol = garden.ProtocolUDP
-		case models.ICMPProtocol:
-			protocol = garden.ProtocolICMP
-			icmpType = securityRule.IcmpInfo.Type
-			icmpCode = securityRule.IcmpInfo.Code
-		case models.AllProtocol:
-			protocol = garden.ProtocolAll
+		netOutRule, err := securityGroupRuleToNetOutRule(securityRule)
+		if err != nil {
+			logger.Error("failed-to-build-net-out-rule", err, lager.Data{"security_group_rule": securityRule})
+			return executor.Container{}, err
 		}
 
-		for _, dest := range securityRule.Destinations {
-			var portRange string
-			if securityRule.PortRange != nil {
-				portRange = fmt.Sprintf("%d:%d", securityRule.PortRange.Start, securityRule.PortRange.End)
-				err := gardenContainer.NetOut(dest, 0, portRange, protocol, icmpType, icmpCode, securityRule.Log)
-				if err != nil {
-					logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
-					exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-					return executor.Container{}, err
-				}
-			} else if securityRule.Ports != nil {
-				for _, port := range securityRule.Ports {
-					err := gardenContainer.NetOut(dest, uint32(port), "", protocol, icmpType, icmpCode, securityRule.Log)
-					if err != nil {
-						logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
-						exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-						return executor.Container{}, err
-					}
-				}
-			} else {
-				err := gardenContainer.NetOut(dest, 0, "", protocol, icmpType, icmpCode, securityRule.Log)
-				if err != nil {
-					logger.Error("failed-to-net-out", err, lager.Data{"security_group_rule": securityRule})
-					exchanger.destroyContainer(logger, gardenClient, gardenContainer)
-					return executor.Container{}, err
-				}
-			}
+		err = gardenContainer.NetOut(netOutRule)
+		if err != nil {
+			logger.Error("failed-to-net-out", err, lager.Data{"net-out-rule": netOutRule})
+			exchanger.destroyContainer(logger, gardenClient, gardenContainer)
+			return executor.Container{}, err
 		}
 	}
 
@@ -440,4 +410,87 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	executorContainer.ExternalIP = info.ExternalIP
 
 	return executorContainer, nil
+}
+
+func securityGroupRuleToNetOutRule(securityRule models.SecurityGroupRule) (garden.NetOutRule, error) {
+	var protocol garden.Protocol
+	var portRanges []garden.PortRange
+	var networks []garden.IPRange
+	var icmp *garden.ICMPControl
+
+	switch securityRule.Protocol {
+	case models.TCPProtocol:
+		protocol = garden.ProtocolTCP
+	case models.UDPProtocol:
+		protocol = garden.ProtocolUDP
+	case models.ICMPProtocol:
+		protocol = garden.ProtocolICMP
+		icmp = &garden.ICMPControl{
+			Type: garden.ICMPType(securityRule.IcmpInfo.Type),
+			Code: garden.ICMPControlCode(uint8(securityRule.IcmpInfo.Code)),
+		}
+	case models.AllProtocol:
+		protocol = garden.ProtocolAll
+	}
+
+	if securityRule.PortRange != nil {
+		portRanges = append(portRanges, garden.PortRange{Start: securityRule.PortRange.Start, End: securityRule.PortRange.End})
+	} else if securityRule.Ports != nil {
+		for _, port := range securityRule.Ports {
+			portRanges = append(portRanges, garden.PortRangeFromPort(port))
+		}
+	}
+
+	for _, dest := range securityRule.Destinations {
+		ipRange, err := toIPRange(dest)
+		if err != nil {
+			return garden.NetOutRule{}, err
+		}
+		networks = append(networks, ipRange)
+	}
+
+	netOutRule := garden.NetOutRule{
+		Protocol: protocol,
+		Networks: networks,
+		Ports:    portRanges,
+		ICMPs:    icmp,
+		Log:      securityRule.Log,
+	}
+
+	return netOutRule, nil
+}
+
+var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
+
+func toIPRange(dest string) (garden.IPRange, error) {
+	idx := strings.IndexAny(dest, "-/")
+
+	// Not a range or a CIDR
+	if idx == -1 {
+		ip := net.ParseIP(dest)
+		if ip == nil {
+			return garden.IPRange{}, ErrIPRangeConversionFailed
+		}
+
+		return garden.IPRangeFromIP(ip), nil
+	}
+
+	// We have a CIDR
+	if dest[idx] == '/' {
+		_, ipNet, err := net.ParseCIDR(dest)
+		if err != nil {
+			return garden.IPRange{}, ErrIPRangeConversionFailed
+		}
+
+		return garden.IPRangeFromIPNet(ipNet), nil
+	}
+
+	// We have an IP range
+	firstIP := net.ParseIP(dest[:idx])
+	secondIP := net.ParseIP(dest[idx+1:])
+	if firstIP == nil || secondIP == nil {
+		return garden.IPRange{}, ErrIPRangeConversionFailed
+	}
+
+	return garden.IPRange{Start: firstIP, End: secondIP}, nil
 }

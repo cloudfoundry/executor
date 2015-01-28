@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -1074,94 +1075,51 @@ var _ = Describe("GardenContainerStore", func() {
 					})
 
 					It("updates egress rules on returned container", func() {
-						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(6))
+						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(4))
 
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog := fakeGardenContainer.NetOutArgsForCall(0)
-						Ω(network).Should(Equal(rules[0].Destinations[0]))
-						Ω(port).Should(Equal(uint32(0)))
-						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolUDP))
-						Ω(portRange).Should(Equal("1:1024"))
-						Ω(netOutLog).Should(BeFalse())
+						_, expectedNet, err := net.ParseCIDR("0.0.0.0/0")
+						Ω(err).ShouldNot(HaveOccurred())
 
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(1)
-						Ω(network).Should(Equal(rules[1].Destinations[0]))
-						Ω(port).Should(Equal(uint32(80)))
-						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolTCP))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeTrue())
+						rule := fakeGardenContainer.NetOutArgsForCall(0)
+						Ω(rule.Protocol).Should(Equal(garden.ProtocolUDP))
+						Ω(rule.Networks).Should(Equal([]garden.IPRange{garden.IPRangeFromIPNet(expectedNet)}))
+						Ω(rule.Ports).Should(Equal([]garden.PortRange{{Start: 1, End: 1024}}))
+						Ω(rule.ICMPs).Should(BeNil())
+						Ω(rule.Log).Should(BeFalse())
 
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(2)
-						Ω(network).Should(Equal(rules[1].Destinations[0]))
-						Ω(port).Should(Equal(uint32(443)))
-						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolTCP))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeTrue())
+						rule = fakeGardenContainer.NetOutArgsForCall(1)
+						Ω(rule.Networks).Should(Equal([]garden.IPRange{{
+							Start: net.ParseIP("1.2.3.4"),
+							End:   net.ParseIP("2.3.4.5"),
+						}}))
+						Ω(rule.Ports).Should(Equal([]garden.PortRange{
+							garden.PortRangeFromPort(80),
+							garden.PortRangeFromPort(443),
+						}))
+						Ω(rule.ICMPs).Should(BeNil())
+						Ω(rule.Log).Should(BeTrue())
 
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(3)
-						Ω(network).Should(Equal(rules[2].Destinations[0]))
-						Ω(port).Should(Equal(uint32(0)))
-						Ω(icmpType).Should(Equal(int32(1)))
-						Ω(icmpCode).Should(Equal(int32(2)))
-						Ω(protocol).Should(Equal(garden.ProtocolICMP))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						rule = fakeGardenContainer.NetOutArgsForCall(2)
+						Ω(rule.Protocol).Should(Equal(garden.ProtocolICMP))
+						Ω(rule.Networks).Should(Equal([]garden.IPRange{
+							garden.IPRangeFromIP(net.ParseIP("1.2.3.4")),
+						}))
+						Ω(rule.Ports).Should(BeEmpty())
+						Ω(*rule.ICMPs).Should(Equal(garden.ICMPControl{
+							Type: garden.ICMPType(1),
+							Code: garden.ICMPControlCode(2),
+						}))
+						Ω(rule.Log).Should(BeFalse())
 
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(4)
-						Ω(network).Should(Equal(rules[3].Destinations[0]))
-						Ω(port).Should(Equal(uint32(0)))
-						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolAll))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeTrue())
-
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog = fakeGardenContainer.NetOutArgsForCall(5)
-						Ω(network).Should(Equal(rules[3].Destinations[1]))
-						Ω(port).Should(Equal(uint32(0)))
-						Ω(icmpType).Should(Equal(int32(-1)))
-						Ω(icmpCode).Should(Equal(int32(-1)))
-						Ω(protocol).Should(Equal(garden.ProtocolAll))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeTrue())
-					})
-				})
-
-				Context("when security rule has icmp protocol", func() {
-
-					BeforeEach(func() {
-						rules = []models.SecurityGroupRule{
-							{
-								Protocol:     "icmp",
-								Destinations: []string{"0.0.0.0/0"},
-								IcmpInfo: &models.ICMPInfo{
-									Type: 1,
-									Code: 2,
-								},
-							},
-						}
-
-						executorContainer.EgressRules = rules
-					})
-
-					It("creates it with the egress rules", func() {
-						Ω(createErr).ShouldNot(HaveOccurred())
-					})
-					It("updates egress rules on returned container", func() {
-						Ω(fakeGardenContainer.NetOutCallCount()).Should(Equal(1))
-						network, port, portRange, protocol, icmpType, icmpCode, netOutLog := fakeGardenContainer.NetOutArgsForCall(0)
-						Ω(network).Should(Equal(rules[0].Destinations[0]))
-						Ω(port).Should(Equal(uint32(0)))
-						Ω(icmpType).Should(Equal(int32(1)))
-						Ω(icmpCode).Should(Equal(int32(2)))
-						Ω(protocol).Should(Equal(garden.ProtocolICMP))
-						Ω(portRange).Should(BeEmpty())
-						Ω(netOutLog).Should(BeFalse())
+						rule = fakeGardenContainer.NetOutArgsForCall(3)
+						Ω(rule.Protocol).Should(Equal(garden.ProtocolAll))
+						Ω(rule.Networks).Should(Equal([]garden.IPRange{
+							garden.IPRangeFromIP(net.ParseIP("9.8.7.6")),
+							garden.IPRangeFromIP(net.ParseIP("8.7.6.5")),
+						}))
+						Ω(rule.Ports).Should(BeEmpty())
+						Ω(rule.ICMPs).Should(BeNil())
+						Ω(rule.Log).Should(BeTrue())
 					})
 				})
 
