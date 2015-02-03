@@ -75,37 +75,41 @@ func (step *downloadStep) Perform() error {
 func (step *downloadStep) perform() error {
 	step.emit("Downloading %s...\n", step.model.Artifact)
 
-	downloadedFile, err := step.fetch()
+	downloadedFile, downloadedSize, err := step.fetch()
 	if err != nil {
 		return NewEmittableError(err, "Downloading failed")
 	}
 
-	size := downloadSize(downloadedFile)
 	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
 		return NewEmittableError(err, "Copying into the container failed")
 	}
 
-	step.emit("Downloaded %s (%s)\n", step.model.Artifact, size)
+	if downloadedSize != 0 {
+		step.emit("Downloaded %s (%s)\n", step.model.Artifact, bytefmt.ByteSize(uint64(downloadedSize)))
+	} else {
+		step.emit("Downloaded %s\n", step.model.Artifact)
+	}
+
 	return nil
 }
 
-func (step *downloadStep) fetch() (io.ReadCloser, error) {
+func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 	step.logger.Info("fetch-starting")
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		step.logger.Error("parse-request-uri-error", err)
-		return nil, err
+		return nil, 0, err
 	}
 
-	tarStream, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.Cancelled())
+	tarStream, downlodedSize, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.Cancelled())
 	if err != nil {
 		step.logger.Error("fetch-failed", err)
-		return nil, err
+		return nil, 0, err
 	}
 
 	step.logger.Info("fetch-complete")
-	return tarStream, nil
+	return tarStream, downlodedSize, nil
 }
 
 func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
@@ -128,16 +132,4 @@ func (step *downloadStep) emit(format string, a ...interface{}) {
 	if step.model.Artifact != "" {
 		fmt.Fprintf(step.streamer.Stdout(), format, a...)
 	}
-}
-
-func downloadSize(downloadedFile interface{}) string {
-	if f, ok := downloadedFile.(*cacheddownloader.CachedFile); ok {
-		fi, err := f.Stat()
-		if err != nil {
-			return "unknown"
-		}
-		return bytefmt.ByteSize(uint64(fi.Size()))
-	}
-
-	return "unknown"
 }

@@ -41,7 +41,7 @@ var _ = Describe("DownloadAction", func() {
 
 	BeforeEach(func() {
 		cache = &cdfakes.FakeCachedDownloader{}
-		cache.FetchReturns(ioutil.NopCloser(new(bytes.Buffer)), nil)
+		cache.FetchReturns(ioutil.NopCloser(new(bytes.Buffer)), 42, nil)
 
 		downloadAction = models.DownloadAction{
 			From:     "http://mr_jones",
@@ -118,34 +118,30 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction.Artifact = "artifact"
 			})
 
-			Context("streams the downloaded filesize", func() {
-				It("streams unknown when the Fetch does not return a File", func() {
-					Ω(stepErr).ShouldNot(HaveOccurred())
-
-					stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-					Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (unknown)"))
-				})
-
-				Context("with a file", func() {
-					var tempFile *os.File
-
+			Describe("logging the size", func() {
+				Context("when nothing had to be downloaded", func() {
 					BeforeEach(func() {
-						var err error
-						tempFile, err = ioutil.TempFile("", "download-step")
-						Ω(err).ShouldNot(HaveOccurred())
-						ioutil.WriteFile(tempFile.Name(), []byte("data"), os.ModePerm)
-						cache.FetchReturns(cacheddownloader.NewFileCloser(tempFile, func(string) {}), nil)
+						cache.FetchReturns(gbytes.NewBuffer(), 0, nil) // 0 bytes downlaoded
 					})
 
-					AfterEach(func() {
-						os.Remove(tempFile.Name())
+					It("streams unknown when the Fetch does not return a File", func() {
+						Ω(stepErr).ShouldNot(HaveOccurred())
+
+						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
+						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact\n"))
+					})
+				})
+
+				Context("when data was downloaded", func() {
+					BeforeEach(func() {
+						cache.FetchReturns(gbytes.NewBuffer(), 42, nil)
 					})
 
 					It("streams the size when the Fetch returns a File", func() {
 						Ω(stepErr).ShouldNot(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (4B)"))
+						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (42B)"))
 					})
 				})
 			})
@@ -173,7 +169,7 @@ var _ = Describe("DownloadAction", func() {
 				tarFile := createTempTar()
 				defer os.Remove(tarFile.Name())
 
-				cache.FetchReturns(tarFile, nil)
+				cache.FetchReturns(tarFile, 42, nil)
 			})
 
 			Context("and streaming in succeeds", func() {
@@ -226,7 +222,7 @@ var _ = Describe("DownloadAction", func() {
 
 		Context("when there is an error fetching the file", func() {
 			BeforeEach(func() {
-				cache.FetchReturns(nil, errors.New("oh no!"))
+				cache.FetchReturns(nil, 0, errors.New("oh no!"))
 			})
 
 			It("returns an error", func() {
@@ -240,7 +236,6 @@ var _ = Describe("DownloadAction", func() {
 				}))
 			})
 		})
-
 	})
 
 	Describe("Cancel", func() {
@@ -288,7 +283,7 @@ var _ = Describe("DownloadAction", func() {
 			BeforeEach(func() {
 				calledChan = make(chan struct{})
 
-				cache.FetchStub = func(u *url.URL, key string, t cacheddownloader.CacheTransformer, cancelCh <-chan struct{}) (io.ReadCloser, error) {
+				cache.FetchStub = func(u *url.URL, key string, t cacheddownloader.CacheTransformer, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
 					Ω(cancelCh).ShouldNot(BeNil())
 					Ω(cancelCh).ShouldNot(BeClosed())
 
@@ -297,7 +292,7 @@ var _ = Describe("DownloadAction", func() {
 
 					Ω(cancelCh).Should(BeClosed())
 
-					return nil, errors.New("some error indicating a cancel")
+					return nil, 0, errors.New("some error indicating a cancel")
 				}
 			})
 
@@ -320,7 +315,7 @@ var _ = Describe("DownloadAction", func() {
 			BeforeEach(func() {
 				tarFile := createTempTar()
 				defer os.Remove(tarFile.Name())
-				cache.FetchReturns(tarFile, nil)
+				cache.FetchReturns(tarFile, 0, nil)
 
 				calledChan = make(chan struct{})
 				barrierChan = make(chan struct{})
@@ -409,10 +404,10 @@ var _ = Describe("DownloadAction", func() {
 			fetchCh := make(chan struct{}, 3)
 			barrier := make(chan struct{})
 			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
-			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer, cancelChan <-chan struct{}) (io.ReadCloser, error) {
+			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
 				fetchCh <- struct{}{}
 				<-barrier
-				return nopCloser, nil
+				return nopCloser, 42, nil
 			}
 
 			go func() {
