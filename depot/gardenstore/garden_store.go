@@ -122,9 +122,9 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 	container.State = executor.StateCreated
 
 	logStreamer := log_streamer.New(
-		container.Log.Guid,
-		container.Log.SourceName,
-		container.Log.Index,
+		container.LogConfig.Guid,
+		container.LogConfig.SourceName,
+		container.LogConfig.Index,
 	)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
@@ -227,9 +227,9 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 	}
 
 	logStreamer := log_streamer.New(
-		container.Log.Guid,
-		container.Log.SourceName,
-		container.Log.Index,
+		container.LogConfig.Guid,
+		container.LogConfig.SourceName,
+		container.LogConfig.Index,
 	)
 
 	var setupStep, actionStep, monitorStep steps.Step

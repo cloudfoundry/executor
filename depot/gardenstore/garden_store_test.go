@@ -636,13 +636,13 @@ var _ = Describe("GardenContainerStore", func() {
 
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:log": string(payload),
+								"executor:log-config": string(payload),
 							},
 						}, nil)
 					})
 
 					It("has it as its log", func() {
-						Ω(executorContainer.Log).Should(Equal(log))
+						Ω(executorContainer.LogConfig).Should(Equal(log))
 					})
 				})
 
@@ -650,14 +650,14 @@ var _ = Describe("GardenContainerStore", func() {
 					BeforeEach(func() {
 						gardenContainer.InfoReturns(garden.ContainerInfo{
 							Properties: garden.Properties{
-								"executor:log": "ß",
+								"executor:log-config": "ß",
 							},
 						}, nil)
 					})
 
 					It("returns an InvalidJSONError", func() {
 						Ω(lookupErr).Should(HaveOccurred())
-						Ω(lookupErr.Error()).Should(ContainSubstring("executor:log"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:log-config"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
 						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
 					})
@@ -781,7 +781,7 @@ var _ = Describe("GardenContainerStore", func() {
 				State:  executor.StateInitializing,
 				Action: action,
 
-				Log: executor.LogConfig{
+				LogConfig: executor.LogConfig{
 					Guid:       "log-guid",
 					SourceName: "some-source-name",
 					Index:      &one,
@@ -1001,16 +1001,16 @@ var _ = Describe("GardenContainerStore", func() {
 					}
 
 					BeforeEach(func() {
-						executorContainer.Log = log
+						executorContainer.LogConfig = log
 					})
 
-					It("creates it with the executor:log property", func() {
+					It("creates it with the executor:log-config property", func() {
 						payload, err := json.Marshal(log)
 						Ω(err).ShouldNot(HaveOccurred())
 
 						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
-						Ω(containerSpec.Properties["executor:log"]).To(MatchJSON(payload))
+						Ω(containerSpec.Properties["executor:log-config"]).To(MatchJSON(payload))
 					})
 				})
 

@@ -39,7 +39,7 @@ const (
 	ContainerSetupProperty         = executorPropertyPrefix + "setup"
 	ContainerMonitorProperty       = executorPropertyPrefix + "monitor"
 	ContainerEnvProperty           = executorPropertyPrefix + "env"
-	ContainerLogProperty           = executorPropertyPrefix + "log"
+	ContainerLogProperty           = executorPropertyPrefix + "log-config"
 	ContainerMetricsConfigProperty = executorPropertyPrefix + "metrics-config"
 	ContainerResultProperty        = executorPropertyPrefix + "result"
 	ContainerMemoryMBProperty      = executorPropertyPrefix + "memory-mb"
@@ -145,7 +145,7 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 				}
 			}
 		case ContainerLogProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Log)
+			err := json.Unmarshal([]byte(value), &executorContainer.LogConfig)
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -276,7 +276,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		return executor.Container{}, err
 	}
 
-	logJson, err := json.Marshal(executorContainer.Log)
+	logJson, err := json.Marshal(executorContainer.LogConfig)
 	if err != nil {
 		logger.Error("failed-marshal-log", err)
 		return executor.Container{}, err

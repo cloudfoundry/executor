@@ -42,7 +42,7 @@ type Container struct {
 	ExternalIP string        `json:"external_ip"`
 	Ports      []PortMapping `json:"ports"`
 
-	Log           LogConfig     `json:"log"`
+	LogConfig     LogConfig     `json:"log_config"`
 	MetricsConfig MetricsConfig `json:"metrics_config"`
 
 	StartTimeout uint          `json:"start_timeout"`

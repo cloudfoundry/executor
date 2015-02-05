@@ -57,7 +57,7 @@ var _ = Describe("Client", func() {
 					MemoryMB:  64,
 					DiskMB:    1024,
 					CPUWeight: 5,
-					Log: executor.LogConfig{
+					LogConfig: executor.LogConfig{
 						Guid:       "some-guid",
 						SourceName: "XYZ",
 						Index:      &zero,
@@ -133,9 +133,13 @@ var _ = Describe("Client", func() {
 						"run": {
 							"run": {"path": "ls"}
 						},
-            "log": {
+            "log_config": {
               "guid":"some-guid",
               "source_name":"XYZ",
+              "index":0
+						},
+            "metrics_config": {
+              "guid":"some-guid",
               "index":0
             }
           }`),
@@ -161,10 +165,15 @@ var _ = Describe("Client", func() {
 						Path: "ls",
 					},
 
-					Log: executor.LogConfig{
+					LogConfig: executor.LogConfig{
 						Guid:       "some-guid",
 						SourceName: "XYZ",
 						Index:      &zero,
+					},
+
+					MetricsConfig: executor.MetricsConfig{
+						Guid:  "some-guid",
+						Index: &zero,
 					},
 				}))
 			})
