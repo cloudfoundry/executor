@@ -60,7 +60,9 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 
 	logger.Info("started")
 	defer func() {
-		logger.Info("done", lager.Data{"took": reporter.clock.Now().Sub(startTime)})
+		logger.Info("done", lager.Data{
+			"took": reporter.clock.Now().Sub(startTime).String(),
+		})
 	}()
 
 	containers, err := reporter.executorClient.ListContainers(nil)
@@ -71,7 +73,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 
 	logger.Info("emitting", lager.Data{
 		"total-containers":        len(containers),
-		"listing-containers-took": reporter.clock.Now().Sub(startTime),
+		"listing-containers-took": reporter.clock.Now().Sub(startTime).String(),
 	})
 
 	for _, container := range containers {
