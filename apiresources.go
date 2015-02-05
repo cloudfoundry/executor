@@ -3,6 +3,7 @@ package executor
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
@@ -23,10 +24,15 @@ type Container struct {
 
 	State State `json:"state"`
 
-	MemoryMB   int  `json:"memory_mb"`
 	Privileged bool `json:"privileged"`
-	DiskMB     int  `json:"disk_mb"`
-	CPUWeight  uint `json:"cpu_weight"`
+
+	MemoryMB  int  `json:"memory_mb"`
+	DiskMB    int  `json:"disk_mb"`
+	CPUWeight uint `json:"cpu_weight"`
+
+	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
+	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
+	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
 
 	Tags Tags `json:"tags,omitempty"`
 

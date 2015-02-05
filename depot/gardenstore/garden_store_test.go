@@ -121,6 +121,33 @@ var _ = Describe("GardenContainerStore", func() {
 				Ω(fakeGardenClient.LookupArgsForCall(0)).Should(Equal("some-container-handle"))
 			})
 
+			Context("when the container returns memory, disk, and CPU stats", func() {
+				BeforeEach(func() {
+					gardenContainer.InfoReturns(garden.ContainerInfo{
+						MemoryStat: garden.ContainerMemoryStat{
+							TotalRss:          100,
+							TotalCache:        12,
+							TotalInactiveFile: 1,
+						},
+						DiskStat: garden.ContainerDiskStat{
+							BytesUsed:  222,
+							InodesUsed: 333,
+						},
+						CPUStat: garden.ContainerCPUStat{
+							Usage:  123,
+							User:   456, // ignored
+							System: 789, // ignored
+						},
+					}, nil)
+				})
+
+				It("returns them on the executor container", func() {
+					Ω(executorContainer.MemoryUsageInBytes).Should(Equal(uint64(111)))
+					Ω(executorContainer.DiskUsageInBytes).Should(Equal(uint64(222)))
+					Ω(executorContainer.TimeSpentInCPU).Should(Equal(123 * time.Nanosecond))
+				})
+			})
+
 			Context("when the container has an executor:state property", func() {
 				Context("and it's Reserved", func() {
 					BeforeEach(func() {

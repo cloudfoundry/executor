@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/garden"
@@ -76,6 +77,10 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 		Tags:       executor.Tags{},
 		Ports:      make([]executor.PortMapping, len(info.MappedPorts)),
 		ExternalIP: info.ExternalIP,
+
+		MemoryUsageInBytes: info.MemoryStat.TotalRss + (info.MemoryStat.TotalCache - info.MemoryStat.TotalInactiveFile),
+		DiskUsageInBytes:   info.DiskStat.BytesUsed,
+		TimeSpentInCPU:     time.Duration(info.CPUStat.Usage),
 	}
 
 	for key, value := range info.Properties {
