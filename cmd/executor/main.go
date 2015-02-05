@@ -25,6 +25,7 @@ import (
 
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
+	"github.com/cloudfoundry-incubator/executor/containermetrics"
 
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
@@ -139,12 +140,13 @@ var exportNetworkEnvVars = flag.Bool(
 )
 
 const (
-	containerOwnerName     = "executor"
-	dropsondeDestination   = "localhost:3457"
-	dropsondeOrigin        = "executor"
-	maxConcurrentDownloads = 5
-	maxConcurrentUploads   = 5
-	metricsReportInterval  = 1 * time.Minute
+	containerOwnerName             = "executor"
+	dropsondeDestination           = "localhost:3457"
+	dropsondeOrigin                = "executor"
+	maxConcurrentDownloads         = 5
+	maxConcurrentUploads           = 5
+	metricsReportInterval          = 1 * time.Minute
+	containerMetricsReportInterval = 30 * time.Second
 )
 
 func main() {
@@ -211,6 +213,7 @@ func main() {
 	)
 
 	metricsLogger := logger.Session("metrics-reporter")
+	containerMetricsLogger := logger.Session("container-metrics-reporter")
 
 	members := grouper.Members{
 		{"api-server", &server.Server{
@@ -225,6 +228,12 @@ func main() {
 		}},
 		{"hub-closer", closeHub(hub)},
 		{"registry-pruner", allocationStore.RegistryPruner(logger, *registryPruningInterval)},
+		{"container-metrics-reporter", containermetrics.NewStatsReporter(
+			containerMetricsLogger,
+			containerMetricsReportInterval,
+			clock,
+			depotClientProvider.WithLogger(containerMetricsLogger),
+		)},
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {

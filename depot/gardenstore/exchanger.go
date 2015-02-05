@@ -31,21 +31,22 @@ const (
 	tagPropertyPrefix      = "tag:"
 	executorPropertyPrefix = "executor:"
 
-	ContainerOwnerProperty        = executorPropertyPrefix + "owner"
-	ContainerStateProperty        = executorPropertyPrefix + "state"
-	ContainerAllocatedAtProperty  = executorPropertyPrefix + "allocated-at"
-	ContainerRootfsProperty       = executorPropertyPrefix + "rootfs"
-	ContainerActionProperty       = executorPropertyPrefix + "action"
-	ContainerSetupProperty        = executorPropertyPrefix + "setup"
-	ContainerMonitorProperty      = executorPropertyPrefix + "monitor"
-	ContainerEnvProperty          = executorPropertyPrefix + "env"
-	ContainerLogProperty          = executorPropertyPrefix + "log"
-	ContainerResultProperty       = executorPropertyPrefix + "result"
-	ContainerMemoryMBProperty     = executorPropertyPrefix + "memory-mb"
-	ContainerDiskMBProperty       = executorPropertyPrefix + "disk-mb"
-	ContainerCPUWeightProperty    = executorPropertyPrefix + "cpu-weight"
-	ContainerStartTimeoutProperty = executorPropertyPrefix + "start-timeout"
-	ContainerEgressRulesProperty  = executorPropertyPrefix + "egress-rules"
+	ContainerOwnerProperty         = executorPropertyPrefix + "owner"
+	ContainerStateProperty         = executorPropertyPrefix + "state"
+	ContainerAllocatedAtProperty   = executorPropertyPrefix + "allocated-at"
+	ContainerRootfsProperty        = executorPropertyPrefix + "rootfs"
+	ContainerActionProperty        = executorPropertyPrefix + "action"
+	ContainerSetupProperty         = executorPropertyPrefix + "setup"
+	ContainerMonitorProperty       = executorPropertyPrefix + "monitor"
+	ContainerEnvProperty           = executorPropertyPrefix + "env"
+	ContainerLogProperty           = executorPropertyPrefix + "log"
+	ContainerMetricsConfigProperty = executorPropertyPrefix + "metrics-config"
+	ContainerResultProperty        = executorPropertyPrefix + "result"
+	ContainerMemoryMBProperty      = executorPropertyPrefix + "memory-mb"
+	ContainerDiskMBProperty        = executorPropertyPrefix + "disk-mb"
+	ContainerCPUWeightProperty     = executorPropertyPrefix + "cpu-weight"
+	ContainerStartTimeoutProperty  = executorPropertyPrefix + "start-timeout"
+	ContainerEgressRulesProperty   = executorPropertyPrefix + "egress-rules"
 )
 
 func NewExchanger(
@@ -145,6 +146,15 @@ func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (ex
 			}
 		case ContainerLogProperty:
 			err := json.Unmarshal([]byte(value), &executorContainer.Log)
+			if err != nil {
+				return executor.Container{}, InvalidJSONError{
+					Property:     key,
+					Value:        value,
+					UnmarshalErr: err,
+				}
+			}
+		case ContainerMetricsConfigProperty:
+			err := json.Unmarshal([]byte(value), &executorContainer.MetricsConfig)
 			if err != nil {
 				return executor.Container{}, InvalidJSONError{
 					Property:     key,
@@ -272,6 +282,12 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		return executor.Container{}, err
 	}
 
+	metricsConfigJson, err := json.Marshal(executorContainer.MetricsConfig)
+	if err != nil {
+		logger.Error("failed-marshal-metrics-config", err)
+		return executor.Container{}, err
+	}
+
 	resultJson, err := json.Marshal(executorContainer.RunResult)
 	if err != nil {
 		logger.Error("failed-marshal-run-result", err)
@@ -285,21 +301,22 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	}
 
 	containerSpec.Properties = garden.Properties{
-		ContainerOwnerProperty:        exchanger.containerOwnerName,
-		ContainerStateProperty:        string(executorContainer.State),
-		ContainerAllocatedAtProperty:  fmt.Sprintf("%d", executorContainer.AllocatedAt),
-		ContainerStartTimeoutProperty: fmt.Sprintf("%d", executorContainer.StartTimeout),
-		ContainerRootfsProperty:       executorContainer.RootFSPath,
-		ContainerSetupProperty:        string(setupJson),
-		ContainerActionProperty:       string(actionJson),
-		ContainerMonitorProperty:      string(monitorJson),
-		ContainerEnvProperty:          string(envJson),
-		ContainerLogProperty:          string(logJson),
-		ContainerResultProperty:       string(resultJson),
-		ContainerMemoryMBProperty:     fmt.Sprintf("%d", executorContainer.MemoryMB),
-		ContainerDiskMBProperty:       fmt.Sprintf("%d", executorContainer.DiskMB),
-		ContainerCPUWeightProperty:    fmt.Sprintf("%d", executorContainer.CPUWeight),
-		ContainerEgressRulesProperty:  string(securityGroupRuleJson),
+		ContainerOwnerProperty:         exchanger.containerOwnerName,
+		ContainerStateProperty:         string(executorContainer.State),
+		ContainerAllocatedAtProperty:   fmt.Sprintf("%d", executorContainer.AllocatedAt),
+		ContainerStartTimeoutProperty:  fmt.Sprintf("%d", executorContainer.StartTimeout),
+		ContainerRootfsProperty:        executorContainer.RootFSPath,
+		ContainerSetupProperty:         string(setupJson),
+		ContainerActionProperty:        string(actionJson),
+		ContainerMonitorProperty:       string(monitorJson),
+		ContainerEnvProperty:           string(envJson),
+		ContainerLogProperty:           string(logJson),
+		ContainerMetricsConfigProperty: string(metricsConfigJson),
+		ContainerResultProperty:        string(resultJson),
+		ContainerMemoryMBProperty:      fmt.Sprintf("%d", executorContainer.MemoryMB),
+		ContainerDiskMBProperty:        fmt.Sprintf("%d", executorContainer.DiskMB),
+		ContainerCPUWeightProperty:     fmt.Sprintf("%d", executorContainer.CPUWeight),
+		ContainerEgressRulesProperty:   string(securityGroupRuleJson),
 	}
 
 	for name, value := range executorContainer.Tags {
@@ -309,6 +326,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	for _, env := range executorContainer.Env {
 		containerSpec.Env = append(containerSpec.Env, env.Name+"="+env.Value)
 	}
+
 	for _, securityRule := range executorContainer.EgressRules {
 		if err := securityRule.Validate(); err != nil {
 			logger.Error("invalid-security-rule", err, lager.Data{"security_group_rule": securityRule})

@@ -41,7 +41,9 @@ type Container struct {
 	RootFSPath string        `json:"rootfs"`
 	ExternalIP string        `json:"external_ip"`
 	Ports      []PortMapping `json:"ports"`
-	Log        LogConfig     `json:"log"`
+
+	Log           LogConfig     `json:"log"`
+	MetricsConfig MetricsConfig `json:"metrics_config"`
 
 	StartTimeout uint          `json:"start_timeout"`
 	Setup        models.Action `json:"setup"`
@@ -157,10 +159,15 @@ type EnvironmentVariable struct {
 	Value string `json:"value"`
 }
 
+type MetricsConfig struct {
+	Guid  string `json:"guid"`
+	Index *int   `json:"index"`
+}
+
 type LogConfig struct {
 	Guid       string `json:"guid"`
-	SourceName string `json:"source_name"`
 	Index      *int   `json:"index"`
+	SourceName string `json:"source_name"`
 }
 
 type PortMapping struct {

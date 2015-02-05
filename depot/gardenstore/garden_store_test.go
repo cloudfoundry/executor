@@ -664,6 +664,48 @@ var _ = Describe("GardenContainerStore", func() {
 				})
 			})
 
+			Context("when the Garden container has a metrics config", func() {
+				Context("and the metrics config is valid", func() {
+					index := 1
+					metricsConfig := executor.MetricsConfig{
+						Guid:  "my-guid",
+						Index: &index,
+					}
+
+					BeforeEach(func() {
+						payload, err := json.Marshal(metricsConfig)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:metrics-config": string(payload),
+							},
+						}, nil)
+					})
+
+					It("has it as its metrics config", func() {
+						Ω(executorContainer.MetricsConfig).Should(Equal(metricsConfig))
+					})
+				})
+
+				Context("and the metrics config is invalid", func() {
+					BeforeEach(func() {
+						gardenContainer.InfoReturns(garden.ContainerInfo{
+							Properties: garden.Properties{
+								"executor:metrics-config": "ß",
+							},
+						}, nil)
+					})
+
+					It("returns an InvalidJSONError", func() {
+						Ω(lookupErr).Should(HaveOccurred())
+						Ω(lookupErr.Error()).Should(ContainSubstring("executor:metrics-config"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("ß"))
+						Ω(lookupErr.Error()).Should(ContainSubstring("invalid character"))
+					})
+				})
+			})
+
 			Context("when the Garden container has a run result", func() {
 				Context("and the run result is valid", func() {
 					runResult := executor.ContainerRunResult{
@@ -969,6 +1011,27 @@ var _ = Describe("GardenContainerStore", func() {
 						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
 						containerSpec := fakeGardenClient.CreateArgsForCall(0)
 						Ω(containerSpec.Properties["executor:log"]).To(MatchJSON(payload))
+					})
+				})
+
+				Context("when the Executor container has metrics config", func() {
+					index := 1
+					metricsConfig := executor.MetricsConfig{
+						Guid:  "my-guid",
+						Index: &index,
+					}
+
+					BeforeEach(func() {
+						executorContainer.MetricsConfig = metricsConfig
+					})
+
+					It("creates it with the executor:metrics-config property", func() {
+						payload, err := json.Marshal(metricsConfig)
+						Ω(err).ShouldNot(HaveOccurred())
+
+						Ω(fakeGardenClient.CreateCallCount()).Should(Equal(1))
+						containerSpec := fakeGardenClient.CreateArgsForCall(0)
+						Ω(containerSpec.Properties["executor:metrics-config"]).To(MatchJSON(payload))
 					})
 				})
 
