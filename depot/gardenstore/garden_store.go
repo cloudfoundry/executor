@@ -76,7 +76,7 @@ func (store *GardenStore) lookup(logger lager.Logger, guid string) (garden.Conta
 	gardenContainer, err := store.gardenClient.Lookup(guid)
 	if err != nil {
 		if _, ok := err.(garden.ContainerNotFoundError); ok {
-			logger.Info("lookup-failed", lager.Data{"guid": guid, "error": err.Error()})
+			logger.Info("lookup-failed-container-not-found", lager.Data{"guid": guid})
 			err = executor.ErrContainerNotFound
 		} else {
 			logger.Error("lookup-failed", err, lager.Data{"guid": guid})

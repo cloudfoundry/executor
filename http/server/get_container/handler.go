@@ -38,7 +38,11 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resource, err := h.depotClient.GetContainer(guid)
 	if err != nil {
-		getLog.Error("failed-to-get-container", err)
+		if err == executor.ErrContainerNotFound {
+			getLog.Info("failed-to-get-container")
+		} else {
+			getLog.Error("failed-to-get-container", err)
+		}
 		error_headers.Write(err, w)
 		return
 	}

@@ -1797,7 +1797,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				It("logs that the container was not found", func() {
 					Ω(logger).Should(gbytes.Say(runSessionPrefix + "lookup-failed"))
-					Ω(logger).Should(gbytes.Say("unknown handle: some-container-handle"))
+					Ω(logger).Should(gbytes.Say("some-container-handle"))
 				})
 
 				It("does not run the container", func() {
