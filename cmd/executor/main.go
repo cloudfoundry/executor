@@ -139,8 +139,13 @@ var exportNetworkEnvVars = flag.Bool(
 	"export network environment variables into container (e.g. CF_INSTANCE_IP, CF_INSTANCE_PORT)",
 )
 
+var containerOwnerName = flag.String(
+	"containerOwnerName",
+	"executor",
+	"owner name with which to tag containers",
+)
+
 const (
-	containerOwnerName             = "executor"
 	dropsondeDestination           = "localhost:3457"
 	dropsondeOrigin                = "executor"
 	maxConcurrentDownloads         = 5
@@ -169,7 +174,7 @@ func main() {
 
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
-		owner:        containerOwnerName,
+		owner:        *containerOwnerName,
 	}
 
 	destroyContainers(gardenClient, containersFetcher, logger)
@@ -193,7 +198,7 @@ func main() {
 
 	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
-		containerOwnerName,
+		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
 		*healthyMonitoringInterval,
