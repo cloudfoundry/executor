@@ -1487,8 +1487,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(containers).Should(HaveLen(2))
-			Ω(containers[0].Guid).Should(Equal("fake-handle-1"))
-			Ω(containers[1].Guid).Should(Equal("fake-handle-2"))
+			Ω([]string{containers[0].Guid, containers[1].Guid}).Should(ConsistOf("fake-handle-1", "fake-handle-2"))
 
 			Ω(containers[0].State).Should(Equal(executor.StateCreated))
 			Ω(containers[1].State).Should(Equal(executor.StateCreated))

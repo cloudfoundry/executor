@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -33,6 +34,8 @@ type GardenStore struct {
 
 	runningProcesses map[string]ifrit.Process
 	processesL       sync.Mutex
+
+	workPool *workpool.WorkPool
 }
 
 func NewGardenStore(
@@ -60,6 +63,8 @@ func NewGardenStore(
 		eventEmitter: eventEmitter,
 
 		runningProcesses: map[string]ifrit.Process{},
+
+		workPool: workpool.NewWorkPool(32),
 	}
 }
 
@@ -104,14 +109,26 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 	}
 
 	result := make([]executor.Container, 0, len(gardenContainers))
-
+	resultChan := make(chan *executor.Container, len(gardenContainers))
 	for _, gardenContainer := range gardenContainers {
-		container, err := store.exchanger.Garden2Executor(gardenContainer)
-		if err != nil {
+		gardenContainer := gardenContainer
+		store.workPool.Submit(func() {
+			container, err := store.exchanger.Garden2Executor(gardenContainer)
+			if err != nil {
+				resultChan <- nil
+				return
+			}
+
+			resultChan <- &container
+		})
+	}
+
+	for i := 0; i < len(gardenContainers); i++ {
+		c := <-resultChan
+		if c == nil {
 			continue
 		}
-
-		result = append(result, container)
+		result = append(result, *c)
 	}
 
 	return result, nil
