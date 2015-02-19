@@ -159,33 +159,39 @@ func (c *client) RunContainer(guid string) error {
 		"guid": guid,
 	})
 
+	logger.Debug("initializing-container")
 	err := c.allocationStore.Initialize(logger, guid)
 	if err != nil {
-		logger.Error("failed-to-initialize-container", err)
+		logger.Error("failed-initializing-container", err)
 		return err
 	}
+	logger.Debug("succeeded-initializing-container")
 
 	go func() {
 		c.containerLockManager.Lock(guid)
 		defer c.containerLockManager.Unlock(guid)
 
+		logger.Debug("looking-up-in-allocation-store")
 		container, err := c.allocationStore.Lookup(guid)
 		if err != nil {
-			logger.Error("failed-to-find-container", err)
+			logger.Error("failed-looking-up-in-allocation-store", err)
 			return
 		}
+		logger.Debug("succeeded-looking-up-in-allocation-store")
 
 		if container.State != executor.StateInitializing {
 			logger.Error("container-state-invalid", err, lager.Data{"state": container.State})
 			return
 		}
 
+		logger.Debug("creating-container-in-garden")
 		container, err = c.gardenStore.Create(logger, container)
 		if err != nil {
-			logger.Error("failed-to-create-container", err)
+			logger.Error("failed-creating-container-in-garden", err)
 			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
 			return
 		}
+		logger.Debug("succeeded-creating-container-in-garden")
 
 		if !c.allocationStore.Deallocate(logger, guid) {
 			logger.Info("container-deallocated-during-initialization")
@@ -198,10 +204,12 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
+		logger.Debug("running-container")
 		err = c.gardenStore.Run(logger, container)
 		if err != nil {
-			logger.Error("failed-to-run", err)
+			logger.Error("failed-running-container", err)
 		}
+		logger.Debug("succeeded-running-container")
 	}()
 
 	return nil

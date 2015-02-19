@@ -496,7 +496,7 @@ var _ = Describe("Depot", func() {
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(BeEmpty())
 
-				Ω(logger).Should(gbytes.Say("test.depot-client.run-container.failed-to-run"))
+				Ω(logger).Should(gbytes.Say("test.depot-client.run-container.failed-running-container"))
 			})
 		})
 	})

@@ -246,6 +246,7 @@ func (exchanger exchanger) destroyContainer(logger lager.Logger, gardenClient Ga
 }
 
 func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
+	logger = logger.Session("create-in-garden", lager.Data{"container-guid": executorContainer.Guid})
 	containerSpec := garden.ContainerSpec{
 		Handle:     executorContainer.Guid,
 		Privileged: executorContainer.Privileged,
@@ -334,19 +335,22 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		}
 	}
 
+	logger.Debug("creating-garden-container")
 	gardenContainer, err := gardenClient.Create(containerSpec)
 	if err != nil {
-		logger.Error("failed-create-garden", err)
+		logger.Error("failed-creating-garden-container", err)
 		return executor.Container{}, err
 	}
+	logger.Debug("succeeded-creating-garden-container")
 
 	if executorContainer.Ports != nil {
 		actualPortMappings := make([]executor.PortMapping, len(executorContainer.Ports))
 
+		logger.Debug("setting-up-ports")
 		for i, ports := range executorContainer.Ports {
 			actualHostPort, actualContainerPort, err := gardenContainer.NetIn(uint32(ports.HostPort), uint32(ports.ContainerPort))
 			if err != nil {
-				logger.Error("failed-setup-ports", err)
+				logger.Error("failed-setting-up-ports", err)
 				exchanger.destroyContainer(logger, gardenClient, gardenContainer)
 				return executor.Container{}, err
 			}
@@ -354,6 +358,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 			actualPortMappings[i].ContainerPort = uint16(actualContainerPort)
 			actualPortMappings[i].HostPort = uint16(actualHostPort)
 		}
+		logger.Debug("succeeded-setting-up-ports")
 
 		executorContainer.Ports = actualPortMappings
 	}
@@ -365,20 +370,23 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 			return executor.Container{}, err
 		}
 
+		logger.Debug("setting-up-net-out")
 		err = gardenContainer.NetOut(netOutRule)
 		if err != nil {
-			logger.Error("failed-to-net-out", err, lager.Data{"net-out-rule": netOutRule})
+			logger.Error("failed-setting-up-net-out", err, lager.Data{"net-out-rule": netOutRule})
 			exchanger.destroyContainer(logger, gardenClient, gardenContainer)
 			return executor.Container{}, err
 		}
+		logger.Debug("succeeded-setting-up-net-out")
 	}
 
 	if executorContainer.MemoryMB != 0 {
+		logger.Debug("setting-up-memory-limits")
 		err := gardenContainer.LimitMemory(garden.MemoryLimits{
 			LimitInBytes: uint64(executorContainer.MemoryMB * 1024 * 1024),
 		})
 		if err != nil {
-			logger.Error("failed-setup-memory-limits", err)
+			logger.Error("failed-setting-up-memory-limits", err)
 
 			gardenErr := gardenClient.Destroy(gardenContainer.Handle())
 			if gardenErr != nil {
@@ -387,14 +395,16 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 			return executor.Container{}, err
 		}
+		logger.Debug("succeeded-setting-up-memory-limits")
 	}
 
+	logger.Debug("setting-up-disk-limits")
 	err = gardenContainer.LimitDisk(garden.DiskLimits{
 		ByteHard:  uint64(executorContainer.DiskMB * 1024 * 1024),
 		InodeHard: exchanger.containerInodeLimit,
 	})
 	if err != nil {
-		logger.Error("failed-setup-disk-limits", err)
+		logger.Error("failed-setting-up-disk-limits", err)
 
 		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
 		if gardenErr != nil {
@@ -403,12 +413,14 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 		return executor.Container{}, err
 	}
+	logger.Debug("succeeded-setting-up-disk-limits")
 
+	logger.Debug("setting-up-cpu-limits")
 	err = gardenContainer.LimitCPU(garden.CPULimits{
 		LimitInShares: uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0),
 	})
 	if err != nil {
-		logger.Error("failed-setup-cpu", err)
+		logger.Error("failed-setting-up-cpu-limits", err)
 
 		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
 		if gardenErr != nil {
@@ -417,10 +429,12 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 		return executor.Container{}, err
 	}
+	logger.Debug("succeeded-setting-up-cpu-limits")
 
+	logger.Debug("getting-garden-container-info")
 	info, err := gardenContainer.Info()
 	if err != nil {
-		logger.Error("failed-garden-container-info", err)
+		logger.Error("failed-getting-garden-container-info", err)
 
 		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
 		if gardenErr != nil {
@@ -429,6 +443,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 		return executor.Container{}, err
 	}
+	logger.Debug("failed-getting-garden-container-info")
 
 	executorContainer.ExternalIP = info.ExternalIP
 
