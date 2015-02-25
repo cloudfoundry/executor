@@ -158,10 +158,13 @@ func (step *runStep) Perform() error {
 			killSwitch = killTimer.C()
 
 		case <-killSwitch:
+			logger = logger.Session("process-sig-kill", lager.Data{"process": process.ID()})
 			err := process.Signal(garden.SignalKill)
 			if err != nil {
-				logger.Error("failed-to-signal-kill", err)
+				logger.Error("failed", err)
 			}
+
+			logger.Debug("success")
 
 			killSwitch = nil
 
