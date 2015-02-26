@@ -23,7 +23,7 @@ type GardenClient interface {
 }
 
 type Exchanger interface {
-	Garden2Executor(garden.Container) (executor.Container, error)
+	Garden2Executor(lager.Logger, garden.Container) (executor.Container, error)
 	CreateInGarden(lager.Logger, GardenClient, executor.Container) (executor.Container, error)
 }
 
@@ -67,11 +67,16 @@ type exchanger struct {
 	containerInodeLimit   uint64
 }
 
-func (exchanger exchanger) Garden2Executor(gardenContainer garden.Container) (executor.Container, error) {
+func (exchanger exchanger) Garden2Executor(logger lager.Logger, gardenContainer garden.Container) (executor.Container, error) {
+	logger = logger.Session("garden-2-executor", lager.Data{"handle": gardenContainer.Handle()})
+
+	logger.Debug("getting-info")
 	info, err := gardenContainer.Info()
 	if err != nil {
+		logger.Error("failed-getting-info", err)
 		return executor.Container{}, err
 	}
+	logger.Debug("succeeded-getting-info")
 
 	executorContainer := executor.Container{
 		Guid:       gardenContainer.Handle(),

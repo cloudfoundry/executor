@@ -237,17 +237,23 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	// In this case, if the garden store were fetched first, the container would
 	// not be listed anywhere. This ordering guarantees that it will at least
 	// show up allocated.
+	logger.Debug("listing-allocation-store")
 	allAllocatedContainers := c.allocationStore.List()
+	logger.Debug("succeeded-listing-allocation-store")
 	allocatedContainers := make([]executor.Container, 0, len(allAllocatedContainers))
 	for _, container := range allAllocatedContainers {
 		if tagsMatch(tags, container.Tags) {
 			allocatedContainers = append(allocatedContainers, container)
 		}
 	}
+
+	logger.Debug("listing-garden-store")
 	gardenContainers, err := c.gardenStore.List(logger, tags)
 	if err != nil {
+		logger.Error("failed-listing-garden-store", err)
 		return nil, err
 	}
+	logger.Debug("succeeded-listing-garden-store")
 
 	// Order here is important; we want allocated containers to override garden
 	// containers as a member of latter is uninitialized until its counterpart

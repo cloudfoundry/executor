@@ -74,7 +74,7 @@ func (store *GardenStore) Lookup(logger lager.Logger, guid string) (executor.Con
 		return executor.Container{}, err
 	}
 
-	return store.exchanger.Garden2Executor(gardenContainer)
+	return store.exchanger.Garden2Executor(logger, gardenContainer)
 }
 
 func (store *GardenStore) lookup(logger lager.Logger, guid string) (garden.Container, error) {
@@ -102,18 +102,20 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 		filter[tagPropertyPrefix+k] = v
 	}
 
+	logger.Debug("listing-garden-containers", lager.Data{"filter": filter})
 	gardenContainers, err := store.gardenClient.Containers(filter)
 	if err != nil {
-		logger.Error("list-failed", err, lager.Data{"filter": filter})
+		logger.Error("failed-listing-garden-containers", err, lager.Data{"filter": filter})
 		return nil, err
 	}
+	logger.Debug("succeeded-listing-garden-containers", lager.Data{"filter": filter})
 
 	result := make([]executor.Container, 0, len(gardenContainers))
 	resultChan := make(chan *executor.Container, len(gardenContainers))
 	for _, gardenContainer := range gardenContainers {
 		gardenContainer := gardenContainer
 		store.workPool.Submit(func() {
-			container, err := store.exchanger.Garden2Executor(gardenContainer)
+			container, err := store.exchanger.Garden2Executor(logger, gardenContainer)
 			if err != nil {
 				resultChan <- nil
 				return
@@ -237,7 +239,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			FailureReason: transitionErr.Error(),
 		}
 
-		err := store.transitionToComplete(gardenContainer, result)
+		err := store.transitionToComplete(logger, gardenContainer, result)
 		if err != nil {
 			logger.Error("failed-transition-to-complete", err)
 		}
@@ -355,7 +357,7 @@ func (store *GardenStore) runStepProcess(
 			case <-hasStartedRunning:
 				hasStartedRunning = nil
 				logger.Info("transitioning-to-running")
-				err := store.transitionToRunning(gardenContainer)
+				err := store.transitionToRunning(logger, gardenContainer)
 				if err != nil {
 					logger.Error("failed-transitioning-to-running", err)
 					result.Failed = true
@@ -381,7 +383,7 @@ func (store *GardenStore) runStepProcess(
 		}
 
 		logger.Info("transitioning-to-complete")
-		err := store.transitionToComplete(gardenContainer, result)
+		err := store.transitionToComplete(logger, gardenContainer, result)
 		if err != nil {
 			logger.Error("failed-transitioning-to-complete", err)
 			return nil
@@ -420,13 +422,13 @@ func (store *GardenStore) freeStepProcess(logger lager.Logger, guid string) (ifr
 	return process, true
 }
 
-func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) error {
+func (store *GardenStore) transitionToRunning(logger lager.Logger, gardenContainer garden.Container) error {
 	err := gardenContainer.SetProperty(ContainerStateProperty, string(executor.StateRunning))
 	if err != nil {
 		return err
 	}
 
-	executorContainer, err := store.exchanger.Garden2Executor(gardenContainer)
+	executorContainer, err := store.exchanger.Garden2Executor(logger, gardenContainer)
 	if err != nil {
 		return err
 	}
@@ -436,7 +438,7 @@ func (store *GardenStore) transitionToRunning(gardenContainer garden.Container) 
 	return nil
 }
 
-func (store *GardenStore) transitionToComplete(gardenContainer garden.Container, result executor.ContainerRunResult) error {
+func (store *GardenStore) transitionToComplete(logger lager.Logger, gardenContainer garden.Container, result executor.ContainerRunResult) error {
 	resultJson, err := json.Marshal(result)
 	if err != nil {
 		return err
@@ -452,7 +454,7 @@ func (store *GardenStore) transitionToComplete(gardenContainer garden.Container,
 		return err
 	}
 
-	executorContainer, err := store.exchanger.Garden2Executor(gardenContainer)
+	executorContainer, err := store.exchanger.Garden2Executor(logger, gardenContainer)
 	if err != nil {
 		return err
 	}
