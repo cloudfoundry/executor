@@ -448,7 +448,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 
 		return executor.Container{}, err
 	}
-	logger.Debug("failed-getting-garden-container-info")
+	logger.Debug("succeeded-getting-garden-container-info")
 
 	executorContainer.ExternalIP = info.ExternalIP
 
