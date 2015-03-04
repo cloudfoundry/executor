@@ -25,12 +25,12 @@ type DeleteStatus struct {
 
 type Manager interface {
 	Create(sizeMB int) CreateStatus
-	//	Delete(id string) chan DeleteStatus
-	//	Get(id string) (Volume, error)
-	//	GetAll() []Volume
-	//	TotalCapacityMB() int
-	//	ReservedCapacityMB() int
-	//	AvailableCapacityMB() int
+	Delete(id string) error
+	Get(id string) (Volume, error)
+	GetAll() []Volume
+	TotalCapacityMB() int
+	ReservedCapacityMB() int
+	AvailableCapacityMB() int
 }
 
 type VolMgr struct {
@@ -46,6 +46,7 @@ func NewManager(creator Creator, capMB int) VolMgr {
 	return VolMgr{volumes: vols, volumeCreator: creator, totalCapacityMB: capMB, availableCapacityMB: capMB}
 }
 
+// TODO: Have Create() return an error and volume ID, force consumers to poll using Get()
 func (vm *VolMgr) Create(sizeMB int) CreateStatus {
 	//TODO: use locking here
 	if vm.availableCapacityMB <= 0 {
@@ -81,8 +82,58 @@ func (vm *VolMgr) Create(sizeMB int) CreateStatus {
 	vm.volumes[vid.String()] = volume
 
 	//TODO: use locking here
+	//TODO: persist these values
 	vm.reservedCapacityMB += sizeMB
 	vm.availableCapacityMB -= sizeMB
 
 	return CreateStatus{Volume: volume}
+}
+
+func (vm *VolMgr) Get(id string) (Volume, error) {
+	v, ok := vm.volumes[id]
+	if !ok {
+		//TODO: return typed error
+		return Volume{}, errors.New("No such volume found")
+	}
+
+	return v, nil
+}
+
+func (vm *VolMgr) Delete(id string) error {
+	//TODO: do all of this atomically
+	v, ok := vm.volumes[id]
+	if !ok {
+		//TODO: return typed error
+		return errors.New("No such volume found")
+	}
+
+	vm.reservedCapacityMB -= v.TotalCapacity
+	vm.availableCapacityMB += v.TotalCapacity
+
+	delete(vm.volumes, id)
+	return nil
+}
+
+func (vm *VolMgr) GetAll() []Volume {
+	var volumes []Volume
+	for _, v := range vm.volumes {
+		volumes = append(volumes, v)
+	}
+
+	return volumes
+}
+
+func (vm *VolMgr) TotalCapacityMB() int {
+	//TODO: read this from persistent settings
+	return vm.totalCapacityMB
+}
+
+func (vm *VolMgr) ReservedCapacityMB() int {
+	//TODO: read this from persistent settings
+	return vm.reservedCapacityMB
+}
+
+func (vm *VolMgr) AvailableCapacityMB() int {
+	//TODO: read this from persistent settings
+	return vm.availableCapacityMB
 }
