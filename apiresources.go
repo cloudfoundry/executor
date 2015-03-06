@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/cloudfoundry-incubator/executor/volume"
+
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
@@ -26,9 +28,10 @@ type Container struct {
 
 	Privileged bool `json:"privileged"`
 
-	MemoryMB  int  `json:"memory_mb"`
-	DiskMB    int  `json:"disk_mb"`
-	CPUWeight uint `json:"cpu_weight"`
+	MemoryMB  int             `json:"memory_mb"`
+	DiskMB    int             `json:"disk_mb"`
+	CPUWeight uint            `json:"cpu_weight"`
+	Volume    *volumes.Volume `json:"volume,omitempty"`
 
 	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
 	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`

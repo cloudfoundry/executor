@@ -2,29 +2,23 @@ package volumes
 
 import (
 	"errors"
-	"io/ioutil"
-
-	"github.com/nu7hatch/gouuid"
 )
+
+type VolumeSpec struct {
+	DesiredSize      int
+	DesiredHostPath  string
+	DesiredGuestPath string
+}
 
 type Volume struct {
 	Id            string
 	TotalCapacity int
 	Path          string
-}
-
-type CreateStatus struct {
-	Error  error
-	Volume Volume
-}
-
-type DeleteStatus struct {
-	Error error
-	Ok    bool
+	Backing       string
 }
 
 type Manager interface {
-	Create(sizeMB int) CreateStatus
+	Create(spec VolumeSpec) (Volume, error)
 	Delete(id string) error
 	Get(id string) (Volume, error)
 	GetAll() []Volume
@@ -33,63 +27,56 @@ type Manager interface {
 	AvailableCapacityMB() int
 }
 
-type VolMgr struct {
+type manager struct {
 	totalCapacityMB     int
 	reservedCapacityMB  int
 	availableCapacityMB int
 	volumeCreator       Creator
 	volumes             map[string]Volume
+	backingStore        string
 }
 
-func NewManager(creator Creator, capMB int) VolMgr {
+func NewManager(store string, creator Creator, capMB int) manager {
 	vols := make(map[string]Volume)
-	return VolMgr{volumes: vols, volumeCreator: creator, totalCapacityMB: capMB, availableCapacityMB: capMB}
+	return manager{
+		volumes:             vols,
+		volumeCreator:       creator,
+		backingStore:        store,
+		totalCapacityMB:     capMB,
+		availableCapacityMB: capMB,
+	}
 }
 
-// TODO: Have Create() return an error and volume ID, force consumers to poll using Get()
-func (vm *VolMgr) Create(sizeMB int) CreateStatus {
+func (vm *manager) Create(spec VolumeSpec) (Volume, error) {
 	//TODO: use locking here
 	if vm.availableCapacityMB <= 0 {
 		enospace := errors.New("No available capacity")
-		return CreateStatus{Error: enospace}
+		return Volume{}, enospace
 	}
 
 	//TODO: use locking here
-	if vm.availableCapacityMB-sizeMB < 0 {
+	if vm.availableCapacityMB-spec.DesiredSize < 0 {
 		enospace := errors.New("Insufficient capacity")
-		return CreateStatus{Error: enospace}
+		return Volume{}, enospace
 	}
 
-	//TODO: use a better directory to create stores in
-	tmpDir, err := ioutil.TempDir("", "volume-store")
+	v, err := vm.volumeCreator.Create(vm.backingStore, spec)
 	if err != nil {
-		return CreateStatus{Error: err}
-	}
-
-	volumeSpec := VolumeSpec{DesiredSize: sizeMB, DesiredPath: tmpDir}
-	err = vm.volumeCreator.Create(volumeSpec)
-	if err != nil {
-		return CreateStatus{Error: err}
-	}
-
-	vid, err := uuid.NewV4()
-	if err != nil {
-		return CreateStatus{Error: err}
+		return Volume{}, err
 	}
 
 	//TODO: use locking here
-	volume := Volume{TotalCapacity: sizeMB, Id: vid.String(), Path: tmpDir}
-	vm.volumes[vid.String()] = volume
+	vm.volumes[v.Id] = v
 
 	//TODO: use locking here
 	//TODO: persist these values
-	vm.reservedCapacityMB += sizeMB
-	vm.availableCapacityMB -= sizeMB
+	vm.reservedCapacityMB += spec.DesiredSize
+	vm.availableCapacityMB -= spec.DesiredSize
 
-	return CreateStatus{Volume: volume}
+	return v, nil
 }
 
-func (vm *VolMgr) Get(id string) (Volume, error) {
+func (vm *manager) Get(id string) (Volume, error) {
 	v, ok := vm.volumes[id]
 	if !ok {
 		//TODO: return typed error
@@ -99,7 +86,7 @@ func (vm *VolMgr) Get(id string) (Volume, error) {
 	return v, nil
 }
 
-func (vm *VolMgr) Delete(id string) error {
+func (vm *manager) Delete(id string) error {
 	//TODO: do all of this atomically
 	v, ok := vm.volumes[id]
 	if !ok {
@@ -114,7 +101,7 @@ func (vm *VolMgr) Delete(id string) error {
 	return nil
 }
 
-func (vm *VolMgr) GetAll() []Volume {
+func (vm *manager) GetAll() []Volume {
 	var volumes []Volume
 	for _, v := range vm.volumes {
 		volumes = append(volumes, v)
@@ -123,17 +110,17 @@ func (vm *VolMgr) GetAll() []Volume {
 	return volumes
 }
 
-func (vm *VolMgr) TotalCapacityMB() int {
+func (vm *manager) TotalCapacityMB() int {
 	//TODO: read this from persistent settings
 	return vm.totalCapacityMB
 }
 
-func (vm *VolMgr) ReservedCapacityMB() int {
+func (vm *manager) ReservedCapacityMB() int {
 	//TODO: read this from persistent settings
 	return vm.reservedCapacityMB
 }
 
-func (vm *VolMgr) AvailableCapacityMB() int {
+func (vm *manager) AvailableCapacityMB() int {
 	//TODO: read this from persistent settings
 	return vm.availableCapacityMB
 }

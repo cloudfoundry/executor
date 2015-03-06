@@ -13,12 +13,16 @@ import (
 var _ = Describe("VolumeCreator", func() {
 	Describe("Creating a volume from a loop device", func() {
 		It("Backs a given directory with a loop device", func() {
+			//TODO: clean up after ourselves
+			store, err := ioutil.TempDir("", "store")
+			Expect(err).To(BeNil())
+
 			dir, err := ioutil.TempDir("", "volume")
 			Expect(err).To(BeNil())
 
-			volCreator := NewVolumeCreator()
-			spec := VolumeSpec{DesiredPath: dir, DesiredSize: 100}
-			err = volCreator.Create(spec)
+			volCreator := NewCreator()
+			spec := VolumeSpec{DesiredHostPath: dir, DesiredSize: 100}
+			_, err = volCreator.Create(store, spec)
 			Expect(err).To(BeNil())
 
 			f, err := ioutil.TempFile(dir, "interesting-file")

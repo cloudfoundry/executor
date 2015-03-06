@@ -258,6 +258,16 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
+	if executorContainer.Volume != nil {
+		bm := garden.BindMount{
+			SrcPath: executorContainer.Volume.Path,
+			DstPath: "/media/persistent_volume",
+			Mode:    garden.BindMountModeRW,
+		}
+
+		containerSpec.BindMounts = append(containerSpec.BindMounts, bm)
+	}
+
 	setupJson, err := models.MarshalAction(executorContainer.Setup)
 	if err != nil {
 		logger.Error("failed-marshal-setup", err)
