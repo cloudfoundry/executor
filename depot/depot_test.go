@@ -996,7 +996,7 @@ var _ = Describe("Depot", func() {
 			}
 		})
 
-		Context("when no containers are running or allcoated", func() {
+		Context("when no containers are running or allocated", func() {
 			It("should return the total resources", func() {
 				Ω(depotClient.RemainingResources()).Should(Equal(resources))
 			})
@@ -1099,6 +1099,26 @@ var _ = Describe("Depot", func() {
 					}
 					Ω(depotClient.RemainingResources()).Should(Equal(tmpExpectedResources))
 				})
+			})
+		})
+
+		Context("when a container is allocated and running", func() {
+			expectedResources := executor.ExecutorResources{
+				MemoryMB:   256,
+				DiskMB:     256,
+				Containers: 0,
+			}
+
+			BeforeEach(func() {
+				errMessageMap, err := depotClient.AllocateContainers(containers)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(errMessageMap).Should(BeEmpty())
+
+				gardenStore.ListReturns(containers[:1], nil)
+			})
+
+			It("should only count the container once", func() {
+				Ω(depotClient.RemainingResources()).Should(Equal(expectedResources))
 			})
 		})
 	})

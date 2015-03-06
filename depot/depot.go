@@ -324,8 +324,11 @@ func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResou
 		return executor.ExecutorResources{}, err
 	}
 
+	processedGuids := map[string]struct{}{}
+
 	allocatedContainers := c.allocationStore.List()
 	for _, allocation := range allocatedContainers {
+		processedGuids[allocation.Guid] = struct{}{}
 		remainingResources.Containers--
 		remainingResources.DiskMB -= allocation.DiskMB
 		remainingResources.MemoryMB -= allocation.MemoryMB
@@ -337,6 +340,9 @@ func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResou
 	}
 
 	for _, gardenContainer := range gardenContainers {
+		if _, seen := processedGuids[gardenContainer.Guid]; seen {
+			continue
+		}
 		remainingResources.Containers--
 		remainingResources.DiskMB -= gardenContainer.DiskMB
 		remainingResources.MemoryMB -= gardenContainer.MemoryMB
