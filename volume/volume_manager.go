@@ -2,12 +2,13 @@ package volumes
 
 import (
 	"errors"
+	"github.com/pivotal-golang/lager"
+	"io/ioutil"
 )
 
 type VolumeSpec struct {
-	DesiredSize      int
-	DesiredHostPath  string
-	DesiredGuestPath string
+	DesiredSize     int
+	DesiredHostPath string
 }
 
 type Volume struct {
@@ -18,7 +19,7 @@ type Volume struct {
 }
 
 type Manager interface {
-	Create(spec VolumeSpec) (Volume, error)
+	Create(sizeMB int) (Volume, error)
 	Delete(id string) error
 	Get(id string) (Volume, error)
 	GetAll() []Volume
@@ -34,20 +35,24 @@ type manager struct {
 	volumeCreator       Creator
 	volumes             map[string]Volume
 	backingStore        string
+	mountRootPath       string
+	logger              lager.Logger
 }
 
-func NewManager(store string, creator Creator, capMB int) manager {
+func NewManager(logger lager.Logger, store string, creator Creator, capMB int) Manager {
 	vols := make(map[string]Volume)
-	return manager{
+	return &manager{
+		logger:              logger,
 		volumes:             vols,
 		volumeCreator:       creator,
 		backingStore:        store,
 		totalCapacityMB:     capMB,
 		availableCapacityMB: capMB,
+		mountRootPath:       "/tmp",
 	}
 }
 
-func (vm *manager) Create(spec VolumeSpec) (Volume, error) {
+func (vm *manager) Create(volumeSizeMB int) (Volume, error) {
 	//TODO: use locking here
 	if vm.availableCapacityMB <= 0 {
 		enospace := errors.New("No available capacity")
@@ -55,13 +60,24 @@ func (vm *manager) Create(spec VolumeSpec) (Volume, error) {
 	}
 
 	//TODO: use locking here
-	if vm.availableCapacityMB-spec.DesiredSize < 0 {
+	if vm.availableCapacityMB-volumeSizeMB < 0 {
 		enospace := errors.New("Insufficient capacity")
 		return Volume{}, enospace
 	}
 
-	v, err := vm.volumeCreator.Create(vm.backingStore, spec)
+	dir, err := ioutil.TempDir(vm.mountRootPath, "mount")
 	if err != nil {
+		return Volume{}, err
+	}
+
+	s := VolumeSpec{
+		DesiredSize:     volumeSizeMB,
+		DesiredHostPath: dir,
+	}
+
+	v, err := vm.volumeCreator.Create(vm.backingStore, s)
+	if err != nil {
+		vm.logger.Error("volumemanager-create", err)
 		return Volume{}, err
 	}
 
@@ -70,8 +86,8 @@ func (vm *manager) Create(spec VolumeSpec) (Volume, error) {
 
 	//TODO: use locking here
 	//TODO: persist these values
-	vm.reservedCapacityMB += spec.DesiredSize
-	vm.availableCapacityMB -= spec.DesiredSize
+	vm.reservedCapacityMB += volumeSizeMB
+	vm.availableCapacityMB -= volumeSizeMB
 
 	return v, nil
 }

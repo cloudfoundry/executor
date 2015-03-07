@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
 	"github.com/cloudfoundry-incubator/executor/http/server/allocate_containers"
+	"github.com/cloudfoundry-incubator/executor/http/server/create_volume"
 	"github.com/cloudfoundry-incubator/executor/http/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/events"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
@@ -36,6 +37,8 @@ type HandlerProvider interface {
 func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error {
 	handlers := rata.Handlers{
 		ehttp.Ping: ping.New(s.DepotClientProvider.WithLogger(s.Logger)),
+		//TODO: don't do this
+		ehttp.CreateVolume: create_volume.New(s.DepotClientProvider.WithLogger(s.Logger)),
 	}
 
 	handlerProviders := s.NewHandlerProviders()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -157,6 +158,20 @@ func (c client) Ping() error {
 	response.Body.Close()
 
 	return nil
+}
+
+func (c client) CreateVolume(sizeMB int) (string, error) {
+	response, err := c.doRequest(ehttp.CreateVolume, nil, nil, url.Values{"size": []string{fmt.Sprintf("%d", sizeMB)}})
+	if err != nil {
+		return "", err
+	}
+
+	b, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
 }
 
 func (c client) SubscribeToEvents() (executor.EventSource, error) {

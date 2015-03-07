@@ -12,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
+	"github.com/cloudfoundry-incubator/executor/volume"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/clock"
@@ -32,6 +33,8 @@ type GardenStore struct {
 
 	eventEmitter EventEmitter
 
+	volumeManager volumes.Manager
+
 	runningProcesses map[string]ifrit.Process
 	processesL       sync.Mutex
 
@@ -40,6 +43,7 @@ type GardenStore struct {
 
 func NewGardenStore(
 	gardenClient garden.Client,
+	volumeManager volumes.Manager,
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
 	containerInodeLimit uint64,
@@ -51,6 +55,7 @@ func NewGardenStore(
 ) *GardenStore {
 	return &GardenStore{
 		gardenClient:       gardenClient,
+		volumeManager:      volumeManager,
 		exchanger:          NewExchanger(containerOwnerName, containerMaxCPUShares, containerInodeLimit),
 		containerOwnerName: containerOwnerName,
 
@@ -150,7 +155,7 @@ func (store *GardenStore) Create(logger lager.Logger, container executor.Contain
 
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
 
-	container, err := store.exchanger.CreateInGarden(logger, store.gardenClient, container)
+	container, err := store.exchanger.CreateInGarden(logger, store.volumeManager, store.gardenClient, container)
 	if err != nil {
 		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
 		return executor.Container{}, err

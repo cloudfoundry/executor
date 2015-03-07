@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/volume"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
@@ -24,7 +25,7 @@ type GardenClient interface {
 
 type Exchanger interface {
 	Garden2Executor(lager.Logger, garden.Container) (executor.Container, error)
-	CreateInGarden(lager.Logger, GardenClient, executor.Container) (executor.Container, error)
+	CreateInGarden(lager.Logger, volumes.Manager, GardenClient, executor.Container) (executor.Container, error)
 }
 
 const (
@@ -250,7 +251,7 @@ func (exchanger exchanger) destroyContainer(logger lager.Logger, gardenClient Ga
 	}
 }
 
-func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
+func (exchanger exchanger) CreateInGarden(logger lager.Logger, volMgr volumes.Manager, gardenClient GardenClient, executorContainer executor.Container) (executor.Container, error) {
 	logger = logger.Session("create-in-garden", lager.Data{"container-guid": executorContainer.Guid})
 	containerSpec := garden.ContainerSpec{
 		Handle:     executorContainer.Guid,
@@ -258,10 +259,16 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
-	if executorContainer.Volume != nil {
+	if mount := executorContainer.VolumeMount; mount != nil {
+		vol, err := volMgr.Get(mount.VolumeID)
+		if err != nil {
+			logger.Error("failed-fetching-volume", err)
+			return executor.Container{}, err
+		}
+
 		bm := garden.BindMount{
-			SrcPath: executorContainer.Volume.Path,
-			DstPath: "/media/persistent_volume",
+			SrcPath: vol.Path,
+			DstPath: mount.Path,
 			Mode:    garden.BindMountModeRW,
 		}
 

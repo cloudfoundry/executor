@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
+	"github.com/cloudfoundry-incubator/executor/volume"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -21,6 +22,7 @@ type client struct {
 type clientProvider struct {
 	totalCapacity        executor.ExecutorResources
 	gardenStore          GardenStore
+	volumeManager        volumes.Manager
 	allocationStore      AllocationStore
 	eventHub             event.Hub
 	containerLockManager keyed_lock.LockManager
@@ -52,6 +54,7 @@ func NewClientProvider(
 	totalCapacity executor.ExecutorResources,
 	allocationStore AllocationStore,
 	gardenStore GardenStore,
+	volumeManager volumes.Manager,
 	eventHub event.Hub,
 	lockManager keyed_lock.LockManager,
 ) executor.ClientProvider {
@@ -59,6 +62,7 @@ func NewClientProvider(
 		totalCapacity:        totalCapacity,
 		allocationStore:      allocationStore,
 		gardenStore:          gardenStore,
+		volumeManager:        volumeManager,
 		eventHub:             eventHub,
 		containerLockManager: lockManager,
 		resourcesLock:        new(sync.Mutex),
@@ -411,4 +415,14 @@ func (c *client) checkSpace(logger lager.Logger, containers []executor.Container
 	}
 
 	return allocatableContainers, unallocatableContainers, nil
+}
+
+func (c *client) CreateVolume(sizeMB int) (string, error) {
+	vol, err := c.volumeManager.Create(sizeMB)
+	if err != nil {
+		c.logger.Error("creating-volume", err)
+		return "", err
+	}
+
+	return vol.Id, nil
 }

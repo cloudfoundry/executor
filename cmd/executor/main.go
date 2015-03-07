@@ -15,6 +15,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
+	"github.com/cloudfoundry-incubator/executor/volume"
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
@@ -145,6 +146,18 @@ var containerOwnerName = flag.String(
 	"owner name with which to tag containers",
 )
 
+var volumeStorePath = flag.String(
+	"volumeStorePath",
+	"/tmp",
+	"location to create backing files for volumes",
+)
+
+var volumeStoreSize = flag.Int(
+	"volumeStoreSize",
+	10240,
+	"volume store size",
+)
+
 const (
 	dropsondeDestination           = "localhost:3457"
 	dropsondeOrigin                = "executor"
@@ -196,8 +209,14 @@ func main() {
 	hub := event.NewHub()
 	clock := clock.NewClock()
 
+	allocationStore := allocationstore.NewAllocationStore(clock, hub)
+
+	volCreator := volumes.NewCreator(logger)
+	volManager := volumes.NewManager(logger, *volumeStorePath, volCreator, *volumeStoreSize)
+
 	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
+		volManager,
 		*containerOwnerName,
 		*containerMaxCpuShares,
 		*containerInodeLimit,
@@ -207,12 +226,12 @@ func main() {
 		clock,
 		hub,
 	)
-	allocationStore := allocationstore.NewAllocationStore(clock, hub)
 
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),
 		allocationStore,
 		gardenStore,
+		volManager,
 		hub,
 		keyed_lock.NewLockManager(),
 	)

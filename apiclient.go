@@ -10,6 +10,7 @@ import (
 
 type Client interface {
 	Ping() error
+	CreateVolume(sizeMB int) (volumeID string, err error)
 	AllocateContainers(requests []Container) (map[string]string, error)
 	GetContainer(guid string) (Container, error)
 	RunContainer(guid string) error
