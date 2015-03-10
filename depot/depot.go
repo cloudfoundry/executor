@@ -417,12 +417,12 @@ func (c *client) checkSpace(logger lager.Logger, containers []executor.Container
 	return allocatableContainers, unallocatableContainers, nil
 }
 
-func (c *client) CreateVolume(sizeMB int) (string, error) {
-	vol, err := c.volumeManager.Create(sizeMB)
+func (c *client) CreateVolume(volume executor.Volume) error {
+	err := c.volumeManager.Create(volume)
 	if err != nil {
 		c.logger.Error("creating-volume", err)
-		return "", err
+		return err
 	}
 
-	return vol.Id, nil
+	return nil
 }

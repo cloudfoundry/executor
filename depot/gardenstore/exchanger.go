@@ -267,7 +267,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, volMgr volumes.Ma
 		}
 
 		bm := garden.BindMount{
-			SrcPath: vol.Path,
+			SrcPath: vol.HostPath,
 			DstPath: mount.Path,
 			Mode:    garden.BindMountModeRW,
 		}

@@ -7,12 +7,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 )
 
 type Creator interface {
-	Create(store string, spec VolumeSpec) (Volume, error)
+	Create(store string, spec VolumeSpec) (backingPath string, err error)
 }
 
 type LoopVolumeCreator struct {
@@ -24,11 +23,11 @@ func NewCreator(logger lager.Logger) LoopVolumeCreator {
 	return LoopVolumeCreator{logger: logger.Session("volume-creator")}
 }
 
-func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (Volume, error) {
-	f, err := ioutil.TempFile(store, "backing")
+func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (string, error) {
+	f, err := ioutil.TempFile(store, "backing-"+spec.VolumeGuid)
 	if err != nil {
 		vc.logger.Error("create-backing-file", err)
-		return Volume{}, err
+		return "", err
 	}
 
 	of := fmt.Sprintf("of=%s", f.Name())
@@ -41,14 +40,14 @@ func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (Volume, error
 	if err != nil {
 		e := errors.New(string(b))
 		vc.logger.Error("create-backing", e)
-		return Volume{}, e
+		return "", e
 	}
 
 	b, err = createLoopDevCmd.CombinedOutput()
 	if err != nil {
 		e := errors.New(string(b))
 		vc.logger.Error("create-loop-device", e)
-		return Volume{}, e
+		return "", e
 	}
 
 	loopDevName := strings.TrimSpace(string(b))
@@ -57,7 +56,7 @@ func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (Volume, error
 	if err != nil {
 		e := errors.New(string(b))
 		vc.logger.Error("create-filesystem", e)
-		return Volume{}, e
+		return "", e
 	}
 
 	mountDevCmd := exec.Command("sudo", "mount", loopDevName, spec.DesiredHostPath)
@@ -65,7 +64,7 @@ func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (Volume, error
 	if err != nil {
 		e := errors.New(string(b))
 		vc.logger.Error("mount-loop-device", e)
-		return Volume{}, err
+		return "", err
 	}
 
 	//TODO: Set less silly perms
@@ -74,20 +73,8 @@ func (vc LoopVolumeCreator) Create(store string, spec VolumeSpec) (Volume, error
 	if err != nil {
 		e := errors.New(string(b))
 		vc.logger.Error("change-permissions", e)
-		return Volume{}, err
+		return "", err
 	}
 
-	id, err := uuid.NewV4()
-	if err != nil {
-		return Volume{}, err
-	}
-
-	v := Volume{
-		Id:            id.String(),
-		TotalCapacity: spec.DesiredSize,
-		Path:          spec.DesiredHostPath,
-		Backing:       f.Name(),
-	}
-
-	return v, nil
+	return f.Name(), nil
 }

@@ -19,6 +19,14 @@ const (
 	StateCompleted    State = "completed"
 )
 
+type Volume struct {
+	VolumeSetGuid    string `json:"volume_set_guid"`
+	VolumeGuid       string `json:"volume_guid"`
+	Index            int    `json:"index"`
+	SizeMB           int    `json:"size_mb"`
+	ReservedMemoryMB int    `json:"reserved_memory_mb"`
+}
+
 type VolumeMount struct {
 	VolumeID string
 	Path     string

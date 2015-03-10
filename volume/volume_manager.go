@@ -2,100 +2,116 @@ package volumes
 
 import (
 	"errors"
-	"github.com/pivotal-golang/lager"
 	"io/ioutil"
+	"sync"
+
+	"github.com/cloudfoundry-incubator/executor"
+	"github.com/pivotal-golang/lager"
 )
 
 type VolumeSpec struct {
+	VolumeGuid      string
 	DesiredSize     int
 	DesiredHostPath string
 }
 
 type Volume struct {
-	Id            string
-	TotalCapacity int
-	Path          string
-	Backing       string
+	executor.Volume
+	HostPath    string
+	BackingPath string
 }
 
 type Manager interface {
-	Create(sizeMB int) (Volume, error)
+	Create(executor.Volume) error
 	Delete(id string) error
 	Get(id string) (Volume, error)
 	GetAll() []Volume
 	TotalCapacityMB() int
-	ReservedCapacityMB() int
+	ReservedMemoryMB() int
 	AvailableCapacityMB() int
 }
 
 type manager struct {
-	totalCapacityMB     int
-	reservedCapacityMB  int
-	availableCapacityMB int
-	volumeCreator       Creator
+	totalCapacityMB int
+	volumeCreator   Creator
+	backingStore    string
+	mountRootPath   string
+	logger          lager.Logger
+
+	*sync.RWMutex
+	//TODO: persist these values
 	volumes             map[string]Volume
-	backingStore        string
-	mountRootPath       string
-	logger              lager.Logger
+	reservedMemoryMB    int
+	availableCapacityMB int
 }
 
 func NewManager(logger lager.Logger, store string, creator Creator, capMB int) Manager {
-	vols := make(map[string]Volume)
 	return &manager{
-		logger:              logger,
-		volumes:             vols,
-		volumeCreator:       creator,
-		backingStore:        store,
-		totalCapacityMB:     capMB,
+		logger:          logger,
+		volumeCreator:   creator,
+		backingStore:    store,
+		totalCapacityMB: capMB,
+		mountRootPath:   "/tmp",
+
+		RWMutex:             new(sync.RWMutex),
 		availableCapacityMB: capMB,
-		mountRootPath:       "/tmp",
+		volumes:             map[string]Volume{},
 	}
 }
 
-func (vm *manager) Create(volumeSizeMB int) (Volume, error) {
-	//TODO: use locking here
-	if vm.availableCapacityMB <= 0 {
-		enospace := errors.New("No available capacity")
-		return Volume{}, enospace
-	}
-
-	//TODO: use locking here
-	if vm.availableCapacityMB-volumeSizeMB < 0 {
+func (vm *manager) Create(volume executor.Volume) error {
+	vm.Lock()
+	if vm.availableCapacityMB-volume.SizeMB < 0 {
+		vm.Unlock()
 		enospace := errors.New("Insufficient capacity")
-		return Volume{}, enospace
+		return enospace
 	}
 
-	dir, err := ioutil.TempDir(vm.mountRootPath, "mount")
+	vm.reservedMemoryMB += volume.ReservedMemoryMB
+	vm.availableCapacityMB -= volume.SizeMB
+
+	vm.Unlock()
+
+	//TODO: use mkdir, not tmpdir
+	dir, err := ioutil.TempDir(vm.mountRootPath, "mount-"+volume.VolumeGuid)
 	if err != nil {
-		return Volume{}, err
+		return err
 	}
 
-	s := VolumeSpec{
-		DesiredSize:     volumeSizeMB,
+	spec := VolumeSpec{
+		VolumeGuid:      volume.VolumeGuid,
+		DesiredSize:     volume.SizeMB,
 		DesiredHostPath: dir,
 	}
 
-	v, err := vm.volumeCreator.Create(vm.backingStore, s)
+	backingPath, err := vm.volumeCreator.Create(vm.backingStore, spec)
 	if err != nil {
+		vm.Lock()
+		vm.reservedMemoryMB -= volume.ReservedMemoryMB
+		vm.availableCapacityMB += volume.SizeMB
+		vm.Unlock()
+
 		vm.logger.Error("volumemanager-create", err)
-		return Volume{}, err
+		return err
 	}
 
-	//TODO: use locking here
-	vm.volumes[v.Id] = v
+	vm.Lock()
+	vm.volumes[volume.VolumeGuid] = Volume{
+		Volume:      volume,
+		HostPath:    dir,
+		BackingPath: backingPath,
+	}
+	vm.Unlock()
 
-	//TODO: use locking here
-	//TODO: persist these values
-	vm.reservedCapacityMB += volumeSizeMB
-	vm.availableCapacityMB -= volumeSizeMB
-
-	return v, nil
+	return nil
 }
 
 func (vm *manager) Get(id string) (Volume, error) {
+	vm.Lock()
+	defer vm.Unlock()
+
 	v, ok := vm.volumes[id]
 	if !ok {
-		//TODO: return typed error
 		return Volume{}, errors.New("No such volume found")
 	}
 
@@ -103,21 +119,25 @@ func (vm *manager) Get(id string) (Volume, error) {
 }
 
 func (vm *manager) Delete(id string) error {
-	//TODO: do all of this atomically
+	vm.Lock()
+	defer vm.Unlock()
+
 	v, ok := vm.volumes[id]
 	if !ok {
-		//TODO: return typed error
 		return errors.New("No such volume found")
 	}
 
-	vm.reservedCapacityMB -= v.TotalCapacity
-	vm.availableCapacityMB += v.TotalCapacity
+	vm.reservedMemoryMB -= v.ReservedMemoryMB
+	vm.availableCapacityMB += v.SizeMB
 
 	delete(vm.volumes, id)
 	return nil
 }
 
 func (vm *manager) GetAll() []Volume {
+	vm.RLock()
+	defer vm.RUnlock()
+
 	var volumes []Volume
 	for _, v := range vm.volumes {
 		volumes = append(volumes, v)
@@ -127,16 +147,19 @@ func (vm *manager) GetAll() []Volume {
 }
 
 func (vm *manager) TotalCapacityMB() int {
-	//TODO: read this from persistent settings
+	vm.RLock()
+	defer vm.RUnlock()
 	return vm.totalCapacityMB
 }
 
-func (vm *manager) ReservedCapacityMB() int {
-	//TODO: read this from persistent settings
-	return vm.reservedCapacityMB
+func (vm *manager) ReservedMemoryMB() int {
+	vm.RLock()
+	defer vm.RUnlock()
+	return vm.reservedMemoryMB
 }
 
 func (vm *manager) AvailableCapacityMB() int {
-	//TODO: read this from persistent settings
+	vm.RLock()
+	defer vm.RUnlock()
 	return vm.availableCapacityMB
 }
