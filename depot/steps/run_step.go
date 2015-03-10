@@ -74,6 +74,15 @@ func (step *runStep) Perform() error {
 		envVars = append(envVars, step.networkingEnvVars()...)
 	}
 
+	cancel := step.Cancelled()
+
+	select {
+	case <-cancel:
+		step.logger.Info("cancelled-before-creating-process")
+		return ErrCancelled
+	default:
+	}
+
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
 
@@ -107,19 +116,22 @@ func (step *runStep) Perform() error {
 		}
 	}()
 
-	cancel := step.Cancelled()
-
 	var killSwitch <-chan time.Time
 	var exitTimeout <-chan time.Time
 
 	for {
 		select {
 		case exitStatus := <-exitStatusChan:
-			logger.Info("process-exit", lager.Data{"exitStatus": exitStatus})
+			cancelled := cancel == nil
+
+			logger.Info("process-exit", lager.Data{
+				"exitStatus": exitStatus,
+				"cancelled":  cancelled,
+			})
 			step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
 			step.streamer.Flush()
 
-			if cancel == nil {
+			if cancelled {
 				return ErrCancelled
 			}
 
@@ -145,11 +157,13 @@ func (step *runStep) Perform() error {
 			return err
 
 		case <-cancel:
+			logger.Debug("signalling-terminate")
 			err := process.Signal(garden.SignalTerminate)
 			if err != nil {
-				logger.Error("failed-to-signal-terminate", err)
+				logger.Error("signalling-terminate-failed", err)
 			}
 
+			logger.Debug("signalling-terminate-success")
 			cancel = nil
 
 			killTimer := step.clock.NewTimer(TERMINATE_TIMEOUT)
@@ -158,14 +172,13 @@ func (step *runStep) Perform() error {
 			killSwitch = killTimer.C()
 
 		case <-killSwitch:
-			logger = logger.Session("process-sig-kill", lager.Data{"process": process.ID()})
+			logger.Debug("signalling-kill")
 			err := process.Signal(garden.SignalKill)
 			if err != nil {
-				logger.Error("failed", err)
+				logger.Error("signalling-kill-failed", err)
 			}
 
-			logger.Debug("success")
-
+			logger.Debug("signalling-kill-success")
 			killSwitch = nil
 
 			exitTimer := step.clock.NewTimer(EXIT_TIMEOUT)

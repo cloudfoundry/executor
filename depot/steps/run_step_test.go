@@ -385,52 +385,39 @@ var _ = Describe("RunAction", func() {
 			}
 		})
 
-		JustBeforeEach(func() {
-			go func() {
-				performErr <- step.Perform()
-				close(performErr)
-			}()
+		Context("when cancelling after perform", func() {
+			JustBeforeEach(func() {
+				go func() {
+					performErr <- step.Perform()
+					close(performErr)
+				}()
 
-			Eventually(waiting).Should(BeClosed())
-			step.Cancel()
-		})
-
-		AfterEach(func() {
-			close(waitExited)
-			Eventually(performErr).Should(BeClosed())
-		})
-
-		It("sends an interrupt to the process", func() {
-			Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
-			Ω(spawnedProcess.SignalArgsForCall(0)).Should(Equal(garden.SignalTerminate))
-		})
-
-		Context("when the process exits", func() {
-			It("completes the perform without having sent kill", func() {
-				waitExited <- (128 + 15)
-
-				Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
-
-				Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
+				Eventually(waiting).Should(BeClosed())
+				step.Cancel()
 			})
-		})
 
-		Context("when the process does not exit after 10s", func() {
-			It("sends a kill signal to the process", func() {
+			AfterEach(func() {
+				close(waitExited)
+				Eventually(performErr).Should(BeClosed())
+			})
+
+			It("sends an interrupt to the process", func() {
 				Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
-
-				fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
-
-				Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
-				Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
-
-				waitExited <- (128 + 9)
-
-				Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
+				Ω(spawnedProcess.SignalArgsForCall(0)).Should(Equal(garden.SignalTerminate))
 			})
 
-			Context("when the process *still* does not exit after 1m", func() {
-				It("finishes performing with failure", func() {
+			Context("when the process exits", func() {
+				It("completes the perform without having sent kill", func() {
+					waitExited <- (128 + 15)
+
+					Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
+
+					Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
+				})
+			})
+
+			Context("when the process does not exit after 10s", func() {
+				It("sends a kill signal to the process", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
 					fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
@@ -438,18 +425,53 @@ var _ = Describe("RunAction", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
 
-					fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+					waitExited <- (128 + 9)
 
-					Consistently(performErr).ShouldNot(Receive())
-
-					fakeClock.Increment(EXIT_TIMEOUT + 1*time.Second)
-
-					Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
-
-					Ω(logger.TestSink.LogMessages()).Should(ContainElement(
-						ContainSubstring("process-did-not-exit"),
-					))
+					Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
 				})
+
+				Context("when the process *still* does not exit after 1m", func() {
+					It("finishes performing with failure", func() {
+						Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+
+						fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+
+						Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
+						Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+
+						fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+
+						Consistently(performErr).ShouldNot(Receive())
+
+						fakeClock.Increment(EXIT_TIMEOUT + 1*time.Second)
+
+						Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
+
+						Ω(logger.TestSink.LogMessages()).Should(ContainElement(
+							ContainSubstring("process-did-not-exit"),
+						))
+					})
+				})
+			})
+		})
+
+		Context("when cancelling before perform", func() {
+			JustBeforeEach(func() {
+				step.Cancel()
+
+				go func() {
+					performErr <- step.Perform()
+					close(performErr)
+				}()
+			})
+
+			AfterEach(func() {
+				close(waitExited)
+				Eventually(performErr).Should(BeClosed())
+			})
+
+			It("sends an interrupt to the process", func() {
+				Consistently(waiting).ShouldNot(BeClosed())
 			})
 		})
 	})
