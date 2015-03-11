@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_files"
 	"github.com/cloudfoundry-incubator/executor/http/server/list_containers"
+	"github.com/cloudfoundry-incubator/executor/http/server/list_volumes"
 	"github.com/cloudfoundry-incubator/executor/http/server/ping"
 	"github.com/cloudfoundry-incubator/executor/http/server/remaining_resources"
 	"github.com/cloudfoundry-incubator/executor/http/server/run_actions"
@@ -85,5 +86,7 @@ func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
 		ehttp.GetRemainingResources: remaining_resources.New(s.DepotClientProvider),
 
 		ehttp.GetFiles: get_files.New(s.DepotClientProvider),
+
+		ehttp.ListVolumes: list_volumes.New(s.DepotClientProvider),
 	}
 }

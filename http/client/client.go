@@ -168,6 +168,18 @@ func (c client) CreateVolume(volume executor.Volume) error {
 	return nil
 }
 
+func (c client) ListVolumes() ([]executor.Volume, error) {
+	response, err := c.doRequest(ehttp.ListVolumes, nil, nil, nil)
+	if err != nil {
+		return []executor.Volume{}, err
+	}
+
+	defer response.Body.Close()
+	volumes := []executor.Volume{}
+	err = json.NewDecoder(response.Body).Decode(&volumes)
+	return volumes, err
+}
+
 func (c client) SubscribeToEvents() (executor.EventSource, error) {
 	source, err := sse.Connect(c.streamingHTTPClient, time.Second, func() *http.Request {
 		request, err := c.reqGen.CreateRequest(ehttp.Events, nil, nil)

@@ -15,6 +15,7 @@ const (
 	GetTotalResources     = "GetTotalResources"
 	GetFiles              = "GetFiles"
 	CreateVolume          = "CreateVolume"
+	ListVolumes           = "ListVolumes"
 )
 
 var Routes = rata.Routes{
@@ -30,4 +31,5 @@ var Routes = rata.Routes{
 	{Path: "/resources/remaining", Method: "GET", Name: GetRemainingResources},
 	{Path: "/resources/total", Method: "GET", Name: GetTotalResources},
 	{Path: "/volumes/create", Method: "POST", Name: CreateVolume},
+	{Path: "/volumes/", Method: "GET", Name: ListVolumes},
 }

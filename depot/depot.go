@@ -346,6 +346,7 @@ func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResou
 		remainingResources.MemoryMB -= gardenContainer.MemoryMB
 	}
 
+	remainingResources.PersistentDiskMB = c.volumeManager.AvailableCapacityMB()
 	return remainingResources, nil
 }
 
@@ -364,9 +365,10 @@ func (c *client) TotalResources() (executor.ExecutorResources, error) {
 	totalCapacity := c.totalCapacity
 
 	return executor.ExecutorResources{
-		MemoryMB:   totalCapacity.MemoryMB,
-		DiskMB:     totalCapacity.DiskMB,
-		Containers: totalCapacity.Containers,
+		MemoryMB:         totalCapacity.MemoryMB,
+		DiskMB:           totalCapacity.DiskMB,
+		Containers:       totalCapacity.Containers,
+		PersistentDiskMB: c.volumeManager.TotalCapacityMB(),
 	}, nil
 }
 
@@ -425,4 +427,13 @@ func (c *client) CreateVolume(volume executor.Volume) error {
 	}
 
 	return nil
+}
+
+func (c *client) ListVolumes() ([]executor.Volume, error) {
+	vmVols := c.volumeManager.GetAll()
+	vols := make([]executor.Volume, len(vmVols))
+	for i := range vmVols {
+		vols[i] = vmVols[i].Volume
+	}
+	return vols, nil
 }

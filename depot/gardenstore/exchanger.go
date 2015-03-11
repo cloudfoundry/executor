@@ -260,7 +260,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, volMgr volumes.Ma
 	}
 
 	if mount := executorContainer.VolumeMount; mount != nil {
-		vol, err := volMgr.Get(mount.VolumeID)
+		vol, err := volMgr.Get(mount.VolumeGuid)
 		if err != nil {
 			logger.Error("failed-fetching-volume", err)
 			return executor.Container{}, err

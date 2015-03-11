@@ -11,6 +11,7 @@ import (
 type Client interface {
 	Ping() error
 	CreateVolume(Volume) error
+	ListVolumes() ([]Volume, error)
 	AllocateContainers(requests []Container) (map[string]string, error)
 	GetContainer(guid string) (Container, error)
 	RunContainer(guid string) error

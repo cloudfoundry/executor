@@ -28,8 +28,8 @@ type Volume struct {
 }
 
 type VolumeMount struct {
-	VolumeID string
-	Path     string
+	VolumeGuid string
+	Path       string
 }
 
 type Container struct {
@@ -197,9 +197,10 @@ type ContainerRunResult struct {
 }
 
 type ExecutorResources struct {
-	MemoryMB   int `json:"memory_mb"`
-	DiskMB     int `json:"disk_mb"`
-	Containers int `json:"containers"`
+	MemoryMB         int `json:"memory_mb"`
+	DiskMB           int `json:"disk_mb"`
+	PersistentDiskMB int `json:"persistent_disk_mb"`
+	Containers       int `json:"containers"`
 }
 
 type Tags map[string]string
