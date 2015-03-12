@@ -77,15 +77,15 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 	})
 
 	for _, container := range containers {
+		if container.MetricsConfig.Guid == "" {
+			continue
+		}
+
 		containerMetrics, err := reporter.executorClient.GetMetrics(container.Guid)
 		if err != nil {
 			logger.Error("failed-to-retrieve-container-metrics", err, lager.Data{
 				"container-guid": container.Guid,
 			})
-			continue
-		}
-
-		if container.MetricsConfig.Guid == "" {
 			continue
 		}
 

@@ -187,7 +187,6 @@ var _ = Describe("StatsReporter", func() {
 
 			fakeClock.Increment(interval)
 			Eventually(fakeExecutorClient.ListContainersCallCount).Should(Equal(1))
-			Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(3))
 		})
 
 		It("emits memory and disk usage for each container, but no CPU", func() {
@@ -212,6 +211,10 @@ var _ = Describe("StatsReporter", func() {
 			}))
 		})
 
+		It("does not ask for metrics when the metrics guid is missing", func() {
+			Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(2))
+		})
+
 		It("does not emit anything for containers with no metrics guid", func() {
 			Consistently(func() msfake.ContainerMetric {
 				return fakeMetricSender.GetContainerMetric("")
@@ -222,6 +225,7 @@ var _ = Describe("StatsReporter", func() {
 			BeforeEach(func() {
 				fakeClock.Increment(interval)
 				Eventually(fakeExecutorClient.ListContainersCallCount).Should(Equal(2))
+				Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(4))
 			})
 
 			It("emits the new memory and disk usage, and the computed CPU percent", func() {
@@ -250,6 +254,7 @@ var _ = Describe("StatsReporter", func() {
 				BeforeEach(func() {
 					fakeClock.Increment(interval)
 					Eventually(fakeExecutorClient.ListContainersCallCount).Should(Equal(3))
+					Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(6))
 				})
 
 				It("emits the new memory and disk usage, and the computed CPU percent", func() {
