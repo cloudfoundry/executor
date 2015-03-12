@@ -271,7 +271,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, volMgr volumes.Ma
 			DstPath: mount.Path,
 			Mode:    garden.BindMountModeRW,
 		}
-
+		logger.Info("bind-mount-volume", lager.Data{"src": vol.HostPath, "dst": mount.Path})
 		containerSpec.BindMounts = append(containerSpec.BindMounts, bm)
 	}
 
