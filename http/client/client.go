@@ -140,6 +140,23 @@ func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	return response.Body, nil
 }
 
+func (c client) GetMetrics(guid string) (executor.Metrics, error) {
+	metrics := executor.Metrics{}
+
+	response, err := c.doRequest(ehttp.GetMetrics, rata.Params{"guid": guid}, nil, nil)
+	if err != nil {
+		return metrics, err
+	}
+	defer response.Body.Close()
+
+	err = json.NewDecoder(response.Body).Decode(&metrics)
+	if err != nil {
+		return metrics, err
+	}
+
+	return metrics, nil
+}
+
 func (c client) RemainingResources() (executor.ExecutorResources, error) {
 	return c.getResources(ehttp.GetRemainingResources)
 }

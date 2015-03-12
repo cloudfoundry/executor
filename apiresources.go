@@ -30,10 +30,6 @@ type Container struct {
 	DiskMB    int  `json:"disk_mb"`
 	CPUWeight uint `json:"cpu_weight"`
 
-	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
-	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
-	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
-
 	Tags Tags `json:"tags,omitempty"`
 
 	AllocatedAt int64 `json:"allocated_at"`
@@ -157,6 +153,12 @@ func (container Container) MarshalJSON() ([]byte, error) {
 type EnvironmentVariable struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+type Metrics struct {
+	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
+	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
+	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
 }
 
 type MetricsConfig struct {

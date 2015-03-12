@@ -686,7 +686,46 @@ var _ = Describe("Depot", func() {
 
 			})
 		})
+	})
 
+	Describe("GetMetrics", func() {
+		var expectedMetrics executor.Metrics
+
+		BeforeEach(func() {
+			expectedMetrics = executor.Metrics{
+				MemoryUsageInBytes: 99999,
+				DiskUsageInBytes:   88888,
+				TimeSpentInCPU:     77777,
+			}
+
+			gardenStore.MetricsReturns(expectedMetrics, nil)
+		})
+
+		It("returns the metrics for the container with the given guid", func() {
+			metrics, err := depotClient.GetMetrics("guid-1")
+			Ω(err).ShouldNot(HaveOccurred())
+			Ω(metrics).Should(Equal(expectedMetrics))
+
+			Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+
+			actualLogger, actualGuid := gardenStore.MetricsArgsForCall(0)
+			Ω(actualLogger).ShouldNot(BeNil())
+			Ω(actualGuid).Should(Equal("guid-1"))
+		})
+
+		Context("when garden fails to get the metrics", func() {
+			var expectedError error
+
+			BeforeEach(func() {
+				expectedError = errors.New("whoops")
+				gardenStore.MetricsReturns(executor.Metrics{}, expectedError)
+			})
+
+			It("propagates the error", func() {
+				_, err := depotClient.GetMetrics("guid-1")
+				Ω(err).Should(Equal(expectedError))
+			})
+		})
 	})
 
 	Describe("DeleteContainer", func() {

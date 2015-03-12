@@ -406,6 +406,67 @@ var _ = Describe("Client", func() {
 		})
 	})
 
+	Describe("GetMetrics", func() {
+		var containerGuid string
+
+		Context("when the call succeeds", func() {
+			BeforeEach(func() {
+				containerGuid = "container-guid-1"
+
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid+"/metrics"),
+					ghttp.RespondWith(http.StatusOK, `
+          {
+						"memory_usage_in_bytes": 123,
+						"disk_usage_in_bytes": 456,
+						"time_spent_in_cpu": 789
+          }`),
+				))
+			})
+
+			It("returns the container metrics", func() {
+				response, err := client.GetMetrics(containerGuid)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(response).Should(Equal(executor.Metrics{
+					MemoryUsageInBytes: 123,
+					DiskUsageInBytes:   456,
+					TimeSpentInCPU:     789,
+				}))
+			})
+		})
+
+		Context("when the server responds with a non-200 status code", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid+"/metrics"),
+					ghttp.RespondWith(executor.ErrContainerNotFound.HttpCode(), "", http.Header{
+						"X-Executor-Error": []string{executor.ErrContainerNotFound.Name()},
+					})),
+				)
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetMetrics(containerGuid)
+				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+			})
+		})
+
+		Context("when the server responds with invalid JSON", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/containers/"+containerGuid+"/metrics"),
+					ghttp.RespondWith(http.StatusOK, `,`),
+				))
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetMetrics(containerGuid)
+				Ω(err).Should(BeAssignableToTypeOf(&json.SyntaxError{}))
+			})
+		})
+	})
+
 	Describe("Ping", func() {
 		Context("when the ping succeeds", func() {
 			BeforeEach(func() {

@@ -77,12 +77,20 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 	})
 
 	for _, container := range containers {
+		containerMetrics, err := reporter.executorClient.GetMetrics(container.Guid)
+		if err != nil {
+			logger.Error("failed-to-retrieve-container-metrics", err, lager.Data{
+				"container-guid": container.Guid,
+			})
+			continue
+		}
+
 		if container.MetricsConfig.Guid == "" {
 			continue
 		}
 
 		currentInfo := cpuInfo{
-			timeSpentInCPU: container.TimeSpentInCPU,
+			timeSpentInCPU: containerMetrics.TimeSpentInCPU,
 			timeOfSample:   reporter.clock.Now(),
 		}
 
@@ -109,7 +117,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 			index = -1
 		}
 
-		err = metrics.SendContainerMetric(container.MetricsConfig.Guid, index, cpuPercent, container.MemoryUsageInBytes, container.DiskUsageInBytes)
+		err = metrics.SendContainerMetric(container.MetricsConfig.Guid, index, cpuPercent, containerMetrics.MemoryUsageInBytes, containerMetrics.DiskUsageInBytes)
 		if err != nil {
 			logger.Error("failed-to-send-container-metrics", err)
 		}

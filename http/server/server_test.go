@@ -641,6 +641,92 @@ var _ = Describe("Api", func() {
 		})
 	})
 
+	Describe("GET /containers/:guid/metrics", func() {
+		var request *http.Request
+		var response *http.Response
+
+		BeforeEach(func() {
+			var err error
+
+			request, err = generator.CreateRequest(
+				ehttp.GetMetrics,
+				rata.Params{"guid": containerGuid},
+				nil,
+			)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
+		JustBeforeEach(func() {
+			response = DoRequest(request, nil)
+		})
+
+		It("sets the content type to application/json", func() {
+			Ω(response.Header.Get("Content-Type")).Should(Equal("application/json"))
+		})
+
+		Context("when the container exists", func() {
+			var metrics executor.Metrics
+
+			BeforeEach(func() {
+				metrics = executor.Metrics{
+					MemoryUsageInBytes: 1234,
+					DiskUsageInBytes:   5678,
+					TimeSpentInCPU:     112358,
+				}
+				depotClient.GetMetricsReturns(metrics, nil)
+			})
+
+			It("returns a 200", func() {
+				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+			})
+
+			It("returns the expected metrics", func() {
+				result := executor.Metrics{}
+
+				err := json.NewDecoder(response.Body).Decode(&result)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(result).Should(Equal(metrics))
+			})
+		})
+
+		Context("when the container does not exist", func() {
+			BeforeEach(func() {
+				depotClient.GetMetricsReturns(executor.Metrics{}, executor.ErrContainerNotFound)
+			})
+
+			It("returns a 404", func() {
+				Ω(response.StatusCode).Should(Equal(http.StatusNotFound))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.get-metrics-handler.container-not-found",
+					"test.request.done",
+				}))
+			})
+		})
+
+		Context("when an unexpected error occurs", func() {
+			BeforeEach(func() {
+				depotClient.GetMetricsReturns(executor.Metrics{}, errors.New("woops"))
+			})
+
+			It("returns 500", func() {
+				Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
+			})
+
+			It("logs the request", func() {
+				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					"test.request.serving",
+					"test.request.get-metrics-handler.failed-to-get-metrics",
+					"test.request.done",
+				}))
+			})
+		})
+	})
+
 	Describe("GET /resources/remaining", func() {
 		var resourcesResponse *http.Response
 

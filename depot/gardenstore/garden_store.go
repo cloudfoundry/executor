@@ -136,6 +136,26 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 	return result, nil
 }
 
+func (store *GardenStore) Metrics(logger lager.Logger, guid string) (executor.Metrics, error) {
+	gardenContainer, err := store.lookup(logger, guid)
+	if err != nil {
+		return executor.Metrics{}, err
+	}
+
+	gmetrics, err := gardenContainer.Metrics()
+	if err != nil {
+		return executor.Metrics{}, err
+	}
+
+	return executor.Metrics{
+		MemoryUsageInBytes: gmetrics.MemoryStat.TotalRss + (gmetrics.MemoryStat.TotalCache - gmetrics.MemoryStat.TotalInactiveFile),
+		DiskUsageInBytes:   gmetrics.DiskStat.BytesUsed,
+		TimeSpentInCPU:     time.Duration(gmetrics.CPUStat.Usage),
+	}, nil
+
+	return executor.Metrics{}, nil
+}
+
 func (store *GardenStore) Create(logger lager.Logger, container executor.Container) (executor.Container, error) {
 	if container.State != executor.StateInitializing {
 		return executor.Container{}, executor.ErrInvalidTransition

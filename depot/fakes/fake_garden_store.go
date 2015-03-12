@@ -41,6 +41,16 @@ type FakeGardenStore struct {
 		result1 []executor.Container
 		result2 error
 	}
+	MetricsStub        func(logger lager.Logger, guid string) (executor.Metrics, error)
+	metricsMutex       sync.RWMutex
+	metricsArgsForCall []struct {
+		logger lager.Logger
+		guid   string
+	}
+	metricsReturns struct {
+		result1 executor.Metrics
+		result2 error
+	}
 	DestroyStub        func(logger lager.Logger, guid string) error
 	destroyMutex       sync.RWMutex
 	destroyArgsForCall []struct {
@@ -53,7 +63,7 @@ type FakeGardenStore struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns     struct {
+	pingReturns struct {
 		result1 error
 	}
 	RunStub        func(logger lager.Logger, container executor.Container) error
@@ -185,6 +195,40 @@ func (fake *FakeGardenStore) ListReturns(result1 []executor.Container, result2 e
 	fake.ListStub = nil
 	fake.listReturns = struct {
 		result1 []executor.Container
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeGardenStore) Metrics(logger lager.Logger, guid string) (executor.Metrics, error) {
+	fake.metricsMutex.Lock()
+	fake.metricsArgsForCall = append(fake.metricsArgsForCall, struct {
+		logger lager.Logger
+		guid   string
+	}{logger, guid})
+	fake.metricsMutex.Unlock()
+	if fake.MetricsStub != nil {
+		return fake.MetricsStub(logger, guid)
+	} else {
+		return fake.metricsReturns.result1, fake.metricsReturns.result2
+	}
+}
+
+func (fake *FakeGardenStore) MetricsCallCount() int {
+	fake.metricsMutex.RLock()
+	defer fake.metricsMutex.RUnlock()
+	return len(fake.metricsArgsForCall)
+}
+
+func (fake *FakeGardenStore) MetricsArgsForCall(i int) (lager.Logger, string) {
+	fake.metricsMutex.RLock()
+	defer fake.metricsMutex.RUnlock()
+	return fake.metricsArgsForCall[i].logger, fake.metricsArgsForCall[i].guid
+}
+
+func (fake *FakeGardenStore) MetricsReturns(result1 executor.Metrics, result2 error) {
+	fake.MetricsStub = nil
+	fake.metricsReturns = struct {
+		result1 executor.Metrics
 		result2 error
 	}{result1, result2}
 }

@@ -41,6 +41,7 @@ type GardenStore interface {
 	Create(logger lager.Logger, container executor.Container) (executor.Container, error)
 	Lookup(logger lager.Logger, guid string) (executor.Container, error)
 	List(logger lager.Logger, tags executor.Tags) ([]executor.Container, error)
+	Metrics(logger lager.Logger, guid string) (executor.Metrics, error)
 	Destroy(logger lager.Logger, guid string) error
 	Ping() error
 	Run(logger lager.Logger, container executor.Container) error
@@ -273,6 +274,19 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	}
 
 	return containers, nil
+}
+
+func (c *client) GetMetrics(guid string) (executor.Metrics, error) {
+	logger := c.logger.Session("metrics", lager.Data{
+		"guid": guid,
+	})
+
+	metrics, err := c.gardenStore.Metrics(logger, guid)
+	if err != nil {
+		logger.Error("failed-to-get-metrics", err)
+	}
+
+	return metrics, err
 }
 
 func (c *client) StopContainer(guid string) error {
