@@ -2,6 +2,7 @@ package containermetrics_test
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -367,6 +368,51 @@ var _ = Describe("StatsReporter", func() {
 		It("continues to process additional containers", func() {
 			Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(2))
 			Consistently(fakeExecutorClient.GetMetricsCallCount).Should(Equal(2))
+		})
+	})
+
+	Context("when getting metrics for multiple containers", func() {
+		var containers []executor.Container
+
+		BeforeEach(func() {
+			containers = []executor.Container{
+				{
+					Guid: "guid-1",
+					MetricsConfig: executor.MetricsConfig{
+						Guid: "metrics-guid-1",
+					},
+				},
+				{
+					Guid: "guid-2",
+					MetricsConfig: executor.MetricsConfig{
+						Guid: "metrics-guid-2",
+					},
+				},
+				{
+					Guid: "guid-3",
+					MetricsConfig: executor.MetricsConfig{
+						Guid: "metrics-guid-3",
+					},
+				},
+			}
+
+			fakeExecutorClient.ListContainersReturns(containers, nil)
+
+			wg := &sync.WaitGroup{}
+			wg.Add(len(containers))
+
+			fakeExecutorClient.GetMetricsStub = func(guid string) (executor.Metrics, error) {
+				wg.Done()
+				wg.Wait() // blocks go routine to verify concurrency
+
+				return executor.Metrics{}, nil
+			}
+
+			fakeClock.Increment(interval)
+		})
+
+		It("retrieves the metrics concurrently", func() {
+			Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(3))
 		})
 	})
 })
