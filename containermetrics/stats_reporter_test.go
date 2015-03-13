@@ -214,6 +214,7 @@ var _ = Describe("StatsReporter", func() {
 
 		It("does not ask for metrics when the metrics guid is missing", func() {
 			Eventually(fakeExecutorClient.GetMetricsCallCount).Should(Equal(2))
+			Consistently(fakeExecutorClient.GetMetricsCallCount).Should(Equal(2))
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
