@@ -74,7 +74,7 @@ func (store *GardenStore) Lookup(logger lager.Logger, guid string) (executor.Con
 		return executor.Container{}, err
 	}
 
-	return store.exchanger.Garden2Executor(logger, gardenContainer)
+	return store.exchanger.Info(logger, gardenContainer)
 }
 
 func (store *GardenStore) lookup(logger lager.Logger, guid string) (garden.Container, error) {
@@ -110,30 +110,7 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 	}
 	logger.Debug("succeeded-listing-garden-containers", lager.Data{"filter": filter})
 
-	result := make([]executor.Container, 0, len(gardenContainers))
-	resultChan := make(chan *executor.Container, len(gardenContainers))
-	for _, gardenContainer := range gardenContainers {
-		gardenContainer := gardenContainer
-		store.workPool.Submit(func() {
-			container, err := store.exchanger.Garden2Executor(logger, gardenContainer)
-			if err != nil {
-				resultChan <- nil
-				return
-			}
-
-			resultChan <- &container
-		})
-	}
-
-	for i := 0; i < len(gardenContainers); i++ {
-		c := <-resultChan
-		if c == nil {
-			continue
-		}
-		result = append(result, *c)
-	}
-
-	return result, nil
+	return store.exchanger.Infos(logger, store.gardenClient, gardenContainers)
 }
 
 func (store *GardenStore) Metrics(logger lager.Logger, guid string) (executor.Metrics, error) {
@@ -282,7 +259,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			gardenContainer,
 			container.ExternalIP,
 			container.Ports,
-			logger,
+			logger.Session("setup"),
 		)
 	}
 
@@ -292,7 +269,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 		gardenContainer,
 		container.ExternalIP,
 		container.Ports,
-		logger,
+		logger.Session("action"),
 	)
 
 	hasStartedRunning := make(chan struct{}, 1)
@@ -306,7 +283,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 					gardenContainer,
 					container.ExternalIP,
 					container.Ports,
-					logger,
+					logger.Session("monitor-run"),
 				)
 			},
 			hasStartedRunning,
@@ -448,7 +425,7 @@ func (store *GardenStore) transitionToRunning(logger lager.Logger, gardenContain
 		return err
 	}
 
-	executorContainer, err := store.exchanger.Garden2Executor(logger, gardenContainer)
+	executorContainer, err := store.exchanger.Info(logger, gardenContainer)
 	if err != nil {
 		return err
 	}
@@ -474,7 +451,7 @@ func (store *GardenStore) transitionToComplete(logger lager.Logger, gardenContai
 		return err
 	}
 
-	executorContainer, err := store.exchanger.Garden2Executor(logger, gardenContainer)
+	executorContainer, err := store.exchanger.Info(logger, gardenContainer)
 	if err != nil {
 		return err
 	}

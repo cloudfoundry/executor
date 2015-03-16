@@ -63,7 +63,7 @@ var _ = Describe("GardenContainerStore", func() {
 			inodeLimit,
 			100*time.Millisecond,
 			100*time.Millisecond,
-			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false),
+			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false, clock),
 			clock,
 			emitter,
 		)
@@ -1425,27 +1425,11 @@ var _ = Describe("GardenContainerStore", func() {
 				HandleStub: func() string {
 					return "fake-handle-1"
 				},
-
-				InfoStub: func() (garden.ContainerInfo, error) {
-					return garden.ContainerInfo{
-						Properties: garden.Properties{
-							gardenstore.ContainerStateProperty: string(executor.StateCreated),
-						},
-					}, nil
-				},
 			}
 
 			fakeContainer2 = &gfakes.FakeContainer{
 				HandleStub: func() string {
 					return "fake-handle-2"
-				},
-
-				InfoStub: func() (garden.ContainerInfo, error) {
-					return garden.ContainerInfo{
-						Properties: garden.Properties{
-							gardenstore.ContainerStateProperty: string(executor.StateCreated),
-						},
-					}, nil
 				},
 			}
 
@@ -1453,6 +1437,25 @@ var _ = Describe("GardenContainerStore", func() {
 				fakeContainer1,
 				fakeContainer2,
 			}, nil)
+
+			fakeGardenClient.BulkInfoReturns(
+				map[string]garden.ContainerInfoEntry{
+					"fake-handle-1": garden.ContainerInfoEntry{
+						Info: garden.ContainerInfo{
+							Properties: garden.Properties{
+								gardenstore.ContainerStateProperty: string(executor.StateCreated),
+							},
+						},
+					},
+					"fake-handle-2": garden.ContainerInfoEntry{
+						Info: garden.ContainerInfo{
+							Properties: garden.Properties{
+								gardenstore.ContainerStateProperty: string(executor.StateCreated),
+							},
+						},
+					},
+				}, nil)
+
 		})
 
 		It("returns an executor container for each container in garden", func() {
@@ -1490,7 +1493,20 @@ var _ = Describe("GardenContainerStore", func() {
 
 		Context("when a container's info fails to fetch", func() {
 			BeforeEach(func() {
-				fakeContainer1.InfoReturns(garden.ContainerInfo{}, errors.New("oh no!"))
+				fakeGardenClient.BulkInfoReturns(
+					map[string]garden.ContainerInfoEntry{
+						"fake-handle-1": garden.ContainerInfoEntry{
+							Err: errors.New("oh no"),
+						},
+						"fake-handle-2": garden.ContainerInfoEntry{
+							Info: garden.ContainerInfo{
+								Properties: garden.Properties{
+									gardenstore.ContainerStateProperty: string(executor.StateCreated),
+								},
+							},
+						},
+					}, nil)
+
 			})
 
 			It("excludes it from the result set", func() {
@@ -1641,13 +1657,12 @@ var _ = Describe("GardenContainerStore", func() {
 
 			runAction     *models.RunAction
 			monitorAction *models.RunAction
-			mutex         *sync.Mutex
+			mutex         sync.Mutex
 		)
 
 		BeforeEach(func() {
 			runAction = &models.RunAction{Path: "run"}
 			monitorAction = &models.RunAction{Path: "monitor"}
-			mutex = &sync.Mutex{}
 
 			mutex.Lock()
 			defer mutex.Unlock()
@@ -1699,6 +1714,7 @@ var _ = Describe("GardenContainerStore", func() {
 			containerProperties[gardenstore.ContainerStateProperty] = string(executor.StateCreated)
 
 			orderInWhichPropertiesAreSet = []string{}
+
 			gardenContainer = new(gfakes.FakeContainer)
 			gardenContainer.HandleReturns("some-container-handle")
 			gardenContainer.SetPropertyStub = func(key, value string) error {
@@ -1982,6 +1998,10 @@ var _ = Describe("GardenContainerStore", func() {
 						}()
 					})
 
+					AfterEach(func() {
+						Eventually(destroyed).Should(BeClosed())
+					})
+
 					It("logs that the step process was signaled and then finished, and was freed", func() {
 						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "signaled"))
 						Eventually(logger).Should(gbytes.Say(stepSessionPrefix + "finished"))
@@ -2008,24 +2028,6 @@ var _ = Describe("GardenContainerStore", func() {
 						Eventually(emitter.EmitCallCount).Should(Equal(2))
 						Ω(emitter.EmitArgsForCall(1).EventType()).Should(Equal(executor.EventTypeContainerComplete))
 						Ω(containerResult().Stopped).Should(BeTrue())
-					})
-
-					Context("when the step takes a while to complete", func() {
-						var exited chan int
-
-						BeforeEach(func() {
-							exited = make(chan int, 1)
-
-							processes["run"].WaitStub = func() (int, error) {
-								return <-exited, nil
-							}
-						})
-
-						It("waits", func() {
-							Consistently(destroyed).ShouldNot(BeClosed())
-							exited <- 1
-							Eventually(destroyed).ShouldNot(BeClosed())
-						})
 					})
 				})
 			})
@@ -2084,6 +2086,7 @@ var _ = Describe("GardenContainerStore", func() {
 				mutex.Lock()
 				defer mutex.Unlock()
 				n := len(orderInWhichPropertiesAreSet)
+				Ω(n).Should(BeNumerically(">", 2))
 				Ω(orderInWhichPropertiesAreSet[n-2]).Should(Equal(gardenstore.ContainerResultProperty))
 				Ω(orderInWhichPropertiesAreSet[n-1]).Should(Equal(gardenstore.ContainerStateProperty))
 			})

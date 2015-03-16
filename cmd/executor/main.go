@@ -180,6 +180,7 @@ func main() {
 	destroyContainers(gardenClient, containersFetcher, logger)
 
 	workDir := setupWorkDir(logger, *tempDir)
+	clock := clock.NewClock()
 
 	transformer := initializeTransformer(
 		logger,
@@ -191,10 +192,10 @@ func main() {
 		*allowPrivileged,
 		*skipCertVerify,
 		*exportNetworkEnvVars,
+		clock,
 	)
 
 	hub := event.NewHub()
-	clock := clock.NewClock()
 
 	gardenStore := gardenstore.NewGardenStore(
 		gardenClient,
@@ -325,6 +326,7 @@ func initializeTransformer(
 	allowPrivileged bool,
 	skipSSLVerification bool,
 	exportNetworkEnvVars bool,
+	clock clock.Clock,
 ) *transformer.Transformer {
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification)
 	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
@@ -341,6 +343,7 @@ func initializeTransformer(
 		workDir,
 		allowPrivileged,
 		exportNetworkEnvVars,
+		clock,
 	)
 }
 

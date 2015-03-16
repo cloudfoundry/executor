@@ -22,7 +22,8 @@ type GardenClient interface {
 }
 
 type Exchanger interface {
-	Garden2Executor(lager.Logger, garden.Container) (executor.Container, error)
+	Infos(lager.Logger, garden.Client, []garden.Container) ([]executor.Container, error)
+	Info(lager.Logger, garden.Container) (executor.Container, error)
 	CreateInGarden(lager.Logger, GardenClient, executor.Container) (executor.Container, error)
 }
 
@@ -48,6 +49,12 @@ const (
 	ContainerEgressRulesProperty   = executorPropertyPrefix + "egress-rules"
 )
 
+type exchanger struct {
+	containerOwnerName    string
+	containerMaxCPUShares uint64
+	containerInodeLimit   uint64
+}
+
 func NewExchanger(
 	containerOwnerName string,
 	containerMaxCPUShares uint64,
@@ -60,14 +67,47 @@ func NewExchanger(
 	}
 }
 
-type exchanger struct {
-	containerOwnerName    string
-	containerMaxCPUShares uint64
-	containerInodeLimit   uint64
+func (exchanger exchanger) Infos(logger lager.Logger, gardenClient garden.Client, gardenContainers []garden.Container) ([]executor.Container, error) {
+	handles := make([]string, len(gardenContainers))
+	for _, c := range gardenContainers {
+		handles = append(handles, c.Handle())
+	}
+	logger = logger.Session("infos", lager.Data{"handles": handles})
+
+	logger.Debug("get-bulk-info")
+	infos, err := gardenClient.BulkInfo(handles)
+	if err != nil {
+		logger.Error("failed-bulk-info", err)
+		return []executor.Container{}, err
+	}
+	logger.Debug("succeeded-bulk-info")
+
+	var containerInfos []executor.Container
+
+	for handle, info := range infos {
+		if info.Err != nil {
+			logger.Error("failed-garden-info", err, lager.Data{
+				"handle": handle,
+			})
+			continue
+		}
+
+		container, err := garden2executor(handle, info.Info)
+		if err != nil {
+			logger.Error("failed-garden2executor", err, lager.Data{
+				"handle": handle,
+			})
+			continue
+		}
+
+		containerInfos = append(containerInfos, container)
+	}
+
+	return containerInfos, nil
 }
 
-func (exchanger exchanger) Garden2Executor(logger lager.Logger, gardenContainer garden.Container) (executor.Container, error) {
-	logger = logger.Session("garden-2-executor", lager.Data{"handle": gardenContainer.Handle()})
+func (exchanger exchanger) Info(logger lager.Logger, gardenContainer garden.Container) (executor.Container, error) {
+	logger = logger.Session("info", lager.Data{"handle": gardenContainer.Handle()})
 
 	logger.Debug("getting-info")
 	info, err := gardenContainer.Info()
@@ -77,13 +117,18 @@ func (exchanger exchanger) Garden2Executor(logger lager.Logger, gardenContainer 
 	}
 	logger.Debug("succeeded-getting-info")
 
+	return garden2executor(gardenContainer.Handle(), info)
+}
+
+func garden2executor(handle string, info garden.ContainerInfo) (executor.Container, error) {
 	executorContainer := executor.Container{
-		Guid:       gardenContainer.Handle(),
+		Guid:       handle,
 		Tags:       executor.Tags{},
 		Ports:      make([]executor.PortMapping, len(info.MappedPorts)),
 		ExternalIP: info.ExternalIP,
 	}
 
+	var err error
 	for key, value := range info.Properties {
 		switch key {
 		case ContainerStateProperty:

@@ -29,6 +29,7 @@ type Transformer struct {
 	tempDir              string
 	allowPrivileged      bool
 	exportNetworkEnvVars bool
+	clock                clock.Clock
 }
 
 func NewTransformer(
@@ -41,6 +42,7 @@ func NewTransformer(
 	tempDir string,
 	allowPrivileged bool,
 	exportNetworkEnvVars bool,
+	clock clock.Clock,
 ) *Transformer {
 	return &Transformer{
 		cachedDownloader:     cachedDownloader,
@@ -52,6 +54,7 @@ func NewTransformer(
 		tempDir:              tempDir,
 		allowPrivileged:      allowPrivileged,
 		exportNetworkEnvVars: exportNetworkEnvVars,
+		clock:                clock,
 	}
 }
 
@@ -75,7 +78,7 @@ func (transformer *Transformer) StepFor(
 			externalIP,
 			ports,
 			transformer.exportNetworkEnvVars,
-			clock.NewClock(),
+			transformer.clock,
 		)
 
 	case *models.DownloadAction:
