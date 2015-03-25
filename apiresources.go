@@ -155,7 +155,7 @@ type EnvironmentVariable struct {
 	Value string `json:"value"`
 }
 
-type Metrics struct {
+type ContainerMetrics struct {
 	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
 	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
 	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
@@ -163,12 +163,17 @@ type Metrics struct {
 
 type MetricsConfig struct {
 	Guid  string `json:"guid"`
-	Index *int   `json:"index"`
+	Index int    `json:"index"`
+}
+
+type Metrics struct {
+	MetricsConfig
+	ContainerMetrics
 }
 
 type LogConfig struct {
 	Guid       string `json:"guid"`
-	Index      *int   `json:"index"`
+	Index      int    `json:"index"`
 	SourceName string `json:"source_name"`
 }
 

@@ -689,28 +689,28 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("GetMetrics", func() {
-		var expectedMetrics executor.Metrics
+		var expectedMetrics executor.ContainerMetrics
 
 		BeforeEach(func() {
-			expectedMetrics = executor.Metrics{
+			expectedMetrics = executor.ContainerMetrics{
 				MemoryUsageInBytes: 99999,
 				DiskUsageInBytes:   88888,
 				TimeSpentInCPU:     77777,
 			}
 
-			gardenStore.MetricsReturns(expectedMetrics, nil)
+			gardenStore.MetricsReturns(map[string]executor.ContainerMetrics{"container-guid": expectedMetrics}, nil)
 		})
 
-		It("returns the metrics for the container with the given guid", func() {
-			metrics, err := depotClient.GetMetrics("guid-1")
+		It("returns the metrics for the container", func() {
+			metrics, err := depotClient.GetMetrics("container-guid")
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(metrics).Should(Equal(expectedMetrics))
 
 			Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
 
-			actualLogger, actualGuid := gardenStore.MetricsArgsForCall(0)
+			actualLogger, guids := gardenStore.MetricsArgsForCall(0)
 			Ω(actualLogger).ShouldNot(BeNil())
-			Ω(actualGuid).Should(Equal("guid-1"))
+			Ω(guids).Should(ConsistOf("container-guid"))
 		})
 
 		Context("when garden fails to get the metrics", func() {
@@ -718,12 +718,154 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				expectedError = errors.New("whoops")
-				gardenStore.MetricsReturns(executor.Metrics{}, expectedError)
+				gardenStore.MetricsReturns(nil, expectedError)
 			})
 
 			It("propagates the error", func() {
 				_, err := depotClient.GetMetrics("guid-1")
 				Ω(err).Should(Equal(expectedError))
+			})
+		})
+	})
+
+	Describe("GetAllMetrics", func() {
+		var tags executor.Tags
+		var metrics map[string]executor.Metrics
+		var metricsErr error
+
+		var expectedMetrics map[string]executor.ContainerMetrics
+
+		BeforeEach(func() {
+			tags = nil
+
+			expectedMetrics = map[string]executor.ContainerMetrics{
+				"a-guid": executor.ContainerMetrics{
+					MemoryUsageInBytes: 123,
+					DiskUsageInBytes:   456,
+					TimeSpentInCPU:     100 * time.Second,
+				},
+				"b-guid": executor.ContainerMetrics{
+					MemoryUsageInBytes: 321,
+					DiskUsageInBytes:   654,
+					TimeSpentInCPU:     100 * time.Second,
+				},
+			}
+
+			gardenStore.MetricsReturns(expectedMetrics, nil)
+		})
+
+		JustBeforeEach(func() {
+			metrics, metricsErr = depotClient.GetAllMetrics(tags)
+		})
+
+		Context("with no tags", func() {
+			BeforeEach(func() {
+				tags = nil
+
+				gardenStore.ListReturns([]executor.Container{
+					executor.Container{Guid: "a-guid", MetricsConfig: executor.MetricsConfig{Guid: "a-metrics"}},
+					executor.Container{Guid: "b-guid", MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}},
+				}, nil)
+			})
+
+			It("gets all the containers", func() {
+				Ω(gardenStore.ListCallCount()).Should(Equal(1))
+				glogger, tags := gardenStore.ListArgsForCall(0)
+				Ω(glogger).ShouldNot(BeNil())
+				Ω(tags).Should(BeNil())
+			})
+
+			It("retrieves all the metrics", func() {
+				Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+
+				actualLogger, guids := gardenStore.MetricsArgsForCall(0)
+				Ω(actualLogger).ShouldNot(BeNil())
+				Ω(guids).Should(ConsistOf("a-guid", "b-guid"))
+			})
+
+			It("does not error", func() {
+				Ω(metricsErr).ShouldNot(HaveOccurred())
+			})
+
+			It("returns all the metrics", func() {
+				Ω(metrics).Should(HaveLen(2))
+				Ω(metrics["a-guid"]).Should(Equal(executor.Metrics{
+					MetricsConfig:    executor.MetricsConfig{Guid: "a-metrics"},
+					ContainerMetrics: expectedMetrics["a-guid"],
+				}))
+				Ω(metrics["b-guid"]).Should(Equal(executor.Metrics{
+					MetricsConfig:    executor.MetricsConfig{Guid: "b-metrics", Index: 1},
+					ContainerMetrics: expectedMetrics["b-guid"],
+				}))
+			})
+		})
+
+		Context("with tags", func() {
+			BeforeEach(func() {
+				tags = executor.Tags{"a": "b"}
+			})
+
+			It("gets containers with those tags", func() {
+				Ω(gardenStore.ListCallCount()).Should(Equal(1))
+				_, listTags := gardenStore.ListArgsForCall(0)
+				Ω(listTags).Should(Equal(tags))
+			})
+		})
+
+		Context("containers with missing metric guids", func() {
+			BeforeEach(func() {
+				tags = nil
+
+				gardenStore.ListReturns([]executor.Container{
+					executor.Container{Guid: "a-guid"},
+					executor.Container{Guid: "b-guid", MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}},
+				}, nil)
+			})
+
+			It("retrieves metrics by metric config guids", func() {
+				Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+
+				actualLogger, guids := gardenStore.MetricsArgsForCall(0)
+				Ω(actualLogger).ShouldNot(BeNil())
+				Ω(guids).Should(ConsistOf("b-guid"))
+			})
+
+			It("does not error", func() {
+				Ω(metricsErr).ShouldNot(HaveOccurred())
+			})
+
+			It("returns the metrics", func() {
+				Ω(metrics).Should(HaveLen(1))
+				Ω(metrics["b-guid"]).Should(Equal(executor.Metrics{
+					MetricsConfig:    executor.MetricsConfig{Guid: "b-metrics", Index: 1},
+					ContainerMetrics: expectedMetrics["b-guid"],
+				}))
+			})
+		})
+
+		Context("when garden fails to list containers", func() {
+			var expectedError error
+
+			BeforeEach(func() {
+				expectedError = errors.New("whoops")
+				gardenStore.ListReturns(nil, expectedError)
+			})
+
+			It("propagates the error", func() {
+				Ω(metricsErr).Should(Equal(expectedError))
+			})
+		})
+
+		Context("when garden fails to get the metrics", func() {
+			var expectedError error
+
+			BeforeEach(func() {
+				expectedError = errors.New("whoops")
+				gardenStore.MetricsReturns(nil, expectedError)
+			})
+
+			It("propagates the error", func() {
+				Ω(metricsErr).Should(Equal(expectedError))
 			})
 		})
 	})

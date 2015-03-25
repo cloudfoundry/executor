@@ -25,7 +25,7 @@ var _ = Describe("LogStreamer", func() {
 		fakeSender = fake.NewFakeLogSender()
 		logs.Initialize(fakeSender)
 
-		streamer = New(guid, sourceName, &index)
+		streamer = New(guid, sourceName, index)
 	})
 
 	Context("when told to emit", func() {
@@ -239,7 +239,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = New("", sourceName, &index)
+			streamer = New("", sourceName, index)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
@@ -251,7 +251,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = New(guid, "", nil)
+			streamer = New(guid, "", -1)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
@@ -263,12 +263,12 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = New(guid, sourceName, nil)
+			streamer = New(guid, sourceName, -1)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(fakeSender.GetLogs()[0].SourceInstance).Should(Equal("0"))
+			Ω(fakeSender.GetLogs()[0].SourceInstance).Should(Equal("-1"))
 		})
 	})
 

@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/http/server/allocate_containers"
 	"github.com/cloudfoundry-incubator/executor/http/server/delete_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/events"
+	"github.com/cloudfoundry-incubator/executor/http/server/get_all_metrics"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_container"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_files"
 	"github.com/cloudfoundry-incubator/executor/http/server/get_metrics"
@@ -49,7 +50,7 @@ func (s *Server) Run(sigChan <-chan os.Signal, readyChan chan<- struct{}) error 
 		return err
 	}
 
-	server := ifrit.Envoke(http_server.New(s.Address, router))
+	server := ifrit.Invoke(http_server.New(s.Address, router))
 
 	close(readyChan)
 
@@ -84,5 +85,7 @@ func (s *Server) NewHandlerProviders() map[string]HandlerProvider {
 
 		ehttp.GetFiles:   get_files.New(s.DepotClientProvider),
 		ehttp.GetMetrics: get_metrics.New(s.DepotClientProvider),
+
+		ehttp.GetAllMetrics: get_all_metrics.New(s.DepotClientProvider),
 	}
 }

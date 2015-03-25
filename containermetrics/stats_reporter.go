@@ -2,12 +2,10 @@ package containermetrics
 
 import (
 	"os"
-	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
@@ -19,10 +17,7 @@ type StatsReporter struct {
 	clock          clock.Clock
 	executorClient executor.Client
 
-	workPool *workpool.WorkPool
-
-	cpuInfos      map[string]cpuInfo
-	cpuInfosMutex *sync.Mutex
+	cpuInfos map[string]cpuInfo
 }
 
 type cpuInfo struct {
@@ -37,11 +32,6 @@ func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.C
 		interval:       interval,
 		clock:          clock,
 		executorClient: executorClient,
-
-		workPool: workpool.NewWorkPool(32),
-
-		cpuInfos:      make(map[string]cpuInfo),
-		cpuInfosMutex: &sync.Mutex{},
 	}
 }
 
@@ -49,21 +39,23 @@ func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct
 	close(ready)
 
 	ticker := reporter.clock.NewTicker(reporter.interval)
+	defer ticker.Stop()
 
+	cpuInfos := make(map[string]*cpuInfo)
 	for {
 		select {
 		case <-signals:
 			return nil
 
 		case <-ticker.C():
-			reporter.emitContainerMetrics(reporter.logger.Session("tick"))
+			cpuInfos = reporter.emitContainerMetrics(reporter.logger.Session("tick"), cpuInfos)
 		}
 	}
 
 	return nil
 }
 
-func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
+func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo) map[string]*cpuInfo {
 	startTime := reporter.clock.Now()
 
 	logger.Info("started")
@@ -73,58 +65,48 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger) {
 		})
 	}()
 
-	containers, err := reporter.executorClient.ListContainers(nil)
+	metrics, err := reporter.executorClient.GetAllMetrics(nil)
 	if err != nil {
-		logger.Error("failed-to-list-containers", err)
-		return
+		logger.Error("failed-to-get-all-metrics", err)
+		return previousCpuInfos
 	}
 
 	logger.Info("emitting", lager.Data{
-		"total-containers":        len(containers),
-		"listing-containers-took": reporter.clock.Now().Sub(startTime).String(),
+		"total-containers": len(metrics),
+		"get-metrics-took": reporter.clock.Now().Sub(startTime).String(),
 	})
 
-	wg := &sync.WaitGroup{}
-
-	for _, container := range containers {
-		if container.MetricsConfig.Guid == "" {
-			continue
+	newCpuInfos := make(map[string]*cpuInfo)
+	now := reporter.clock.Now()
+	for guid, metric := range metrics {
+		previousCpuInfo := previousCpuInfos[guid]
+		cpu := reporter.calculateAndSendMetrics(logger, &metric.MetricsConfig, &metric.ContainerMetrics, previousCpuInfo, now)
+		if cpu != nil {
+			newCpuInfos[guid] = cpu
 		}
-
-		wg.Add(1)
-
-		container := container
-		reporter.workPool.Submit(func() {
-			defer wg.Done()
-			reporter.calculateAndSendMetrics(logger, &container)
-		})
 	}
 
-	wg.Wait()
+	return newCpuInfos
 }
 
-func (reporter *StatsReporter) calculateAndSendMetrics(logger lager.Logger, container *executor.Container) {
-	containerMetrics, err := reporter.executorClient.GetMetrics(container.Guid)
-	if err != nil {
-		logger.Error("failed-to-retrieve-container-metrics", err, lager.Data{
-			"container-guid": container.Guid,
-		})
-		return
+func (reporter *StatsReporter) calculateAndSendMetrics(
+	logger lager.Logger,
+	metricsConfig *executor.MetricsConfig,
+	containerMetrics *executor.ContainerMetrics,
+	previousInfo *cpuInfo,
+	now time.Time,
+) *cpuInfo {
+	if metricsConfig.Guid == "" {
+		return nil
 	}
 
 	currentInfo := cpuInfo{
 		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
-		timeOfSample:   reporter.clock.Now(),
+		timeOfSample:   now,
 	}
 
-	reporter.cpuInfosMutex.Lock()
-	previousInfo, found := reporter.cpuInfos[container.Guid]
-
-	reporter.cpuInfos[container.Guid] = currentInfo
-	reporter.cpuInfosMutex.Unlock()
-
 	var cpuPercent float64
-	if !found {
+	if previousInfo == nil {
 		cpuPercent = 0.0
 	} else {
 		cpuPercent = computeCPUPercent(
@@ -135,17 +117,15 @@ func (reporter *StatsReporter) calculateAndSendMetrics(logger lager.Logger, cont
 		)
 	}
 
-	var index int32
-	if container.MetricsConfig.Index != nil {
-		index = int32(*container.MetricsConfig.Index)
-	} else {
-		index = -1
+	err := metrics.SendContainerMetric(metricsConfig.Guid, int32(metricsConfig.Index), cpuPercent, containerMetrics.MemoryUsageInBytes, containerMetrics.DiskUsageInBytes)
+	if err != nil {
+		logger.Error("failed-to-send-container-metrics", err, lager.Data{
+			"metrics_guid":  metricsConfig.Guid,
+			"metrics_index": metricsConfig.Index,
+		})
 	}
 
-	err = metrics.SendContainerMetric(container.MetricsConfig.Guid, index, cpuPercent, containerMetrics.MemoryUsageInBytes, containerMetrics.DiskUsageInBytes)
-	if err != nil {
-		logger.Error("failed-to-send-container-metrics", err)
-	}
+	return &currentInfo
 }
 
 // scale from 0 - 100

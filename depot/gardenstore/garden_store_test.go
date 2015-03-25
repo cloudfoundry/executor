@@ -600,7 +600,7 @@ var _ = Describe("GardenContainerStore", func() {
 					log := executor.LogConfig{
 						Guid:       "my-guid",
 						SourceName: "source-name",
-						Index:      &index,
+						Index:      index,
 					}
 
 					BeforeEach(func() {
@@ -642,7 +642,7 @@ var _ = Describe("GardenContainerStore", func() {
 					index := 1
 					metricsConfig := executor.MetricsConfig{
 						Guid:  "my-guid",
-						Index: &index,
+						Index: index,
 					}
 
 					BeforeEach(func() {
@@ -748,7 +748,6 @@ var _ = Describe("GardenContainerStore", func() {
 		}
 
 		BeforeEach(func() {
-			one := 1
 			executorContainer = executor.Container{
 				Guid:   "some-guid",
 				State:  executor.StateInitializing,
@@ -757,7 +756,7 @@ var _ = Describe("GardenContainerStore", func() {
 				LogConfig: executor.LogConfig{
 					Guid:       "log-guid",
 					SourceName: "some-source-name",
-					Index:      &one,
+					Index:      1,
 				},
 			}
 
@@ -970,7 +969,7 @@ var _ = Describe("GardenContainerStore", func() {
 					log := executor.LogConfig{
 						Guid:       "my-guid",
 						SourceName: "source-name",
-						Index:      &index,
+						Index:      index,
 					}
 
 					BeforeEach(func() {
@@ -991,7 +990,7 @@ var _ = Describe("GardenContainerStore", func() {
 					index := 1
 					metricsConfig := executor.MetricsConfig{
 						Guid:  "my-guid",
-						Index: &index,
+						Index: index,
 					}
 
 					BeforeEach(func() {
@@ -2095,77 +2094,82 @@ var _ = Describe("GardenContainerStore", func() {
 
 	Describe("Metrics", func() {
 		var (
-			metrics         executor.Metrics
-			metricsErr      error
-			gardenContainer *gfakes.FakeContainer
+			metrics    map[string]executor.ContainerMetrics
+			metricsErr error
 		)
 
-		BeforeEach(func() {
-			gardenContainer = new(gfakes.FakeContainer)
-
-			fakeGardenClient.LookupReturns(gardenContainer, nil)
-		})
-
 		JustBeforeEach(func() {
-			metrics, metricsErr = gardenStore.Metrics(logger, "some-container-handle")
+			metrics, metricsErr = gardenStore.Metrics(logger, []string{"some-container-handle"})
 		})
 
-		It("looked up by the given guid", func() {
-			Ω(fakeGardenClient.LookupArgsForCall(0)).Should(Equal("some-container-handle"))
+		BeforeEach(func() {
+			containerMetrics := garden.Metrics{
+				MemoryStat: garden.ContainerMemoryStat{
+					TotalRss:          100,
+					TotalCache:        12,
+					TotalInactiveFile: 1,
+				},
+				DiskStat: garden.ContainerDiskStat{
+					BytesUsed:  222,
+					InodesUsed: 333,
+				},
+				CPUStat: garden.ContainerCPUStat{
+					Usage:  123,
+					User:   456, // ignored
+					System: 789, // ignored
+				},
+			}
+
+			fakeGardenClient.BulkMetricsReturns(map[string]garden.ContainerMetricsEntry{
+				"some-container-handle": garden.ContainerMetricsEntry{
+					Metrics: containerMetrics,
+					Err:     nil,
+				},
+			}, nil)
 		})
 
-		Context("when the container doesn't exist", func() {
+		It("does not error", func() {
+			Ω(metricsErr).ShouldNot(HaveOccurred())
+		})
+
+		It("gets metrics from garden", func() {
+			Ω(fakeGardenClient.BulkMetricsCallCount()).Should(Equal(1))
+			Ω(metrics).Should(HaveLen(1))
+			Ω(metrics["some-container-handle"]).Should(Equal(executor.ContainerMetrics{
+				MemoryUsageInBytes: 111,
+				DiskUsageInBytes:   222,
+				TimeSpentInCPU:     123,
+			}))
+		})
+
+		Context("when a container metric entry has an error", func() {
 			BeforeEach(func() {
-				fakeGardenClient.LookupReturns(nil, garden.ContainerNotFoundError{})
-			})
-
-			It("looked up by the given guid", func() {
-				Ω(fakeGardenClient.LookupArgsForCall(0)).Should(Equal("some-container-handle"))
-			})
-
-			It("returns a container-not-found-error", func() {
-				Ω(metricsErr).Should(Equal(executor.ErrContainerNotFound))
-			})
-		})
-
-		Context("when the container exists", func() {
-			var containerMetrics garden.Metrics
-
-			BeforeEach(func() {
-				containerMetrics = garden.Metrics{
-					MemoryStat: garden.ContainerMemoryStat{
-						TotalRss:          100,
-						TotalCache:        12,
-						TotalInactiveFile: 1,
+				fakeGardenClient.BulkMetricsReturns(map[string]garden.ContainerMetricsEntry{
+					"some-container-handle": garden.ContainerMetricsEntry{
+						Err: errors.New("oh no"),
 					},
-					DiskStat: garden.ContainerDiskStat{
-						BytesUsed:  222,
-						InodesUsed: 333,
-					},
-					CPUStat: garden.ContainerCPUStat{
-						Usage:  123,
-						User:   456, // ignored
-						System: 789, // ignored
-					},
-				}
-				gardenContainer.MetricsReturns(containerMetrics, nil)
-				fakeGardenClient.LookupReturns(gardenContainer, nil)
+				}, nil)
 			})
 
 			It("does not error", func() {
 				Ω(metricsErr).ShouldNot(HaveOccurred())
 			})
 
-			It("gets metrics from garden", func() {
-				Ω(gardenContainer.MetricsCallCount()).Should(Equal(1))
-				Ω(metrics).Should(Equal(executor.Metrics{
-					MemoryUsageInBytes: 111,
-					DiskUsageInBytes:   222,
-					TimeSpentInCPU:     123,
-				}))
+			It("ignores any container with errors", func() {
+				Ω(fakeGardenClient.BulkMetricsCallCount()).Should(Equal(1))
+				Ω(metrics).Should(HaveLen(0))
 			})
 		})
 
+		Context("when a bulk metrics returns an error", func() {
+			BeforeEach(func() {
+				fakeGardenClient.BulkMetricsReturns(nil, errors.New("oh no"))
+			})
+
+			It("does not error", func() {
+				Ω(metricsErr).Should(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("Transitions", func() {

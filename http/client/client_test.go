@@ -48,8 +48,6 @@ var _ = Describe("Client", func() {
 		var validResponse map[string]string
 
 		BeforeEach(func() {
-			zero := 0
-
 			validRequest = []executor.Container{
 				{
 					Guid:      containerGuid,
@@ -60,7 +58,7 @@ var _ = Describe("Client", func() {
 					LogConfig: executor.LogConfig{
 						Guid:       "some-guid",
 						SourceName: "XYZ",
-						Index:      &zero,
+						Index:      0,
 					},
 				},
 			}
@@ -150,7 +148,6 @@ var _ = Describe("Client", func() {
 				response, err := client.GetContainer(containerGuid)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				zero := 0
 				Ω(response).Should(Equal(executor.Container{
 					Guid: "guid-123",
 
@@ -168,12 +165,12 @@ var _ = Describe("Client", func() {
 					LogConfig: executor.LogConfig{
 						Guid:       "some-guid",
 						SourceName: "XYZ",
-						Index:      &zero,
+						Index:      0,
 					},
 
 					MetricsConfig: executor.MetricsConfig{
 						Guid:  "some-guid",
-						Index: &zero,
+						Index: 0,
 					},
 				}))
 			})
@@ -428,7 +425,7 @@ var _ = Describe("Client", func() {
 				response, err := client.GetMetrics(containerGuid)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				Ω(response).Should(Equal(executor.Metrics{
+				Ω(response).Should(Equal(executor.ContainerMetrics{
 					MemoryUsageInBytes: 123,
 					DiskUsageInBytes:   456,
 					TimeSpentInCPU:     789,
@@ -462,6 +459,115 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetMetrics(containerGuid)
+				Ω(err).Should(BeAssignableToTypeOf(&json.SyntaxError{}))
+			})
+		})
+	})
+
+	Describe("GetAllMetrics", func() {
+		var allMetricsResponse map[string]executor.Metrics
+
+		BeforeEach(func() {
+			allMetricsResponse = map[string]executor.Metrics{
+				"a-guid": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Guid: "a-metrics"},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes: 123,
+						DiskUsageInBytes:   456,
+						TimeSpentInCPU:     100 * time.Second,
+					},
+				},
+				"b-guid": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes: 321,
+						DiskUsageInBytes:   654,
+						TimeSpentInCPU:     100 * time.Second,
+					},
+				},
+			}
+		})
+
+		Context("with no tags", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/metrics"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, allMetricsResponse)),
+				)
+			})
+
+			It("should returns the metrics of all containers", func() {
+				response, err := client.GetAllMetrics(nil)
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(response).Should(Equal(allMetricsResponse))
+			})
+		})
+
+		Context("with tags", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/metrics"),
+					func(w http.ResponseWriter, r *http.Request) {
+						Ω(r.URL.Query()["tag"]).Should(ConsistOf([]string{"a:b", "c:d"}))
+					},
+					ghttp.RespondWithJSONEncoded(http.StatusOK, allMetricsResponse)),
+				)
+			})
+
+			It("specifies them as query params", func() {
+				response, err := client.GetAllMetrics(executor.Tags{
+					"a": "b",
+					"c": "d",
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(response).Should(Equal(allMetricsResponse))
+			})
+		})
+
+		Context("when the server responds with a non-200 status code", func() {
+			Context("when not found", func() {
+				BeforeEach(func() {
+					fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/metrics"),
+						ghttp.RespondWith(executor.ErrContainerNotFound.HttpCode(), "", http.Header{
+							"X-Executor-Error": []string{executor.ErrContainerNotFound.Name()},
+						})),
+					)
+				})
+
+				It("returns an error", func() {
+					_, err := client.GetAllMetrics(nil)
+					Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				})
+			})
+
+			Context("when someother error", func() {
+				BeforeEach(func() {
+					fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/metrics"),
+						ghttp.RespondWith(http.StatusInternalServerError, "", http.Header{
+							"X-Executor-Error": []string{executor.ErrContainerNotFound.Name()},
+						})),
+					)
+				})
+
+				It("returns an error", func() {
+					_, err := client.GetAllMetrics(nil)
+					Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				})
+			})
+		})
+
+		Context("when the server responds with invalid JSON", func() {
+			BeforeEach(func() {
+				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/metrics"),
+					ghttp.RespondWith(http.StatusOK, `,`),
+				))
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetAllMetrics(nil)
 				Ω(err).Should(BeAssignableToTypeOf(&json.SyntaxError{}))
 			})
 		})

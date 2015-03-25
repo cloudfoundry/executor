@@ -27,7 +27,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index *int) LogStreamer {
+func New(guid string, sourceName string, index int) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -36,10 +36,7 @@ func New(guid string, sourceName string, index *int) LogStreamer {
 		sourceName = DefaultLogSource
 	}
 
-	sourceIndex := "0"
-	if index != nil {
-		sourceIndex = strconv.Itoa(*index)
-	}
+	sourceIndex := strconv.Itoa(index)
 
 	return &logStreamer{
 		stdout: newStreamDestination(

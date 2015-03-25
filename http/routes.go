@@ -15,6 +15,7 @@ const (
 	GetTotalResources     = "GetTotalResources"
 	GetFiles              = "GetFiles"
 	GetMetrics            = "GetMetrics"
+	GetAllMetrics         = "GetAllMetrics"
 )
 
 var Routes = rata.Routes{
@@ -28,6 +29,7 @@ var Routes = rata.Routes{
 	{Path: "/containers/:guid/metrics", Method: "GET", Name: GetMetrics},
 	{Path: "/containers/:guid/stop", Method: "POST", Name: StopContainer},
 	{Path: "/containers/:guid", Method: "DELETE", Name: DeleteContainer},
+	{Path: "/metrics", Method: "GET", Name: GetAllMetrics},
 	{Path: "/resources/remaining", Method: "GET", Name: GetRemainingResources},
 	{Path: "/resources/total", Method: "GET", Name: GetTotalResources},
 }

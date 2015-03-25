@@ -113,24 +113,27 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 	return store.exchanger.Infos(logger, store.gardenClient, gardenContainers)
 }
 
-func (store *GardenStore) Metrics(logger lager.Logger, guid string) (executor.Metrics, error) {
-	gardenContainer, err := store.lookup(logger, guid)
+func (store *GardenStore) Metrics(logger lager.Logger, containerGuids []string) (map[string]executor.ContainerMetrics, error) {
+	gardenMetrics, err := store.gardenClient.BulkMetrics(containerGuids)
 	if err != nil {
-		return executor.Metrics{}, err
+		return nil, err
 	}
 
-	gmetrics, err := gardenContainer.Metrics()
-	if err != nil {
-		return executor.Metrics{}, err
+	containerMetrics := map[string]executor.ContainerMetrics{}
+	for _, containerGuid := range containerGuids {
+		if metrics, found := gardenMetrics[containerGuid]; found {
+			if metrics.Err == nil {
+				gmetrics := metrics.Metrics
+				containerMetrics[containerGuid] = executor.ContainerMetrics{
+					MemoryUsageInBytes: gmetrics.MemoryStat.TotalRss + (gmetrics.MemoryStat.TotalCache - gmetrics.MemoryStat.TotalInactiveFile),
+					DiskUsageInBytes:   gmetrics.DiskStat.BytesUsed,
+					TimeSpentInCPU:     time.Duration(gmetrics.CPUStat.Usage),
+				}
+			}
+		}
 	}
 
-	return executor.Metrics{
-		MemoryUsageInBytes: gmetrics.MemoryStat.TotalRss + (gmetrics.MemoryStat.TotalCache - gmetrics.MemoryStat.TotalInactiveFile),
-		DiskUsageInBytes:   gmetrics.DiskStat.BytesUsed,
-		TimeSpentInCPU:     time.Duration(gmetrics.CPUStat.Usage),
-	}, nil
-
-	return executor.Metrics{}, nil
+	return containerMetrics, nil
 }
 
 func (store *GardenStore) Create(logger lager.Logger, container executor.Container) (executor.Container, error) {

@@ -41,7 +41,7 @@ type GardenStore interface {
 	Create(logger lager.Logger, container executor.Container) (executor.Container, error)
 	Lookup(logger lager.Logger, guid string) (executor.Container, error)
 	List(logger lager.Logger, tags executor.Tags) ([]executor.Container, error)
-	Metrics(logger lager.Logger, guid string) (executor.Metrics, error)
+	Metrics(logger lager.Logger, guid []string) (map[string]executor.ContainerMetrics, error)
 	Destroy(logger lager.Logger, guid string) error
 	Ping() error
 	Run(logger lager.Logger, container executor.Container) error
@@ -276,17 +276,57 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	return containers, nil
 }
 
-func (c *client) GetMetrics(guid string) (executor.Metrics, error) {
-	logger := c.logger.Session("metrics", lager.Data{
-		"guid": guid,
-	})
+func (c *client) GetMetrics(guid string) (executor.ContainerMetrics, error) {
+	logger := c.logger.Session("get-metrics")
 
-	metrics, err := c.gardenStore.Metrics(logger, guid)
+	metrics, err := c.gardenStore.Metrics(logger, []string{guid})
 	if err != nil {
-		logger.Error("failed-to-get-metrics", err)
+		logger.Error("failed-get-container-metrics", err)
+		return executor.ContainerMetrics{}, err
 	}
 
-	return metrics, err
+	if m, found := metrics[guid]; found {
+		return m, nil
+	}
+
+	return executor.ContainerMetrics{}, executor.ErrContainerNotFound
+}
+
+func (c *client) GetAllMetrics(tags executor.Tags) (map[string]executor.Metrics, error) {
+	logger := c.logger.Session("get-all-metrics")
+
+	containers, err := c.gardenStore.List(logger, tags)
+	if err != nil {
+		logger.Error("failed-to-list-containers", err)
+		return nil, err
+	}
+
+	containerGuids := make([]string, 0, len(containers))
+	for _, container := range containers {
+		if container.MetricsConfig.Guid != "" {
+			containerGuids = append(containerGuids, container.Guid)
+		}
+	}
+
+	cmetrics, err := c.gardenStore.Metrics(logger, containerGuids)
+	if err != nil {
+		logger.Error("failed-to-get-metrics", err)
+		return nil, err
+	}
+
+	metrics := make(map[string]executor.Metrics)
+	for _, container := range containers {
+		if container.MetricsConfig.Guid != "" {
+			if cmetric, found := cmetrics[container.Guid]; found {
+				metrics[container.Guid] = executor.Metrics{
+					MetricsConfig:    container.MetricsConfig,
+					ContainerMetrics: cmetric,
+				}
+			}
+		}
+	}
+
+	return metrics, nil
 }
 
 func (c *client) StopContainer(guid string) error {

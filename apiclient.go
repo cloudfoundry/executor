@@ -16,7 +16,8 @@ type Client interface {
 	StopContainer(guid string) error
 	DeleteContainer(guid string) error
 	ListContainers(Tags) ([]Container, error)
-	GetMetrics(guid string) (Metrics, error)
+	GetAllMetrics(Tags) (map[string]Metrics, error)
+	GetMetrics(guid string) (ContainerMetrics, error)
 	RemainingResources() (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)

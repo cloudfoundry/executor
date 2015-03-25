@@ -140,8 +140,8 @@ func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	return response.Body, nil
 }
 
-func (c client) GetMetrics(guid string) (executor.Metrics, error) {
-	metrics := executor.Metrics{}
+func (c client) GetMetrics(guid string) (executor.ContainerMetrics, error) {
+	metrics := executor.ContainerMetrics{}
 
 	response, err := c.doRequest(ehttp.GetMetrics, rata.Params{"guid": guid}, nil, nil)
 	if err != nil {
@@ -152,6 +152,27 @@ func (c client) GetMetrics(guid string) (executor.Metrics, error) {
 	err = json.NewDecoder(response.Body).Decode(&metrics)
 	if err != nil {
 		return metrics, err
+	}
+
+	return metrics, nil
+}
+
+func (c client) GetAllMetrics(tags executor.Tags) (map[string]executor.Metrics, error) {
+	filter := make([]string, 0, len(tags))
+	for name, value := range tags {
+		filter = append(filter, fmt.Sprintf("%s:%s", name, value))
+	}
+
+	response, err := c.doRequest(ehttp.GetAllMetrics, nil, nil, url.Values{"tag": filter})
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	metrics := map[string]executor.Metrics{}
+	err = json.NewDecoder(response.Body).Decode(&metrics)
+	if err != nil {
+		return nil, err
 	}
 
 	return metrics, nil
