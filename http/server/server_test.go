@@ -15,7 +15,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/fakes"
 	ehttp "github.com/cloudfoundry-incubator/executor/http"
-	. "github.com/cloudfoundry-incubator/executor/http/server"
+	"github.com/cloudfoundry-incubator/executor/http/server"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/vito/go-sse/sse"
 
@@ -43,7 +43,7 @@ var _ = Describe("Api", func() {
 	var depotClient *fakes.FakeClient
 	var containerGuid string
 
-	var server ifrit.Process
+	var srvr ifrit.Process
 	var generator *rata.RequestGenerator
 	var logger *lagertest.TestLogger
 
@@ -65,7 +65,7 @@ var _ = Describe("Api", func() {
 		depotClient = new(fakes.FakeClient)
 		depotClientProvider.WithLoggerReturns(depotClient)
 
-		server = ginkgomon.Invoke(&Server{
+		srvr = ginkgomon.Invoke(&server.Server{
 			Address:             address,
 			Logger:              logger,
 			DepotClientProvider: depotClientProvider,
@@ -75,8 +75,8 @@ var _ = Describe("Api", func() {
 	})
 
 	AfterEach(func() {
-		server.Signal(os.Kill)
-		Eventually(server.Wait(), 3).Should(Receive())
+		srvr.Signal(os.Kill)
+		Eventually(srvr.Wait(), 3).Should(Receive())
 	})
 
 	DoRequest := func(req *http.Request, err error) *http.Response {

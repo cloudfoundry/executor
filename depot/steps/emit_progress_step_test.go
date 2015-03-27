@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 
 	. "github.com/onsi/ginkgo"
@@ -16,8 +16,8 @@ import (
 )
 
 var _ = Describe("EmitProgressStep", func() {
-	var step Step
-	var subStep Step
+	var step steps.Step
+	var subStep steps.Step
 	var cancelled bool
 	var errorToReturn error
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -51,7 +51,7 @@ var _ = Describe("EmitProgressStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = NewEmitProgress(subStep, startMessage, successMessage, failureMessage, fakeStreamer, logger)
+		step = steps.NewEmitProgress(subStep, startMessage, successMessage, failureMessage, fakeStreamer, logger)
 	})
 
 	Context("running", func() {
@@ -111,7 +111,7 @@ var _ = Describe("EmitProgressStep", func() {
 
 				Context("with an emittable error", func() {
 					BeforeEach(func() {
-						errorToReturn = NewEmittableError(errors.New("bam!"), "Failed to reticulate")
+						errorToReturn = steps.NewEmittableError(errors.New("bam!"), "Failed to reticulate")
 					})
 
 					It("should print out the emittable error", func() {
@@ -134,7 +134,7 @@ var _ = Describe("EmitProgressStep", func() {
 
 					Context("without a wrapped error", func() {
 						BeforeEach(func() {
-							errorToReturn = NewEmittableError(nil, "Failed to reticulate")
+							errorToReturn = steps.NewEmittableError(nil, "Failed to reticulate")
 						})
 
 						It("should print out the emittable error", func() {
@@ -160,7 +160,7 @@ var _ = Describe("EmitProgressStep", func() {
 
 			Context("and there is no failure message", func() {
 				BeforeEach(func() {
-					errorToReturn = NewEmittableError(errors.New("bam!"), "Failed to reticulate")
+					errorToReturn = steps.NewEmittableError(errors.New("bam!"), "Failed to reticulate")
 				})
 
 				It("should not emit the failure message or error, even with an emittable error", func() {

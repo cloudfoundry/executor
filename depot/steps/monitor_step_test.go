@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -24,7 +24,7 @@ var _ = Describe("MonitorStep", func() {
 
 		checkSteps chan *fakes.FakeStep
 
-		checkFunc        func() Step
+		checkFunc        func() steps.Step
 		hasBecomeHealthy <-chan struct{}
 		clock            *fakeclock.FakeClock
 		fakeStreamer     *fake_log_streamer.FakeLogStreamer
@@ -33,7 +33,7 @@ var _ = Describe("MonitorStep", func() {
 		healthyInterval   time.Duration
 		unhealthyInterval time.Duration
 
-		step   Step
+		step   steps.Step
 		logger *lagertest.TestLogger
 	)
 
@@ -53,7 +53,7 @@ var _ = Describe("MonitorStep", func() {
 
 		fakeStreamer = newFakeStreamer()
 
-		checkFunc = func() Step {
+		checkFunc = func() steps.Step {
 			return <-checkSteps
 		}
 
@@ -64,7 +64,7 @@ var _ = Describe("MonitorStep", func() {
 		hasBecomeHealthyChannel := make(chan struct{}, 1000)
 		hasBecomeHealthy = hasBecomeHealthyChannel
 
-		step = NewMonitor(
+		step = steps.NewMonitor(
 			checkFunc,
 			hasBecomeHealthyChannel,
 			logger,
@@ -262,7 +262,7 @@ var _ = Describe("MonitorStep", func() {
 			performResult := make(chan error)
 			go func() { performResult <- step.Perform() }()
 			step.Cancel()
-			Eventually(performResult).Should(Receive(Equal(ErrCancelled)))
+			Eventually(performResult).Should(Receive(Equal(steps.ErrCancelled)))
 		})
 
 		Context("while checking", func() {
@@ -277,7 +277,7 @@ var _ = Describe("MonitorStep", func() {
 
 					select {
 					case <-cancelled:
-						return ErrCancelled
+						return steps.ErrCancelled
 					}
 				}
 
@@ -297,7 +297,7 @@ var _ = Describe("MonitorStep", func() {
 
 				step.Cancel()
 
-				Eventually(performResult).Should(Receive(Equal(ErrCancelled)))
+				Eventually(performResult).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 	})

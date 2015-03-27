@@ -63,7 +63,7 @@ type FakeGardenStore struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns struct {
+	pingReturns     struct {
 		result1 error
 	}
 	RunStub        func(logger lager.Logger, container executor.Container) error

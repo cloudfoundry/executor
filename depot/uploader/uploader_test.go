@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/uploader"
+	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -22,7 +22,7 @@ import (
 )
 
 var _ = Describe("Uploader", func() {
-	var uploader Uploader
+	var upldr uploader.Uploader
 	var testServer *httptest.Server
 	var serverRequests []*http.Request
 	var serverRequestBody []string
@@ -34,7 +34,7 @@ var _ = Describe("Uploader", func() {
 		serverRequests = []*http.Request{}
 		logger = lagertest.NewTestLogger("test")
 
-		uploader = New(100*time.Millisecond, false, logger)
+		upldr = uploader.New(100*time.Millisecond, false, logger)
 	})
 
 	Describe("Upload", func() {
@@ -79,7 +79,7 @@ var _ = Describe("Uploader", func() {
 			var err error
 			var numBytes int64
 			JustBeforeEach(func() {
-				numBytes, err = uploader.Upload(file.Name(), url, nil)
+				numBytes, err = upldr.Upload(file.Name(), url, nil)
 			})
 
 			It("uploads the file to the url", func() {
@@ -127,7 +127,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("interrupts the client and returns an error", func() {
-				uploaderWithoutTimeout := New(0, false, logger)
+				upldrWithoutTimeout := uploader.New(0, false, logger)
 
 				cancel := make(chan struct{})
 				errs := make(chan error)
@@ -135,7 +135,7 @@ var _ = Describe("Uploader", func() {
 				requestsInFlight.Add(1)
 
 				go func() {
-					_, err := uploaderWithoutTimeout.Upload(file.Name(), url, cancel)
+					_, err := upldrWithoutTimeout.Upload(file.Name(), url, cancel)
 					errs <- err
 				}()
 
@@ -143,7 +143,7 @@ var _ = Describe("Uploader", func() {
 
 				close(cancel)
 
-				Eventually(errs).Should(Receive(Equal(ErrUploadCancelled)))
+				Eventually(errs).Should(Receive(Equal(uploader.ErrUploadCancelled)))
 			})
 		})
 
@@ -168,7 +168,7 @@ var _ = Describe("Uploader", func() {
 				errs := make(chan error)
 
 				go func() {
-					_, err := uploader.Upload(file.Name(), url, nil)
+					_, err := upldr.Upload(file.Name(), url, nil)
 					errs <- err
 				}()
 
@@ -196,7 +196,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url, nil)
+				_, err := upldr.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})
@@ -210,7 +210,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("should return the error", func() {
-				_, err := uploader.Upload(file.Name(), url, nil)
+				_, err := upldr.Upload(file.Name(), url, nil)
 				Ω(err).NotTo(BeNil())
 			})
 		})

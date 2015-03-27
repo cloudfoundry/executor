@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	. "github.com/cloudfoundry-incubator/executor/depot"
+	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
@@ -25,7 +25,7 @@ var _ = Describe("Depot", func() {
 		logger          lager.Logger
 		fakeClock       *fakeclock.FakeClock
 		eventHub        *efakes.FakeHub
-		allocationStore AllocationStore
+		allocationStore depot.AllocationStore
 		gardenStore     *fakes.FakeGardenStore
 		resources       executor.ExecutorResources
 		lockManager     *fakelockmanager.FakeLockManager
@@ -50,7 +50,7 @@ var _ = Describe("Depot", func() {
 
 		lockManager = &fakelockmanager.FakeLockManager{}
 
-		depotClient = NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager).WithLogger(logger)
+		depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager).WithLogger(logger)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -1023,7 +1023,7 @@ var _ = Describe("Depot", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(result.State).Should(Equal(executor.StateCompleted))
 					Ω(result.RunResult.Failed).Should(BeTrue())
-					Ω(result.RunResult.FailureReason).Should(Equal(ContainerStoppedBeforeRunMessage))
+					Ω(result.RunResult.FailureReason).Should(Equal(depot.ContainerStoppedBeforeRunMessage))
 				})
 			})
 

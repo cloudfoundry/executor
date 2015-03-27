@@ -18,11 +18,11 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 )
 
 var _ = Describe("RunAction", func() {
-	var step Step
+	var step steps.Step
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -84,7 +84,7 @@ var _ = Describe("RunAction", func() {
 		container, err := gardenClient.Create(garden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		step = NewRun(
+		step = steps.NewRun(
 			container,
 			runAction,
 			fakeStreamer,
@@ -266,7 +266,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("should return an emittable error with the exit code", func() {
-				Ω(stepErr).Should(MatchError(NewEmittableError(nil, "Exited with status 19")))
+				Ω(stepErr).Should(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
 			})
 		})
 
@@ -303,7 +303,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Ω(stepErr).Should(MatchError(NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				Ω(stepErr).Should(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
 			})
 		})
 
@@ -410,7 +410,7 @@ var _ = Describe("RunAction", func() {
 				It("completes the perform without having sent kill", func() {
 					waitExited <- (128 + 15)
 
-					Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
+					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
 
 					Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
 				})
@@ -420,32 +420,32 @@ var _ = Describe("RunAction", func() {
 				It("sends a kill signal to the process", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-					fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+					fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
 
 					waitExited <- (128 + 9)
 
-					Eventually(performErr).Should(Receive(Equal(ErrCancelled)))
+					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {
 					It("finishes performing with failure", func() {
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-						fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+						fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 						Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
 
-						fakeClock.Increment(TERMINATE_TIMEOUT + 1*time.Second)
+						fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 						Consistently(performErr).ShouldNot(Receive())
 
-						fakeClock.Increment(EXIT_TIMEOUT + 1*time.Second)
+						fakeClock.Increment(steps.EXIT_TIMEOUT + 1*time.Second)
 
-						Eventually(performErr).Should(Receive(Equal(ErrExitTimeout)))
+						Eventually(performErr).Should(Receive(Equal(steps.ErrExitTimeout)))
 
 						Ω(logger.TestSink.LogMessages()).Should(ContainElement(
 							ContainSubstring("process-did-not-exit"),

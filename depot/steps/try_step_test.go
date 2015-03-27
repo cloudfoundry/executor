@@ -8,13 +8,13 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/pivotal-golang/lager/lagertest"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
 var _ = Describe("TryStep", func() {
-	var step Step
-	var subStep Step
+	var step steps.Step
+	var subStep steps.Step
 	var thingHappened bool
 	var cancelled bool
 	var logger *lagertest.TestLogger
@@ -36,7 +36,7 @@ var _ = Describe("TryStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = NewTry(subStep, logger)
+		step = steps.NewTry(subStep, logger)
 	})
 
 	It("performs its substep", func() {

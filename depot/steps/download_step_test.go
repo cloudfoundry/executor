@@ -19,7 +19,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -28,7 +28,7 @@ import (
 )
 
 var _ = Describe("DownloadAction", func() {
-	var step Step
+	var step steps.Step
 
 	var downloadAction models.DownloadAction
 	var cache *cdfakes.FakeCachedDownloader
@@ -66,7 +66,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			step = NewDownload(
+			step = steps.NewDownload(
 				container,
 				downloadAction,
 				cache,
@@ -249,7 +249,7 @@ var _ = Describe("DownloadAction", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			step = NewDownload(
+			step = steps.NewDownload(
 				container,
 				downloadAction,
 				cache,
@@ -267,12 +267,12 @@ var _ = Describe("DownloadAction", func() {
 
 			It("cancels the wait", func() {
 				step.Cancel()
-				Eventually(result).Should(Receive(Equal(ErrCancelled)))
+				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 
 			It("does not fetch the download artifact", func() {
 				step.Cancel()
-				Eventually(result).Should(Receive(Equal(ErrCancelled)))
+				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
 				Ω(cache.FetchCallCount()).Should(Equal(0))
 			})
 		})
@@ -304,7 +304,7 @@ var _ = Describe("DownloadAction", func() {
 				Eventually(calledChan).Should(BeClosed())
 				step.Cancel()
 
-				Eventually(result).Should(Receive(Equal(ErrCancelled)))
+				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 
@@ -340,7 +340,7 @@ var _ = Describe("DownloadAction", func() {
 				step.Cancel()
 				close(barrierChan)
 
-				Eventually(result).Should(Receive(Equal(ErrCancelled)))
+				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 	})
@@ -364,7 +364,7 @@ var _ = Describe("DownloadAction", func() {
 				To:   "/tmp/Antarctica",
 			}
 
-			step1 := NewDownload(
+			step1 := steps.NewDownload(
 				container,
 				downloadAction1,
 				cache,
@@ -378,7 +378,7 @@ var _ = Describe("DownloadAction", func() {
 				To:   "/tmp/Antarctica",
 			}
 
-			step2 := NewDownload(
+			step2 := steps.NewDownload(
 				container,
 				downloadAction2,
 				cache,
@@ -392,7 +392,7 @@ var _ = Describe("DownloadAction", func() {
 				To:   "/tmp/Antarctica",
 			}
 
-			step3 := NewDownload(
+			step3 := steps.NewDownload(
 				container,
 				downloadAction3,
 				cache,

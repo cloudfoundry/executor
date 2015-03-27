@@ -8,12 +8,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
 var _ = Describe("CodependentStep", func() {
-	var step Step
+	var step steps.Step
 	var subStep1 *fakes.FakeStep
 	var subStep2 *fakes.FakeStep
 
@@ -53,7 +53,7 @@ var _ = Describe("CodependentStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = NewCodependent([]Step{subStep1, subStep2})
+		step = steps.NewCodependent([]steps.Step{subStep1, subStep2})
 	})
 
 	Describe("Perform", func() {
@@ -102,7 +102,7 @@ var _ = Describe("CodependentStep", func() {
 			step2 := &fakes.FakeStep{}
 			step3 := &fakes.FakeStep{}
 
-			sequence := NewCodependent([]Step{step1, step2, step3})
+			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3})
 
 			sequence.Cancel()
 

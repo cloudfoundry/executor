@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/log_streamer"
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("LogStreamer", func() {
 	var fakeSender *fake.FakeLogSender
-	var streamer LogStreamer
+	var streamer log_streamer.LogStreamer
 	guid := "the-guid"
 	sourceName := "the-source-name"
 	index := 11
@@ -25,7 +25,7 @@ var _ = Describe("LogStreamer", func() {
 		fakeSender = fake.NewFakeLogSender()
 		logs.Initialize(fakeSender)
 
-		streamer = New(guid, sourceName, index)
+		streamer = log_streamer.New(guid, sourceName, index)
 	})
 
 	Context("when told to emit", func() {
@@ -135,8 +135,8 @@ var _ = Describe("LogStreamer", func() {
 			var message string
 			Context("when the message is just at the emittable length", func() {
 				BeforeEach(func() {
-					message = strings.Repeat("7", MAX_MESSAGE_SIZE)
-					Ω([]byte(message)).Should(HaveLen(MAX_MESSAGE_SIZE), "Ensure that the byte representation of our message is under the limit")
+					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)
+					Ω([]byte(message)).Should(HaveLen(log_streamer.MAX_MESSAGE_SIZE), "Ensure that the byte representation of our message is under the limit")
 
 					fmt.Fprintf(streamer.Stdout(), message+"\n")
 				})
@@ -150,46 +150,46 @@ var _ = Describe("LogStreamer", func() {
 
 			Context("when the message exceeds the emittable length", func() {
 				BeforeEach(func() {
-					message = strings.Repeat("7", MAX_MESSAGE_SIZE)
-					message += strings.Repeat("8", MAX_MESSAGE_SIZE)
-					message += strings.Repeat("9", MAX_MESSAGE_SIZE)
+					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)
+					message += strings.Repeat("8", log_streamer.MAX_MESSAGE_SIZE)
+					message += strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE)
 					message += "hello\n"
 					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
 					Ω(fakeSender.GetLogs()).Should(HaveLen(4))
-					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
-					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal(strings.Repeat("8", MAX_MESSAGE_SIZE)))
-					Ω(string(fakeSender.GetLogs()[2].Message)).Should(Equal(strings.Repeat("9", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal(strings.Repeat("8", log_streamer.MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[2].Message)).Should(Equal(strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE)))
 					Ω(string(fakeSender.GetLogs()[3].Message)).Should(Equal("hello"))
 				})
 			})
 
 			Context("when having to deal with byte boundaries", func() {
 				BeforeEach(func() {
-					message = strings.Repeat("7", MAX_MESSAGE_SIZE-1)
+					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-1)
 					message += "\u0623\n"
 					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
 					Ω(fakeSender.GetLogs()).Should(HaveLen(2))
-					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE-1)))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-1)))
 					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal("\u0623"))
 				})
 			})
 
 			Context("while concatenating, if the message exceeds the emittable length", func() {
 				BeforeEach(func() {
-					message = strings.Repeat("7", MAX_MESSAGE_SIZE-2)
+					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-2)
 					fmt.Fprintf(streamer.Stdout(), message)
 					fmt.Fprintf(streamer.Stdout(), "778888\n")
 				})
 
 				It("should break the message up and send multiple messages", func() {
 					Ω(fakeSender.GetLogs()).Should(HaveLen(2))
-					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", MAX_MESSAGE_SIZE)))
+					Ω(string(fakeSender.GetLogs()[0].Message)).Should(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
 					Ω(string(fakeSender.GetLogs()[1].Message)).Should(Equal("8888"))
 				})
 			})
@@ -211,11 +211,11 @@ var _ = Describe("LogStreamer", func() {
 		})
 
 		It("should handle long messages", func() {
-			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", MAX_MESSAGE_SIZE+1)+"\n")
+			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE+1)+"\n")
 			Ω(fakeSender.GetLogs()).Should(HaveLen(2))
 
 			emission := fakeSender.GetLogs()[0]
-			Ω(string(emission.Message)).Should(Equal(strings.Repeat("e", MAX_MESSAGE_SIZE)))
+			Ω(string(emission.Message)).Should(Equal(strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE)))
 
 			emission = fakeSender.GetLogs()[1]
 			Ω(string(emission.Message)).Should(Equal("e"))
@@ -239,7 +239,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = New("", sourceName, index)
+			streamer = log_streamer.New("", sourceName, index)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
@@ -251,19 +251,19 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = New(guid, "", -1)
+			streamer = log_streamer.New(guid, "", -1)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Ω(fakeSender.GetLogs()[0].SourceType).Should(Equal(DefaultLogSource))
+			Ω(fakeSender.GetLogs()[0].SourceType).Should(Equal(log_streamer.DefaultLogSource))
 
 		})
 	})
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = New(guid, sourceName, -1)
+			streamer = log_streamer.New(guid, sourceName, -1)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()

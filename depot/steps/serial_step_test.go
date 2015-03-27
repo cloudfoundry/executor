@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
@@ -16,7 +15,7 @@ var _ = Describe("SerialStep", func() {
 		It("performs them all in order and returns nil", func() {
 			seq := make(chan int, 3)
 
-			sequence := NewSerial([]steps.Step{
+			sequence := steps.NewSerial([]steps.Step{
 				&fakes.FakeStep{
 					PerformStub: func() error {
 						seq <- 1
@@ -53,7 +52,7 @@ var _ = Describe("SerialStep", func() {
 
 				seq := make(chan int, 3)
 
-				sequence := NewSerial([]steps.Step{
+				sequence := steps.NewSerial([]steps.Step{
 					&fakes.FakeStep{
 						PerformStub: func() error {
 							seq <- 1
@@ -91,7 +90,7 @@ var _ = Describe("SerialStep", func() {
 			step2 := &fakes.FakeStep{}
 			step3 := &fakes.FakeStep{}
 
-			sequence := NewSerial([]Step{step1, step2, step3})
+			sequence := steps.NewSerial([]steps.Step{step1, step2, step3})
 
 			sequence.Cancel()
 

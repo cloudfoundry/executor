@@ -20,7 +20,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	Uploader "github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader/fake_uploader"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
@@ -50,7 +50,7 @@ func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
 }
 
 var _ = Describe("UploadStep", func() {
-	var step Step
+	var step steps.Step
 	var result chan error
 
 	var uploadAction *models.UploadAction
@@ -112,7 +112,7 @@ var _ = Describe("UploadStep", func() {
 		container, err := gardenClient.Create(garden.ContainerSpec{})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		step = NewUpload(
+		step = steps.NewUpload(
 			container,
 			*uploadAction,
 			uploader,
@@ -205,7 +205,7 @@ var _ = Describe("UploadStep", func() {
 
 					step.Cancel()
 
-					Eventually(errs).Should(Receive(Equal(ErrCancelled)))
+					Eventually(errs).Should(Receive(Equal(steps.ErrCancelled)))
 				})
 			})
 
@@ -303,7 +303,7 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(NewEmittableError(errStream, ErrEstablishStream)))
+				Ω(err).Should(MatchError(steps.NewEmittableError(errStream, steps.ErrEstablishStream)))
 			})
 
 			It("logs the step", func() {
@@ -325,7 +325,7 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(NewEmittableError(errStream, ErrReadTar)))
+				Ω(err).Should(MatchError(steps.NewEmittableError(errStream, steps.ErrReadTar)))
 			})
 
 			It("logs the step", func() {
@@ -378,7 +378,7 @@ var _ = Describe("UploadStep", func() {
 				From: "./foo1.txt",
 			}
 
-			step1 := NewUpload(
+			step1 := steps.NewUpload(
 				container,
 				uploadAction1,
 				uploader,
@@ -394,7 +394,7 @@ var _ = Describe("UploadStep", func() {
 				From: "./foo2.txt",
 			}
 
-			step2 := NewUpload(
+			step2 := steps.NewUpload(
 				container,
 				uploadAction2,
 				uploader,
@@ -410,7 +410,7 @@ var _ = Describe("UploadStep", func() {
 				From: "./foo3.txt",
 			}
 
-			step3 := NewUpload(
+			step3 := steps.NewUpload(
 				container,
 				uploadAction3,
 				uploader,

@@ -8,14 +8,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 )
 
 var _ = Describe("ParallelStep", func() {
-	var step Step
-	var subStep1 Step
-	var subStep2 Step
+	var step steps.Step
+	var subStep1 steps.Step
+	var subStep2 steps.Step
 
 	var thingHappened chan bool
 	var cancelled chan bool
@@ -53,7 +53,7 @@ var _ = Describe("ParallelStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = NewParallel([]Step{subStep1, subStep2})
+		step = steps.NewParallel([]steps.Step{subStep1, subStep2})
 	})
 
 	It("performs its substeps in parallel", func(done Done) {

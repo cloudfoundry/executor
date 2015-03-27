@@ -1,7 +1,7 @@
 package executor_test
 
 import (
-	. "github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -9,11 +9,11 @@ import (
 
 var _ = Describe("Container", func() {
 	Describe("HasTags", func() {
-		var container Container
+		var container executor.Container
 
 		Context("when tags are nil", func() {
 			BeforeEach(func() {
-				container = Container{
+				container = executor.Container{
 					Tags: nil,
 				}
 			})
@@ -23,19 +23,19 @@ var _ = Describe("Container", func() {
 			})
 
 			It("returns false if requested tags are not nil", func() {
-				Ω(container.HasTags(Tags{"a": "b"})).Should(BeFalse())
+				Ω(container.HasTags(executor.Tags{"a": "b"})).Should(BeFalse())
 			})
 		})
 
 		Context("when tags are not nil", func() {
 			BeforeEach(func() {
-				container = Container{
-					Tags: Tags{"a": "b"},
+				container = executor.Container{
+					Tags: executor.Tags{"a": "b"},
 				}
 			})
 
 			It("returns true when found", func() {
-				Ω(container.HasTags(Tags{"a": "b"})).Should(BeTrue())
+				Ω(container.HasTags(executor.Tags{"a": "b"})).Should(BeTrue())
 			})
 
 			It("returns false when nil", func() {
@@ -43,7 +43,7 @@ var _ = Describe("Container", func() {
 			})
 
 			It("returns false when not found", func() {
-				Ω(container.HasTags(Tags{"a": "c"})).Should(BeFalse())
+				Ω(container.HasTags(executor.Tags{"a": "c"})).Should(BeFalse())
 			})
 		})
 	})
@@ -51,9 +51,9 @@ var _ = Describe("Container", func() {
 	Describe("UnmarshalJSON", func() {
 		var securityGroupRule models.SecurityGroupRule
 		var payload string
-		var container Container
+		var container executor.Container
 		BeforeEach(func() {
-			container = Container{}
+			container = executor.Container{}
 
 			payload = `{
 				    "setup":null,
