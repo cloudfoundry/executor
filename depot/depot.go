@@ -185,14 +185,14 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		logger.Debug("creating-container-in-garden")
+		logger.Info("creating-container-in-garden")
 		container, err = c.gardenStore.Create(logger, container)
 		if err != nil {
 			logger.Error("failed-creating-container-in-garden", err)
 			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
 			return
 		}
-		logger.Debug("succeeded-creating-container-in-garden")
+		logger.Info("succeeded-creating-container-in-garden")
 
 		if !c.allocationStore.Deallocate(logger, guid) {
 			logger.Info("container-deallocated-during-initialization")
@@ -205,12 +205,12 @@ func (c *client) RunContainer(guid string) error {
 			return
 		}
 
-		logger.Debug("running-container")
+		logger.Info("running-container-in-garden")
 		err = c.gardenStore.Run(logger, container)
 		if err != nil {
-			logger.Error("failed-running-container", err)
+			logger.Error("failed-running-container-in-garden", err)
 		}
-		logger.Debug("succeeded-running-container")
+		logger.Info("succeeded-running-container-in-garden")
 	}()
 
 	return nil
