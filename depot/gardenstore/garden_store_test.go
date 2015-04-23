@@ -1466,6 +1466,9 @@ var _ = Describe("GardenContainerStore", func() {
 
 			Ω(containers[0].State).Should(Equal(executor.StateCreated))
 			Ω(containers[1].State).Should(Equal(executor.StateCreated))
+
+			Ω(fakeGardenClient.BulkInfoCallCount()).Should(Equal(1))
+			Ω(fakeGardenClient.BulkInfoArgsForCall(0)).Should(ConsistOf("fake-handle-1", "fake-handle-2"))
 		})
 
 		It("only queries garden for the containers with the right owner", func() {

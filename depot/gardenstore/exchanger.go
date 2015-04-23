@@ -68,7 +68,7 @@ func NewExchanger(
 }
 
 func (exchanger exchanger) Infos(logger lager.Logger, gardenClient garden.Client, gardenContainers []garden.Container) ([]executor.Container, error) {
-	handles := make([]string, len(gardenContainers))
+	handles := make([]string, 0, len(gardenContainers))
 	for _, c := range gardenContainers {
 		handles = append(handles, c.Handle())
 	}
