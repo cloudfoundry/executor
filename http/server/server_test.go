@@ -1098,7 +1098,7 @@ var _ = Describe("Api", func() {
 				It("closes the server's source", func() {
 					response.Body.Close()
 
-					Eventually(fakeEventSource.CloseCallCount).Should(Equal(1))
+					Eventually(fakeEventSource.CloseCallCount).Should(BeNumerically(">=", 1))
 				})
 			})
 		})
