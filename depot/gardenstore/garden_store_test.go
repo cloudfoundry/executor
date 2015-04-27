@@ -2095,6 +2095,49 @@ var _ = Describe("GardenContainerStore", func() {
 		})
 	})
 
+	Describe("Stop", func() {
+		Context("when the garden container is not found in the local store", func() {
+			var stopErr error
+
+			JustBeforeEach(func() {
+				stopErr = gardenStore.Stop(logger, "an-unknown-guid")
+			})
+
+			It("tries to destroy the real garden container", func() {
+				Ω(fakeGardenClient.DestroyCallCount()).Should(Equal(1))
+				Ω(fakeGardenClient.DestroyArgsForCall(0)).Should(Equal("an-unknown-guid"))
+			})
+
+			It("fails with container not found", func() {
+				Ω(stopErr).Should(Equal(executor.ErrContainerNotFound))
+			})
+
+			Context("when destroying the garden container fails", func() {
+				Context("with a container not found", func() {
+					BeforeEach(func() {
+						fakeGardenClient.DestroyReturns(garden.ContainerNotFoundError{})
+					})
+
+					It("fails with executor's container not found error", func() {
+						Ω(stopErr).Should(Equal(executor.ErrContainerNotFound))
+					})
+				})
+
+				Context("with any other error", func() {
+					var expectedError = errors.New("woops")
+
+					BeforeEach(func() {
+						fakeGardenClient.DestroyReturns(expectedError)
+					})
+
+					It("fails with the original error", func() {
+						Ω(stopErr).Should(Equal(expectedError))
+					})
+				})
+			})
+		})
+	})
+
 	Describe("Metrics", func() {
 		var (
 			metrics    map[string]executor.ContainerMetrics

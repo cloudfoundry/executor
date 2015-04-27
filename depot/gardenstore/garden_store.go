@@ -168,6 +168,12 @@ func (store *GardenStore) Stop(logger lager.Logger, guid string) error {
 
 	process, found := store.freeStepProcess(logger, guid)
 	if !found {
+		logger.Info("container-not-found")
+
+		err := store.Destroy(logger, guid)
+		if err != nil {
+			return err
+		}
 		return executor.ErrContainerNotFound
 	}
 
