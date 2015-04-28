@@ -41,9 +41,9 @@ var _ = Describe("TryStep", func() {
 
 	It("performs its substep", func() {
 		err := step.Perform()
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
-		Ω(thingHappened).To(BeTrue())
+		Expect(thingHappened).To(BeTrue())
 	})
 
 	Context("when the substep fails", func() {
@@ -59,23 +59,23 @@ var _ = Describe("TryStep", func() {
 
 		It("succeeds anyway", func() {
 			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("logs the failure", func() {
 			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(logger).Should(gbytes.Say("failed"))
-			Ω(logger).Should(gbytes.Say("oh no!"))
+			Expect(logger).To(gbytes.Say("failed"))
+			Expect(logger).To(gbytes.Say("oh no!"))
 		})
 	})
 
 	Context("when told to cancel", func() {
 		It("passes the message along", func() {
-			Ω(cancelled).Should(BeFalse())
+			Expect(cancelled).To(BeFalse())
 			step.Cancel()
-			Ω(cancelled).Should(BeTrue())
+			Expect(cancelled).To(BeTrue())
 		})
 	})
 })

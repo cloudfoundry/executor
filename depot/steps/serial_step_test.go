@@ -94,9 +94,9 @@ var _ = Describe("SerialStep", func() {
 
 			sequence.Cancel()
 
-			Ω(step1.CancelCallCount()).Should(Equal(1))
-			Ω(step2.CancelCallCount()).Should(Equal(1))
-			Ω(step3.CancelCallCount()).Should(Equal(1))
+			Expect(step1.CancelCallCount()).To(Equal(1))
+			Expect(step2.CancelCallCount()).To(Equal(1))
+			Expect(step3.CancelCallCount()).To(Equal(1))
 		})
 	})
 })

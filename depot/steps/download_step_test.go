@@ -64,7 +64,7 @@ var _ = Describe("DownloadAction", func() {
 			container, err := gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			step = steps.NewDownload(
 				container,
@@ -81,35 +81,36 @@ var _ = Describe("DownloadAction", func() {
 		var tarReader *tar.Reader
 
 		It("downloads via the cache with a tar transformer", func() {
-			Ω(cache.FetchCallCount()).Should(Equal(1))
+			Expect(cache.FetchCallCount()).To(Equal(1))
 
 			url, cacheKey, transformer, cancelChan := cache.FetchArgsForCall(0)
-			Ω(url.Host).Should(ContainSubstring("mr_jones"))
-			Ω(cacheKey).Should(Equal("the-cache-key"))
-			Ω(cancelChan).ShouldNot(BeNil())
+			Expect(url.Host).To(ContainSubstring("mr_jones"))
+			Expect(cacheKey).To(Equal("the-cache-key"))
+			Expect(cancelChan).NotTo(BeNil())
 
 			tVal := reflect.ValueOf(transformer)
 			expectedVal := reflect.ValueOf(cacheddownloader.TarTransform)
 
-			Ω(tVal.Pointer()).Should(Equal(expectedVal.Pointer()))
+			Expect(tVal.Pointer()).To(Equal(expectedVal.Pointer()))
 		})
 
 		It("logs the step", func() {
-			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+			Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 				"test.download-step.fetch-starting",
 				"test.download-step.fetch-complete",
 				"test.download-step.stream-in-starting",
 				"test.download-step.stream-in-complete",
 			}))
+
 		})
 
 		Context("when an artifact is not specified", func() {
 			It("does not stream the download information", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-				Ω(stdout.Contents()).Should(BeEmpty())
+				Expect(stdout.Contents()).To(BeEmpty())
 			})
 		})
 
@@ -125,10 +126,10 @@ var _ = Describe("DownloadAction", func() {
 					})
 
 					It("streams unknown when the Fetch does not return a File", func() {
-						Ω(stepErr).ShouldNot(HaveOccurred())
+						Expect(stepErr).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact\n"))
+						Expect(stdout.Contents()).To(ContainSubstring("Downloaded artifact\n"))
 					})
 				})
 
@@ -138,10 +139,10 @@ var _ = Describe("DownloadAction", func() {
 					})
 
 					It("streams the size when the Fetch returns a File", func() {
-						Ω(stepErr).ShouldNot(HaveOccurred())
+						Expect(stepErr).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-						Ω(stdout.Contents()).Should(ContainSubstring("Downloaded artifact (42B)"))
+						Expect(stdout.Contents()).To(ContainSubstring("Downloaded artifact (42B)"))
 					})
 				})
 			})
@@ -153,14 +154,15 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(stepErr).Should(HaveOccurred())
+				Expect(stepErr).To(HaveOccurred())
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.download-step.fetch-starting",
 					"test.download-step.parse-request-uri-error",
 				}))
+
 			})
 		})
 
@@ -178,23 +180,23 @@ var _ = Describe("DownloadAction", func() {
 					tarReader = tar.NewReader(buffer)
 
 					gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
-						Ω(dest).Should(Equal("/tmp/Antarctica"))
+						Expect(dest).To(Equal("/tmp/Antarctica"))
 
 						_, err := io.Copy(buffer, tarStream)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						return nil
 					}
 				})
 
 				It("does not return an error", func() {
-					Ω(stepErr).ShouldNot(HaveOccurred())
+					Expect(stepErr).NotTo(HaveOccurred())
 				})
 
 				It("places the file in the container under the destination", func() {
 					header, err := tarReader.Next()
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(header.Name).Should(Equal("file1"))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(header.Name).To(Equal("file1"))
 				})
 			})
 
@@ -206,16 +208,17 @@ var _ = Describe("DownloadAction", func() {
 				})
 
 				It("returns an error", func() {
-					Ω(stepErr.Error()).Should(ContainSubstring("Copying into the container failed"))
+					Expect(stepErr.Error()).To(ContainSubstring("Copying into the container failed"))
 				})
 
 				It("logs the step", func() {
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.download-step.fetch-starting",
 						"test.download-step.fetch-complete",
 						"test.download-step.stream-in-starting",
 						"test.download-step.stream-in-failed",
 					}))
+
 				})
 			})
 		})
@@ -226,14 +229,15 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(stepErr.Error()).Should(ContainSubstring("Downloading failed"))
+				Expect(stepErr.Error()).To(ContainSubstring("Downloading failed"))
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.download-step.fetch-starting",
 					"test.download-step.fetch-failed",
 				}))
+
 			})
 		})
 	})
@@ -247,7 +251,7 @@ var _ = Describe("DownloadAction", func() {
 			container, err := gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			step = steps.NewDownload(
 				container,
@@ -273,7 +277,7 @@ var _ = Describe("DownloadAction", func() {
 			It("does not fetch the download artifact", func() {
 				step.Cancel()
 				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
-				Ω(cache.FetchCallCount()).Should(Equal(0))
+				Expect(cache.FetchCallCount()).To(Equal(0))
 			})
 		})
 
@@ -284,13 +288,13 @@ var _ = Describe("DownloadAction", func() {
 				calledChan = make(chan struct{})
 
 				cache.FetchStub = func(u *url.URL, key string, t cacheddownloader.CacheTransformer, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
-					Ω(cancelCh).ShouldNot(BeNil())
-					Ω(cancelCh).ShouldNot(BeClosed())
+					Expect(cancelCh).NotTo(BeNil())
+					Expect(cancelCh).NotTo(BeClosed())
 
 					close(calledChan)
 					<-cancelCh
 
-					Ω(cancelCh).Should(BeClosed())
+					Expect(cancelCh).To(BeClosed())
 
 					return nil, 0, errors.New("some error indicating a cancel")
 				}
@@ -353,7 +357,7 @@ var _ = Describe("DownloadAction", func() {
 			container, err = gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("allows only N concurrent downloads", func() {
@@ -414,19 +418,19 @@ var _ = Describe("DownloadAction", func() {
 				defer GinkgoRecover()
 
 				err := step1.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 			go func() {
 				defer GinkgoRecover()
 
 				err := step2.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 			go func() {
 				defer GinkgoRecover()
 
 				err := step3.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			Eventually(fetchCh).Should(Receive())
@@ -444,7 +448,7 @@ var _ = Describe("DownloadAction", func() {
 
 func createTempTar() *os.File {
 	tarFile, err := ioutil.TempFile("", "some-tar")
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	archiveHelper.CreateTarArchive(
 		tarFile.Name(),
@@ -452,7 +456,7 @@ func createTempTar() *os.File {
 	)
 
 	_, err = tarFile.Seek(0, 0)
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	return tarFile
 }

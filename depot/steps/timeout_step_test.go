@@ -59,12 +59,12 @@ var _ = Describe("TimeoutStep", func() {
 				})
 
 				It("performs the substep", func() {
-					Ω(substepFinishedChan).Should(BeClosed())
+					Expect(substepFinishedChan).To(BeClosed())
 				})
 
 				It("returns this error", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(Equal(substepPerformError))
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(substepPerformError))
 				})
 			})
 
@@ -74,11 +74,11 @@ var _ = Describe("TimeoutStep", func() {
 				})
 
 				It("performs the substep", func() {
-					Ω(substepFinishedChan).Should(BeClosed())
+					Expect(substepFinishedChan).To(BeClosed())
 				})
 
 				It("does not error", func() {
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 			})
 		})
@@ -90,11 +90,11 @@ var _ = Describe("TimeoutStep", func() {
 			})
 
 			It("cancels the substep", func() {
-				Ω(substep.CancelCallCount()).Should(Equal(1))
+				Expect(substep.CancelCallCount()).To(Equal(1))
 			})
 
 			It("waits until the substep completes performing", func() {
-				Ω(substepFinishedChan).Should(BeClosed())
+				Expect(substepFinishedChan).To(BeClosed())
 			})
 
 			It("logs the timeout", func() {
@@ -109,8 +109,8 @@ var _ = Describe("TimeoutStep", func() {
 				})
 
 				It("returns an emittable error", func() {
-					Ω(err).Should(HaveOccurred())
-					Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
 				})
 			})
 
@@ -121,10 +121,10 @@ var _ = Describe("TimeoutStep", func() {
 					})
 
 					It("returns a timeout error which does not include the error returned by the substep", func() {
-						Ω(err).Should(HaveOccurred())
-						Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
-						Ω(err.Error()).ShouldNot(ContainSubstring("some error"))
-						Ω(err.(*steps.EmittableError).WrappedError()).Should(Equal(substepPerformError))
+						Expect(err).To(HaveOccurred())
+						Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
+						Expect(err.Error()).NotTo(ContainSubstring("some error"))
+						Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepPerformError))
 					})
 				})
 
@@ -134,10 +134,10 @@ var _ = Describe("TimeoutStep", func() {
 					})
 
 					It("returns a timeout error which includes the error returned by the substep", func() {
-						Ω(err).Should(HaveOccurred())
-						Ω(err).Should(BeAssignableToTypeOf(&steps.EmittableError{}))
-						Ω(err.Error()).Should(ContainSubstring("some error"))
-						Ω(err.(*steps.EmittableError).WrappedError()).Should(Equal(substepPerformError))
+						Expect(err).To(HaveOccurred())
+						Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
+						Expect(err.Error()).To(ContainSubstring("some error"))
+						Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepPerformError))
 					})
 				})
 			})
@@ -149,7 +149,7 @@ var _ = Describe("TimeoutStep", func() {
 			step := steps.NewTimeout(substep, timeout, logger)
 			step.Cancel()
 
-			Ω(substep.CancelCallCount()).Should(Equal(1))
+			Expect(substep.CancelCallCount()).To(Equal(1))
 		})
 	})
 })

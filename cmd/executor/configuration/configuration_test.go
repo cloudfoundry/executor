@@ -34,7 +34,7 @@ var _ = Describe("configuration", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(err).Should(Equal(errors.New("uh oh")))
+				Expect(err).To(Equal(errors.New("uh oh")))
 			})
 		})
 
@@ -59,11 +59,11 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("does not return an error", func() {
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 					})
 
 					It("uses the garden server's memory capacity", func() {
-						Ω(capacity.MemoryMB).Should(Equal(3))
+						Expect(capacity.MemoryMB).To(Equal(3))
 					})
 				})
 
@@ -73,11 +73,11 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("does not return an error", func() {
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 					})
 
 					It("uses that number", func() {
-						Ω(capacity.MemoryMB).Should(Equal(2))
+						Expect(capacity.MemoryMB).To(Equal(2))
 					})
 				})
 
@@ -87,7 +87,7 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("returns an error", func() {
-						Ω(err).Should(Equal(configuration.ErrMemoryFlagInvalid))
+						Expect(err).To(Equal(configuration.ErrMemoryFlagInvalid))
 					})
 				})
 
@@ -97,7 +97,7 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("returns an error", func() {
-						Ω(err).Should(Equal(configuration.ErrMemoryFlagInvalid))
+						Expect(err).To(Equal(configuration.ErrMemoryFlagInvalid))
 					})
 				})
 			})
@@ -109,11 +109,11 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("does not return an error", func() {
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 					})
 
 					It("uses the garden server's memory capacity", func() {
-						Ω(capacity.DiskMB).Should(Equal(4))
+						Expect(capacity.DiskMB).To(Equal(4))
 					})
 				})
 
@@ -123,11 +123,11 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("does not return an error", func() {
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 					})
 
 					It("uses that number", func() {
-						Ω(capacity.DiskMB).Should(Equal(2))
+						Expect(capacity.DiskMB).To(Equal(2))
 					})
 				})
 
@@ -137,7 +137,7 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("returns an error", func() {
-						Ω(err).Should(Equal(configuration.ErrDiskFlagInvalid))
+						Expect(err).To(Equal(configuration.ErrDiskFlagInvalid))
 					})
 				})
 
@@ -147,14 +147,14 @@ var _ = Describe("configuration", func() {
 					})
 
 					It("returns an error", func() {
-						Ω(err).Should(Equal(configuration.ErrDiskFlagInvalid))
+						Expect(err).To(Equal(configuration.ErrDiskFlagInvalid))
 					})
 				})
 			})
 
 			Describe("Containers Limit", func() {
 				It("uses the garden server's max containers", func() {
-					Ω(capacity.Containers).Should(Equal(5))
+					Expect(capacity.Containers).To(Equal(5))
 				})
 			})
 		})

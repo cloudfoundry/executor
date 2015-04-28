@@ -82,7 +82,7 @@ var _ = Describe("RunAction", func() {
 		gardenClient.Connection.CreateReturns(handle, nil)
 
 		container, err := gardenClient.Create(garden.ContainerSpec{})
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		step = steps.NewRun(
 			container,
@@ -115,14 +115,15 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("errors when trying to execute a privileged run action", func() {
-					Ω(stepErr).Should(HaveOccurred())
+					Expect(stepErr).To(HaveOccurred())
 				})
 
 				It("logs the step", func() {
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.run-step.running",
 						"test.run-step.privileged-action-denied",
 					}))
+
 				})
 			})
 
@@ -132,12 +133,12 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("does not error when trying to execute a privileged run action", func() {
-					Ω(stepErr).ShouldNot(HaveOccurred())
+					Expect(stepErr).NotTo(HaveOccurred())
 				})
 
 				It("creates a privileged container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Ω(spec.Privileged).Should(BeTrue())
+					Expect(spec.Privileged).To(BeTrue())
 				})
 			})
 		})
@@ -148,28 +149,29 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("does not return an error", func() {
-				Ω(stepErr).ShouldNot(HaveOccurred())
+				Expect(stepErr).NotTo(HaveOccurred())
 			})
 
 			It("executes the command in the passed-in container", func() {
 				ranHandle, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-				Ω(ranHandle).Should(Equal(handle))
-				Ω(spec.Path).Should(Equal("sudo"))
-				Ω(spec.Args).Should(Equal([]string{"reboot"}))
-				Ω(spec.Dir).Should(Equal("/some-dir"))
-				Ω(*spec.Limits.Nofile).Should(BeNumerically("==", fileDescriptorLimit))
-				Ω(spec.Env).Should(ContainElement("A=1"))
-				Ω(spec.Env).Should(ContainElement("B=2"))
-				Ω(spec.Privileged).Should(BeFalse())
+				Expect(ranHandle).To(Equal(handle))
+				Expect(spec.Path).To(Equal("sudo"))
+				Expect(spec.Args).To(Equal([]string{"reboot"}))
+				Expect(spec.Dir).To(Equal("/some-dir"))
+				Expect(*spec.Limits.Nofile).To(BeNumerically("==", fileDescriptorLimit))
+				Expect(spec.Env).To(ContainElement("A=1"))
+				Expect(spec.Env).To(ContainElement("B=2"))
+				Expect(spec.Privileged).To(BeFalse())
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.successful-process-create",
 					"test.run-step.process-exit",
 				}))
+
 			})
 		})
 
@@ -182,16 +184,17 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(stepErr).Should(MatchError(waitErr))
+				Expect(stepErr).To(MatchError(waitErr))
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.successful-process-create",
 					"test.run-step.running-error",
 				}))
+
 			})
 		})
 
@@ -203,7 +206,7 @@ var _ = Describe("RunAction", func() {
 
 				It("sets CF_INSTANCE_IP on the container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Ω(spec.Env).Should(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_IP=external-ip"))
 				})
 
 				Context("when the container has port mappings configured", func() {
@@ -216,9 +219,9 @@ var _ = Describe("RunAction", func() {
 
 					It("sets CF_INSTANCE_* networking env vars", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT=1"))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS=1:2,3:4"))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT=1"))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS=1:2,3:4"))
 					})
 				})
 
@@ -229,9 +232,9 @@ var _ = Describe("RunAction", func() {
 
 					It("sets all port-related env vars to the empty string", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORT="))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_ADDR="))
-						Ω(spec.Env).Should(ContainElement("CF_INSTANCE_PORTS="))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT="))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR="))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS="))
 					})
 				})
 			})
@@ -243,7 +246,7 @@ var _ = Describe("RunAction", func() {
 
 				It("does not set CF_INSTANCE_IP on the container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Ω(spec.Env).ShouldNot(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Expect(spec.Env).NotTo(ContainElement("CF_INSTANCE_IP=external-ip"))
 				})
 			})
 		})
@@ -256,7 +259,7 @@ var _ = Describe("RunAction", func() {
 
 			It("does not enforce it on the process", func() {
 				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-				Ω(spec.Limits.Nofile).Should(BeNil())
+				Expect(spec.Limits.Nofile).To(BeNil())
 			})
 		})
 
@@ -266,7 +269,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("should return an emittable error with the exit code", func() {
-				Ω(stepErr).Should(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
 			})
 		})
 
@@ -278,15 +281,16 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns the error", func() {
-				Ω(stepErr).Should(Equal(disaster))
+				Expect(stepErr).To(Equal(disaster))
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.failed-creating-process",
 				}))
+
 			})
 		})
 
@@ -303,7 +307,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Ω(stepErr).Should(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
 			})
 		})
 
@@ -314,13 +318,14 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("logs the step", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.successful-process-create",
 					"test.run-step.process-exit",
 					"test.run-step.failed-to-get-info",
 				}))
+
 			})
 		})
 
@@ -338,26 +343,26 @@ var _ = Describe("RunAction", func() {
 					_, _, io := gardenClient.Connection.RunArgsForCall(0)
 
 					_, err := io.Stdout.Write([]byte("hi out"))
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					_, err = io.Stderr.Write([]byte("hi err"))
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					return 34, nil
 				}
 			})
 
 			It("emits the output chunks as they come in", func() {
-				Ω(stdoutBuffer).Should(gbytes.Say("hi out"))
-				Ω(stderrBuffer).Should(gbytes.Say("hi err"))
+				Expect(stdoutBuffer).To(gbytes.Say("hi out"))
+				Expect(stderrBuffer).To(gbytes.Say("hi err"))
 			})
 
 			It("should flush the output when the code exits", func() {
-				Ω(fakeStreamer.FlushCallCount()).Should(Equal(1))
+				Expect(fakeStreamer.FlushCallCount()).To(Equal(1))
 			})
 
 			It("emits the exit status code", func() {
-				Ω(stdoutBuffer).Should(gbytes.Say("Exit status 34"))
+				Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
 			})
 		})
 	})
@@ -403,7 +408,7 @@ var _ = Describe("RunAction", func() {
 
 			It("sends an interrupt to the process", func() {
 				Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
-				Ω(spawnedProcess.SignalArgsForCall(0)).Should(Equal(garden.SignalTerminate))
+				Expect(spawnedProcess.SignalArgsForCall(0)).To(Equal(garden.SignalTerminate))
 			})
 
 			Context("when the process exits", func() {
@@ -412,7 +417,7 @@ var _ = Describe("RunAction", func() {
 
 					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
 
-					Ω(spawnedProcess.SignalCallCount()).Should(Equal(1))
+					Expect(spawnedProcess.SignalCallCount()).To(Equal(1))
 				})
 			})
 
@@ -423,7 +428,7 @@ var _ = Describe("RunAction", func() {
 					fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
-					Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+					Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
 
 					waitExited <- (128 + 9)
 
@@ -437,7 +442,7 @@ var _ = Describe("RunAction", func() {
 						fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
-						Ω(spawnedProcess.SignalArgsForCall(1)).Should(Equal(garden.SignalKill))
+						Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
 
 						fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
@@ -447,9 +452,10 @@ var _ = Describe("RunAction", func() {
 
 						Eventually(performErr).Should(Receive(Equal(steps.ErrExitTimeout)))
 
-						Ω(logger.TestSink.LogMessages()).Should(ContainElement(
+						Expect(logger.TestSink.LogMessages()).To(ContainElement(
 							ContainSubstring("process-did-not-exit"),
 						))
+
 					})
 				})
 			})

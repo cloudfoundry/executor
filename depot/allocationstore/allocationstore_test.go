@@ -44,23 +44,23 @@ var _ = Describe("Allocation Store", func() {
 				}
 
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("is included in the list", func() {
 				allocations := allocationStore.List()
-				Ω(allocations).Should(HaveLen(1))
-				Ω(allocations[0].Guid).Should(Equal(container.Guid))
+				Expect(allocations).To(HaveLen(1))
+				Expect(allocations[0].Guid).To(Equal(container.Guid))
 			})
 
 			Context("and then deallocated", func() {
 				BeforeEach(func() {
 					deallocated := allocationStore.Deallocate(logger, container.Guid)
-					Ω(deallocated).Should(BeTrue())
+					Expect(deallocated).To(BeTrue())
 				})
 
 				It("is no longer in the list", func() {
-					Ω(allocationStore.List()).Should(BeEmpty())
+					Expect(allocationStore.List()).To(BeEmpty())
 				})
 			})
 		})
@@ -72,16 +72,16 @@ var _ = Describe("Allocation Store", func() {
 					MemoryMB: 512,
 					DiskMB:   512,
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				_, err = allocationStore.Allocate(logger, executor.Container{
 					Guid:     "banana-2",
 					MemoryMB: 512,
 					DiskMB:   512,
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(allocationStore.List()).Should(HaveLen(2))
+				Expect(allocationStore.List()).To(HaveLen(2))
 			})
 		})
 	})
@@ -99,27 +99,27 @@ var _ = Describe("Allocation Store", func() {
 		Context("when the guid is available", func() {
 			It("it is marked as RESERVED", func() {
 				allocation, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(allocation.Guid).Should(Equal(container.Guid))
-				Ω(allocation.State).Should(Equal(executor.StateReserved))
-				Ω(allocation.AllocatedAt).Should(Equal(currentTime.UnixNano()))
+				Expect(allocation.Guid).To(Equal(container.Guid))
+				Expect(allocation.State).To(Equal(executor.StateReserved))
+				Expect(allocation.AllocatedAt).To(Equal(currentTime.UnixNano()))
 
-				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(1))
-				Ω(fakeEventEmitter.EmitArgsForCall(0)).Should(Equal(executor.NewContainerReservedEvent(allocation)))
+				Expect(fakeEventEmitter.EmitCallCount()).To(Equal(1))
+				Expect(fakeEventEmitter.EmitArgsForCall(0)).To(Equal(executor.NewContainerReservedEvent(allocation)))
 			})
 		})
 
 		Context("when the guid is not available", func() {
 			BeforeEach(func() {
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("errors and does not store the duplicate", func() {
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).Should(HaveOccurred())
-				Ω(allocationStore.List()).Should(HaveLen(1))
+				Expect(err).To(HaveOccurred())
+				Expect(allocationStore.List()).To(HaveLen(1))
 			})
 		})
 	})
@@ -133,27 +133,27 @@ var _ = Describe("Allocation Store", func() {
 				DiskMB:   512,
 			}
 			_, err := allocationStore.Allocate(logger, container)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("when the guid is available", func() {
 			It("it is marked as INITIALIZING", func() {
 				err := allocationStore.Initialize(logger, container.Guid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				allocation, err := allocationStore.Lookup(container.Guid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(allocation.Guid).Should(Equal(container.Guid))
-				Ω(allocation.State).Should(Equal(executor.StateInitializing))
+				Expect(allocation.Guid).To(Equal(container.Guid))
+				Expect(allocation.State).To(Equal(executor.StateInitializing))
 			})
 		})
 
 		Context("when the guid is not available", func() {
 			It("errors", func() {
 				err := allocationStore.Initialize(logger, "doesnt-exist")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})
@@ -167,22 +167,22 @@ var _ = Describe("Allocation Store", func() {
 				DiskMB:   512,
 			}
 			_, err := allocationStore.Allocate(logger, container)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("when the guid is available", func() {
 			It("it is returns the container", func() {
 				allocation, err := allocationStore.Lookup(container.Guid)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(allocation.Guid).Should(Equal(container.Guid))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocation.Guid).To(Equal(container.Guid))
 			})
 		})
 
 		Context("when the guid is not available", func() {
 			It("errors", func() {
 				_, err := allocationStore.Lookup("doesnt-exist")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})
@@ -200,63 +200,63 @@ var _ = Describe("Allocation Store", func() {
 		Context("when the container is not in the allocation store", func() {
 			It("errors", func() {
 				_, err := allocationStore.Fail(logger, container.Guid, "failure-response")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 
-				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(0))
+				Expect(fakeEventEmitter.EmitCallCount()).To(Equal(0))
 			})
 		})
 
 		Context("when the container is in the allocation store", func() {
 			BeforeEach(func() {
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("it is marked as COMPLETED with failure reason", func() {
 				emitCallCount := fakeEventEmitter.EmitCallCount()
 				allocation, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(allocation.Guid).Should(Equal(container.Guid))
-				Ω(allocation.State).Should(Equal(executor.StateCompleted))
-				Ω(allocation.RunResult).Should(Equal(executor.ContainerRunResult{
+				Expect(allocation.Guid).To(Equal(container.Guid))
+				Expect(allocation.State).To(Equal(executor.StateCompleted))
+				Expect(allocation.RunResult).To(Equal(executor.ContainerRunResult{
 					Failed:        true,
 					FailureReason: "failure-reason",
 				}))
 
-				Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(emitCallCount + 1))
-				Ω(fakeEventEmitter.EmitArgsForCall(emitCallCount)).Should(Equal(executor.NewContainerCompleteEvent(allocation)))
+				Expect(fakeEventEmitter.EmitCallCount()).To(Equal(emitCallCount + 1))
+				Expect(fakeEventEmitter.EmitArgsForCall(emitCallCount)).To(Equal(executor.NewContainerCompleteEvent(allocation)))
 			})
 
 			It("remains in the allocation store as reserved", func() {
 				c, err := allocationStore.Lookup(container.Guid)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(c.State).Should(Equal(executor.StateReserved))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.State).To(Equal(executor.StateReserved))
 			})
 
 			Context("when the container is already in the completed state", func() {
 				BeforeEach(func() {
 					err := allocationStore.Initialize(logger, container.Guid)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					_, err = allocationStore.Fail(logger, container.Guid, "force-completed")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("remains in the allocation store as completed", func() {
 					c, err := allocationStore.Lookup(container.Guid)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(c.State).Should(Equal(executor.StateCompleted))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(c.State).To(Equal(executor.StateCompleted))
 				})
 
 				It("fails with an invalid transition error", func() {
 					expectedEmitCount := fakeEventEmitter.EmitCallCount()
 
 					_, err := allocationStore.Fail(logger, container.Guid, "already-completed")
-					Ω(err).Should(Equal(executor.ErrInvalidTransition))
+					Expect(err).To(Equal(executor.ErrInvalidTransition))
 
-					Ω(fakeEventEmitter.EmitCallCount()).Should(Equal(expectedEmitCount))
+					Expect(fakeEventEmitter.EmitCallCount()).To(Equal(expectedEmitCount))
 				})
 			})
 		})
@@ -276,23 +276,23 @@ var _ = Describe("Allocation Store", func() {
 		Context("when the guid is in the list", func() {
 			BeforeEach(func() {
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("it is removed from the list, and returns true", func() {
 				count := len(allocationStore.List())
 
 				deallocated := allocationStore.Deallocate(logger, container.Guid)
-				Ω(deallocated).Should(BeTrue())
+				Expect(deallocated).To(BeTrue())
 
-				Ω(allocationStore.List()).Should(HaveLen(count - 1))
+				Expect(allocationStore.List()).To(HaveLen(count - 1))
 			})
 		})
 
 		Context("when the guid is not in the list", func() {
 			It("returns false", func() {
 				deallocated := allocationStore.Deallocate(logger, "doesnt-exist")
-				Ω(deallocated).Should(BeFalse())
+				Expect(deallocated).To(BeFalse())
 			})
 		})
 	})
@@ -309,17 +309,17 @@ var _ = Describe("Allocation Store", func() {
 				MemoryMB: 512,
 				DiskMB:   512,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			_, err = allocationStore.Allocate(logger, executor.Container{
 				Guid:     "eventually-initialized",
 				MemoryMB: 512,
 				DiskMB:   512,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			err = allocationStore.Initialize(logger, "eventually-initialized")
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			expirationTime = 20 * time.Millisecond
 
@@ -348,7 +348,7 @@ var _ = Describe("Allocation Store", func() {
 
 			It("it removes only RESERVED containers from the list", func() {
 				Eventually(allocationStore.List).Should(HaveLen(1))
-				Ω(allocationStore.List()[0].Guid).Should(Equal("eventually-initialized"))
+				Expect(allocationStore.List()[0].Guid).To(Equal("eventually-initialized"))
 			})
 		})
 	})
@@ -395,24 +395,24 @@ func (expectation transitionExpectation) driveFromState(allocationStore *allocat
 
 	case "reserved":
 		_, err := allocationStore.Allocate(logger, container)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 	case "initializing":
 		_, err := allocationStore.Allocate(logger, container)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		err = allocationStore.Initialize(logger, container.Guid)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 	case "failed":
 		_, err := allocationStore.Allocate(logger, container)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		err = allocationStore.Initialize(logger, container.Guid)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		_, err = allocationStore.Fail(logger, container.Guid, "failure-reason")
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 	default:
 		Fail("unknown 'from' state: " + expectation.from)
@@ -441,9 +441,9 @@ func (expectation transitionExpectation) transitionToState(allocationStore *allo
 func (expectation transitionExpectation) checkErrorResult(err error) {
 	switch expectation.assertError {
 	case "occurs":
-		Ω(err).Should(HaveOccurred())
+		Expect(err).To(HaveOccurred())
 	case "does not occur":
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 	default:
 		Fail("unknown 'assertErr' expectation: " + expectation.assertError)
 	}

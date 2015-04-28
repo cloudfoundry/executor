@@ -78,8 +78,8 @@ var _ = Describe("Client", func() {
 			It("returns a container", func() {
 				response, err := client.AllocateContainers(validRequest)
 
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(validResponse))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal(validResponse))
 			})
 		})
 
@@ -93,7 +93,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.AllocateContainers(validRequest)
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -107,7 +107,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.AllocateContainers(validRequest)
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
@@ -146,9 +146,9 @@ var _ = Describe("Client", func() {
 
 			It("returns a container", func() {
 				response, err := client.GetContainer(containerGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(response).Should(Equal(executor.Container{
+				Expect(response).To(Equal(executor.Container{
 					Guid: "guid-123",
 
 					MemoryMB:  64,
@@ -173,6 +173,7 @@ var _ = Describe("Client", func() {
 						Index: 0,
 					},
 				}))
+
 			})
 		})
 
@@ -188,7 +189,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetContainer(containerGuid)
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
@@ -202,7 +203,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetContainer(containerGuid)
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
@@ -218,7 +219,7 @@ var _ = Describe("Client", func() {
 
 			It("does not return an error", func() {
 				err := client.RunContainer("guid-123")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -234,7 +235,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				err := client.RunContainer("guid-123")
-				Ω(err).Should(Equal(executor.ErrStepsInvalid))
+				Expect(err).To(Equal(executor.ErrStepsInvalid))
 			})
 		})
 	})
@@ -250,7 +251,7 @@ var _ = Describe("Client", func() {
 
 			It("does not return an error", func() {
 				err := client.DeleteContainer("guid-123")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -264,7 +265,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				err := client.DeleteContainer("guid-123")
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
@@ -289,8 +290,8 @@ var _ = Describe("Client", func() {
 
 			It("should returns the list of containers sent back by the server", func() {
 				response, err := client.ListContainers(nil)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(listResponse))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal(listResponse))
 			})
 		})
 
@@ -299,7 +300,7 @@ var _ = Describe("Client", func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/containers"),
 					func(w http.ResponseWriter, r *http.Request) {
-						Ω(r.URL.Query()["tag"]).Should(ConsistOf([]string{"a:b", "c:d"}))
+						Expect(r.URL.Query()["tag"]).To(ConsistOf([]string{"a:b", "c:d"}))
 					},
 					ghttp.RespondWithJSONEncoded(http.StatusOK, listResponse)),
 				)
@@ -310,8 +311,8 @@ var _ = Describe("Client", func() {
 					"a": "b",
 					"c": "d",
 				})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(listResponse))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal(listResponse))
 			})
 		})
 	})
@@ -334,8 +335,8 @@ var _ = Describe("Client", func() {
 
 		It("Should returns the total resources", func() {
 			response, err := client.TotalResources()
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(response).Should(Equal(totalResourcesResponse))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal(totalResourcesResponse))
 		})
 	})
 
@@ -357,8 +358,8 @@ var _ = Describe("Client", func() {
 
 		It("Should returns the remaining resources", func() {
 			response, err := client.RemainingResources()
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(response).Should(Equal(remainingResourcesResponse))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(response).To(Equal(remainingResourcesResponse))
 		})
 	})
 
@@ -382,8 +383,8 @@ var _ = Describe("Client", func() {
 
 			It("does not return an error", func() {
 				stream, err := client.GetFiles("guid-123", "path")
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(stream).ShouldNot(BeNil())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream).NotTo(BeNil())
 				stream.Close()
 			})
 		})
@@ -397,8 +398,8 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				stream, err := client.GetFiles("guid-123", "path")
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				Ω(stream).Should(BeNil())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
+				Expect(stream).To(BeNil())
 			})
 		})
 	})
@@ -423,13 +424,14 @@ var _ = Describe("Client", func() {
 
 			It("returns the container metrics", func() {
 				response, err := client.GetMetrics(containerGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(response).Should(Equal(executor.ContainerMetrics{
+				Expect(response).To(Equal(executor.ContainerMetrics{
 					MemoryUsageInBytes: 123,
 					DiskUsageInBytes:   456,
 					TimeSpentInCPU:     789,
 				}))
+
 			})
 		})
 
@@ -445,7 +447,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetMetrics(containerGuid)
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
@@ -459,7 +461,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetMetrics(containerGuid)
-				Ω(err).Should(BeAssignableToTypeOf(&json.SyntaxError{}))
+				Expect(err).To(BeAssignableToTypeOf(&json.SyntaxError{}))
 			})
 		})
 	})
@@ -498,8 +500,8 @@ var _ = Describe("Client", func() {
 
 			It("should returns the metrics of all containers", func() {
 				response, err := client.GetAllMetrics(nil)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(allMetricsResponse))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal(allMetricsResponse))
 			})
 		})
 
@@ -508,7 +510,7 @@ var _ = Describe("Client", func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/metrics"),
 					func(w http.ResponseWriter, r *http.Request) {
-						Ω(r.URL.Query()["tag"]).Should(ConsistOf([]string{"a:b", "c:d"}))
+						Expect(r.URL.Query()["tag"]).To(ConsistOf([]string{"a:b", "c:d"}))
 					},
 					ghttp.RespondWithJSONEncoded(http.StatusOK, allMetricsResponse)),
 				)
@@ -519,8 +521,8 @@ var _ = Describe("Client", func() {
 					"a": "b",
 					"c": "d",
 				})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(response).Should(Equal(allMetricsResponse))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal(allMetricsResponse))
 			})
 		})
 
@@ -537,7 +539,7 @@ var _ = Describe("Client", func() {
 
 				It("returns an error", func() {
 					_, err := client.GetAllMetrics(nil)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
+					Expect(err).To(Equal(executor.ErrContainerNotFound))
 				})
 			})
 
@@ -553,7 +555,7 @@ var _ = Describe("Client", func() {
 
 				It("returns an error", func() {
 					_, err := client.GetAllMetrics(nil)
-					Ω(err).Should(Equal(executor.ErrContainerNotFound))
+					Expect(err).To(Equal(executor.ErrContainerNotFound))
 				})
 			})
 		})
@@ -568,7 +570,7 @@ var _ = Describe("Client", func() {
 
 			It("returns an error", func() {
 				_, err := client.GetAllMetrics(nil)
-				Ω(err).Should(BeAssignableToTypeOf(&json.SyntaxError{}))
+				Expect(err).To(BeAssignableToTypeOf(&json.SyntaxError{}))
 			})
 		})
 	})
@@ -584,7 +586,7 @@ var _ = Describe("Client", func() {
 
 			It("should succeed", func() {
 				err := client.Ping()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -598,7 +600,7 @@ var _ = Describe("Client", func() {
 
 			It("should fail", func() {
 				err := client.Ping()
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -614,8 +616,8 @@ var _ = Describe("Client", func() {
 
 			It("should fail and at least propagate the original name", func() {
 				err := client.Ping()
-				Ω(err).Should(HaveOccurred())
-				Ω(err.Error()).Should(ContainSubstring("Whoa"))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Whoa"))
 			})
 		})
 	})
@@ -658,16 +660,16 @@ var _ = Describe("Client", func() {
 						flusher.Flush()
 
 						firstEventPayload, err := json.Marshal(executor.NewContainerCompleteEvent(container1))
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						secondEventPayload, err := json.Marshal(executor.NewContainerCompleteEvent(container2))
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						thirdEventPayload, err := json.Marshal(executor.NewContainerRunningEvent(container1))
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						fourthEventPayload, err := json.Marshal(executor.NewContainerReservedEvent(container1))
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						result := sse.Event{
 							ID:   "0",
@@ -676,7 +678,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err = result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						flusher.Flush()
 
@@ -687,7 +689,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err = result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						flusher.Flush()
 
@@ -698,7 +700,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err = result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						result = sse.Event{
 							ID:   "3",
@@ -707,7 +709,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err = result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						flusher.Flush()
 					},
@@ -716,15 +718,15 @@ var _ = Describe("Client", func() {
 
 			It("returns them over the channel", func() {
 				source, err := client.SubscribeToEvents()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(source.Next()).Should(Equal(executor.NewContainerCompleteEvent(container1)))
-				Ω(source.Next()).Should(Equal(executor.NewContainerCompleteEvent(container2)))
-				Ω(source.Next()).Should(Equal(executor.NewContainerRunningEvent(container1)))
-				Ω(source.Next()).Should(Equal(executor.NewContainerReservedEvent(container1)))
+				Expect(source.Next()).To(Equal(executor.NewContainerCompleteEvent(container1)))
+				Expect(source.Next()).To(Equal(executor.NewContainerCompleteEvent(container2)))
+				Expect(source.Next()).To(Equal(executor.NewContainerRunningEvent(container1)))
+				Expect(source.Next()).To(Equal(executor.NewContainerReservedEvent(container1)))
 
 				_, err = source.Next()
-				Ω(err).Should(Equal(io.EOF))
+				Expect(err).To(Equal(io.EOF))
 			})
 		})
 
@@ -750,7 +752,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err := result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						flusher.Flush()
 					},
@@ -759,10 +761,10 @@ var _ = Describe("Client", func() {
 
 			It("returns ErrUnknownEventType", func() {
 				source, err := client.SubscribeToEvents()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				_, err = source.Next()
-				Ω(err).Should(Equal(executor.ErrUnknownEventType))
+				Expect(err).To(Equal(executor.ErrUnknownEventType))
 			})
 		})
 
@@ -785,7 +787,7 @@ var _ = Describe("Client", func() {
 						flusher.Flush()
 
 						firstEventPayload, err := json.Marshal(executor.NewContainerCompleteEvent(container1))
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						time.Sleep(2 * nonStreamingClient.Timeout)
 
@@ -796,7 +798,7 @@ var _ = Describe("Client", func() {
 						}
 
 						err = result.Write(w)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						flusher.Flush()
 					},
@@ -805,11 +807,11 @@ var _ = Describe("Client", func() {
 
 			It("does not enforce the non-streaming client's timeout", func() {
 				eventSource, err := client.SubscribeToEvents()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				event, err := eventSource.Next()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(event).Should(Equal(executor.NewContainerCompleteEvent(container1)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(event).To(Equal(executor.NewContainerCompleteEvent(container1)))
 			})
 		})
 	})

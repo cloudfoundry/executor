@@ -60,7 +60,7 @@ var _ = Describe("ParallelStep", func() {
 		defer close(done)
 
 		err := step.Perform()
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(thingHappened).Should(Receive())
 		Eventually(thingHappened).Should(Receive())
@@ -105,7 +105,7 @@ var _ = Describe("ParallelStep", func() {
 
 			var err error
 			Eventually(errs).Should(Receive(&err))
-			Ω(err.(*multierror.Error).WrappedErrors()).Should(ConsistOf(disaster))
+			Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(disaster))
 		})
 	})
 

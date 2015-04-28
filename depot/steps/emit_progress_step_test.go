@@ -62,16 +62,16 @@ var _ = Describe("EmitProgressStep", func() {
 
 			It("should emit the start message before performing", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(stdoutBuffer.String()).Should(Equal("STARTING\nRUNNING\n"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stdoutBuffer.String()).To(Equal("STARTING\nRUNNING\n"))
 			})
 		})
 
 		Context("when there is no start or success message", func() {
 			It("should not emit the start message (i.e. a newline) before performing", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 			})
 		})
 
@@ -82,8 +82,8 @@ var _ = Describe("EmitProgressStep", func() {
 
 			It("should emit the sucess message", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(stdoutBuffer.String()).Should(Equal("RUNNING\nSUCCESS\n"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stdoutBuffer.String()).To(Equal("RUNNING\nSUCCESS\n"))
 			})
 		})
 
@@ -94,7 +94,7 @@ var _ = Describe("EmitProgressStep", func() {
 
 			It("should pass the error along", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(errorToReturn))
+				Expect(err).To(MatchError(errorToReturn))
 			})
 
 			Context("and there is a failure message", func() {
@@ -105,8 +105,8 @@ var _ = Describe("EmitProgressStep", func() {
 				It("should emit the failure message", func() {
 					step.Perform()
 
-					Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
-					Ω(stderrBuffer.String()).Should(Equal("FAIL\n"))
+					Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
+					Expect(stderrBuffer.String()).To(Equal("FAIL\n"))
 				})
 
 				Context("with an emittable error", func() {
@@ -117,19 +117,19 @@ var _ = Describe("EmitProgressStep", func() {
 					It("should print out the emittable error", func() {
 						step.Perform()
 
-						Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
-						Ω(stderrBuffer.String()).Should(Equal("FAIL: Failed to reticulate\n"))
+						Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
+						Expect(stderrBuffer.String()).To(Equal("FAIL: Failed to reticulate\n"))
 					})
 
 					It("logs the error", func() {
 						step.Perform()
 
 						logs := logger.TestSink.Logs()
-						Ω(logs).Should(HaveLen(1))
+						Expect(logs).To(HaveLen(1))
 
-						Ω(logs[0].Message).Should(ContainSubstring("errored"))
-						Ω(logs[0].Data["wrapped-error"]).Should(Equal("bam!"))
-						Ω(logs[0].Data["message-emitted"]).Should(Equal("Failed to reticulate"))
+						Expect(logs[0].Message).To(ContainSubstring("errored"))
+						Expect(logs[0].Data["wrapped-error"]).To(Equal("bam!"))
+						Expect(logs[0].Data["message-emitted"]).To(Equal("Failed to reticulate"))
 					})
 
 					Context("without a wrapped error", func() {
@@ -140,19 +140,19 @@ var _ = Describe("EmitProgressStep", func() {
 						It("should print out the emittable error", func() {
 							step.Perform()
 
-							Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
-							Ω(stderrBuffer.String()).Should(Equal("FAIL: Failed to reticulate\n"))
+							Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
+							Expect(stderrBuffer.String()).To(Equal("FAIL: Failed to reticulate\n"))
 						})
 
 						It("logs the error", func() {
 							step.Perform()
 
 							logs := logger.TestSink.Logs()
-							Ω(logs).Should(HaveLen(1))
+							Expect(logs).To(HaveLen(1))
 
-							Ω(logs[0].Message).Should(ContainSubstring("errored"))
-							Ω(logs[0].Data["wrapped-error"]).Should(BeEmpty())
-							Ω(logs[0].Data["message-emitted"]).Should(Equal("Failed to reticulate"))
+							Expect(logs[0].Message).To(ContainSubstring("errored"))
+							Expect(logs[0].Data["wrapped-error"]).To(BeEmpty())
+							Expect(logs[0].Data["message-emitted"]).To(Equal("Failed to reticulate"))
 						})
 					})
 				})
@@ -166,8 +166,8 @@ var _ = Describe("EmitProgressStep", func() {
 				It("should not emit the failure message or error, even with an emittable error", func() {
 					step.Perform()
 
-					Ω(stdoutBuffer.String()).Should(Equal("RUNNING\n"))
-					Ω(stderrBuffer.String()).Should(BeEmpty())
+					Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
+					Expect(stderrBuffer.String()).To(BeEmpty())
 				})
 			})
 		})
@@ -175,9 +175,9 @@ var _ = Describe("EmitProgressStep", func() {
 
 	Context("when told to cancel", func() {
 		It("passes the message along", func() {
-			Ω(cancelled).Should(BeFalse())
+			Expect(cancelled).To(BeFalse())
 			step.Cancel()
-			Ω(cancelled).Should(BeTrue())
+			Expect(cancelled).To(BeTrue())
 		})
 	})
 })

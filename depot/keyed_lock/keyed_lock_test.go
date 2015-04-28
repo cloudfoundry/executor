@@ -65,9 +65,12 @@ var _ = Describe("KeyedLock", func() {
 	Describe("Unlock", func() {
 		Context("when the key has not been locked", func() {
 			It("panics", func() {
-				Ω(func() {
+				Expect(func() {
 					lockManager.Unlock("key")
-				}).Should(Panic())
+				}).To(
+
+					Panic())
+
 			})
 		})
 	})
@@ -83,7 +86,7 @@ var _ = Describe("KeyedLock", func() {
 			}
 			runtime.ReadMemStats(&afterStats)
 
-			Ω(math.Abs(float64(afterStats.HeapObjects - beforeStats.HeapObjects))).To(BeNumerically("<", 10000))
+			Expect(math.Abs(float64(afterStats.HeapObjects - beforeStats.HeapObjects))).To(BeNumerically("<", 10000))
 		})
 	})
 })

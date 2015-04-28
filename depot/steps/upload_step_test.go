@@ -73,7 +73,7 @@ var _ = Describe("UploadStep", func() {
 			var err error
 
 			uploadedPayload, err = ioutil.ReadAll(req.Body)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -84,7 +84,7 @@ var _ = Describe("UploadStep", func() {
 		}
 
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		gardenClient = fake_api_client.New()
 
@@ -96,7 +96,7 @@ var _ = Describe("UploadStep", func() {
 		fakeStreamer = newFakeStreamer()
 
 		currentUser, err = user.Current()
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -110,7 +110,7 @@ var _ = Describe("UploadStep", func() {
 		gardenClient.Connection.CreateReturns(handle, nil)
 
 		container, err := gardenClient.Create(garden.ContainerSpec{})
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		step = steps.NewUpload(
 			container,
@@ -132,8 +132,8 @@ var _ = Describe("UploadStep", func() {
 				buffer = gbytes.NewBuffer()
 
 				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
-					Ω(src).Should(Equal("./expected-src.txt"))
-					Ω(handle).Should(Equal("some-container-handle"))
+					Expect(src).To(Equal("./expected-src.txt"))
+					Expect(handle).To(Equal("some-container-handle"))
 
 					tarWriter := tar.NewWriter(buffer)
 
@@ -143,13 +143,13 @@ var _ = Describe("UploadStep", func() {
 						Name: "./expected-src.txt",
 						Size: int64(len(dropletContents)),
 					})
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					_, err = tarWriter.Write([]byte(dropletContents))
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					err = tarWriter.Flush()
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					return buffer, nil
 				}
@@ -157,23 +157,24 @@ var _ = Describe("UploadStep", func() {
 
 			It("uploads the specified file to the destination", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(uploadedPayload).ShouldNot(BeZero())
+				Expect(uploadedPayload).NotTo(BeZero())
 
-				Ω(buffer.Closed()).Should(BeTrue())
+				Expect(buffer.Closed()).To(BeTrue())
 
-				Ω(string(uploadedPayload)).Should(Equal("expected-contents"))
+				Expect(string(uploadedPayload)).To(Equal("expected-contents"))
 			})
 
 			It("logs the step", func() {
 				err := step.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(err).NotTo(HaveOccurred())
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
 					"test.URLUploader.attempt",
 					"test.upload-step.upload-successful",
 				}))
+
 			})
 
 			Describe("Cancel", func() {
@@ -223,29 +224,29 @@ var _ = Describe("UploadStep", func() {
 
 					It("streams the upload filesize", func() {
 						err := step.Perform()
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-						Ω(stdout.Contents()).Should(ContainSubstring("Uploaded artifact (1K)"))
+						Expect(stdout.Contents()).To(ContainSubstring("Uploaded artifact (1K)"))
 					})
 				})
 
 				Context("when an artifact is not specified", func() {
 					It("does not stream the upload information", func() {
 						err := step.Perform()
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
-						Ω(stdout.Contents()).Should(BeEmpty())
+						Expect(stdout.Contents()).To(BeEmpty())
 					})
 				})
 
 				It("does not stream an error", func() {
 					err := step.Perform()
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
-					Ω(stderr.Contents()).Should(BeEmpty())
+					Expect(stderr.Contents()).To(BeEmpty())
 				})
 			})
 
@@ -260,16 +261,17 @@ var _ = Describe("UploadStep", func() {
 
 				It("returns the appropriate error", func() {
 					err := step.Perform()
-					Ω(err).Should(MatchError(errUploadFailed))
+					Expect(err).To(MatchError(errUploadFailed))
 				})
 
 				It("logs the step", func() {
 					err := step.Perform()
-					Ω(err).Should(HaveOccurred())
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(err).To(HaveOccurred())
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.upload-step.upload-starting",
 						"test.upload-step.failed-to-upload",
 					}))
+
 				})
 			})
 		})
@@ -281,16 +283,17 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(BeAssignableToTypeOf(&url.Error{}))
+				Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
 			})
 
 			It("logs the step", func() {
 				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(err).To(HaveOccurred())
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
 					"test.upload-step.failed-to-parse-url",
 				}))
+
 			})
 		})
 
@@ -303,16 +306,17 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(steps.NewEmittableError(errStream, steps.ErrEstablishStream)))
+				Expect(err).To(MatchError(steps.NewEmittableError(errStream, steps.ErrEstablishStream)))
 			})
 
 			It("logs the step", func() {
 				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(err).To(HaveOccurred())
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
 					"test.upload-step.failed-to-stream-out",
 				}))
+
 			})
 		})
 
@@ -325,16 +329,17 @@ var _ = Describe("UploadStep", func() {
 
 			It("returns the appropriate error", func() {
 				err := step.Perform()
-				Ω(err).Should(MatchError(steps.NewEmittableError(errStream, steps.ErrReadTar)))
+				Expect(err).To(MatchError(steps.NewEmittableError(errStream, steps.ErrReadTar)))
 			})
 
 			It("logs the step", func() {
 				err := step.Perform()
-				Ω(err).Should(HaveOccurred())
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(err).To(HaveOccurred())
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
 					"test.upload-step.failed-to-read-stream",
 				}))
+
 			})
 		})
 	})
@@ -347,7 +352,7 @@ var _ = Describe("UploadStep", func() {
 			container, err = gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
 				buffer := gbytes.NewBuffer()
@@ -357,7 +362,7 @@ var _ = Describe("UploadStep", func() {
 					Name: "./does-not-matter.txt",
 					Size: int64(0),
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				return buffer, nil
 			}
@@ -425,19 +430,19 @@ var _ = Describe("UploadStep", func() {
 				defer GinkgoRecover()
 
 				err := step1.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 			go func() {
 				defer GinkgoRecover()
 
 				err := step2.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 			go func() {
 				defer GinkgoRecover()
 
 				err := step3.Perform()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			Eventually(ready).Should(Receive())

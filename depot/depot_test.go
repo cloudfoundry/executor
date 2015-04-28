@@ -68,13 +68,13 @@ var _ = Describe("Depot", func() {
 
 			It("should allocate the container", func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				allocatedContainers := allocationStore.List()
-				Ω(allocatedContainers).Should(HaveLen(len(containers)))
-				Ω(allocatedContainers[0].Guid).Should(Equal("guid-1"))
-				Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainers[0].CPUWeight).Should(Equal(uint(100)))
+				Expect(allocatedContainers).To(HaveLen(len(containers)))
+				Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
+				Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
+				Expect(allocatedContainers[0].CPUWeight).To(Equal(uint(100)))
 			})
 		})
 
@@ -104,23 +104,23 @@ var _ = Describe("Depot", func() {
 
 				It("should allocate all the containers", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(BeEmpty())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(BeEmpty())
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers)))
+					Expect(allocatedContainers).To(HaveLen(len(containers)))
 
 					allocatedContainersMap := map[string]*executor.Container{}
 					for _, container := range allocatedContainers {
 						allocatedContainersMap[container.Guid] = &container
 					}
 
-					Ω(allocatedContainersMap).Should(HaveLen(len(containers)))
-					Ω(allocatedContainersMap["guid-1"]).ShouldNot(BeNil())
-					Ω(allocatedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-2"]).ShouldNot(BeNil())
-					Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-3"]).ShouldNot(BeNil())
-					Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap).To(HaveLen(len(containers)))
+					Expect(allocatedContainersMap["guid-1"]).NotTo(BeNil())
+					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-2"]).NotTo(BeNil())
+					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-3"]).NotTo(BeNil())
+					Expect(allocatedContainersMap["guid-3"].State).To(Equal(executor.StateReserved))
 				})
 			})
 
@@ -147,21 +147,21 @@ var _ = Describe("Depot", func() {
 
 				It("should allocate first few containers that can fit the available resources", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 
 					errMessage, found := errMessageMap["guid-3"]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
-					Ω(allocatedContainersMap).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-3"))
+					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap).NotTo(HaveKey("guid-3"))
 				})
 			})
 
@@ -188,21 +188,21 @@ var _ = Describe("Depot", func() {
 
 				It("should allocate first few containers that can fit the available resources", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-3"]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
 
-					Ω(allocatedContainersMap).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-3"))
+					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap).NotTo(HaveKey("guid-3"))
 				})
 			})
 
@@ -234,21 +234,21 @@ var _ = Describe("Depot", func() {
 
 				It("should allocate first few containers that can fit the available resources", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-4"]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
-					Ω(allocatedContainersMap).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-4"))
+					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap["guid-3"].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainersMap).NotTo(HaveKey("guid-4"))
 				})
 			})
 		})
@@ -274,16 +274,16 @@ var _ = Describe("Depot", func() {
 
 				It("should not allocate container with duplicate guid", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-1"]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrContainerGuidNotAvailable.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrContainerGuidNotAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainers[0].Guid).Should(Equal("guid-1"))
-					Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
+					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
 				})
 			})
 
@@ -304,16 +304,16 @@ var _ = Describe("Depot", func() {
 
 				It("should not allocate container with empty guid", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap[""]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrGuidNotSpecified.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrGuidNotSpecified.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainers[0].Guid).Should(Equal("guid-1"))
-					Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
+					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
 				})
 			})
 
@@ -337,17 +337,17 @@ var _ = Describe("Depot", func() {
 
 				It("should not allocate container with invalid CPUWeight", func() {
 					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(errMessageMap).Should(HaveLen(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-1"]
-					Ω(found).Should(BeTrue())
-					Ω(errMessage).Should(Equal(executor.ErrLimitsInvalid.Error()))
+					Expect(found).To(BeTrue())
+					Expect(errMessage).To(Equal(executor.ErrLimitsInvalid.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Ω(allocatedContainers).Should(HaveLen(len(containers) - 1))
-					Ω(allocatedContainers[0].Guid).Should(Equal("guid-2"))
-					Ω(allocatedContainers[0].State).Should(Equal(executor.StateReserved))
-					Ω(allocatedContainers[0].CPUWeight).Should(Equal(uint(80)))
+					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers[0].Guid).To(Equal("guid-2"))
+					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
+					Expect(allocatedContainers[0].CPUWeight).To(Equal(uint(80)))
 				})
 			})
 		})
@@ -372,8 +372,8 @@ var _ = Describe("Depot", func() {
 
 			It("should return error", func() {
 				_, err := depotClient.AllocateContainers(containers)
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrFailureToCheckSpace))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrFailureToCheckSpace))
 			})
 		})
 	})
@@ -398,17 +398,17 @@ var _ = Describe("Depot", func() {
 
 		JustBeforeEach(func() {
 			errMessageMap, err := depotClient.AllocateContainers(containers)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(errMessageMap).Should(BeEmpty())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(errMessageMap).To(BeEmpty())
 		})
 
 		Context("when the container is valid", func() {
 			It("should create garden container, run it, and remove from allocation store", func() {
-				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
-				Ω(gardenStore.RunCallCount()).Should(Equal(0))
-				Ω(allocationStore.List()).Should(HaveLen(1))
+				Expect(gardenStore.CreateCallCount()).To(Equal(0))
+				Expect(gardenStore.RunCallCount()).To(Equal(0))
+				Expect(allocationStore.List()).To(HaveLen(1))
 				err := depotClient.RunContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(BeEmpty())
@@ -419,23 +419,23 @@ var _ = Describe("Depot", func() {
 				initialUnlockCount := lockManager.UnlockCallCount()
 
 				err := depotClient.RunContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 
-				Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount + 1))
-				Ω(lockManager.LockArgsForCall(initialLockCount)).Should(Equal(gardenStoreGuid))
+				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
+				Expect(lockManager.LockArgsForCall(initialLockCount)).To(Equal(gardenStoreGuid))
 
-				Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount + 1))
-				Ω(lockManager.UnlockArgsForCall(initialUnlockCount)).Should(Equal(gardenStoreGuid))
+				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
+				Expect(lockManager.UnlockArgsForCall(initialUnlockCount)).To(Equal(gardenStoreGuid))
 			})
 		})
 
 		Context("when it tries to run a missing container", func() {
 			It("should return error", func() {
 				err := depotClient.RunContainer("missing-guid")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 
 			It("does not allocate and drop the container lock", func() {
@@ -443,10 +443,10 @@ var _ = Describe("Depot", func() {
 				initialUnlockCount := lockManager.UnlockCallCount()
 
 				err := depotClient.RunContainer("missing-guid")
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 
-				Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount))
-				Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount))
+				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount))
+				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount))
 			})
 		})
 
@@ -460,10 +460,10 @@ var _ = Describe("Depot", func() {
 
 			It("does not create a garden container", func() {
 				err := depotClient.RunContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(logger).Should(gbytes.Say("test.depot-client.run-container.container-state-invalid"))
-				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
+				Expect(gardenStore.CreateCallCount()).To(Equal(0))
 			})
 		})
 
@@ -473,16 +473,16 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should change container's state to failed", func() {
-				Ω(gardenStore.CreateCallCount()).Should(Equal(0))
+				Expect(gardenStore.CreateCallCount()).To(Equal(0))
 				err := depotClient.RunContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 				Eventually(gardenStore.RunCallCount).Should(Equal(0))
 				Eventually(allocationStore.List).Should(HaveLen(1))
 				container, err := allocationStore.Lookup(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.State).Should(Equal(executor.StateCompleted))
-				Ω(container.RunResult.Failed).Should(BeTrue())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.State).To(Equal(executor.StateCompleted))
+				Expect(container.RunResult.Failed).To(BeTrue())
 			})
 		})
 
@@ -492,11 +492,11 @@ var _ = Describe("Depot", func() {
 			})
 			It("should log the error", func() {
 				err := depotClient.RunContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(BeEmpty())
 
-				Ω(logger).Should(gbytes.Say("test.depot-client.run-container.failed-running-container-in-garden"))
+				Expect(logger).To(gbytes.Say("test.depot-client.run-container.failed-running-container-in-garden"))
 			})
 		})
 	})
@@ -530,54 +530,54 @@ var _ = Describe("Depot", func() {
 		Context("when containers exist only allocation store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 			})
 
 			It("should return the containers from allocation store", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(HaveLen(len(containers)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(HaveLen(len(containers)))
 
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Ω(returnedContainersMap).Should(HaveLen(len(containers)))
-				Ω(returnedContainersMap["guid-1"].State).Should(Equal(executor.StateReserved))
-				Ω(returnedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
+				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
+				Expect(returnedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 			})
 		})
 
 		Context("when containers exist only garden store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				err = depotClient.RunContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				err = depotClient.RunContainer("guid-2")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Eventually(allocationStore.List).Should(HaveLen(0))
 				gardenStore.ListReturns(containers, nil)
 			})
 
 			It("should return the containers from garden store", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(HaveLen(len(containers)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(HaveLen(len(containers)))
 
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Ω(returnedContainersMap).Should(HaveLen(len(containers)))
-				Ω(returnedContainersMap).Should(HaveKey("guid-1"))
-				Ω(returnedContainersMap).Should(HaveKey("guid-2"))
+				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveKey("guid-1"))
+				Expect(returnedContainersMap).To(HaveKey("guid-2"))
 			})
 		})
 
 		Context("when containers exist in both allocation store and garden store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				err = depotClient.RunContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(allocationStore.List).Should(HaveLen(1))
 				gardenStore.ListReturns(containers[:1], nil)
@@ -585,31 +585,31 @@ var _ = Describe("Depot", func() {
 
 			It("should return the containers from both the stores", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(HaveLen(len(containers)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(HaveLen(len(containers)))
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Ω(returnedContainersMap).Should(HaveLen(len(containers)))
-				Ω(returnedContainersMap).Should(HaveKey("guid-1"))
-				Ω(returnedContainersMap).Should(HaveKey("guid-2"))
+				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveKey("guid-1"))
+				Expect(returnedContainersMap).To(HaveKey("guid-2"))
 			})
 		})
 
 		Context("when allocation and garden store are empty", func() {
 			It("should return empty list", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(BeEmpty())
 			})
 		})
 
 		Context("when a duplicate container (same guid) exists in both stores", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 
 				err = depotClient.RunContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(allocationStore.List).Should(HaveLen(1))
 				gardenStore.ListReturns([]executor.Container{
@@ -631,48 +631,48 @@ var _ = Describe("Depot", func() {
 
 			It("should ignore the duplicate container from garden store", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(HaveLen(len(containers)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(HaveLen(len(containers)))
 
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Ω(returnedContainersMap).Should(HaveLen(len(containers)))
-				Ω(returnedContainersMap["guid-1"].State).Should(Equal(executor.StateRunning))
-				Ω(returnedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
+				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap["guid-1"].State).To(Equal(executor.StateRunning))
+				Expect(returnedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 			})
 		})
 
 		Context("when garden store returns an error", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				gardenStore.ListReturns(nil, errors.New("some-error"))
 			})
 
 			It("should return an error", func() {
 				_, err := depotClient.ListContainers(executor.Tags{})
-				Ω(err).Should(HaveOccurred())
-				Ω(err.Error()).Should(Equal("some-error"))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("some-error"))
 			})
 		})
 
 		Context("when tags are passed", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 			})
 
 			It("should return the containers matching those tags", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{
 					"b": "b-value",
 				})
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(returnedContainers).Should(HaveLen(len(containers)))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(returnedContainers).To(HaveLen(len(containers)))
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Ω(returnedContainersMap).Should(HaveLen(len(containers)))
-				Ω(returnedContainersMap).Should(HaveKey("guid-1"))
-				Ω(returnedContainersMap).Should(HaveKey("guid-2"))
+				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveKey("guid-1"))
+				Expect(returnedContainersMap).To(HaveKey("guid-2"))
 			})
 
 			Context("when non-existent tags are passed", func() {
@@ -680,8 +680,8 @@ var _ = Describe("Depot", func() {
 					returnedContainers, err := depotClient.ListContainers(executor.Tags{
 						"non-existent": "any-value",
 					})
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(returnedContainers).Should(BeEmpty())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(returnedContainers).To(BeEmpty())
 				})
 
 			})
@@ -703,14 +703,14 @@ var _ = Describe("Depot", func() {
 
 		It("returns the metrics for the container", func() {
 			metrics, err := depotClient.GetMetrics("container-guid")
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(metrics).Should(Equal(expectedMetrics))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metrics).To(Equal(expectedMetrics))
 
-			Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+			Expect(gardenStore.MetricsCallCount()).To(Equal(1))
 
 			actualLogger, guids := gardenStore.MetricsArgsForCall(0)
-			Ω(actualLogger).ShouldNot(BeNil())
-			Ω(guids).Should(ConsistOf("container-guid"))
+			Expect(actualLogger).NotTo(BeNil())
+			Expect(guids).To(ConsistOf("container-guid"))
 		})
 
 		Context("when garden fails to get the metrics", func() {
@@ -723,7 +723,7 @@ var _ = Describe("Depot", func() {
 
 			It("propagates the error", func() {
 				_, err := depotClient.GetMetrics("guid-1")
-				Ω(err).Should(Equal(expectedError))
+				Expect(err).To(Equal(expectedError))
 			})
 		})
 	})
@@ -769,34 +769,36 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("gets all the containers", func() {
-				Ω(gardenStore.ListCallCount()).Should(Equal(1))
+				Expect(gardenStore.ListCallCount()).To(Equal(1))
 				glogger, tags := gardenStore.ListArgsForCall(0)
-				Ω(glogger).ShouldNot(BeNil())
-				Ω(tags).Should(BeNil())
+				Expect(glogger).NotTo(BeNil())
+				Expect(tags).To(BeNil())
 			})
 
 			It("retrieves all the metrics", func() {
-				Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+				Expect(gardenStore.MetricsCallCount()).To(Equal(1))
 
 				actualLogger, guids := gardenStore.MetricsArgsForCall(0)
-				Ω(actualLogger).ShouldNot(BeNil())
-				Ω(guids).Should(ConsistOf("a-guid", "b-guid"))
+				Expect(actualLogger).NotTo(BeNil())
+				Expect(guids).To(ConsistOf("a-guid", "b-guid"))
 			})
 
 			It("does not error", func() {
-				Ω(metricsErr).ShouldNot(HaveOccurred())
+				Expect(metricsErr).NotTo(HaveOccurred())
 			})
 
 			It("returns all the metrics", func() {
-				Ω(metrics).Should(HaveLen(2))
-				Ω(metrics["a-guid"]).Should(Equal(executor.Metrics{
+				Expect(metrics).To(HaveLen(2))
+				Expect(metrics["a-guid"]).To(Equal(executor.Metrics{
 					MetricsConfig:    executor.MetricsConfig{Guid: "a-metrics"},
 					ContainerMetrics: expectedMetrics["a-guid"],
 				}))
-				Ω(metrics["b-guid"]).Should(Equal(executor.Metrics{
+
+				Expect(metrics["b-guid"]).To(Equal(executor.Metrics{
 					MetricsConfig:    executor.MetricsConfig{Guid: "b-metrics", Index: 1},
 					ContainerMetrics: expectedMetrics["b-guid"],
 				}))
+
 			})
 		})
 
@@ -806,9 +808,9 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("gets containers with those tags", func() {
-				Ω(gardenStore.ListCallCount()).Should(Equal(1))
+				Expect(gardenStore.ListCallCount()).To(Equal(1))
 				_, listTags := gardenStore.ListArgsForCall(0)
-				Ω(listTags).Should(Equal(tags))
+				Expect(listTags).To(Equal(tags))
 			})
 		})
 
@@ -823,23 +825,24 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("retrieves metrics by metric config guids", func() {
-				Ω(gardenStore.MetricsCallCount()).Should(Equal(1))
+				Expect(gardenStore.MetricsCallCount()).To(Equal(1))
 
 				actualLogger, guids := gardenStore.MetricsArgsForCall(0)
-				Ω(actualLogger).ShouldNot(BeNil())
-				Ω(guids).Should(ConsistOf("b-guid"))
+				Expect(actualLogger).NotTo(BeNil())
+				Expect(guids).To(ConsistOf("b-guid"))
 			})
 
 			It("does not error", func() {
-				Ω(metricsErr).ShouldNot(HaveOccurred())
+				Expect(metricsErr).NotTo(HaveOccurred())
 			})
 
 			It("returns the metrics", func() {
-				Ω(metrics).Should(HaveLen(1))
-				Ω(metrics["b-guid"]).Should(Equal(executor.Metrics{
+				Expect(metrics).To(HaveLen(1))
+				Expect(metrics["b-guid"]).To(Equal(executor.Metrics{
 					MetricsConfig:    executor.MetricsConfig{Guid: "b-metrics", Index: 1},
 					ContainerMetrics: expectedMetrics["b-guid"],
 				}))
+
 			})
 		})
 
@@ -852,7 +855,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("propagates the error", func() {
-				Ω(metricsErr).Should(Equal(expectedError))
+				Expect(metricsErr).To(Equal(expectedError))
 			})
 		})
 
@@ -865,7 +868,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("propagates the error", func() {
-				Ω(metricsErr).Should(Equal(expectedError))
+				Expect(metricsErr).To(Equal(expectedError))
 			})
 		})
 	})
@@ -896,67 +899,67 @@ var _ = Describe("Depot", func() {
 		It("allocates and drops the container lock", func() {
 			depotClient.DeleteContainer("guid-1")
 
-			Ω(lockManager.LockCallCount()).Should(Equal(1))
-			Ω(lockManager.LockArgsForCall(0)).Should(Equal("guid-1"))
+			Expect(lockManager.LockCallCount()).To(Equal(1))
+			Expect(lockManager.LockArgsForCall(0)).To(Equal("guid-1"))
 
-			Ω(lockManager.UnlockCallCount()).Should(Equal(1))
-			Ω(lockManager.UnlockArgsForCall(0)).Should(Equal("guid-1"))
+			Expect(lockManager.UnlockCallCount()).To(Equal(1))
+			Expect(lockManager.UnlockArgsForCall(0)).To(Equal("guid-1"))
 		})
 
 		Context("when container exists in allocation store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
 			})
 
 			It("should remove the container from both allocation store, and attempt to remove it from the garden store", func() {
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(0))
 
 				err := depotClient.DeleteContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				allocatedContainers := allocationStore.List()
-				Ω(allocatedContainers).Should(HaveLen(2))
+				Expect(allocatedContainers).To(HaveLen(2))
 				allocatedContainersMap := convertSliceToMap(allocatedContainers)
-				Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-1"))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
+				Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+				Expect(allocatedContainersMap["guid-3"].State).To(Equal(executor.StateReserved))
+				Expect(allocatedContainersMap).NotTo(HaveKey("guid-1"))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(1))
 				_, guid := gardenStore.DestroyArgsForCall(0)
-				Ω(guid).Should(Equal("guid-1"))
+				Expect(guid).To(Equal("guid-1"))
 			})
 		})
 
 		Context("when container exists in garden store", func() {
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 
 				err = depotClient.RunContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Eventually(allocationStore.List).Should(HaveLen(2))
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 			})
 
 			It("should remove the container from both allocation store and the garden store", func() {
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(0))
 
 				err := depotClient.DeleteContainer("guid-1")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				allocatedContainers := allocationStore.List()
-				Ω(allocatedContainers).Should(HaveLen(2))
+				Expect(allocatedContainers).To(HaveLen(2))
 				allocatedContainersMap := convertSliceToMap(allocatedContainers)
-				Ω(allocatedContainersMap["guid-2"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap["guid-3"].State).Should(Equal(executor.StateReserved))
-				Ω(allocatedContainersMap).ShouldNot(HaveKey("guid-1"))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
+				Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
+				Expect(allocatedContainersMap["guid-3"].State).To(Equal(executor.StateReserved))
+				Expect(allocatedContainersMap).NotTo(HaveKey("guid-1"))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(1))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(1))
 				_, guid := gardenStore.DestroyArgsForCall(0)
-				Ω(guid).Should(Equal("guid-1"))
+				Expect(guid).To(Equal("guid-1"))
 			})
 		})
 
@@ -966,12 +969,12 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should return an error", func() {
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(0))
+				Expect(gardenStore.DestroyCallCount()).To(Equal(0))
 				err := depotClient.DeleteContainer("guid-1")
-				Ω(err).Should(HaveOccurred())
-				Ω(gardenStore.DestroyCallCount()).Should(Equal(1))
+				Expect(err).To(HaveOccurred())
+				Expect(gardenStore.DestroyCallCount()).To(Equal(1))
 				_, guid := gardenStore.DestroyArgsForCall(0)
-				Ω(guid).Should(Equal("guid-1"))
+				Expect(guid).To(Equal("guid-1"))
 			})
 		})
 	})
@@ -989,17 +992,17 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("allocates and drops the container lock", func() {
-			Ω(lockManager.LockCallCount()).Should(Equal(1))
-			Ω(lockManager.LockArgsForCall(0)).Should(Equal(stopGuid))
+			Expect(lockManager.LockCallCount()).To(Equal(1))
+			Expect(lockManager.LockArgsForCall(0)).To(Equal(stopGuid))
 
-			Ω(lockManager.UnlockCallCount()).Should(Equal(1))
-			Ω(lockManager.UnlockArgsForCall(0)).Should(Equal(stopGuid))
+			Expect(lockManager.UnlockCallCount()).To(Equal(1))
+			Expect(lockManager.UnlockArgsForCall(0)).To(Equal(stopGuid))
 		})
 
 		Context("when the container doesn't exist in the allocation store", func() {
 			It("should stop the garden container", func() {
-				Ω(stopError).ShouldNot(HaveOccurred())
-				Ω(gardenStore.StopCallCount()).Should(Equal(1))
+				Expect(stopError).NotTo(HaveOccurred())
+				Expect(gardenStore.StopCallCount()).To(Equal(1))
 			})
 		})
 
@@ -1014,39 +1017,39 @@ var _ = Describe("Depot", func() {
 				}
 
 				_, err := allocationStore.Allocate(logger, container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("when the container is not completed", func() {
 				It("should fail the container", func() {
 					result, err := allocationStore.Lookup(stopGuid)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(result.State).Should(Equal(executor.StateCompleted))
-					Ω(result.RunResult.Failed).Should(BeTrue())
-					Ω(result.RunResult.FailureReason).Should(Equal(depot.ContainerStoppedBeforeRunMessage))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result.State).To(Equal(executor.StateCompleted))
+					Expect(result.RunResult.Failed).To(BeTrue())
+					Expect(result.RunResult.FailureReason).To(Equal(depot.ContainerStoppedBeforeRunMessage))
 				})
 			})
 
 			Context("when the container is completed", func() {
 				BeforeEach(func() {
 					_, err := allocationStore.Fail(logger, stopGuid, "go away")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("the run result should remain unchanged", func() {
 					result, err := allocationStore.Lookup(stopGuid)
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(result.State).Should(Equal(executor.StateCompleted))
-					Ω(result.RunResult.Failed).Should(BeTrue())
-					Ω(result.RunResult.FailureReason).Should(Equal("go away"))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result.State).To(Equal(executor.StateCompleted))
+					Expect(result.RunResult.Failed).To(BeTrue())
+					Expect(result.RunResult.FailureReason).To(Equal("go away"))
 				})
 			})
 		})
 
 		Context("when the container is present in gardenStore", func() {
 			It("should successfully stop the container", func() {
-				Ω(stopError).ShouldNot(HaveOccurred())
-				Ω(gardenStore.StopCallCount()).Should(Equal(1))
+				Expect(stopError).NotTo(HaveOccurred())
+				Expect(gardenStore.StopCallCount()).To(Equal(1))
 			})
 		})
 
@@ -1056,9 +1059,9 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should fail and return an error", func() {
-				Ω(stopError).Should(HaveOccurred())
-				Ω(stopError.Error()).Should(Equal("some-error"))
-				Ω(gardenStore.StopCallCount()).Should(Equal(1))
+				Expect(stopError).To(HaveOccurred())
+				Expect(stopError.Error()).To(Equal("some-error"))
+				Expect(gardenStore.StopCallCount()).To(Equal(1))
 			})
 		})
 	})
@@ -1088,13 +1091,13 @@ var _ = Describe("Depot", func() {
 			}
 
 			errMessageMap, err := depotClient.AllocateContainers(containers)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(errMessageMap).Should(BeEmpty())
-			Ω(gardenStore.CreateCallCount()).Should(Equal(0))
-			Ω(gardenStore.RunCallCount()).Should(Equal(0))
-			Ω(allocationStore.List()).Should(HaveLen(2))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(errMessageMap).To(BeEmpty())
+			Expect(gardenStore.CreateCallCount()).To(Equal(0))
+			Expect(gardenStore.RunCallCount()).To(Equal(0))
+			Expect(allocationStore.List()).To(HaveLen(2))
 			err = depotClient.RunContainer(gardenStoreGuid)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 			Eventually(gardenStore.RunCallCount).Should(Equal(1))
 			Eventually(allocationStore.List).Should(HaveLen(1))
@@ -1113,29 +1116,29 @@ var _ = Describe("Depot", func() {
 			initialUnlockCount := lockManager.UnlockCallCount()
 
 			_, err := depotClient.GetContainer(allocationStoreGuid)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(lockManager.LockCallCount()).Should(Equal(initialLockCount + 1))
-			Ω(lockManager.LockArgsForCall(initialLockCount)).Should(Equal(allocationStoreGuid))
+			Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
+			Expect(lockManager.LockArgsForCall(initialLockCount)).To(Equal(allocationStoreGuid))
 
-			Ω(lockManager.UnlockCallCount()).Should(Equal(initialUnlockCount + 1))
-			Ω(lockManager.UnlockArgsForCall(initialUnlockCount)).Should(Equal(allocationStoreGuid))
+			Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
+			Expect(lockManager.UnlockArgsForCall(initialUnlockCount)).To(Equal(allocationStoreGuid))
 		})
 
 		Context("when container exists in allocation store", func() {
 			It("should return the container", func() {
 				container, err := depotClient.GetContainer(allocationStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.Guid).Should(Equal(allocationStoreGuid))
-				Ω(container.State).Should(Equal(executor.StateReserved))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.Guid).To(Equal(allocationStoreGuid))
+				Expect(container.State).To(Equal(executor.StateReserved))
 			})
 		})
 
 		Context("when container exists in garden store", func() {
 			It("should return the container", func() {
 				container, err := depotClient.GetContainer(gardenStoreGuid)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.Guid).Should(Equal(gardenStoreGuid))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.Guid).To(Equal(gardenStoreGuid))
 				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(HaveLen(1))
@@ -1148,9 +1151,9 @@ var _ = Describe("Depot", func() {
 			})
 			It("should return an error", func() {
 				container, err := depotClient.GetContainer("does-not-exist")
-				Ω(err).Should(HaveOccurred())
-				Ω(err).Should(Equal(executor.ErrContainerNotFound))
-				Ω(container).Should(Equal(executor.Container{}))
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
+				Expect(container).To(Equal(executor.Container{}))
 			})
 		})
 	})
@@ -1179,7 +1182,7 @@ var _ = Describe("Depot", func() {
 
 		Context("when no containers are running or allocated", func() {
 			It("should return the total resources", func() {
-				Ω(depotClient.RemainingResources()).Should(Equal(resources))
+				Expect(depotClient.RemainingResources()).To(Equal(resources))
 			})
 		})
 
@@ -1192,34 +1195,34 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 			})
 
 			Context("when no containers are running", func() {
 				It("should reduce resources used by allocated containers", func() {
-					Ω(depotClient.RemainingResources()).Should(Equal(expectedResources))
+					Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
 				})
 			})
 
 			Context("when some containers are running", func() {
 				BeforeEach(func() {
 					err := depotClient.RunContainer("guid-1")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 					Eventually(gardenStore.RunCallCount).Should(Equal(1))
 					Eventually(allocationStore.List).Should(HaveLen(2))
 
 					gardenStore.ListReturns(containers[:1], nil)
 				})
 				It("should reduce resources used by allocated and running containers", func() {
-					Ω(depotClient.RemainingResources()).Should(Equal(expectedResources))
+					Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
 				})
 			})
 
 			Context("when some allocated containers are deallocated", func() {
 				BeforeEach(func() {
 					err := depotClient.DeleteContainer("guid-1")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 				It("should make the resources used by the deallocated container available", func() {
 					tmpExpectedResources := executor.ExecutorResources{
@@ -1227,7 +1230,7 @@ var _ = Describe("Depot", func() {
 						DiskMB:     512,
 						Containers: 1,
 					}
-					Ω(depotClient.RemainingResources()).Should(Equal(tmpExpectedResources))
+					Expect(depotClient.RemainingResources()).To(Equal(tmpExpectedResources))
 				})
 			})
 		})
@@ -1241,11 +1244,11 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 				for _, container := range containers {
 					err = depotClient.RunContainer(container.Guid)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				}
 				Eventually(gardenStore.RunCallCount).Should(Equal(3))
 				Eventually(allocationStore.List).Should(BeEmpty())
@@ -1254,7 +1257,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should reduce resources used by running containers", func() {
-				Ω(depotClient.RemainingResources()).Should(Equal(expectedResources))
+				Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
 			})
 
 			Context("when garden returns error", func() {
@@ -1263,8 +1266,8 @@ var _ = Describe("Depot", func() {
 				})
 				It("should return an error", func() {
 					_, err := depotClient.RemainingResources()
-					Ω(err).Should(HaveOccurred())
-					Ω(err.Error()).Should(Equal("some-error"))
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("some-error"))
 				})
 			})
 
@@ -1278,7 +1281,7 @@ var _ = Describe("Depot", func() {
 						DiskMB:     512,
 						Containers: 1,
 					}
-					Ω(depotClient.RemainingResources()).Should(Equal(tmpExpectedResources))
+					Expect(depotClient.RemainingResources()).To(Equal(tmpExpectedResources))
 				})
 			})
 		})
@@ -1292,14 +1295,14 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 
 				gardenStore.ListReturns(containers[:1], nil)
 			})
 
 			It("should only count the container once", func() {
-				Ω(depotClient.RemainingResources()).Should(Equal(expectedResources))
+				Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
 			})
 		})
 	})
@@ -1307,7 +1310,7 @@ var _ = Describe("Depot", func() {
 	Describe("TotalResources", func() {
 		Context("when asked for total resources", func() {
 			It("should return the resources it was configured with", func() {
-				Ω(depotClient.TotalResources()).Should(Equal(resources))
+				Expect(depotClient.TotalResources()).To(Equal(resources))
 			})
 		})
 	})

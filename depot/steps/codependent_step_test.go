@@ -59,7 +59,7 @@ var _ = Describe("CodependentStep", func() {
 	Describe("Perform", func() {
 		It("performs its substeps in parallel", func() {
 			err := step.Perform()
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(thingHappened).Should(Receive())
 			Eventually(thingHappened).Should(Receive())
@@ -84,14 +84,14 @@ var _ = Describe("CodependentStep", func() {
 
 			It("returns an aggregate of the failures", func() {
 				err := step.Perform()
-				Ω(err.(*multierror.Error).WrappedErrors()).Should(ConsistOf(disaster))
+				Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(disaster))
 			})
 
 			It("cancels all the steps", func() {
 				step.Perform()
 
-				Ω(subStep1.CancelCallCount()).Should(Equal(1))
-				Ω(subStep2.CancelCallCount()).Should(Equal(1))
+				Expect(subStep1.CancelCallCount()).To(Equal(1))
+				Expect(subStep2.CancelCallCount()).To(Equal(1))
 			})
 		})
 	})
@@ -106,9 +106,9 @@ var _ = Describe("CodependentStep", func() {
 
 			sequence.Cancel()
 
-			Ω(step1.CancelCallCount()).Should(Equal(1))
-			Ω(step2.CancelCallCount()).Should(Equal(1))
-			Ω(step3.CancelCallCount()).Should(Equal(1))
+			Expect(step1.CancelCallCount()).To(Equal(1))
+			Expect(step2.CancelCallCount()).To(Equal(1))
+			Expect(step3.CancelCallCount()).To(Equal(1))
 		})
 	})
 })

@@ -66,7 +66,7 @@ var _ = Describe("Uploader", func() {
 					serverRequests = append(serverRequests, r)
 
 					data, err := ioutil.ReadAll(r.Body)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 					serverRequestBody = append(serverRequestBody, string(data))
 
 					fmt.Fprintln(w, "Hello, client")
@@ -83,24 +83,24 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("uploads the file to the url", func() {
-				Ω(len(serverRequests)).Should(Equal(1))
+				Expect(len(serverRequests)).To(Equal(1))
 
 				request := serverRequests[0]
 				data := serverRequestBody[0]
 
-				Ω(request.URL.Path).Should(Equal("/somepath"))
-				Ω(request.Header.Get("Content-Type")).Should(Equal("application/octet-stream"))
-				Ω(request.Header.Get("Content-MD5")).Should(Equal(expectedMD5))
-				Ω(strconv.Atoi(request.Header.Get("Content-Length"))).Should(BeNumerically("==", 31))
-				Ω(string(data)).Should(Equal("content that we can check later"))
+				Expect(request.URL.Path).To(Equal("/somepath"))
+				Expect(request.Header.Get("Content-Type")).To(Equal("application/octet-stream"))
+				Expect(request.Header.Get("Content-MD5")).To(Equal(expectedMD5))
+				Expect(strconv.Atoi(request.Header.Get("Content-Length"))).To(BeNumerically("==", 31))
+				Expect(string(data)).To(Equal("content that we can check later"))
 			})
 
 			It("returns the number of bytes written", func() {
-				Ω(numBytes).Should(Equal(int64(expectedBytes)))
+				Expect(numBytes).To(Equal(int64(expectedBytes)))
 			})
 
 			It("does not return an error", func() {
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -183,7 +183,7 @@ var _ = Describe("Uploader", func() {
 
 				Eventually(logger.TestSink.Buffer).Should(gbytes.Say("failed-upload"))
 
-				Ω(<-errs).Should(HaveOccurred())
+				Expect(<-errs).To(HaveOccurred())
 			})
 		})
 
@@ -197,7 +197,7 @@ var _ = Describe("Uploader", func() {
 
 			It("should return the error", func() {
 				_, err := upldr.Upload(file.Name(), url, nil)
-				Ω(err).NotTo(BeNil())
+				Expect(err).NotTo(BeNil())
 			})
 		})
 
@@ -211,7 +211,7 @@ var _ = Describe("Uploader", func() {
 
 			It("should return the error", func() {
 				_, err := upldr.Upload(file.Name(), url, nil)
-				Ω(err).NotTo(BeNil())
+				Expect(err).NotTo(BeNil())
 			})
 		})
 	})

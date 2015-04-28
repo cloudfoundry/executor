@@ -19,11 +19,11 @@ var _ = Describe("Container", func() {
 			})
 
 			It("returns true if requested tags are nil", func() {
-				Ω(container.HasTags(nil)).Should(BeTrue())
+				Expect(container.HasTags(nil)).To(BeTrue())
 			})
 
 			It("returns false if requested tags are not nil", func() {
-				Ω(container.HasTags(executor.Tags{"a": "b"})).Should(BeFalse())
+				Expect(container.HasTags(executor.Tags{"a": "b"})).To(BeFalse())
 			})
 		})
 
@@ -35,15 +35,15 @@ var _ = Describe("Container", func() {
 			})
 
 			It("returns true when found", func() {
-				Ω(container.HasTags(executor.Tags{"a": "b"})).Should(BeTrue())
+				Expect(container.HasTags(executor.Tags{"a": "b"})).To(BeTrue())
 			})
 
 			It("returns false when nil", func() {
-				Ω(container.HasTags(nil)).Should(BeFalse())
+				Expect(container.HasTags(nil)).To(BeFalse())
 			})
 
 			It("returns false when not found", func() {
-				Ω(container.HasTags(executor.Tags{"a": "c"})).Should(BeFalse())
+				Expect(container.HasTags(executor.Tags{"a": "c"})).To(BeFalse())
 			})
 		})
 	})
@@ -83,9 +83,9 @@ var _ = Describe("Container", func() {
 		Context("when it has egress rules", func() {
 			It("unmarshals egress rules", func() {
 				err := container.UnmarshalJSON([]byte(payload))
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(container.EgressRules).Should(HaveLen(1))
-				Ω(container.EgressRules[0]).Should(Equal(securityGroupRule))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.EgressRules).To(HaveLen(1))
+				Expect(container.EgressRules[0]).To(Equal(securityGroupRule))
 			})
 		})
 	})

@@ -144,9 +144,10 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("logs the step", func() {
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.monitor-step.transitioned-to-healthy",
 					}))
+
 				})
 
 				Context("and the healthy interval passes", func() {
@@ -178,10 +179,11 @@ var _ = Describe("MonitorStep", func() {
 						})
 
 						It("logs the step", func() {
-							Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+							Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 								"test.monitor-step.transitioned-to-healthy",
 								"test.monitor-step.transitioned-to-unhealthy",
 							}))
+
 						})
 
 						It("completes with failure", func() {

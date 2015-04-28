@@ -31,11 +31,11 @@ var _ = Describe("Main", func() {
 			})
 
 			ifrit.Invoke(runner)
-			Ω(runner).ShouldNot(gexec.Exit(0))
+			Expect(runner).NotTo(gexec.Exit(0))
 
-			Ω(runner).Should(gbytes.Say("max-cpu-shares-invalid"))
-			Ω(runner).Should(gbytes.Say("healthy-monitoring-interval-invalid"))
-			Ω(runner).Should(gbytes.Say("unhealthy-monitoring-interval-invalid"))
+			Expect(runner).To(gbytes.Say("max-cpu-shares-invalid"))
+			Expect(runner).To(gbytes.Say("healthy-monitoring-interval-invalid"))
+			Expect(runner).To(gbytes.Say("unhealthy-monitoring-interval-invalid"))
 		})
 	})
 })

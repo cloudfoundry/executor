@@ -15,19 +15,19 @@ var _ = Describe("EmittableError", func() {
 	It("should satisfy the error interface", func() {
 		var err error
 		err = steps.NewEmittableError(wrappedError, "Fancy")
-		Ω(err).Should(HaveOccurred())
+		Expect(err).To(HaveOccurred())
 	})
 
 	Describe("WrappedError", func() {
 		It("returns the wrapped error message", func() {
 			err := steps.NewEmittableError(wrappedError, "Fancy emittable message")
-			Ω(err.WrappedError()).Should(Equal(wrappedError))
+			Expect(err.WrappedError()).To(Equal(wrappedError))
 		})
 
 		Context("when the wrapped error is nil", func() {
 			It("should not blow up", func() {
 				err := steps.NewEmittableError(nil, "Fancy emittable message")
-				Ω(err.WrappedError()).Should(BeNil())
+				Expect(err.WrappedError()).To(BeNil())
 			})
 		})
 	})
@@ -35,13 +35,13 @@ var _ = Describe("EmittableError", func() {
 	Describe("Error", func() {
 		Context("with no format args", func() {
 			It("should just be the message", func() {
-				Ω(steps.NewEmittableError(wrappedError, "Fancy %s %d").Error()).Should(Equal("Fancy %s %d"))
+				Expect(steps.NewEmittableError(wrappedError, "Fancy %s %d").Error()).To(Equal("Fancy %s %d"))
 			})
 		})
 
 		Context("with format args", func() {
 			It("should Sprintf", func() {
-				Ω(steps.NewEmittableError(wrappedError, "Fancy %s %d", "hi", 3).Error()).Should(Equal("Fancy hi 3"))
+				Expect(steps.NewEmittableError(wrappedError, "Fancy %s %d", "hi", 3).Error()).To(Equal("Fancy hi 3"))
 			})
 		})
 	})

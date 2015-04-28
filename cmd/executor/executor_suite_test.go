@@ -21,7 +21,7 @@ var executorPath string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	executorPath, err := gexec.Build("github.com/cloudfoundry-incubator/executor/cmd/executor", "-race")
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 	return []byte(executorPath)
 }, func(path []byte) {
 	executorPath = string(path)

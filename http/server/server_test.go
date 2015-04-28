@@ -33,7 +33,7 @@ import (
 
 func MarshalledPayload(payload interface{}) io.Reader {
 	reqBody, err := json.Marshal(payload)
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	return bytes.NewBuffer(reqBody)
 }
@@ -80,10 +80,10 @@ var _ = Describe("Api", func() {
 	})
 
 	DoRequest := func(req *http.Request, err error) *http.Response {
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		client := http.Client{}
 		resp, err := client.Do(req)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		return resp
 	}
@@ -113,23 +113,24 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200 OK", func() {
-				Ω(getResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(getResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns the correct container", func() {
 				container := executor.Container{}
 
 				err := json.NewDecoder(getResponse.Body).Decode(&container)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(container).Should(Equal(expectedContainer))
+				Expect(container).To(Equal(expectedContainer))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -139,15 +140,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 404 Not Found", func() {
-				Ω(getResponse.StatusCode).Should(Equal(http.StatusNotFound))
+				Expect(getResponse.StatusCode).To(Equal(http.StatusNotFound))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-handler.failed-to-get-container",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -157,15 +159,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500 Internal Error", func() {
-				Ω(getResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(getResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-handler.failed-to-get-container",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -204,7 +207,7 @@ var _ = Describe("Api", func() {
 
 			JustBeforeEach(func() {
 				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			BeforeEach(func() {
@@ -213,18 +216,19 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(reserveResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns empty error map", func() {
-				Ω(errMessageMap).Should(BeEmpty())
+				Expect(errMessageMap).To(BeEmpty())
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -233,7 +237,7 @@ var _ = Describe("Api", func() {
 
 			JustBeforeEach(func() {
 				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 			BeforeEach(func() {
 				depotClient.AllocateContainersReturns(map[string]string{
@@ -242,19 +246,20 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(reserveResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns error map with appropriate error message", func() {
-				Ω(errMessageMap[containerGuid]).Should(Equal(executor.ErrContainerGuidNotAvailable.Error()))
+				Expect(errMessageMap[containerGuid]).To(Equal(executor.ErrContainerGuidNotAvailable.Error()))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.allocate-handler.failed-to-allocate-containers",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -263,7 +268,7 @@ var _ = Describe("Api", func() {
 
 			JustBeforeEach(func() {
 				err := json.NewDecoder(reserveResponse.Body).Decode(&errMessageMap)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 			BeforeEach(func() {
 				depotClient.AllocateContainersReturns(map[string]string{
@@ -272,19 +277,20 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(reserveResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns error map with appropriate error message", func() {
-				Ω(errMessageMap[containerGuid]).Should(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
+				Expect(errMessageMap[containerGuid]).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.allocate-handler.failed-to-allocate-containers",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -294,15 +300,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(reserveResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(reserveResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.allocate-handler.failed-to-allocate-containers",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -338,7 +345,7 @@ var _ = Describe("Api", func() {
 		})
 
 		It("returns 201", func() {
-			Ω(runResponse.StatusCode).Should(Equal(http.StatusCreated))
+			Expect(runResponse.StatusCode).To(Equal(http.StatusCreated))
 			time.Sleep(time.Second)
 		})
 
@@ -346,14 +353,15 @@ var _ = Describe("Api", func() {
 			Eventually(depotClient.RunContainerCallCount).Should(Equal(1))
 
 			guid := depotClient.RunContainerArgsForCall(0)
-			Ω(guid).Should(Equal(containerGuid))
+			Expect(guid).To(Equal(containerGuid))
 		})
 
 		It("logs the request", func() {
-			Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+			Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 				"test.request.serving",
 				"test.request.done",
 			}))
+
 		})
 
 		Context("when the run action fails", func() {
@@ -362,15 +370,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 404", func() {
-				Ω(runResponse.StatusCode).Should(Equal(http.StatusNotFound))
+				Expect(runResponse.StatusCode).To(Equal(http.StatusNotFound))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.run-handler.run-actions-failed",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -398,7 +407,7 @@ var _ = Describe("Api", func() {
 					nil,
 					nil,
 				)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			JustBeforeEach(func() {
@@ -406,21 +415,22 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200", func() {
-				Ω(listResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(listResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("should return all reserved containers", func() {
 				containers := []executor.Container{}
 				err := json.NewDecoder(listResponse.Body).Decode(&containers)
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(containers).Should(Equal(expectedContainers))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(containers).To(Equal(expectedContainers))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 
 			Context("and tags are specified", func() {
@@ -431,10 +441,11 @@ var _ = Describe("Api", func() {
 				})
 
 				It("filters by the given tags", func() {
-					Ω(depotClient.ListContainersArgsForCall(0)).Should(Equal(executor.Tags{
+					Expect(depotClient.ListContainersArgsForCall(0)).To(Equal(executor.Tags{
 						"a": "b",
 						"c": "d",
 					}))
+
 				})
 			})
 		})
@@ -453,15 +464,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(listResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(listResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.list-handler.failed-to-list-container",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -479,19 +491,20 @@ var _ = Describe("Api", func() {
 
 		Context("when the container exists", func() {
 			It("returns 200 OK", func() {
-				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(deleteResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("deletes the container", func() {
-				Ω(depotClient.DeleteContainerCallCount()).Should(Equal(1))
-				Ω(depotClient.DeleteContainerArgsForCall(0)).Should(Equal(containerGuid))
+				Expect(depotClient.DeleteContainerCallCount()).To(Equal(1))
+				Expect(depotClient.DeleteContainerArgsForCall(0)).To(Equal(containerGuid))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 
 			Context("when deleting the container fails", func() {
@@ -500,7 +513,7 @@ var _ = Describe("Api", func() {
 				})
 
 				It("returns a 500", func() {
-					Ω(deleteResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+					Expect(deleteResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 				})
 			})
 		})
@@ -511,15 +524,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a 404", func() {
-				Ω(deleteResponse.StatusCode).Should(Equal(http.StatusNotFound))
+				Expect(deleteResponse.StatusCode).To(Equal(http.StatusNotFound))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.delete-handler.failed-to-delete-container",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -536,7 +550,7 @@ var _ = Describe("Api", func() {
 				rata.Params{"guid": containerGuid},
 				nil,
 			)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		JustBeforeEach(func() {
@@ -553,37 +567,38 @@ var _ = Describe("Api", func() {
 				})
 
 				It("returns 200 OK", func() {
-					Ω(response.StatusCode).Should(Equal(http.StatusOK))
+					Expect(response.StatusCode).To(Equal(http.StatusOK))
 				})
 
 				It("streams the files to the request", func() {
 					streamedOut, err := ioutil.ReadAll(response.Body)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
-					Ω(string(streamedOut)).Should(Equal("some-stream"))
+					Expect(string(streamedOut)).To(Equal("some-stream"))
 				})
 
 				It("gets the files out of the container's working directory", func() {
-					Ω(depotClient.GetFilesCallCount()).Should(Equal(1))
+					Expect(depotClient.GetFilesCallCount()).To(Equal(1))
 
 					guid, source := depotClient.GetFilesArgsForCall(0)
-					Ω(guid).Should(Equal(containerGuid))
-					Ω(source).Should(Equal(""))
+					Expect(guid).To(Equal(containerGuid))
+					Expect(source).To(Equal(""))
 				})
 
 				It("returns application/tar content-type", func() {
-					Ω(response.Header.Get("content-type")).Should(Equal("application/x-tar"))
+					Expect(response.Header.Get("content-type")).To(Equal("application/x-tar"))
 				})
 
 				It("closes the stream after the request completes", func() {
-					Ω(responseStream.Closed()).Should(BeTrue())
+					Expect(responseStream.Closed()).To(BeTrue())
 				})
 
 				It("logs the request", func() {
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.request.serving",
 						"test.request.done",
 					}))
+
 				})
 
 				Context("when a source query param is specified", func() {
@@ -594,11 +609,11 @@ var _ = Describe("Api", func() {
 					})
 
 					It("gets the files out of the given path in the container", func() {
-						Ω(depotClient.GetFilesCallCount()).Should(Equal(1))
+						Expect(depotClient.GetFilesCallCount()).To(Equal(1))
 
 						guid, source := depotClient.GetFilesArgsForCall(0)
-						Ω(guid).Should(Equal(containerGuid))
-						Ω(source).Should(Equal("path/to/file"))
+						Expect(guid).To(Equal(containerGuid))
+						Expect(source).To(Equal("path/to/file"))
 					})
 				})
 			})
@@ -609,15 +624,16 @@ var _ = Describe("Api", func() {
 				})
 
 				It("returns a 500", func() {
-					Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
+					Expect(response.StatusCode).To(Equal(http.StatusInternalServerError))
 				})
 
 				It("logs the request", func() {
-					Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.request.serving",
 						"test.request.get-files-handler.failed-to-get-container",
 						"test.request.done",
 					}))
+
 				})
 			})
 		})
@@ -628,15 +644,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a 404", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusNotFound))
+				Expect(response.StatusCode).To(Equal(http.StatusNotFound))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-files-handler.failed-to-get-container",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -653,7 +670,7 @@ var _ = Describe("Api", func() {
 				rata.Params{"guid": containerGuid},
 				nil,
 			)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		JustBeforeEach(func() {
@@ -661,7 +678,7 @@ var _ = Describe("Api", func() {
 		})
 
 		It("sets the content type to application/json", func() {
-			Ω(response.Header.Get("Content-Type")).Should(Equal("application/json"))
+			Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))
 		})
 
 		Context("when the container exists", func() {
@@ -677,16 +694,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a 200", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns the expected metrics", func() {
 				result := executor.ContainerMetrics{}
 
 				err := json.NewDecoder(response.Body).Decode(&result)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(result).Should(Equal(metrics))
+				Expect(result).To(Equal(metrics))
 			})
 		})
 
@@ -696,15 +713,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns a 404", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusNotFound))
+				Expect(response.StatusCode).To(Equal(http.StatusNotFound))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-metrics-handler.container-not-found",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -714,15 +732,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(response.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-metrics-handler.failed-to-get-metrics",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -739,7 +758,7 @@ var _ = Describe("Api", func() {
 				nil,
 				nil,
 			)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		JustBeforeEach(func() {
@@ -747,7 +766,7 @@ var _ = Describe("Api", func() {
 		})
 
 		It("sets the content type to application/json", func() {
-			Ω(response.Header.Get("Content-Type")).Should(Equal("application/json"))
+			Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))
 		})
 
 		Context("when no tags", func() {
@@ -768,21 +787,21 @@ var _ = Describe("Api", func() {
 			})
 
 			It("calls GetAllMetrics with no tags", func() {
-				Ω(depotClient.GetAllMetricsCallCount()).Should(Equal(1))
-				Ω(depotClient.GetAllMetricsArgsForCall(0)).Should(Equal(executor.Tags{}))
+				Expect(depotClient.GetAllMetricsCallCount()).To(Equal(1))
+				Expect(depotClient.GetAllMetricsArgsForCall(0)).To(Equal(executor.Tags{}))
 			})
 
 			It("returns a 200", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns the expected metrics", func() {
 				result := map[string]executor.Metrics{}
 
 				err := json.NewDecoder(response.Body).Decode(&result)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(result).Should(Equal(metrics))
+				Expect(result).To(Equal(metrics))
 			})
 		})
 
@@ -805,21 +824,21 @@ var _ = Describe("Api", func() {
 			})
 
 			It("calls GetAllMetrics with tags", func() {
-				Ω(depotClient.GetAllMetricsCallCount()).Should(Equal(1))
-				Ω(depotClient.GetAllMetricsArgsForCall(0)).Should(Equal(executor.Tags{"a": "b"}))
+				Expect(depotClient.GetAllMetricsCallCount()).To(Equal(1))
+				Expect(depotClient.GetAllMetricsArgsForCall(0)).To(Equal(executor.Tags{"a": "b"}))
 			})
 
 			It("returns a 200", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns the expected metrics", func() {
 				result := map[string]executor.Metrics{}
 
 				err := json.NewDecoder(response.Body).Decode(&result)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(result).Should(Equal(metrics))
+				Expect(result).To(Equal(metrics))
 			})
 		})
 
@@ -829,15 +848,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(response.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.get-all-metrics-handler.failed-to-get-metrics",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -865,23 +885,24 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200", func() {
-				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(resourcesResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("should return the remaining resources", func() {
 				var resources executor.ExecutorResources
 				err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
-				Ω(resources).Should(Equal(expectedExecutorResources))
+				Expect(resourcesResponse.StatusCode).To(Equal(http.StatusOK))
+				Expect(resources).To(Equal(expectedExecutorResources))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -891,15 +912,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(resourcesResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.remaining-resources-handler.failed-to-get-remaining-resources",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -927,22 +949,23 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 200 ok", func() {
-				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusOK))
+				Expect(resourcesResponse.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("returns the total resources", func() {
 				var resources executor.ExecutorResources
 				err := json.NewDecoder(resourcesResponse.Body).Decode(&resources)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(resources).Should(Equal(expectedTotalResources))
+				Expect(resources).To(Equal(expectedTotalResources))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 		})
 
@@ -952,15 +975,16 @@ var _ = Describe("Api", func() {
 			})
 
 			It("returns 500", func() {
-				Ω(resourcesResponse.StatusCode).Should(Equal(http.StatusInternalServerError))
+				Expect(resourcesResponse.StatusCode).To(Equal(http.StatusInternalServerError))
 			})
 
 			It("logs the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.total-resources-handler.failed-to-get-total-resources",
 					"test.request.done",
 				}))
+
 			})
 		})
 	})
@@ -973,11 +997,11 @@ var _ = Describe("Api", func() {
 
 			It("should 200", func() {
 				response := DoRequest(generator.CreateRequest(ehttp.Ping, nil, nil))
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			It("does not log the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(BeEmpty())
+				Expect(logger.TestSink.LogMessages()).To(BeEmpty())
 			})
 		})
 
@@ -988,11 +1012,11 @@ var _ = Describe("Api", func() {
 
 			It("should 502", func() {
 				response := DoRequest(generator.CreateRequest(ehttp.Ping, nil, nil))
-				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
+				Expect(response.StatusCode).To(Equal(http.StatusBadGateway))
 			})
 
 			It("does not log the request", func() {
-				Ω(logger.TestSink.LogMessages()).Should(BeEmpty())
+				Expect(logger.TestSink.LogMessages()).To(BeEmpty())
 			})
 		})
 	})
@@ -1050,48 +1074,49 @@ var _ = Describe("Api", func() {
 			})
 
 			It("response with the appropriate SSE headers", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 
-				Ω(response.Header.Get("Content-Type")).Should(Equal("text/event-stream; charset=utf-8"))
-				Ω(response.Header.Get("Cache-Control")).Should(Equal("no-cache, no-store, must-revalidate"))
-				Ω(response.Header.Get("Connection")).Should(Equal("keep-alive"))
+				Expect(response.Header.Get("Content-Type")).To(Equal("text/event-stream; charset=utf-8"))
+				Expect(response.Header.Get("Cache-Control")).To(Equal("no-cache, no-store, must-revalidate"))
+				Expect(response.Header.Get("Connection")).To(Equal("keep-alive"))
 			})
 
 			It("emits the events via SSE and ends when the source returns an error", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusOK))
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
 
 				reader := sse.NewReadCloser(response.Body)
 
 				payload1, err := json.Marshal(event1)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				payload2, err := json.Marshal(event2)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(reader.Next()).Should(Equal(sse.Event{
+				Expect(reader.Next()).To(Equal(sse.Event{
 					ID:   "0",
 					Name: string(executor.EventTypeContainerComplete),
 					Data: payload1,
 				}))
 
-				Ω(reader.Next()).Should(Equal(sse.Event{
+				Expect(reader.Next()).To(Equal(sse.Event{
 					ID:   "1",
 					Name: string(executor.EventTypeContainerComplete),
 					Data: payload2,
 				}))
 
 				_, err = reader.Next()
-				Ω(err).Should(Equal(io.EOF))
+				Expect(err).To(Equal(io.EOF))
 			})
 
 			It("logs the request", func() {
 				_, err := ioutil.ReadAll(response.Body)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(logger.TestSink.LogMessages()).Should(ConsistOf([]string{
+				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.request.serving",
 					"test.request.done",
 				}))
+
 			})
 
 			Context("when the client goes away", func() {
@@ -1110,7 +1135,7 @@ var _ = Describe("Api", func() {
 			})
 
 			It("should 502", func() {
-				Ω(response.StatusCode).Should(Equal(http.StatusBadGateway))
+				Expect(response.StatusCode).To(Equal(http.StatusBadGateway))
 			})
 		})
 	})
