@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +17,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+type fakeTransport struct {
+	RoundTripCount int
+}
+
+func (t *fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	t.RoundTripCount++
+	return nil, errors.New("Something bad happened")
+}
 
 var _ = Describe("Client", func() {
 	var (
@@ -112,7 +122,22 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Describe("Get", func() {
+	itRetries := func(m func()) {
+		Context("when the executor is down", func() {
+			var testTransport *fakeTransport
+			BeforeEach(func() {
+				testTransport = &fakeTransport{}
+				nonStreamingClient.Transport = testTransport
+			})
+
+			It("retries the request", func() {
+				m()
+				Ω(testTransport.RoundTripCount).Should(Equal(2))
+			})
+		})
+	}
+
+	Describe("GetContainer", func() {
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
@@ -177,6 +202,8 @@ var _ = Describe("Client", func() {
 			})
 		})
 
+		itRetries(func() { client.GetContainer(containerGuid) })
+
 		Context("when the get fails because the container was not found", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
@@ -238,9 +265,24 @@ var _ = Describe("Client", func() {
 				Expect(err).To(Equal(executor.ErrStepsInvalid))
 			})
 		})
+
+		Context("when the executor is down", func() {
+			var testTransport *fakeTransport
+			BeforeEach(func() {
+				testTransport = &fakeTransport{}
+				nonStreamingClient.Transport = testTransport
+			})
+
+			It("does not retry the request", func() {
+				client.RunContainer("guid-123")
+				Ω(testTransport.RoundTripCount).Should(Equal(1))
+			})
+		})
 	})
 
 	Describe("DeleteContainer", func() {
+		itRetries(func() { client.DeleteContainer("guid-123") })
+
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(
@@ -279,6 +321,8 @@ var _ = Describe("Client", func() {
 				{Guid: "b", Action: action},
 			}
 		})
+
+		itRetries(func() { client.ListContainers(nil) })
 
 		Context("with no tags", func() {
 			BeforeEach(func() {
@@ -338,6 +382,8 @@ var _ = Describe("Client", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(totalResourcesResponse))
 		})
+
+		itRetries(func() { client.TotalResources() })
 	})
 
 	Describe("Remaining Resources", func() {
@@ -361,6 +407,8 @@ var _ = Describe("Client", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).To(Equal(remainingResourcesResponse))
 		})
+
+		itRetries(func() { client.RemainingResources() })
 	})
 
 	Describe("GetFiles", func() {
@@ -375,6 +423,8 @@ var _ = Describe("Client", func() {
 				response),
 			)
 		})
+
+		itRetries(func() { client.GetFiles("guid-123", "path") })
 
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
@@ -406,6 +456,8 @@ var _ = Describe("Client", func() {
 
 	Describe("GetMetrics", func() {
 		var containerGuid string
+
+		itRetries(func() { client.GetMetrics(containerGuid) })
 
 		Context("when the call succeeds", func() {
 			BeforeEach(func() {
@@ -489,6 +541,8 @@ var _ = Describe("Client", func() {
 				},
 			}
 		})
+
+		itRetries(func() { client.GetAllMetrics(nil) })
 
 		Context("with no tags", func() {
 			BeforeEach(func() {
@@ -576,6 +630,9 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Ping", func() {
+
+		itRetries(func() { client.Ping() })
+
 		Context("when the ping succeeds", func() {
 			BeforeEach(func() {
 				fakeExecutor.AppendHandlers(ghttp.CombineHandlers(

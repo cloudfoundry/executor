@@ -121,18 +121,7 @@ func (c client) ListContainers(tags executor.Tags) ([]executor.Container, error)
 }
 
 func (c client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
-	req, err := c.reqGen.CreateRequest(ehttp.GetFiles, rata.Params{"guid": guid}, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.URL.RawQuery = url.Values{"source": []string{sourcePath}}.Encode()
-
-	response, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	response, err = handleResponse(response)
+	response, err := c.doRequest(ehttp.GetFiles, rata.Params{"guid": guid}, nil, url.Values{"source": []string{sourcePath}})
 	if err != nil {
 		return nil, err
 	}
@@ -243,12 +232,17 @@ func (c client) getResources(apiEndpoint string) (executor.ExecutorResources, er
 }
 
 func (c client) doRequest(handlerName string, params rata.Params, payload interface{}, queryParameters url.Values) (*http.Response, error) {
-	jsonBody, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var bodyReader io.Reader
+
+	if payload != nil {
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = bytes.NewReader(jsonBody)
 	}
 
-	req, err := c.reqGen.CreateRequest(handlerName, params, bytes.NewReader(jsonBody))
+	req, err := c.reqGen.CreateRequest(handlerName, params, bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -259,12 +253,17 @@ func (c client) doRequest(handlerName string, params rata.Params, payload interf
 
 	req.Header.Set("Content-Type", "application/json")
 
-	response, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	var response *http.Response
+	for tries := 2; tries > 0; tries-- {
+		response, err = c.httpClient.Do(req)
+		if err == nil {
+			return handleResponse(response)
+		}
+		if req.Method != "GET" && req.Method != "DELETE" {
+			break
+		}
 	}
-
-	return handleResponse(response)
+	return nil, err
 }
 
 func handleResponse(response *http.Response) (*http.Response, error) {
