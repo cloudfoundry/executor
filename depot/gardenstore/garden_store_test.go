@@ -1495,7 +1495,7 @@ var _ = Describe("GardenContainerStore", func() {
 				fakeGardenClient.BulkInfoReturns(
 					map[string]garden.ContainerInfoEntry{
 						"fake-handle-1": garden.ContainerInfoEntry{
-							Err: errors.New("oh no"),
+							Err: garden.NewError("oh no"),
 						},
 						"fake-handle-2": garden.ContainerInfoEntry{
 							Info: garden.ContainerInfo{
@@ -2146,7 +2146,7 @@ var _ = Describe("GardenContainerStore", func() {
 			BeforeEach(func() {
 				fakeGardenClient.BulkMetricsReturns(map[string]garden.ContainerMetricsEntry{
 					"some-container-handle": garden.ContainerMetricsEntry{
-						Err: errors.New("oh no"),
+						Err: garden.NewError("oh no"),
 					},
 				}, nil)
 			})
