@@ -28,6 +28,14 @@ type ClientProvider interface {
 	WithLogger(logger lager.Logger) Client
 }
 
+type WorkPoolSettings struct {
+	CreateWorkPoolSize      int
+	DeleteWorkPoolSize      int
+	ReadWorkPoolSize        int
+	MetricsWorkPoolSize     int
+	HealthCheckWorkPoolSize int
+}
+
 //go:generate counterfeiter -o fakes/fake_event_source.go . EventSource
 
 type EventSource interface {

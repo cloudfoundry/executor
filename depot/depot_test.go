@@ -2,6 +2,8 @@ package depot_test
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -49,8 +51,15 @@ var _ = Describe("Depot", func() {
 		}
 
 		lockManager = &fakelockmanager.FakeLockManager{}
+		workPoolSettings := executor.WorkPoolSettings{
+			CreateWorkPoolSize:      5,
+			DeleteWorkPoolSize:      5,
+			ReadWorkPoolSize:        5,
+			MetricsWorkPoolSize:     5,
+			HealthCheckWorkPoolSize: 5,
+		}
 
-		depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager).WithLogger(logger)
+		depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -497,6 +506,298 @@ var _ = Describe("Depot", func() {
 				Eventually(allocationStore.List).Should(BeEmpty())
 
 				Expect(logger).To(gbytes.Say("test.depot-client.run-container.failed-running-container-in-garden"))
+			})
+		})
+	})
+
+	Describe("Throttling", func() {
+		var (
+			containers       []executor.Container
+			gardenStoreGuid  = "garden-store-guid"
+			workPoolSettings executor.WorkPoolSettings
+		)
+
+		BeforeEach(func() {
+			containers = make([]executor.Container, 10)
+			for i := 0; i < cap(containers); i++ {
+				containers[i] = executor.Container{
+					Guid:     fmt.Sprintf("%s-%d", gardenStoreGuid, i),
+					MemoryMB: 5,
+					DiskMB:   5,
+				}
+			}
+
+			resources = executor.ExecutorResources{
+				MemoryMB:   1024,
+				DiskMB:     1024,
+				Containers: 10,
+			}
+
+			workPoolSettings = executor.WorkPoolSettings{
+				CreateWorkPoolSize:      2,
+				DeleteWorkPoolSize:      6,
+				ReadWorkPoolSize:        4,
+				MetricsWorkPoolSize:     5,
+				HealthCheckWorkPoolSize: 3,
+			}
+
+			depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
+		})
+
+		Context("Health check", func() {
+			var (
+				throttleChan chan struct{}
+				doneChan     chan struct{}
+			)
+
+			BeforeEach(func() {
+				throttleChan = make(chan struct{}, len(containers))
+				doneChan = make(chan struct{})
+
+				gardenStore.PingStub = func() error {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return nil
+				}
+			})
+
+			It("throttles the requests to Garden", func() {
+				for _, _ = range containers {
+					go depotClient.Ping()
+				}
+
+				Eventually(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
+				Consistently(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
+
+				Eventually(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
+				Consistently(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
+
+				doneChan <- struct{}{}
+
+				Eventually(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize + 1))
+				Consistently(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize + 1))
+
+				close(doneChan)
+				Eventually(gardenStore.PingCallCount).Should(Equal(len(containers)))
+			})
+		})
+
+		Context("Container creation", func() {
+			var (
+				throttleChan chan struct{}
+				doneChan     chan struct{}
+			)
+
+			BeforeEach(func() {
+				throttleChan = make(chan struct{}, len(containers))
+				doneChan = make(chan struct{})
+				_, err := depotClient.AllocateContainers(containers)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				gardenStore.CreateStub = func(logger lager.Logger, container executor.Container) (executor.Container, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return executor.Container{}, nil
+				}
+			})
+
+			It("throttles the requests to Garden", func() {
+				for _, container := range containers {
+					go depotClient.RunContainer(container.Guid)
+				}
+
+				Eventually(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+				Consistently(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+
+				Eventually(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+				Consistently(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+
+				doneChan <- struct{}{}
+
+				Eventually(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize + 1))
+				Consistently(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize + 1))
+
+				close(doneChan)
+				Eventually(gardenStore.CreateCallCount).Should(Equal(len(containers)))
+			})
+		})
+
+		Context("Container Deletion", func() {
+			var (
+				throttleChan chan struct{}
+				doneChan     chan struct{}
+			)
+
+			BeforeEach(func() {
+				throttleChan = make(chan struct{}, len(containers))
+				doneChan = make(chan struct{})
+				gardenStore.DestroyStub = func(logger lager.Logger, guid string) error {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return nil
+				}
+				gardenStore.StopStub = func(logger lager.Logger, guid string) error {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return nil
+				}
+			})
+
+			It("throttles the requests to Garden", func() {
+				stopContainerCount := 0
+				deleteContainerCount := 0
+				for i, container := range containers {
+					if i%2 == 0 {
+						stopContainerCount++
+						go depotClient.StopContainer(container.Guid)
+					} else {
+						deleteContainerCount++
+						go depotClient.DeleteContainer(container.Guid)
+					}
+				}
+
+				Eventually(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize))
+				Consistently(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize))
+
+				doneChan <- struct{}{}
+
+				Eventually(func() int {
+					return gardenStore.StopCallCount() + gardenStore.DestroyCallCount()
+				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize + 1))
+
+				close(doneChan)
+
+				Eventually(gardenStore.StopCallCount).Should(Equal(stopContainerCount))
+				Eventually(gardenStore.DestroyCallCount).Should(Equal(deleteContainerCount))
+			})
+		})
+
+		Context("Retrieves containers", func() {
+			var (
+				throttleChan chan struct{}
+				doneChan     chan struct{}
+			)
+
+			BeforeEach(func() {
+				throttleChan = make(chan struct{}, len(containers))
+				doneChan = make(chan struct{})
+				gardenStore.GetFilesStub = func(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return nil, nil
+				}
+				gardenStore.ListStub = func(logger lager.Logger, tags executor.Tags) ([]executor.Container, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return []executor.Container{executor.Container{}}, nil
+				}
+				gardenStore.LookupStub = func(logger lager.Logger, guid string) (executor.Container, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return executor.Container{}, nil
+				}
+			})
+
+			It("throttles the requests to Garden", func() {
+				getContainerCount := 0
+				listContainerCount := 0
+				getFilesCount := 0
+				for i, container := range containers {
+					switch i % 3 {
+					case 0:
+						getContainerCount++
+						go depotClient.GetContainer(container.Guid)
+					case 1:
+						listContainerCount++
+						go depotClient.ListContainers(executor.Tags{})
+					case 2:
+						getFilesCount++
+						go depotClient.GetFiles(container.Guid, "/some/path")
+					}
+				}
+
+				Eventually(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.ReadWorkPoolSize))
+				Consistently(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.ReadWorkPoolSize))
+
+				doneChan <- struct{}{}
+
+				Eventually(func() int {
+					return gardenStore.LookupCallCount() + gardenStore.ListCallCount() + gardenStore.GetFilesCallCount()
+				}).Should(Equal(workPoolSettings.ReadWorkPoolSize + 1))
+
+				close(doneChan)
+
+				Eventually(gardenStore.LookupCallCount).Should(Equal(getContainerCount))
+				Eventually(gardenStore.ListCallCount).Should(Equal(listContainerCount))
+				Eventually(gardenStore.GetFilesCallCount).Should(Equal(getFilesCount))
+			})
+		})
+
+		Context("Metrics", func() {
+			var (
+				throttleChan chan struct{}
+				doneChan     chan struct{}
+			)
+
+			BeforeEach(func() {
+				throttleChan = make(chan struct{}, len(containers))
+				doneChan = make(chan struct{})
+				gardenStore.MetricsStub = func(logger lager.Logger, guids []string) (map[string]executor.ContainerMetrics, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return map[string]executor.ContainerMetrics{
+						"some-guid": executor.ContainerMetrics{},
+					}, nil
+				}
+				gardenStore.ListReturns([]executor.Container{executor.Container{Guid: "some-guid"}}, nil)
+
+				gardenStore.LookupStub = func(logger lager.Logger, guid string) (executor.Container, error) {
+					throttleChan <- struct{}{}
+					<-doneChan
+					return executor.Container{}, nil
+				}
+			})
+
+			It("throttles the requests to Garden", func() {
+				for i, container := range containers {
+					switch i % 2 {
+					case 0:
+						go depotClient.GetMetrics(container.Guid)
+					case 1:
+						go depotClient.GetAllMetrics(executor.Tags{})
+					}
+				}
+
+				Eventually(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.MetricsWorkPoolSize))
+				Consistently(func() int {
+					return len(throttleChan)
+				}).Should(Equal(workPoolSettings.MetricsWorkPoolSize))
+
+				doneChan <- struct{}{}
+
+				Eventually(gardenStore.MetricsCallCount).Should(Equal(workPoolSettings.MetricsWorkPoolSize + 1))
+
+				close(doneChan)
+
+				Eventually(gardenStore.MetricsCallCount).Should(Equal(len(containers)))
 			})
 		})
 	})

@@ -37,6 +37,14 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
+const (
+	defaultCreateWorkPoolSize      = 25
+	defaultDeleteWorkPoolSize      = 25
+	defaultReadWorkPoolSize        = 25
+	defaultMetricsWorkPoolSize     = 25
+	defaultHealthCheckWorkPoolSize = 5
+)
+
 var listenAddr = flag.String(
 	"listenAddr",
 	"0.0.0.0:1700",
@@ -145,6 +153,36 @@ var containerOwnerName = flag.String(
 	"owner name with which to tag containers",
 )
 
+var createWorkPoolSize = flag.Int(
+	"createWorkPoolSize",
+	defaultCreateWorkPoolSize,
+	"Number of concurrent create operations in garden",
+)
+
+var deleteWorkPoolSize = flag.Int(
+	"deleteWorkPoolSize",
+	defaultDeleteWorkPoolSize,
+	"Number of concurrent delete operations in garden",
+)
+
+var readWorkPoolSize = flag.Int(
+	"readWorkPoolSize",
+	defaultReadWorkPoolSize,
+	"Number of concurrent read operations in garden",
+)
+
+var metricsWorkPoolSize = flag.Int(
+	"metricsWorkPoolSize",
+	defaultMetricsWorkPoolSize,
+	"Number of concurrent metrics operations in garden",
+)
+
+var healthCheckWorkPoolSize = flag.Int(
+	"healthCheckWorkPoolSize",
+	defaultHealthCheckWorkPoolSize,
+	"Number of concurrent ping operations in garden",
+)
+
 const (
 	dropsondeDestination           = "localhost:3457"
 	dropsondeOrigin                = "executor"
@@ -210,12 +248,21 @@ func main() {
 	)
 	allocationStore := allocationstore.NewAllocationStore(clock, hub)
 
+	workPoolSettings := executor.WorkPoolSettings{
+		CreateWorkPoolSize:      *createWorkPoolSize,
+		DeleteWorkPoolSize:      *deleteWorkPoolSize,
+		ReadWorkPoolSize:        *readWorkPoolSize,
+		MetricsWorkPoolSize:     *metricsWorkPoolSize,
+		HealthCheckWorkPoolSize: *healthCheckWorkPoolSize,
+	}
+
 	depotClientProvider := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient),
 		allocationStore,
 		gardenStore,
 		hub,
 		keyed_lock.NewLockManager(),
+		workPoolSettings,
 	)
 
 	metricsLogger := logger.Session("metrics-reporter")

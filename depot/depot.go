@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -25,6 +26,11 @@ type clientProvider struct {
 	eventHub             event.Hub
 	containerLockManager keyed_lock.LockManager
 	resourcesLock        *sync.Mutex
+	creationWorkPool     *workpool.WorkPool
+	deletionWorkPool     *workpool.WorkPool
+	readWorkPool         *workpool.WorkPool
+	metricsWorkPool      *workpool.WorkPool
+	healthCheckWorkPool  *workpool.WorkPool
 }
 
 type AllocationStore interface {
@@ -55,6 +61,7 @@ func NewClientProvider(
 	gardenStore GardenStore,
 	eventHub event.Hub,
 	lockManager keyed_lock.LockManager,
+	workPoolSettings executor.WorkPoolSettings,
 ) executor.ClientProvider {
 	return &clientProvider{
 		totalCapacity:        totalCapacity,
@@ -63,6 +70,11 @@ func NewClientProvider(
 		eventHub:             eventHub,
 		containerLockManager: lockManager,
 		resourcesLock:        new(sync.Mutex),
+		creationWorkPool:     workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize),
+		deletionWorkPool:     workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize),
+		readWorkPool:         workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize),
+		metricsWorkPool:      workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize),
+		healthCheckWorkPool:  workpool.NewWorkPool(workPoolSettings.HealthCheckWorkPoolSize),
 	}
 }
 
@@ -71,6 +83,10 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 		provider,
 		logger.Session("depot-client"),
 	}
+}
+
+func (c *client) DestroyWorkPools() {
+	c.creationWorkPool.Stop()
 }
 
 func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
@@ -146,13 +162,30 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
-		container, err = c.gardenStore.Lookup(logger, guid)
-		if err != nil {
-			return executor.Container{}, err
+		errChannel := make(chan error, 1)
+		containerChannel := make(chan executor.Container, 1)
+
+		c.readWorkPool.Submit(func() {
+			container, err = c.gardenStore.Lookup(logger, guid)
+			if err != nil {
+				errChannel <- err
+				return
+			}
+			containerChannel <- container
+			return
+		})
+
+		select {
+		case container = <-containerChannel:
+			err = nil
+		case err = <-errChannel:
+			container = executor.Container{}
 		}
+		close(errChannel)
+		close(containerChannel)
 	}
 
-	return container, nil
+	return container, err
 }
 
 func (c *client) RunContainer(guid string) error {
@@ -168,7 +201,7 @@ func (c *client) RunContainer(guid string) error {
 	}
 	logger.Debug("succeeded-initializing-container")
 
-	go func() {
+	c.creationWorkPool.Submit(func() {
 		c.containerLockManager.Lock(guid)
 		defer c.containerLockManager.Unlock(guid)
 
@@ -211,7 +244,7 @@ func (c *client) RunContainer(guid string) error {
 			logger.Error("failed-running-container-in-garden", err)
 		}
 		logger.Info("succeeded-running-container-in-garden")
-	}()
+	})
 
 	return nil
 }
@@ -249,12 +282,32 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 	}
 
 	logger.Debug("listing-garden-store")
-	gardenContainers, err := c.gardenStore.List(logger, tags)
+	errChannel := make(chan error, 1)
+	containersChannel := make(chan []executor.Container, 1)
+	c.readWorkPool.Submit(func() {
+		gardenContainers, err := c.gardenStore.List(logger, tags)
+		if err != nil {
+			logger.Error("failed-listing-garden-store", err)
+			errChannel <- err
+		} else {
+			logger.Debug("succeeded-listing-garden-store")
+			containersChannel <- gardenContainers
+		}
+	})
+
+	var err error
+	var gardenContainers []executor.Container
+	select {
+	case gardenContainers = <-containersChannel:
+		err = nil
+	case err = <-errChannel:
+	}
+	close(errChannel)
+	close(containersChannel)
+
 	if err != nil {
-		logger.Error("failed-listing-garden-store", err)
 		return nil, err
 	}
-	logger.Debug("succeeded-listing-garden-store")
 
 	// Order here is important; we want allocated containers to override garden
 	// containers as a member of latter is uninitialized until its counterpart
@@ -277,59 +330,100 @@ func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error
 }
 
 func (c *client) GetMetrics(guid string) (executor.ContainerMetrics, error) {
+
+	errChannel := make(chan error, 1)
+	metricsChannel := make(chan executor.ContainerMetrics, 1)
+
 	logger := c.logger.Session("get-metrics")
 
-	metrics, err := c.gardenStore.Metrics(logger, []string{guid})
-	if err != nil {
-		logger.Error("failed-get-container-metrics", err)
-		return executor.ContainerMetrics{}, err
+	c.metricsWorkPool.Submit(func() {
+		metrics, err := c.gardenStore.Metrics(logger, []string{guid})
+		if err != nil {
+			logger.Error("failed-get-container-metrics", err)
+			errChannel <- err
+		} else {
+			if m, found := metrics[guid]; found {
+				metricsChannel <- m
+			} else {
+				errChannel <- executor.ErrContainerNotFound
+			}
+		}
+	})
+
+	var metrics executor.ContainerMetrics
+	var err error
+	select {
+	case metrics = <-metricsChannel:
+		err = nil
+	case err = <-errChannel:
+		metrics = executor.ContainerMetrics{}
 	}
 
-	if m, found := metrics[guid]; found {
-		return m, nil
-	}
-
-	return executor.ContainerMetrics{}, executor.ErrContainerNotFound
+	close(metricsChannel)
+	close(errChannel)
+	return metrics, err
 }
 
 func (c *client) GetAllMetrics(tags executor.Tags) (map[string]executor.Metrics, error) {
+
+	errChannel := make(chan error, 1)
+	metricsChannel := make(chan map[string]executor.Metrics, 1)
+
 	logger := c.logger.Session("get-all-metrics")
 
-	containers, err := c.gardenStore.List(logger, tags)
-	if err != nil {
-		logger.Error("failed-to-list-containers", err)
-		return nil, err
-	}
-
-	containerGuids := make([]string, 0, len(containers))
-	for _, container := range containers {
-		if container.MetricsConfig.Guid != "" {
-			containerGuids = append(containerGuids, container.Guid)
+	c.metricsWorkPool.Submit(func() {
+		containers, err := c.gardenStore.List(logger, tags)
+		if err != nil {
+			logger.Error("failed-to-list-containers", err)
+			errChannel <- err
+			return
 		}
-	}
 
-	cmetrics, err := c.gardenStore.Metrics(logger, containerGuids)
-	if err != nil {
-		logger.Error("failed-to-get-metrics", err)
-		return nil, err
-	}
+		containerGuids := make([]string, 0, len(containers))
+		for _, container := range containers {
+			if container.MetricsConfig.Guid != "" {
+				containerGuids = append(containerGuids, container.Guid)
+			}
+		}
 
-	metrics := make(map[string]executor.Metrics)
-	for _, container := range containers {
-		if container.MetricsConfig.Guid != "" {
-			if cmetric, found := cmetrics[container.Guid]; found {
-				metrics[container.Guid] = executor.Metrics{
-					MetricsConfig:    container.MetricsConfig,
-					ContainerMetrics: cmetric,
+		cmetrics, err := c.gardenStore.Metrics(logger, containerGuids)
+		if err != nil {
+			logger.Error("failed-to-get-metrics", err)
+			errChannel <- err
+			return
+		}
+
+		metrics := make(map[string]executor.Metrics)
+		for _, container := range containers {
+			if container.MetricsConfig.Guid != "" {
+				if cmetric, found := cmetrics[container.Guid]; found {
+					metrics[container.Guid] = executor.Metrics{
+						MetricsConfig:    container.MetricsConfig,
+						ContainerMetrics: cmetric,
+					}
 				}
 			}
 		}
+		metricsChannel <- metrics
+	})
+
+	var metrics map[string]executor.Metrics
+	var err error
+	select {
+	case metrics = <-metricsChannel:
+		err = nil
+	case err = <-errChannel:
+		metrics = make(map[string]executor.Metrics)
 	}
 
-	return metrics, nil
+	close(metricsChannel)
+	close(errChannel)
+	return metrics, err
 }
 
 func (c *client) StopContainer(guid string) error {
+	errChannel := make(chan error, 1)
+
 	logger := c.logger.Session("stop-container", lager.Data{
 		"guid": guid,
 	})
@@ -339,37 +433,50 @@ func (c *client) StopContainer(guid string) error {
 
 	container, err := c.allocationStore.Lookup(guid)
 	if err == executor.ErrContainerNotFound {
-		return c.gardenStore.Stop(logger, guid)
+		c.deletionWorkPool.Submit(func() {
+			err = c.gardenStore.Stop(logger, guid)
+			if err != nil {
+				logger.Error("failed-to-find-container", err)
+				errChannel <- err
+			} else {
+				errChannel <- nil
+			}
+		})
+		err = <-errChannel
+		close(errChannel)
 	}
-	if err != nil {
-		logger.Error("failed-to-find-container", err)
-		return err
-	}
-
 	if container.State != executor.StateCompleted {
 		c.allocationStore.Fail(logger, guid, ContainerStoppedBeforeRunMessage)
 	}
 
-	return nil
+	return err
 }
 
 func (c *client) DeleteContainer(guid string) error {
-	logger := c.logger.Session("delete-container", lager.Data{
-		"guid": guid,
+	errChannel := make(chan error, 1)
+	c.deletionWorkPool.Submit(func() {
+		logger := c.logger.Session("delete-container", lager.Data{
+			"guid": guid,
+		})
+
+		c.containerLockManager.Lock(guid)
+		defer c.containerLockManager.Unlock(guid)
+
+		// don't care if we actually deallocated
+		c.allocationStore.Deallocate(logger, guid)
+
+		if err := c.gardenStore.Destroy(logger, guid); err != nil {
+			logger.Error("failed-to-delete-garden-container", err)
+			errChannel <- err
+		} else {
+			errChannel <- nil
+		}
 	})
 
-	c.containerLockManager.Lock(guid)
-	defer c.containerLockManager.Unlock(guid)
+	err := <-errChannel
+	close(errChannel)
 
-	// don't care if we actually deallocated
-	c.allocationStore.Deallocate(logger, guid)
-
-	if err := c.gardenStore.Destroy(logger, guid); err != nil {
-		logger.Error("failed-to-delete-garden-container", err)
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
@@ -413,7 +520,22 @@ func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 }
 
 func (c *client) Ping() error {
-	return c.gardenStore.Ping()
+	errChannel := make(chan error, 1)
+
+	c.healthCheckWorkPool.Submit(func() {
+		err := c.gardenStore.Ping()
+
+		if err != nil {
+			errChannel <- err
+		} else {
+			errChannel <- nil
+		}
+	})
+
+	err := <-errChannel
+
+	close(errChannel)
+	return err
 }
 
 func (c *client) TotalResources() (executor.ExecutorResources, error) {
@@ -431,7 +553,25 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 		"guid": guid,
 	})
 
-	return c.gardenStore.GetFiles(logger, guid, sourcePath)
+	errChannel := make(chan error, 1)
+	readChannel := make(chan io.ReadCloser, 1)
+	c.readWorkPool.Submit(func() {
+		readCloser, err := c.gardenStore.GetFiles(logger, guid, sourcePath)
+		if err != nil {
+			errChannel <- err
+		} else {
+			readChannel <- readCloser
+		}
+	})
+
+	var readCloser io.ReadCloser
+	var err error
+	select {
+	case readCloser = <-readChannel:
+		err = nil
+	case err = <-errChannel:
+	}
+	return readCloser, err
 }
 
 func (c *client) SubscribeToEvents() (executor.EventSource, error) {
