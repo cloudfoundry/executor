@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -36,6 +37,8 @@ var _ = Describe("MonitorStep", func() {
 		step   steps.Step
 		logger *lagertest.TestLogger
 	)
+
+	const numOfConcurrentMonitorSteps = 3
 
 	BeforeEach(func() {
 		startTimeout = 0
@@ -73,6 +76,7 @@ var _ = Describe("MonitorStep", func() {
 			startTimeout,
 			healthyInterval,
 			unhealthyInterval,
+			workpool.NewWorkPool(numOfConcurrentMonitorSteps),
 		)
 	})
 
@@ -85,6 +89,59 @@ var _ = Describe("MonitorStep", func() {
 		clock.Increment(d)
 		Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
 	}
+
+	Describe("Throttling", func() {
+		var (
+			throttleChan chan struct{}
+			doneChan     chan struct{}
+			fakeStep     *fakes.FakeStep
+		)
+
+		BeforeEach(func() {
+			throttleChan = make(chan struct{}, numOfConcurrentMonitorSteps)
+			doneChan = make(chan struct{}, 1)
+			fakeStep = new(fakes.FakeStep)
+			fakeStep.PerformStub = func() error {
+				throttleChan <- struct{}{}
+				<-doneChan
+				return nil
+			}
+			checkFunc = func() steps.Step {
+				return fakeStep
+			}
+
+		})
+
+		AfterEach(func() {
+			step.Cancel()
+		})
+
+		It("throttles concurrent health check", func() {
+			for i := 0; i < 5; i++ {
+				go step.Perform()
+			}
+
+			Consistently(fakeStep.PerformCallCount).Should(Equal(0))
+			clock.Increment(501 * time.Millisecond)
+
+			Eventually(func() int {
+				return len(throttleChan)
+			}).Should(Equal(numOfConcurrentMonitorSteps))
+			Consistently(func() int {
+				return len(throttleChan)
+			}).Should(Equal(numOfConcurrentMonitorSteps))
+
+			Eventually(fakeStep.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps))
+
+			doneChan <- struct{}{}
+
+			Eventually(fakeStep.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps + 1))
+
+			close(doneChan)
+
+			Eventually(fakeStep.PerformCallCount).Should(Equal(5))
+		})
+	})
 
 	Describe("Perform", func() {
 		var (

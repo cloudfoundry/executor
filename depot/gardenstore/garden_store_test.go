@@ -66,6 +66,7 @@ var _ = Describe("GardenContainerStore", func() {
 			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false, clock),
 			clock,
 			emitter,
+			100,
 		)
 	})
 

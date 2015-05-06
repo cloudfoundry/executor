@@ -52,11 +52,10 @@ var _ = Describe("Depot", func() {
 
 		lockManager = &fakelockmanager.FakeLockManager{}
 		workPoolSettings := executor.WorkPoolSettings{
-			CreateWorkPoolSize:      5,
-			DeleteWorkPoolSize:      5,
-			ReadWorkPoolSize:        5,
-			MetricsWorkPoolSize:     5,
-			HealthCheckWorkPoolSize: 5,
+			CreateWorkPoolSize:  5,
+			DeleteWorkPoolSize:  5,
+			ReadWorkPoolSize:    5,
+			MetricsWorkPoolSize: 5,
 		}
 
 		depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
@@ -534,56 +533,13 @@ var _ = Describe("Depot", func() {
 			}
 
 			workPoolSettings = executor.WorkPoolSettings{
-				CreateWorkPoolSize:      2,
-				DeleteWorkPoolSize:      6,
-				ReadWorkPoolSize:        4,
-				MetricsWorkPoolSize:     5,
-				HealthCheckWorkPoolSize: 3,
+				CreateWorkPoolSize:  2,
+				DeleteWorkPoolSize:  6,
+				ReadWorkPoolSize:    4,
+				MetricsWorkPoolSize: 5,
 			}
 
 			depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
-		})
-
-		Context("Health check", func() {
-			var (
-				throttleChan chan struct{}
-				doneChan     chan struct{}
-			)
-
-			BeforeEach(func() {
-				throttleChan = make(chan struct{}, len(containers))
-				doneChan = make(chan struct{})
-
-				gardenStore.PingStub = func() error {
-					throttleChan <- struct{}{}
-					<-doneChan
-					return nil
-				}
-			})
-
-			It("throttles the requests to Garden", func() {
-				for _, _ = range containers {
-					go depotClient.Ping()
-				}
-
-				Eventually(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
-				Consistently(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
-
-				Eventually(func() int {
-					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
-				Consistently(func() int {
-					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize))
-
-				doneChan <- struct{}{}
-
-				Eventually(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize + 1))
-				Consistently(gardenStore.PingCallCount).Should(Equal(workPoolSettings.HealthCheckWorkPoolSize + 1))
-
-				close(doneChan)
-				Eventually(gardenStore.PingCallCount).Should(Equal(len(containers)))
-			})
 		})
 
 		Context("Container creation", func() {

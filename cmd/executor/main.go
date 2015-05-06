@@ -38,11 +38,11 @@ import (
 )
 
 const (
-	defaultCreateWorkPoolSize      = 25
-	defaultDeleteWorkPoolSize      = 25
-	defaultReadWorkPoolSize        = 25
-	defaultMetricsWorkPoolSize     = 25
-	defaultHealthCheckWorkPoolSize = 5
+	defaultCreateWorkPoolSize      = 20
+	defaultDeleteWorkPoolSize      = 20
+	defaultReadWorkPoolSize        = 20
+	defaultMetricsWorkPoolSize     = 20
+	defaultHealthCheckWorkPoolSize = 125
 )
 
 var listenAddr = flag.String(
@@ -245,15 +245,15 @@ func main() {
 		transformer,
 		clock,
 		hub,
+		*healthCheckWorkPoolSize,
 	)
 	allocationStore := allocationstore.NewAllocationStore(clock, hub)
 
 	workPoolSettings := executor.WorkPoolSettings{
-		CreateWorkPoolSize:      *createWorkPoolSize,
-		DeleteWorkPoolSize:      *deleteWorkPoolSize,
-		ReadWorkPoolSize:        *readWorkPoolSize,
-		MetricsWorkPoolSize:     *metricsWorkPoolSize,
-		HealthCheckWorkPoolSize: *healthCheckWorkPoolSize,
+		CreateWorkPoolSize:  *createWorkPoolSize,
+		DeleteWorkPoolSize:  *deleteWorkPoolSize,
+		ReadWorkPoolSize:    *readWorkPoolSize,
+		MetricsWorkPoolSize: *metricsWorkPoolSize,
 	}
 
 	depotClientProvider := depot.NewClientProvider(

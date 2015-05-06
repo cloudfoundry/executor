@@ -30,7 +30,6 @@ type clientProvider struct {
 	deletionWorkPool     *workpool.WorkPool
 	readWorkPool         *workpool.WorkPool
 	metricsWorkPool      *workpool.WorkPool
-	healthCheckWorkPool  *workpool.WorkPool
 }
 
 type AllocationStore interface {
@@ -74,7 +73,6 @@ func NewClientProvider(
 		deletionWorkPool:     workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize),
 		readWorkPool:         workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize),
 		metricsWorkPool:      workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize),
-		healthCheckWorkPool:  workpool.NewWorkPool(workPoolSettings.HealthCheckWorkPoolSize),
 	}
 }
 
@@ -520,22 +518,7 @@ func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 }
 
 func (c *client) Ping() error {
-	errChannel := make(chan error, 1)
-
-	c.healthCheckWorkPool.Submit(func() {
-		err := c.gardenStore.Ping()
-
-		if err != nil {
-			errChannel <- err
-		} else {
-			errChannel <- nil
-		}
-	})
-
-	err := <-errChannel
-
-	close(errChannel)
-	return err
+	return c.gardenStore.Ping()
 }
 
 func (c *client) TotalResources() (executor.ExecutorResources, error) {

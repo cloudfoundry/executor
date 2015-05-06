@@ -29,11 +29,10 @@ type ClientProvider interface {
 }
 
 type WorkPoolSettings struct {
-	CreateWorkPoolSize      int
-	DeleteWorkPoolSize      int
-	ReadWorkPoolSize        int
-	MetricsWorkPoolSize     int
-	HealthCheckWorkPoolSize int
+	CreateWorkPoolSize  int
+	DeleteWorkPoolSize  int
+	ReadWorkPoolSize    int
+	MetricsWorkPoolSize int
 }
 
 //go:generate counterfeiter -o fakes/fake_event_source.go . EventSource

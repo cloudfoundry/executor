@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
@@ -26,6 +27,7 @@ type monitorStep struct {
 	startTimeout      time.Duration
 	healthyInterval   time.Duration
 	unhealthyInterval time.Duration
+	workPool          *workpool.WorkPool
 
 	*canceller
 }
@@ -39,6 +41,7 @@ func NewMonitor(
 	startTimeout time.Duration,
 	healthyInterval time.Duration,
 	unhealthyInterval time.Duration,
+	workPool *workpool.WorkPool,
 ) Step {
 	logger = logger.Session("monitor-step")
 
@@ -53,6 +56,7 @@ func NewMonitor(
 		unhealthyInterval: unhealthyInterval,
 
 		canceller: newCanceller(),
+		workPool:  workPool,
 	}
 }
 
@@ -84,9 +88,9 @@ func (step *monitorStep) Perform() error {
 
 			check := step.checkFunc()
 
-			go func() {
+			step.workPool.Submit(func() {
 				stepResult <- check.Perform()
-			}()
+			})
 
 			select {
 			case stepErr := <-stepResult:

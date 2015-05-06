@@ -48,6 +48,7 @@ func NewGardenStore(
 	transformer *transformer.Transformer,
 	clock clock.Clock,
 	eventEmitter EventEmitter,
+	healthCheckWorkPoolSize int,
 ) *GardenStore {
 	return &GardenStore{
 		gardenClient:       gardenClient,
@@ -64,7 +65,7 @@ func NewGardenStore(
 
 		runningProcesses: map[string]ifrit.Process{},
 
-		workPool: workpool.NewWorkPool(32),
+		workPool: workpool.NewWorkPool(healthCheckWorkPoolSize),
 	}
 }
 
@@ -302,6 +303,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			time.Duration(container.StartTimeout)*time.Second,
 			store.healthyMonitoringInterval,
 			store.unhealthyMonitoringInterval,
+			store.workPool,
 		)
 	}
 
