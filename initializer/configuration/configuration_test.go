@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/cmd/executor/configuration"
+	"github.com/cloudfoundry-incubator/executor/initializer/configuration"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	. "github.com/onsi/ginkgo"
