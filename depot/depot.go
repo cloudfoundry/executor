@@ -155,15 +155,15 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 		"guid": guid,
 	})
 
-	c.containerLockManager.Lock(guid)
-	defer c.containerLockManager.Unlock(guid)
-
 	container, err := c.allocationStore.Lookup(guid)
 	if err != nil {
 		errChannel := make(chan error, 1)
 		containerChannel := make(chan executor.Container, 1)
 
 		c.readWorkPool.Submit(func() {
+			c.containerLockManager.Lock(guid)
+			defer c.containerLockManager.Unlock(guid)
+
 			container, err = c.gardenStore.Lookup(logger, guid)
 			if err != nil {
 				errChannel <- err
@@ -426,12 +426,12 @@ func (c *client) StopContainer(guid string) error {
 		"guid": guid,
 	})
 
-	c.containerLockManager.Lock(guid)
-	defer c.containerLockManager.Unlock(guid)
-
 	container, err := c.allocationStore.Lookup(guid)
 	if err == executor.ErrContainerNotFound {
 		c.deletionWorkPool.Submit(func() {
+			c.containerLockManager.Lock(guid)
+			defer c.containerLockManager.Unlock(guid)
+
 			err = c.gardenStore.Stop(logger, guid)
 			if err != nil {
 				logger.Error("failed-to-find-container", err)

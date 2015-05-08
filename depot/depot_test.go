@@ -1368,20 +1368,6 @@ var _ = Describe("Depot", func() {
 			)
 		})
 
-		It("allocates and drops the container lock", func() {
-			initialLockCount := lockManager.LockCallCount()
-			initialUnlockCount := lockManager.UnlockCallCount()
-
-			_, err := depotClient.GetContainer(allocationStoreGuid)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
-			Expect(lockManager.LockArgsForCall(initialLockCount)).To(Equal(allocationStoreGuid))
-
-			Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
-			Expect(lockManager.UnlockArgsForCall(initialUnlockCount)).To(Equal(allocationStoreGuid))
-		})
-
 		Context("when container exists in allocation store", func() {
 			It("should return the container", func() {
 				container, err := depotClient.GetContainer(allocationStoreGuid)
@@ -1391,26 +1377,41 @@ var _ = Describe("Depot", func() {
 			})
 		})
 
-		Context("when container exists in garden store", func() {
-			It("should return the container", func() {
-				container, err := depotClient.GetContainer(gardenStoreGuid)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(container.Guid).To(Equal(gardenStoreGuid))
-				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
-				Eventually(gardenStore.RunCallCount).Should(Equal(1))
-				Eventually(allocationStore.List).Should(HaveLen(1))
-			})
-		})
+		Context("when the container does not exist in the allocation store", func() {
+			It("allocates and drops the container lock", func() {
+				initialLockCount := lockManager.LockCallCount()
+				initialUnlockCount := lockManager.UnlockCallCount()
 
-		Context("when container does not exists in allocation or garden store", func() {
-			BeforeEach(func() {
-				gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
+				_, err := depotClient.GetContainer(gardenStoreGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
+				Expect(lockManager.LockArgsForCall(initialLockCount)).To(Equal(gardenStoreGuid))
+
+				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
+				Expect(lockManager.UnlockArgsForCall(initialUnlockCount)).To(Equal(gardenStoreGuid))
 			})
-			It("should return an error", func() {
-				container, err := depotClient.GetContainer("does-not-exist")
-				Expect(err).To(HaveOccurred())
-				Expect(err).To(Equal(executor.ErrContainerNotFound))
-				Expect(container).To(Equal(executor.Container{}))
+
+			Context("when container exists in garden store", func() {
+				It("should return the container", func() {
+					container, err := depotClient.GetContainer(gardenStoreGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.Guid).To(Equal(gardenStoreGuid))
+					Eventually(gardenStore.LookupCallCount).Should(Equal(1))
+				})
+			})
+
+			Context("when container does not exists in allocation or garden store", func() {
+				BeforeEach(func() {
+					gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
+				})
+
+				It("should return an error", func() {
+					container, err := depotClient.GetContainer("does-not-exist")
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(executor.ErrContainerNotFound))
+					Expect(container).To(Equal(executor.Container{}))
+				})
 			})
 		})
 	})
