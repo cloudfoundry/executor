@@ -126,7 +126,7 @@ func (store *GardenStore) Metrics(logger lager.Logger, containerGuids []string) 
 			if metrics.Err == nil {
 				gmetrics := metrics.Metrics
 				containerMetrics[containerGuid] = executor.ContainerMetrics{
-					MemoryUsageInBytes: gmetrics.MemoryStat.TotalRss + (gmetrics.MemoryStat.TotalCache - gmetrics.MemoryStat.TotalInactiveFile),
+					MemoryUsageInBytes: gmetrics.MemoryStat.TotalBytesUsed,
 					DiskUsageInBytes:   gmetrics.DiskStat.BytesUsed,
 					TimeSpentInCPU:     time.Duration(gmetrics.CPUStat.Usage),
 				}

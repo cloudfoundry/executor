@@ -2170,9 +2170,10 @@ var _ = Describe("GardenContainerStore", func() {
 		BeforeEach(func() {
 			containerMetrics := garden.Metrics{
 				MemoryStat: garden.ContainerMemoryStat{
-					TotalRss:          100,
-					TotalCache:        12,
-					TotalInactiveFile: 1,
+					TotalRss:          100, // ignored
+					TotalCache:        12,  // ignored
+					TotalInactiveFile: 1,   // ignored
+					TotalBytesUsed:    987,
 				},
 				DiskStat: garden.ContainerDiskStat{
 					BytesUsed:  222,
@@ -2201,7 +2202,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Expect(fakeGardenClient.BulkMetricsCallCount()).To(Equal(1))
 			Expect(metrics).To(HaveLen(1))
 			Expect(metrics["some-container-handle"]).To(Equal(executor.ContainerMetrics{
-				MemoryUsageInBytes: 111,
+				MemoryUsageInBytes: 987,
 				DiskUsageInBytes:   222,
 				TimeSpentInCPU:     123,
 			}))
