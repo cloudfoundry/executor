@@ -78,11 +78,11 @@ type Configuration struct {
 }
 
 const (
-	defaultCreateWorkPoolSize      = 20
-	defaultDeleteWorkPoolSize      = 20
-	defaultReadWorkPoolSize        = 20
-	defaultMetricsWorkPoolSize     = 20
-	defaultHealthCheckWorkPoolSize = 125
+	defaultCreateWorkPoolSize      = 32
+	defaultDeleteWorkPoolSize      = 32
+	defaultReadWorkPoolSize        = 64
+	defaultMetricsWorkPoolSize     = 8
+	defaultHealthCheckWorkPoolSize = 64
 )
 
 var DefaultConfiguration = Configuration{
