@@ -2170,10 +2170,10 @@ var _ = Describe("GardenContainerStore", func() {
 		BeforeEach(func() {
 			containerMetrics := garden.Metrics{
 				MemoryStat: garden.ContainerMemoryStat{
-					TotalRss:          100, // ignored
-					TotalCache:        12,  // ignored
-					TotalInactiveFile: 1,   // ignored
-					TotalBytesUsed:    987,
+					TotalRss:              100, // ignored
+					TotalCache:            12,  // ignored
+					TotalInactiveFile:     1,   // ignored
+					TotalUsageTowardLimit: 987,
 				},
 				DiskStat: garden.ContainerDiskStat{
 					BytesUsed:  222,
