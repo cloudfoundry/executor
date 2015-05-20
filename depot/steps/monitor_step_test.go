@@ -67,6 +67,9 @@ var _ = Describe("MonitorStep", func() {
 		hasBecomeHealthyChannel := make(chan struct{}, 1000)
 		hasBecomeHealthy = hasBecomeHealthyChannel
 
+		workPool, err := workpool.NewWorkPool(numOfConcurrentMonitorSteps)
+		Expect(err).NotTo(HaveOccurred())
+
 		step = steps.NewMonitor(
 			checkFunc,
 			hasBecomeHealthyChannel,
@@ -76,7 +79,7 @@ var _ = Describe("MonitorStep", func() {
 			startTimeout,
 			healthyInterval,
 			unhealthyInterval,
-			workpool.NewWorkPool(numOfConcurrentMonitorSteps),
+			workPool,
 		)
 	})
 

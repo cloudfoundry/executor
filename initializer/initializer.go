@@ -109,7 +109,7 @@ var DefaultConfiguration = Configuration{
 	HealthCheckWorkPoolSize:     defaultHealthCheckWorkPoolSize,
 }
 
-func Initialize(logger lager.Logger, config Configuration) (executor.Client, grouper.Members) {
+func Initialize(logger lager.Logger, config Configuration) (executor.Client, grouper.Members, error) {
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
 	waitForGarden(logger, gardenClient)
 
@@ -138,7 +138,7 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 
 	hub := event.NewHub()
 
-	gardenStore := gardenstore.NewGardenStore(
+	gardenStore, err := gardenstore.NewGardenStore(
 		gardenClient,
 		config.ContainerOwnerName,
 		config.ContainerMaxCpuShares,
@@ -150,6 +150,10 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 		hub,
 		config.HealthCheckWorkPoolSize,
 	)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
+
 	allocationStore := allocationstore.NewAllocationStore(clock, hub)
 
 	workPoolSettings := executor.WorkPoolSettings{
@@ -159,7 +163,7 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 		MetricsWorkPoolSize: config.MetricsWorkPoolSize,
 	}
 
-	depotClientProvider := depot.NewClientProvider(
+	depotClientProvider, err := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient, config),
 		allocationStore,
 		gardenStore,
@@ -167,25 +171,30 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 		keyed_lock.NewLockManager(),
 		workPoolSettings,
 	)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
 
 	metricsLogger := logger.Session("metrics-reporter")
 	containerMetricsLogger := logger.Session("container-metrics-reporter")
 
-	return depotClientProvider.WithLogger(logger), grouper.Members{
-		{"metrics-reporter", &metrics.Reporter{
-			ExecutorSource: depotClientProvider.WithLogger(metricsLogger),
-			Interval:       metricsReportInterval,
-			Logger:         metricsLogger,
-		}},
-		{"hub-closer", closeHub(hub)},
-		{"registry-pruner", allocationStore.RegistryPruner(logger, config.RegistryPruningInterval)},
-		{"container-metrics-reporter", containermetrics.NewStatsReporter(
-			containerMetricsLogger,
-			containerMetricsReportInterval,
-			clock,
-			depotClientProvider.WithLogger(containerMetricsLogger),
-		)},
-	}
+	return depotClientProvider.WithLogger(logger),
+		grouper.Members{
+			{"metrics-reporter", &metrics.Reporter{
+				ExecutorSource: depotClientProvider.WithLogger(metricsLogger),
+				Interval:       metricsReportInterval,
+				Logger:         metricsLogger,
+			}},
+			{"hub-closer", closeHub(hub)},
+			{"registry-pruner", allocationStore.RegistryPruner(logger, config.RegistryPruningInterval)},
+			{"container-metrics-reporter", containermetrics.NewStatsReporter(
+				containerMetricsLogger,
+				containerMetricsReportInterval,
+				clock,
+				depotClientProvider.WithLogger(containerMetricsLogger),
+			)},
+		},
+		nil
 }
 
 func ValidateExecutor(logger lager.Logger, config Configuration) bool {

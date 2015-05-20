@@ -49,7 +49,12 @@ func NewGardenStore(
 	clock clock.Clock,
 	eventEmitter EventEmitter,
 	healthCheckWorkPoolSize int,
-) *GardenStore {
+) (*GardenStore, error) {
+	workPool, err := workpool.NewWorkPool(healthCheckWorkPoolSize)
+	if err != nil {
+		return nil, err
+	}
+
 	return &GardenStore{
 		gardenClient:       gardenClient,
 		exchanger:          NewExchanger(containerOwnerName, containerMaxCPUShares, containerInodeLimit),
@@ -65,8 +70,8 @@ func NewGardenStore(
 
 		runningProcesses: map[string]ifrit.Process{},
 
-		workPool: workpool.NewWorkPool(healthCheckWorkPoolSize),
-	}
+		workPool: workPool,
+	}, nil
 }
 
 func (store *GardenStore) Lookup(logger lager.Logger, guid string) (executor.Container, error) {

@@ -61,7 +61,24 @@ func NewClientProvider(
 	eventHub event.Hub,
 	lockManager keyed_lock.LockManager,
 	workPoolSettings executor.WorkPoolSettings,
-) executor.ClientProvider {
+) (executor.ClientProvider, error) {
+	creationWorkPool, err := workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize)
+	if err != nil {
+		return nil, err
+	}
+	deletionWorkPool, err := workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize)
+	if err != nil {
+		return nil, err
+	}
+	readWorkPool, err := workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize)
+	if err != nil {
+		return nil, err
+	}
+	metricsWorkPool, err := workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize)
+	if err != nil {
+		return nil, err
+	}
+
 	return &clientProvider{
 		totalCapacity:        totalCapacity,
 		allocationStore:      allocationStore,
@@ -69,11 +86,11 @@ func NewClientProvider(
 		eventHub:             eventHub,
 		containerLockManager: lockManager,
 		resourcesLock:        new(sync.Mutex),
-		creationWorkPool:     workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize),
-		deletionWorkPool:     workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize),
-		readWorkPool:         workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize),
-		metricsWorkPool:      workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize),
-	}
+		creationWorkPool:     creationWorkPool,
+		deletionWorkPool:     deletionWorkPool,
+		readWorkPool:         readWorkPool,
+		metricsWorkPool:      metricsWorkPool,
+	}, nil
 }
 
 func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client {

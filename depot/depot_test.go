@@ -58,7 +58,10 @@ var _ = Describe("Depot", func() {
 			MetricsWorkPoolSize: 5,
 		}
 
-		depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
+		d, err := depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings)
+		Expect(err).NotTo(HaveOccurred())
+
+		depotClient = d.WithLogger(logger)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -539,7 +542,10 @@ var _ = Describe("Depot", func() {
 				MetricsWorkPoolSize: 5,
 			}
 
-			depotClient = depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings).WithLogger(logger)
+			d, err := depot.NewClientProvider(resources, allocationStore, gardenStore, eventHub, lockManager, workPoolSettings)
+			Expect(err).NotTo(HaveOccurred())
+
+			depotClient = d.WithLogger(logger)
 		})
 
 		Context("Container creation", func() {
