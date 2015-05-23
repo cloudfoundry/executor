@@ -87,12 +87,16 @@ func (step *runStep) Perform() error {
 	errChan := make(chan error, 1)
 
 	step.logger.Info("creating-process")
+	runAs := "vcap"
+	if step.model.Privileged {
+		runAs = "root"
+	}
 	process, err := step.container.Run(garden.ProcessSpec{
-		Path:       step.model.Path,
-		Args:       step.model.Args,
-		Dir:        step.model.Dir,
-		Env:        envVars,
-		Privileged: step.model.Privileged,
+		Path: step.model.Path,
+		Args: step.model.Args,
+		Dir:  step.model.Dir,
+		Env:  envVars,
+		User: runAs,
 
 		Limits: garden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
 	}, garden.ProcessIO{

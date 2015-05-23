@@ -136,9 +136,9 @@ var _ = Describe("RunAction", func() {
 					Expect(stepErr).NotTo(HaveOccurred())
 				})
 
-				It("creates a privileged container", func() {
+				It("creates a process as root", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Expect(spec.Privileged).To(BeTrue())
+					Expect(spec.User).To(Equal("root"))
 				})
 			})
 		})
@@ -161,7 +161,7 @@ var _ = Describe("RunAction", func() {
 				Expect(*spec.Limits.Nofile).To(BeNumerically("==", fileDescriptorLimit))
 				Expect(spec.Env).To(ContainElement("A=1"))
 				Expect(spec.Env).To(ContainElement("B=2"))
-				Expect(spec.Privileged).To(BeFalse())
+				Expect(spec.User).To(Equal("vcap"))
 			})
 
 			It("logs the step", func() {
