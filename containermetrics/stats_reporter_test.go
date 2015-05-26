@@ -108,7 +108,7 @@ var _ = Describe("StatsReporter", func() {
 		fakeExecutorClient = new(efakes.FakeClient)
 
 		fakeMetricSender = msfake.NewFakeMetricSender()
-		dmetrics.Initialize(fakeMetricSender)
+		dmetrics.Initialize(fakeMetricSender, nil)
 
 		metricsResults = make(chan map[string]executor.Metrics, 10)
 

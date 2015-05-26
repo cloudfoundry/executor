@@ -30,7 +30,7 @@ var _ = Describe("Reporter", func() {
 		executorClient = new(fakes.FakeClient)
 
 		sender = fake.NewFakeMetricSender()
-		dropsonde_metrics.Initialize(sender)
+		dropsonde_metrics.Initialize(sender, nil)
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
