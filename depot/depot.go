@@ -100,8 +100,11 @@ func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client 
 	}
 }
 
-func (c *client) DestroyWorkPools() {
+func (c *client) Cleanup() {
 	c.creationWorkPool.Stop()
+	c.deletionWorkPool.Stop()
+	c.readWorkPool.Stop()
+	c.metricsWorkPool.Stop()
 }
 
 func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {

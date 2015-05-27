@@ -56,7 +56,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 		logger = lagertest.NewTestLogger("test")
 
-		gardenStore = gardenstore.NewGardenStore(
+		var err error
+		gardenStore, err = gardenstore.NewGardenStore(
 			fakeGardenClient,
 			ownerName,
 			maxCPUShares,
@@ -68,6 +69,7 @@ var _ = Describe("GardenContainerStore", func() {
 			emitter,
 			100,
 		)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("Lookup", func() {
@@ -1495,7 +1497,6 @@ var _ = Describe("GardenContainerStore", func() {
 			Expect(fakeGardenClient.ContainersArgsForCall(0)).To(Equal(garden.Properties{
 				gardenstore.ContainerOwnerProperty: ownerName,
 			}))
-
 		})
 
 		Context("when tags are specified", func() {
@@ -1508,7 +1509,6 @@ var _ = Describe("GardenContainerStore", func() {
 					"tag:a": "b",
 					"tag:c": "d",
 				}))
-
 			})
 		})
 
@@ -1517,7 +1517,7 @@ var _ = Describe("GardenContainerStore", func() {
 				fakeGardenClient.BulkInfoReturns(
 					map[string]garden.ContainerInfoEntry{
 						"fake-handle-1": garden.ContainerInfoEntry{
-							Err: errors.New("oh no"),
+							Err: &garden.Error{ErrorMsg: "oh no"},
 						},
 						"fake-handle-2": garden.ContainerInfoEntry{
 							Info: garden.ContainerInfo{
@@ -1526,8 +1526,9 @@ var _ = Describe("GardenContainerStore", func() {
 								},
 							},
 						},
-					}, nil)
-
+					},
+					nil,
+				)
 			})
 
 			It("excludes it from the result set", func() {
@@ -2212,7 +2213,7 @@ var _ = Describe("GardenContainerStore", func() {
 			BeforeEach(func() {
 				fakeGardenClient.BulkMetricsReturns(map[string]garden.ContainerMetricsEntry{
 					"some-container-handle": garden.ContainerMetricsEntry{
-						Err: errors.New("oh no"),
+						Err: &garden.Error{ErrorMsg: "oh no"},
 					},
 				}, nil)
 			})

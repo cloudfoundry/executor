@@ -115,6 +115,9 @@ type FakeClient struct {
 		result1 executor.EventSource
 		result2 error
 	}
+	CleanupStub        func()
+	cleanupMutex       sync.RWMutex
+	cleanupArgsForCall []struct{}
 }
 
 func (fake *FakeClient) Ping() error {
@@ -509,6 +512,21 @@ func (fake *FakeClient) SubscribeToEventsReturns(result1 executor.EventSource, r
 		result1 executor.EventSource
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeClient) Cleanup() {
+	fake.cleanupMutex.Lock()
+	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct{}{})
+	fake.cleanupMutex.Unlock()
+	if fake.CleanupStub != nil {
+		fake.CleanupStub()
+	}
+}
+
+func (fake *FakeClient) CleanupCallCount() int {
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	return len(fake.cleanupArgsForCall)
 }
 
 var _ executor.Client = new(FakeClient)

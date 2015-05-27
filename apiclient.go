@@ -22,6 +22,7 @@ type Client interface {
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)
 	SubscribeToEvents() (EventSource, error)
+	Cleanup()
 }
 
 type ClientProvider interface {
