@@ -10,8 +10,8 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/pivotal-golang/cacheddownloader"
-	cdfakes "github.com/pivotal-golang/cacheddownloader/fakes"
+	"github.com/cloudfoundry-incubator/cacheddownloader"
+	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden"

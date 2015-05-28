@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cloudfoundry-incubator/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/containermetrics"
 	"github.com/cloudfoundry-incubator/executor/depot"
@@ -22,7 +23,6 @@ import (
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
-	"github.com/pivotal-golang/cacheddownloader"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
