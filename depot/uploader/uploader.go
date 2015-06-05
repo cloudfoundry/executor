@@ -56,9 +56,7 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 }
 
 func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, cancel <-chan struct{}) (int64, error) {
-	logger := uploader.logger.WithData(lager.Data{
-		"fileLocation": fileLocation,
-	})
+	logger := uploader.logger.WithData(lager.Data{"fileLocation": fileLocation})
 
 	sourceFile, bytesToUpload, contentMD5, err := uploader.prepareFileForUpload(fileLocation, logger)
 	if err != nil {
@@ -66,18 +64,32 @@ func (uploader *URLUploader) Upload(fileLocation string, url *url.URL, cancel <-
 	}
 	defer sourceFile.Close()
 
+UPLOAD_ATTEMPTS:
 	for attempt := 0; attempt < 3; attempt++ {
-		logger.Info("attempt", lager.Data{
-			"attempt": attempt,
-		})
-		err = uploader.attemptUpload(sourceFile, bytesToUpload, contentMD5, url.String(), cancel, logger)
-		if err == nil || err == ErrUploadCancelled {
-			break
+		logger := logger.WithData(lager.Data{"attempt": attempt})
+		logger.Info("uploading")
+		err = uploader.attemptUpload(
+			sourceFile,
+			bytesToUpload,
+			contentMD5,
+			url.String(),
+			cancel,
+			logger,
+		)
+		switch err {
+		case nil:
+			logger.Info("succeeded-uploading")
+			break UPLOAD_ATTEMPTS
+		case ErrUploadCancelled:
+			logger.Info("cancelled-uploading")
+			break UPLOAD_ATTEMPTS
+		default:
+			logger.Error("failed-uploading", err)
 		}
 	}
 
 	if err != nil {
-		logger.Error("failed-upload", err)
+		logger.Error("failed-all-upload-attempts", err)
 		return 0, err
 	}
 

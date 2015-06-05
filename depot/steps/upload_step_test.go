@@ -171,7 +171,8 @@ var _ = Describe("UploadStep", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
-					"test.URLUploader.attempt",
+					"test.URLUploader.uploading",
+					"test.URLUploader.succeeded-uploading",
 					"test.upload-step.upload-successful",
 				}))
 
