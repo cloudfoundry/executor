@@ -175,7 +175,6 @@ var _ = Describe("UploadStep", func() {
 					"test.URLUploader.succeeded-uploading",
 					"test.upload-step.upload-successful",
 				}))
-
 			})
 
 			Describe("Cancel", func() {
