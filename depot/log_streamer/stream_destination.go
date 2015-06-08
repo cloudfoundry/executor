@@ -4,8 +4,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/cloudfoundry/dropsonde/events"
 	"github.com/cloudfoundry/dropsonde/logs"
+	"github.com/cloudfoundry/sonde-go/events"
 )
 
 type streamDestination struct {

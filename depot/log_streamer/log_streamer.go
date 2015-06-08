@@ -4,7 +4,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/cloudfoundry/dropsonde/events"
+	"github.com/cloudfoundry/sonde-go/events"
 )
 
 const (
