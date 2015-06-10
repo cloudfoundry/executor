@@ -161,6 +161,21 @@ func (transformer *Transformer) StepFor(
 		}
 		return steps.NewParallel(subSteps)
 
+	case *models.CodependentAction:
+		subSteps := make([]steps.Step, len(actionModel.Actions))
+		for i, action := range actionModel.Actions {
+			subSteps[i] = transformer.StepFor(
+				logStreamer.WithSource(actionModel.LogSource),
+				action,
+				container,
+				externalIP,
+				ports,
+				logger,
+			)
+		}
+		errorOnExit := true
+		return steps.NewCodependent(subSteps, errorOnExit)
+
 	case *models.SerialAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
