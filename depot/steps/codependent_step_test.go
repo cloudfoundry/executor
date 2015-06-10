@@ -20,7 +20,11 @@ var _ = Describe("CodependentStep", func() {
 	var thingHappened chan bool
 	var cancelled chan bool
 
+	var errorOnExit bool
+
 	BeforeEach(func() {
+		errorOnExit = false
+
 		thingHappened = make(chan bool, 2)
 		cancelled = make(chan bool, 2)
 
@@ -53,7 +57,7 @@ var _ = Describe("CodependentStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		step = steps.NewCodependent([]steps.Step{subStep1, subStep2})
+		step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit)
 	})
 
 	Describe("Perform", func() {
@@ -94,6 +98,61 @@ var _ = Describe("CodependentStep", func() {
 				Expect(subStep2.CancelCallCount()).To(Equal(1))
 			})
 		})
+
+		Context("when one of the substeps exits without failure", func() {
+			var (
+				cancelledError, err error
+				errCh               chan error
+			)
+
+			BeforeEach(func() {
+				cancelledError = errors.New("I was cancelled yo.")
+				cancelled2 := make(chan bool)
+
+				subStep1.PerformStub = func() error {
+					return nil
+				}
+
+				subStep2.PerformStub = func() error {
+					<-cancelled2
+					return cancelledError
+				}
+
+				subStep2.CancelStub = func() {
+					cancelled2 <- true
+				}
+			})
+
+			JustBeforeEach(func() {
+				errCh = make(chan error)
+
+				go func() {
+					errCh <- step.Perform()
+				}()
+			})
+
+			It("continues to performe the other step", func() {
+				Eventually(errCh).ShouldNot(Receive())
+			})
+
+			Context("when errorOnExit is set to true", func() {
+				BeforeEach(func() {
+					errorOnExit = true
+				})
+
+				It("returns an aggregate of the failures", func() {
+					Eventually(errCh).Should(Receive(&err))
+					Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(cancelledError, steps.CodependentStepExitedError))
+				})
+
+				It("cancels all the steps", func() {
+					Eventually(errCh).Should(Receive())
+
+					Expect(subStep1.CancelCallCount()).To(Equal(1))
+					Expect(subStep2.CancelCallCount()).To(Equal(1))
+				})
+			})
+		})
 	})
 
 	Describe("Cancel", func() {
@@ -102,7 +161,7 @@ var _ = Describe("CodependentStep", func() {
 			step2 := &fakes.FakeStep{}
 			step3 := &fakes.FakeStep{}
 
-			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3})
+			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3}, errorOnExit)
 
 			sequence.Cancel()
 

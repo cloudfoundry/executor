@@ -1,14 +1,22 @@
 package steps
 
-import "github.com/hashicorp/go-multierror"
+import (
+	"errors"
+
+	"github.com/hashicorp/go-multierror"
+)
+
+var CodependentStepExitedError = errors.New("Codependent step exited")
 
 type codependentStep struct {
-	substeps []Step
+	substeps    []Step
+	errorOnExit bool
 }
 
-func NewCodependent(substeps []Step) *codependentStep {
+func NewCodependent(substeps []Step, errorOnExit bool) *codependentStep {
 	return &codependentStep{
-		substeps: substeps,
+		substeps:    substeps,
+		errorOnExit: errorOnExit,
 	}
 }
 
@@ -26,6 +34,10 @@ func (step *codependentStep) Perform() error {
 
 	for _ = range step.substeps {
 		err := <-errs
+		if step.errorOnExit && err == nil {
+			err = CodependentStepExitedError
+		}
+
 		if err != nil {
 			aggregate = multierror.Append(aggregate, err)
 

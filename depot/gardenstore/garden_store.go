@@ -314,7 +314,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 
 	var longLivedAction steps.Step
 	if monitorStep != nil {
-		longLivedAction = steps.NewCodependent([]steps.Step{actionStep, monitorStep})
+		longLivedAction = steps.NewCodependent([]steps.Step{actionStep, monitorStep}, false)
 	} else {
 		longLivedAction = actionStep
 
