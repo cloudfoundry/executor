@@ -56,11 +56,11 @@ var _ = Describe("CodependentStep", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
-		step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit)
-	})
-
 	Describe("Perform", func() {
+		JustBeforeEach(func() {
+			step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit)
+		})
+
 		It("performs its substeps in parallel", func() {
 			err := step.Perform()
 			Expect(err).NotTo(HaveOccurred())
@@ -107,7 +107,7 @@ var _ = Describe("CodependentStep", func() {
 
 			BeforeEach(func() {
 				cancelledError = errors.New("I was cancelled yo.")
-				cancelled2 := make(chan bool)
+				cancelled2 := make(chan bool, 1)
 
 				subStep1.PerformStub = func() error {
 					return nil
@@ -131,8 +131,12 @@ var _ = Describe("CodependentStep", func() {
 				}()
 			})
 
-			It("continues to performe the other step", func() {
-				Eventually(errCh).ShouldNot(Receive())
+			It("continues to perform the other step", func() {
+				Consistently(errCh).ShouldNot(Receive())
+
+				By("cancelling, it should return")
+				step.Cancel()
+				Eventually(errCh).Should(Receive())
 			})
 
 			Context("when errorOnExit is set to true", func() {
