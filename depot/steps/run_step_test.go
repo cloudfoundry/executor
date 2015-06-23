@@ -52,7 +52,7 @@ var _ = Describe("RunAction", func() {
 			ResourceLimits: models.ResourceLimits{
 				Nofile: &fileDescriptorLimit,
 			},
-			Privileged: false,
+			User: "notroot",
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
@@ -104,9 +104,9 @@ var _ = Describe("RunAction", func() {
 			stepErr = step.Perform()
 		})
 
-		Context("with a privileged action", func() {
+		Context("with an action running as root", func() {
 			BeforeEach(func() {
-				runAction.Privileged = true
+				runAction.User = "root"
 			})
 
 			Context("with allowPrivileged set to false", func() {
@@ -114,7 +114,7 @@ var _ = Describe("RunAction", func() {
 					allowPrivileged = false
 				})
 
-				It("errors when trying to execute a privileged run action", func() {
+				It("errors when trying to execute a run action as root", func() {
 					Expect(stepErr).To(HaveOccurred())
 				})
 
@@ -132,7 +132,7 @@ var _ = Describe("RunAction", func() {
 					allowPrivileged = true
 				})
 
-				It("does not error when trying to execute a privileged run action", func() {
+				It("does not error when trying to execute a run action as root", func() {
 					Expect(stepErr).NotTo(HaveOccurred())
 				})
 
@@ -161,7 +161,7 @@ var _ = Describe("RunAction", func() {
 				Expect(*spec.Limits.Nofile).To(BeNumerically("==", fileDescriptorLimit))
 				Expect(spec.Env).To(ContainElement("A=1"))
 				Expect(spec.Env).To(ContainElement("B=2"))
-				Expect(spec.User).To(Equal("vcap"))
+				Expect(spec.User).To(Equal("notroot"))
 			})
 
 			It("logs the step", func() {

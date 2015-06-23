@@ -385,6 +385,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Context("when the container has an executor:setup property", func() {
 				Context("and the action is valid", func() {
 					action := &models.RunAction{
+						User: "me",
 						Path: "ls",
 					}
 
@@ -425,6 +426,7 @@ var _ = Describe("GardenContainerStore", func() {
 			Context("when the container has an executor:monitor property", func() {
 				Context("and the action is valid", func() {
 					action := &models.RunAction{
+						User: "me",
 						Path: "ls",
 					}
 
@@ -753,6 +755,7 @@ var _ = Describe("GardenContainerStore", func() {
 		)
 
 		action := &models.RunAction{
+			User: "me",
 			Path: "ls",
 		}
 
@@ -918,6 +921,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				Context("when the Executor container has a Setup", func() {
 					action := &models.RunAction{
+						User: "me",
 						Path: "ls",
 					}
 
@@ -937,6 +941,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				Context("when the Executor container has a Monitor", func() {
 					action := &models.RunAction{
+						User: "me",
 						Path: "ls",
 					}
 
@@ -1683,8 +1688,8 @@ var _ = Describe("GardenContainerStore", func() {
 		)
 
 		BeforeEach(func() {
-			runAction = &models.RunAction{Path: "run"}
-			monitorAction = &models.RunAction{Path: "monitor"}
+			runAction = &models.RunAction{User: "me", Path: "run"}
+			monitorAction = &models.RunAction{User: "me", Path: "monitor"}
 
 			mutex.Lock()
 			defer mutex.Unlock()
