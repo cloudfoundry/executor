@@ -35,10 +35,6 @@ const (
 	ContainerStateProperty         = executorPropertyPrefix + "state"
 	ContainerAllocatedAtProperty   = executorPropertyPrefix + "allocated-at"
 	ContainerRootfsProperty        = executorPropertyPrefix + "rootfs"
-	ContainerActionProperty        = executorPropertyPrefix + "action"
-	ContainerSetupProperty         = executorPropertyPrefix + "setup"
-	ContainerMonitorProperty       = executorPropertyPrefix + "monitor"
-	ContainerEnvProperty           = executorPropertyPrefix + "env"
 	ContainerLogProperty           = executorPropertyPrefix + "log-config"
 	ContainerMetricsConfigProperty = executorPropertyPrefix + "metrics-config"
 	ContainerResultProperty        = executorPropertyPrefix + "result"
@@ -46,7 +42,6 @@ const (
 	ContainerDiskMBProperty        = executorPropertyPrefix + "disk-mb"
 	ContainerCPUWeightProperty     = executorPropertyPrefix + "cpu-weight"
 	ContainerStartTimeoutProperty  = executorPropertyPrefix + "start-timeout"
-	ContainerEgressRulesProperty   = executorPropertyPrefix + "egress-rules"
 )
 
 type exchanger struct {
@@ -128,7 +123,6 @@ func garden2executor(handle string, info garden.ContainerInfo) (executor.Contain
 		ExternalIP: info.ExternalIP,
 	}
 
-	var err error
 	for key, value := range info.Properties {
 		switch key {
 		case ContainerStateProperty:
@@ -153,42 +147,6 @@ func garden2executor(handle string, info garden.ContainerInfo) (executor.Contain
 			}
 		case ContainerRootfsProperty:
 			executorContainer.RootFSPath = value
-		case ContainerSetupProperty:
-			executorContainer.Setup, err = models.UnmarshalAction([]byte(value))
-			if err != nil {
-				return executor.Container{}, InvalidJSONError{
-					Property:     key,
-					Value:        value,
-					UnmarshalErr: err,
-				}
-			}
-		case ContainerActionProperty:
-			executorContainer.Action, err = models.UnmarshalAction([]byte(value))
-			if err != nil {
-				return executor.Container{}, InvalidJSONError{
-					Property:     key,
-					Value:        value,
-					UnmarshalErr: err,
-				}
-			}
-		case ContainerMonitorProperty:
-			executorContainer.Monitor, err = models.UnmarshalAction([]byte(value))
-			if err != nil {
-				return executor.Container{}, InvalidJSONError{
-					Property:     key,
-					Value:        value,
-					UnmarshalErr: err,
-				}
-			}
-		case ContainerEnvProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.Env)
-			if err != nil {
-				return executor.Container{}, InvalidJSONError{
-					Property:     key,
-					Value:        value,
-					UnmarshalErr: err,
-				}
-			}
 		case ContainerLogProperty:
 			err := json.Unmarshal([]byte(value), &executorContainer.LogConfig)
 			if err != nil {
@@ -256,16 +214,6 @@ func garden2executor(handle string, info garden.ContainerInfo) (executor.Contain
 			}
 
 			executorContainer.StartTimeout = uint(startTimeout)
-		case ContainerEgressRulesProperty:
-			err := json.Unmarshal([]byte(value), &executorContainer.EgressRules)
-			if err != nil {
-				return executor.Container{}, InvalidJSONError{
-					Property:     key,
-					Value:        value,
-					UnmarshalErr: err,
-				}
-			}
-
 		default:
 			if strings.HasPrefix(key, tagPropertyPrefix) {
 				executorContainer.Tags[key[len(tagPropertyPrefix):]] = value
@@ -298,30 +246,6 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
-	setupJson, err := models.MarshalAction(executorContainer.Setup)
-	if err != nil {
-		logger.Error("failed-marshal-setup", err)
-		return executor.Container{}, err
-	}
-
-	actionJson, err := models.MarshalAction(executorContainer.Action)
-	if err != nil {
-		logger.Error("failed-marshal-action", err)
-		return executor.Container{}, err
-	}
-
-	monitorJson, err := models.MarshalAction(executorContainer.Monitor)
-	if err != nil {
-		logger.Error("failed-marshal-monitor", err)
-		return executor.Container{}, err
-	}
-
-	envJson, err := json.Marshal(executorContainer.Env)
-	if err != nil {
-		logger.Error("failed-marshal-env", err)
-		return executor.Container{}, err
-	}
-
 	logJson, err := json.Marshal(executorContainer.LogConfig)
 	if err != nil {
 		logger.Error("failed-marshal-log", err)
@@ -340,29 +264,18 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		return executor.Container{}, err
 	}
 
-	securityGroupRuleJson, err := json.Marshal(executorContainer.EgressRules)
-	if err != nil {
-		logger.Error("failed-marshal-egress-rules", err)
-		return executor.Container{}, err
-	}
-
 	containerSpec.Properties = garden.Properties{
 		ContainerOwnerProperty:         exchanger.containerOwnerName,
 		ContainerStateProperty:         string(executorContainer.State),
 		ContainerAllocatedAtProperty:   fmt.Sprintf("%d", executorContainer.AllocatedAt),
 		ContainerStartTimeoutProperty:  fmt.Sprintf("%d", executorContainer.StartTimeout),
 		ContainerRootfsProperty:        executorContainer.RootFSPath,
-		ContainerSetupProperty:         string(setupJson),
-		ContainerActionProperty:        string(actionJson),
-		ContainerMonitorProperty:       string(monitorJson),
-		ContainerEnvProperty:           string(envJson),
 		ContainerLogProperty:           string(logJson),
 		ContainerMetricsConfigProperty: string(metricsConfigJson),
 		ContainerResultProperty:        string(resultJson),
 		ContainerMemoryMBProperty:      fmt.Sprintf("%d", executorContainer.MemoryMB),
 		ContainerDiskMBProperty:        fmt.Sprintf("%d", executorContainer.DiskMB),
 		ContainerCPUWeightProperty:     fmt.Sprintf("%d", executorContainer.CPUWeight),
-		ContainerEgressRulesProperty:   string(securityGroupRuleJson),
 	}
 
 	for name, value := range executorContainer.Tags {
