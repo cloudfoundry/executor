@@ -116,7 +116,7 @@ func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) err
 	step.logger.Info("stream-in-starting")
 
 	// StreamIn will close the reader
-	err := step.container.StreamIn(destination, reader)
+	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: reader, User: "root"})
 	if err != nil {
 		step.logger.Error("stream-in-failed", err, lager.Data{
 			"destination": destination,

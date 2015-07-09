@@ -15,11 +15,11 @@ import (
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/fakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -32,7 +32,7 @@ var _ = Describe("DownloadAction", func() {
 
 	var downloadAction models.DownloadAction
 	var cache *cdfakes.FakeCachedDownloader
-	var gardenClient *fake_api_client.FakeClient
+	var gardenClient *fakes.FakeGardenClient
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var logger *lagertest.TestLogger
 	var rateLimiter chan struct{}
@@ -49,7 +49,7 @@ var _ = Describe("DownloadAction", func() {
 			CacheKey: "the-cache-key",
 		}
 
-		gardenClient = fake_api_client.New()
+		gardenClient = fakes.NewGardenClient()
 
 		fakeStreamer = newFakeStreamer()
 		logger = lagertest.NewTestLogger("test")
@@ -179,10 +179,10 @@ var _ = Describe("DownloadAction", func() {
 					buffer := &bytes.Buffer{}
 					tarReader = tar.NewReader(buffer)
 
-					gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
-						Expect(dest).To(Equal("/tmp/Antarctica"))
+					gardenClient.Connection.StreamInStub = func(handle string, spec garden.StreamInSpec) error {
+						Expect(spec.Path).To(Equal("/tmp/Antarctica"))
 
-						_, err := io.Copy(buffer, tarStream)
+						_, err := io.Copy(buffer, spec.TarStream)
 						Expect(err).NotTo(HaveOccurred())
 
 						return nil
@@ -324,13 +324,13 @@ var _ = Describe("DownloadAction", func() {
 				calledChan = make(chan struct{})
 				barrierChan = make(chan struct{})
 
-				gardenClient.Connection.StreamInStub = func(handle string, dest string, tarStream io.Reader) error {
+				gardenClient.Connection.StreamInStub = func(handle string, spec garden.StreamInSpec) error {
 					writer := func(p []byte) (n int, err error) {
 						close(calledChan)
 						<-barrierChan
 						return 1, nil
 					}
-					_, err := io.Copy(WriteFunc(writer), tarStream)
+					_, err := io.Copy(WriteFunc(writer), spec.TarStream)
 					return err
 				}
 			})
