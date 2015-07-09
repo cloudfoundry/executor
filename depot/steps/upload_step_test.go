@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,6 +22,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	Uploader "github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader/fake_uploader"
+	"github.com/cloudfoundry-incubator/executor/fakes"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/lager/lagertest"
 )
@@ -56,7 +56,7 @@ var _ = Describe("UploadStep", func() {
 	var uploadAction *models.UploadAction
 	var uploader Uploader.Uploader
 	var tempDir string
-	var gardenClient *fake_api_client.FakeClient
+	var gardenClient *fakes.FakeGardenClient
 	var logger *lagertest.TestLogger
 	var compressor Compressor.Compressor
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -86,7 +86,7 @@ var _ = Describe("UploadStep", func() {
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
 		Expect(err).NotTo(HaveOccurred())
 
-		gardenClient = fake_api_client.New()
+		gardenClient = fakes.NewGardenClient()
 
 		logger = lagertest.NewTestLogger("test")
 
@@ -131,8 +131,8 @@ var _ = Describe("UploadStep", func() {
 			BeforeEach(func() {
 				buffer = gbytes.NewBuffer()
 
-				gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
-					Expect(src).To(Equal("./expected-src.txt"))
+				gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
+					Expect(spec.Path).To(Equal("./expected-src.txt"))
 					Expect(handle).To(Equal("some-container-handle"))
 
 					tarWriter := tar.NewWriter(buffer)
@@ -354,7 +354,7 @@ var _ = Describe("UploadStep", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			gardenClient.Connection.StreamOutStub = func(handle, src string) (io.ReadCloser, error) {
+			gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
 				buffer := gbytes.NewBuffer()
 				tarWriter := tar.NewWriter(buffer)
 

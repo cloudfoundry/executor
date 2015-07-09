@@ -89,7 +89,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(tempDir)
 
-	outStream, err := step.container.StreamOut(step.model.From)
+	outStream, err := step.container.StreamOut(garden.StreamOutSpec{Path: step.model.From, User: "vcap"})
 	if err != nil {
 		step.logger.Info("failed-to-stream-out")
 		return NewEmittableError(err, ErrEstablishStream)

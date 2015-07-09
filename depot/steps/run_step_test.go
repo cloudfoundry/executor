@@ -11,7 +11,6 @@ import (
 	"github.com/onsi/gomega/gbytes"
 
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/clock/fakeclock"
@@ -19,6 +18,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
+	"github.com/cloudfoundry-incubator/executor/fakes"
 )
 
 var _ = Describe("RunAction", func() {
@@ -26,7 +26,7 @@ var _ = Describe("RunAction", func() {
 
 	var runAction models.RunAction
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var gardenClient *fake_api_client.FakeClient
+	var gardenClient *fakes.FakeGardenClient
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
 	var allowPrivileged bool
@@ -57,7 +57,7 @@ var _ = Describe("RunAction", func() {
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 		fakeStreamer.StdoutReturns(noOpWriter{})
-		gardenClient = fake_api_client.New()
+		gardenClient = fakes.NewGardenClient()
 
 		logger = lagertest.NewTestLogger("test")
 

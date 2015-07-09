@@ -4,18 +4,18 @@ import (
 	"errors"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/cloudfoundry-incubator/executor/initializer/configuration"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client/fake_api_client"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("configuration", func() {
-	var gardenClient *fake_api_client.FakeClient
+	var gardenClient *fakes.FakeGardenClient
 
 	BeforeEach(func() {
-		gardenClient = fake_api_client.New()
+		gardenClient = fakes.NewGardenClient()
 	})
 
 	Describe("ConfigureCapacity", func() {

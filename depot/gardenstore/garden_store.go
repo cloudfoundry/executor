@@ -219,7 +219,7 @@ func (store *GardenStore) GetFiles(logger lager.Logger, guid, sourcePath string)
 		return nil, err
 	}
 
-	return container.StreamOut(sourcePath)
+	return container.StreamOut(garden.StreamOutSpec{Path: sourcePath, User: "vcap"})
 }
 
 func (store *GardenStore) Ping() error {
