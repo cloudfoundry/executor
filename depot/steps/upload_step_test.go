@@ -50,19 +50,22 @@ func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
 }
 
 var _ = Describe("UploadStep", func() {
-	var step steps.Step
-	var result chan error
+	var (
+		step   steps.Step
+		result chan error
 
-	var uploadAction *models.UploadAction
-	var uploader Uploader.Uploader
-	var tempDir string
-	var gardenClient *fakes.FakeGardenClient
-	var logger *lagertest.TestLogger
-	var compressor Compressor.Compressor
-	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var currentUser *user.User
-	var uploadTarget *httptest.Server
-	var uploadedPayload []byte
+		uploadAction    *models.UploadAction
+		uploader        Uploader.Uploader
+		tempDir         string
+		gardenClient    *fakes.FakeGardenClient
+		logger          *lagertest.TestLogger
+		compressor      Compressor.Compressor
+		fakeStreamer    *fake_log_streamer.FakeLogStreamer
+		currentUser     *user.User
+		uploadTarget    *httptest.Server
+		uploadedPayload []byte
+		allowPrivileged bool
+	)
 
 	BeforeEach(func() {
 		var err error
@@ -81,6 +84,7 @@ var _ = Describe("UploadStep", func() {
 		uploadAction = &models.UploadAction{
 			To:   uploadTarget.URL,
 			From: "./expected-src.txt",
+			User: "notroot",
 		}
 
 		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
@@ -120,6 +124,7 @@ var _ = Describe("UploadStep", func() {
 			tempDir,
 			fakeStreamer,
 			make(chan struct{}, 1),
+			allowPrivileged,
 			logger,
 		)
 	})
@@ -133,6 +138,7 @@ var _ = Describe("UploadStep", func() {
 
 				gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
 					Expect(spec.Path).To(Equal("./expected-src.txt"))
+					Expect(spec.User).To(Equal("notroot"))
 					Expect(handle).To(Equal("some-container-handle"))
 
 					tarWriter := tar.NewWriter(buffer)
@@ -276,6 +282,70 @@ var _ = Describe("UploadStep", func() {
 			})
 		})
 
+		Context("when the action uploads as root", func() {
+			var stepErr error
+
+			BeforeEach(func() {
+				uploadAction.User = "root"
+
+				gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
+					buffer := gbytes.NewBuffer()
+					tarWriter := tar.NewWriter(buffer)
+
+					dropletContents := "expected-contents"
+
+					err := tarWriter.WriteHeader(&tar.Header{
+						Name: "./expected-src.txt",
+						Size: int64(len(dropletContents)),
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = tarWriter.Write([]byte(dropletContents))
+					Expect(err).NotTo(HaveOccurred())
+
+					err = tarWriter.Flush()
+					Expect(err).NotTo(HaveOccurred())
+
+					return buffer, nil
+				}
+			})
+
+			JustBeforeEach(func() {
+				stepErr = step.Perform()
+			})
+
+			Context("with allowPrivileged set to false", func() {
+				BeforeEach(func() {
+					allowPrivileged = false
+				})
+
+				It("errors when trying to execute a download action as root", func() {
+					Expect(stepErr).To(HaveOccurred())
+				})
+
+				It("logs the step", func() {
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+						"test.upload-step.privileged-action-denied",
+					}))
+				})
+			})
+
+			Context("with allowPrivileged set to true", func() {
+				BeforeEach(func() {
+					allowPrivileged = true
+				})
+
+				It("does not error when trying to execute a download action as root", func() {
+					Expect(stepErr).NotTo(HaveOccurred())
+				})
+
+				It("streams in as root", func() {
+					_, spec := gardenClient.Connection.StreamOutArgsForCall(0)
+					Expect(spec.User).To(Equal("root"))
+				})
+			})
+		})
+
 		Context("when there is an error parsing the upload url", func() {
 			BeforeEach(func() {
 				uploadAction.To = "foo/bar"
@@ -391,6 +461,7 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
+				allowPrivileged,
 				logger,
 			)
 
@@ -407,6 +478,7 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
+				allowPrivileged,
 				logger,
 			)
 
@@ -423,6 +495,7 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
+				allowPrivileged,
 				logger,
 			)
 

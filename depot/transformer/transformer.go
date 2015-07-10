@@ -87,6 +87,7 @@ func (transformer *Transformer) StepFor(
 			*actionModel,
 			transformer.cachedDownloader,
 			transformer.downloadLimiter,
+			transformer.allowPrivileged,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		)
@@ -100,6 +101,7 @@ func (transformer *Transformer) StepFor(
 			transformer.tempDir,
 			logStreamer.WithSource(actionModel.LogSource),
 			transformer.uploadLimiter,
+			transformer.allowPrivileged,
 			logger,
 		)
 

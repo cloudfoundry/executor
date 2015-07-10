@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -19,7 +20,9 @@ type downloadStep struct {
 	cachedDownloader cacheddownloader.CachedDownloader
 	streamer         log_streamer.LogStreamer
 	rateLimiter      chan struct{}
-	logger           lager.Logger
+	allowPrivileged  bool
+
+	logger lager.Logger
 
 	*canceller
 }
@@ -29,12 +32,14 @@ func NewDownload(
 	model models.DownloadAction,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	rateLimiter chan struct{},
+	allowPrivileged bool,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 ) *downloadStep {
 	logger = logger.Session("download-step", lager.Data{
 		"to":       model.To,
 		"cacheKey": model.CacheKey,
+		"user":     model.User,
 	})
 
 	return &downloadStep{
@@ -43,6 +48,7 @@ func NewDownload(
 		cachedDownloader: cachedDownloader,
 		streamer:         streamer,
 		rateLimiter:      rateLimiter,
+		allowPrivileged:  allowPrivileged,
 		logger:           logger,
 
 		canceller: newCanceller(),
@@ -50,6 +56,11 @@ func NewDownload(
 }
 
 func (step *downloadStep) Perform() error {
+	if step.model.User == "root" && !step.allowPrivileged {
+		step.logger.Info("privileged-action-denied")
+		return errors.New("privileged-action-denied")
+	}
+
 	select {
 	case step.rateLimiter <- struct{}{}:
 	case <-step.Cancelled():
@@ -116,7 +127,7 @@ func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) err
 	step.logger.Info("stream-in-starting")
 
 	// StreamIn will close the reader
-	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: reader, User: "vcap"})
+	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: reader, User: step.model.User})
 	if err != nil {
 		step.logger.Error("stream-in-failed", err, lager.Data{
 			"destination": destination,

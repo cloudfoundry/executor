@@ -2,6 +2,7 @@ package steps
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,14 +19,15 @@ import (
 )
 
 type uploadStep struct {
-	container   garden.Container
-	model       models.UploadAction
-	uploader    uploader.Uploader
-	compressor  compressor.Compressor
-	tempDir     string
-	streamer    log_streamer.LogStreamer
-	rateLimiter chan struct{}
-	logger      lager.Logger
+	container       garden.Container
+	model           models.UploadAction
+	uploader        uploader.Uploader
+	compressor      compressor.Compressor
+	tempDir         string
+	streamer        log_streamer.LogStreamer
+	rateLimiter     chan struct{}
+	allowPrivileged bool
+	logger          lager.Logger
 
 	*canceller
 }
@@ -38,6 +40,7 @@ func NewUpload(
 	tempDir string,
 	streamer log_streamer.LogStreamer,
 	rateLimiter chan struct{},
+	allowPrivileged bool,
 	logger lager.Logger,
 ) *uploadStep {
 	logger = logger.Session("upload-step", lager.Data{
@@ -45,14 +48,15 @@ func NewUpload(
 	})
 
 	return &uploadStep{
-		container:   container,
-		model:       model,
-		uploader:    uploader,
-		compressor:  compressor,
-		tempDir:     tempDir,
-		streamer:    streamer,
-		rateLimiter: rateLimiter,
-		logger:      logger,
+		container:       container,
+		model:           model,
+		uploader:        uploader,
+		compressor:      compressor,
+		tempDir:         tempDir,
+		streamer:        streamer,
+		rateLimiter:     rateLimiter,
+		allowPrivileged: allowPrivileged,
+		logger:          logger,
 
 		canceller: newCanceller(),
 	}
@@ -67,6 +71,11 @@ const (
 )
 
 func (step *uploadStep) Perform() (err error) {
+	if step.model.User == "root" && !step.allowPrivileged {
+		step.logger.Info("privileged-action-denied")
+		return errors.New("privileged-action-denied")
+	}
+
 	step.rateLimiter <- struct{}{}
 	defer func() {
 		<-step.rateLimiter
@@ -89,7 +98,7 @@ func (step *uploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(tempDir)
 
-	outStream, err := step.container.StreamOut(garden.StreamOutSpec{Path: step.model.From, User: "vcap"})
+	outStream, err := step.container.StreamOut(garden.StreamOutSpec{Path: step.model.From, User: step.model.User})
 	if err != nil {
 		step.logger.Info("failed-to-stream-out")
 		return NewEmittableError(err, ErrEstablishStream)
