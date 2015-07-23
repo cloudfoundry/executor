@@ -1346,7 +1346,7 @@ var _ = Describe("GardenContainerStore", func() {
 				stream, err := gardenStore.GetFiles(logger, "the-guid", "the-path")
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(container.StreamOutArgsForCall(0)).To(Equal(garden.StreamOutSpec{Path: "the-path", User: "vcap"}))
+				Expect(container.StreamOutArgsForCall(0)).To(Equal(garden.StreamOutSpec{Path: "the-path", User: "root"}))
 
 				bytes, err := ioutil.ReadAll(stream)
 				Expect(err).NotTo(HaveOccurred())
