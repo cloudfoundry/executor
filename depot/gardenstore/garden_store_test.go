@@ -1907,8 +1907,8 @@ var _ = Describe("GardenContainerStore", func() {
 					TotalUsageTowardLimit: 987,
 				},
 				DiskStat: garden.ContainerDiskStat{
-					BytesUsed:  222,
-					InodesUsed: 333,
+					TotalBytesUsed:  222,
+					TotalInodesUsed: 333,
 				},
 				CPUStat: garden.ContainerCPUStat{
 					Usage:  123,
