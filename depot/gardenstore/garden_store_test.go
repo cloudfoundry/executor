@@ -1027,8 +1027,8 @@ var _ = Describe("GardenContainerStore", func() {
 					Expect(fakeGardenContainer.LimitDiskArgsForCall(0)).To(Equal(garden.DiskLimits{
 						ByteHard:  64 * 1024 * 1024,
 						InodeHard: inodeLimit,
+						Scope:     garden.DiskLimitScopeExclusive,
 					}))
-
 				})
 
 				It("creates it with the executor:disk-mb property", func() {
@@ -1064,6 +1064,7 @@ var _ = Describe("GardenContainerStore", func() {
 					Expect(fakeGardenContainer.LimitDiskCallCount()).To(Equal(1))
 					Expect(fakeGardenContainer.LimitDiskArgsForCall(0)).To(Equal(garden.DiskLimits{
 						InodeHard: inodeLimit,
+						Scope:     garden.DiskLimitScopeExclusive,
 					}))
 
 				})
@@ -1907,8 +1908,8 @@ var _ = Describe("GardenContainerStore", func() {
 					TotalUsageTowardLimit: 987,
 				},
 				DiskStat: garden.ContainerDiskStat{
-					TotalBytesUsed:  222,
-					TotalInodesUsed: 333,
+					ExclusiveBytesUsed:  222,
+					ExclusiveInodesUsed: 333,
 				},
 				CPUStat: garden.ContainerCPUStat{
 					Usage:  123,

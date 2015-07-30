@@ -132,7 +132,7 @@ func (store *GardenStore) Metrics(logger lager.Logger, containerGuids []string) 
 				gmetrics := metrics.Metrics
 				containerMetrics[containerGuid] = executor.ContainerMetrics{
 					MemoryUsageInBytes: gmetrics.MemoryStat.TotalUsageTowardLimit,
-					DiskUsageInBytes:   gmetrics.DiskStat.TotalBytesUsed,
+					DiskUsageInBytes:   gmetrics.DiskStat.ExclusiveBytesUsed,
 					TimeSpentInCPU:     time.Duration(gmetrics.CPUStat.Usage),
 				}
 			}
