@@ -120,6 +120,7 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 }
 
 func (store *GardenStore) Metrics(logger lager.Logger, containerGuids []string) (map[string]executor.ContainerMetrics, error) {
+	logger.Debug("get-bulk-metrics", lager.Data{"guids": containerGuids})
 	gardenMetrics, err := store.gardenClient.BulkMetrics(containerGuids)
 	if err != nil {
 		return nil, err
