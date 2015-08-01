@@ -10,9 +10,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/clock/fakeclock"
 
 	"github.com/cloudfoundry-incubator/executor"
@@ -45,12 +45,12 @@ var _ = Describe("RunAction", func() {
 			Path: "sudo",
 			Args: []string{"reboot"},
 			Dir:  "/some-dir",
-			Env: []models.EnvironmentVariable{
+			Env: []*models.EnvironmentVariable{
 				{Name: "A", Value: "1"},
 				{Name: "B", Value: "2"},
 			},
-			ResourceLimits: models.ResourceLimits{
-				Nofile: &fileDescriptorLimit,
+			ResourceLimits: &models.ResourceLimits{
+				Nofile: fileDescriptorLimit,
 			},
 			User: "notroot",
 		}
@@ -253,7 +253,7 @@ var _ = Describe("RunAction", func() {
 
 		Context("when a file descriptor limit is not configured", func() {
 			BeforeEach(func() {
-				runAction.ResourceLimits.Nofile = nil
+				runAction.ResourceLimits = nil
 				spawnedProcess.WaitReturns(0, nil)
 			})
 

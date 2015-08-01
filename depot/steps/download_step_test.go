@@ -14,8 +14,8 @@ import (
 	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"

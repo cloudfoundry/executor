@@ -11,12 +11,12 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore/fakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/clock/fakeclock"
@@ -556,7 +556,7 @@ var _ = Describe("GardenContainerStore", func() {
 			executorContainer = executor.Container{
 				Guid:   "some-guid",
 				State:  executor.StateInitializing,
-				Action: action,
+				Action: models.WrapAction(action),
 
 				LogConfig: executor.LogConfig{
 					Guid:       "log-guid",
@@ -838,10 +838,10 @@ var _ = Describe("GardenContainerStore", func() {
 			})
 
 			Context("when the Executor container has egress rules", func() {
-				var rules []models.SecurityGroupRule
+				var rules []*models.SecurityGroupRule
 
 				BeforeEach(func() {
-					rules = []models.SecurityGroupRule{
+					rules = []*models.SecurityGroupRule{
 						{
 							Protocol:     "udp",
 							Destinations: []string{"0.0.0.0/0"},
@@ -853,7 +853,7 @@ var _ = Describe("GardenContainerStore", func() {
 						{
 							Protocol:     "tcp",
 							Destinations: []string{"1.2.3.4-2.3.4.5"},
-							Ports:        []uint16{80, 443},
+							Ports:        []uint32{80, 443},
 							Log:          true,
 						},
 						{
@@ -932,7 +932,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 				Context("when security rule is invalid", func() {
 					BeforeEach(func() {
-						rules = []models.SecurityGroupRule{
+						rules = []*models.SecurityGroupRule{
 							{
 								Protocol:     "foo",
 								Destinations: []string{"0.0.0.0/0"},
@@ -1423,8 +1423,8 @@ var _ = Describe("GardenContainerStore", func() {
 			runReturns = make(chan int)
 
 			executorContainer = executor.Container{
-				Action:       runAction,
-				Monitor:      monitorAction,
+				Action:       models.WrapAction(runAction),
+				Monitor:      models.WrapAction(monitorAction),
 				State:        executor.StateInitializing,
 				Guid:         "some-container-handle",
 				StartTimeout: 3,
@@ -1975,8 +1975,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 		BeforeEach(func() {
 			executorContainer = executor.Container{
-				Action:  action,
-				Monitor: action,
+				Action:  models.WrapAction(action),
+				Monitor: models.WrapAction(action),
 				Guid:    "some-container-handle",
 			}
 
