@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -408,7 +408,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	return executorContainer, nil
 }
 
-func securityGroupRuleToNetOutRule(securityRule models.SecurityGroupRule) (garden.NetOutRule, error) {
+func securityGroupRuleToNetOutRule(securityRule *models.SecurityGroupRule) (garden.NetOutRule, error) {
 	var protocol garden.Protocol
 	var portRanges []garden.PortRange
 	var networks []garden.IPRange
@@ -430,10 +430,10 @@ func securityGroupRuleToNetOutRule(securityRule models.SecurityGroupRule) (garde
 	}
 
 	if securityRule.PortRange != nil {
-		portRanges = append(portRanges, garden.PortRange{Start: securityRule.PortRange.Start, End: securityRule.PortRange.End})
+		portRanges = append(portRanges, garden.PortRange{Start: uint16(securityRule.PortRange.Start), End: uint16(securityRule.PortRange.End)})
 	} else if securityRule.Ports != nil {
 		for _, port := range securityRule.Ports {
-			portRanges = append(portRanges, garden.PortRangeFromPort(port))
+			portRanges = append(portRanges, garden.PortRangeFromPort(uint16(port)))
 		}
 	}
 

@@ -3,14 +3,15 @@ package transformer
 import (
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -60,14 +61,15 @@ func NewTransformer(
 
 func (transformer *Transformer) StepFor(
 	logStreamer log_streamer.LogStreamer,
-	action models.Action,
+	action *models.Action,
 	container garden.Container,
 	externalIP string,
 	ports []executor.PortMapping,
 	logger lager.Logger,
 ) steps.Step {
 
-	switch actionModel := action.(type) {
+	a := action.GetValue()
+	switch actionModel := a.(type) {
 	case *models.RunAction:
 		return steps.NewRun(
 			container,
@@ -132,7 +134,7 @@ func (transformer *Transformer) StepFor(
 				ports,
 				logger,
 			),
-			actionModel.Timeout,
+			time.Duration(actionModel.Timeout),
 			logger,
 		)
 

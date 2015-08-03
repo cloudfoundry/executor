@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
@@ -87,6 +87,10 @@ func (step *runStep) Perform() error {
 	errChan := make(chan error, 1)
 
 	step.logger.Info("creating-process")
+	var nofile *uint64
+	if step.model.ResourceLimits != nil {
+		nofile = step.model.ResourceLimits.Nofile
+	}
 	process, err := step.container.Run(garden.ProcessSpec{
 		Path: step.model.Path,
 		Args: step.model.Args,
@@ -94,7 +98,7 @@ func (step *runStep) Perform() error {
 		Env:  envVars,
 		User: step.model.User,
 
-		Limits: garden.ResourceLimits{Nofile: step.model.ResourceLimits.Nofile},
+		Limits: garden.ResourceLimits{Nofile: nofile},
 	}, garden.ProcessIO{
 		Stdout: step.streamer.Stdout(),
 		Stderr: step.streamer.Stderr(),
@@ -198,7 +202,7 @@ func (step *runStep) Perform() error {
 	panic("unreachable")
 }
 
-func convertEnvironmentVariables(environmentVariables []models.EnvironmentVariable) []string {
+func convertEnvironmentVariables(environmentVariables []*models.EnvironmentVariable) []string {
 	converted := []string{}
 
 	for _, env := range environmentVariables {

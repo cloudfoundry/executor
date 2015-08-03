@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/url"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/cacheddownloader"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"
 )
