@@ -2,6 +2,7 @@ package steps_test
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/pivotal-golang/lager/lagertest"
@@ -221,7 +222,15 @@ var _ = Describe("RunAction", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT=1"))
 						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS=1:2,3:4"))
+
+						var cfPortsValue string
+						for _, env := range spec.Env {
+							if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
+								cfPortsValue = strings.Split(env, "=")[1]
+								break
+							}
+						}
+						Expect(cfPortsValue).To(MatchJSON("[{\"internal\":2,\"external\":1},{\"internal\":4,\"external\":3}]"))
 					})
 				})
 
@@ -234,7 +243,7 @@ var _ = Describe("RunAction", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT="))
 						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR="))
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS="))
+						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS=[]"))
 					})
 				})
 			})

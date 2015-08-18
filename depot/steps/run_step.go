@@ -1,7 +1,7 @@
 package steps
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -221,18 +221,30 @@ func (step *runStep) networkingEnvVars() []string {
 		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))
 		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
 
-		buffer := bytes.NewBufferString("CF_INSTANCE_PORTS=")
-		for i, portMapping := range step.portMappings {
-			if i > 0 {
-				buffer.WriteString(",")
-			}
-			buffer.WriteString(fmt.Sprintf("%d:%d", portMapping.HostPort, portMapping.ContainerPort))
+		type cfPortMapping struct {
+			External uint16 `json:"external"`
+			Internal uint16 `json:"internal"`
 		}
-		envVars = append(envVars, buffer.String())
+
+		cfPortMappings := make([]cfPortMapping, len(step.portMappings))
+		for i, portMapping := range step.portMappings {
+			cfPortMappings[i] = cfPortMapping{
+				Internal: portMapping.ContainerPort,
+				External: portMapping.HostPort,
+			}
+		}
+
+		mappingsValue, err := json.Marshal(cfPortMappings)
+		if err != nil {
+			step.logger.Error("marshal-networking-env-vars-failed", err)
+			mappingsValue = []byte("[]")
+		}
+
+		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORTS=%s", mappingsValue))
 	} else {
 		envVars = append(envVars, "CF_INSTANCE_PORT=")
 		envVars = append(envVars, "CF_INSTANCE_ADDR=")
-		envVars = append(envVars, "CF_INSTANCE_PORTS=")
+		envVars = append(envVars, "CF_INSTANCE_PORTS=[]")
 	}
 
 	return envVars
