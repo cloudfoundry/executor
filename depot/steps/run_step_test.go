@@ -30,7 +30,6 @@ var _ = Describe("RunAction", func() {
 	var gardenClient *fakes.FakeGardenClient
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
-	var allowPrivileged bool
 	var externalIP string
 	var portMappings []executor.PortMapping
 	var exportNetworkEnvVars bool
@@ -62,8 +61,6 @@ var _ = Describe("RunAction", func() {
 
 		logger = lagertest.NewTestLogger("test")
 
-		allowPrivileged = false
-
 		spawnedProcess = new(gfakes.FakeProcess)
 		runError = nil
 
@@ -90,7 +87,6 @@ var _ = Describe("RunAction", func() {
 			runAction,
 			fakeStreamer,
 			logger,
-			allowPrivileged,
 			externalIP,
 			portMappings,
 			exportNetworkEnvVars,
@@ -103,45 +99,6 @@ var _ = Describe("RunAction", func() {
 
 		JustBeforeEach(func() {
 			stepErr = step.Perform()
-		})
-
-		Context("with an action running as root", func() {
-			BeforeEach(func() {
-				runAction.User = "root"
-			})
-
-			Context("with allowPrivileged set to false", func() {
-				BeforeEach(func() {
-					allowPrivileged = false
-				})
-
-				It("errors when trying to execute a run action as root", func() {
-					Expect(stepErr).To(HaveOccurred())
-				})
-
-				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
-						"test.run-step.running",
-						"test.run-step.privileged-action-denied",
-					}))
-
-				})
-			})
-
-			Context("with allowPrivileged set to true", func() {
-				BeforeEach(func() {
-					allowPrivileged = true
-				})
-
-				It("does not error when trying to execute a run action as root", func() {
-					Expect(stepErr).NotTo(HaveOccurred())
-				})
-
-				It("creates a process as root", func() {
-					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Expect(spec.User).To(Equal("root"))
-				})
-			})
 		})
 
 		Context("when the script succeeds", func() {

@@ -28,7 +28,6 @@ type Transformer struct {
 	downloadLimiter      chan struct{}
 	uploadLimiter        chan struct{}
 	tempDir              string
-	allowPrivileged      bool
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 }
@@ -41,7 +40,6 @@ func NewTransformer(
 	downloadLimiter chan struct{},
 	uploadLimiter chan struct{},
 	tempDir string,
-	allowPrivileged bool,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
 ) *Transformer {
@@ -53,7 +51,6 @@ func NewTransformer(
 		downloadLimiter:      downloadLimiter,
 		uploadLimiter:        uploadLimiter,
 		tempDir:              tempDir,
-		allowPrivileged:      allowPrivileged,
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		clock:                clock,
 	}
@@ -76,7 +73,6 @@ func (transformer *Transformer) StepFor(
 			*actionModel,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
-			transformer.allowPrivileged,
 			externalIP,
 			ports,
 			transformer.exportNetworkEnvVars,
@@ -89,7 +85,6 @@ func (transformer *Transformer) StepFor(
 			*actionModel,
 			transformer.cachedDownloader,
 			transformer.downloadLimiter,
-			transformer.allowPrivileged,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		)
@@ -103,7 +98,6 @@ func (transformer *Transformer) StepFor(
 			transformer.tempDir,
 			logStreamer.WithSource(actionModel.LogSource),
 			transformer.uploadLimiter,
-			transformer.allowPrivileged,
 			logger,
 		)
 

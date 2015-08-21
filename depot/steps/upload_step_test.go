@@ -64,7 +64,6 @@ var _ = Describe("UploadStep", func() {
 		currentUser     *user.User
 		uploadTarget    *httptest.Server
 		uploadedPayload []byte
-		allowPrivileged bool
 	)
 
 	BeforeEach(func() {
@@ -124,7 +123,6 @@ var _ = Describe("UploadStep", func() {
 			tempDir,
 			fakeStreamer,
 			make(chan struct{}, 1),
-			allowPrivileged,
 			logger,
 		)
 	})
@@ -282,70 +280,6 @@ var _ = Describe("UploadStep", func() {
 			})
 		})
 
-		Context("when the action uploads as root", func() {
-			var stepErr error
-
-			BeforeEach(func() {
-				uploadAction.User = "root"
-
-				gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
-					buffer := gbytes.NewBuffer()
-					tarWriter := tar.NewWriter(buffer)
-
-					dropletContents := "expected-contents"
-
-					err := tarWriter.WriteHeader(&tar.Header{
-						Name: "./expected-src.txt",
-						Size: int64(len(dropletContents)),
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					_, err = tarWriter.Write([]byte(dropletContents))
-					Expect(err).NotTo(HaveOccurred())
-
-					err = tarWriter.Flush()
-					Expect(err).NotTo(HaveOccurred())
-
-					return buffer, nil
-				}
-			})
-
-			JustBeforeEach(func() {
-				stepErr = step.Perform()
-			})
-
-			Context("with allowPrivileged set to false", func() {
-				BeforeEach(func() {
-					allowPrivileged = false
-				})
-
-				It("errors when trying to execute a download action as root", func() {
-					Expect(stepErr).To(HaveOccurred())
-				})
-
-				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
-						"test.upload-step.privileged-action-denied",
-					}))
-				})
-			})
-
-			Context("with allowPrivileged set to true", func() {
-				BeforeEach(func() {
-					allowPrivileged = true
-				})
-
-				It("does not error when trying to execute a download action as root", func() {
-					Expect(stepErr).NotTo(HaveOccurred())
-				})
-
-				It("streams in as root", func() {
-					_, spec := gardenClient.Connection.StreamOutArgsForCall(0)
-					Expect(spec.User).To(Equal("root"))
-				})
-			})
-		})
-
 		Context("when there is an error parsing the upload url", func() {
 			BeforeEach(func() {
 				uploadAction.To = "foo/bar"
@@ -461,7 +395,6 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
-				allowPrivileged,
 				logger,
 			)
 
@@ -478,7 +411,6 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
-				allowPrivileged,
 				logger,
 			)
 
@@ -495,7 +427,6 @@ var _ = Describe("UploadStep", func() {
 				tempDir,
 				newFakeStreamer(),
 				rateLimiter,
-				allowPrivileged,
 				logger,
 			)
 

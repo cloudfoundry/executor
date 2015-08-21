@@ -37,8 +37,6 @@ var _ = Describe("DownloadAction", func() {
 		fakeStreamer   *fake_log_streamer.FakeLogStreamer
 		logger         *lagertest.TestLogger
 		rateLimiter    chan struct{}
-
-		allowPrivileged bool
 	)
 
 	handle := "some-container-handle"
@@ -76,7 +74,6 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction,
 				cache,
 				rateLimiter,
-				allowPrivileged,
 				fakeStreamer,
 				logger,
 			)
@@ -107,43 +104,6 @@ var _ = Describe("DownloadAction", func() {
 				"test.download-step.stream-in-starting",
 				"test.download-step.stream-in-complete",
 			}))
-		})
-
-		Context("when the action downloads as root", func() {
-			BeforeEach(func() {
-				downloadAction.User = "root"
-			})
-
-			Context("with allowPrivileged set to false", func() {
-				BeforeEach(func() {
-					allowPrivileged = false
-				})
-
-				It("errors when trying to execute a download action as root", func() {
-					Expect(stepErr).To(HaveOccurred())
-				})
-
-				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
-						"test.download-step.privileged-action-denied",
-					}))
-				})
-			})
-
-			Context("with allowPrivileged set to true", func() {
-				BeforeEach(func() {
-					allowPrivileged = true
-				})
-
-				It("does not error when trying to execute a download action as root", func() {
-					Expect(stepErr).NotTo(HaveOccurred())
-				})
-
-				It("streams in as root", func() {
-					_, spec := gardenClient.Connection.StreamInArgsForCall(0)
-					Expect(spec.User).To(Equal("root"))
-				})
-			})
 		})
 
 		Context("when an artifact is not specified", func() {
@@ -301,7 +261,6 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction,
 				cache,
 				rateLimiter,
-				allowPrivileged,
 				fakeStreamer,
 				logger,
 			)
@@ -417,7 +376,6 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction1,
 				cache,
 				rateLimiter,
-				allowPrivileged,
 				fakeStreamer,
 				logger,
 			)
@@ -432,7 +390,6 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction2,
 				cache,
 				rateLimiter,
-				allowPrivileged,
 				fakeStreamer,
 				logger,
 			)
@@ -447,7 +404,6 @@ var _ = Describe("DownloadAction", func() {
 				downloadAction3,
 				cache,
 				rateLimiter,
-				allowPrivileged,
 				fakeStreamer,
 				logger,
 			)

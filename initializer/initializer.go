@@ -56,7 +56,6 @@ type Configuration struct {
 	TempDir              string
 	CachePath            string
 	MaxCacheSizeInBytes  uint64
-	AllowPrivileged      bool
 	SkipCertVerify       bool
 	ExportNetworkEnvVars bool
 
@@ -96,7 +95,6 @@ var DefaultConfiguration = Configuration{
 	ContainerMaxCpuShares:       0,
 	CachePath:                   "/tmp/cache",
 	MaxCacheSizeInBytes:         10 * 1024 * 1024 * 1024,
-	AllowPrivileged:             false,
 	SkipCertVerify:              false,
 	HealthyMonitoringInterval:   30 * time.Second,
 	UnhealthyMonitoringInterval: 500 * time.Millisecond,
@@ -130,7 +128,6 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 		config.MaxCacheSizeInBytes,
 		maxConcurrentDownloads,
 		maxConcurrentUploads,
-		config.AllowPrivileged,
 		config.SkipCertVerify,
 		config.ExportNetworkEnvVars,
 		clock,
@@ -290,7 +287,6 @@ func initializeTransformer(
 	cachePath, workDir string,
 	maxCacheSizeInBytes uint64,
 	maxConcurrentDownloads, maxConcurrentUploads uint,
-	allowPrivileged bool,
 	skipSSLVerification bool,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
@@ -308,7 +304,6 @@ func initializeTransformer(
 		make(chan struct{}, maxConcurrentDownloads),
 		make(chan struct{}, maxConcurrentUploads),
 		workDir,
-		allowPrivileged,
 		exportNetworkEnvVars,
 		clock,
 	)

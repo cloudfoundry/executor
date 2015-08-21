@@ -24,7 +24,6 @@ type runStep struct {
 	model                models.RunAction
 	streamer             log_streamer.LogStreamer
 	logger               lager.Logger
-	allowPrivileged      bool
 	externalIP           string
 	portMappings         []executor.PortMapping
 	exportNetworkEnvVars bool
@@ -38,7 +37,6 @@ func NewRun(
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
-	allowPrivileged bool,
 	externalIP string,
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
@@ -50,7 +48,6 @@ func NewRun(
 		model:                model,
 		streamer:             streamer,
 		logger:               logger,
-		allowPrivileged:      allowPrivileged,
 		externalIP:           externalIP,
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
@@ -62,11 +59,6 @@ func NewRun(
 
 func (step *runStep) Perform() error {
 	step.logger.Info("running")
-
-	if step.model.User == "root" && !step.allowPrivileged {
-		step.logger.Info("privileged-action-denied")
-		return errors.New("privileged-action-denied")
-	}
 
 	envVars := convertEnvironmentVariables(step.model.Env)
 
