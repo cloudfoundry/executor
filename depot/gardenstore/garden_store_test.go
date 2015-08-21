@@ -64,7 +64,7 @@ var _ = Describe("GardenContainerStore", func() {
 			inodeLimit,
 			100*time.Millisecond,
 			100*time.Millisecond,
-			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, false, clock),
+			transformer.NewTransformer(nil, nil, nil, nil, nil, nil, os.TempDir(), false, clock),
 			clock,
 			emitter,
 			100,
