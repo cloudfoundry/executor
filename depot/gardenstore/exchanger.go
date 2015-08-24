@@ -357,10 +357,14 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	}
 
 	logger.Debug("setting-up-disk-limits")
+	gardenScope := garden.DiskLimitScopeExclusive
+	if executorContainer.DiskScope == executor.TotalDiskLimit {
+		gardenScope = garden.DiskLimitScopeTotal
+	}
 	err = gardenContainer.LimitDisk(garden.DiskLimits{
 		ByteHard:  uint64(executorContainer.DiskMB * 1024 * 1024),
 		InodeHard: exchanger.containerInodeLimit,
-		Scope:     garden.DiskLimitScopeExclusive,
+		Scope:     gardenScope,
 	})
 	if err != nil {
 		logger.Error("failed-setting-up-disk-limits", err)

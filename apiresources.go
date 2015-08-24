@@ -9,6 +9,7 @@ import (
 )
 
 type State string
+type DiskLimitScope uint8
 
 const (
 	StateInvalid      State = ""
@@ -18,6 +19,10 @@ const (
 	StateRunning      State = "running"
 	StateCompleted    State = "completed"
 )
+const (
+	ExclusiveDiskLimit DiskLimitScope = iota
+	TotalDiskLimit     DiskLimitScope = iota
+)
 
 type Container struct {
 	Guid string `json:"guid"`
@@ -26,8 +31,10 @@ type Container struct {
 
 	Privileged bool `json:"privileged"`
 
-	MemoryMB  int  `json:"memory_mb"`
-	DiskMB    int  `json:"disk_mb"`
+	MemoryMB  int            `json:"memory_mb"`
+	DiskMB    int            `json:"disk_mb"`
+	DiskScope DiskLimitScope `json:"disk_scope,omitempty"`
+
 	CPUWeight uint `json:"cpu_weight"`
 
 	Tags Tags `json:"tags,omitempty"`
