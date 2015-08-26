@@ -246,6 +246,25 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		RootFSPath: executorContainer.RootFSPath,
 	}
 
+	if executorContainer.MemoryMB != 0 {
+		logger.Debug("setting-up-memory-limits")
+		containerSpec.Limits.Memory.LimitInBytes = uint64(executorContainer.MemoryMB * 1024 * 1024)
+	}
+
+	logger.Debug("setting-up-disk-limits")
+	gardenScope := garden.DiskLimitScopeExclusive
+	if executorContainer.DiskScope == executor.TotalDiskLimit {
+		gardenScope = garden.DiskLimitScopeTotal
+	}
+	containerSpec.Limits.Disk = garden.DiskLimits{
+		ByteHard:  uint64(executorContainer.DiskMB * 1024 * 1024),
+		InodeHard: exchanger.containerInodeLimit,
+		Scope:     gardenScope,
+	}
+
+	logger.Debug("setting-up-cpu-limits")
+	containerSpec.Limits.CPU.LimitInShares = uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0)
+
 	logJson, err := json.Marshal(executorContainer.LogConfig)
 	if err != nil {
 		logger.Error("failed-marshal-log", err)
@@ -337,62 +356,6 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 		}
 		logger.Debug("succeeded-setting-up-net-out")
 	}
-
-	if executorContainer.MemoryMB != 0 {
-		logger.Debug("setting-up-memory-limits")
-		err := gardenContainer.LimitMemory(garden.MemoryLimits{
-			LimitInBytes: uint64(executorContainer.MemoryMB * 1024 * 1024),
-		})
-		if err != nil {
-			logger.Error("failed-setting-up-memory-limits", err)
-
-			gardenErr := gardenClient.Destroy(gardenContainer.Handle())
-			if gardenErr != nil {
-				logger.Error("failed-destroy-garden-container", gardenErr)
-			}
-
-			return executor.Container{}, err
-		}
-		logger.Debug("succeeded-setting-up-memory-limits")
-	}
-
-	logger.Debug("setting-up-disk-limits")
-	gardenScope := garden.DiskLimitScopeExclusive
-	if executorContainer.DiskScope == executor.TotalDiskLimit {
-		gardenScope = garden.DiskLimitScopeTotal
-	}
-	err = gardenContainer.LimitDisk(garden.DiskLimits{
-		ByteHard:  uint64(executorContainer.DiskMB * 1024 * 1024),
-		InodeHard: exchanger.containerInodeLimit,
-		Scope:     gardenScope,
-	})
-	if err != nil {
-		logger.Error("failed-setting-up-disk-limits", err)
-
-		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
-		if gardenErr != nil {
-			logger.Error("failed-destroy-garden-container", gardenErr)
-		}
-
-		return executor.Container{}, err
-	}
-	logger.Debug("succeeded-setting-up-disk-limits")
-
-	logger.Debug("setting-up-cpu-limits")
-	err = gardenContainer.LimitCPU(garden.CPULimits{
-		LimitInShares: uint64(float64(exchanger.containerMaxCPUShares) * float64(executorContainer.CPUWeight) / 100.0),
-	})
-	if err != nil {
-		logger.Error("failed-setting-up-cpu-limits", err)
-
-		gardenErr := gardenClient.Destroy(gardenContainer.Handle())
-		if gardenErr != nil {
-			logger.Error("failed-destroy-garden-container", gardenErr)
-		}
-
-		return executor.Container{}, err
-	}
-	logger.Debug("succeeded-setting-up-cpu-limits")
 
 	logger.Debug("getting-garden-container-info")
 	info, err := gardenContainer.Info()

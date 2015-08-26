@@ -975,45 +975,19 @@ var _ = Describe("GardenContainerStore", func() {
 					executorContainer.MemoryMB = 64
 				})
 
-				It("sets the memory limit", func() {
-					Expect(fakeGardenContainer.LimitMemoryCallCount()).To(Equal(1))
-					Expect(fakeGardenContainer.LimitMemoryArgsForCall(0)).To(Equal(garden.MemoryLimits{
+				It("creates it with the memory limit", func() {
+					Expect(fakeGardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Limits.Memory).To(Equal(garden.MemoryLimits{
 						LimitInBytes: 64 * 1024 * 1024,
 					}))
-
 				})
 
 				It("creates it with the executor:memory-mb property", func() {
 					Expect(fakeGardenClient.CreateCallCount()).To(Equal(1))
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Expect(containerSpec.Properties["executor:memory-mb"]).To(Equal("64"))
-				})
-
-				Context("and limiting memory fails", func() {
-					disaster := errors.New("oh no!")
-
-					BeforeEach(func() {
-						fakeGardenContainer.LimitMemoryReturns(disaster)
-					})
-
-					It("returns the error", func() {
-						Expect(createErr).To(Equal(disaster))
-					})
-
-					It("deletes the container from Garden", func() {
-						Expect(fakeGardenClient.DestroyCallCount()).To(Equal(1))
-						Expect(fakeGardenClient.DestroyArgsForCall(0)).To(Equal(executorContainer.Guid))
-					})
-				})
-			})
-
-			Context("when no memory limit is set", func() {
-				BeforeEach(func() {
-					executorContainer.MemoryMB = 0
-				})
-
-				It("does not apply any", func() {
-					Expect(fakeGardenContainer.LimitMemoryCallCount()).To(BeZero())
 				})
 			})
 
@@ -1022,9 +996,11 @@ var _ = Describe("GardenContainerStore", func() {
 					executorContainer.DiskMB = 64
 				})
 
-				It("sets the disk limit", func() {
-					Expect(fakeGardenContainer.LimitDiskCallCount()).To(Equal(1))
-					Expect(fakeGardenContainer.LimitDiskArgsForCall(0)).To(Equal(garden.DiskLimits{
+				It("creates it the disk limit", func() {
+					Expect(fakeGardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Limits.Disk).To(Equal(garden.DiskLimits{
 						ByteHard:  64 * 1024 * 1024,
 						InodeHard: inodeLimit,
 						Scope:     garden.DiskLimitScopeExclusive,
@@ -1036,38 +1012,6 @@ var _ = Describe("GardenContainerStore", func() {
 					containerSpec := fakeGardenClient.CreateArgsForCall(0)
 					Expect(containerSpec.Properties["executor:disk-mb"]).To(Equal("64"))
 				})
-
-				Context("and limiting disk fails", func() {
-					disaster := errors.New("oh no!")
-
-					BeforeEach(func() {
-						fakeGardenContainer.LimitDiskReturns(disaster)
-					})
-
-					It("returns the error", func() {
-						Expect(createErr).To(Equal(disaster))
-					})
-
-					It("deletes the container from Garden", func() {
-						Expect(fakeGardenClient.DestroyCallCount()).To(Equal(1))
-						Expect(fakeGardenClient.DestroyArgsForCall(0)).To(Equal(executorContainer.Guid))
-					})
-				})
-			})
-
-			Context("when no disk limit is set", func() {
-				BeforeEach(func() {
-					executorContainer.DiskMB = 0
-				})
-
-				It("still sets the inode limit", func() {
-					Expect(fakeGardenContainer.LimitDiskCallCount()).To(Equal(1))
-					Expect(fakeGardenContainer.LimitDiskArgsForCall(0)).To(Equal(garden.DiskLimits{
-						InodeHard: inodeLimit,
-						Scope:     garden.DiskLimitScopeExclusive,
-					}))
-
-				})
 			})
 
 			Context("when a cpu limit is set", func() {
@@ -1075,29 +1019,14 @@ var _ = Describe("GardenContainerStore", func() {
 					executorContainer.CPUWeight = 50
 				})
 
-				It("sets the CPU shares to the ratio of the max shares", func() {
-					Expect(fakeGardenContainer.LimitCPUCallCount()).To(Equal(1))
-					Expect(fakeGardenContainer.LimitCPUArgsForCall(0)).To(Equal(garden.CPULimits{
+				It("creates it with the CPU shares to the ratio of the max shares", func() {
+					Expect(fakeGardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := fakeGardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Limits.CPU).To(Equal(garden.CPULimits{
 						LimitInShares: 512,
 					}))
 
-				})
-
-				Context("and limiting CPU fails", func() {
-					disaster := errors.New("oh no!")
-
-					BeforeEach(func() {
-						fakeGardenContainer.LimitCPUReturns(disaster)
-					})
-
-					It("returns the error", func() {
-						Expect(createErr).To(Equal(disaster))
-					})
-
-					It("deletes the container from Garden", func() {
-						Expect(fakeGardenClient.DestroyCallCount()).To(Equal(1))
-						Expect(fakeGardenClient.DestroyArgsForCall(0)).To(Equal(executorContainer.Guid))
-					})
 				})
 			})
 
