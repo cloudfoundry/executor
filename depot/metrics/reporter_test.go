@@ -23,9 +23,11 @@ var _ = Describe("Reporter", func() {
 		executorClient *fakes.FakeClient
 
 		reporter ifrit.Process
+		logger   *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
+		logger = lagertest.NewTestLogger("test")
 		reportInterval = 100 * time.Millisecond
 		executorClient = new(fakes.FakeClient)
 
@@ -55,7 +57,7 @@ var _ = Describe("Reporter", func() {
 		reporter = ifrit.Envoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
 			Interval:       reportInterval,
-			Logger:         lagertest.NewTestLogger("test"),
+			Logger:         logger,
 		})
 	})
 
@@ -147,6 +149,64 @@ var _ = Describe("Reporter", func() {
 			Value: 2,
 			Unit:  "Metric",
 		}))
+	})
+
+	Context("when getting remaining resources fails", func() {
+		BeforeEach(func() {
+			executorClient.RemainingResourcesReturns(executor.ExecutorResources{}, errors.New("oh no!"))
+		})
+
+		It("sends missing remaining resources", func() {
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityRemainingMemory")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "MiB",
+			}))
+
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityRemainingDisk")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "MiB",
+			}))
+
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityRemainingContainers")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "Metric",
+			}))
+		})
+	})
+
+	Context("when getting total resources fails", func() {
+		BeforeEach(func() {
+			executorClient.TotalResourcesReturns(executor.ExecutorResources{}, errors.New("oh no!"))
+		})
+
+		It("sends missing total resources", func() {
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityTotalMemory")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "MiB",
+			}))
+
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityTotalDisk")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "MiB",
+			}))
+
+			Eventually(func() fake.Metric {
+				return sender.GetValue("CapacityTotalContainers")
+			}, reportInterval*2).Should(Equal(fake.Metric{
+				Value: -1,
+				Unit:  "Metric",
+			}))
+		})
 	})
 
 	Context("when getting the containers fails", func() {

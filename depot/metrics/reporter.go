@@ -44,12 +44,18 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 		case <-time.After(reporter.Interval):
 			remainingCapacity, err := reporter.ExecutorSource.RemainingResources()
 			if err != nil {
-				reporter.Logger.Fatal("this-cant-happen", err)
+				reporter.Logger.Error("failed-remaining-resources", err)
+				remainingCapacity.Containers = -1
+				remainingCapacity.DiskMB = -1
+				remainingCapacity.MemoryMB = -1
 			}
 
 			totalCapacity, err := reporter.ExecutorSource.TotalResources()
 			if err != nil {
-				reporter.Logger.Fatal("this-cant-happen", err)
+				reporter.Logger.Error("failed-total-resources", err)
+				totalCapacity.Containers = -1
+				totalCapacity.DiskMB = -1
+				totalCapacity.MemoryMB = -1
 			}
 
 			var nContainers int
