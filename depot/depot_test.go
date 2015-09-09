@@ -22,6 +22,11 @@ import (
 )
 
 var _ = Describe("Depot", func() {
+	const (
+		defaultMemoryMB = 256
+		defaultDiskMB   = 256
+	)
+
 	var (
 		depotClient     executor.Client
 		logger          lager.Logger
@@ -66,66 +71,50 @@ var _ = Describe("Depot", func() {
 
 	Describe("AllocateContainers", func() {
 		Context("when allocating a single valid container within executor resource limits", func() {
-			var containers []executor.Container
+			var requests []executor.AllocationRequest
 			BeforeEach(func() {
-				containers = []executor.Container{
-					{
-						Guid:     "guid-1",
-						MemoryMB: 512,
-						DiskMB:   512,
-					},
+				requests = []executor.AllocationRequest{
+					newAllocationRequest("guid-1", 512, 512),
 				}
 			})
 
 			It("should allocate the container", func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 				allocatedContainers := allocationStore.List()
-				Expect(allocatedContainers).To(HaveLen(len(containers)))
+				Expect(allocatedContainers).To(HaveLen(len(requests)))
 				Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
 				Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
-				Expect(allocatedContainers[0].CPUWeight).To(Equal(uint(100)))
 			})
 		})
 
 		Context("when allocating multiple valid containers", func() {
-			var containers []executor.Container
+			var requests []executor.AllocationRequest
 
 			Context("when total required resources are within executor resource limits", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-2",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-3",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should allocate all the containers", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(BeEmpty())
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers)))
+					Expect(allocatedContainers).To(HaveLen(len(requests)))
 
 					allocatedContainersMap := map[string]*executor.Container{}
 					for _, container := range allocatedContainers {
 						allocatedContainersMap[container.Guid] = &container
 					}
 
-					Expect(allocatedContainersMap).To(HaveLen(len(containers)))
+					Expect(allocatedContainersMap).To(HaveLen(len(requests)))
 					Expect(allocatedContainersMap["guid-1"]).NotTo(BeNil())
 					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap["guid-2"]).NotTo(BeNil())
@@ -137,27 +126,15 @@ var _ = Describe("Depot", func() {
 
 			Context("when required memory is more than executor resource limits", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 512,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-2",
-							MemoryMB: 512,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-3",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", 512, defaultDiskMB),
+						newAllocationRequest("guid-2", 512, defaultDiskMB),
+						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should allocate first few containers that can fit the available resources", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(HaveLen(1))
 
@@ -166,10 +143,10 @@ var _ = Describe("Depot", func() {
 					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(requests) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
-					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap).To(HaveLen(len(requests) - 1))
 					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap).NotTo(HaveKey("guid-3"))
@@ -178,27 +155,15 @@ var _ = Describe("Depot", func() {
 
 			Context("when required disk space is more than executor resource limits", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   512,
-						},
-						{
-							Guid:     "guid-2",
-							MemoryMB: 256,
-							DiskMB:   512,
-						},
-						{
-							Guid:     "guid-3",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", defaultMemoryMB, 512),
+						newAllocationRequest("guid-2", defaultMemoryMB, 512),
+						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should allocate first few containers that can fit the available resources", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-3"]
@@ -206,11 +171,11 @@ var _ = Describe("Depot", func() {
 					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(requests) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
 
-					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap).To(HaveLen(len(requests) - 1))
 					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap).NotTo(HaveKey("guid-3"))
@@ -219,32 +184,16 @@ var _ = Describe("Depot", func() {
 
 			Context("when required number of containers is more than what executor can allocate", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-2",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-3",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-4",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-4", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should allocate first few containers that can fit the available resources", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-4"]
@@ -252,10 +201,10 @@ var _ = Describe("Depot", func() {
 					Expect(errMessage).To(Equal(executor.ErrInsufficientResourcesAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(requests) - 1))
 
 					allocatedContainersMap := convertSliceToMap(allocatedContainers)
-					Expect(allocatedContainersMap).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainersMap).To(HaveLen(len(requests) - 1))
 					Expect(allocatedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 					Expect(allocatedContainersMap["guid-3"].State).To(Equal(executor.StateReserved))
@@ -265,26 +214,18 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when allocating invalid containers list", func() {
-			var containers []executor.Container
+			var requests []executor.AllocationRequest
 
 			Context("when two containers have the same guid", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should not allocate container with duplicate guid", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap["guid-1"]
@@ -292,7 +233,7 @@ var _ = Describe("Depot", func() {
 					Expect(errMessage).To(Equal(executor.ErrContainerGuidNotAvailable.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(requests) - 1))
 					Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
 					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
 				})
@@ -300,21 +241,14 @@ var _ = Describe("Depot", func() {
 
 			Context("when one of the containers has empty guid", func() {
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:     "guid-1",
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
-						{
-							MemoryMB: 256,
-							DiskMB:   256,
-						},
+					requests = []executor.AllocationRequest{
+						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+						newAllocationRequest("", defaultMemoryMB, defaultDiskMB),
 					}
 				})
 
 				It("should not allocate container with empty guid", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
+					errMessageMap, err := depotClient.AllocateContainers(requests)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessageMap).To(HaveLen(1))
 					errMessage, found := errMessageMap[""]
@@ -322,67 +256,46 @@ var _ = Describe("Depot", func() {
 					Expect(errMessage).To(Equal(executor.ErrGuidNotSpecified.Error()))
 
 					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
+					Expect(allocatedContainers).To(HaveLen(len(requests) - 1))
 					Expect(allocatedContainers[0].Guid).To(Equal("guid-1"))
 					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
 				})
 			})
 
-			Context("when one of the containers has invalid CPUWeight", func() {
+			XContext("when one of the containers has invalid CPUWeight", func() {
+				var request *executor.RunRequest
 				BeforeEach(func() {
-					containers = []executor.Container{
-						{
-							Guid:      "guid-1",
-							MemoryMB:  256,
-							DiskMB:    256,
-							CPUWeight: 150,
-						},
-						{
-							Guid:      "guid-2",
-							MemoryMB:  256,
-							DiskMB:    256,
-							CPUWeight: 80,
-						},
-					}
+					request = nil // TODO
+					// request = executor.RunRequest{
+					// 	{
+					// 		Guid:      "guid-1",
+					// 		MemoryMB:  256,
+					// 		DiskMB:    256,
+					// 		CPUWeight: 150,
+					// 	},
+					// }
 				})
 
 				It("should not allocate container with invalid CPUWeight", func() {
-					errMessageMap, err := depotClient.AllocateContainers(containers)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(errMessageMap).To(HaveLen(1))
-					errMessage, found := errMessageMap["guid-1"]
-					Expect(found).To(BeTrue())
-					Expect(errMessage).To(Equal(executor.ErrLimitsInvalid.Error()))
-
-					allocatedContainers := allocationStore.List()
-					Expect(allocatedContainers).To(HaveLen(len(containers) - 1))
-					Expect(allocatedContainers[0].Guid).To(Equal("guid-2"))
-					Expect(allocatedContainers[0].State).To(Equal(executor.StateReserved))
-					Expect(allocatedContainers[0].CPUWeight).To(Equal(uint(80)))
+					err := depotClient.RunContainer(request)
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(MatchError(executor.ErrLimitsInvalid))
 				})
 			})
 		})
 
 		Context("when garden store returns an error", func() {
-			var containers []executor.Container
+			var requests []executor.AllocationRequest
 			BeforeEach(func() {
 				gardenStore.ListReturns(nil, errors.New("error"))
-				containers = []executor.Container{
-					{
-						Guid:     "guid-1",
-						MemoryMB: 256,
-						DiskMB:   256,
-					},
-					{
-						Guid:     "guid-2",
-						MemoryMB: 256,
-						DiskMB:   256,
-					},
+				requests = []executor.AllocationRequest{
+					newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
 				}
 			})
 
 			It("should return error", func() {
-				_, err := depotClient.AllocateContainers(containers)
+				_, err := depotClient.AllocateContainers(requests)
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrFailureToCheckSpace))
 			})
@@ -390,25 +303,23 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("RunContainer", func() {
+		const gardenStoreGuid = "garden-store-guid"
 		var (
-			containers      []executor.Container
-			gardenStoreGuid string
+			allocRequests []executor.AllocationRequest
+			runRequest    *executor.RunRequest
 		)
 
 		BeforeEach(func() {
-			gardenStoreGuid = "garden-store-guid"
 
-			containers = []executor.Container{
-				{
-					Guid:     gardenStoreGuid,
-					MemoryMB: 512,
-					DiskMB:   512,
-				},
+			allocRequests = []executor.AllocationRequest{
+				newAllocationRequest(gardenStoreGuid, 512, 512),
 			}
+
+			runRequest = newRunRequest(gardenStoreGuid)
 		})
 
 		JustBeforeEach(func() {
-			errMessageMap, err := depotClient.AllocateContainers(containers)
+			errMessageMap, err := depotClient.AllocateContainers(allocRequests)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(errMessageMap).To(BeEmpty())
 		})
@@ -418,7 +329,7 @@ var _ = Describe("Depot", func() {
 				Expect(gardenStore.CreateCallCount()).To(Equal(0))
 				Expect(gardenStore.RunCallCount()).To(Equal(0))
 				Expect(allocationStore.List()).To(HaveLen(1))
-				err := depotClient.RunContainer(gardenStoreGuid)
+				err := depotClient.RunContainer(runRequest)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
@@ -429,7 +340,7 @@ var _ = Describe("Depot", func() {
 				initialLockCount := lockManager.LockCallCount()
 				initialUnlockCount := lockManager.UnlockCallCount()
 
-				err := depotClient.RunContainer(gardenStoreGuid)
+				err := depotClient.RunContainer(runRequest)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
@@ -444,7 +355,7 @@ var _ = Describe("Depot", func() {
 
 		Context("when it tries to run a missing container", func() {
 			It("should return error", func() {
-				err := depotClient.RunContainer("missing-guid")
+				err := depotClient.RunContainer(newRunRequest("missing-guid"))
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
@@ -453,7 +364,7 @@ var _ = Describe("Depot", func() {
 				initialLockCount := lockManager.LockCallCount()
 				initialUnlockCount := lockManager.UnlockCallCount()
 
-				err := depotClient.RunContainer("missing-guid")
+				err := depotClient.RunContainer(newRunRequest("missing-guid"))
 				Expect(err).To(HaveOccurred())
 
 				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount))
@@ -470,7 +381,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("does not create a garden container", func() {
-				err := depotClient.RunContainer(gardenStoreGuid)
+				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(logger).Should(gbytes.Say("test.depot-client.run-container.container-state-invalid"))
@@ -485,7 +396,7 @@ var _ = Describe("Depot", func() {
 
 			It("should change container's state to failed", func() {
 				Expect(gardenStore.CreateCallCount()).To(Equal(0))
-				err := depotClient.RunContainer(gardenStoreGuid)
+				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 				Eventually(gardenStore.RunCallCount).Should(Equal(0))
@@ -502,7 +413,7 @@ var _ = Describe("Depot", func() {
 				gardenStore.RunReturns(errors.New("some-error"))
 			})
 			It("should log the error", func() {
-				err := depotClient.RunContainer(gardenStoreGuid)
+				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 				Eventually(allocationStore.List).Should(BeEmpty())
@@ -514,19 +425,15 @@ var _ = Describe("Depot", func() {
 
 	Describe("Throttling", func() {
 		var (
-			containers       []executor.Container
+			requests         []executor.AllocationRequest
 			gardenStoreGuid  = "garden-store-guid"
 			workPoolSettings executor.WorkPoolSettings
 		)
 
 		BeforeEach(func() {
-			containers = make([]executor.Container, 10)
-			for i := 0; i < cap(containers); i++ {
-				containers[i] = executor.Container{
-					Guid:     fmt.Sprintf("%s-%d", gardenStoreGuid, i),
-					MemoryMB: 5,
-					DiskMB:   5,
-				}
+			requests = make([]executor.AllocationRequest, 10)
+			for i := 0; i < cap(requests); i++ {
+				requests[i] = newAllocationRequest(fmt.Sprintf("%s-%d", gardenStoreGuid, i), 5, 5)
 			}
 
 			resources = executor.ExecutorResources{
@@ -555,9 +462,9 @@ var _ = Describe("Depot", func() {
 			)
 
 			BeforeEach(func() {
-				throttleChan = make(chan struct{}, len(containers))
+				throttleChan = make(chan struct{}, len(requests))
 				doneChan = make(chan struct{})
-				_, err := depotClient.AllocateContainers(containers)
+				_, err := depotClient.AllocateContainers(requests)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				gardenStore.CreateStub = func(logger lager.Logger, container executor.Container) (executor.Container, error) {
@@ -568,8 +475,8 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("throttles the requests to Garden", func() {
-				for _, container := range containers {
-					go depotClient.RunContainer(container.Guid)
+				for _, request := range requests {
+					go depotClient.RunContainer(newRunRequest(request.Guid))
 				}
 
 				Eventually(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
@@ -588,7 +495,7 @@ var _ = Describe("Depot", func() {
 				Consistently(gardenStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize + 1))
 
 				close(doneChan)
-				Eventually(gardenStore.CreateCallCount).Should(Equal(len(containers)))
+				Eventually(gardenStore.CreateCallCount).Should(Equal(len(requests)))
 			})
 		})
 
@@ -599,7 +506,7 @@ var _ = Describe("Depot", func() {
 			)
 
 			BeforeEach(func() {
-				throttleChan = make(chan struct{}, len(containers))
+				throttleChan = make(chan struct{}, len(requests))
 				doneChan = make(chan struct{})
 				gardenStore.DestroyStub = func(logger lager.Logger, guid string) error {
 					throttleChan <- struct{}{}
@@ -616,13 +523,13 @@ var _ = Describe("Depot", func() {
 			It("throttles the requests to Garden", func() {
 				stopContainerCount := 0
 				deleteContainerCount := 0
-				for i, container := range containers {
+				for i, request := range requests {
 					if i%2 == 0 {
 						stopContainerCount++
-						go depotClient.StopContainer(container.Guid)
+						go depotClient.StopContainer(request.Guid)
 					} else {
 						deleteContainerCount++
-						go depotClient.DeleteContainer(container.Guid)
+						go depotClient.DeleteContainer(request.Guid)
 					}
 				}
 
@@ -653,7 +560,7 @@ var _ = Describe("Depot", func() {
 			)
 
 			BeforeEach(func() {
-				throttleChan = make(chan struct{}, len(containers))
+				throttleChan = make(chan struct{}, len(requests))
 				doneChan = make(chan struct{})
 				gardenStore.GetFilesStub = func(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {
 					throttleChan <- struct{}{}
@@ -676,17 +583,17 @@ var _ = Describe("Depot", func() {
 				getContainerCount := 0
 				listContainerCount := 0
 				getFilesCount := 0
-				for i, container := range containers {
+				for i, request := range requests {
 					switch i % 3 {
 					case 0:
 						getContainerCount++
-						go depotClient.GetContainer(container.Guid)
+						go depotClient.GetContainer(request.Guid)
 					case 1:
 						listContainerCount++
 						go depotClient.ListContainers(executor.Tags{})
 					case 2:
 						getFilesCount++
-						go depotClient.GetFiles(container.Guid, "/some/path")
+						go depotClient.GetFiles(request.Guid, "/some/path")
 					}
 				}
 
@@ -718,7 +625,7 @@ var _ = Describe("Depot", func() {
 			)
 
 			BeforeEach(func() {
-				throttleChan = make(chan struct{}, len(containers))
+				throttleChan = make(chan struct{}, len(requests))
 				doneChan = make(chan struct{})
 				gardenStore.MetricsStub = func(logger lager.Logger, guids []string) (map[string]executor.ContainerMetrics, error) {
 					throttleChan <- struct{}{}
@@ -737,10 +644,10 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("throttles the requests to Garden", func() {
-				for i, container := range containers {
+				for i, request := range requests {
 					switch i % 2 {
 					case 0:
-						go depotClient.GetMetrics(container.Guid)
+						go depotClient.GetMetrics(request.Guid)
 					case 1:
 						go depotClient.GetAllMetrics(executor.Tags{})
 					}
@@ -759,40 +666,24 @@ var _ = Describe("Depot", func() {
 
 				close(doneChan)
 
-				Eventually(gardenStore.MetricsCallCount).Should(Equal(len(containers)))
+				Eventually(gardenStore.MetricsCallCount).Should(Equal(len(requests)))
 			})
 		})
 	})
 
 	Describe("ListContainers", func() {
-		var containers []executor.Container
-
+		var requests []executor.AllocationRequest
 		BeforeEach(func() {
-			containers = []executor.Container{
-				{
-					Guid:     "guid-1",
-					MemoryMB: 512,
-					DiskMB:   512,
-					Tags: executor.Tags{
-						"a": "a-value",
-						"b": "b-value",
-					},
-				},
-				{
-					Guid:     "guid-2",
-					MemoryMB: 512,
-					DiskMB:   512,
-					Tags: executor.Tags{
-						"b": "b-value",
-						"c": "c-value",
-					},
-				},
+			requests = []executor.AllocationRequest{
+				newAllocationRequest("guid-1", 512, 512, executor.Tags{"a": "a-value", "b": "b-value"}),
+				newAllocationRequest("guid-2", 512, 512, executor.Tags{"b": "b-value", "c": "c-value"}),
 			}
+
 		})
 
 		Context("when containers exist only allocation store", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 			})
@@ -800,25 +691,24 @@ var _ = Describe("Depot", func() {
 			It("should return the containers from allocation store", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(returnedContainers).To(HaveLen(len(containers)))
+				Expect(returnedContainers).To(HaveLen(len(requests)))
 
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveLen(len(requests)))
 				Expect(returnedContainersMap["guid-1"].State).To(Equal(executor.StateReserved))
 				Expect(returnedContainersMap["guid-2"].State).To(Equal(executor.StateReserved))
 			})
 		})
 
 		Context("when containers exist only garden store", func() {
+			var containers []executor.Container
+
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(errMessageMap).To(BeEmpty())
-				err = depotClient.RunContainer("guid-1")
-				Expect(err).NotTo(HaveOccurred())
-				err = depotClient.RunContainer("guid-2")
-				Expect(err).NotTo(HaveOccurred())
-				Eventually(allocationStore.List).Should(HaveLen(0))
+				r := executor.NewResource(512, 512, "")
+				containers = []executor.Container{
+					newRunningContainer(newRunRequest("guid-1"), r),
+					newRunningContainer(newRunRequest("guid-2"), r),
+				}
 				gardenStore.ListReturns(containers, nil)
 			})
 
@@ -835,23 +725,28 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when containers exist in both allocation store and garden store", func() {
+			var containers []executor.Container
+
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
-				err = depotClient.RunContainer("guid-1")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(allocationStore.List()).Should(HaveLen(2))
 
-				Eventually(allocationStore.List).Should(HaveLen(1))
-				gardenStore.ListReturns(containers[:1], nil)
+				r := executor.NewResource(512, 512, "")
+				containers = []executor.Container{
+					newRunningContainer(newRunRequest("guid-3"), r),
+					newRunningContainer(newRunRequest("guid-4"), r),
+				}
+				gardenStore.ListReturns(containers, nil)
 			})
 
 			It("should return the containers from both the stores", func() {
 				returnedContainers, err := depotClient.ListContainers(executor.Tags{})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(returnedContainers).To(HaveLen(len(containers)))
+				Expect(returnedContainers).To(HaveLen(4))
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveLen(4))
 				Expect(returnedContainersMap).To(HaveKey("guid-1"))
 				Expect(returnedContainersMap).To(HaveKey("guid-2"))
 			})
@@ -866,29 +761,23 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when a duplicate container (same guid) exists in both stores", func() {
+			var containers []executor.Container
+
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 
-				err = depotClient.RunContainer("guid-1")
+				err = depotClient.RunContainer(newRunRequest("guid-1"))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(allocationStore.List).Should(HaveLen(1))
-				gardenStore.ListReturns([]executor.Container{
-					{
-						Guid:     "guid-1",
-						MemoryMB: 512,
-						DiskMB:   512,
-						State:    executor.StateRunning,
-					},
-					{
-						Guid:     "guid-2",
-						MemoryMB: 512,
-						DiskMB:   512,
-						State:    executor.StateInvalid,
-					},
-				}, nil)
+				r := executor.NewResource(512, 512, "")
+				containers = []executor.Container{
+					newRunningContainer(newRunRequest("guid-1"), r),
+					newRunningContainer(newRunRequest("guid-1"), r),
+				}
+				gardenStore.ListReturns(containers, nil)
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
 			})
 
@@ -906,7 +795,7 @@ var _ = Describe("Depot", func() {
 
 		Context("when garden store returns an error", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 				gardenStore.ListReturns(nil, errors.New("some-error"))
@@ -921,7 +810,7 @@ var _ = Describe("Depot", func() {
 
 		Context("when tags are passed", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 			})
@@ -931,9 +820,9 @@ var _ = Describe("Depot", func() {
 					"b": "b-value",
 				})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(returnedContainers).To(HaveLen(len(containers)))
+				Expect(returnedContainers).To(HaveLen(len(requests)))
 				returnedContainersMap := convertSliceToMap(returnedContainers)
-				Expect(returnedContainersMap).To(HaveLen(len(containers)))
+				Expect(returnedContainersMap).To(HaveLen(len(requests)))
 				Expect(returnedContainersMap).To(HaveKey("guid-1"))
 				Expect(returnedContainersMap).To(HaveKey("guid-2"))
 			})
@@ -946,7 +835,6 @@ var _ = Describe("Depot", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(returnedContainers).To(BeEmpty())
 				})
-
 			})
 		})
 	})
@@ -1026,8 +914,8 @@ var _ = Describe("Depot", func() {
 				tags = nil
 
 				gardenStore.ListReturns([]executor.Container{
-					executor.Container{Guid: "a-guid", MetricsConfig: executor.MetricsConfig{Guid: "a-metrics"}},
-					executor.Container{Guid: "b-guid", MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}},
+					executor.Container{Guid: "a-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "a-metrics"}}},
+					executor.Container{Guid: "b-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}}},
 				}, nil)
 			})
 
@@ -1083,7 +971,7 @@ var _ = Describe("Depot", func() {
 
 				gardenStore.ListReturns([]executor.Container{
 					executor.Container{Guid: "a-guid"},
-					executor.Container{Guid: "b-guid", MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}},
+					executor.Container{Guid: "b-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}}},
 				}, nil)
 			})
 
@@ -1137,25 +1025,13 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("DeleteContainer", func() {
-		var containers []executor.Container
+		var requests []executor.AllocationRequest
 
 		BeforeEach(func() {
-			containers = []executor.Container{
-				{
-					Guid:     "guid-1",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
-				{
-					Guid:     "guid-2",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
-				{
-					Guid:     "guid-3",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
+			requests = []executor.AllocationRequest{
+				newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+				newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+				newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
 			}
 		})
 
@@ -1171,7 +1047,7 @@ var _ = Describe("Depot", func() {
 
 		Context("when container exists in allocation store", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 				gardenStore.LookupReturns(executor.Container{}, executor.ErrContainerNotFound)
@@ -1197,11 +1073,11 @@ var _ = Describe("Depot", func() {
 
 		Context("when container exists in garden store", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 
-				err = depotClient.RunContainer("guid-1")
+				err = depotClient.RunContainer(newRunRequest("guid-1"))
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(allocationStore.List).Should(HaveLen(2))
 				Eventually(gardenStore.RunCallCount).Should(Equal(1))
@@ -1274,9 +1150,11 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				container = executor.Container{
-					Guid:     stopGuid,
-					MemoryMB: 512,
-					DiskMB:   512,
+					Guid: stopGuid,
+					Resource: executor.Resource{
+						MemoryMB: 512,
+						DiskMB:   512,
+					},
 				}
 
 				_, err := allocationStore.Allocate(logger, container)
@@ -1331,7 +1209,7 @@ var _ = Describe("Depot", func() {
 
 	Describe("GetContainer", func() {
 		var (
-			containers []executor.Container
+			requests []executor.AllocationRequest
 
 			gardenStoreGuid     string
 			allocationStoreGuid string
@@ -1340,35 +1218,29 @@ var _ = Describe("Depot", func() {
 		BeforeEach(func() {
 			gardenStoreGuid = "garden-store-guid"
 			allocationStoreGuid = "allocation-store-guid"
-			containers = []executor.Container{
-				{
-					Guid:     gardenStoreGuid,
-					MemoryMB: 512,
-					DiskMB:   512,
-				},
-				{
-					Guid:     allocationStoreGuid,
-					MemoryMB: 512,
-					DiskMB:   512,
-				},
+			requests = []executor.AllocationRequest{
+				newAllocationRequest(gardenStoreGuid, 512, 512),
+				newAllocationRequest(allocationStoreGuid, 512, 512),
 			}
 
-			errMessageMap, err := depotClient.AllocateContainers(containers)
+			errMessageMap, err := depotClient.AllocateContainers(requests)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(errMessageMap).To(BeEmpty())
 			Expect(gardenStore.CreateCallCount()).To(Equal(0))
 			Expect(gardenStore.RunCallCount()).To(Equal(0))
 			Expect(allocationStore.List()).To(HaveLen(2))
-			err = depotClient.RunContainer(gardenStoreGuid)
+			err = depotClient.RunContainer(newRunRequest(gardenStoreGuid))
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(gardenStore.CreateCallCount).Should(Equal(1))
 			Eventually(gardenStore.RunCallCount).Should(Equal(1))
 			Eventually(allocationStore.List).Should(HaveLen(1))
 
 			gardenStore.LookupReturns(executor.Container{
-				Guid:     gardenStoreGuid,
-				MemoryMB: 512,
-				DiskMB:   512,
+				Guid: gardenStoreGuid,
+				Resource: executor.Resource{
+					MemoryMB: 512,
+					DiskMB:   512,
+				},
 			},
 				nil,
 			)
@@ -1423,24 +1295,12 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("RemainingResources", func() {
-		var containers []executor.Container
+		var requests []executor.AllocationRequest
 		BeforeEach(func() {
-			containers = []executor.Container{
-				{
-					Guid:     "guid-1",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
-				{
-					Guid:     "guid-2",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
-				{
-					Guid:     "guid-3",
-					MemoryMB: 256,
-					DiskMB:   256,
-				},
+			requests = []executor.AllocationRequest{
+				newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+				newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+				newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
 			}
 		})
 
@@ -1450,123 +1310,43 @@ var _ = Describe("Depot", func() {
 			})
 		})
 
-		Context("when some containers are allocated", func() {
-			expectedResources := executor.ExecutorResources{
-				MemoryMB:   256,
-				DiskMB:     256,
-				Containers: 0,
-			}
-
+		Context("when some containers are running", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				running := requests[0]
+				errMessageMap, err := depotClient.AllocateContainers(requests[1:])
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
+
+				gardenStore.ListReturns([]executor.Container{
+					newRunningContainer(newRunRequest(running.Guid), running.Resource),
+				}, nil)
 			})
 
-			Context("when no containers are running", func() {
-				It("should reduce resources used by allocated containers", func() {
-					Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
-				})
-			})
-
-			Context("when some containers are running", func() {
-				BeforeEach(func() {
-					err := depotClient.RunContainer("guid-1")
-					Expect(err).NotTo(HaveOccurred())
-					Eventually(gardenStore.RunCallCount).Should(Equal(1))
-					Eventually(allocationStore.List).Should(HaveLen(2))
-
-					gardenStore.ListReturns(containers[:1], nil)
-				})
-				It("should reduce resources used by allocated and running containers", func() {
-					Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
-				})
-			})
-
-			Context("when some allocated containers are deallocated", func() {
-				BeforeEach(func() {
-					err := depotClient.DeleteContainer("guid-1")
-					Expect(err).NotTo(HaveOccurred())
-				})
-				It("should make the resources used by the deallocated container available", func() {
-					tmpExpectedResources := executor.ExecutorResources{
-						MemoryMB:   512,
-						DiskMB:     512,
-						Containers: 1,
-					}
-					Expect(depotClient.RemainingResources()).To(Equal(tmpExpectedResources))
-				})
+			It("should reduce resources used by allocated and running containers", func() {
+				Expect(depotClient.RemainingResources()).To(Equal(executor.ExecutorResources{
+					MemoryMB:   256,
+					DiskMB:     256,
+					Containers: 0,
+				}))
 			})
 		})
 
-		Context("when all containers are running", func() {
-			expectedResources := executor.ExecutorResources{
-				MemoryMB:   256,
-				DiskMB:     256,
-				Containers: 0,
-			}
-
+		Context("when some allocated containers are deallocated", func() {
 			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(errMessageMap).To(BeEmpty())
-				for _, container := range containers {
-					err = depotClient.RunContainer(container.Guid)
-					Expect(err).NotTo(HaveOccurred())
-				}
-				Eventually(gardenStore.RunCallCount).Should(Equal(3))
-				Eventually(allocationStore.List).Should(BeEmpty())
-
-				gardenStore.ListReturns(containers, nil)
-			})
-
-			It("should reduce resources used by running containers", func() {
-				Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
-			})
-
-			Context("when garden returns error", func() {
-				BeforeEach(func() {
-					gardenStore.ListReturns(nil, errors.New("some-error"))
-				})
-				It("should return an error", func() {
-					_, err := depotClient.RemainingResources()
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(Equal("some-error"))
-				})
-			})
-
-			Context("when some running containers are destroyed", func() {
-				BeforeEach(func() {
-					gardenStore.ListReturns(containers[:2], nil)
-				})
-				It("should make the resources used by the destroyed container available", func() {
-					tmpExpectedResources := executor.ExecutorResources{
-						MemoryMB:   512,
-						DiskMB:     512,
-						Containers: 1,
-					}
-					Expect(depotClient.RemainingResources()).To(Equal(tmpExpectedResources))
-				})
-			})
-		})
-
-		Context("when a container is allocated and running", func() {
-			expectedResources := executor.ExecutorResources{
-				MemoryMB:   256,
-				DiskMB:     256,
-				Containers: 0,
-			}
-
-			BeforeEach(func() {
-				errMessageMap, err := depotClient.AllocateContainers(containers)
+				errMessageMap, err := depotClient.AllocateContainers(requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 
-				gardenStore.ListReturns(containers[:1], nil)
+				err = depotClient.DeleteContainer("guid-1")
+				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should only count the container once", func() {
-				Expect(depotClient.RemainingResources()).To(Equal(expectedResources))
+			It("should make the resources used by the deallocated container available", func() {
+				Expect(depotClient.RemainingResources()).To(Equal(executor.ExecutorResources{
+					MemoryMB:   512,
+					DiskMB:     512,
+					Containers: 1,
+				}))
 			})
 		})
 	})
@@ -1586,4 +1366,28 @@ func convertSliceToMap(containers []executor.Container) map[string]executor.Cont
 		containersMap[container.Guid] = container
 	}
 	return containersMap
+}
+
+func newAllocationRequest(guid string, memoryMB, diskMB int, tagses ...executor.Tags) executor.AllocationRequest {
+	resource := executor.NewResource(memoryMB, diskMB, "linux")
+	var tags executor.Tags
+	if len(tagses) > 0 {
+		tags = tagses[0]
+	}
+	return executor.NewAllocationRequest(guid, &resource, tags)
+}
+
+func newRunRequest(guid string) *executor.RunRequest {
+	runInfo := executor.RunInfo{
+	// TODO: Fill in required fields.
+	}
+	r := executor.NewRunRequest(guid, &runInfo, nil)
+	return &r
+}
+
+func newRunningContainer(req *executor.RunRequest, res executor.Resource) executor.Container {
+	c := executor.NewContainerFromResource(req.Guid, &res, req.Tags)
+	c.State = executor.StateRunning
+	c.RunInfo = req.RunInfo
+	return c
 }

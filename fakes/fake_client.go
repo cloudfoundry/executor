@@ -12,13 +12,13 @@ type FakeClient struct {
 	PingStub        func() error
 	pingMutex       sync.RWMutex
 	pingArgsForCall []struct{}
-	pingReturns     struct {
+	pingReturns struct {
 		result1 error
 	}
-	AllocateContainersStub        func(requests []executor.Container) (map[string]string, error)
+	AllocateContainersStub        func(requests []executor.AllocationRequest) (map[string]string, error)
 	allocateContainersMutex       sync.RWMutex
 	allocateContainersArgsForCall []struct {
-		requests []executor.Container
+		requests []executor.AllocationRequest
 	}
 	allocateContainersReturns struct {
 		result1 map[string]string
@@ -33,10 +33,10 @@ type FakeClient struct {
 		result1 executor.Container
 		result2 error
 	}
-	RunContainerStub        func(guid string) error
+	RunContainerStub        func(*executor.RunRequest) error
 	runContainerMutex       sync.RWMutex
 	runContainerArgsForCall []struct {
-		guid string
+		arg1 *executor.RunRequest
 	}
 	runContainerReturns struct {
 		result1 error
@@ -87,14 +87,14 @@ type FakeClient struct {
 	RemainingResourcesStub        func() (executor.ExecutorResources, error)
 	remainingResourcesMutex       sync.RWMutex
 	remainingResourcesArgsForCall []struct{}
-	remainingResourcesReturns     struct {
+	remainingResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
 	TotalResourcesStub        func() (executor.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
-	totalResourcesReturns     struct {
+	totalResourcesReturns struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
@@ -111,7 +111,7 @@ type FakeClient struct {
 	SubscribeToEventsStub        func() (executor.EventSource, error)
 	subscribeToEventsMutex       sync.RWMutex
 	subscribeToEventsArgsForCall []struct{}
-	subscribeToEventsReturns     struct {
+	subscribeToEventsReturns struct {
 		result1 executor.EventSource
 		result2 error
 	}
@@ -144,10 +144,10 @@ func (fake *FakeClient) PingReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeClient) AllocateContainers(requests []executor.Container) (map[string]string, error) {
+func (fake *FakeClient) AllocateContainers(requests []executor.AllocationRequest) (map[string]string, error) {
 	fake.allocateContainersMutex.Lock()
 	fake.allocateContainersArgsForCall = append(fake.allocateContainersArgsForCall, struct {
-		requests []executor.Container
+		requests []executor.AllocationRequest
 	}{requests})
 	fake.allocateContainersMutex.Unlock()
 	if fake.AllocateContainersStub != nil {
@@ -163,7 +163,7 @@ func (fake *FakeClient) AllocateContainersCallCount() int {
 	return len(fake.allocateContainersArgsForCall)
 }
 
-func (fake *FakeClient) AllocateContainersArgsForCall(i int) []executor.Container {
+func (fake *FakeClient) AllocateContainersArgsForCall(i int) []executor.AllocationRequest {
 	fake.allocateContainersMutex.RLock()
 	defer fake.allocateContainersMutex.RUnlock()
 	return fake.allocateContainersArgsForCall[i].requests
@@ -210,14 +210,14 @@ func (fake *FakeClient) GetContainerReturns(result1 executor.Container, result2 
 	}{result1, result2}
 }
 
-func (fake *FakeClient) RunContainer(guid string) error {
+func (fake *FakeClient) RunContainer(arg1 *executor.RunRequest) error {
 	fake.runContainerMutex.Lock()
 	fake.runContainerArgsForCall = append(fake.runContainerArgsForCall, struct {
-		guid string
-	}{guid})
+		arg1 *executor.RunRequest
+	}{arg1})
 	fake.runContainerMutex.Unlock()
 	if fake.RunContainerStub != nil {
-		return fake.RunContainerStub(guid)
+		return fake.RunContainerStub(arg1)
 	} else {
 		return fake.runContainerReturns.result1
 	}
@@ -229,10 +229,10 @@ func (fake *FakeClient) RunContainerCallCount() int {
 	return len(fake.runContainerArgsForCall)
 }
 
-func (fake *FakeClient) RunContainerArgsForCall(i int) string {
+func (fake *FakeClient) RunContainerArgsForCall(i int) *executor.RunRequest {
 	fake.runContainerMutex.RLock()
 	defer fake.runContainerMutex.RUnlock()
-	return fake.runContainerArgsForCall[i].guid
+	return fake.runContainerArgsForCall[i].arg1
 }
 
 func (fake *FakeClient) RunContainerReturns(result1 error) {

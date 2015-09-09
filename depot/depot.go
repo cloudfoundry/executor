@@ -36,7 +36,7 @@ type AllocationStore interface {
 	List() []executor.Container
 	Lookup(guid string) (executor.Container, error)
 	Allocate(logger lager.Logger, container executor.Container) (executor.Container, error)
-	Initialize(logger lager.Logger, guid string) error
+	Initialize(logger lager.Logger, runRequest *executor.RunRequest) error
 	Fail(logger lager.Logger, guid string, reason string) (executor.Container, error)
 	Deallocate(logger lager.Logger, guid string) bool
 }
@@ -107,64 +107,52 @@ func (c *client) Cleanup() {
 	c.metricsWorkPool.Stop()
 }
 
-func (c *client) AllocateContainers(executorContainers []executor.Container) (map[string]string, error) {
-	logger := c.logger.Session("allocate-containers")
-
-	errMessageMap := map[string]string{}
-	eligibleContainers := make([]executor.Container, 0, len(executorContainers))
-
-	for _, executorContainer := range executorContainers {
-		if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
-			logger.Debug("invalid-cpu-weight", lager.Data{
-				"guid":      executorContainer.Guid,
-				"cpuweight": executorContainer.CPUWeight,
-			})
-			errMessageMap[executorContainer.Guid] = executor.ErrLimitsInvalid.Error()
-			continue
-		} else if executorContainer.CPUWeight == 0 {
-			executorContainer.CPUWeight = 100
-		}
-
-		if executorContainer.Guid == "" {
-			logger.Debug("empty-guid")
-			errMessageMap[executorContainer.Guid] = executor.ErrGuidNotSpecified.Error()
-			continue
-		}
-
-		eligibleContainers = append(eligibleContainers, executorContainer)
-	}
-
+func (c *client) AllocateContainers(requests []executor.AllocationRequest) (map[string]string, error) {
 	c.resourcesLock.Lock()
 	defer c.resourcesLock.Unlock()
 
-	allocatableContainers, unallocatableContainers, err := c.checkSpace(logger, eligibleContainers)
+	logger := c.logger.Session("allocate-containers")
+	errMessageMap := map[string]string{}
+
+	remainingResources, err := c.remainingResources(logger)
 	if err != nil {
-		logger.Error("failed-to-allocate-containers", err)
 		return nil, executor.ErrFailureToCheckSpace
 	}
 
-	for _, allocatableContainer := range allocatableContainers {
-		if _, err := c.allocationStore.Allocate(logger, allocatableContainer); err != nil {
-			logger.Debug(
-				"failed-to-allocate-container",
-				lager.Data{
-					"guid":  allocatableContainer.Guid,
-					"error": err.Error(),
-				},
-			)
-			errMessageMap[allocatableContainer.Guid] = err.Error()
-		}
-	}
+	for i := range requests {
+		// if executorContainer.CPUWeight > 100 || executorContainer.CPUWeight < 0 {
+		// 	logger.Debug("invalid-cpu-weight", lager.Data{
+		// 		"guid":      executorContainer.Guid,
+		// 		"cpuweight": executorContainer.CPUWeight,
+		// 	})
+		// 	errMessageMap[executorContainer.Guid] = executor.ErrLimitsInvalid.Error()
+		// 	continue
+		// } else if executorContainer.CPUWeight == 0 {
+		// 	executorContainer.CPUWeight = 100
+		// }
 
-	for _, unallocatableContainer := range unallocatableContainers {
-		logger.Debug(
-			"failed-to-allocate-container",
-			lager.Data{
-				"guid":  unallocatableContainer.Guid,
-				"error": executor.ErrInsufficientResourcesAvailable.Error(),
-			},
-		)
-		errMessageMap[unallocatableContainer.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
+		req := &requests[i]
+		err := req.Validate()
+		if err != nil {
+			logger.Debug("empty-guid")
+			// TODO: return a slice of errors instead of a map so we can handle this case
+			errMessageMap[""] = err.Error()
+			continue
+		}
+
+		ok := remainingResources.Subtract(&req.Resource)
+		if !ok {
+			logger.Debug("failed-to-allocate-container", lager.Data{"guid": req.Guid, "error": executor.ErrInsufficientResourcesAvailable.Error()})
+			errMessageMap[req.Guid] = executor.ErrInsufficientResourcesAvailable.Error()
+			continue
+		}
+
+		_, err = c.allocationStore.Allocate(logger, executor.NewContainerFromResource(req.Guid, &req.Resource, req.Tags))
+		if err != nil {
+			logger.Debug("failed-to-allocate-container", lager.Data{"guid": req.Guid, "error": err.Error()})
+			errMessageMap[req.Guid] = err.Error()
+			continue
+		}
 	}
 
 	return errMessageMap, nil
@@ -206,20 +194,25 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 	return container, err
 }
 
-func (c *client) RunContainer(guid string) error {
+func (c *client) RunContainer(request *executor.RunRequest) error {
 	logger := c.logger.Session("run-container", lager.Data{
-		"guid": guid,
+		"guid": request.Guid,
 	})
 
 	logger.Debug("initializing-container")
-	err := c.allocationStore.Initialize(logger, guid)
+	err := c.allocationStore.Initialize(logger, request)
 	if err != nil {
 		logger.Error("failed-initializing-container", err)
 		return err
 	}
 	logger.Debug("succeeded-initializing-container")
 
-	c.creationWorkPool.Submit(func() {
+	c.creationWorkPool.Submit(c.newRunContainerWorker(request.Guid, logger))
+	return nil
+}
+
+func (c *client) newRunContainerWorker(guid string, logger lager.Logger) func() {
+	return func() {
 		c.containerLockManager.Lock(guid)
 		defer c.containerLockManager.Unlock(guid)
 
@@ -262,9 +255,7 @@ func (c *client) RunContainer(guid string) error {
 			logger.Error("failed-running-container-in-garden", err)
 		}
 		logger.Info("succeeded-running-container-in-garden")
-	})
-
-	return nil
+	}
 }
 
 func tagsMatch(needles, haystack executor.Tags) bool {
@@ -506,11 +497,10 @@ func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResou
 	processedGuids := map[string]struct{}{}
 
 	allocatedContainers := c.allocationStore.List()
-	for _, allocation := range allocatedContainers {
-		processedGuids[allocation.Guid] = struct{}{}
-		remainingResources.Containers--
-		remainingResources.DiskMB -= allocation.DiskMB
-		remainingResources.MemoryMB -= allocation.MemoryMB
+	for i := range allocatedContainers {
+		c := &allocatedContainers[i]
+		processedGuids[c.Guid] = struct{}{}
+		remainingResources.Subtract(&c.Resource)
 	}
 
 	gardenContainers, err := c.gardenStore.List(logger, nil)
@@ -518,13 +508,13 @@ func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResou
 		return executor.ExecutorResources{}, err
 	}
 
-	for _, gardenContainer := range gardenContainers {
-		if _, seen := processedGuids[gardenContainer.Guid]; seen {
+	for i := range gardenContainers {
+		c := &gardenContainers[i]
+		if _, seen := processedGuids[c.Guid]; seen {
 			continue
 		}
-		remainingResources.Containers--
-		remainingResources.DiskMB -= gardenContainer.DiskMB
-		remainingResources.MemoryMB -= gardenContainer.MemoryMB
+		processedGuids[c.Guid] = struct{}{}
+		remainingResources.Subtract(&c.Resource)
 	}
 
 	return remainingResources, nil
@@ -579,39 +569,4 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 
 func (c *client) SubscribeToEvents() (executor.EventSource, error) {
 	return c.eventHub.Subscribe()
-}
-
-func (c *client) checkSpace(logger lager.Logger, containers []executor.Container) ([]executor.Container, []executor.Container, error) {
-	remainingResources, err := c.remainingResources(logger)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	allocatableContainers := make([]executor.Container, 0, len(containers))
-	unallocatableContainers := make([]executor.Container, 0, len(containers))
-
-	// Can be optimized to select containers such that maximum number of containers can be allocated
-	for _, container := range containers {
-		if remainingResources.MemoryMB < container.MemoryMB {
-			unallocatableContainers = append(unallocatableContainers, container)
-			continue
-		}
-
-		if remainingResources.DiskMB < container.DiskMB {
-			unallocatableContainers = append(unallocatableContainers, container)
-			continue
-		}
-
-		if remainingResources.Containers < 1 {
-			unallocatableContainers = append(unallocatableContainers, container)
-			continue
-		}
-
-		remainingResources.MemoryMB -= container.MemoryMB
-		remainingResources.DiskMB -= container.DiskMB
-		remainingResources.Containers--
-		allocatableContainers = append(allocatableContainers, container)
-	}
-
-	return allocatableContainers, unallocatableContainers, nil
 }

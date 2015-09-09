@@ -65,16 +65,16 @@ func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Conta
 	return container, nil
 }
 
-func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
+func (a *AllocationStore) Initialize(logger lager.Logger, req *executor.RunRequest) error {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	container, err := a.lookup(guid)
+	container, err := a.lookup(req.Guid)
 	if err != nil {
 		logger.Error("failed-initializing-container", err)
 		return err
 	}
-	logger.Debug("initializing-container", lager.Data{"guid": guid})
+	logger.Debug("initializing-container", lager.Data{"guid": req.Guid})
 
 	if container.State != executor.StateReserved {
 		logger.Error(
@@ -89,7 +89,9 @@ func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
 	}
 
 	container.State = executor.StateInitializing
-	a.allocated[guid] = container
+	container.RunInfo = req.RunInfo
+	container.Tags.Add(req.Tags)
+	a.allocated[container.Guid] = container
 
 	return nil
 }
