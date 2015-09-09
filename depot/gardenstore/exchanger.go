@@ -119,9 +119,10 @@ func garden2executor(handle string, info garden.ContainerInfo) (executor.Contain
 	executorContainer := executor.Container{
 		Guid:       handle,
 		Tags:       executor.Tags{},
-		Ports:      make([]executor.PortMapping, len(info.MappedPorts)),
 		ExternalIP: info.ExternalIP,
 	}
+
+	executorContainer.Ports = make([]executor.PortMapping, len(info.MappedPorts))
 
 	for key, value := range info.Properties {
 		switch key {

@@ -32,8 +32,8 @@ func (a *AllocationStore) List() []executor.Container {
 
 	containers := make([]executor.Container, 0, len(a.allocated))
 
-	for _, container := range a.allocated {
-		containers = append(containers, container)
+	for key := range a.allocated {
+		containers = append(containers, a.allocated[key].Copy())
 	}
 
 	return containers
@@ -46,35 +46,34 @@ func (a *AllocationStore) Lookup(guid string) (executor.Container, error) {
 	return a.lookup(guid)
 }
 
-func (a *AllocationStore) Allocate(logger lager.Logger, container executor.Container) (executor.Container, error) {
+func (a *AllocationStore) Allocate(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	if _, err := a.lookup(container.Guid); err == nil {
+	if _, err := a.lookup(req.Guid); err == nil {
 		logger.Error("failed-allocating-container", err)
 		return executor.Container{}, executor.ErrContainerGuidNotAvailable
 	}
-	logger.Debug("allocating-container", lager.Data{"container": container})
 
-	container.State = executor.StateReserved
-	container.AllocatedAt = a.clock.Now().UnixNano()
-	a.allocated[container.Guid] = container
+	logger.Debug("allocating-container", lager.Data{"allocation-request": req})
 
-	a.eventEmitter.Emit(executor.NewContainerReservedEvent(container))
+	a.allocated[req.Guid] = executor.NewReservedContainerFromAllocationRequest(req, a.clock.Now().UnixNano())
 
-	return container, nil
+	a.eventEmitter.Emit(executor.NewContainerReservedEvent(a.allocated[req.Guid]))
+
+	return a.allocated[req.Guid].Copy(), nil
 }
 
-func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
+func (a *AllocationStore) Initialize(logger lager.Logger, req *executor.RunRequest) error {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	container, err := a.lookup(guid)
+	container, err := a.lookup(req.Guid)
 	if err != nil {
 		logger.Error("failed-initializing-container", err)
 		return err
 	}
-	logger.Debug("initializing-container", lager.Data{"guid": guid})
+	logger.Debug("initializing-container", lager.Data{"guid": req.Guid})
 
 	if container.State != executor.StateReserved {
 		logger.Error(
@@ -89,7 +88,9 @@ func (a *AllocationStore) Initialize(logger lager.Logger, guid string) error {
 	}
 
 	container.State = executor.StateInitializing
-	a.allocated[guid] = container
+	container.RunInfo = req.RunInfo
+	container.Tags.Add(req.Tags)
+	a.allocated[container.Guid] = container
 
 	return nil
 }

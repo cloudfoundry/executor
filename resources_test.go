@@ -46,4 +46,29 @@ var _ = Describe("Container", func() {
 			})
 		})
 	})
+	Describe("Subtract", func() {
+		const (
+			defaultDiskMB     = 20
+			defaultMemoryMB   = 30
+			defaultContainers = 3
+		)
+
+		It("returns false when the number of containers is less than 1", func() {
+			resources := executor.NewExecutorResources(defaultMemoryMB, defaultDiskMB, 0)
+			resourceToSubtract := executor.NewResource(defaultMemoryMB-1, defaultDiskMB-1, "rootfs")
+			Expect(resources.Subtract(&resourceToSubtract)).To(BeFalse())
+		})
+
+		It("returns false when disk size exceeds total available disk size", func() {
+			resources := executor.NewExecutorResources(defaultMemoryMB, 10, defaultContainers)
+			resourceToSubtract := executor.NewResource(defaultMemoryMB-1, 20, "rootfs")
+			Expect(resources.Subtract(&resourceToSubtract)).To(BeFalse())
+		})
+
+		It("returns false when memory exceeds total available memory", func() {
+			resources := executor.NewExecutorResources(10, defaultDiskMB, defaultContainers)
+			resourceToSubtract := executor.NewResource(20, defaultDiskMB-1, "rootfs")
+			Expect(resources.Subtract(&resourceToSubtract)).To(BeFalse())
+		})
+	})
 })
