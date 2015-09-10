@@ -35,8 +35,8 @@ type clientProvider struct {
 type AllocationStore interface {
 	List() []executor.Container
 	Lookup(guid string) (executor.Container, error)
-	Allocate(logger lager.Logger, container executor.Container) (executor.Container, error)
-	Initialize(logger lager.Logger, runRequest *executor.RunRequest) error
+	Allocate(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error)
+	Initialize(logger lager.Logger, req *executor.RunRequest) error
 	Fail(logger lager.Logger, guid string, reason string) (executor.Container, error)
 	Deallocate(logger lager.Logger, guid string) bool
 }
@@ -147,7 +147,7 @@ func (c *client) AllocateContainers(requests []executor.AllocationRequest) (map[
 			continue
 		}
 
-		_, err = c.allocationStore.Allocate(logger, executor.NewContainerFromResource(req.Guid, &req.Resource, req.Tags))
+		_, err = c.allocationStore.Allocate(logger, req)
 		if err != nil {
 			logger.Debug("failed-to-allocate-container", lager.Data{"guid": req.Guid, "error": err.Error()})
 			errMessageMap[req.Guid] = err.Error()

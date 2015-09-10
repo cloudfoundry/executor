@@ -34,28 +34,25 @@ var _ = Describe("Allocation Store", func() {
 
 	Describe("List", func() {
 		Context("when a container is allocated", func() {
-			var container executor.Container
+			var request *executor.AllocationRequest
 
 			BeforeEach(func() {
-				container = executor.Container{
-					Guid:     "banana",
-					MemoryMB: 512,
-					DiskMB:   512,
-				}
+				request = newAllocationRequest("banana", 512, 512)
 
-				_, err := allocationStore.Allocate(logger, container)
+				_, err := allocationStore.Allocate(logger, request)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("is included in the list", func() {
 				allocations := allocationStore.List()
 				Expect(allocations).To(HaveLen(1))
-				Expect(allocations[0].Guid).To(Equal(container.Guid))
+				Expect(allocations[0].Guid).To(Equal(request.Guid))
+				Expect(allocations[0].Resource).To(BeEquivalentTo(request.Resource))
 			})
 
 			Context("and then deallocated", func() {
 				BeforeEach(func() {
-					deallocated := allocationStore.Deallocate(logger, container.Guid)
+					deallocated := allocationStore.Deallocate(logger, request.Guid)
 					Expect(deallocated).To(BeTrue())
 				})
 
@@ -67,18 +64,10 @@ var _ = Describe("Allocation Store", func() {
 
 		Context("when multiple containers are allocated", func() {
 			It("they are added to the store", func() {
-				_, err := allocationStore.Allocate(logger, executor.Container{
-					Guid:     "banana-1",
-					MemoryMB: 512,
-					DiskMB:   512,
-				})
+				_, err := allocationStore.Allocate(logger, newAllocationRequest("banana", 512, 512))
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = allocationStore.Allocate(logger, executor.Container{
-					Guid:     "banana-2",
-					MemoryMB: 512,
-					DiskMB:   512,
-				})
+				_, err = allocationStore.Allocate(logger, newAllocationRequest("banana-2", 512, 512))
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(allocationStore.List()).To(HaveLen(2))
@@ -87,71 +76,67 @@ var _ = Describe("Allocation Store", func() {
 	})
 
 	Describe("Allocate", func() {
-		var container executor.Container
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:     "banana",
-				MemoryMB: 512,
-				DiskMB:   512,
-			}
-		})
-
 		Context("when the guid is available", func() {
 			It("it is marked as RESERVED", func() {
-				allocation, err := allocationStore.Allocate(logger, container)
+				request := newAllocationRequest("banana", 512, 512)
+
+				allocation, err := allocationStore.Allocate(logger, request)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(allocation.Guid).To(Equal(container.Guid))
-				Expect(allocation.State).To(Equal(executor.StateReserved))
+				Expect(allocation.Guid).To(Equal(request.Guid))
+				Expect(allocation.Resource).To(BeEquivalentTo(request.Resource))
 				Expect(allocation.AllocatedAt).To(Equal(currentTime.UnixNano()))
 
+				Expect(allocation.State).To(Equal(executor.StateReserved))
+
 				Expect(fakeEventEmitter.EmitCallCount()).To(Equal(1))
-				Expect(fakeEventEmitter.EmitArgsForCall(0)).To(Equal(executor.NewContainerReservedEvent(allocation)))
+				Expect(fakeEventEmitter.EmitArgsForCall(0)).To(BeEquivalentTo(executor.NewContainerReservedEvent(allocation)))
 			})
 		})
 
 		Context("when the guid is not available", func() {
-			BeforeEach(func() {
-				_, err := allocationStore.Allocate(logger, container)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
 			It("errors and does not store the duplicate", func() {
-				_, err := allocationStore.Allocate(logger, container)
+				request := newAllocationRequest("banana", 512, 512)
+
+				_, err := allocationStore.Allocate(logger, request)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = allocationStore.Allocate(logger, request)
 				Expect(err).To(HaveOccurred())
+
 				Expect(allocationStore.List()).To(HaveLen(1))
 			})
 		})
 	})
 
 	Describe("Initialize", func() {
-		var container executor.Container
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:     "banana",
-				MemoryMB: 512,
-				DiskMB:   512,
-			}
-			_, err := allocationStore.Allocate(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
 		Context("when the guid is available", func() {
+			const guid = "banana"
+
+			BeforeEach(func() {
+				request := newAllocationRequest(guid, 512, 512)
+				_, err := allocationStore.Allocate(logger, request)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			It("it is marked as INITIALIZING", func() {
-				err := allocationStore.Initialize(logger, container.Guid)
+				runReq := newRunRequest(guid)
+				err := allocationStore.Initialize(logger, runReq)
 				Expect(err).NotTo(HaveOccurred())
 
-				allocation, err := allocationStore.Lookup(container.Guid)
+				container, err := allocationStore.Lookup(guid)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(allocation.Guid).To(Equal(container.Guid))
-				Expect(allocation.State).To(Equal(executor.StateInitializing))
+				Expect(container.Guid).To(Equal(guid))
+				Expect(container.RunInfo).To(BeEquivalentTo(runReq.RunInfo))
+				Expect(container.State).To(Equal(executor.StateInitializing))
 			})
 		})
 
 		Context("when the guid is not available", func() {
 			It("errors", func() {
-				err := allocationStore.Initialize(logger, "doesnt-exist")
+				runReq := newRunRequest("doesnt-exist")
+				err := allocationStore.Initialize(logger, runReq)
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
@@ -159,22 +144,19 @@ var _ = Describe("Allocation Store", func() {
 	})
 
 	Describe("Lookup", func() {
-		var container executor.Container
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:     "banana",
-				MemoryMB: 512,
-				DiskMB:   512,
-			}
-			_, err := allocationStore.Allocate(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
 		Context("when the guid is available", func() {
-			It("it is returns the container", func() {
-				allocation, err := allocationStore.Lookup(container.Guid)
+			const guid = "banana"
+
+			BeforeEach(func() {
+				request := newAllocationRequest(guid, 512, 512)
+				_, err := allocationStore.Allocate(logger, request)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(allocation.Guid).To(Equal(container.Guid))
+			})
+
+			It("it is returns the container", func() {
+				allocation, err := allocationStore.Lookup(guid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allocation.Guid).To(Equal(guid))
 			})
 		})
 
@@ -188,18 +170,9 @@ var _ = Describe("Allocation Store", func() {
 	})
 
 	Describe("Fail", func() {
-		var container executor.Container
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:     "banana",
-				MemoryMB: 512,
-				DiskMB:   512,
-			}
-		})
-
 		Context("when the container is not in the allocation store", func() {
 			It("errors", func() {
-				_, err := allocationStore.Fail(logger, container.Guid, "failure-response")
+				_, err := allocationStore.Fail(logger, "doesnt-exist", "failure-response")
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 
@@ -208,17 +181,20 @@ var _ = Describe("Allocation Store", func() {
 		})
 
 		Context("when the container is in the allocation store", func() {
+			const guid = "banana"
+
 			BeforeEach(func() {
-				_, err := allocationStore.Allocate(logger, container)
+				request := newAllocationRequest(guid, 512, 512)
+				_, err := allocationStore.Allocate(logger, request)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("it is marked as COMPLETED with failure reason", func() {
 				emitCallCount := fakeEventEmitter.EmitCallCount()
-				allocation, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
+				allocation, err := allocationStore.Fail(logger, guid, "failure-reason")
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(allocation.Guid).To(Equal(container.Guid))
+				Expect(allocation.Guid).To(Equal(guid))
 				Expect(allocation.State).To(Equal(executor.StateCompleted))
 				Expect(allocation.RunResult).To(Equal(executor.ContainerRunResult{
 					Failed:        true,
@@ -230,22 +206,23 @@ var _ = Describe("Allocation Store", func() {
 			})
 
 			It("remains in the allocation store as reserved", func() {
-				c, err := allocationStore.Lookup(container.Guid)
+				c, err := allocationStore.Lookup(guid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.State).To(Equal(executor.StateReserved))
 			})
 
 			Context("when the container is already in the completed state", func() {
 				BeforeEach(func() {
-					err := allocationStore.Initialize(logger, container.Guid)
+					runReq := newRunRequest(guid)
+					err := allocationStore.Initialize(logger, runReq)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = allocationStore.Fail(logger, container.Guid, "force-completed")
+					_, err = allocationStore.Fail(logger, guid, "force-completed")
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("remains in the allocation store as completed", func() {
-					c, err := allocationStore.Lookup(container.Guid)
+					c, err := allocationStore.Lookup(guid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(c.State).To(Equal(executor.StateCompleted))
 				})
@@ -253,7 +230,7 @@ var _ = Describe("Allocation Store", func() {
 				It("fails with an invalid transition error", func() {
 					expectedEmitCount := fakeEventEmitter.EmitCallCount()
 
-					_, err := allocationStore.Fail(logger, container.Guid, "already-completed")
+					_, err := allocationStore.Fail(logger, guid, "already-completed")
 					Expect(err).To(Equal(executor.ErrInvalidTransition))
 
 					Expect(fakeEventEmitter.EmitCallCount()).To(Equal(expectedEmitCount))
@@ -263,26 +240,19 @@ var _ = Describe("Allocation Store", func() {
 	})
 
 	Describe("Deallocate", func() {
-		var container executor.Container
-
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:     "banana",
-				MemoryMB: 512,
-				DiskMB:   512,
-			}
-		})
-
 		Context("when the guid is in the list", func() {
+			const guid = "banana"
+
 			BeforeEach(func() {
-				_, err := allocationStore.Allocate(logger, container)
+				request := newAllocationRequest(guid, 512, 512)
+				_, err := allocationStore.Allocate(logger, request)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("it is removed from the list, and returns true", func() {
 				count := len(allocationStore.List())
 
-				deallocated := allocationStore.Deallocate(logger, container.Guid)
+				deallocated := allocationStore.Deallocate(logger, guid)
 				Expect(deallocated).To(BeTrue())
 
 				Expect(allocationStore.List()).To(HaveLen(count - 1))
@@ -304,21 +274,13 @@ var _ = Describe("Allocation Store", func() {
 		)
 
 		BeforeEach(func() {
-			_, err := allocationStore.Allocate(logger, executor.Container{
-				Guid:     "forever-reserved",
-				MemoryMB: 512,
-				DiskMB:   512,
-			})
+			_, err := allocationStore.Allocate(logger, newAllocationRequest("forever-reserved", 512, 512))
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = allocationStore.Allocate(logger, executor.Container{
-				Guid:     "eventually-initialized",
-				MemoryMB: 512,
-				DiskMB:   512,
-			})
+			_, err = allocationStore.Allocate(logger, newAllocationRequest("eventually-initialized", 512, 512))
 			Expect(err).NotTo(HaveOccurred())
 
-			err = allocationStore.Initialize(logger, "eventually-initialized")
+			err = allocationStore.Initialize(logger, newRunRequest("eventually-initialized"))
 			Expect(err).NotTo(HaveOccurred())
 
 			expirationTime = 20 * time.Millisecond
@@ -390,25 +352,29 @@ type transitionExpectation struct {
 }
 
 func (expectation transitionExpectation) driveFromState(allocationStore *allocationstore.AllocationStore, container executor.Container) {
+	allocReq := executor.NewAllocationRequest(container.Guid,&container.Resource,container.Tags)
+	runReq := executor.NewRunRequest(container.Guid,&container.RunInfo,container.Tags)
+
 	switch expectation.from {
 	case "non-existent":
 
 	case "reserved":
-		_, err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, &allocReq)
 		Expect(err).NotTo(HaveOccurred())
 
 	case "initializing":
-		_, err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, &allocReq)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = allocationStore.Initialize(logger, container.Guid)
+
+		err = allocationStore.Initialize(logger, &runReq)
 		Expect(err).NotTo(HaveOccurred())
 
 	case "failed":
-		_, err := allocationStore.Allocate(logger, container)
+		_, err := allocationStore.Allocate(logger, &allocReq)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = allocationStore.Initialize(logger, container.Guid)
+		err = allocationStore.Initialize(logger, &runReq)
 		Expect(err).NotTo(HaveOccurred())
 
 		_, err = allocationStore.Fail(logger, container.Guid, "failure-reason")
@@ -422,11 +388,13 @@ func (expectation transitionExpectation) driveFromState(allocationStore *allocat
 func (expectation transitionExpectation) transitionToState(allocationStore *allocationstore.AllocationStore, container executor.Container) error {
 	switch expectation.to {
 	case "reserve":
-		_, err := allocationStore.Allocate(logger, container)
+		allocReq := executor.NewAllocationRequest(container.Guid,&container.Resource,container.Tags)
+		_, err := allocationStore.Allocate(logger, &allocReq)
 		return err
 
 	case "initialize":
-		return allocationStore.Initialize(logger, container.Guid)
+		runReq := executor.NewRunRequest(container.Guid,&container.RunInfo,container.Tags)
+		return allocationStore.Initialize(logger, &runReq)
 
 	case "fail":
 		_, err := allocationStore.Fail(logger, container.Guid, "failure-reason")
@@ -447,4 +415,22 @@ func (expectation transitionExpectation) checkErrorResult(err error) {
 	default:
 		Fail("unknown 'assertErr' expectation: " + expectation.assertError)
 	}
+}
+
+func newAllocationRequest(guid string, memoryMB, diskMB int, tagses ...executor.Tags) *executor.AllocationRequest {
+	resource := executor.NewResource(memoryMB, diskMB, "linux")
+	var tags executor.Tags
+	if len(tagses) > 0 {
+		tags = tagses[0]
+	}
+	req := executor.NewAllocationRequest(guid, &resource, tags)
+	return &req
+}
+
+func newRunRequest(guid string) *executor.RunRequest {
+	runInfo := executor.RunInfo{
+	// TODO: Fill in required fields.
+	}
+	r := executor.NewRunRequest(guid, &runInfo, nil)
+	return &r
 }

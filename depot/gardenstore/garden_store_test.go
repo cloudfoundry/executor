@@ -556,12 +556,14 @@ var _ = Describe("GardenContainerStore", func() {
 			executorContainer = executor.Container{
 				Guid:   "some-guid",
 				State:  executor.StateInitializing,
-				Action: models.WrapAction(action),
+				RunInfo: executor.RunInfo{
+					Action: models.WrapAction(action),
 
-				LogConfig: executor.LogConfig{
-					Guid:       "log-guid",
-					SourceName: "some-source-name",
-					Index:      1,
+					LogConfig: executor.LogConfig{
+						Guid:       "log-guid",
+						SourceName: "some-source-name",
+						Index:      1,
+					},
 				},
 			}
 
@@ -1424,11 +1426,13 @@ var _ = Describe("GardenContainerStore", func() {
 			runReturns = make(chan int)
 
 			executorContainer = executor.Container{
-				Action:       models.WrapAction(runAction),
-				Monitor:      models.WrapAction(monitorAction),
-				State:        executor.StateInitializing,
 				Guid:         "some-container-handle",
-				StartTimeout: 3,
+				State:        executor.StateInitializing,
+				RunInfo: executor.RunInfo{
+					Action:       models.WrapAction(runAction),
+					Monitor:      models.WrapAction(monitorAction),
+					StartTimeout: 3,
+				},
 			}
 
 			runSignalled := make(chan struct{})
@@ -1976,9 +1980,11 @@ var _ = Describe("GardenContainerStore", func() {
 
 		BeforeEach(func() {
 			executorContainer = executor.Container{
-				Action:  models.WrapAction(action),
-				Monitor: models.WrapAction(action),
 				Guid:    "some-container-handle",
+				RunInfo: executor.RunInfo{
+					Action:  models.WrapAction(action),
+					Monitor: models.WrapAction(action),
+				},
 			}
 
 			gardenContainer := new(gfakes.FakeContainer)

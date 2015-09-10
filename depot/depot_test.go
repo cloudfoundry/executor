@@ -1146,18 +1146,9 @@ var _ = Describe("Depot", func() {
 		})
 
 		Context("when the container is in the allocation store", func() {
-			var container executor.Container
-
 			BeforeEach(func() {
-				container = executor.Container{
-					Guid: stopGuid,
-					Resource: executor.Resource{
-						MemoryMB: 512,
-						DiskMB:   512,
-					},
-				}
-
-				_, err := allocationStore.Allocate(logger, container)
+				req := newAllocationRequest(stopGuid,512,512)
+				_, err := allocationStore.Allocate(logger, &req)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

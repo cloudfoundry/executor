@@ -43,6 +43,13 @@ func NewContainerFromResource(guid string, resource *Resource, tags Tags) Contai
 	}
 }
 
+func NewReservedContainerFromAllocationRequest(req *AllocationRequest,allocatedAt int64) Container {
+	c := NewContainerFromResource(req.Guid,&req.Resource,req.Tags)
+	c.State = StateReserved
+	c.AllocatedAt = allocatedAt
+	return c
+}
+
 type Resource struct {
 	MemoryMB   int    `json:"memory_mb"`
 	DiskMB     int    `json:"disk_mb"`
@@ -70,6 +77,11 @@ type RunInfo struct {
 	Monitor       *models.Action              `json:"monitor"`
 	EgressRules   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
 	Env           []EnvironmentVariable       `json:"env,omitempty"`
+}
+
+func (newContainer Container) Copy() Container {
+	newContainer.Tags = newContainer.Tags.Copy()
+	return newContainer
 }
 
 func (c *Container) HasTags(tags Tags) bool {
@@ -169,6 +181,15 @@ func (r *ExecutorResources) Subtract(res *Resource) bool {
 }
 
 type Tags map[string]string
+
+func (t Tags) Copy()Tags {
+	if t == nil {
+		return nil
+	}
+	newTags := make(Tags,len(t))
+	newTags.Add(t)
+	return newTags
+}
 
 func (t Tags) Add(other Tags) {
 	for key := range other {
