@@ -97,7 +97,9 @@ func (step *downloadStep) perform() error {
 }
 
 func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
-	step.logger.Info("fetch-starting")
+	step.logger.Info("fetch-starting", lager.Data{
+		"from": step.model.From,
+	})
 	url, err := url.ParseRequestURI(step.model.From)
 	if err != nil {
 		step.logger.Error("parse-request-uri-error", err)
