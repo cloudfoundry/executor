@@ -554,8 +554,8 @@ var _ = Describe("GardenContainerStore", func() {
 
 		BeforeEach(func() {
 			executorContainer = executor.Container{
-				Guid:   "some-guid",
-				State:  executor.StateInitializing,
+				Guid:  "some-guid",
+				State: executor.StateInitializing,
 				RunInfo: executor.RunInfo{
 					Action: models.WrapAction(action),
 
@@ -1355,8 +1355,8 @@ var _ = Describe("GardenContainerStore", func() {
 			runReturns = make(chan int)
 
 			executorContainer = executor.Container{
-				Guid:         "some-container-handle",
-				State:        executor.StateInitializing,
+				Guid:  "some-container-handle",
+				State: executor.StateInitializing,
 				RunInfo: executor.RunInfo{
 					Action:       models.WrapAction(runAction),
 					Monitor:      models.WrapAction(monitorAction),
@@ -1909,7 +1909,7 @@ var _ = Describe("GardenContainerStore", func() {
 
 		BeforeEach(func() {
 			executorContainer = executor.Container{
-				Guid:    "some-container-handle",
+				Guid: "some-container-handle",
 				RunInfo: executor.RunInfo{
 					Action:  models.WrapAction(action),
 					Monitor: models.WrapAction(action),
