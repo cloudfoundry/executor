@@ -399,30 +399,6 @@ var _ = Describe("Depot", func() {
 				Expect(logger).To(gbytes.Say("test.depot-client.run-container.failed-running-container-in-garden"))
 			})
 		})
-
-		Context("CPUWeight", func() {
-			Context("when the run request has invalid CPUWeight", func() {
-				It("should not allocate container with invalid CPUWeight", func() {
-					request := executor.NewRunRequest(gardenStoreGuid, &executor.RunInfo{CPUWeight: 150}, nil)
-					err := depotClient.RunContainer(&request)
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(executor.ErrLimitsInvalid))
-				})
-			})
-
-			Context("when the run request has 0 cpu weight", func() {
-				It("should allocate container with 100 CPUWeight", func() {
-					request := executor.NewRunRequest(gardenStoreGuid, &executor.RunInfo{CPUWeight: 0}, nil)
-					err := depotClient.RunContainer(&request)
-					Expect(err).ToNot(HaveOccurred())
-
-					expectedRunInfo := executor.RunInfo{CPUWeight: 100}
-					container, err := allocationStore.Lookup(gardenStoreGuid)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(container.RunInfo).To(Equal(expectedRunInfo))
-				})
-			})
-		})
 	})
 
 	Describe("Throttling", func() {

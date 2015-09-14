@@ -187,16 +187,6 @@ func (c *client) RunContainer(request *executor.RunRequest) error {
 		"guid": request.Guid,
 	})
 
-	if request.CPUWeight > 100 || request.CPUWeight < 0 {
-		logger.Debug("invalid-cpu-weight", lager.Data{
-			"guid":      request.Guid,
-			"cpuweight": request.CPUWeight,
-		})
-		return executor.ErrLimitsInvalid
-	} else if request.CPUWeight == 0 {
-		request.CPUWeight = 100
-	}
-
 	logger.Debug("initializing-container")
 	err := c.allocationStore.Initialize(logger, request)
 	if err != nil {
