@@ -2,6 +2,7 @@ package metrics_test
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -59,6 +60,11 @@ var _ = Describe("Reporter", func() {
 			Interval:       reportInterval,
 			Logger:         logger,
 		})
+	})
+
+	AfterEach(func() {
+		reporter.Signal(os.Interrupt)
+		Eventually(reporter.Wait()).Should(Receive())
 	})
 
 	It("reports the current capacity on the given interval", func() {
