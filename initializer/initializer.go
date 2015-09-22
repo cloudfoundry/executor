@@ -21,6 +21,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -30,6 +31,7 @@ import (
 )
 
 const (
+	stalledDuration                = metric.Duration("rep.stalled_duration")
 	maxConcurrentDownloads         = 5
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
@@ -215,13 +217,39 @@ func ValidateExecutor(logger lager.Logger, config Configuration) bool {
 	return valid
 }
 
+// Until we get a successful response from garden,
+// periodically emit metrics saying how long we've been trying
+// while retrying the connection indefinitely.
 func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client) {
-	err := gardenClient.Ping()
+	pingStart := time.Now()
 
-	for err != nil {
-		logger.Error("failed-to-make-connection", err)
-		time.Sleep(time.Second)
-		err = gardenClient.Ping()
+	pingChan := make(chan error)
+
+	go func() {
+		pingChan <- gardenClient.Ping()
+	}()
+
+	var err error
+
+OUTER:
+	for {
+		select {
+		case err = <-pingChan:
+			if err != nil {
+				logger.Error("failed-to-make-connection", err)
+				stalledDuration.Send(time.Now().Sub(pingStart))
+				time.Sleep(time.Second)
+				go func() {
+					pingChan <- gardenClient.Ping()
+				}()
+			} else {
+				// send 0 to indicate ping responded successfully
+				stalledDuration.Send(0)
+				break OUTER
+			}
+		case <-time.After(1500 * time.Millisecond):
+			stalledDuration.Send(time.Now().Sub(pingStart))
+		}
 	}
 }
 
