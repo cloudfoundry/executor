@@ -21,6 +21,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -30,6 +31,9 @@ import (
 )
 
 const (
+	PingGardenInterval             = time.Second
+	StalledMetricHeartbeatInterval = 5 * time.Second
+	stalledDuration                = metric.Duration("StalledGardenDuration")
 	maxConcurrentDownloads         = 5
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
@@ -107,9 +111,9 @@ var DefaultConfiguration = Configuration{
 	HealthCheckWorkPoolSize:     defaultHealthCheckWorkPoolSize,
 }
 
-func Initialize(logger lager.Logger, config Configuration) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
-	waitForGarden(logger, gardenClient)
+	waitForGarden(logger, gardenClient, clock)
 
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
@@ -119,7 +123,6 @@ func Initialize(logger lager.Logger, config Configuration) (executor.Client, gro
 	destroyContainers(gardenClient, containersFetcher, logger)
 
 	workDir := setupWorkDir(logger, config.TempDir)
-	clock := clock.NewClock()
 
 	transformer := initializeTransformer(
 		logger,
@@ -215,13 +218,39 @@ func ValidateExecutor(logger lager.Logger, config Configuration) bool {
 	return valid
 }
 
-func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client) {
-	err := gardenClient.Ping()
+// Until we get a successful response from garden,
+// periodically emit metrics saying how long we've been trying
+// while retrying the connection indefinitely.
+func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock clock.Clock) {
+	pingStart := clock.Now()
+	logger = logger.Session("wait-for-garden", lager.Data{"initialTime:": pingStart})
+	pingRequest := clock.NewTimer(0)
+	pingResponse := make(chan error)
+	heartbeatTimer := clock.NewTimer(StalledMetricHeartbeatInterval)
 
-	for err != nil {
-		logger.Error("failed-to-make-connection", err)
-		time.Sleep(time.Second)
-		err = gardenClient.Ping()
+	for {
+		select {
+		case <-pingRequest.C():
+			go func() {
+				logger.Info("ping-garden", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
+				pingResponse <- gardenClient.Ping()
+			}()
+
+		case err := <-pingResponse:
+			if err == nil {
+				logger.Info("ping-garden-success", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
+				// send 0 to indicate ping responded successfully
+				stalledDuration.Send(0)
+				return
+			}
+			logger.Error("failed-to-ping-garden", err)
+			pingRequest.Reset(PingGardenInterval)
+
+		case <-heartbeatTimer.C():
+			logger.Info("emitting-stalled-garden-heartbeat", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
+			stalledDuration.Send(clock.Since(pingStart))
+			heartbeatTimer.Reset(StalledMetricHeartbeatInterval)
+		}
 	}
 }
 
