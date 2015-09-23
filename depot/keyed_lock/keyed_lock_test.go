@@ -78,15 +78,20 @@ var _ = Describe("KeyedLock", func() {
 	Describe("Reap unused locks", func() {
 		It("does not leak", func() {
 			var beforeStats, afterStats runtime.MemStats
+
+			runtime.GC()
 			runtime.ReadMemStats(&beforeStats)
+
 			for i := 0; i < 10000; i++ {
 				k := strconv.Itoa(i)
 				lockManager.Lock(k)
 				lockManager.Unlock(k)
 			}
+
+			runtime.GC()
 			runtime.ReadMemStats(&afterStats)
 
-			Expect(math.Abs(float64(afterStats.HeapObjects - beforeStats.HeapObjects))).To(BeNumerically("<", 10000))
+			Expect(math.Abs(float64(afterStats.HeapObjects) - float64(beforeStats.HeapObjects))).To(BeNumerically("<", 10000))
 		})
 	})
 })
