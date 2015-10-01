@@ -56,6 +56,7 @@ func (a *AllocationStore) Allocate(logger lager.Logger, req *executor.Allocation
 	}
 
 	logger.Debug("allocating-container", lager.Data{"allocation-request": req})
+	defer logger.Debug("finished-allocating-container", lager.Data{"allocation-request": req})
 
 	a.allocated[req.Guid] = executor.NewReservedContainerFromAllocationRequest(req, a.clock.Now().UnixNano())
 
