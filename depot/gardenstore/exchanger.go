@@ -81,7 +81,7 @@ func (exchanger exchanger) Infos(logger lager.Logger, gardenClient garden.Client
 
 	for handle, info := range infos {
 		if info.Err != nil {
-			logger.Error("failed-garden-info", err, lager.Data{
+			logger.Error("failed-garden-info", info.Err, lager.Data{
 				"handle": handle,
 			})
 			continue
