@@ -426,7 +426,7 @@ func (c *client) StopContainer(guid string) error {
 	})
 
 	container, err := c.allocationStore.Lookup(guid)
-	if err == executor.ErrContainerNotFound {
+	if err != nil {
 		c.deletionWorkPool.Submit(func() {
 			c.containerLockManager.Lock(guid)
 			defer c.containerLockManager.Unlock(guid)
@@ -441,9 +441,10 @@ func (c *client) StopContainer(guid string) error {
 		})
 		err = <-errChannel
 		close(errChannel)
-	}
-	if container.State != executor.StateCompleted {
-		c.allocationStore.Fail(logger, guid, ContainerStoppedBeforeRunMessage)
+	} else {
+		if container.State != executor.StateCompleted {
+			c.allocationStore.Fail(logger, guid, ContainerStoppedBeforeRunMessage)
+		}
 	}
 
 	return err
