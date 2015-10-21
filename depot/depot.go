@@ -3,16 +3,19 @@ package depot
 import (
 	"io"
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerStoppedBeforeRunMessage = "Container stopped by user"
+const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
 type client struct {
 	*clientProvider
@@ -218,12 +221,14 @@ func (c *client) newRunContainerWorker(guid string, logger lager.Logger) func() 
 		}
 
 		logger.Info("creating-container-in-garden")
+		startTime := time.Now()
 		container, err = c.gardenStore.Create(logger, container)
 		if err != nil {
 			logger.Error("failed-creating-container-in-garden", err)
 			c.allocationStore.Fail(logger, guid, ContainerInitializationFailedMessage)
 			return
 		}
+		GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
 		logger.Info("succeeded-creating-container-in-garden")
 
 		if !c.allocationStore.Deallocate(logger, guid) {
