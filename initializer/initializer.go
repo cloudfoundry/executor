@@ -34,7 +34,6 @@ const (
 	PingGardenInterval             = time.Second
 	StalledMetricHeartbeatInterval = 5 * time.Second
 	stalledDuration                = metric.Duration("StalledGardenDuration")
-	maxConcurrentDownloads         = 5
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
 	containerMetricsReportInterval = 30 * time.Second
@@ -69,6 +68,8 @@ type Configuration struct {
 	UnhealthyMonitoringInterval time.Duration
 	HealthCheckWorkPoolSize     int
 
+	MaxConcurrentDownloads int
+
 	CreateWorkPoolSize  int
 	DeleteWorkPoolSize  int
 	ReadWorkPoolSize    int
@@ -81,6 +82,7 @@ type Configuration struct {
 }
 
 const (
+	defaultMaxConcurrentDownloads  = 5
 	defaultCreateWorkPoolSize      = 32
 	defaultDeleteWorkPoolSize      = 32
 	defaultReadWorkPoolSize        = 64
@@ -109,6 +111,7 @@ var DefaultConfiguration = Configuration{
 	ReadWorkPoolSize:            defaultReadWorkPoolSize,
 	MetricsWorkPoolSize:         defaultMetricsWorkPoolSize,
 	HealthCheckWorkPoolSize:     defaultHealthCheckWorkPoolSize,
+	MaxConcurrentDownloads:      defaultMaxConcurrentDownloads,
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -129,7 +132,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		config.CachePath,
 		workDir,
 		config.MaxCacheSizeInBytes,
-		maxConcurrentDownloads,
+		uint(config.MaxConcurrentDownloads),
 		maxConcurrentUploads,
 		config.SkipCertVerify,
 		config.ExportNetworkEnvVars,
