@@ -21,6 +21,7 @@ var _ = Describe("Initializer", func() {
 	var fakeGarden *ghttp.Server
 	var fakeClock *fakeclock.FakeClock
 	var errCh chan error
+	var done chan struct{}
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -29,9 +30,17 @@ var _ = Describe("Initializer", func() {
 		fakeGarden = ghttp.NewUnstartedServer()
 		fakeClock = fakeclock.NewFakeClock(initialTime)
 		errCh = make(chan error, 1)
+		done = make(chan struct{})
+
+		fakeGarden.RouteToHandler("GET", "/ping", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
+		fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
+		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
+			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
+		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 	})
 
 	AfterEach(func() {
+		Eventually(done).Should(BeClosed())
 		fakeGarden.Close()
 	})
 
@@ -43,6 +52,7 @@ var _ = Describe("Initializer", func() {
 		go func() {
 			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, fakeClock)
 			errCh <- err
+			close(done)
 		}()
 	})
 
@@ -55,8 +65,9 @@ var _ = Describe("Initializer", func() {
 
 		BeforeEach(func() {
 			waitChan = make(chan struct{})
-			fakeGarden.RouteToHandler("GET", "/ping", func(http.ResponseWriter, *http.Request) {
+			fakeGarden.RouteToHandler("GET", "/ping", func(w http.ResponseWriter, req *http.Request) {
 				<-waitChan
+				ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{})(w, req)
 			})
 		})
 
@@ -69,18 +80,9 @@ var _ = Describe("Initializer", func() {
 			fakeClock.Increment(initializer.StalledMetricHeartbeatInterval)
 			Eventually(checkStalledMetric).Should(BeNumerically("~", fakeClock.Since(initialTime)))
 		})
-
 	})
 
 	Context("when garden responds", func() {
-		BeforeEach(func() {
-			fakeGarden.RouteToHandler("GET", "/ping", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-			fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-			fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
-				garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
-			fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-		})
-
 		It("emits 0", func() {
 			Eventually(func() bool { return sender.HasValue("StalledGardenDuration") }).Should(BeTrue())
 			Expect(checkStalledMetric()).To(BeEquivalentTo(0))
@@ -93,10 +95,6 @@ var _ = Describe("Initializer", func() {
 		BeforeEach(func() {
 			callCount := 0
 			retried = make(chan struct{})
-			fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-			fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
-				garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
-			fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 			fakeGarden.RouteToHandler("GET", "/ping", func(w http.ResponseWriter, req *http.Request) {
 				callCount++
 				if callCount == 1 {
