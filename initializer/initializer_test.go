@@ -21,6 +21,7 @@ var _ = Describe("Initializer", func() {
 	var fakeGarden *ghttp.Server
 	var fakeClock *fakeclock.FakeClock
 	var errCh chan error
+	var done chan struct{}
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -29,9 +30,11 @@ var _ = Describe("Initializer", func() {
 		fakeGarden = ghttp.NewUnstartedServer()
 		fakeClock = fakeclock.NewFakeClock(initialTime)
 		errCh = make(chan error, 1)
+		done = make(chan struct{})
 	})
 
 	AfterEach(func() {
+		Eventually(done).Should(BeClosed())
 		fakeGarden.Close()
 	})
 
@@ -43,6 +46,7 @@ var _ = Describe("Initializer", func() {
 		go func() {
 			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, fakeClock)
 			errCh <- err
+			close(done)
 		}()
 	})
 
