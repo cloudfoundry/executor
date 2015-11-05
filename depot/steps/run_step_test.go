@@ -379,11 +379,14 @@ var _ = Describe("RunAction", func() {
 
 			Context("when the process exits", func() {
 				It("completes the perform without having sent kill", func() {
+					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+
 					waitExited <- (128 + 15)
 
 					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
 
 					Expect(spawnedProcess.SignalCallCount()).To(Equal(1))
+					Expect(spawnedProcess.SignalArgsForCall(0)).To(Equal(garden.SignalTerminate))
 				})
 			})
 
