@@ -116,7 +116,10 @@ var DefaultConfiguration = Configuration{
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
-	waitForGarden(logger, gardenClient, clock)
+	err := waitForGarden(logger, gardenClient, clock)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	containersFetcher := &executorContainers{
 		gardenClient: gardenClient,
@@ -224,7 +227,7 @@ func ValidateExecutor(logger lager.Logger, config Configuration) bool {
 // Until we get a successful response from garden,
 // periodically emit metrics saying how long we've been trying
 // while retrying the connection indefinitely.
-func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock clock.Clock) {
+func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock clock.Clock) error {
 	pingStart := clock.Now()
 	logger = logger.Session("wait-for-garden", lager.Data{"initialTime:": pingStart})
 	pingRequest := clock.NewTimer(0)
@@ -240,14 +243,19 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 			}()
 
 		case err := <-pingResponse:
-			if err == nil {
+			switch err.(type) {
+			case nil:
 				logger.Info("ping-garden-success", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
 				// send 0 to indicate ping responded successfully
 				stalledDuration.Send(0)
-				return
+				return nil
+			case garden.UnrecoverableError:
+				logger.Error("failed-to-ping-garden-with-unrecoverable-error", err)
+				return err
+			default:
+				logger.Error("failed-to-ping-garden", err)
+				pingRequest.Reset(PingGardenInterval)
 			}
-			logger.Error("failed-to-ping-garden", err)
-			pingRequest.Reset(PingGardenInterval)
 
 		case <-heartbeatTimer.C():
 			logger.Info("emitting-stalled-garden-heartbeat", lager.Data{"wait-time-ns:": clock.Since(pingStart)})

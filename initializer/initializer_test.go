@@ -20,6 +20,7 @@ var _ = Describe("Initializer", func() {
 	var sender *fake_metric.FakeMetricSender
 	var fakeGarden *ghttp.Server
 	var fakeClock *fakeclock.FakeClock
+	var errCh chan error
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -27,6 +28,7 @@ var _ = Describe("Initializer", func() {
 		metrics.Initialize(sender, nil)
 		fakeGarden = ghttp.NewUnstartedServer()
 		fakeClock = fakeclock.NewFakeClock(initialTime)
+		errCh = make(chan error, 1)
 	})
 
 	AfterEach(func() {
@@ -38,7 +40,10 @@ var _ = Describe("Initializer", func() {
 		config := initializer.DefaultConfiguration
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
-		go initializer.Initialize(lagertest.NewTestLogger("test"), config, fakeClock)
+		go func() {
+			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, fakeClock)
+			errCh <- err
+		}()
 	})
 
 	checkStalledMetric := func() float64 {
@@ -116,5 +121,18 @@ var _ = Describe("Initializer", func() {
 			Expect(checkStalledMetric()).To(BeEquivalentTo(0))
 		})
 
+		Context("when the error is unrecoverable", func() {
+			BeforeEach(func() {
+				fakeGarden.RouteToHandler(
+					"GET",
+					"/ping",
+					ghttp.RespondWith(http.StatusGatewayTimeout, `{ "Type": "UnrecoverableError" , "Message": "Extra Special Error Message"}`),
+				)
+			})
+
+			It("returns an error", func() {
+				Eventually(errCh).Should(Receive(HaveOccurred()))
+			})
+		})
 	})
 })
