@@ -483,42 +483,40 @@ func (c *client) DeleteContainer(guid string) error {
 }
 
 func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
+	containers, err := c.ListContainers(executor.Tags{})
+	if err != nil {
+		logger.Error("failed-to-list-containers", err)
+		return executor.ExecutorResources{}, err
+	}
+	return c.remainingResourcesFrom(logger, containers)
+}
+
+func (c *client) remainingResourcesFrom(logger lager.Logger, containers []executor.Container) (executor.ExecutorResources, error) {
 	remainingResources, err := c.TotalResources()
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
 
-	processedGuids := map[string]struct{}{}
-
-	allocatedContainers := c.allocationStore.List()
-	for i := range allocatedContainers {
-		c := &allocatedContainers[i]
-		processedGuids[c.Guid] = struct{}{}
-		remainingResources.Subtract(&c.Resource)
-	}
-
-	gardenContainers, err := c.gardenStore.List(logger, nil)
-	if err != nil {
-		return executor.ExecutorResources{}, err
-	}
-
-	for i := range gardenContainers {
-		c := &gardenContainers[i]
-		if _, seen := processedGuids[c.Guid]; seen {
-			continue
-		}
-		processedGuids[c.Guid] = struct{}{}
+	for i := range containers {
+		c := &containers[i]
 		remainingResources.Subtract(&c.Resource)
 	}
 
 	return remainingResources, nil
 }
 
+func (c *client) RemainingResourcesFrom(containers []executor.Container) (executor.ExecutorResources, error) {
+	logger := c.logger.Session("remaining-resources-from", lager.Data{"containers": containers})
+	return c.remainingResourcesFrom(logger, containers)
+}
+
 func (c *client) RemainingResources() (executor.ExecutorResources, error) {
 	c.resourcesLock.Lock()
 	defer c.resourcesLock.Unlock()
 
-	return c.remainingResources(c.logger)
+	logger := c.logger.Session("remaining-resources")
+
+	return c.remainingResources(logger)
 }
 
 func (c *client) Ping() error {

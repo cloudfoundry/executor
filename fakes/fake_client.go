@@ -91,6 +91,15 @@ type FakeClient struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
+	RemainingResourcesFromStub        func([]executor.Container) (executor.ExecutorResources, error)
+	remainingResourcesFromMutex       sync.RWMutex
+	remainingResourcesFromArgsForCall []struct {
+		arg1 []executor.Container
+	}
+	remainingResourcesFromReturns struct {
+		result1 executor.ExecutorResources
+		result2 error
+	}
 	TotalResourcesStub        func() (executor.ExecutorResources, error)
 	totalResourcesMutex       sync.RWMutex
 	totalResourcesArgsForCall []struct{}
@@ -425,6 +434,39 @@ func (fake *FakeClient) RemainingResourcesCallCount() int {
 func (fake *FakeClient) RemainingResourcesReturns(result1 executor.ExecutorResources, result2 error) {
 	fake.RemainingResourcesStub = nil
 	fake.remainingResourcesReturns = struct {
+		result1 executor.ExecutorResources
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) RemainingResourcesFrom(arg1 []executor.Container) (executor.ExecutorResources, error) {
+	fake.remainingResourcesFromMutex.Lock()
+	fake.remainingResourcesFromArgsForCall = append(fake.remainingResourcesFromArgsForCall, struct {
+		arg1 []executor.Container
+	}{arg1})
+	fake.remainingResourcesFromMutex.Unlock()
+	if fake.RemainingResourcesFromStub != nil {
+		return fake.RemainingResourcesFromStub(arg1)
+	} else {
+		return fake.remainingResourcesFromReturns.result1, fake.remainingResourcesFromReturns.result2
+	}
+}
+
+func (fake *FakeClient) RemainingResourcesFromCallCount() int {
+	fake.remainingResourcesFromMutex.RLock()
+	defer fake.remainingResourcesFromMutex.RUnlock()
+	return len(fake.remainingResourcesFromArgsForCall)
+}
+
+func (fake *FakeClient) RemainingResourcesFromArgsForCall(i int) []executor.Container {
+	fake.remainingResourcesFromMutex.RLock()
+	defer fake.remainingResourcesFromMutex.RUnlock()
+	return fake.remainingResourcesFromArgsForCall[i].arg1
+}
+
+func (fake *FakeClient) RemainingResourcesFromReturns(result1 executor.ExecutorResources, result2 error) {
+	fake.RemainingResourcesFromStub = nil
+	fake.remainingResourcesFromReturns = struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}{result1, result2}

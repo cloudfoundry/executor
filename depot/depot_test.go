@@ -1320,6 +1320,23 @@ var _ = Describe("Depot", func() {
 		})
 	})
 
+	Describe("RemainingResourcesFrom", func() {
+		It("returns the available resources from a container snapshot", func() {
+			containers := []executor.Container{
+				newRunningContainer(newRunRequest("guid-1"), executor.Resource{
+					MemoryMB: defaultMemoryMB,
+					DiskMB:   defaultDiskMB,
+				}),
+			}
+
+			execResources, err := depotClient.RemainingResourcesFrom(containers)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(resources.Subtract(&containers[0].Resource)).To(BeTrue())
+			Expect(execResources).To(Equal(resources))
+		})
+	})
+
 	Describe("TotalResources", func() {
 		Context("when asked for total resources", func() {
 			It("should return the resources it was configured with", func() {
