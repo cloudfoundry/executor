@@ -19,9 +19,15 @@ const (
 	StateRunning      State = "running"
 	StateCompleted    State = "completed"
 )
+
 const (
 	ExclusiveDiskLimit DiskLimitScope = iota
 	TotalDiskLimit     DiskLimitScope = iota
+)
+
+const (
+	HealthcheckTag      = "executor-healthcheck"
+	HealthcheckTagValue = "executor-healthcheck"
 )
 
 type Container struct {

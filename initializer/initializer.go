@@ -17,6 +17,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
+	"github.com/cloudfoundry-incubator/executor/healthstate"
 	"github.com/cloudfoundry-incubator/executor/initializer/configuration"
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
@@ -67,6 +68,7 @@ type Configuration struct {
 	HealthyMonitoringInterval   time.Duration
 	UnhealthyMonitoringInterval time.Duration
 	HealthCheckWorkPoolSize     int
+	RootfsForGardenHealthcheck  string
 
 	MaxConcurrentDownloads int
 
@@ -75,7 +77,8 @@ type Configuration struct {
 	ReadWorkPoolSize    int
 	MetricsWorkPoolSize int
 
-	RegistryPruningInterval time.Duration
+	RegistryPruningInterval   time.Duration
+	GardenHealthCheckInterval time.Duration
 
 	MemoryMB string
 	DiskMB   string
@@ -112,6 +115,7 @@ var DefaultConfiguration = Configuration{
 	MetricsWorkPoolSize:         defaultMetricsWorkPoolSize,
 	HealthCheckWorkPoolSize:     defaultHealthCheckWorkPoolSize,
 	MaxConcurrentDownloads:      defaultMaxConcurrentDownloads,
+	GardenHealthCheckInterval:   10 * time.Minute,
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -198,6 +202,14 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				containerMetricsReportInterval,
 				clock,
 				depotClientProvider.WithLogger(containerMetricsLogger),
+			)},
+			{"garden_health_checker", healthstate.New(
+				config.RootfsForGardenHealthcheck,
+				depotClientProvider.WithLogger(logger),
+				gardenStore,
+				clock,
+				config.GardenHealthCheckInterval,
+				logger,
 			)},
 		},
 		nil
