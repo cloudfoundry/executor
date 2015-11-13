@@ -1,4 +1,4 @@
-package healthstate_test
+package gardenhealth_test
 
 import (
 	. "github.com/onsi/ginkgo"
