@@ -10,7 +10,11 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-const HealthcheckPrefix = "executor-healthcheck-"
+const (
+	HealthcheckPrefix   = "executor-healthcheck-"
+	HealthcheckTag      = "healthcheck-tag"
+	HealthcheckTagValue = "healthcheck"
+)
 
 type UnrecoverableError string
 
@@ -56,6 +60,20 @@ func NewChecker(
 }
 
 func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
+	containers, err := c.gardenClient.Containers(garden.Properties{
+		HealthcheckTag: HealthcheckTagValue,
+	})
+	if err != nil {
+		return err
+	}
+
+	for i := range containers {
+		err := c.gardenClient.Destroy(containers[i].Handle())
+		if err != nil {
+			return err
+		}
+	}
+
 	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
 
 	container, err := c.gardenClient.Create(garden.ContainerSpec{
@@ -63,6 +81,7 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 		RootFSPath: c.rootfsPath,
 		Properties: garden.Properties{
 			gardenstore.ContainerOwnerProperty: c.containerOwnerName,
+			HealthcheckTag:                     HealthcheckTagValue,
 		},
 	})
 

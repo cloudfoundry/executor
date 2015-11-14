@@ -45,6 +45,8 @@ func (fake *FakeChecker) HealthcheckArgsForCall(i int) lager.Logger {
 }
 
 func (fake *FakeChecker) HealthcheckReturns(result1 error) {
+	fake.healthcheckMutex.Lock()
+	defer fake.healthcheckMutex.Unlock()
 	fake.HealthcheckStub = nil
 	fake.healthcheckReturns = struct {
 		result1 error

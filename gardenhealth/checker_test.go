@@ -41,22 +41,35 @@ var _ = Describe("Checker", func() {
 
 	Describe("Healthcheck", func() {
 		var fakeContainer *gardenFakes.FakeContainer
+		var oldContainer *gardenFakes.FakeContainer
 		var fakeProcess *gardenFakes.FakeProcess
 
 		BeforeEach(func() {
 			fakeContainer = &gardenFakes.FakeContainer{}
+			oldContainer = &gardenFakes.FakeContainer{}
+			oldContainer.HandleReturns("old-guid")
 			fakeProcess = &gardenFakes.FakeProcess{}
 		})
 
 		Context("When garden is healthy", func() {
 			BeforeEach(func() {
 				gardenClient.CreateReturns(fakeContainer, nil)
+				gardenClient.ContainersReturns([]garden.Container{oldContainer}, nil)
 				fakeContainer.RunReturns(fakeProcess, nil)
 				fakeProcess.WaitReturns(0, nil)
 			})
 
 			It("drives a container lifecycle", func() {
 				err := gardenChecker.Healthcheck(logger)
+
+				By("Fetching any pre-existing healthcheck containers")
+				Expect(gardenClient.ContainersCallCount()).To(Equal(1))
+
+				By("Deleting all pre-existing-containers")
+				//call count is two because we also expect to destroy the container we create
+				Expect(gardenClient.DestroyCallCount()).To(Equal(2))
+				guid := gardenClient.DestroyArgsForCall(0)
+				Expect(guid).To(Equal("old-guid"))
 
 				By("Creates the container")
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -66,6 +79,7 @@ var _ = Describe("Checker", func() {
 					RootFSPath: rootfsPath,
 					Properties: garden.Properties{
 						gardenstore.ContainerOwnerProperty: containerOwnerName,
+						gardenhealth.HealthcheckTag:        gardenhealth.HealthcheckTagValue,
 					},
 				}))
 
@@ -80,7 +94,8 @@ var _ = Describe("Checker", func() {
 				Expect(fakeProcess.WaitCallCount()).To(Equal(1))
 
 				By("Destroys the container")
-				Expect(gardenClient.DestroyCallCount()).To(Equal(1))
+				guid = gardenClient.DestroyArgsForCall(1)
+				Expect(guid).To(Equal("executor-healthcheck-abc-123"))
 
 				By("Returns success")
 				Expect(err).Should(BeNil())

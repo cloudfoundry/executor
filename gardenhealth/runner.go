@@ -9,41 +9,82 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
+type HealthcheckTimeoutError struct{}
+
+func (HealthcheckTimeoutError) Error() string {
+	return "garden healthcheck timed out"
+}
+
+//go:generate counterfeiter -o fakegardenhealth/fake_timerprovider.go . TimerProvider
+
+type TimerProvider interface {
+	NewTimer(time.Duration) clock.Timer
+}
+
 type Runner struct {
-	interval       time.Duration
-	logger         lager.Logger
-	checker        Checker
-	executorClient executor.Client
-	clock          clock.Clock
+	failures        int
+	healthy         bool
+	checkInterval   time.Duration
+	timeoutInterval time.Duration
+	logger          lager.Logger
+	checker         Checker
+	executorClient  executor.Client
+	timerProvider   TimerProvider
 }
 
 func NewRunner(
-	interval time.Duration,
+	checkInterval time.Duration,
+	timeoutInterval time.Duration,
 	logger lager.Logger,
 	checker Checker,
 	executorClient executor.Client,
-	clock clock.Clock,
+	timerProvider TimerProvider,
 ) *Runner {
 	return &Runner{
-		interval:       interval,
-		logger:         logger.Session("garden-health-check"),
-		checker:        checker,
-		executorClient: executorClient,
-		clock:          clock,
+		checkInterval:   checkInterval,
+		timeoutInterval: timeoutInterval,
+		logger:          logger.Session("garden-health-check"),
+		checker:         checker,
+		executorClient:  executorClient,
+		timerProvider:   timerProvider,
+		healthy:         false,
+		failures:        0,
 	}
 }
 
 func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	var (
-		checkResult                       = make(chan error, 1)
-		startHealthcheck <-chan time.Time = r.clock.NewTimer(0).C()
-		failures                          = 0
-		healthy                           = true
+		startHealthcheck    = r.timerProvider.NewTimer(0)
+		healthcheckTimeout  = r.timerProvider.NewTimer(r.timeoutInterval)
+		healthcheckComplete = make(chan error, 1)
 	)
+	r.logger.Info("starting")
+
+	go r.HealthcheckCycle(healthcheckComplete)
+
+	select {
+	case <-signals:
+		return nil
+
+	case <-healthcheckTimeout.C():
+		r.logger.Error("failed-initial-healthcheck-timeout", nil)
+		return HealthcheckTimeoutError{}
+
+	case err := <-healthcheckComplete:
+		if err != nil {
+			r.logger.Error("failed-initial-healthcheck", err)
+			return err
+		}
+		healthcheckTimeout.Stop()
+	}
+
+	r.logger.Info("passed-initial-health-check")
+	r.SetHealthy()
 
 	close(ready)
+	r.logger.Info("started")
 
-	r.logger.Info("starting")
+	startHealthcheck.Reset(r.checkInterval)
 
 	for {
 		select {
@@ -51,23 +92,19 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			r.logger.Info("complete")
 			return nil
 
-		case <-startHealthcheck:
+		case <-startHealthcheck.C():
 			r.logger.Info("check-starting")
-			startHealthcheck = nil
-			go func() {
-				checkResult <- r.checker.Healthcheck(r.logger)
-			}()
+			go r.HealthcheckCycle(healthcheckComplete)
+			healthcheckTimeout.Reset(r.timeoutInterval)
 
-		case err := <-checkResult:
+		case <-healthcheckTimeout.C():
+			r.executorClient.SetHealthy(false)
+
+		case err := <-healthcheckComplete:
 			switch err.(type) {
 			case nil:
 				r.logger.Info("passed-health-check")
-				failures = 0
-				if !healthy {
-					r.logger.Info("set-state-healthy")
-					r.executorClient.SetHealthy(true)
-					healthy = true
-				}
+				r.SetHealthy()
 
 			case UnrecoverableError:
 				r.logger.Error("failed-unrecoverable-error", err)
@@ -75,19 +112,34 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 			default:
 				r.logger.Info("failed-health-check")
-				failures++
-				if failures >= 3 {
-					r.logger.Error("set-state-unhealthy", nil)
-					r.executorClient.SetHealthy(false)
-					healthy = false
-				}
+				r.SetUnhealthy()
 			}
 
-			startHealthcheck = r.clock.NewTimer(r.interval).C()
-
+			startHealthcheck.Reset(r.checkInterval)
+			healthcheckTimeout.Stop()
 			r.logger.Info("check-complete")
 		}
 	}
 
 	return nil
+}
+
+func (r *Runner) SetHealthy() {
+	if !r.healthy {
+		r.logger.Info("set-state-healthy")
+		r.executorClient.SetHealthy(true)
+		r.healthy = true
+	}
+}
+
+func (r *Runner) SetUnhealthy() {
+	if r.healthy {
+		r.logger.Error("set-state-unhealthy", nil)
+		r.executorClient.SetHealthy(false)
+		r.healthy = false
+	}
+}
+
+func (r *Runner) HealthcheckCycle(healthcheckComplete chan<- error) {
+	healthcheckComplete <- r.checker.Healthcheck(r.logger)
 }
