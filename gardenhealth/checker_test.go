@@ -16,6 +16,7 @@ import (
 
 var _ = Describe("Checker", func() {
 	const (
+		retryCount         = 3
 		rootfsPath         = "test-rootfs-path"
 		containerOwnerName = "container-owner"
 	)
@@ -36,7 +37,7 @@ var _ = Describe("Checker", func() {
 		gardenClient = &gardenFakes.FakeClient{}
 		guidGenerator := &fakeguidgen.FakeGenerator{}
 		guidGenerator.GuidReturns("abc-123")
-		gardenChecker = gardenhealth.NewChecker(rootfsPath, containerOwnerName, healthcheckSpec, gardenClient, guidGenerator)
+		gardenChecker = gardenhealth.NewChecker(rootfsPath, containerOwnerName, 0, healthcheckSpec, gardenClient, guidGenerator)
 	})
 
 	Describe("Healthcheck", func() {
@@ -102,6 +103,40 @@ var _ = Describe("Checker", func() {
 			})
 		})
 
+		Context("when list containers fails", func() {
+			var listErr = errors.New("boom")
+			BeforeEach(func() {
+				gardenClient.ContainersReturns(nil, listErr)
+			})
+
+			It("returns the list error", func() {
+				err := gardenChecker.Healthcheck(logger)
+
+				By("Retries the failing list command")
+				Expect(gardenClient.ContainersCallCount()).To(Equal(retryCount))
+
+				By("Returns the error")
+				Expect(err).To(Equal(listErr))
+			})
+		})
+
+		Context("when deleting old containers fails", func() {
+			var destroyErr = errors.New("boom")
+			BeforeEach(func() {
+				gardenClient.ContainersReturns([]garden.Container{fakeContainer}, nil)
+				gardenClient.DestroyReturns(destroyErr)
+			})
+
+			It("returns the destroy error", func() {
+				err := gardenChecker.Healthcheck(logger)
+
+				By("Retries the destroy container command")
+				Expect(gardenClient.DestroyCallCount()).To(Equal(retryCount))
+
+				By("Returns the error")
+				Expect(err).To(Equal(destroyErr))
+			})
+		})
 		Context("when create fails", func() {
 			var createErr = errors.New("nope")
 
@@ -111,8 +146,15 @@ var _ = Describe("Checker", func() {
 
 			It("sends back the creation error", func() {
 				err := gardenChecker.Healthcheck(logger)
-				Expect(err).To(Equal(createErr))
+
+				By("Retries the failing create")
+				Expect(gardenClient.CreateCallCount()).To(Equal(retryCount))
+
+				By("Does not attempt to destroy the container")
 				Expect(gardenClient.DestroyCallCount()).To(Equal(0))
+
+				By("Returns the error")
+				Expect(err).To(Equal(createErr))
 			})
 		})
 
@@ -130,6 +172,9 @@ var _ = Describe("Checker", func() {
 				By("Sending the result back")
 				Expect(err).To(Equal(runErr))
 
+				By("Retries the failing run command")
+				Expect(fakeContainer.RunCallCount()).To(Equal(retryCount))
+
 				By("Destroys the container")
 				Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 			})
@@ -146,6 +191,11 @@ var _ = Describe("Checker", func() {
 
 			It("sends back the wait error", func() {
 				err := gardenChecker.Healthcheck(logger)
+
+				By("Retries the failing wait command")
+				Expect(fakeProcess.WaitCallCount()).To(Equal(retryCount))
+
+				By("Returns the error")
 				Expect(err).To(Equal(waitErr))
 			})
 		})
@@ -163,23 +213,7 @@ var _ = Describe("Checker", func() {
 			})
 		})
 
-		Context("when destroying the container fails", func() {
-			var destroyErr = errors.New("no disassemble #5!")
-
-			BeforeEach(func() {
-				gardenClient.CreateReturns(fakeContainer, nil)
-				fakeContainer.RunReturns(fakeProcess, nil)
-				fakeProcess.WaitReturns(0, nil)
-				gardenClient.DestroyReturns(destroyErr)
-			})
-
-			It("returns an UnrecoverableError", func() {
-				err := gardenChecker.Healthcheck(logger)
-				Expect(err).To(Equal(gardenhealth.UnrecoverableError(destroyErr.Error())))
-			})
-		})
-
-		Context("when destroying fails to find the container", func() {
+		Context("when destroying fails", func() {
 			var destroyErr = garden.ContainerNotFoundError{}
 
 			BeforeEach(func() {
@@ -189,8 +223,12 @@ var _ = Describe("Checker", func() {
 				gardenClient.DestroyReturns(destroyErr)
 			})
 
-			It("does not typecast the error as UnrecoverableError", func() {
+			It("retries and returns the error", func() {
 				err := gardenChecker.Healthcheck(logger)
+
+				By("Retries the failing destroy command")
+				Expect(gardenClient.DestroyCallCount()).To(Equal(retryCount))
+				By("Returns the error")
 				Expect(err).To(Equal(destroyErr))
 			})
 		})

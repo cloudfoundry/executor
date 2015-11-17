@@ -98,30 +98,27 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			healthcheckTimeout.Reset(r.timeoutInterval)
 
 		case <-healthcheckTimeout.C():
-			r.executorClient.SetHealthy(false)
+			r.logger.Error("failed-healthcheck-timeout", nil)
+			r.SetUnhealthy()
 
 		case err := <-healthcheckComplete:
+			timeoutOk := healthcheckTimeout.Stop()
 			switch err.(type) {
 			case nil:
 				r.logger.Info("passed-health-check")
-				r.SetHealthy()
-
-			case UnrecoverableError:
-				r.logger.Error("failed-unrecoverable-error", err)
-				return err
+				if timeoutOk {
+					r.SetHealthy()
+				}
 
 			default:
-				r.logger.Info("failed-health-check")
+				r.logger.Error("failed-health-check", err)
 				r.SetUnhealthy()
 			}
 
 			startHealthcheck.Reset(r.checkInterval)
-			healthcheckTimeout.Stop()
 			r.logger.Info("check-complete")
 		}
 	}
-
-	return nil
 }
 
 func (r *Runner) SetHealthy() {

@@ -2,6 +2,7 @@ package gardenhealth
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
@@ -35,8 +36,9 @@ type Checker interface {
 }
 
 type checker struct {
-	rootfsPath         string
+	rootFSPath         string
 	containerOwnerName string
+	retryInterval      time.Duration
 	healthcheckSpec    garden.ProcessSpec
 	executorClient     executor.Client
 	gardenClient       garden.Client
@@ -44,15 +46,17 @@ type checker struct {
 }
 
 func NewChecker(
-	rootfsPath string,
+	rootFSPath string,
 	containerOwnerName string,
+	retryInterval time.Duration,
 	healthcheckSpec garden.ProcessSpec,
 	gardenClient garden.Client,
 	guidGenerator guidgen.Generator,
 ) Checker {
 	return &checker{
-		rootfsPath:         rootfsPath,
+		rootFSPath:         rootFSPath,
 		containerOwnerName: containerOwnerName,
+		retryInterval:      retryInterval,
 		healthcheckSpec:    healthcheckSpec,
 		gardenClient:       gardenClient,
 		guidGenerator:      guidGenerator,
@@ -60,15 +64,23 @@ func NewChecker(
 }
 
 func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
-	containers, err := c.gardenClient.Containers(garden.Properties{
-		HealthcheckTag: HealthcheckTagValue,
+	var containers []garden.Container
+	err := RetryOnFail(c.retryInterval, func() (listErr error) {
+		containers, listErr = c.gardenClient.Containers(garden.Properties{
+			HealthcheckTag: HealthcheckTagValue,
+		})
+		return listErr
 	})
+
 	if err != nil {
 		return err
 	}
 
 	for i := range containers {
-		err := c.gardenClient.Destroy(containers[i].Handle())
+		err = RetryOnFail(c.retryInterval, func() (destroyErr error) {
+			return c.gardenClient.Destroy(containers[i].Handle())
+		})
+
 		if err != nil {
 			return err
 		}
@@ -76,33 +88,45 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 
 	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
 
-	container, err := c.gardenClient.Create(garden.ContainerSpec{
-		Handle:     guid,
-		RootFSPath: c.rootfsPath,
-		Properties: garden.Properties{
-			gardenstore.ContainerOwnerProperty: c.containerOwnerName,
-			HealthcheckTag:                     HealthcheckTagValue,
-		},
+	var container garden.Container
+	err = RetryOnFail(c.retryInterval, func() (createErr error) {
+		container, createErr = c.gardenClient.Create(garden.ContainerSpec{
+			Handle:     guid,
+			RootFSPath: c.rootFSPath,
+			Properties: garden.Properties{
+				gardenstore.ContainerOwnerProperty: c.containerOwnerName,
+				HealthcheckTag:                     HealthcheckTagValue,
+			},
+		})
+		return createErr
 	})
-
 	if err != nil {
 		return err
 	}
 
 	defer func() {
-		err := c.destroyContainer(guid)
+		err := RetryOnFail(c.retryInterval, func() error {
+			return c.destroyContainer(guid)
+		})
 		if err != nil {
 			healthcheckResult = err
 		}
 	}()
 
-	proc, err := container.Run(c.healthcheckSpec, garden.ProcessIO{})
-
+	var proc garden.Process
+	err = RetryOnFail(c.retryInterval, func() (runErr error) {
+		proc, runErr = container.Run(c.healthcheckSpec, garden.ProcessIO{})
+		return runErr
+	})
 	if err != nil {
 		return err
 	}
 
-	exitCode, err := proc.Wait()
+	var exitCode int
+	err = RetryOnFail(c.retryInterval, func() (waitErr error) {
+		exitCode, waitErr = proc.Wait()
+		return waitErr
+	})
 	if err != nil {
 		return err
 	}
@@ -124,4 +148,23 @@ func (c *checker) destroyContainer(guid string) error {
 	default:
 		return UnrecoverableError(err.Error())
 	}
+}
+
+const (
+	MaxRetries = 3
+)
+
+func RetryOnFail(retryInterval time.Duration, cmd func() error) error {
+	var err error
+
+	for i := 0; i < MaxRetries; i++ {
+		err = cmd()
+		if err == nil {
+			return nil
+		}
+
+		time.Sleep(retryInterval)
+	}
+
+	return err
 }

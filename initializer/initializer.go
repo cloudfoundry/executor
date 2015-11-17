@@ -17,7 +17,8 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
-	"github.com/cloudfoundry-incubator/executor/healthstate"
+	"github.com/cloudfoundry-incubator/executor/gardenhealth"
+	"github.com/cloudfoundry-incubator/executor/guidgen"
 	"github.com/cloudfoundry-incubator/executor/initializer/configuration"
 	"github.com/cloudfoundry-incubator/garden"
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
@@ -68,7 +69,6 @@ type Configuration struct {
 	HealthyMonitoringInterval   time.Duration
 	UnhealthyMonitoringInterval time.Duration
 	HealthCheckWorkPoolSize     int
-	RootfsForGardenHealthcheck  string
 
 	MaxConcurrentDownloads int
 
@@ -77,8 +77,12 @@ type Configuration struct {
 	ReadWorkPoolSize    int
 	MetricsWorkPoolSize int
 
-	RegistryPruningInterval   time.Duration
-	GardenHealthCheckInterval time.Duration
+	RegistryPruningInterval time.Duration
+
+	RootFSForGardenHealthcheck      string
+	GardenHealthcheckInterval       time.Duration
+	GardenHealthcheckTimeout        time.Duration
+	GardenHealthcheckCommandTimeout time.Duration
 
 	MemoryMB string
 	DiskMB   string
@@ -94,28 +98,30 @@ const (
 )
 
 var DefaultConfiguration = Configuration{
-	GardenNetwork:               "unix",
-	GardenAddr:                  "/tmp/garden.sock",
-	MemoryMB:                    configuration.Automatic,
-	DiskMB:                      configuration.Automatic,
-	TempDir:                     "/tmp",
-	RegistryPruningInterval:     time.Minute,
-	ContainerInodeLimit:         200000,
-	ContainerMaxCpuShares:       0,
-	CachePath:                   "/tmp/cache",
-	MaxCacheSizeInBytes:         10 * 1024 * 1024 * 1024,
-	SkipCertVerify:              false,
-	HealthyMonitoringInterval:   30 * time.Second,
-	UnhealthyMonitoringInterval: 500 * time.Millisecond,
-	ExportNetworkEnvVars:        false,
-	ContainerOwnerName:          "executor",
-	CreateWorkPoolSize:          defaultCreateWorkPoolSize,
-	DeleteWorkPoolSize:          defaultDeleteWorkPoolSize,
-	ReadWorkPoolSize:            defaultReadWorkPoolSize,
-	MetricsWorkPoolSize:         defaultMetricsWorkPoolSize,
-	HealthCheckWorkPoolSize:     defaultHealthCheckWorkPoolSize,
-	MaxConcurrentDownloads:      defaultMaxConcurrentDownloads,
-	GardenHealthCheckInterval:   10 * time.Minute,
+	GardenNetwork:                   "unix",
+	GardenAddr:                      "/tmp/garden.sock",
+	MemoryMB:                        configuration.Automatic,
+	DiskMB:                          configuration.Automatic,
+	TempDir:                         "/tmp",
+	RegistryPruningInterval:         time.Minute,
+	ContainerInodeLimit:             200000,
+	ContainerMaxCpuShares:           0,
+	CachePath:                       "/tmp/cache",
+	MaxCacheSizeInBytes:             10 * 1024 * 1024 * 1024,
+	SkipCertVerify:                  false,
+	HealthyMonitoringInterval:       30 * time.Second,
+	UnhealthyMonitoringInterval:     500 * time.Millisecond,
+	ExportNetworkEnvVars:            false,
+	ContainerOwnerName:              "executor",
+	CreateWorkPoolSize:              defaultCreateWorkPoolSize,
+	DeleteWorkPoolSize:              defaultDeleteWorkPoolSize,
+	ReadWorkPoolSize:                defaultReadWorkPoolSize,
+	MetricsWorkPoolSize:             defaultMetricsWorkPoolSize,
+	HealthCheckWorkPoolSize:         defaultHealthCheckWorkPoolSize,
+	MaxConcurrentDownloads:          defaultMaxConcurrentDownloads,
+	GardenHealthcheckInterval:       10 * time.Minute,
+	GardenHealthcheckTimeout:        10 * time.Minute,
+	GardenHealthcheckCommandTimeout: time.Second,
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -185,6 +191,16 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		return nil, grouper.Members{}, err
 	}
 
+	healthcheckSpec := garden.ProcessSpec{}
+	gardenHealthcheck := gardenhealth.NewChecker(
+		config.RootFSForGardenHealthcheck,
+		config.ContainerOwnerName,
+		config.GardenHealthcheckCommandTimeout,
+		healthcheckSpec,
+		gardenClient,
+		guidgen.DefaultGenerator,
+	)
+
 	metricsLogger := logger.Session("metrics-reporter")
 	containerMetricsLogger := logger.Session("container-metrics-reporter")
 
@@ -203,13 +219,13 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				clock,
 				depotClientProvider.WithLogger(containerMetricsLogger),
 			)},
-			{"garden_health_checker", healthstate.New(
-				config.RootfsForGardenHealthcheck,
-				depotClientProvider.WithLogger(logger),
-				gardenStore,
-				clock,
-				config.GardenHealthCheckInterval,
+			{"garden_health_checker", gardenhealth.NewRunner(
+				config.GardenHealthcheckInterval,
+				config.GardenHealthcheckTimeout,
 				logger,
+				gardenHealthcheck,
+				depotClientProvider.WithLogger(logger),
+				clock,
 			)},
 		},
 		nil

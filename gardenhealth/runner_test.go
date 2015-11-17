@@ -20,12 +20,14 @@ import (
 )
 
 type fakeTimer struct {
-	TimeChan chan time.Time
+	TimeChan    chan time.Time
+	StopReturns bool
 }
 
 func newFakeTimer() *fakeTimer {
 	return &fakeTimer{
-		TimeChan: make(chan time.Time),
+		TimeChan:    make(chan time.Time),
+		StopReturns: true,
 	}
 }
 func (t *fakeTimer) C() <-chan time.Time {
@@ -35,8 +37,8 @@ func (t *fakeTimer) C() <-chan time.Time {
 func (*fakeTimer) Reset(time.Duration) bool {
 	return true
 }
-func (*fakeTimer) Stop() bool {
-	return true
+func (t *fakeTimer) Stop() bool {
+	return t.StopReturns
 }
 
 var _ = Describe("Runner", func() {
@@ -76,7 +78,6 @@ var _ = Describe("Runner", func() {
 
 	Describe("Run", func() {
 		Context("When garden is immediately unhealthy", func() {
-
 			Context("because the health check fails", func() {
 				var checkErr = gardenhealth.UnrecoverableError("nope")
 				BeforeEach(func() {
@@ -131,14 +132,6 @@ var _ = Describe("Runner", func() {
 		Context("When garden is intermittently healthy", func() {
 			var checkErr = errors.New("nope")
 
-			It("reports unhealthy if we timeout", func() {
-				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
-
-				Eventually(timeoutTimer.TimeChan).Should(BeSent(time.Time{}))
-				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
-				Expect(executorClient.SetHealthyArgsForCall(1)).Should(Equal(false))
-			})
-
 			It("Sets healthy to false after it fails, then to true after success", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				Expect(executorClient.SetHealthyArgsForCall(0)).Should(Equal(true))
@@ -155,15 +148,41 @@ var _ = Describe("Runner", func() {
 			})
 		})
 
-		Context("When garden has an unrecoverable error", func() {
-			var checkErr gardenhealth.UnrecoverableError = "huh"
+		Context("When the healthcheck times out", func() {
+			var blockHealthcheck chan struct{}
 
-			It("exits with an error", func() {
+			BeforeEach(func() {
+				blockHealthcheck = make(chan struct{})
+				checker.HealthcheckStub = func(lager.Logger) error {
+					logger.Info("blocking")
+					<-blockHealthcheck
+					logger.Info("unblocking")
+					return nil
+				}
+			})
+
+			JustBeforeEach(func() {
+				Eventually(blockHealthcheck).Should(BeSent(struct{}{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 
-				checker.HealthcheckReturns(checkErr)
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
-				Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
+				timeoutTimer.StopReturns = false
+				Eventually(timeoutTimer.TimeChan).Should(BeSent(time.Time{}))
+			})
+
+			AfterEach(func() {
+				close(blockHealthcheck)
+			})
+
+			It("sets the executor to unhealthy", func() {
+				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
+				Expect(executorClient.SetHealthyArgsForCall(1)).Should(Equal(false))
+			})
+
+			It("does not set the executor to healthy when the healtcheck completes", func() {
+				blockHealthcheck <- struct{}{}
+				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
+				Consistently(executorClient.SetHealthyCallCount).Should(Equal(2))
 			})
 		})
 
