@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
+	"github.com/cloudfoundry-incubator/garden"
 )
 
 type State string
@@ -34,11 +35,12 @@ type Container struct {
 	Guid string `json:"guid"`
 	Resource
 	RunInfo
-	Tags        Tags
-	State       State              `json:"state"`
-	AllocatedAt int64              `json:"allocated_at"`
-	ExternalIP  string             `json:"external_ip"`
-	RunResult   ContainerRunResult `json:"run_result"`
+	Tags            Tags
+	State           State              `json:"state"`
+	AllocatedAt     int64              `json:"allocated_at"`
+	ExternalIP      string             `json:"external_ip"`
+	RunResult       ContainerRunResult `json:"run_result"`
+	GardenContainer garden.Container
 }
 
 func NewContainerFromResource(guid string, resource *Resource, tags Tags) Container {

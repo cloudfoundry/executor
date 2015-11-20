@@ -65,7 +65,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 		})
 	}()
 
-	metrics, err := reporter.executorClient.GetAllMetrics(nil)
+	metrics, err := reporter.executorClient.GetBulkMetrics(nil)
 	if err != nil {
 		logger.Error("failed-to-get-all-metrics", err)
 		return previousCpuInfos

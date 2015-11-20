@@ -46,8 +46,6 @@ func (fake *FakeTimerProvider) NewTimerArgsForCall(i int) time.Duration {
 }
 
 func (fake *FakeTimerProvider) NewTimerReturns(result1 clock.Timer) {
-	fake.newTimerMutex.Lock()
-	defer fake.newTimerMutex.Unlock()
 	fake.NewTimerStub = nil
 	fake.newTimerReturns = struct {
 		result1 clock.Timer
