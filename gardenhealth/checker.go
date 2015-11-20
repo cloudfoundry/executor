@@ -64,67 +64,109 @@ func NewChecker(
 }
 
 func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
+	logger = logger.Session("healthcheck")
+	logger.Debug("starting")
+
+	logger.Debug("attempting-list")
 	var containers []garden.Container
 	err := RetryOnFail(c.retryInterval, func() (listErr error) {
 		containers, listErr = c.gardenClient.Containers(garden.Properties{
-			HealthcheckTag: HealthcheckTagValue,
+			gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
 		})
+		if listErr != nil {
+			logger.Debug("failed-list", lager.Data{"error": listErr})
+		}
 		return listErr
 	})
 
 	if err != nil {
 		return err
 	}
+	logger.Debug("list-succeeded")
 
+	logger.Debug("attempting-initial-destroy")
 	for i := range containers {
 		err = RetryOnFail(c.retryInterval, func() (destroyErr error) {
-			return c.gardenClient.Destroy(containers[i].Handle())
+			destroyErr = c.gardenClient.Destroy(containers[i].Handle())
+			if destroyErr != nil {
+				logger.Debug("failed-initial-destroy", lager.Data{"error": destroyErr})
+			}
+			return destroyErr
 		})
 
 		if err != nil {
 			return err
 		}
 	}
+	logger.Debug("initial-destroy-succeeded")
 
+	logger.Debug("attempting-create")
 	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
-
 	var container garden.Container
 	err = RetryOnFail(c.retryInterval, func() (createErr error) {
 		container, createErr = c.gardenClient.Create(garden.ContainerSpec{
 			Handle:     guid,
 			RootFSPath: c.rootFSPath,
 			Properties: garden.Properties{
-				gardenstore.ContainerOwnerProperty: c.containerOwnerName,
-				HealthcheckTag:                     HealthcheckTagValue,
+				gardenstore.ContainerOwnerProperty:             c.containerOwnerName,
+				gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
 			},
 		})
+		if createErr != nil {
+			logger.Debug("failed-create", lager.Data{"error": createErr})
+		}
 		return createErr
 	})
+
 	if err != nil {
 		return err
 	}
+	logger.Debug("create-succeeded")
 
 	defer func() {
-		err := RetryOnFail(c.retryInterval, func() error {
-			return c.destroyContainer(guid)
+		err := RetryOnFail(c.retryInterval, func() (destroyErr error) {
+			destroyErr = c.destroyContainer(guid)
+			if destroyErr != nil {
+				logger.Debug("failed-cleanup-destroy", lager.Data{"error": destroyErr})
+			}
+			return destroyErr
 		})
 		if err != nil {
 			healthcheckResult = err
 		}
+
+		logger.Debug("finished")
 	}()
+
+	logger.Debug("attempting-run", lager.Data{
+		"processPath": c.healthcheckSpec.Path,
+		"processArgs": c.healthcheckSpec.Args,
+		"processUser": c.healthcheckSpec.User,
+		"processEnv":  c.healthcheckSpec.Env,
+		"processDir":  c.healthcheckSpec.Dir,
+	})
 
 	var proc garden.Process
 	err = RetryOnFail(c.retryInterval, func() (runErr error) {
 		proc, runErr = container.Run(c.healthcheckSpec, garden.ProcessIO{})
+		if runErr != nil {
+			logger.Debug("failed-run", lager.Data{"error": runErr})
+		}
 		return runErr
 	})
+
 	if err != nil {
 		return err
 	}
+	logger.Debug("run-succeeded")
 
+	logger.Debug("attempting-wait")
 	var exitCode int
 	err = RetryOnFail(c.retryInterval, func() (waitErr error) {
 		exitCode, waitErr = proc.Wait()
+		if waitErr != nil {
+			logger.Debug("failed-wait", lager.Data{"error": waitErr})
+		}
 		return waitErr
 	})
 	if err != nil {
@@ -134,6 +176,8 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	if exitCode != 0 {
 		return HealthcheckFailedError(exitCode)
 	}
+
+	logger.Debug("wait-succeeded")
 
 	return nil
 }

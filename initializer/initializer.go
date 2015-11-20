@@ -79,10 +79,16 @@ type Configuration struct {
 
 	RegistryPruningInterval time.Duration
 
-	RootFSForGardenHealthcheck      string
-	GardenHealthcheckInterval       time.Duration
-	GardenHealthcheckTimeout        time.Duration
-	GardenHealthcheckCommandTimeout time.Duration
+	GardenHealthcheckRootFS            string
+	GardenHealthcheckInterval          time.Duration
+	GardenHealthcheckTimeout           time.Duration
+	GardenHealthcheckCommandRetryPause time.Duration
+
+	GardenHealthcheckProcessPath string
+	GardenHealthcheckProcessArgs []string
+	GardenHealthcheckProcessUser string
+	GardenHealthcheckProcessEnv  []string
+	GardenHealthcheckProcessDir  string
 
 	MemoryMB string
 	DiskMB   string
@@ -98,30 +104,32 @@ const (
 )
 
 var DefaultConfiguration = Configuration{
-	GardenNetwork:                   "unix",
-	GardenAddr:                      "/tmp/garden.sock",
-	MemoryMB:                        configuration.Automatic,
-	DiskMB:                          configuration.Automatic,
-	TempDir:                         "/tmp",
-	RegistryPruningInterval:         time.Minute,
-	ContainerInodeLimit:             200000,
-	ContainerMaxCpuShares:           0,
-	CachePath:                       "/tmp/cache",
-	MaxCacheSizeInBytes:             10 * 1024 * 1024 * 1024,
-	SkipCertVerify:                  false,
-	HealthyMonitoringInterval:       30 * time.Second,
-	UnhealthyMonitoringInterval:     500 * time.Millisecond,
-	ExportNetworkEnvVars:            false,
-	ContainerOwnerName:              "executor",
-	CreateWorkPoolSize:              defaultCreateWorkPoolSize,
-	DeleteWorkPoolSize:              defaultDeleteWorkPoolSize,
-	ReadWorkPoolSize:                defaultReadWorkPoolSize,
-	MetricsWorkPoolSize:             defaultMetricsWorkPoolSize,
-	HealthCheckWorkPoolSize:         defaultHealthCheckWorkPoolSize,
-	MaxConcurrentDownloads:          defaultMaxConcurrentDownloads,
-	GardenHealthcheckInterval:       10 * time.Minute,
-	GardenHealthcheckTimeout:        10 * time.Minute,
-	GardenHealthcheckCommandTimeout: time.Second,
+	GardenNetwork:                      "unix",
+	GardenAddr:                         "/tmp/garden.sock",
+	MemoryMB:                           configuration.Automatic,
+	DiskMB:                             configuration.Automatic,
+	TempDir:                            "/tmp",
+	RegistryPruningInterval:            time.Minute,
+	ContainerInodeLimit:                200000,
+	ContainerMaxCpuShares:              0,
+	CachePath:                          "/tmp/cache",
+	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
+	SkipCertVerify:                     false,
+	HealthyMonitoringInterval:          30 * time.Second,
+	UnhealthyMonitoringInterval:        500 * time.Millisecond,
+	ExportNetworkEnvVars:               false,
+	ContainerOwnerName:                 "executor",
+	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
+	DeleteWorkPoolSize:                 defaultDeleteWorkPoolSize,
+	ReadWorkPoolSize:                   defaultReadWorkPoolSize,
+	MetricsWorkPoolSize:                defaultMetricsWorkPoolSize,
+	HealthCheckWorkPoolSize:            defaultHealthCheckWorkPoolSize,
+	MaxConcurrentDownloads:             defaultMaxConcurrentDownloads,
+	GardenHealthcheckInterval:          10 * time.Minute,
+	GardenHealthcheckTimeout:           10 * time.Minute,
+	GardenHealthcheckCommandRetryPause: time.Second,
+	GardenHealthcheckProcessArgs:       []string{},
+	GardenHealthcheckProcessEnv:        []string{},
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -191,11 +199,18 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		return nil, grouper.Members{}, err
 	}
 
-	healthcheckSpec := garden.ProcessSpec{}
+	healthcheckSpec := garden.ProcessSpec{
+		Path: config.GardenHealthcheckProcessPath,
+		Args: config.GardenHealthcheckProcessArgs,
+		User: config.GardenHealthcheckProcessUser,
+		Env:  config.GardenHealthcheckProcessEnv,
+		Dir:  config.GardenHealthcheckProcessDir,
+	}
+
 	gardenHealthcheck := gardenhealth.NewChecker(
-		config.RootFSForGardenHealthcheck,
+		config.GardenHealthcheckRootFS,
 		config.ContainerOwnerName,
-		config.GardenHealthcheckCommandTimeout,
+		config.GardenHealthcheckCommandRetryPause,
 		healthcheckSpec,
 		gardenClient,
 		guidgen.DefaultGenerator,
@@ -229,27 +244,6 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 			)},
 		},
 		nil
-}
-
-func ValidateExecutor(logger lager.Logger, config Configuration) bool {
-	valid := true
-
-	if config.ContainerMaxCpuShares == 0 {
-		logger.Error("max-cpu-shares-invalid", nil)
-		valid = false
-	}
-
-	if config.HealthyMonitoringInterval <= 0 {
-		logger.Error("healthy-monitoring-interval-invalid", nil)
-		valid = false
-	}
-
-	if config.UnhealthyMonitoringInterval <= 0 {
-		logger.Error("unhealthy-monitoring-interval-invalid", nil)
-		valid = false
-	}
-
-	return valid
 }
 
 // Until we get a successful response from garden,
@@ -384,4 +378,40 @@ func closeHub(hub event.Hub) ifrit.Runner {
 		hub.Close()
 		return nil
 	})
+}
+
+func (config *Configuration) Validate(logger lager.Logger) bool {
+	valid := true
+
+	if config.ContainerMaxCpuShares == 0 {
+		logger.Error("max-cpu-shares-invalid", nil)
+		valid = false
+	}
+
+	if config.HealthyMonitoringInterval <= 0 {
+		logger.Error("healthy-monitoring-interval-invalid", nil)
+		valid = false
+	}
+
+	if config.UnhealthyMonitoringInterval <= 0 {
+		logger.Error("unhealthy-monitoring-interval-invalid", nil)
+		valid = false
+	}
+
+	if config.GardenHealthcheckInterval <= 0 {
+		logger.Error("garden-healthcheck-interval-invalid", nil)
+		valid = false
+	}
+
+	if config.GardenHealthcheckProcessUser == "" {
+		logger.Error("garden-healthcheck-process-user-invalid", nil)
+		valid = false
+	}
+
+	if config.GardenHealthcheckProcessPath == "" {
+		logger.Error("garden-healthcheck-process-path-invalid", nil)
+		valid = false
+	}
+
+	return valid
 }

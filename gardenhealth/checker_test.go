@@ -79,8 +79,8 @@ var _ = Describe("Checker", func() {
 					Handle:     "executor-healthcheck-abc-123",
 					RootFSPath: rootfsPath,
 					Properties: garden.Properties{
-						gardenstore.ContainerOwnerProperty: containerOwnerName,
-						gardenhealth.HealthcheckTag:        gardenhealth.HealthcheckTagValue,
+						gardenstore.ContainerOwnerProperty:                          containerOwnerName,
+						gardenstore.TagPropertyPrefix + gardenhealth.HealthcheckTag: gardenhealth.HealthcheckTagValue,
 					},
 				}))
 

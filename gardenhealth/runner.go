@@ -43,7 +43,7 @@ func NewRunner(
 	return &Runner{
 		checkInterval:   checkInterval,
 		timeoutInterval: timeoutInterval,
-		logger:          logger.Session("garden-health-check"),
+		logger:          logger.Session("garden-healthcheck"),
 		checker:         checker,
 		executorClient:  executorClient,
 		timerProvider:   timerProvider,
@@ -78,7 +78,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 		healthcheckTimeout.Stop()
 	}
 
-	r.logger.Info("passed-initial-health-check")
+	r.logger.Info("passed-initial-healthcheck")
 	r.SetHealthy()
 
 	close(ready)

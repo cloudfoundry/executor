@@ -105,7 +105,7 @@ func (store *GardenStore) List(logger lager.Logger, tags executor.Tags) ([]execu
 	}
 
 	for k, v := range tags {
-		filter[tagPropertyPrefix+k] = v
+		filter[TagPropertyPrefix+k] = v
 	}
 
 	logger.Debug("listing-garden-containers", lager.Data{"filter": filter})
