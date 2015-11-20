@@ -33,6 +33,9 @@ type clientProvider struct {
 	deletionWorkPool     *workpool.WorkPool
 	readWorkPool         *workpool.WorkPool
 	metricsWorkPool      *workpool.WorkPool
+
+	healthyLock sync.RWMutex
+	healthy     bool
 }
 
 type AllocationStore interface {
@@ -93,6 +96,7 @@ func NewClientProvider(
 		deletionWorkPool:     deletionWorkPool,
 		readWorkPool:         readWorkPool,
 		metricsWorkPool:      metricsWorkPool,
+		healthy:              true,
 	}, nil
 }
 
@@ -561,4 +565,16 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 
 func (c *client) SubscribeToEvents() (executor.EventSource, error) {
 	return c.eventHub.Subscribe()
+}
+
+func (c *client) Healthy() bool {
+	c.healthyLock.RLock()
+	defer c.healthyLock.RUnlock()
+	return c.healthy
+}
+
+func (c *client) SetHealthy(healthy bool) {
+	c.healthyLock.Lock()
+	defer c.healthyLock.Unlock()
+	c.healthy = healthy
 }

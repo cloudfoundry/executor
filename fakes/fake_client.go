@@ -124,6 +124,17 @@ type FakeClient struct {
 		result1 executor.EventSource
 		result2 error
 	}
+	HealthyStub        func() bool
+	healthyMutex       sync.RWMutex
+	healthyArgsForCall []struct{}
+	healthyReturns struct {
+		result1 bool
+	}
+	SetHealthyStub        func(bool)
+	setHealthyMutex       sync.RWMutex
+	setHealthyArgsForCall []struct {
+		arg1 bool
+	}
 	CleanupStub        func()
 	cleanupMutex       sync.RWMutex
 	cleanupArgsForCall []struct{}
@@ -554,6 +565,53 @@ func (fake *FakeClient) SubscribeToEventsReturns(result1 executor.EventSource, r
 		result1 executor.EventSource
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeClient) Healthy() bool {
+	fake.healthyMutex.Lock()
+	fake.healthyArgsForCall = append(fake.healthyArgsForCall, struct{}{})
+	fake.healthyMutex.Unlock()
+	if fake.HealthyStub != nil {
+		return fake.HealthyStub()
+	} else {
+		return fake.healthyReturns.result1
+	}
+}
+
+func (fake *FakeClient) HealthyCallCount() int {
+	fake.healthyMutex.RLock()
+	defer fake.healthyMutex.RUnlock()
+	return len(fake.healthyArgsForCall)
+}
+
+func (fake *FakeClient) HealthyReturns(result1 bool) {
+	fake.HealthyStub = nil
+	fake.healthyReturns = struct {
+		result1 bool
+	}{result1}
+}
+
+func (fake *FakeClient) SetHealthy(arg1 bool) {
+	fake.setHealthyMutex.Lock()
+	fake.setHealthyArgsForCall = append(fake.setHealthyArgsForCall, struct {
+		arg1 bool
+	}{arg1})
+	fake.setHealthyMutex.Unlock()
+	if fake.SetHealthyStub != nil {
+		fake.SetHealthyStub(arg1)
+	}
+}
+
+func (fake *FakeClient) SetHealthyCallCount() int {
+	fake.setHealthyMutex.RLock()
+	defer fake.setHealthyMutex.RUnlock()
+	return len(fake.setHealthyArgsForCall)
+}
+
+func (fake *FakeClient) SetHealthyArgsForCall(i int) bool {
+	fake.setHealthyMutex.RLock()
+	defer fake.setHealthyMutex.RUnlock()
+	return fake.setHealthyArgsForCall[i].arg1
 }
 
 func (fake *FakeClient) Cleanup() {

@@ -28,7 +28,7 @@ type Exchanger interface {
 }
 
 const (
-	tagPropertyPrefix      = "tag:"
+	TagPropertyPrefix      = "tag:"
 	executorPropertyPrefix = "executor:"
 
 	ContainerOwnerProperty         = executorPropertyPrefix + "owner"
@@ -216,8 +216,8 @@ func garden2executor(handle string, info garden.ContainerInfo) (executor.Contain
 
 			executorContainer.StartTimeout = uint(startTimeout)
 		default:
-			if strings.HasPrefix(key, tagPropertyPrefix) {
-				executorContainer.Tags[key[len(tagPropertyPrefix):]] = value
+			if strings.HasPrefix(key, TagPropertyPrefix) {
+				executorContainer.Tags[key[len(TagPropertyPrefix):]] = value
 			}
 		}
 	}
@@ -299,7 +299,7 @@ func (exchanger exchanger) CreateInGarden(logger lager.Logger, gardenClient Gard
 	}
 
 	for name, value := range executorContainer.Tags {
-		containerSpec.Properties[tagPropertyPrefix+name] = value
+		containerSpec.Properties[TagPropertyPrefix+name] = value
 	}
 
 	for _, env := range executorContainer.Env {
