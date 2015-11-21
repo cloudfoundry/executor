@@ -21,6 +21,10 @@ type TimerProvider interface {
 	NewTimer(time.Duration) clock.Timer
 }
 
+// Runner coordinates health checks against an executor client.  When checks fail or
+// time out, its executor will be marked as unhealthy until a successful check occurs.
+//
+// See NewRunner and Runner.Run for more details.
 type Runner struct {
 	failures        int
 	healthy         bool
@@ -32,6 +36,11 @@ type Runner struct {
 	timerProvider   TimerProvider
 }
 
+// NewRunner constructs a healthcheck runner.
+//
+// The checkInterval parameter controls how often the healthcheck should run, and
+// the timeoutInterval sets the time to wait for the healthcheck to complete before
+// marking the executor as unhealthy.
 func NewRunner(
 	checkInterval time.Duration,
 	timeoutInterval time.Duration,
@@ -52,6 +61,13 @@ func NewRunner(
 	}
 }
 
+// Run coordinates the execution of the healthcheck. It responds to incoming signals,
+// monitors the elapsed time to determine timeouts, and ensures the healthcheck runs periodically.
+//
+// Note: If the healthcheck has not returned before the timeout expires, we
+// intentionally do not kill the healthcheck process, and we don't spawn a new healthcheck
+// until the existing healthcheck exits. It may be necessary for an operator to
+// inspect the long running container to debug the problem.
 func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	var (
 		startHealthcheck    = r.timerProvider.NewTimer(0)

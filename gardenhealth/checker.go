@@ -45,6 +45,11 @@ type checker struct {
 	guidGenerator      guidgen.Generator
 }
 
+// NewChecker constructs a checker.
+//
+// healthcheckSpec describes the process to run in the healthcheck container and
+// retryInterval describes the amount of time to wait to sleep when retrying a
+// failed garden command.
 func NewChecker(
 	rootFSPath string,
 	containerOwnerName string,
@@ -63,6 +68,13 @@ func NewChecker(
 	}
 }
 
+// Healthcheck destroys any existing healthcheck containers, creates a new container,
+// runs a process in the new container, waits for the process to exit, then destroys
+// the created container.
+//
+// If any of these steps fail, the failed step will be retried
+// up to gardenhealth.MaxRetries times. If the command continues to fail after the
+// retries, an error will be returned, indicating the healthcheck failed.
 func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	logger = logger.Session("healthcheck")
 	logger.Debug("starting")
