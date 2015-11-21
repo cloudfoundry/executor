@@ -60,7 +60,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	)
 	r.logger.Info("starting")
 
-	go r.HealthcheckCycle(healthcheckComplete)
+	go r.healthcheckCycle(healthcheckComplete)
 
 	select {
 	case <-signals:
@@ -79,7 +79,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	}
 
 	r.logger.Info("passed-initial-healthcheck")
-	r.SetHealthy()
+	r.setHealthy()
 
 	close(ready)
 	r.logger.Info("started")
@@ -94,12 +94,12 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 		case <-startHealthcheck.C():
 			r.logger.Info("check-starting")
-			go r.HealthcheckCycle(healthcheckComplete)
+			go r.healthcheckCycle(healthcheckComplete)
 			healthcheckTimeout.Reset(r.timeoutInterval)
 
 		case <-healthcheckTimeout.C():
 			r.logger.Error("failed-healthcheck-timeout", nil)
-			r.SetUnhealthy()
+			r.setUnhealthy()
 
 		case err := <-healthcheckComplete:
 			timeoutOk := healthcheckTimeout.Stop()
@@ -107,12 +107,12 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			case nil:
 				r.logger.Info("passed-health-check")
 				if timeoutOk {
-					r.SetHealthy()
+					r.setHealthy()
 				}
 
 			default:
 				r.logger.Error("failed-health-check", err)
-				r.SetUnhealthy()
+				r.setUnhealthy()
 			}
 
 			startHealthcheck.Reset(r.checkInterval)
@@ -121,7 +121,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	}
 }
 
-func (r *Runner) SetHealthy() {
+func (r *Runner) setHealthy() {
 	if !r.healthy {
 		r.logger.Info("set-state-healthy")
 		r.executorClient.SetHealthy(true)
@@ -129,7 +129,7 @@ func (r *Runner) SetHealthy() {
 	}
 }
 
-func (r *Runner) SetUnhealthy() {
+func (r *Runner) setUnhealthy() {
 	if r.healthy {
 		r.logger.Error("set-state-unhealthy", nil)
 		r.executorClient.SetHealthy(false)
@@ -137,6 +137,6 @@ func (r *Runner) SetUnhealthy() {
 	}
 }
 
-func (r *Runner) HealthcheckCycle(healthcheckComplete chan<- error) {
+func (r *Runner) healthcheckCycle(healthcheckComplete chan<- error) {
 	healthcheckComplete <- r.checker.Healthcheck(r.logger)
 }
