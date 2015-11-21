@@ -556,7 +556,7 @@ var _ = Describe("Depot", func() {
 
 			It("throttles the requests to Garden", func() {
 				for i := 0; i < numRequests; i++ {
-					go depotClient.GetBulkMetrics(executor.Tags{})
+					go depotClient.GetBulkMetrics()
 				}
 
 				Eventually(func() int {
@@ -586,23 +586,20 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("lists the containers in the container store", func() {
-			returnedContainers, err := depotClient.ListContainers(executor.Tags{})
+			returnedContainers, err := depotClient.ListContainers()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(containerStore.ListCallCount()).To(Equal(1))
 			Expect(returnedContainers).To(Equal(containers))
+			Expect(containerStore.ListCallCount()).To(Equal(1))
 		})
 	})
 
 	Describe("GetBulkMetrics", func() {
-		var tags executor.Tags
 		var metrics map[string]executor.Metrics
 		var metricsErr error
 
 		var expectedMetrics map[string]executor.ContainerMetrics
 
 		BeforeEach(func() {
-			tags = nil
-
 			expectedMetrics = map[string]executor.ContainerMetrics{
 				"a-guid": executor.ContainerMetrics{
 					MemoryUsageInBytes: 123,
@@ -620,13 +617,11 @@ var _ = Describe("Depot", func() {
 		})
 
 		JustBeforeEach(func() {
-			metrics, metricsErr = depotClient.GetBulkMetrics(tags)
+			metrics, metricsErr = depotClient.GetBulkMetrics()
 		})
 
 		Context("with no tags", func() {
 			BeforeEach(func() {
-				tags = nil
-
 				containerStore.ListReturns([]executor.Container{
 					executor.Container{Guid: "a-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "a-metrics"}}},
 					executor.Container{Guid: "b-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}}},
@@ -661,8 +656,6 @@ var _ = Describe("Depot", func() {
 
 		Context("containers with missing metric guids", func() {
 			BeforeEach(func() {
-				tags = nil
-
 				containerStore.ListReturns([]executor.Container{
 					executor.Container{Guid: "a-guid"},
 					executor.Container{Guid: "b-guid", RunInfo: executor.RunInfo{MetricsConfig: executor.MetricsConfig{Guid: "b-metrics", Index: 1}}},

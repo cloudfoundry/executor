@@ -4,10 +4,12 @@ package containerstorefakes
 import (
 	"io"
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type FakeContainerStore struct {
@@ -115,6 +117,15 @@ type FakeContainerStore struct {
 	getFilesReturns struct {
 		result1 io.ReadCloser
 		result2 error
+	}
+	RegistryPrunerStub        func(logger lager.Logger, expirationTime time.Duration) ifrit.Runner
+	registryPrunerMutex       sync.RWMutex
+	registryPrunerArgsForCall []struct {
+		logger         lager.Logger
+		expirationTime time.Duration
+	}
+	registryPrunerReturns struct {
+		result1 ifrit.Runner
 	}
 }
 
@@ -485,6 +496,39 @@ func (fake *FakeContainerStore) GetFilesReturns(result1 io.ReadCloser, result2 e
 		result1 io.ReadCloser
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeContainerStore) RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner {
+	fake.registryPrunerMutex.Lock()
+	fake.registryPrunerArgsForCall = append(fake.registryPrunerArgsForCall, struct {
+		logger         lager.Logger
+		expirationTime time.Duration
+	}{logger, expirationTime})
+	fake.registryPrunerMutex.Unlock()
+	if fake.RegistryPrunerStub != nil {
+		return fake.RegistryPrunerStub(logger, expirationTime)
+	} else {
+		return fake.registryPrunerReturns.result1
+	}
+}
+
+func (fake *FakeContainerStore) RegistryPrunerCallCount() int {
+	fake.registryPrunerMutex.RLock()
+	defer fake.registryPrunerMutex.RUnlock()
+	return len(fake.registryPrunerArgsForCall)
+}
+
+func (fake *FakeContainerStore) RegistryPrunerArgsForCall(i int) (lager.Logger, time.Duration) {
+	fake.registryPrunerMutex.RLock()
+	defer fake.registryPrunerMutex.RUnlock()
+	return fake.registryPrunerArgsForCall[i].logger, fake.registryPrunerArgsForCall[i].expirationTime
+}
+
+func (fake *FakeContainerStore) RegistryPrunerReturns(result1 ifrit.Runner) {
+	fake.RegistryPrunerStub = nil
+	fake.registryPrunerReturns = struct {
+		result1 ifrit.Runner
+	}{result1}
 }
 
 var _ containerstore.ContainerStore = new(FakeContainerStore)

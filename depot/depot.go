@@ -203,11 +203,11 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 	return true
 }
 
-func (c *client) ListContainers(tags executor.Tags) ([]executor.Container, error) {
+func (c *client) ListContainers() ([]executor.Container, error) {
 	return c.containerStore.List(c.logger), nil
 }
 
-func (c *client) GetBulkMetrics(tags executor.Tags) (map[string]executor.Metrics, error) {
+func (c *client) GetBulkMetrics() (map[string]executor.Metrics, error) {
 	errChannel := make(chan error, 1)
 	metricsChannel := make(chan map[string]executor.Metrics, 1)
 
@@ -289,7 +289,7 @@ func (c *client) DeleteContainer(guid string) error {
 }
 
 func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
-	containers, err := c.ListContainers(executor.Tags{})
+	containers, err := c.ListContainers()
 	if err != nil {
 		logger.Error("failed-to-list-containers", err)
 		return executor.ExecutorResources{}, err

@@ -2,14 +2,14 @@ package containerstore_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
@@ -100,7 +100,7 @@ var _ = Describe("Container Store", func() {
 			Expect(container.Tags).To(Equal(containerTags))
 			Expect(container.Resource).To(Equal(containerResource))
 			Expect(container.State).To(Equal(executor.StateReserved))
-			Expect(container.AllocatedAt).To(Equal(time.Now().Unix()))
+			Expect(container.AllocatedAt).To(Equal(clock.Now().UnixNano()))
 		})
 
 		It("tracks the container", func() {
@@ -316,24 +316,8 @@ var _ = Describe("Container Store", func() {
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
 				containerSpec := gardenClient.CreateArgsForCall(0)
 
-				expectedLogProperty, err := json.Marshal(runReq.LogConfig)
-				Expect(err).NotTo(HaveOccurred())
-
-				expectedMetricProperty, err := json.Marshal(runReq.MetricsConfig)
-				Expect(err).NotTo(HaveOccurred())
-
 				Expect(containerSpec.Properties).To(Equal(garden.Properties{
-					containerstore.ContainerOwnerProperty:         ownerName,
-					containerstore.ContainerStateProperty:         string(executor.StateCreated),
-					containerstore.ContainerAllocatedAtProperty:   fmt.Sprintf("%d", time.Now().Unix()),
-					containerstore.ContainerStartTimeoutProperty:  fmt.Sprintf("%d", runReq.StartTimeout),
-					containerstore.ContainerRootfsProperty:        resource.RootFSPath,
-					containerstore.ContainerLogProperty:           string(expectedLogProperty),
-					containerstore.ContainerMetricsConfigProperty: string(expectedMetricProperty),
-					containerstore.ContainerMemoryMBProperty:      fmt.Sprintf("%d", resource.MemoryMB),
-					containerstore.ContainerDiskMBProperty:        fmt.Sprintf("%d", resource.DiskMB),
-					containerstore.ContainerCPUWeightProperty:     fmt.Sprintf("%d", runReq.CPUWeight),
-					"tag:Foo": "Bar",
+					containerstore.ContainerOwnerProperty: ownerName,
 				}))
 			})
 
@@ -616,6 +600,7 @@ var _ = Describe("Container Store", func() {
 				runReq            *executor.RunRequest
 				actionStep        *stepfakes.FakeStep
 				healthCheckPassed chan struct{}
+				finishPerforming  chan struct{}
 				result            error
 			)
 
@@ -637,11 +622,16 @@ var _ = Describe("Container Store", func() {
 				healthCheckPassed = make(chan struct{})
 
 				megatron.StepsForContainerReturns(actionStep, healthCheckPassed, nil)
+
+				finishPerforming = make(chan struct{})
+
+				actionStep.PerformStub = func() error {
+					<-finishPerforming
+					return result
+				}
 			})
 
 			JustBeforeEach(func() {
-				actionStep.PerformReturns(result)
-
 				_, err := containerStore.Reserve(logger, allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -676,7 +666,27 @@ var _ = Describe("Container Store", func() {
 				}).Should(Equal(executor.StateRunning))
 			})
 
+			It("emits a container running event after the health check passes", func() {
+				err := containerStore.Run(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				healthCheckPassed <- struct{}{}
+
+				container, err := containerStore.Get(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
+				event := eventEmitter.EmitArgsForCall(1)
+				Expect(event).To(Equal(executor.ContainerRunningEvent{RawContainer: container}))
+
+				close(finishPerforming)
+			})
+
 			Context("when the action exits", func() {
+				BeforeEach(func() {
+					close(finishPerforming)
+				})
+
 				It("sets its state to completed", func() {
 					err := containerStore.Run(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
@@ -1229,6 +1239,137 @@ var _ = Describe("Container Store", func() {
 				_, err := containerStore.GetFiles(logger, "", "/stuff")
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
+		})
+	})
+
+	Describe("RegistryPruner", func() {
+		var (
+			expirationTime time.Duration
+			process        ifrit.Process
+		)
+
+		BeforeEach(func() {
+			resource := executor.NewResource(512, 512, "")
+			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
+
+			_, err := containerStore.Reserve(logger, &req)
+			Expect(err).NotTo(HaveOccurred())
+
+			resource = executor.NewResource(512, 512, "")
+			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
+
+			_, err = containerStore.Reserve(logger, &req)
+			Expect(err).NotTo(HaveOccurred())
+
+			runReq := executor.NewRunRequest("eventually-initialized", &executor.RunInfo{}, executor.Tags{})
+			err = containerStore.Initialize(logger, &runReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			expirationTime = 20 * time.Millisecond
+
+			pruner := containerStore.RegistryPruner(logger, expirationTime)
+			process = ginkgomon.Invoke(pruner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(process)
+		})
+
+		Context("when the elapsed time is less than expiration period", func() {
+			BeforeEach(func() {
+				clock.Increment(expirationTime / 2)
+			})
+
+			It("still has all the containers in the list", func() {
+				Consistently(func() []executor.Container {
+					return containerStore.List(logger)
+				}).Should(HaveLen(2))
+			})
+		})
+
+		Context("when the elapsed time is more than expiration period", func() {
+			BeforeEach(func() {
+				clock.Increment(2 * expirationTime)
+			})
+
+			It("removes only RESERVED containers from the list", func() {
+				Eventually(func() []executor.Container {
+					return containerStore.List(logger)
+				}).Should(HaveLen(1))
+				Expect(containerStore.List(logger)[0].Guid).To(Equal("eventually-initialized"))
+			})
+		})
+	})
+
+	Describe("ContainerReaper", func() {
+		var (
+			containerGuid1, containerGuid2, containerGuid3, containerGuid4, containerGuid5 string
+			process                                                                        ifrit.Process
+		)
+
+		BeforeEach(func() {
+			gardenClient.CreateReturns(gardenContainer, nil)
+
+			containerGuid1 = "container-guid-1"
+			containerGuid2 = "container-guid-2"
+			containerGuid3 = "container-guid-3"
+			containerGuid4 = "container-guid-4"
+			containerGuid5 = "container-guid-5"
+
+			// Reserve
+			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid4})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid5})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Initialize
+			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid2})
+			Expect(err).NotTo(HaveOccurred())
+			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid3})
+			Expect(err).NotTo(HaveOccurred())
+			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid4})
+			Expect(err).NotTo(HaveOccurred())
+			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid5})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create Containers
+			_, err = containerStore.Create(logger, containerGuid3)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Create(logger, containerGuid4)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Create(logger, containerGuid5)
+			Expect(err).NotTo(HaveOccurred())
+
+			gardenContainer.HandleReturns(containerGuid3)
+			gardenContainers := []garden.Container{gardenContainer}
+			gardenClient.ContainersReturns(gardenContainers, nil)
+		})
+
+		JustBeforeEach(func() {
+			reaper := containerStore.ContainerReaper(logger, 20*time.Millisecond)
+			process = ginkgomon.Invoke(reaper)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(process)
+		})
+
+		FIt("removes containers that no longer have corresponding garden containers", func() {
+			Consistently(func() []executor.Container {
+				return containerStore.List(logger)
+			}).Should(HaveLen(5))
+
+			clock.Increment(30 * time.Millisecond)
+
+			Eventually(func() []executor.Container {
+				return containerStore.List(logger)
+			}).Should(HaveLen(3))
 		})
 	})
 })

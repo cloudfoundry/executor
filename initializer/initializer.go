@@ -244,6 +244,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				depotClientProvider.WithLogger(logger),
 				clock,
 			)},
+			{"registry-pruner", containerStore.RegistryPruner(logger, config.RegistryPruningInterval)},
 		},
 		nil
 }

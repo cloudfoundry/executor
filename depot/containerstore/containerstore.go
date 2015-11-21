@@ -1,10 +1,10 @@
 package containerstore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -16,24 +16,10 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
 )
 
-const (
-	tagPropertyPrefix      = "tag:"
-	executorPropertyPrefix = "executor:"
-
-	ContainerOwnerProperty         = executorPropertyPrefix + "owner"
-	ContainerStateProperty         = executorPropertyPrefix + "state"
-	ContainerAllocatedAtProperty   = executorPropertyPrefix + "allocated-at"
-	ContainerRootfsProperty        = executorPropertyPrefix + "rootfs"
-	ContainerLogProperty           = executorPropertyPrefix + "log-config"
-	ContainerMetricsConfigProperty = executorPropertyPrefix + "metrics-config"
-	ContainerResultProperty        = executorPropertyPrefix + "result"
-	ContainerMemoryMBProperty      = executorPropertyPrefix + "memory-mb"
-	ContainerDiskMBProperty        = executorPropertyPrefix + "disk-mb"
-	ContainerCPUWeightProperty     = executorPropertyPrefix + "cpu-weight"
-	ContainerStartTimeoutProperty  = executorPropertyPrefix + "start-timeout"
-)
+const ContainerOwnerProperty = "executor:owner"
 
 var (
 	ErrFailedToCAS = errors.New("failed-to-cas")
@@ -58,6 +44,9 @@ type ContainerStore interface {
 
 	// Hopefully on container?
 	GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
+
+	RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner
+	ContainerReaper(logger lager.Logger, reapInterval time.Duration) ifrit.Runner
 }
 
 type containerStore struct {
@@ -112,7 +101,7 @@ func New(
 }
 
 func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
-	container := executor.NewReservedContainerFromAllocationRequest(req, time.Now().Unix())
+	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
 
 	_, err := cs.get(logger, container.Guid)
 	if err == nil {
@@ -198,18 +187,6 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 		diskScope = garden.DiskLimitScopeTotal
 	}
 
-	logProperty, err := json.Marshal(container.LogConfig)
-	if err != nil {
-		logger.Error("failed-to-marshal-log-config", err)
-		return executor.Container{}, err
-	}
-
-	metricsProperty, err := json.Marshal(container.MetricsConfig)
-	if err != nil {
-		logger.Error("failed-to-marshal-metrics-config", err)
-		return executor.Container{}, err
-	}
-
 	containerSpec := garden.ContainerSpec{
 		Handle:     container.Guid,
 		Privileged: container.Privileged,
@@ -228,21 +205,8 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 			},
 		},
 		Properties: garden.Properties{
-			ContainerOwnerProperty:         cs.ownerName,
-			ContainerStateProperty:         string(container.State),
-			ContainerAllocatedAtProperty:   fmt.Sprintf("%d", container.AllocatedAt),
-			ContainerStartTimeoutProperty:  fmt.Sprintf("%d", container.StartTimeout),
-			ContainerRootfsProperty:        container.RootFSPath,
-			ContainerLogProperty:           string(logProperty),
-			ContainerMetricsConfigProperty: string(metricsProperty),
-			ContainerMemoryMBProperty:      fmt.Sprintf("%d", container.MemoryMB),
-			ContainerDiskMBProperty:        fmt.Sprintf("%d", container.DiskMB),
-			ContainerCPUWeightProperty:     fmt.Sprintf("%d", container.CPUWeight),
+			ContainerOwnerProperty: cs.ownerName,
 		},
-	}
-
-	for name, value := range container.Tags {
-		containerSpec.Properties[tagPropertyPrefix+name] = value
 	}
 
 	for _, envVar := range container.Env {
@@ -331,70 +295,72 @@ func (cs *containerStore) Run(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	container := node.container
-
-	if container.State != executor.StateCreated {
+	if node.container.State != executor.StateCreated {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromContainer(container)
+	logStreamer := logStreamerFromContainer(node.container)
 
-	action, healthCheckPassed, err := cs.transformer.StepsForContainer(logger, container, logStreamer)
+	action, healthCheckPassed, err := cs.transformer.StepsForContainer(logger, node.container, logStreamer)
 	if err != nil {
 		return err
 	}
 
 	doneChan := make(chan struct{})
-	go func() {
-		resultCh := make(chan error)
-		go func() {
-			resultCh <- action.Perform()
-		}()
-
-		for {
-			select {
-			case err := <-resultCh:
-				defer close(doneChan)
-				var failed bool
-				var failureReason string
-
-				if err != nil {
-					failed = true
-					failureReason = err.Error()
-				}
-
-				node, err := cs.get(logger, guid)
-				if err != nil {
-					logger.Error("failed-to-fetch-container", err)
-					return
-				}
-				node, err = cs.complete(logger, node, failed, failureReason)
-				if err != nil {
-					logger.Error("failed-to-complete", err)
-				}
-				return
-
-			case <-healthCheckPassed:
-				node, err := cs.get(logger, guid)
-				if err != nil {
-					logger.Error("failed-to-fetch-container", err)
-					return
-				}
-				node.container.State = executor.StateRunning
-				_, err = cs.compareAndSwap(logger, node)
-				if err != nil {
-					logger.Error("failed-to-transition-to-running", err)
-					return
-				}
-			}
-		}
-	}()
+	process := runningProcess{action: action, done: doneChan}
+	go cs.run(logger, process, healthCheckPassed, node.container.Guid)
 
 	cs.runningProcessesLock.Lock()
 	defer cs.runningProcessesLock.Unlock()
-	cs.runningProcesses[container.Guid] = runningProcess{action: action, done: doneChan}
+	cs.runningProcesses[node.container.Guid] = process
 
 	return nil
+}
+
+func (cs *containerStore) run(logger lager.Logger, process runningProcess, healthCheckPassed <-chan struct{}, guid string) {
+	resultCh := make(chan error)
+	go func() {
+		resultCh <- process.action.Perform()
+	}()
+
+	for {
+		select {
+		case err := <-resultCh:
+			defer close(process.done)
+			var failed bool
+			var failureReason string
+
+			if err != nil {
+				failed = true
+				failureReason = err.Error()
+			}
+
+			node, err := cs.get(logger, guid)
+			if err != nil {
+				logger.Error("failed-to-fetch-container", err)
+				return
+			}
+			node, err = cs.complete(logger, node, failed, failureReason)
+			if err != nil {
+				logger.Error("failed-to-complete", err)
+			}
+			return
+
+		case <-healthCheckPassed:
+			node, err := cs.get(logger, guid)
+			if err != nil {
+				logger.Error("failed-to-fetch-container", err)
+				return
+			}
+			node.container.State = executor.StateRunning
+			_, err = cs.compareAndSwap(logger, node)
+			if err != nil {
+				logger.Error("failed-to-transition-to-running", err)
+				return
+			}
+			go cs.eventEmitter.Emit(executor.NewContainerRunningEvent(node.container))
+		}
+	}
 }
 
 func (cs *containerStore) Fail(logger lager.Logger, guid, reason string) (executor.Container, error) {
@@ -436,8 +402,13 @@ func (cs *containerStore) complete(logger lager.Logger, node storeNode, failed b
 }
 
 func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
+	logger = logger.Session("containerstore.stop", lager.Data{"Guid": guid})
+	logger.Info("stopping")
+	defer logger.Info("finished")
+
 	node, err := cs.get(logger, guid)
 	if err != nil {
+		logger.Error("failed-to-get-container", err)
 		return err
 	}
 
@@ -593,4 +564,84 @@ func logStreamerFromContainer(container executor.Container) log_streamer.LogStre
 		container.LogConfig.SourceName,
 		container.LogConfig.Index,
 	)
+}
+
+func (cs *containerStore) RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		close(ready)
+		ticker := cs.clock.NewTicker(expirationTime / 2)
+
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C():
+				cs.containersLock.Lock()
+
+				containersToPrune := []string{}
+				for key := range cs.containers {
+					container := cs.containers[key].container
+					if container.State != executor.StateReserved {
+						continue
+					}
+
+					lifespan := cs.clock.Now().Sub(time.Unix(0, container.AllocatedAt))
+					if lifespan >= expirationTime {
+						containersToPrune = append(containersToPrune, key)
+					}
+				}
+
+				for _, key := range containersToPrune {
+					delete(cs.containers, key)
+				}
+
+				cs.containersLock.Unlock()
+			case <-signals:
+				return nil
+			}
+		}
+		return nil
+	})
+}
+
+func (cs *containerStore) ContainerReaper(logger lager.Logger, reapInterval time.Duration) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		close(ready)
+		ticker := cs.clock.NewTicker(reapInterval)
+
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C():
+				properties := garden.Properties{
+					ContainerOwnerProperty: cs.ownerName,
+				}
+				gardenContainers, err := cs.gardenClient.Containers(properties)
+				if err != nil {
+					// log?
+					break
+				}
+
+				handles := make(map[string]struct{})
+				for _, gardenContainer := range gardenContainers {
+					handles[gardenContainer.Handle()] = struct{}{}
+				}
+
+				containersToDestroy := []string{}
+				for key := range cs.containers {
+					if _, ok := handles[key]; !ok {
+						containersToDestroy = append(containersToDestroy, key)
+					}
+				}
+
+				for _, key := range containersToDestroy {
+					cs.Destroy(logger, key)
+				}
+
+			case <-signals:
+				return nil
+			}
+		}
+
+		return nil
+	})
 }

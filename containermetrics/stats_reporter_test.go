@@ -112,7 +112,7 @@ var _ = Describe("StatsReporter", func() {
 
 		metricsResults = make(chan map[string]executor.Metrics, 10)
 
-		fakeExecutorClient.GetBulkMetricsStub = func(tags executor.Tags) (map[string]executor.Metrics, error) {
+		fakeExecutorClient.GetBulkMetricsStub = func() (map[string]executor.Metrics, error) {
 			result, ok := <-metricsResults
 			if !ok || result == nil {
 				return nil, errors.New("closed")
