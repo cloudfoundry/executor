@@ -305,10 +305,12 @@ var _ = Describe("Depot", func() {
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
 
 				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
-				Expect(lockManager.LockArgsForCall(initialLockCount)).To(Equal(gardenStoreGuid))
+				_, guid := lockManager.LockArgsForCall(initialLockCount)
+				Expect(guid).To(Equal(gardenStoreGuid))
 
 				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
-				Expect(lockManager.UnlockArgsForCall(initialUnlockCount)).To(Equal(gardenStoreGuid))
+				_, guid = lockManager.UnlockArgsForCall(initialLockCount)
+				Expect(guid).To(Equal(gardenStoreGuid))
 			})
 		})
 
@@ -704,10 +706,12 @@ var _ = Describe("Depot", func() {
 			depotClient.DeleteContainer("guid-1")
 
 			Expect(lockManager.LockCallCount()).To(Equal(1))
-			Expect(lockManager.LockArgsForCall(0)).To(Equal("guid-1"))
+			_, guid := lockManager.LockArgsForCall(0)
+			Expect(guid).To(Equal("guid-1"))
 
 			Expect(lockManager.UnlockCallCount()).To(Equal(1))
-			Expect(lockManager.UnlockArgsForCall(0)).To(Equal("guid-1"))
+			_, guid = lockManager.UnlockArgsForCall(0)
+			Expect(guid).To(Equal("guid-1"))
 		})
 
 		It("removes the container from the container store", func() {
@@ -746,10 +750,12 @@ var _ = Describe("Depot", func() {
 
 		It("allocates and drops the container lock", func() {
 			Expect(lockManager.LockCallCount()).To(Equal(1))
-			Expect(lockManager.LockArgsForCall(0)).To(Equal(stopGuid))
+			_, guid := lockManager.LockArgsForCall(0)
+			Expect(guid).To(Equal(stopGuid))
 
 			Expect(lockManager.UnlockCallCount()).To(Equal(1))
-			Expect(lockManager.UnlockArgsForCall(0)).To(Equal(stopGuid))
+			_, guid = lockManager.UnlockArgsForCall(0)
+			Expect(guid).To(Equal(stopGuid))
 		})
 
 		It("stops the container in the container store", func() {

@@ -6,16 +6,21 @@ import (
 	"strconv"
 
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("KeyedLock", func() {
-	var lockManager keyed_lock.LockManager
+	var (
+		lockManager keyed_lock.LockManager
+		logger      *lagertest.TestLogger
+	)
 
 	BeforeEach(func() {
 		lockManager = keyed_lock.NewLockManager()
+		logger = lagertest.NewTestLogger("locks")
 	})
 
 	Describe("Lock", func() {
@@ -23,7 +28,7 @@ var _ = Describe("KeyedLock", func() {
 			It("allows access", func() {
 				accessGrantedCh := make(chan struct{})
 				go func() {
-					lockManager.Lock("the-key")
+					lockManager.Lock(logger, "the-key")
 					close(accessGrantedCh)
 				}()
 				Eventually(accessGrantedCh).Should(BeClosed())
@@ -39,19 +44,19 @@ var _ = Describe("KeyedLock", func() {
 				secondProcDoneCh := make(chan struct{})
 
 				go func() {
-					lockManager.Lock("the-key")
+					lockManager.Lock(logger, "the-key")
 					close(firstProcReadyCh)
 					<-firstProcWaitCh
-					lockManager.Unlock("the-key")
+					lockManager.Unlock(logger, "the-key")
 					close(firstProcDoneCh)
 				}()
 
 				Eventually(firstProcReadyCh).Should(BeClosed())
 
 				go func() {
-					lockManager.Lock("the-key")
+					lockManager.Lock(logger, "the-key")
 					close(secondProcReadyCh)
-					lockManager.Unlock("the-key")
+					lockManager.Unlock(logger, "the-key")
 					close(secondProcDoneCh)
 				}()
 
@@ -66,7 +71,7 @@ var _ = Describe("KeyedLock", func() {
 		Context("when the key has not been locked", func() {
 			It("panics", func() {
 				Expect(func() {
-					lockManager.Unlock("key")
+					lockManager.Unlock(logger, "key")
 				}).To(
 
 					Panic())
@@ -84,8 +89,8 @@ var _ = Describe("KeyedLock", func() {
 
 			for i := 0; i < 10000; i++ {
 				k := strconv.Itoa(i)
-				lockManager.Lock(k)
-				lockManager.Unlock(k)
+				lockManager.Lock(logger, k)
+				lockManager.Unlock(logger, k)
 			}
 
 			runtime.GC()
