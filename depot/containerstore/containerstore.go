@@ -70,7 +70,7 @@ type containerStore struct {
 
 type storeNode struct {
 	modifiedIndex uint
-	container     executor.Container
+	executor.Container
 }
 
 type runningProcess struct {
@@ -101,6 +101,11 @@ func New(
 }
 
 func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
+	logger = logger.Session("containerstore-reserve", lager.Data{"guid": req.Guid})
+
+	logger.Debug("starting")
+	defer logger.Debug("complete")
+
 	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
 
 	_, err := cs.get(logger, container.Guid)
@@ -109,30 +114,38 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	}
 
 	cs.containersLock.Lock()
-	defer cs.containersLock.Unlock()
-	cs.containers[container.Guid] = storeNode{container: container, modifiedIndex: 0}
+	cs.containers[container.Guid] = storeNode{Container: container, modifiedIndex: 0}
+	cs.containersLock.Unlock()
 
-	go cs.eventEmitter.Emit(executor.NewContainerReservedEvent(container))
+	cs.eventEmitter.Emit(executor.NewContainerReservedEvent(container))
 
 	return container, nil
 }
 
 func (cs *containerStore) Initialize(logger lager.Logger, req *executor.RunRequest) error {
+	logger = logger.Session("containerstore-initialize", lager.Data{"guid": req.Guid})
+
+	logger.Debug("starting")
+	defer logger.Debug("complete")
+
 	node, err := cs.get(logger, req.Guid)
 	if err != nil {
+		logger.Error("failed-to-get-container", err)
 		return err
 	}
 
-	if node.container.State != executor.StateReserved {
+	if node.State != executor.StateReserved {
+		logger.Error("failed-to-initialize", executor.ErrInvalidTransition)
 		return executor.ErrInvalidTransition
 	}
 
-	node.container.State = executor.StateInitializing
-	node.container.RunInfo = req.RunInfo
-	node.container.Tags.Add(req.Tags)
+	node.State = executor.StateInitializing
+	node.RunInfo = req.RunInfo
+	node.Tags.Add(req.Tags)
 
 	node, err = cs.compareAndSwap(logger, node)
 	if err != nil {
+		logger.Error("failed-to-cas", err)
 		return err
 	}
 
@@ -140,18 +153,21 @@ func (cs *containerStore) Initialize(logger lager.Logger, req *executor.RunReque
 }
 
 func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Container, error) {
-	logger = logger.Session("container-store.create")
+	logger = logger.Session("containerstore-create", lager.Data{"guid": guid})
 
-	logger.Debug("obtaining-container")
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	node, err := cs.get(logger, guid)
 	if err != nil {
 		logger.Error("failed-to-get-container", err)
 		return executor.Container{}, err
 	}
 
-	container := node.container
+	container := node.Container
 
 	if container.State != executor.StateInitializing {
+		logger.Error("failed-to-create", executor.ErrInvalidTransition)
 		return executor.Container{}, executor.ErrInvalidTransition
 	}
 
@@ -167,11 +183,12 @@ func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Con
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
 
-	node.container = container
+	node.Container = container
 
 	node, err = cs.compareAndSwap(logger, node)
 	if err != nil {
-		destroyErr := cs.gardenClient.Destroy(node.container.Guid)
+		logger.Error("failed-to-cas", err)
+		destroyErr := cs.gardenClient.Destroy(node.Guid)
 		if destroyErr != nil {
 			logger.Error("failed-to-destroy", destroyErr)
 		}
@@ -229,30 +246,35 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 		netOutRules = append(netOutRules, netOutRule)
 	}
 
+	logger.Debug("creating-container-in-garden")
 	gardenContainer, err := cs.gardenClient.Create(containerSpec)
 	if err != nil {
-		logger.Error("failed-to-create-container-in-garden", err)
+		logger.Error("failed-to-creating-container-in-garden", err)
 		return executor.Container{}, err
 	}
+	logger.Debug("created-container-in-garden")
 
 	for _, rule := range netOutRules {
+		logger.Debug("net-out")
 		err = gardenContainer.NetOut(rule)
 		if err != nil {
 			destroyErr := cs.gardenClient.Destroy(container.Guid)
 			if destroyErr != nil {
 				logger.Error("failed-destroy-container", err)
 			}
-			logger.Error("failed-to-net-out", err)
+			logger.Error("net-out-failed", err)
 			return executor.Container{}, err
 		}
+		logger.Debug("net-out-complete")
 	}
 
 	if container.Ports != nil {
 		actualPortMappings := make([]executor.PortMapping, len(container.Ports))
 		for i, portMapping := range container.Ports {
+			logger.Debug("net-in")
 			actualHost, actualContainerPort, err := gardenContainer.NetIn(uint32(portMapping.HostPort), uint32(portMapping.ContainerPort))
 			if err != nil {
-				logger.Error("failed-to-net-in", err)
+				logger.Error("net-in-failed", err)
 
 				destroyErr := cs.gardenClient.Destroy(container.Guid)
 				if destroyErr != nil {
@@ -261,6 +283,7 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 
 				return executor.Container{}, err
 			}
+			logger.Debug("net-in-complete")
 			actualPortMappings[i].ContainerPort = uint16(actualContainerPort)
 			actualPortMappings[i].HostPort = uint16(actualHost)
 		}
@@ -268,6 +291,7 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 		container.Ports = actualPortMappings
 	}
 
+	logger.Debug("container-info")
 	info, err := gardenContainer.Info()
 	if err != nil {
 		logger.Error("failed-container-info", err)
@@ -279,6 +303,8 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 
 		return executor.Container{}, err
 	}
+	logger.Debug("container-info-complete")
+
 	container.ExternalIP = info.ExternalIP
 	container.GardenContainer = gardenContainer
 
@@ -286,7 +312,10 @@ func (cs *containerStore) createInGarden(logger lager.Logger, container executor
 }
 
 func (cs *containerStore) Run(logger lager.Logger, guid string) error {
-	logger = logger.Session("container-store.run")
+	logger = logger.Session("containerstore-run")
+
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	logger.Debug("getting-container")
 	node, err := cs.get(logger, guid)
@@ -295,24 +324,26 @@ func (cs *containerStore) Run(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	if node.container.State != executor.StateCreated {
+	if node.State != executor.StateCreated {
+		logger.Error("failed-to-run", err)
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromContainer(node.container)
+	logStreamer := logStreamerFromContainer(node.Container)
 
-	action, healthCheckPassed, err := cs.transformer.StepsForContainer(logger, node.container, logStreamer)
+	action, healthCheckPassed, err := cs.transformer.StepsForContainer(logger, node.Container, logStreamer)
 	if err != nil {
+		logger.Error("failed-to-build-steps", err)
 		return err
 	}
 
 	doneChan := make(chan struct{})
 	process := runningProcess{action: action, done: doneChan}
-	go cs.run(logger, process, healthCheckPassed, node.container.Guid)
+	go cs.run(logger, process, healthCheckPassed, node.Guid)
 
 	cs.runningProcessesLock.Lock()
-	defer cs.runningProcessesLock.Unlock()
-	cs.runningProcesses[node.container.Guid] = process
+	cs.runningProcesses[node.Guid] = process
+	cs.runningProcessesLock.Unlock()
 
 	return nil
 }
@@ -352,19 +383,22 @@ func (cs *containerStore) run(logger lager.Logger, process runningProcess, healt
 				logger.Error("failed-to-fetch-container", err)
 				return
 			}
-			node.container.State = executor.StateRunning
+			node.State = executor.StateRunning
 			_, err = cs.compareAndSwap(logger, node)
 			if err != nil {
 				logger.Error("failed-to-transition-to-running", err)
 				return
 			}
-			go cs.eventEmitter.Emit(executor.NewContainerRunningEvent(node.container))
+			cs.eventEmitter.Emit(executor.NewContainerRunningEvent(node.Container))
 		}
 	}
 }
 
 func (cs *containerStore) Fail(logger lager.Logger, guid, reason string) (executor.Container, error) {
-	logger = logger.Session("container-store.fail")
+	logger = logger.Session("containerstore-fail")
+
+	logger.Info("starting")
+	logger.Info("complete")
 
 	node, err := cs.get(logger, guid)
 	if err != nil {
@@ -372,7 +406,7 @@ func (cs *containerStore) Fail(logger lager.Logger, guid, reason string) (execut
 		return executor.Container{}, err
 	}
 
-	if node.container.State == executor.StateCompleted {
+	if node.State == executor.StateCompleted {
 		logger.Error("invalid-transition", executor.ErrInvalidTransition)
 		return executor.Container{}, executor.ErrInvalidTransition
 	}
@@ -383,28 +417,30 @@ func (cs *containerStore) Fail(logger lager.Logger, guid, reason string) (execut
 		return executor.Container{}, err
 	}
 
-	return node.container, nil
+	return node.Container, nil
 }
 
 func (cs *containerStore) complete(logger lager.Logger, node storeNode, failed bool, failureReason string) (storeNode, error) {
-	node.container.RunResult.Failed = failed
-	node.container.RunResult.FailureReason = failureReason
+	node.RunResult.Failed = failed
+	node.RunResult.FailureReason = failureReason
 
-	node.container.State = executor.StateCompleted
+	node.State = executor.StateCompleted
 	node, err := cs.compareAndSwap(logger, node)
 	if err != nil {
+		logger.Error("failed-to-cas", err)
 		return node, err
 	}
 
-	go cs.eventEmitter.Emit(executor.NewContainerCompleteEvent(node.container))
+	cs.eventEmitter.Emit(executor.NewContainerCompleteEvent(node.Container))
 
 	return node, nil
 }
 
 func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
-	logger = logger.Session("containerstore.stop", lager.Data{"Guid": guid})
-	logger.Info("stopping")
-	defer logger.Info("finished")
+	logger = logger.Session("containerstore-stop", lager.Data{"Guid": guid})
+
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	node, err := cs.get(logger, guid)
 	if err != nil {
@@ -417,13 +453,14 @@ func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
 
 func (cs *containerStore) stop(logger lager.Logger, node storeNode) error {
 	cs.runningProcessesLock.Lock()
-	process, ok := cs.runningProcesses[node.container.Guid]
+	process, ok := cs.runningProcesses[node.Guid]
+	cs.runningProcessesLock.Unlock()
+
 	if !ok {
 		return executor.ErrNoProcessToStop
 	}
-	cs.runningProcessesLock.Unlock()
 
-	node.container.RunResult.Stopped = true
+	node.RunResult.Stopped = true
 	node, err := cs.compareAndSwap(logger, node)
 	if err != nil {
 		logger.Error("failed-to-cas-container", err)
@@ -434,13 +471,18 @@ func (cs *containerStore) stop(logger lager.Logger, node storeNode) error {
 	<-process.done
 
 	cs.runningProcessesLock.Lock()
-	delete(cs.runningProcesses, node.container.Guid)
+	delete(cs.runningProcesses, node.Guid)
 	cs.runningProcessesLock.Unlock()
 
 	return nil
 }
 
 func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
+	logger = logger.Session("containerstore.destroy", lager.Data{"Guid": guid})
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	node, err := cs.get(logger, guid)
 	if err != nil {
 		return err
@@ -455,49 +497,67 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 	delete(cs.containers, guid)
 	cs.containersLock.Unlock()
 
+	logger.Debug("destroying-garden-container")
 	err = cs.gardenClient.Destroy(guid)
 	if err != nil {
 		if _, ok := err.(garden.ContainerNotFoundError); ok {
 			logger.Error("container-not-found-in-garden", err)
 			return nil
 		}
-		logger.Error("failed-to-create-garden-container", err)
+		logger.Error("failed-to-delete-garden-container", err)
 		return err
 	}
+	logger.Debug("destroyed-garden-container")
 
 	return nil
 }
 
 func (cs *containerStore) Get(logger lager.Logger, guid string) (executor.Container, error) {
 	node, err := cs.get(logger, guid)
-	return node.container, err
+	return node.Container, err
 }
 
 func (cs *containerStore) get(logger lager.Logger, guid string) (storeNode, error) {
+	logger = logger.Session("containerstore-get")
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	cs.containersLock.RLock()
 	defer cs.containersLock.RUnlock()
 
 	node, ok := cs.containers[guid]
 	if !ok {
+		logger.Error("container-not-found", executor.ErrContainerNotFound)
 		return storeNode{}, executor.ErrContainerNotFound
 	}
 	return node, nil
 }
 
 func (cs *containerStore) List(logger lager.Logger) []executor.Container {
+	logger = logger.Session("containerstore-list")
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	cs.containersLock.RLock()
 	defer cs.containersLock.RUnlock()
 
 	containers := make([]executor.Container, 0, len(cs.containers))
 
 	for key := range cs.containers {
-		containers = append(containers, cs.containers[key].container)
+		containers = append(containers, cs.containers[key].Container)
 	}
 
 	return containers
 }
 
 func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.ContainerMetrics, error) {
+	logger = logger.Session("containerstore-metrics")
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	cs.containersLock.RLock()
 	containerGuids := make([]string, 0, len(cs.containers))
 	for key := range cs.containers {
@@ -505,10 +565,13 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 	}
 	cs.containersLock.RUnlock()
 
+	logger.Debug("getting-metrics-in-garden")
 	gardenMetrics, err := cs.gardenClient.BulkMetrics(containerGuids)
 	if err != nil {
+		logger.Error("getting-metrics-in-garden-failed", err)
 		return nil, err
 	}
+	logger.Debug("getting-metrics-in-garden-complete")
 
 	containerMetrics := map[string]executor.ContainerMetrics{}
 	for _, guid := range containerGuids {
@@ -528,12 +591,18 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 }
 
 func (cs *containerStore) GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error) {
+	logger = logger.Session("containerstore-getfiles")
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	container, err := cs.Get(logger, guid)
 	if err != nil {
 		return nil, err
 	}
 
 	if container.GardenContainer == nil {
+		// TODO THIS ERROR SUCKS
 		return nil, executor.ErrContainerNotFound
 	}
 
@@ -541,19 +610,27 @@ func (cs *containerStore) GetFiles(logger lager.Logger, guid, sourcePath string)
 }
 
 func (cs *containerStore) compareAndSwap(logger lager.Logger, node storeNode) (storeNode, error) {
+	logger = logger.Session("compare-and-swap")
+
+	logger.Info("starting")
+	defer logger.Info("finished")
+
 	cs.containersLock.Lock()
 	defer cs.containersLock.Unlock()
-	existingNode, ok := cs.containers[node.container.Guid]
+
+	existingNode, ok := cs.containers[node.Guid]
 	if !ok {
+		logger.Error("container-not-found", executor.ErrContainerNotFound)
 		return storeNode{}, executor.ErrContainerNotFound
 	}
 
 	if existingNode.modifiedIndex != node.modifiedIndex {
+		logger.Error("failed-to-cas", ErrFailedToCAS)
 		return storeNode{}, ErrFailedToCAS
 	}
 
 	node.modifiedIndex++
-	cs.containers[node.container.Guid] = node
+	cs.containers[node.Guid] = node
 
 	return node, nil
 }
@@ -577,21 +654,16 @@ func (cs *containerStore) RegistryPruner(logger lager.Logger, expirationTime tim
 			case <-ticker.C():
 				cs.containersLock.Lock()
 
-				containersToPrune := []string{}
 				for key := range cs.containers {
-					container := cs.containers[key].container
-					if container.State != executor.StateReserved {
+					node := cs.containers[key]
+					if node.State != executor.StateReserved {
 						continue
 					}
 
-					lifespan := cs.clock.Now().Sub(time.Unix(0, container.AllocatedAt))
+					lifespan := cs.clock.Now().Sub(time.Unix(0, node.AllocatedAt))
 					if lifespan >= expirationTime {
-						containersToPrune = append(containersToPrune, key)
+						delete(cs.containers, key)
 					}
-				}
-
-				for _, key := range containersToPrune {
-					delete(cs.containers, key)
 				}
 
 				cs.containersLock.Unlock()
@@ -604,20 +676,22 @@ func (cs *containerStore) RegistryPruner(logger lager.Logger, expirationTime tim
 }
 
 func (cs *containerStore) ContainerReaper(logger lager.Logger, reapInterval time.Duration) ifrit.Runner {
+	logger = logger.Session("container-reqper")
+
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
-		ticker := cs.clock.NewTicker(reapInterval)
+		timer := cs.clock.NewTimer(reapInterval)
 
-		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C():
+			case <-timer.C():
 				properties := garden.Properties{
 					ContainerOwnerProperty: cs.ownerName,
 				}
+
 				gardenContainers, err := cs.gardenClient.Containers(properties)
 				if err != nil {
-					// log?
+					logger.Error("failed-to-fetch-containers", err)
 					break
 				}
 
@@ -626,20 +700,30 @@ func (cs *containerStore) ContainerReaper(logger lager.Logger, reapInterval time
 					handles[gardenContainer.Handle()] = struct{}{}
 				}
 
-				containersToDestroy := []string{}
-				for key := range cs.containers {
-					if _, ok := handles[key]; !ok {
-						containersToDestroy = append(containersToDestroy, key)
+				cs.containersLock.Lock()
+				for key, node := range cs.containers {
+					_, ok := handles[key]
+					if !ok && node.IsCreated() {
+						delete(cs.containers, key)
 					}
 				}
+				cs.containersLock.Unlock()
 
-				for _, key := range containersToDestroy {
-					cs.Destroy(logger, key)
+				for key := range handles {
+					_, err := cs.get(logger, key)
+					if err != nil {
+						err := cs.gardenClient.Destroy(key)
+						if err != nil {
+							logger.Error("failed-to-destroy-container", err)
+						}
+					}
 				}
 
 			case <-signals:
 				return nil
 			}
+
+			timer.Reset(reapInterval)
 		}
 
 		return nil

@@ -245,6 +245,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				clock,
 			)},
 			{"registry-pruner", containerStore.RegistryPruner(logger, config.RegistryPruningInterval)},
+			{"container-reaper", containerStore.ContainerReaper(logger, config.RegistryPruningInterval)},
 		},
 		nil
 }

@@ -164,14 +164,14 @@ func (c *client) RunContainer(request *executor.RunRequest) error {
 	}
 	logger.Debug("succeeded-initializing-container")
 
-	c.creationWorkPool.Submit(c.newRunContainerWorker(request.Guid, logger))
+	c.creationWorkPool.Submit(c.newRunContainerWorker(logger, request.Guid))
 	return nil
 }
 
-func (c *client) newRunContainerWorker(guid string, logger lager.Logger) func() {
+func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() {
 	return func() {
-		c.containerLockManager.Lock(guid)
-		defer c.containerLockManager.Unlock(guid)
+		c.containerLockManager.Lock(logger, guid)
+		defer c.containerLockManager.Unlock(logger, guid)
 
 		logger.Info("creating-container-in-garden")
 		startTime := time.Now()
@@ -258,32 +258,36 @@ func (c *client) GetBulkMetrics() (map[string]executor.Metrics, error) {
 }
 
 func (c *client) StopContainer(guid string) error {
-	c.containerLockManager.Lock(guid)
-	defer c.containerLockManager.Unlock(guid)
+	logger := c.logger.Session("stop-container")
+	logger.Info("starting")
+	defer logger.Info("complete")
+
+	c.containerLockManager.Lock(logger, guid)
+	defer c.containerLockManager.Unlock(logger, guid)
 
 	return c.containerStore.Stop(c.logger, guid)
 }
 
 func (c *client) DeleteContainer(guid string) error {
+	logger := c.logger.Session("delete-container", lager.Data{"guid": guid})
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
 	errChannel := make(chan error, 1)
 	c.deletionWorkPool.Submit(func() {
-		logger := c.logger.Session("delete-container", lager.Data{
-			"guid": guid,
-		})
 
-		c.containerLockManager.Lock(guid)
-		defer c.containerLockManager.Unlock(guid)
+		c.containerLockManager.Lock(logger, guid)
+		defer c.containerLockManager.Unlock(logger, guid)
 
-		if err := c.containerStore.Destroy(logger, guid); err != nil {
-			logger.Error("failed-to-delete-garden-container", err)
-			errChannel <- err
-		} else {
-			errChannel <- nil
-		}
+		errChannel <- c.containerStore.Destroy(logger, guid)
 	})
 
 	err := <-errChannel
-	close(errChannel)
+
+	if err != nil {
+		logger.Error("failed-to-delete-garden-container", err)
+	}
 
 	return err
 }

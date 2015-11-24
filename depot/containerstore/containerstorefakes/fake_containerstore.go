@@ -127,6 +127,15 @@ type FakeContainerStore struct {
 	registryPrunerReturns struct {
 		result1 ifrit.Runner
 	}
+	ContainerReaperStub        func(logger lager.Logger, reapInterval time.Duration) ifrit.Runner
+	containerReaperMutex       sync.RWMutex
+	containerReaperArgsForCall []struct {
+		logger       lager.Logger
+		reapInterval time.Duration
+	}
+	containerReaperReturns struct {
+		result1 ifrit.Runner
+	}
 }
 
 func (fake *FakeContainerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
@@ -527,6 +536,39 @@ func (fake *FakeContainerStore) RegistryPrunerArgsForCall(i int) (lager.Logger, 
 func (fake *FakeContainerStore) RegistryPrunerReturns(result1 ifrit.Runner) {
 	fake.RegistryPrunerStub = nil
 	fake.registryPrunerReturns = struct {
+		result1 ifrit.Runner
+	}{result1}
+}
+
+func (fake *FakeContainerStore) ContainerReaper(logger lager.Logger, reapInterval time.Duration) ifrit.Runner {
+	fake.containerReaperMutex.Lock()
+	fake.containerReaperArgsForCall = append(fake.containerReaperArgsForCall, struct {
+		logger       lager.Logger
+		reapInterval time.Duration
+	}{logger, reapInterval})
+	fake.containerReaperMutex.Unlock()
+	if fake.ContainerReaperStub != nil {
+		return fake.ContainerReaperStub(logger, reapInterval)
+	} else {
+		return fake.containerReaperReturns.result1
+	}
+}
+
+func (fake *FakeContainerStore) ContainerReaperCallCount() int {
+	fake.containerReaperMutex.RLock()
+	defer fake.containerReaperMutex.RUnlock()
+	return len(fake.containerReaperArgsForCall)
+}
+
+func (fake *FakeContainerStore) ContainerReaperArgsForCall(i int) (lager.Logger, time.Duration) {
+	fake.containerReaperMutex.RLock()
+	defer fake.containerReaperMutex.RUnlock()
+	return fake.containerReaperArgsForCall[i].logger, fake.containerReaperArgsForCall[i].reapInterval
+}
+
+func (fake *FakeContainerStore) ContainerReaperReturns(result1 ifrit.Runner) {
+	fake.ContainerReaperStub = nil
+	fake.containerReaperReturns = struct {
 		result1 ifrit.Runner
 	}{result1}
 }

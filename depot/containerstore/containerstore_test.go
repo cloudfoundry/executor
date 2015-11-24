@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -1305,6 +1306,7 @@ var _ = Describe("Container Store", func() {
 		var (
 			containerGuid1, containerGuid2, containerGuid3, containerGuid4, containerGuid5 string
 			process                                                                        ifrit.Process
+			extraGardenContainer                                                           *gfakes.FakeContainer
 		)
 
 		BeforeEach(func() {
@@ -1346,8 +1348,10 @@ var _ = Describe("Container Store", func() {
 			_, err = containerStore.Create(logger, containerGuid5)
 			Expect(err).NotTo(HaveOccurred())
 
+			extraGardenContainer = &gfakes.FakeContainer{}
+			extraGardenContainer.HandleReturns("foobar")
 			gardenContainer.HandleReturns(containerGuid3)
-			gardenContainers := []garden.Container{gardenContainer}
+			gardenContainers := []garden.Container{gardenContainer, extraGardenContainer}
 			gardenClient.ContainersReturns(gardenContainers, nil)
 		})
 
@@ -1360,7 +1364,7 @@ var _ = Describe("Container Store", func() {
 			ginkgomon.Interrupt(process)
 		})
 
-		FIt("removes containers that no longer have corresponding garden containers", func() {
+		It("removes containers that no longer have corresponding garden containers", func() {
 			Consistently(func() []executor.Container {
 				return containerStore.List(logger)
 			}).Should(HaveLen(5))
@@ -1370,6 +1374,41 @@ var _ = Describe("Container Store", func() {
 			Eventually(func() []executor.Container {
 				return containerStore.List(logger)
 			}).Should(HaveLen(3))
+
+			Expect(gardenClient.ContainersCallCount()).To(Equal(1))
+			properties := gardenClient.ContainersArgsForCall(0)
+			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
+			Expect(gardenClient.DestroyCallCount()).To(Equal(1))
+			Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(extraGardenContainer.Handle()))
+
+			clock.Increment(30 * time.Millisecond)
+			Eventually(gardenClient.ContainersCallCount).Should(Equal(2))
+		})
+
+		Context("when listing containers in garden fails", func() {
+			BeforeEach(func() {
+				gardenClient.ContainersReturns([]garden.Container{}, errors.New("failed-to-list"))
+			})
+
+			It("logs the failure and continues", func() {
+				clock.Increment(30 * time.Millisecond)
+				Eventually(logger).Should(gbytes.Say("failed-to-fetch-containers"))
+
+				Consistently(func() []executor.Container {
+					return containerStore.List(logger)
+				}).Should(HaveLen(5))
+			})
+		})
+
+		Context("when destroying the extra container fails", func() {
+			BeforeEach(func() {
+				gardenClient.DestroyReturns(errors.New("failed-to-destroy"))
+			})
+
+			It("logs the error and continues", func() {
+				clock.Increment(30 * time.Millisecond)
+				Eventually(logger).Should(gbytes.Say("failed-to-destroy-container"))
+			})
 		})
 	})
 })
