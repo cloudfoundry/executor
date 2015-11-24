@@ -46,4 +46,5 @@ var (
 	ErrInvalidTransition              = registerError("InvalidStateTransition", "container cannot transition to given state", http.StatusConflict)
 	ErrFailureToCheckSpace            = registerError("ErrFailureToCheckSpace", "failed to check available space", http.StatusInternalServerError)
 	ErrInvalidSecurityGroup           = registerError("ErrInvalidSecurityGroup", "security group has invalid values", http.StatusBadRequest)
+	ErrNoProcessToStop                = registerError("ErrNoProcessToStop", "failed to find a process to stop", http.StatusNotFound)
 )

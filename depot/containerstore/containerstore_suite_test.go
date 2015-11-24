@@ -1,4 +1,4 @@
-package allocationstore_test
+package containerstore_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestAllocationstore(t *testing.T) {
+func TestContainerstore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Allocationstore Suite")
+	RunSpecs(t, "Containerstore Suite")
 }

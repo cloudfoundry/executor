@@ -10,7 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/containermetrics"
 	"github.com/cloudfoundry-incubator/executor/depot"
-	"github.com/cloudfoundry-incubator/executor/depot/allocationstore"
+	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
@@ -24,6 +24,7 @@ import (
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -48,7 +49,7 @@ type executorContainers struct {
 
 func (containers *executorContainers) Containers() ([]garden.Container, error) {
 	return containers.gardenClient.Containers(garden.Properties{
-		gardenstore.ContainerOwnerProperty: containers.owner,
+		containerstore.ContainerOwnerProperty: containers.owner,
 	})
 }
 
@@ -148,6 +149,11 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 
 	workDir := setupWorkDir(logger, config.TempDir)
 
+	healthCheckWorkPool, err := workpool.NewWorkPool(config.HealthCheckWorkPoolSize)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
+
 	transformer := initializeTransformer(
 		logger,
 		config.CachePath,
@@ -157,28 +163,25 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		maxConcurrentUploads,
 		config.SkipCertVerify,
 		config.ExportNetworkEnvVars,
+		config.HealthyMonitoringInterval,
+		config.UnhealthyMonitoringInterval,
+		healthCheckWorkPool,
 		clock,
 	)
 
 	hub := event.NewHub()
 
-	gardenStore, err := gardenstore.NewGardenStore(
-		gardenClient,
+	containerStore := containerstore.New(
 		config.ContainerOwnerName,
-		config.ContainerMaxCpuShares,
 		config.ContainerInodeLimit,
-		config.HealthyMonitoringInterval,
-		config.UnhealthyMonitoringInterval,
-		transformer,
+		config.ContainerMaxCpuShares,
+		gardenClient,
 		clock,
 		hub,
-		config.HealthCheckWorkPoolSize,
+		transformer,
 	)
-	if err != nil {
-		return nil, grouper.Members{}, err
-	}
 
-	allocationStore := allocationstore.NewAllocationStore(clock, hub)
+	gardenStore := gardenstore.NewGardenStore(gardenClient)
 
 	workPoolSettings := executor.WorkPoolSettings{
 		CreateWorkPoolSize:  config.CreateWorkPoolSize,
@@ -189,7 +192,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 
 	depotClientProvider, err := depot.NewClientProvider(
 		fetchCapacity(logger, gardenClient, config),
-		allocationStore,
+		containerStore,
 		gardenStore,
 		hub,
 		keyed_lock.NewLockManager(),
@@ -227,7 +230,6 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				Logger:         metricsLogger,
 			}},
 			{"hub-closer", closeHub(hub)},
-			{"registry-pruner", allocationStore.RegistryPruner(logger, config.RegistryPruningInterval)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
 				containerMetricsLogger,
 				containerMetricsReportInterval,
@@ -242,6 +244,8 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				depotClientProvider.WithLogger(logger),
 				clock,
 			)},
+			{"registry-pruner", containerStore.RegistryPruner(logger, config.RegistryPruningInterval)},
+			{"container-reaper", containerStore.ContainerReaper(logger, config.RegistryPruningInterval)},
 		},
 		nil
 }
@@ -351,8 +355,11 @@ func initializeTransformer(
 	maxConcurrentDownloads, maxConcurrentUploads uint,
 	skipSSLVerification bool,
 	exportNetworkEnvVars bool,
+	healthyMonitoringInterval time.Duration,
+	unhealthyMonitoringInterval time.Duration,
+	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
-) *transformer.Transformer {
+) transformer.Transformer {
 	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification)
 	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
 	extractor := extractor.NewDetectable()
@@ -367,6 +374,9 @@ func initializeTransformer(
 		make(chan struct{}, maxConcurrentUploads),
 		workDir,
 		exportNetworkEnvVars,
+		healthyMonitoringInterval,
+		unhealthyMonitoringInterval,
+		healthCheckWorkPool,
 		clock,
 	)
 }

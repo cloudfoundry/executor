@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
+	"github.com/cloudfoundry-incubator/garden"
 )
 
 type State string
@@ -34,11 +35,12 @@ type Container struct {
 	Guid string `json:"guid"`
 	Resource
 	RunInfo
-	Tags        Tags
-	State       State              `json:"state"`
-	AllocatedAt int64              `json:"allocated_at"`
-	ExternalIP  string             `json:"external_ip"`
-	RunResult   ContainerRunResult `json:"run_result"`
+	Tags            Tags
+	State           State              `json:"state"`
+	AllocatedAt     int64              `json:"allocated_at"`
+	ExternalIP      string             `json:"external_ip"`
+	RunResult       ContainerRunResult `json:"run_result"`
+	GardenContainer garden.Container
 }
 
 func NewContainerFromResource(guid string, resource *Resource, tags Tags) Container {
@@ -47,6 +49,34 @@ func NewContainerFromResource(guid string, resource *Resource, tags Tags) Contai
 		Resource: *resource,
 		Tags:     tags,
 	}
+}
+
+func (newContainer Container) Copy() Container {
+	newContainer.Tags = newContainer.Tags.Copy()
+	return newContainer
+}
+
+func (c *Container) IsCreated() bool {
+	return c.State != StateReserved && c.State != StateInitializing
+}
+
+func (c *Container) HasTags(tags Tags) bool {
+	if c.Tags == nil {
+		return tags == nil
+	}
+
+	if tags == nil {
+		return false
+	}
+
+	for key, val := range tags {
+		v, ok := c.Tags[key]
+		if !ok || val != v {
+			return false
+		}
+	}
+
+	return true
 }
 
 func NewReservedContainerFromAllocationRequest(req *AllocationRequest, allocatedAt int64) Container {
@@ -83,30 +113,6 @@ type RunInfo struct {
 	Monitor       *models.Action              `json:"monitor"`
 	EgressRules   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
 	Env           []EnvironmentVariable       `json:"env,omitempty"`
-}
-
-func (newContainer Container) Copy() Container {
-	newContainer.Tags = newContainer.Tags.Copy()
-	return newContainer
-}
-
-func (c *Container) HasTags(tags Tags) bool {
-	if c.Tags == nil {
-		return tags == nil
-	}
-
-	if tags == nil {
-		return false
-	}
-
-	for key, val := range tags {
-		v, ok := c.Tags[key]
-		if !ok || val != v {
-			return false
-		}
-	}
-
-	return true
 }
 
 type InnerContainer Container

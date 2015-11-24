@@ -3,12 +3,14 @@ package keyed_lock
 import (
 	"fmt"
 	"sync"
+
+	"github.com/pivotal-golang/lager"
 )
 
 //go:generate counterfeiter -o fakelockmanager/fake_lock_manager.go . LockManager
 type LockManager interface {
-	Lock(key string)
-	Unlock(key string)
+	Lock(logger lager.Logger, key string)
+	Unlock(logger lager.Logger, key string)
 }
 
 type lockManager struct {
@@ -28,7 +30,9 @@ func NewLockManager() LockManager {
 	}
 }
 
-func (m *lockManager) Lock(key string) {
+func (m *lockManager) Lock(logger lager.Logger, key string) {
+	logger.Debug("locking")
+	defer logger.Debug("locking-complete")
 	m.mutex.Lock()
 	entry, ok := m.locks[key]
 	if !ok {
@@ -43,7 +47,10 @@ func (m *lockManager) Lock(key string) {
 	entry.ch <- struct{}{}
 }
 
-func (m *lockManager) Unlock(key string) {
+func (m *lockManager) Unlock(logger lager.Logger, key string) {
+	logger.Debug("unlocking")
+	defer logger.Debug("unlocking-complete")
+
 	m.mutex.Lock()
 	entry, ok := m.locks[key]
 	if !ok {

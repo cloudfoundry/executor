@@ -112,7 +112,7 @@ var _ = Describe("StatsReporter", func() {
 
 		metricsResults = make(chan map[string]executor.Metrics, 10)
 
-		fakeExecutorClient.GetAllMetricsStub = func(tags executor.Tags) (map[string]executor.Metrics, error) {
+		fakeExecutorClient.GetBulkMetricsStub = func() (map[string]executor.Metrics, error) {
 			result, ok := <-metricsResults
 			if !ok || result == nil {
 				return nil, errors.New("closed")
@@ -133,7 +133,7 @@ var _ = Describe("StatsReporter", func() {
 			sendResults()
 
 			fakeClock.Increment(interval)
-			Eventually(fakeExecutorClient.GetAllMetricsCallCount).Should(Equal(1))
+			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
 		})
 
 		It("emits memory and disk usage for each container, but no CPU", func() {
@@ -167,7 +167,7 @@ var _ = Describe("StatsReporter", func() {
 		Context("and the interval elapses again", func() {
 			BeforeEach(func() {
 				fakeClock.Increment(interval)
-				Eventually(fakeExecutorClient.GetAllMetricsCallCount).Should(Equal(2))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 			})
 
 			It("emits the new memory and disk usage, and the computed CPU percent", func() {
@@ -195,7 +195,7 @@ var _ = Describe("StatsReporter", func() {
 			Context("and the interval elapses again", func() {
 				BeforeEach(func() {
 					fakeClock.Increment(interval)
-					Eventually(fakeExecutorClient.GetAllMetricsCallCount).Should(Equal(3))
+					Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
 				})
 
 				It("emits the new memory and disk usage, and the computed CPU percent", func() {
@@ -228,7 +228,7 @@ var _ = Describe("StatsReporter", func() {
 			metricsResults <- nil
 
 			fakeClock.Increment(interval)
-			Eventually(fakeExecutorClient.GetAllMetricsCallCount).Should(Equal(1))
+			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
 		})
 
 		It("does not blow up", func() {
@@ -239,7 +239,7 @@ var _ = Describe("StatsReporter", func() {
 			BeforeEach(func() {
 				sendResults()
 				fakeClock.Increment(interval)
-				Eventually(fakeExecutorClient.GetAllMetricsCallCount).Should(Equal(2))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 			})
 
 			It("processes the containers happily", func() {
