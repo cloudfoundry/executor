@@ -69,6 +69,160 @@ func NewChecker(
 	}
 }
 
+func (c *checker) list(logger lager.Logger) ([]garden.Container, error) {
+	logger = logger.Session("list")
+	logger.Debug("starting")
+	defer logger.Debug("finished")
+
+	var containers []garden.Container
+	err := retryOnFail(c.retryInterval, func(attempt uint) (listErr error) {
+		containers, listErr = c.gardenClient.Containers(garden.Properties{
+			gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
+		})
+		if listErr != nil {
+			logger.Error("failed", listErr, lager.Data{"attempt": attempt})
+			return listErr
+		}
+
+		logger.Debug("succeeded", lager.Data{"attempt": attempt})
+		return nil
+	})
+
+	return containers, err
+}
+
+func (c *checker) initialDestroy(logger lager.Logger, containers []garden.Container) error {
+	logger = logger.Session("initial-destroy")
+	logger.Debug("starting", lager.Data{"numContainers": len(containers)})
+	defer logger.Debug("finished")
+
+	for i := range containers {
+		err := retryOnFail(c.retryInterval, func(attempt uint) (destroyErr error) {
+			handle := containers[i].Handle()
+			destroyErr = c.gardenClient.Destroy(handle)
+			if destroyErr != nil {
+				if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
+					// Log but don't fail if container is already being destroyed
+					logger.Debug("already-being-destroyed", lager.Data{"handle": handle})
+					return nil
+				}
+
+				logger.Error("failed", destroyErr, lager.Data{"handle": handle, "attempt": attempt})
+				return destroyErr
+			}
+
+			logger.Debug("succeeded", lager.Data{"handle": handle, "attempt": attempt})
+			return nil
+		})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	logger.Debug("succeeded")
+	return nil
+}
+
+func (c *checker) create(logger lager.Logger) (string, garden.Container, error) {
+	logger = logger.Session("create")
+	logger.Debug("starting")
+	defer logger.Debug("finished")
+
+	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
+	var container garden.Container
+	err := retryOnFail(c.retryInterval, func(attempt uint) (createErr error) {
+		container, createErr = c.gardenClient.Create(garden.ContainerSpec{
+			Handle:     guid,
+			RootFSPath: c.rootFSPath,
+			Properties: garden.Properties{
+				gardenstore.ContainerOwnerProperty:             c.containerOwnerName,
+				gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
+			},
+		})
+		if createErr != nil {
+			logger.Error("failed", createErr, lager.Data{"attempt": attempt})
+			return createErr
+		}
+
+		logger.Debug("succeeded", lager.Data{"attempt": attempt})
+		return nil
+	})
+
+	return guid, container, err
+}
+
+func (c *checker) cleanupDestroy(logger lager.Logger, guid string) error {
+	logger = logger.Session("cleanup-destroy")
+	logger.Debug("starting")
+	defer logger.Debug("finished")
+
+	err := retryOnFail(c.retryInterval, func(attempt uint) (destroyErr error) {
+		destroyErr = c.destroyContainer(guid)
+		if destroyErr != nil {
+			if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
+				// Log but don't fail if container is already being destroyed
+				logger.Debug("already-being-destroyed", lager.Data{"handle": guid})
+				return nil
+			}
+
+			logger.Error("failed", destroyErr, lager.Data{"handle": guid, "attempt": attempt})
+			return destroyErr
+		}
+
+		logger.Debug("succeeded", lager.Data{"attempt": attempt})
+		return nil
+	})
+
+	return err
+}
+
+func (c *checker) run(logger lager.Logger, container garden.Container) (garden.Process, error) {
+	logger = logger.Session("run", lager.Data{
+		"processPath": c.healthcheckSpec.Path,
+		"processArgs": c.healthcheckSpec.Args,
+		"processUser": c.healthcheckSpec.User,
+		"processEnv":  c.healthcheckSpec.Env,
+		"processDir":  c.healthcheckSpec.Dir,
+	})
+	logger.Debug("starting")
+	defer logger.Debug("finished")
+
+	var proc garden.Process
+	err := retryOnFail(c.retryInterval, func(attempt uint) (runErr error) {
+		proc, runErr = container.Run(c.healthcheckSpec, garden.ProcessIO{})
+		if runErr != nil {
+			logger.Error("failed", runErr, lager.Data{"attempt": attempt})
+			return runErr
+		}
+
+		logger.Debug("succeeded", lager.Data{"attempt": attempt})
+		return nil
+	})
+
+	return proc, err
+}
+
+func (c *checker) wait(logger lager.Logger, proc garden.Process) (int, error) {
+	logger = logger.Session("wait")
+	logger.Debug("starting")
+	defer logger.Debug("finished")
+
+	var exitCode int
+	err := retryOnFail(c.retryInterval, func(attempt uint) (waitErr error) {
+		exitCode, waitErr = proc.Wait()
+		if waitErr != nil {
+			logger.Error("failed", waitErr, lager.Data{"attempt": attempt})
+			return waitErr
+		}
+
+		logger.Debug("succeeded", lager.Data{"attempt": attempt})
+		return nil
+	})
+
+	return exitCode, err
+}
+
 // Healthcheck destroys any existing healthcheck containers, creates a new container,
 // runs a process in the new container, waits for the process to exit, then destroys
 // the created container.
@@ -80,120 +234,34 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	logger = logger.Session("healthcheck")
 	logger.Debug("starting")
 
-	logger.Debug("attempting-list")
-	var containers []garden.Container
-	err := RetryOnFail(c.retryInterval, func() (listErr error) {
-		containers, listErr = c.gardenClient.Containers(garden.Properties{
-			gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
-		})
-		if listErr != nil {
-			logger.Debug("failed-list", lager.Data{"error": listErr})
-		}
-		return listErr
-	})
-
+	containers, err := c.list(logger)
 	if err != nil {
 		return err
 	}
-	logger.Debug("list-succeeded")
 
-	logger.Debug("attempting-initial-destroy")
-	for i := range containers {
-		err = RetryOnFail(c.retryInterval, func() (destroyErr error) {
-			handle := containers[i].Handle()
-			destroyErr = c.gardenClient.Destroy(handle)
-			if destroyErr != nil {
-				if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
-					// Log but don't fail if container is already being destroyed
-					logger.Debug("already-being-destroyed-during-initial-destroy", lager.Data{"handle": handle})
-					return nil
-				}
-
-				logger.Debug("failed-initial-destroy", lager.Data{"error": destroyErr})
-			}
-			return destroyErr
-		})
-
-		if err != nil {
-			return err
-		}
-	}
-	logger.Debug("initial-destroy-succeeded")
-
-	logger.Debug("attempting-create")
-	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
-	var container garden.Container
-	err = RetryOnFail(c.retryInterval, func() (createErr error) {
-		container, createErr = c.gardenClient.Create(garden.ContainerSpec{
-			Handle:     guid,
-			RootFSPath: c.rootFSPath,
-			Properties: garden.Properties{
-				gardenstore.ContainerOwnerProperty:             c.containerOwnerName,
-				gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
-			},
-		})
-		if createErr != nil {
-			logger.Debug("failed-create", lager.Data{"error": createErr})
-		}
-		return createErr
-	})
-
+	err = c.initialDestroy(logger, containers)
 	if err != nil {
 		return err
 	}
-	logger.Debug("create-succeeded")
+
+	guid, container, err := c.create(logger)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
-		err := RetryOnFail(c.retryInterval, func() (destroyErr error) {
-			destroyErr = c.destroyContainer(guid)
-			if destroyErr != nil {
-				if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
-					// Log but don't fail if container is already being destroyed
-					logger.Debug("already-being-destroyed-during-cleanup-destroy", lager.Data{"handle": guid})
-					return nil
-				}
-				logger.Debug("failed-cleanup-destroy", lager.Data{"error": destroyErr})
-			}
-			return destroyErr
-		})
+		err := c.cleanupDestroy(logger, guid)
 		if err != nil {
 			healthcheckResult = err
 		}
-
-		logger.Debug("finished")
 	}()
 
-	logger.Debug("attempting-run", lager.Data{
-		"processPath": c.healthcheckSpec.Path,
-		"processArgs": c.healthcheckSpec.Args,
-		"processUser": c.healthcheckSpec.User,
-		"processEnv":  c.healthcheckSpec.Env,
-		"processDir":  c.healthcheckSpec.Dir,
-	})
-
-	var proc garden.Process
-	err = RetryOnFail(c.retryInterval, func() (runErr error) {
-		proc, runErr = container.Run(c.healthcheckSpec, garden.ProcessIO{})
-		if runErr != nil {
-			logger.Debug("failed-run", lager.Data{"error": runErr})
-		}
-		return runErr
-	})
-
+	proc, err := c.run(logger, container)
 	if err != nil {
 		return err
 	}
-	logger.Debug("run-succeeded")
 
-	logger.Debug("attempting-wait")
-	var exitCode int
-	err = RetryOnFail(c.retryInterval, func() (waitErr error) {
-		exitCode, waitErr = proc.Wait()
-		if waitErr != nil {
-			logger.Debug("failed-wait", lager.Data{"error": waitErr})
-		}
-		return waitErr
-	})
+	exitCode, err := c.wait(logger, proc)
 	if err != nil {
 		return err
 	}
@@ -201,8 +269,6 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	if exitCode != 0 {
 		return HealthcheckFailedError(exitCode)
 	}
-
-	logger.Debug("wait-succeeded")
 
 	return nil
 }
@@ -220,14 +286,14 @@ func (c *checker) destroyContainer(guid string) error {
 }
 
 const (
-	MaxRetries = 3
+	maxRetries = 3
 )
 
-func RetryOnFail(retryInterval time.Duration, cmd func() error) error {
+func retryOnFail(retryInterval time.Duration, cmd func(attempt uint) error) error {
 	var err error
 
-	for i := 0; i < MaxRetries; i++ {
-		err = cmd()
+	for i := uint(0); i < maxRetries; i++ {
+		err = cmd(i)
 		if err == nil {
 			return nil
 		}
