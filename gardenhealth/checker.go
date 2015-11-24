@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
 	"github.com/cloudfoundry-incubator/executor/guidgen"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -99,8 +100,15 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	logger.Debug("attempting-initial-destroy")
 	for i := range containers {
 		err = RetryOnFail(c.retryInterval, func() (destroyErr error) {
-			destroyErr = c.gardenClient.Destroy(containers[i].Handle())
+			handle := containers[i].Handle()
+			destroyErr = c.gardenClient.Destroy(handle)
 			if destroyErr != nil {
+				if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
+					// Log but don't fail if container is already being destroyed
+					logger.Debug("already-being-destroyed-during-initial-destroy", lager.Data{"handle": handle})
+					return nil
+				}
+
 				logger.Debug("failed-initial-destroy", lager.Data{"error": destroyErr})
 			}
 			return destroyErr
@@ -139,6 +147,11 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 		err := RetryOnFail(c.retryInterval, func() (destroyErr error) {
 			destroyErr = c.destroyContainer(guid)
 			if destroyErr != nil {
+				if destroyErr.Error() == server.ErrConcurrentDestroy.Error() {
+					// Log but don't fail if container is already being destroyed
+					logger.Debug("already-being-destroyed-during-cleanup-destroy", lager.Data{"handle": guid})
+					return nil
+				}
 				logger.Debug("failed-cleanup-destroy", lager.Data{"error": destroyErr})
 			}
 			return destroyErr
