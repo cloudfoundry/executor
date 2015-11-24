@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
+	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/guidgen"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/lager"
@@ -13,7 +13,7 @@ import (
 
 const (
 	HealthcheckPrefix   = "executor-healthcheck-"
-	HealthcheckTag      = "healthcheck-tag"
+	HealthcheckTag      = "tag:healthcheck-tag"
 	HealthcheckTagValue = "healthcheck"
 )
 
@@ -83,7 +83,7 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	var containers []garden.Container
 	err := RetryOnFail(c.retryInterval, func() (listErr error) {
 		containers, listErr = c.gardenClient.Containers(garden.Properties{
-			gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
+			HealthcheckTag: HealthcheckTagValue,
 		})
 		if listErr != nil {
 			logger.Debug("failed-list", lager.Data{"error": listErr})
@@ -120,8 +120,8 @@ func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 			Handle:     guid,
 			RootFSPath: c.rootFSPath,
 			Properties: garden.Properties{
-				gardenstore.ContainerOwnerProperty:             c.containerOwnerName,
-				gardenstore.TagPropertyPrefix + HealthcheckTag: HealthcheckTagValue,
+				containerstore.ContainerOwnerProperty: c.containerOwnerName,
+				HealthcheckTag:                        HealthcheckTagValue,
 			},
 		})
 		if createErr != nil {

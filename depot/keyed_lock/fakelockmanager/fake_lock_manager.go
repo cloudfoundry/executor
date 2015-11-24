@@ -5,29 +5,33 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
+	"github.com/pivotal-golang/lager"
 )
 
 type FakeLockManager struct {
-	LockStub        func(key string)
+	LockStub        func(logger lager.Logger, key string)
 	lockMutex       sync.RWMutex
 	lockArgsForCall []struct {
-		key string
+		logger lager.Logger
+		key    string
 	}
-	UnlockStub        func(key string)
+	UnlockStub        func(logger lager.Logger, key string)
 	unlockMutex       sync.RWMutex
 	unlockArgsForCall []struct {
-		key string
+		logger lager.Logger
+		key    string
 	}
 }
 
-func (fake *FakeLockManager) Lock(key string) {
+func (fake *FakeLockManager) Lock(logger lager.Logger, key string) {
 	fake.lockMutex.Lock()
 	fake.lockArgsForCall = append(fake.lockArgsForCall, struct {
-		key string
-	}{key})
+		logger lager.Logger
+		key    string
+	}{logger, key})
 	fake.lockMutex.Unlock()
 	if fake.LockStub != nil {
-		fake.LockStub(key)
+		fake.LockStub(logger, key)
 	}
 }
 
@@ -37,20 +41,21 @@ func (fake *FakeLockManager) LockCallCount() int {
 	return len(fake.lockArgsForCall)
 }
 
-func (fake *FakeLockManager) LockArgsForCall(i int) string {
+func (fake *FakeLockManager) LockArgsForCall(i int) (lager.Logger, string) {
 	fake.lockMutex.RLock()
 	defer fake.lockMutex.RUnlock()
-	return fake.lockArgsForCall[i].key
+	return fake.lockArgsForCall[i].logger, fake.lockArgsForCall[i].key
 }
 
-func (fake *FakeLockManager) Unlock(key string) {
+func (fake *FakeLockManager) Unlock(logger lager.Logger, key string) {
 	fake.unlockMutex.Lock()
 	fake.unlockArgsForCall = append(fake.unlockArgsForCall, struct {
-		key string
-	}{key})
+		logger lager.Logger
+		key    string
+	}{logger, key})
 	fake.unlockMutex.Unlock()
 	if fake.UnlockStub != nil {
-		fake.UnlockStub(key)
+		fake.UnlockStub(logger, key)
 	}
 }
 
@@ -60,10 +65,10 @@ func (fake *FakeLockManager) UnlockCallCount() int {
 	return len(fake.unlockArgsForCall)
 }
 
-func (fake *FakeLockManager) UnlockArgsForCall(i int) string {
+func (fake *FakeLockManager) UnlockArgsForCall(i int) (lager.Logger, string) {
 	fake.unlockMutex.RLock()
 	defer fake.unlockMutex.RUnlock()
-	return fake.unlockArgsForCall[i].key
+	return fake.unlockArgsForCall[i].logger, fake.unlockArgsForCall[i].key
 }
 
 var _ keyed_lock.LockManager = new(FakeLockManager)

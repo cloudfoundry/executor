@@ -12,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -20,7 +21,14 @@ import (
 
 var ErrNoCheck = errors.New("no check configured")
 
-type Transformer struct {
+//go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
+
+type Transformer interface {
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, []executor.PortMapping, lager.Logger) steps.Step
+	StepsForContainer(lager.Logger, executor.Container, log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error)
+}
+
+type transformer struct {
 	cachedDownloader     cacheddownloader.CachedDownloader
 	uploader             uploader.Uploader
 	extractor            extractor.Extractor
@@ -30,6 +38,10 @@ type Transformer struct {
 	tempDir              string
 	exportNetworkEnvVars bool
 	clock                clock.Clock
+
+	healthyMonitoringInterval   time.Duration
+	unhealthyMonitoringInterval time.Duration
+	healthCheckWorkPool         *workpool.WorkPool
 }
 
 func NewTransformer(
@@ -41,22 +53,28 @@ func NewTransformer(
 	uploadLimiter chan struct{},
 	tempDir string,
 	exportNetworkEnvVars bool,
+	healthyMonitoringInterval time.Duration,
+	unhealthyMonitoringInterval time.Duration,
+	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
-) *Transformer {
-	return &Transformer{
-		cachedDownloader:     cachedDownloader,
-		uploader:             uploader,
-		extractor:            extractor,
-		compressor:           compressor,
-		downloadLimiter:      downloadLimiter,
-		uploadLimiter:        uploadLimiter,
-		tempDir:              tempDir,
-		exportNetworkEnvVars: exportNetworkEnvVars,
-		clock:                clock,
+) *transformer {
+	return &transformer{
+		cachedDownloader:            cachedDownloader,
+		uploader:                    uploader,
+		extractor:                   extractor,
+		compressor:                  compressor,
+		downloadLimiter:             downloadLimiter,
+		uploadLimiter:               uploadLimiter,
+		tempDir:                     tempDir,
+		exportNetworkEnvVars:        exportNetworkEnvVars,
+		healthyMonitoringInterval:   healthyMonitoringInterval,
+		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
+		healthCheckWorkPool:         healthCheckWorkPool,
+		clock:                       clock,
 	}
 }
 
-func (transformer *Transformer) StepFor(
+func (t *transformer) StepFor(
 	logStreamer log_streamer.LogStreamer,
 	action *models.Action,
 	container garden.Container,
@@ -64,7 +82,6 @@ func (transformer *Transformer) StepFor(
 	ports []executor.PortMapping,
 	logger lager.Logger,
 ) steps.Step {
-
 	a := action.GetValue()
 	switch actionModel := a.(type) {
 	case *models.RunAction:
@@ -75,16 +92,16 @@ func (transformer *Transformer) StepFor(
 			logger,
 			externalIP,
 			ports,
-			transformer.exportNetworkEnvVars,
-			transformer.clock,
+			t.exportNetworkEnvVars,
+			t.clock,
 		)
 
 	case *models.DownloadAction:
 		return steps.NewDownload(
 			container,
 			*actionModel,
-			transformer.cachedDownloader,
-			transformer.downloadLimiter,
+			t.cachedDownloader,
+			t.downloadLimiter,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 		)
@@ -93,17 +110,17 @@ func (transformer *Transformer) StepFor(
 		return steps.NewUpload(
 			container,
 			*actionModel,
-			transformer.uploader,
-			transformer.compressor,
-			transformer.tempDir,
+			t.uploader,
+			t.compressor,
+			t.tempDir,
 			logStreamer.WithSource(actionModel.LogSource),
-			transformer.uploadLimiter,
+			t.uploadLimiter,
 			logger,
 		)
 
 	case *models.EmitProgressAction:
 		return steps.NewEmitProgress(
-			transformer.StepFor(
+			t.StepFor(
 				logStreamer,
 				actionModel.Action,
 				container,
@@ -120,7 +137,7 @@ func (transformer *Transformer) StepFor(
 
 	case *models.TimeoutAction:
 		return steps.NewTimeout(
-			transformer.StepFor(
+			t.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
@@ -134,7 +151,7 @@ func (transformer *Transformer) StepFor(
 
 	case *models.TryAction:
 		return steps.NewTry(
-			transformer.StepFor(
+			t.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
@@ -148,7 +165,7 @@ func (transformer *Transformer) StepFor(
 	case *models.ParallelAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = transformer.StepFor(
+			subSteps[i] = t.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				action,
 				container,
@@ -162,7 +179,7 @@ func (transformer *Transformer) StepFor(
 	case *models.CodependentAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = transformer.StepFor(
+			subSteps[i] = t.StepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				action,
 				container,
@@ -177,7 +194,7 @@ func (transformer *Transformer) StepFor(
 	case *models.SerialAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = transformer.StepFor(
+			subSteps[i] = t.StepFor(
 				logStreamer,
 				action,
 				container,
@@ -190,4 +207,81 @@ func (transformer *Transformer) StepFor(
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))
+}
+
+func (t *transformer) StepsForContainer(
+	logger lager.Logger,
+	container executor.Container,
+	logStreamer log_streamer.LogStreamer,
+) (steps.Step, <-chan struct{}, error) {
+	var setup, action, monitor steps.Step
+	if container.Setup != nil {
+		setup = t.StepFor(
+			logStreamer,
+			container.Setup,
+			container.GardenContainer,
+			container.ExternalIP,
+			container.Ports,
+			logger.Session("setup"),
+		)
+	}
+
+	if container.Action == nil {
+		err := errors.New("container cannot have empty action")
+		logger.Error("empty-action", err)
+		return nil, nil, err
+	}
+
+	action = t.StepFor(
+		logStreamer,
+		container.Action,
+		container.GardenContainer,
+		container.ExternalIP,
+		container.Ports,
+		logger.Session("action"),
+	)
+
+	hasStartedRunning := make(chan struct{}, 1)
+
+	if container.Monitor != nil {
+		monitor = steps.NewMonitor(
+			func() steps.Step {
+				return t.StepFor(
+					logStreamer,
+					container.Monitor,
+					container.GardenContainer,
+					container.ExternalIP,
+					container.Ports,
+					logger.Session("monitor-run"),
+				)
+			},
+			hasStartedRunning,
+			logger.Session("monitor"),
+			t.clock,
+			logStreamer,
+			time.Duration(container.StartTimeout)*time.Second,
+			t.healthyMonitoringInterval,
+			t.unhealthyMonitoringInterval,
+			t.healthCheckWorkPool,
+		)
+	}
+
+	var longLivedAction steps.Step
+	if monitor != nil {
+		longLivedAction = steps.NewCodependent([]steps.Step{action, monitor}, false)
+	} else {
+		longLivedAction = action
+
+		// this container isn't monitored, so we mark it running right away
+		hasStartedRunning <- struct{}{}
+	}
+
+	var step steps.Step
+	if setup == nil {
+		step = longLivedAction
+	} else {
+		step = steps.NewSerial([]steps.Step{setup, longLivedAction})
+	}
+
+	return step, hasStartedRunning, nil
 }
