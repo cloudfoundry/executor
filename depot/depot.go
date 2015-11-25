@@ -27,7 +27,6 @@ type clientProvider struct {
 	containerStore   containerstore.ContainerStore
 	gardenStore      GardenStore
 	eventHub         event.Hub
-	resourcesLock    *sync.Mutex
 	creationWorkPool *workpool.WorkPool
 	deletionWorkPool *workpool.WorkPool
 	readWorkPool     *workpool.WorkPool
@@ -72,7 +71,6 @@ func NewClientProvider(
 		containerStore:   containerStore,
 		gardenStore:      gardenStore,
 		eventHub:         eventHub,
-		resourcesLock:    new(sync.Mutex),
 		creationWorkPool: creationWorkPool,
 		deletionWorkPool: deletionWorkPool,
 		readWorkPool:     readWorkPool,
@@ -96,16 +94,8 @@ func (c *client) Cleanup() {
 }
 
 func (c *client) AllocateContainers(requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
-	c.resourcesLock.Lock()
-	defer c.resourcesLock.Unlock()
-
 	logger := c.logger.Session("allocate-containers")
 	failures := make([]executor.AllocationFailure, 0)
-
-	remainingResources, err := c.remainingResources(logger)
-	if err != nil {
-		return nil, executor.ErrFailureToCheckSpace
-	}
 
 	for i := range requests {
 		req := &requests[i]
@@ -113,13 +103,6 @@ func (c *client) AllocateContainers(requests []executor.AllocationRequest) ([]ex
 		if err != nil {
 			logger.Error("invalid-request", err)
 			failures = append(failures, executor.NewAllocationFailure(req, err.Error()))
-			continue
-		}
-
-		ok := remainingResources.Subtract(&req.Resource)
-		if !ok {
-			logger.Error("failed-to-allocate-container", executor.ErrInsufficientResourcesAvailable, lager.Data{"guid": req.Guid})
-			failures = append(failures, executor.NewAllocationFailure(req, executor.ErrInsufficientResourcesAvailable.Error()))
 			continue
 		}
 
@@ -278,41 +261,9 @@ func (c *client) DeleteContainer(guid string) error {
 	return err
 }
 
-func (c *client) remainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
-	containers, err := c.ListContainers()
-	if err != nil {
-		logger.Error("failed-to-list-containers", err)
-		return executor.ExecutorResources{}, err
-	}
-	return c.remainingResourcesFrom(logger, containers)
-}
-
-func (c *client) remainingResourcesFrom(logger lager.Logger, containers []executor.Container) (executor.ExecutorResources, error) {
-	remainingResources, err := c.TotalResources()
-	if err != nil {
-		return executor.ExecutorResources{}, err
-	}
-
-	for i := range containers {
-		c := &containers[i]
-		remainingResources.Subtract(&c.Resource)
-	}
-
-	return remainingResources, nil
-}
-
-func (c *client) RemainingResourcesFrom(containers []executor.Container) (executor.ExecutorResources, error) {
-	logger := c.logger.Session("remaining-resources-from", lager.Data{"containers": containers})
-	return c.remainingResourcesFrom(logger, containers)
-}
-
 func (c *client) RemainingResources() (executor.ExecutorResources, error) {
-	c.resourcesLock.Lock()
-	defer c.resourcesLock.Unlock()
-
 	logger := c.logger.Session("remaining-resources")
-
-	return c.remainingResources(logger)
+	return c.containerStore.RemainingResources(logger), nil
 }
 
 func (c *client) Ping() error {

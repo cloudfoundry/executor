@@ -29,9 +29,10 @@ var _ = Describe("Container Store", func() {
 	var (
 		containerStore containerstore.ContainerStore
 
-		iNodeLimit   uint64
-		maxCPUShares uint64
-		ownerName    string
+		iNodeLimit    uint64
+		maxCPUShares  uint64
+		ownerName     string
+		totalCapacity executor.ExecutorResources
 
 		containerGuid string
 
@@ -55,6 +56,7 @@ var _ = Describe("Container Store", func() {
 		iNodeLimit = 64
 		maxCPUShares = 100
 		ownerName = "test-owner"
+		totalCapacity = executor.NewExecutorResources(1024*10, 1024*10, 10)
 
 		containerGuid = "container-guid"
 
@@ -63,6 +65,7 @@ var _ = Describe("Container Store", func() {
 			ownerName,
 			iNodeLimit,
 			maxCPUShares,
+			&totalCapacity,
 			gardenClient,
 			clock,
 			eventEmitter,
@@ -125,6 +128,16 @@ var _ = Describe("Container Store", func() {
 			}))
 		})
 
+		It("decrements the remaining capacity", func() {
+			_, err := containerStore.Reserve(logger, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			remainingCapacity := containerStore.RemainingResources(logger)
+			Expect(remainingCapacity.MemoryMB).To(Equal(totalCapacity.MemoryMB - req.MemoryMB))
+			Expect(remainingCapacity.DiskMB).To(Equal(totalCapacity.DiskMB - req.DiskMB))
+			Expect(remainingCapacity.Containers).To(Equal(totalCapacity.Containers - 1))
+		})
+
 		Context("when the container guid is already reserved", func() {
 			BeforeEach(func() {
 				_, err := containerStore.Reserve(logger, req)
@@ -134,6 +147,17 @@ var _ = Describe("Container Store", func() {
 			It("fails with container guid not available", func() {
 				_, err := containerStore.Reserve(logger, req)
 				Expect(err).To(Equal(executor.ErrContainerGuidNotAvailable))
+			})
+		})
+
+		Context("when there are not enough remaining resources available", func() {
+			BeforeEach(func() {
+				req.Resource.MemoryMB = totalCapacity.MemoryMB + 1
+			})
+
+			It("returns an error", func() {
+				_, err := containerStore.Reserve(logger, req)
+				Expect(err).To(Equal(executor.ErrInsufficientResourcesAvailable))
 			})
 		})
 	})
@@ -934,12 +958,15 @@ var _ = Describe("Container Store", func() {
 	})
 
 	Describe("Destroy", func() {
+		var resource executor.Resource
+
 		BeforeEach(func() {
 			gardenClient.CreateReturns(gardenContainer, nil)
+			resource = executor.NewResource(1024, 2048, "foobar")
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid})
@@ -958,6 +985,14 @@ var _ = Describe("Container Store", func() {
 
 			_, err = containerStore.Get(logger, containerGuid)
 			Expect(err).To(Equal(executor.ErrContainerNotFound))
+		})
+
+		It("frees the containers resources", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+
+			remainingResources := containerStore.RemainingResources(logger)
+			Expect(remainingResources).To(Equal(totalCapacity))
 		})
 
 		Context("when destroying the garden container fails", func() {
@@ -985,6 +1020,25 @@ var _ = Describe("Container Store", func() {
 				It("returns an error", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
+				})
+
+				It("does not remove the container from the container store", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.Guid).To(Equal(containerGuid))
+				})
+
+				It("does not return the resources", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+
+					resources := containerStore.RemainingResources(logger)
+					expectedResources := totalCapacity.Copy()
+					expectedResources.Subtract(&resource)
+					Expect(resources).To(Equal(expectedResources))
 				})
 			})
 		})
@@ -1247,10 +1301,11 @@ var _ = Describe("Container Store", func() {
 		var (
 			expirationTime time.Duration
 			process        ifrit.Process
+			resource       executor.Resource
 		)
 
 		BeforeEach(func() {
-			resource := executor.NewResource(512, 512, "")
+			resource = executor.NewResource(512, 512, "")
 			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
 
 			_, err := containerStore.Reserve(logger, &req)
@@ -1285,6 +1340,12 @@ var _ = Describe("Container Store", func() {
 				Consistently(func() []executor.Container {
 					return containerStore.List(logger)
 				}).Should(HaveLen(2))
+
+				resources := containerStore.RemainingResources(logger)
+				expectedResources := totalCapacity.Copy()
+				expectedResources.Subtract(&resource)
+				expectedResources.Subtract(&resource)
+				Expect(resources).To(Equal(expectedResources))
 			})
 		})
 
@@ -1298,6 +1359,11 @@ var _ = Describe("Container Store", func() {
 					return containerStore.List(logger)
 				}).Should(HaveLen(1))
 				Expect(containerStore.List(logger)[0].Guid).To(Equal("eventually-initialized"))
+
+				resources := containerStore.RemainingResources(logger)
+				expectedResources := totalCapacity.Copy()
+				expectedResources.Subtract(&resource)
+				Expect(resources).To(Equal(expectedResources))
 			})
 		})
 	})
@@ -1375,9 +1441,13 @@ var _ = Describe("Container Store", func() {
 				return containerStore.List(logger)
 			}).Should(HaveLen(3))
 
-			Expect(gardenClient.ContainersCallCount()).To(Equal(1))
+			Expect(gardenClient.ContainersCallCount()).To(Equal(2))
+
 			properties := gardenClient.ContainersArgsForCall(0)
 			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
+			properties = gardenClient.ContainersArgsForCall(1)
+			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
+
 			Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 			Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(extraGardenContainer.Handle()))
 

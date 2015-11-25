@@ -107,6 +107,14 @@ type FakeContainerStore struct {
 		result1 map[string]executor.ContainerMetrics
 		result2 error
 	}
+	RemainingResourcesStub        func(logger lager.Logger) executor.ExecutorResources
+	remainingResourcesMutex       sync.RWMutex
+	remainingResourcesArgsForCall []struct {
+		logger lager.Logger
+	}
+	remainingResourcesReturns struct {
+		result1 executor.ExecutorResources
+	}
 	GetFilesStub        func(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
 	getFilesMutex       sync.RWMutex
 	getFilesArgsForCall []struct {
@@ -470,6 +478,38 @@ func (fake *FakeContainerStore) MetricsReturns(result1 map[string]executor.Conta
 		result1 map[string]executor.ContainerMetrics
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeContainerStore) RemainingResources(logger lager.Logger) executor.ExecutorResources {
+	fake.remainingResourcesMutex.Lock()
+	fake.remainingResourcesArgsForCall = append(fake.remainingResourcesArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.remainingResourcesMutex.Unlock()
+	if fake.RemainingResourcesStub != nil {
+		return fake.RemainingResourcesStub(logger)
+	} else {
+		return fake.remainingResourcesReturns.result1
+	}
+}
+
+func (fake *FakeContainerStore) RemainingResourcesCallCount() int {
+	fake.remainingResourcesMutex.RLock()
+	defer fake.remainingResourcesMutex.RUnlock()
+	return len(fake.remainingResourcesArgsForCall)
+}
+
+func (fake *FakeContainerStore) RemainingResourcesArgsForCall(i int) lager.Logger {
+	fake.remainingResourcesMutex.RLock()
+	defer fake.remainingResourcesMutex.RUnlock()
+	return fake.remainingResourcesArgsForCall[i].logger
+}
+
+func (fake *FakeContainerStore) RemainingResourcesReturns(result1 executor.ExecutorResources) {
+	fake.RemainingResourcesStub = nil
+	fake.remainingResourcesReturns = struct {
+		result1 executor.ExecutorResources
+	}{result1}
 }
 
 func (fake *FakeContainerStore) GetFiles(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {

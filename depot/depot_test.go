@@ -84,111 +84,28 @@ var _ = Describe("Depot", func() {
 		Context("when allocating multiple valid containers", func() {
 			var requests []executor.AllocationRequest
 
-			Context("when total required resources are within executor resource limits", func() {
-				BeforeEach(func() {
-					requests = []executor.AllocationRequest{
-						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
-						newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
-						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
-					}
-				})
-
-				It("should allocate all the containers", func() {
-					errMessageMap, err := depotClient.AllocateContainers(requests)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(errMessageMap).To(BeEmpty())
-
-					Expect(containerStore.ReserveCallCount()).To(Equal(3))
-					_, request := containerStore.ReserveArgsForCall(0)
-					Expect(*request).To(Equal(requests[0]))
-
-					_, request = containerStore.ReserveArgsForCall(1)
-					Expect(*request).To(Equal(requests[1]))
-
-					_, request = containerStore.ReserveArgsForCall(2)
-					Expect(*request).To(Equal(requests[2]))
-				})
+			BeforeEach(func() {
+				requests = []executor.AllocationRequest{
+					newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
+				}
 			})
 
-			Context("when required memory is more than executor resource limits", func() {
-				BeforeEach(func() {
-					requests = []executor.AllocationRequest{
-						newAllocationRequest("guid-1", 512, defaultDiskMB),
-						newAllocationRequest("guid-2", 512, defaultDiskMB),
-						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
-					}
-				})
+			It("should allocate all the containers", func() {
+				errMessageMap, err := depotClient.AllocateContainers(requests)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessageMap).To(BeEmpty())
 
-				It("should allocate first few containers that can fit the available resources", func() {
-					failures, err := depotClient.AllocateContainers(requests)
-					Expect(err).NotTo(HaveOccurred())
+				Expect(containerStore.ReserveCallCount()).To(Equal(3))
+				_, request := containerStore.ReserveArgsForCall(0)
+				Expect(*request).To(Equal(requests[0]))
 
-					Expect(failures).To(HaveLen(1))
-					expectedFailure := executor.NewAllocationFailure(&requests[2], executor.ErrInsufficientResourcesAvailable.Error())
-					Expect(failures[0]).To(BeEquivalentTo(expectedFailure))
+				_, request = containerStore.ReserveArgsForCall(1)
+				Expect(*request).To(Equal(requests[1]))
 
-					Expect(containerStore.ReserveCallCount()).To(Equal(len(requests) - 1))
-
-					_, request := containerStore.ReserveArgsForCall(0)
-					Expect(*request).To(Equal(requests[0]))
-					_, request = containerStore.ReserveArgsForCall(1)
-					Expect(*request).To(Equal(requests[1]))
-				})
-			})
-
-			Context("when required disk space is more than executor resource limits", func() {
-				BeforeEach(func() {
-					requests = []executor.AllocationRequest{
-						newAllocationRequest("guid-1", defaultMemoryMB, 512),
-						newAllocationRequest("guid-2", defaultMemoryMB, 512),
-						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
-					}
-				})
-
-				It("should allocate first few containers that can fit the available resources", func() {
-					failures, err := depotClient.AllocateContainers(requests)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(failures).To(HaveLen(1))
-					expectedFailure := executor.NewAllocationFailure(&requests[2], executor.ErrInsufficientResourcesAvailable.Error())
-					Expect(failures[0]).To(BeEquivalentTo(expectedFailure))
-
-					Expect(containerStore.ReserveCallCount()).To(Equal(len(requests) - 1))
-
-					_, request := containerStore.ReserveArgsForCall(0)
-					Expect(*request).To(Equal(requests[0]))
-					_, request = containerStore.ReserveArgsForCall(1)
-					Expect(*request).To(Equal(requests[1]))
-				})
-			})
-
-			Context("when required number of containers is more than what executor can allocate", func() {
-				BeforeEach(func() {
-					requests = []executor.AllocationRequest{
-						newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
-						newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
-						newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
-						newAllocationRequest("guid-4", defaultMemoryMB, defaultDiskMB),
-					}
-				})
-
-				It("should allocate first few containers that can fit the available resources", func() {
-					failures, err := depotClient.AllocateContainers(requests)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(failures).To(HaveLen(1))
-					expectedFailure := executor.NewAllocationFailure(&requests[3], executor.ErrInsufficientResourcesAvailable.Error())
-					Expect(failures[0]).To(BeEquivalentTo(expectedFailure))
-
-					Expect(containerStore.ReserveCallCount()).To(Equal(len(requests) - 1))
-
-					_, request := containerStore.ReserveArgsForCall(0)
-					Expect(*request).To(Equal(requests[0]))
-					_, request = containerStore.ReserveArgsForCall(1)
-					Expect(*request).To(Equal(requests[1]))
-					_, request = containerStore.ReserveArgsForCall(2)
-					Expect(*request).To(Equal(requests[2]))
-				})
+				_, request = containerStore.ReserveArgsForCall(2)
+				Expect(*request).To(Equal(requests[2]))
 			})
 		})
 
@@ -750,49 +667,17 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("RemainingResources", func() {
-		Context("when no containers are running or allocated", func() {
-			BeforeEach(func() {
-				containerStore.ListReturns([]executor.Container{})
-			})
+		var resources executor.ExecutorResources
 
-			It("should return the total resources", func() {
-				Expect(depotClient.RemainingResources()).To(Equal(resources))
-			})
+		BeforeEach(func() {
+			resources = executor.NewExecutorResources(1024, 1024, 3)
+			containerStore.RemainingResourcesReturns(resources)
 		})
 
-		Context("when some containers are running", func() {
-			BeforeEach(func() {
-				containerStore.ListReturns([]executor.Container{
-					{Resource: executor.Resource{MemoryMB: defaultMemoryMB, DiskMB: defaultDiskMB}},
-					{Resource: executor.Resource{MemoryMB: defaultMemoryMB, DiskMB: defaultDiskMB}},
-					{Resource: executor.Resource{MemoryMB: defaultMemoryMB, DiskMB: defaultDiskMB}},
-				})
-			})
-
-			It("should reduce resources used by allocated and running containers", func() {
-				Expect(depotClient.RemainingResources()).To(Equal(executor.ExecutorResources{
-					MemoryMB:   256,
-					DiskMB:     256,
-					Containers: 0,
-				}))
-			})
-		})
-	})
-
-	Describe("RemainingResourcesFrom", func() {
-		It("returns the available resources from a container snapshot", func() {
-			containers := []executor.Container{
-				newRunningContainer(newRunRequest("guid-1"), executor.Resource{
-					MemoryMB: defaultMemoryMB,
-					DiskMB:   defaultDiskMB,
-				}),
-			}
-
-			execResources, err := depotClient.RemainingResourcesFrom(containers)
+		It("should reduce resources used by allocated and running containers", func() {
+			actualResources, err := depotClient.RemainingResources()
 			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resources.Subtract(&containers[0].Resource)).To(BeTrue())
-			Expect(execResources).To(Equal(resources))
+			Expect(actualResources).To(Equal(resources))
 		})
 	})
 

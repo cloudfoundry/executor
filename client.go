@@ -18,7 +18,6 @@ type Client interface {
 	ListContainers() ([]Container, error)
 	GetBulkMetrics() (map[string]Metrics, error)
 	RemainingResources() (ExecutorResources, error)
-	RemainingResourcesFrom([]Container) (ExecutorResources, error)
 	TotalResources() (ExecutorResources, error)
 	GetFiles(guid string, path string) (io.ReadCloser, error)
 	SubscribeToEvents() (EventSource, error)

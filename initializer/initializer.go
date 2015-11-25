@@ -170,10 +170,12 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 
 	hub := event.NewHub()
 
+	totalCapacity := fetchCapacity(logger, gardenClient, config)
 	containerStore := containerstore.New(
 		config.ContainerOwnerName,
 		config.ContainerInodeLimit,
 		config.ContainerMaxCpuShares,
+		&totalCapacity,
 		gardenClient,
 		clock,
 		hub,
@@ -190,7 +192,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	}
 
 	depotClientProvider, err := depot.NewClientProvider(
-		fetchCapacity(logger, gardenClient, config),
+		totalCapacity,
 		containerStore,
 		gardenStore,
 		hub,
