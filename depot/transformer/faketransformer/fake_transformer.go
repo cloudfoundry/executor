@@ -27,12 +27,13 @@ type FakeTransformer struct {
 	stepForReturns struct {
 		result1 steps.Step
 	}
-	StepsForContainerStub        func(lager.Logger, executor.Container, log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error)
+	StepsForContainerStub        func(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error)
 	stepsForContainerMutex       sync.RWMutex
 	stepsForContainerArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 executor.Container
-		arg3 log_streamer.LogStreamer
+		arg3 garden.Container
+		arg4 log_streamer.LogStreamer
 	}
 	stepsForContainerReturns struct {
 		result1 steps.Step
@@ -78,16 +79,17 @@ func (fake *FakeTransformer) StepForReturns(result1 steps.Step) {
 	}{result1}
 }
 
-func (fake *FakeTransformer) StepsForContainer(arg1 lager.Logger, arg2 executor.Container, arg3 log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error) {
+func (fake *FakeTransformer) StepsForContainer(arg1 lager.Logger, arg2 executor.Container, arg3 garden.Container, arg4 log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error) {
 	fake.stepsForContainerMutex.Lock()
 	fake.stepsForContainerArgsForCall = append(fake.stepsForContainerArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 executor.Container
-		arg3 log_streamer.LogStreamer
-	}{arg1, arg2, arg3})
+		arg3 garden.Container
+		arg4 log_streamer.LogStreamer
+	}{arg1, arg2, arg3, arg4})
 	fake.stepsForContainerMutex.Unlock()
 	if fake.StepsForContainerStub != nil {
-		return fake.StepsForContainerStub(arg1, arg2, arg3)
+		return fake.StepsForContainerStub(arg1, arg2, arg3, arg4)
 	} else {
 		return fake.stepsForContainerReturns.result1, fake.stepsForContainerReturns.result2, fake.stepsForContainerReturns.result3
 	}
@@ -99,10 +101,10 @@ func (fake *FakeTransformer) StepsForContainerCallCount() int {
 	return len(fake.stepsForContainerArgsForCall)
 }
 
-func (fake *FakeTransformer) StepsForContainerArgsForCall(i int) (lager.Logger, executor.Container, log_streamer.LogStreamer) {
+func (fake *FakeTransformer) StepsForContainerArgsForCall(i int) (lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) {
 	fake.stepsForContainerMutex.RLock()
 	defer fake.stepsForContainerMutex.RUnlock()
-	return fake.stepsForContainerArgsForCall[i].arg1, fake.stepsForContainerArgsForCall[i].arg2, fake.stepsForContainerArgsForCall[i].arg3
+	return fake.stepsForContainerArgsForCall[i].arg1, fake.stepsForContainerArgsForCall[i].arg2, fake.stepsForContainerArgsForCall[i].arg3, fake.stepsForContainerArgsForCall[i].arg4
 }
 
 func (fake *FakeTransformer) StepsForContainerReturns(result1 steps.Step, result2 <-chan struct{}, result3 error) {

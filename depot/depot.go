@@ -41,7 +41,7 @@ type clientProvider struct {
 
 //go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
 type GardenStore interface {
-	// WTF
+	// This should probably live somewhere else.
 	Ping() error
 }
 
@@ -276,7 +276,6 @@ func (c *client) DeleteContainer(guid string) error {
 
 	errChannel := make(chan error, 1)
 	c.deletionWorkPool.Submit(func() {
-
 		c.containerLockManager.Lock(logger, guid)
 		defer c.containerLockManager.Unlock(logger, guid)
 
