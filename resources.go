@@ -176,6 +176,10 @@ func NewExecutorResources(memoryMB, diskMB, containers int) ExecutorResources {
 	}
 }
 
+func (e ExecutorResources) Copy() ExecutorResources {
+	return e
+}
+
 func (r *ExecutorResources) canSubtract(res *Resource) bool {
 	return r.MemoryMB >= res.MemoryMB && r.DiskMB >= res.DiskMB && r.Containers > 0
 }
@@ -188,6 +192,12 @@ func (r *ExecutorResources) Subtract(res *Resource) bool {
 	r.DiskMB -= res.DiskMB
 	r.Containers -= 1
 	return true
+}
+
+func (r *ExecutorResources) Add(res *Resource) {
+	r.MemoryMB += res.MemoryMB
+	r.DiskMB += res.DiskMB
+	r.Containers += 1
 }
 
 type Tags map[string]string

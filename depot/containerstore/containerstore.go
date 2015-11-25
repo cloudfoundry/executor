@@ -41,6 +41,7 @@ type ContainerStore interface {
 	Get(logger lager.Logger, guid string) (executor.Container, error)
 	List(logger lager.Logger) []executor.Container
 	Metrics(logger lager.Logger) (map[string]executor.ContainerMetrics, error)
+	RemainingResources(logger lager.Logger) executor.ExecutorResources
 
 	// Hopefully on container?
 	GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
@@ -76,6 +77,7 @@ func New(
 	ownerName string,
 	iNodeLimit uint64,
 	maxCPUShares uint64,
+	totalCapacity *executor.ExecutorResources,
 	gardenClient garden.Client,
 	clock clock.Clock,
 	eventEmitter event.Hub,
@@ -86,7 +88,7 @@ func New(
 		iNodeLimit:       iNodeLimit,
 		maxCPUShares:     maxCPUShares,
 		gardenClient:     gardenClient,
-		containers:       newNodeMap(),
+		containers:       newNodeMap(totalCapacity),
 		runningProcesses: map[string]runningProcess{},
 		eventEmitter:     eventEmitter,
 		transformer:      transformer,
@@ -477,8 +479,6 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 		logger.Error("failed-to-stop", err)
 	}
 
-	cs.containers.Remove(guid)
-
 	logger.Debug("destroying-garden-container")
 	err = cs.gardenClient.Destroy(guid)
 	if err != nil {
@@ -490,6 +490,8 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 		return err
 	}
 	logger.Debug("destroyed-garden-container")
+
+	cs.containers.Remove(guid)
 
 	return nil
 }
@@ -550,6 +552,10 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 	}
 
 	return containerMetrics, nil
+}
+
+func (cs *containerStore) RemainingResources(logger lager.Logger) executor.ExecutorResources {
+	return cs.containers.RemainingResources()
 }
 
 func (cs *containerStore) GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error) {
@@ -623,37 +629,14 @@ func (cs *containerStore) ContainerReaper(logger lager.Logger, reapInterval time
 		for {
 			select {
 			case <-timer.C():
-				properties := garden.Properties{
-					ContainerOwnerProperty: cs.ownerName,
-				}
-
-				gardenContainers, err := cs.gardenClient.Containers(properties)
+				err := cs.reapExtraGardenContainers(logger)
 				if err != nil {
-					logger.Error("failed-to-fetch-containers", err)
-					break
+					logger.Error("failed-to-reap-extra-containers", err)
 				}
 
-				handles := make(map[string]struct{})
-				for _, gardenContainer := range gardenContainers {
-					handles[gardenContainer.Handle()] = struct{}{}
-				}
-
-				nodes := cs.containers.List()
-				for i := range nodes {
-					node := &nodes[i]
-					_, ok := handles[node.Guid]
-					if !ok && node.IsCreated() {
-						cs.containers.Remove(node.Guid)
-					}
-				}
-
-				for key := range handles {
-					if !cs.containers.Contains(key) {
-						err := cs.gardenClient.Destroy(key)
-						if err != nil {
-							logger.Error("failed-to-destroy-container", err)
-						}
-					}
+				err = cs.reapMissingGardenContainers(logger)
+				if err != nil {
+					logger.Error("failed-to-reap-missing-containers", err)
 				}
 
 			case <-signals:
@@ -665,4 +648,59 @@ func (cs *containerStore) ContainerReaper(logger lager.Logger, reapInterval time
 
 		return nil
 	})
+}
+
+func (cs *containerStore) reapExtraGardenContainers(logger lager.Logger) error {
+	handles, err := cs.fetchGardenContainerHandles(logger)
+	if err != nil {
+		return err
+	}
+
+	for key := range handles {
+		if !cs.containers.Contains(key) {
+			err := cs.gardenClient.Destroy(key)
+			if err != nil {
+				logger.Error("failed-to-destroy-container", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (cs *containerStore) reapMissingGardenContainers(logger lager.Logger) error {
+	nodes := cs.containers.List()
+
+	handles, err := cs.fetchGardenContainerHandles(logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range nodes {
+		node := &nodes[i]
+		_, ok := handles[node.Guid]
+		if !ok && node.IsCreated() {
+			cs.containers.Remove(node.Guid)
+		}
+	}
+
+	return nil
+}
+
+func (cs *containerStore) fetchGardenContainerHandles(logger lager.Logger) (map[string]struct{}, error) {
+	properties := garden.Properties{
+		ContainerOwnerProperty: cs.ownerName,
+	}
+
+	gardenContainers, err := cs.gardenClient.Containers(properties)
+	if err != nil {
+		logger.Error("failed-to-fetch-containers", err)
+		return nil, err
+	}
+
+	handles := make(map[string]struct{})
+	for _, gardenContainer := range gardenContainers {
+		handles[gardenContainer.Handle()] = struct{}{}
+	}
+	return handles, nil
 }

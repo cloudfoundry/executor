@@ -23,12 +23,16 @@ func newStoreNode(container executor.Container) storeNode {
 type nodeMap struct {
 	nodes map[string]storeNode
 	lock  *sync.RWMutex
+
+	remainingResources *executor.ExecutorResources
 }
 
-func newNodeMap() nodeMap {
+func newNodeMap(totalCapacity *executor.ExecutorResources) nodeMap {
+	capacity := totalCapacity.Copy()
 	return nodeMap{
-		nodes: make(map[string]storeNode),
-		lock:  &sync.RWMutex{},
+		nodes:              make(map[string]storeNode),
+		lock:               &sync.RWMutex{},
+		remainingResources: &capacity,
 	}
 }
 
@@ -39,12 +43,23 @@ func (n nodeMap) Contains(guid string) bool {
 	return ok
 }
 
+func (n nodeMap) RemainingResources() executor.ExecutorResources {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+	return n.remainingResources.Copy()
+}
+
 func (n nodeMap) Add(node storeNode) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	if _, ok := n.nodes[node.Guid]; ok {
 		return executor.ErrContainerGuidNotAvailable
+	}
+
+	ok := n.remainingResources.Subtract(&node.Resource)
+	if !ok {
+		return executor.ErrInsufficientResourcesAvailable
 	}
 
 	n.nodes[node.Guid] = node
@@ -56,7 +71,12 @@ func (n nodeMap) Remove(guid string) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	delete(n.nodes, guid)
+	node, ok := n.nodes[guid]
+	if !ok {
+		return
+	}
+
+	n.remove(node)
 }
 
 func (n nodeMap) Get(guid string) (storeNode, error) {
@@ -114,7 +134,11 @@ func (n nodeMap) CAD(node storeNode) error {
 		return ErrFailedToCAS
 	}
 
-	delete(n.nodes, node.Guid)
-
+	n.remove(node)
 	return nil
+}
+
+func (n nodeMap) remove(node storeNode) {
+	n.remainingResources.Add(&node.Resource)
+	delete(n.nodes, node.Guid)
 }
