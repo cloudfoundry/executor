@@ -10,7 +10,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
-	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock/fakelockmanager"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -34,7 +33,6 @@ var _ = Describe("Depot", func() {
 		gardenStore    *fakes.FakeGardenStore
 		containerStore *containerstorefakes.FakeContainerStore
 		resources      executor.ExecutorResources
-		lockManager    *fakelockmanager.FakeLockManager
 	)
 
 	BeforeEach(func() {
@@ -50,7 +48,6 @@ var _ = Describe("Depot", func() {
 			Containers: 3,
 		}
 
-		lockManager = &fakelockmanager.FakeLockManager{}
 		workPoolSettings := executor.WorkPoolSettings{
 			CreateWorkPoolSize:  5,
 			DeleteWorkPoolSize:  5,
@@ -58,7 +55,7 @@ var _ = Describe("Depot", func() {
 			MetricsWorkPoolSize: 5,
 		}
 
-		d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, lockManager, workPoolSettings)
+		d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, workPoolSettings)
 		Expect(err).NotTo(HaveOccurred())
 
 		depotClient = d.WithLogger(logger)
@@ -294,24 +291,6 @@ var _ = Describe("Depot", func() {
 				_, guid = containerStore.RunArgsForCall(0)
 				Expect(guid).To(Equal(gardenStoreGuid))
 			})
-
-			It("allocates and drops the container lock", func() {
-				initialLockCount := lockManager.LockCallCount()
-				initialUnlockCount := lockManager.UnlockCallCount()
-
-				err := depotClient.RunContainer(runRequest)
-				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(containerStore.RunCallCount).Should(Equal(1))
-
-				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount + 1))
-				_, guid := lockManager.LockArgsForCall(initialLockCount)
-				Expect(guid).To(Equal(gardenStoreGuid))
-
-				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount + 1))
-				_, guid = lockManager.UnlockArgsForCall(initialLockCount)
-				Expect(guid).To(Equal(gardenStoreGuid))
-			})
 		})
 
 		Context("when the container fails to initialize", func() {
@@ -323,20 +302,6 @@ var _ = Describe("Depot", func() {
 				err := depotClient.RunContainer(newRunRequest("missing-guid"))
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
-			})
-
-			It("does not allocate and drop the container lock", func() {
-				initialLockCount := lockManager.LockCallCount()
-				initialUnlockCount := lockManager.UnlockCallCount()
-
-				err := depotClient.RunContainer(newRunRequest("missing-guid"))
-				Expect(err).To(HaveOccurred())
-
-				Consistently(containerStore.CreateCallCount).Should(Equal(0))
-				Consistently(containerStore.RunCallCount).Should(Equal(0))
-
-				Expect(lockManager.LockCallCount()).To(Equal(initialLockCount))
-				Expect(lockManager.UnlockCallCount()).To(Equal(initialUnlockCount))
 			})
 		})
 
@@ -397,7 +362,7 @@ var _ = Describe("Depot", func() {
 				MetricsWorkPoolSize: 5,
 			}
 
-			d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, lockManager, workPoolSettings)
+			d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, workPoolSettings)
 			Expect(err).NotTo(HaveOccurred())
 
 			depotClient = d.WithLogger(logger)
@@ -702,18 +667,6 @@ var _ = Describe("Depot", func() {
 			}
 		})
 
-		It("allocates and drops the container lock", func() {
-			depotClient.DeleteContainer("guid-1")
-
-			Expect(lockManager.LockCallCount()).To(Equal(1))
-			_, guid := lockManager.LockArgsForCall(0)
-			Expect(guid).To(Equal("guid-1"))
-
-			Expect(lockManager.UnlockCallCount()).To(Equal(1))
-			_, guid = lockManager.UnlockArgsForCall(0)
-			Expect(guid).To(Equal("guid-1"))
-		})
-
 		It("removes the container from the container store", func() {
 			err := depotClient.DeleteContainer("guid-1")
 			Expect(err).NotTo(HaveOccurred())
@@ -746,16 +699,6 @@ var _ = Describe("Depot", func() {
 
 		JustBeforeEach(func() {
 			stopError = depotClient.StopContainer(stopGuid)
-		})
-
-		It("allocates and drops the container lock", func() {
-			Expect(lockManager.LockCallCount()).To(Equal(1))
-			_, guid := lockManager.LockArgsForCall(0)
-			Expect(guid).To(Equal(stopGuid))
-
-			Expect(lockManager.UnlockCallCount()).To(Equal(1))
-			_, guid = lockManager.UnlockArgsForCall(0)
-			Expect(guid).To(Equal(stopGuid))
 		})
 
 		It("stops the container in the container store", func() {

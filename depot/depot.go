@@ -8,7 +8,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
@@ -24,16 +23,15 @@ type client struct {
 }
 
 type clientProvider struct {
-	totalCapacity        executor.ExecutorResources
-	containerStore       containerstore.ContainerStore
-	gardenStore          GardenStore
-	eventHub             event.Hub
-	containerLockManager keyed_lock.LockManager
-	resourcesLock        *sync.Mutex
-	creationWorkPool     *workpool.WorkPool
-	deletionWorkPool     *workpool.WorkPool
-	readWorkPool         *workpool.WorkPool
-	metricsWorkPool      *workpool.WorkPool
+	totalCapacity    executor.ExecutorResources
+	containerStore   containerstore.ContainerStore
+	gardenStore      GardenStore
+	eventHub         event.Hub
+	resourcesLock    *sync.Mutex
+	creationWorkPool *workpool.WorkPool
+	deletionWorkPool *workpool.WorkPool
+	readWorkPool     *workpool.WorkPool
+	metricsWorkPool  *workpool.WorkPool
 
 	healthyLock sync.RWMutex
 	healthy     bool
@@ -50,7 +48,6 @@ func NewClientProvider(
 	containerStore containerstore.ContainerStore,
 	gardenStore GardenStore,
 	eventHub event.Hub,
-	lockManager keyed_lock.LockManager,
 	workPoolSettings executor.WorkPoolSettings,
 ) (executor.ClientProvider, error) {
 	creationWorkPool, err := workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize)
@@ -71,17 +68,16 @@ func NewClientProvider(
 	}
 
 	return &clientProvider{
-		totalCapacity:        totalCapacity,
-		containerStore:       containerStore,
-		gardenStore:          gardenStore,
-		eventHub:             eventHub,
-		containerLockManager: lockManager,
-		resourcesLock:        new(sync.Mutex),
-		creationWorkPool:     creationWorkPool,
-		deletionWorkPool:     deletionWorkPool,
-		readWorkPool:         readWorkPool,
-		metricsWorkPool:      metricsWorkPool,
-		healthy:              true,
+		totalCapacity:    totalCapacity,
+		containerStore:   containerStore,
+		gardenStore:      gardenStore,
+		eventHub:         eventHub,
+		resourcesLock:    new(sync.Mutex),
+		creationWorkPool: creationWorkPool,
+		deletionWorkPool: deletionWorkPool,
+		readWorkPool:     readWorkPool,
+		metricsWorkPool:  metricsWorkPool,
+		healthy:          true,
 	}, nil
 }
 
@@ -170,9 +166,6 @@ func (c *client) RunContainer(request *executor.RunRequest) error {
 
 func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() {
 	return func() {
-		c.containerLockManager.Lock(logger, guid)
-		defer c.containerLockManager.Unlock(logger, guid)
-
 		logger.Info("creating-container-in-garden")
 		startTime := time.Now()
 		_, err := c.containerStore.Create(logger, guid)
@@ -262,9 +255,6 @@ func (c *client) StopContainer(guid string) error {
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	c.containerLockManager.Lock(logger, guid)
-	defer c.containerLockManager.Unlock(logger, guid)
-
 	return c.containerStore.Stop(c.logger, guid)
 }
 
@@ -276,9 +266,6 @@ func (c *client) DeleteContainer(guid string) error {
 
 	errChannel := make(chan error, 1)
 	c.deletionWorkPool.Submit(func() {
-		c.containerLockManager.Lock(logger, guid)
-		defer c.containerLockManager.Unlock(logger, guid)
-
 		errChannel <- c.containerStore.Destroy(logger, guid)
 	})
 
