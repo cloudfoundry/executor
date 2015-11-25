@@ -56,7 +56,6 @@ var _ = Describe("Transformer", func() {
 			)
 
 			container = executor.Container{
-				GardenContainer: gardenContainer,
 				RunInfo: executor.RunInfo{
 					Setup: &models.Action{
 						RunAction: &models.RunAction{
@@ -83,7 +82,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, _, err := optimusPrime.StepsForContainer(logger, container, logStreamer)
+				_, _, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -101,7 +100,7 @@ var _ = Describe("Transformer", func() {
 			}
 			monitorProcess.WaitReturns(1, errors.New("boom"))
 
-			action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, logStreamer)
+			action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 
 			errCh := make(chan error)
@@ -149,7 +148,7 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
 
-				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, logStreamer)
+				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				errCh := make(chan error)
@@ -182,7 +181,7 @@ var _ = Describe("Transformer", func() {
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
 				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
 
-				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, logStreamer)
+				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				errCh := make(chan error)
