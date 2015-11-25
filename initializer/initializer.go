@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/gardenstore"
-	"github.com/cloudfoundry-incubator/executor/depot/keyed_lock"
 	"github.com/cloudfoundry-incubator/executor/depot/metrics"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
@@ -195,7 +194,6 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		containerStore,
 		gardenStore,
 		hub,
-		keyed_lock.NewLockManager(),
 		workPoolSettings,
 	)
 	if err != nil {
