@@ -536,12 +536,14 @@ var _ = Describe("Container Store", func() {
 				var (
 					finishInfo, infoCalled chan struct{}
 					createErrCh            chan error
+					done                   chan struct{}
 				)
 
 				BeforeEach(func() {
 					finishInfo = make(chan struct{})
 					infoCalled = make(chan struct{})
 					createErrCh = make(chan error)
+					done = make(chan struct{})
 
 					gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
 						close(infoCalled)
@@ -559,10 +561,12 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Fail(logger, containerGuid, "i failed.")
 					Expect(err).NotTo(HaveOccurred())
 					close(finishInfo)
+
+					Eventually(createErrCh).Should(Receive(Equal(containerstore.ErrFailedToCAS)))
 				})
 
-				It("returns an error", func() {
-					Eventually(createErrCh).Should(Receive(Equal(containerstore.ErrFailedToCAS)))
+				AfterEach(func() {
+					close(done)
 				})
 
 				It("deletes the garden container", func() {
@@ -570,8 +574,6 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("does not update the container in the container store", func() {
-					Eventually(createErrCh).Should(Receive(Equal(containerstore.ErrFailedToCAS)))
-
 					container, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -626,6 +628,7 @@ var _ = Describe("Container Store", func() {
 				actionStep        *stepfakes.FakeStep
 				healthCheckPassed chan struct{}
 				finishPerforming  chan struct{}
+				done              chan struct{}
 				result            error
 			)
 
@@ -648,15 +651,18 @@ var _ = Describe("Container Store", func() {
 
 				megatron.StepsForContainerReturns(actionStep, healthCheckPassed, nil)
 
-				finishPerforming = make(chan struct{})
-
-				actionStep.PerformStub = func() error {
-					<-finishPerforming
-					return result
-				}
+				finishPerforming = make(chan struct{}, 1)
+				done = make(chan struct{})
 			})
 
 			JustBeforeEach(func() {
+				errResult := result
+				actionStep.PerformStub = func() error {
+					<-finishPerforming
+					close(done)
+					return errResult
+				}
+
 				_, err := containerStore.Reserve(logger, allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -665,6 +671,11 @@ var _ = Describe("Container Store", func() {
 
 				_, err = containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				close(finishPerforming)
+				Eventually(done).Should(BeClosed())
 			})
 
 			It("performs the step", func() {
@@ -703,13 +714,11 @@ var _ = Describe("Container Store", func() {
 				Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
 				event := eventEmitter.EmitArgsForCall(1)
 				Expect(event).To(Equal(executor.ContainerRunningEvent{RawContainer: container}))
-
-				close(finishPerforming)
 			})
 
 			Context("when the action exits", func() {
 				BeforeEach(func() {
-					close(finishPerforming)
+					finishPerforming <- struct{}{}
 				})
 
 				It("sets its state to completed", func() {
@@ -780,6 +789,7 @@ var _ = Describe("Container Store", func() {
 				It("returns an error", func() {
 					err := containerStore.Run(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
+					close(done)
 				})
 			})
 		})
