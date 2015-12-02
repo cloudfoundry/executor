@@ -55,7 +55,7 @@ func (newContainer Container) Copy() Container {
 }
 
 func (c *Container) IsCreated() bool {
-	return c.State != StateReserved && c.State != StateInitializing
+	return c.State != StateReserved && c.State != StateInitializing && c.State != StateCompleted
 }
 
 func (c *Container) HasTags(tags Tags) bool {

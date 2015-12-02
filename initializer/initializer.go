@@ -56,7 +56,8 @@ type Configuration struct {
 	GardenNetwork string
 	GardenAddr    string
 
-	ContainerOwnerName string
+	ContainerOwnerName            string
+	HealthCheckContainerOwnerName string
 
 	TempDir              string
 	CachePath            string
@@ -119,6 +120,7 @@ var DefaultConfiguration = Configuration{
 	UnhealthyMonitoringInterval:        500 * time.Millisecond,
 	ExportNetworkEnvVars:               false,
 	ContainerOwnerName:                 "executor",
+	HealthCheckContainerOwnerName:      "executor-health-check",
 	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
 	DeleteWorkPoolSize:                 defaultDeleteWorkPoolSize,
 	ReadWorkPoolSize:                   defaultReadWorkPoolSize,
@@ -212,7 +214,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 
 	gardenHealthcheck := gardenhealth.NewChecker(
 		config.GardenHealthcheckRootFS,
-		config.ContainerOwnerName,
+		config.HealthCheckContainerOwnerName,
 		config.GardenHealthcheckCommandRetryPause,
 		healthcheckSpec,
 		gardenClient,

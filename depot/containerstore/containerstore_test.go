@@ -1380,9 +1380,10 @@ var _ = Describe("Container Store", func() {
 
 	Describe("ContainerReaper", func() {
 		var (
-			containerGuid1, containerGuid2, containerGuid3, containerGuid4, containerGuid5 string
-			process                                                                        ifrit.Process
-			extraGardenContainer                                                           *gfakes.FakeContainer
+			containerGuid1, containerGuid2, containerGuid3 string
+			containerGuid4, containerGuid5, containerGuid6 string
+			process                                        ifrit.Process
+			extraGardenContainer                           *gfakes.FakeContainer
 		)
 
 		BeforeEach(func() {
@@ -1393,6 +1394,7 @@ var _ = Describe("Container Store", func() {
 			containerGuid3 = "container-guid-3"
 			containerGuid4 = "container-guid-4"
 			containerGuid5 = "container-guid-5"
+			containerGuid6 = "container-guid-6"
 
 			// Reserve
 			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1})
@@ -1405,6 +1407,8 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid5})
 			Expect(err).NotTo(HaveOccurred())
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid6})
+			Expect(err).NotTo(HaveOccurred())
 
 			// Initialize
 			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid2})
@@ -1415,6 +1419,8 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid5})
 			Expect(err).NotTo(HaveOccurred())
+			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid6})
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create Containers
 			_, err = containerStore.Create(logger, containerGuid3)
@@ -1422,6 +1428,10 @@ var _ = Describe("Container Store", func() {
 			_, err = containerStore.Create(logger, containerGuid4)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = containerStore.Create(logger, containerGuid5)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Fail One of the containers
+			_, err = containerStore.Fail(logger, containerGuid6, "failed-yo")
 			Expect(err).NotTo(HaveOccurred())
 
 			extraGardenContainer = &gfakes.FakeContainer{}
@@ -1443,13 +1453,13 @@ var _ = Describe("Container Store", func() {
 		It("removes containers that no longer have corresponding garden containers", func() {
 			Consistently(func() []executor.Container {
 				return containerStore.List(logger)
-			}).Should(HaveLen(5))
+			}).Should(HaveLen(6))
 
 			clock.Increment(30 * time.Millisecond)
 
 			Eventually(func() []executor.Container {
 				return containerStore.List(logger)
-			}).Should(HaveLen(3))
+			}).Should(HaveLen(4))
 
 			Expect(gardenClient.ContainersCallCount()).To(Equal(2))
 
@@ -1476,7 +1486,7 @@ var _ = Describe("Container Store", func() {
 
 				Consistently(func() []executor.Container {
 					return containerStore.List(logger)
-				}).Should(HaveLen(5))
+				}).Should(HaveLen(6))
 			})
 		})
 
