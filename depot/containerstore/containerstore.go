@@ -680,7 +680,7 @@ func (cs *containerStore) reapMissingGardenContainers(logger lager.Logger) error
 		node := &nodes[i]
 		_, ok := handles[node.Guid]
 		if !ok && node.IsCreated() {
-			cs.containers.Remove(node.Guid)
+			cs.complete(logger, *node, true, "container missing")
 		}
 	}
 

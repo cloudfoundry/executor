@@ -1450,16 +1450,36 @@ var _ = Describe("Container Store", func() {
 			ginkgomon.Interrupt(process)
 		})
 
-		It("removes containers that no longer have corresponding garden containers", func() {
-			Consistently(func() []executor.Container {
-				return containerStore.List(logger)
-			}).Should(HaveLen(6))
+		It("marks containers completed that no longer have corresponding garden containers", func() {
+			initialEmitCallCount := eventEmitter.EmitCallCount()
 
 			clock.Increment(30 * time.Millisecond)
 
-			Eventually(func() []executor.Container {
-				return containerStore.List(logger)
-			}).Should(HaveLen(4))
+			Eventually(func() executor.State {
+				container, err := containerStore.Get(logger, containerGuid4)
+				Expect(err).NotTo(HaveOccurred())
+				return container.State
+			}).Should(Equal(executor.StateCompleted))
+
+			Eventually(func() executor.State {
+				container, err := containerStore.Get(logger, containerGuid5)
+				Expect(err).NotTo(HaveOccurred())
+				return container.State
+			}).Should(Equal(executor.StateCompleted))
+
+			Expect(eventEmitter.EmitCallCount()).To(Equal(initialEmitCallCount + 2))
+
+			container4, err := containerStore.Get(logger, containerGuid4)
+			Expect(err).NotTo(HaveOccurred())
+			container5, err := containerStore.Get(logger, containerGuid5)
+			Expect(err).NotTo(HaveOccurred())
+
+			var events []executor.Event
+			events = append(events, eventEmitter.EmitArgsForCall(initialEmitCallCount))
+			events = append(events, eventEmitter.EmitArgsForCall(initialEmitCallCount+1))
+
+			Expect(events).To(ContainElement(executor.ContainerCompleteEvent{RawContainer: container4}))
+			Expect(events).To(ContainElement(executor.ContainerCompleteEvent{RawContainer: container5}))
 
 			Expect(gardenClient.ContainersCallCount()).To(Equal(2))
 
@@ -1468,11 +1488,9 @@ var _ = Describe("Container Store", func() {
 			properties = gardenClient.ContainersArgsForCall(1)
 			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
 
-			Expect(gardenClient.DestroyCallCount()).To(Equal(1))
-			Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(extraGardenContainer.Handle()))
-
 			clock.Increment(30 * time.Millisecond)
-			Eventually(gardenClient.ContainersCallCount).Should(Equal(2))
+
+			Eventually(gardenClient.ContainersCallCount).Should(Equal(4))
 		})
 
 		Context("when listing containers in garden fails", func() {
