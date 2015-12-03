@@ -23,6 +23,7 @@ import (
 	eventfakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	stepfakes "github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
+	"github.com/cloudfoundry-incubator/garden/server"
 )
 
 var _ = Describe("Container Store", func() {
@@ -1026,29 +1027,40 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
+			Context("because the garden container is already being destroyed", func() {
+				BeforeEach(func() {
+					destroyErr = server.ErrConcurrentDestroy
+				})
+
+				It("does not return an error", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			Context("for unknown reason", func() {
 				It("returns an error", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
 				})
 
-				It("does not remove the container from the container store", func() {
+				It("does remove the container from the container store", func() {
 					err := containerStore.Destroy(logger, containerGuid)
-					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(destroyErr))
 
-					container, err := containerStore.Get(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(container.Guid).To(Equal(containerGuid))
+					Expect(gardenClient.DestroyCallCount()).To(Equal(1))
+					Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
+
+					_, err = containerStore.Get(logger, containerGuid)
+					Expect(err).To(Equal(executor.ErrContainerNotFound))
 				})
 
-				It("does not return the resources", func() {
+				It("frees the containers resources", func() {
 					err := containerStore.Destroy(logger, containerGuid)
-					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(destroyErr))
 
-					resources := containerStore.RemainingResources(logger)
-					expectedResources := totalCapacity.Copy()
-					expectedResources.Subtract(&resource)
-					Expect(resources).To(Equal(expectedResources))
+					remainingResources := containerStore.RemainingResources(logger)
+					Expect(remainingResources).To(Equal(totalCapacity))
 				})
 			})
 		})

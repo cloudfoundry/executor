@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -479,19 +480,21 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 		logger.Error("failed-to-stop", err)
 	}
 
+	defer cs.containers.Remove(guid)
+
 	logger.Debug("destroying-garden-container")
 	err = cs.gardenClient.Destroy(guid)
 	if err != nil {
 		if _, ok := err.(garden.ContainerNotFoundError); ok {
 			logger.Error("container-not-found-in-garden", err)
-			return nil
+		} else if err.Error() == server.ErrConcurrentDestroy.Error() {
+			logger.Error("container-destroy-in-progress", err)
+		} else {
+			logger.Error("failed-to-delete-garden-container", err)
+			return err
 		}
-		logger.Error("failed-to-delete-garden-container", err)
-		return err
 	}
 	logger.Debug("destroyed-garden-container")
-
-	cs.containers.Remove(guid)
 
 	return nil
 }
