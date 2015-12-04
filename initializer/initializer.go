@@ -78,7 +78,8 @@ type Configuration struct {
 	ReadWorkPoolSize    int
 	MetricsWorkPoolSize int
 
-	RegistryPruningInterval time.Duration
+	ReservedExpirationTime time.Duration
+	ContainerReapInterval  time.Duration
 
 	GardenHealthcheckRootFS            string
 	GardenHealthcheckInterval          time.Duration
@@ -110,7 +111,8 @@ var DefaultConfiguration = Configuration{
 	MemoryMB:                           configuration.Automatic,
 	DiskMB:                             configuration.Automatic,
 	TempDir:                            "/tmp",
-	RegistryPruningInterval:            time.Minute,
+	ReservedExpirationTime:             time.Minute,
+	ContainerReapInterval:              time.Minute,
 	ContainerInodeLimit:                200000,
 	ContainerMaxCpuShares:              0,
 	CachePath:                          "/tmp/cache",
@@ -173,10 +175,17 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	hub := event.NewHub()
 
 	totalCapacity := fetchCapacity(logger, gardenClient, config)
+
+	containerConfig := containerstore.ContainerConfig{
+		OwnerName:              config.ContainerOwnerName,
+		INodeLimit:             config.ContainerInodeLimit,
+		MaxCPUShares:           config.ContainerMaxCpuShares,
+		ReservedExpirationTime: config.ReservedExpirationTime,
+		ReapInterval:           config.ContainerReapInterval,
+	}
+
 	containerStore := containerstore.New(
-		config.ContainerOwnerName,
-		config.ContainerInodeLimit,
-		config.ContainerMaxCpuShares,
+		containerConfig,
 		&totalCapacity,
 		gardenClient,
 		clock,
@@ -246,8 +255,8 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 				depotClientProvider.WithLogger(logger),
 				clock,
 			)},
-			{"registry-pruner", containerStore.RegistryPruner(logger, config.RegistryPruningInterval)},
-			{"container-reaper", containerStore.ContainerReaper(logger, config.RegistryPruningInterval)},
+			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
+			{"container-reaper", containerStore.NewContainerReaper(logger)},
 		},
 		nil
 }

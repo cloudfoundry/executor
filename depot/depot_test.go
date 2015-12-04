@@ -228,17 +228,9 @@ var _ = Describe("Depot", func() {
 				containerStore.CreateReturns(executor.Container{}, errors.New("some-error"))
 			})
 
-			It("should change container's state to failed", func() {
+			It("returns an error", func() {
 				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(containerStore.CreateCallCount).Should(Equal(1))
-				Consistently(containerStore.RunCallCount).Should(Equal(0))
-				Eventually(containerStore.FailCallCount).Should(Equal(1))
-
-				_, guid, reason := containerStore.FailArgsForCall(0)
-				Expect(guid).To(Equal(gardenStoreGuid))
-				Expect(reason).To(Equal(depot.ContainerInitializationFailedMessage))
 			})
 		})
 

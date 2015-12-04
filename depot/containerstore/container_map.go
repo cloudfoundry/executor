@@ -2,72 +2,61 @@ package containerstore
 
 import (
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/garden"
+	"github.com/pivotal-golang/lager"
 )
 
-type storeNode struct {
-	modifiedIndex uint
-	executor.Container
-	GardenContainer garden.Container
-}
-
-func newStoreNode(container executor.Container) storeNode {
-	return storeNode{
-		Container:     container,
-		modifiedIndex: 0,
-	}
-}
-
 type nodeMap struct {
-	nodes map[string]storeNode
+	nodes map[string]*storeNode
 	lock  *sync.RWMutex
 
 	remainingResources *executor.ExecutorResources
 }
 
-func newNodeMap(totalCapacity *executor.ExecutorResources) nodeMap {
+func newNodeMap(totalCapacity *executor.ExecutorResources) *nodeMap {
 	capacity := totalCapacity.Copy()
-	return nodeMap{
-		nodes:              make(map[string]storeNode),
+	return &nodeMap{
+		nodes:              make(map[string]*storeNode),
 		lock:               &sync.RWMutex{},
 		remainingResources: &capacity,
 	}
 }
 
-func (n nodeMap) Contains(guid string) bool {
+func (n *nodeMap) Contains(guid string) bool {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	_, ok := n.nodes[guid]
 	return ok
 }
 
-func (n nodeMap) RemainingResources() executor.ExecutorResources {
+func (n *nodeMap) RemainingResources() executor.ExecutorResources {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	return n.remainingResources.Copy()
 }
 
-func (n nodeMap) Add(node storeNode) error {
+func (n *nodeMap) Add(node *storeNode) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	if _, ok := n.nodes[node.Guid]; ok {
+	info := node.Info()
+	if _, ok := n.nodes[info.Guid]; ok {
 		return executor.ErrContainerGuidNotAvailable
 	}
 
-	ok := n.remainingResources.Subtract(&node.Resource)
+	ok := n.remainingResources.Subtract(&info.Resource)
 	if !ok {
 		return executor.ErrInsufficientResourcesAvailable
 	}
 
-	n.nodes[node.Guid] = node
+	n.nodes[info.Guid] = node
 
 	return nil
 }
 
-func (n nodeMap) Remove(guid string) {
+func (n *nodeMap) Remove(guid string) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -79,66 +68,62 @@ func (n nodeMap) Remove(guid string) {
 	n.remove(node)
 }
 
-func (n nodeMap) Get(guid string) (storeNode, error) {
+func (n *nodeMap) remove(node *storeNode) {
+	info := node.Info()
+	n.remainingResources.Add(&info.Resource)
+	delete(n.nodes, info.Guid)
+}
+
+func (n *nodeMap) Get(guid string) (*storeNode, error) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
 	node, ok := n.nodes[guid]
 	if !ok {
-		return storeNode{}, executor.ErrContainerNotFound
+		return nil, executor.ErrContainerNotFound
 	}
 
 	return node, nil
 }
 
-func (n nodeMap) List() []storeNode {
+func (n *nodeMap) List() []*storeNode {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	list := make([]storeNode, 0, len(n.nodes))
+	list := make([]*storeNode, 0, len(n.nodes))
 	for _, node := range n.nodes {
 		list = append(list, node)
 	}
 	return list
 }
 
-func (n nodeMap) CAS(node storeNode) (storeNode, error) {
+func (n *nodeMap) CompleteExpired(logger lager.Logger, now time.Time) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	existingNode, ok := n.nodes[node.Guid]
-	if !ok {
-		return storeNode{}, executor.ErrContainerNotFound
+	for i := range n.nodes {
+		node := n.nodes[i]
+		expired := node.Expire(logger, now)
+		if expired {
+			logger.Info("expired-container", lager.Data{"guid": node.Info().Guid})
+		}
 	}
-
-	if existingNode.modifiedIndex != node.modifiedIndex {
-		return storeNode{}, ErrFailedToCAS
-	}
-
-	node.modifiedIndex++
-	n.nodes[node.Guid] = node
-
-	return node, nil
 }
 
-func (n nodeMap) CAD(node storeNode) error {
+func (n *nodeMap) CompleteMissing(logger lager.Logger, existingHandles map[string]struct{}) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	existingNode, ok := n.nodes[node.Guid]
-	if !ok {
-		return executor.ErrContainerNotFound
+	for i := range n.nodes {
+		node := n.nodes[i]
+		info := node.Info()
+
+		_, ok := existingHandles[info.Guid]
+		if !ok {
+			reaped := node.Reap(logger)
+			if reaped {
+				logger.Info("reaped-missing-container", lager.Data{"guid": info.Guid})
+			}
+		}
 	}
-
-	if existingNode.modifiedIndex != node.modifiedIndex {
-		return ErrFailedToCAS
-	}
-
-	n.remove(node)
-	return nil
-}
-
-func (n nodeMap) remove(node storeNode) {
-	n.remainingResources.Add(&node.Resource)
-	delete(n.nodes, node.Guid)
 }

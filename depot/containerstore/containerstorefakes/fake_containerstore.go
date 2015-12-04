@@ -4,7 +4,6 @@ package containerstorefakes
 import (
 	"io"
 	"sync"
-	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
@@ -22,6 +21,15 @@ type FakeContainerStore struct {
 	reserveReturns struct {
 		result1 executor.Container
 		result2 error
+	}
+	DestroyStub        func(logger lager.Logger, guid string) error
+	destroyMutex       sync.RWMutex
+	destroyArgsForCall []struct {
+		logger lager.Logger
+		guid   string
+	}
+	destroyReturns struct {
+		result1 error
 	}
 	InitializeStub        func(logger lager.Logger, req *executor.RunRequest) error
 	initializeMutex       sync.RWMutex
@@ -51,17 +59,6 @@ type FakeContainerStore struct {
 	runReturns struct {
 		result1 error
 	}
-	FailStub        func(logger lager.Logger, guid string, reason string) (executor.Container, error)
-	failMutex       sync.RWMutex
-	failArgsForCall []struct {
-		logger lager.Logger
-		guid   string
-		reason string
-	}
-	failReturns struct {
-		result1 executor.Container
-		result2 error
-	}
 	StopStub        func(logger lager.Logger, guid string) error
 	stopMutex       sync.RWMutex
 	stopArgsForCall []struct {
@@ -71,14 +68,16 @@ type FakeContainerStore struct {
 	stopReturns struct {
 		result1 error
 	}
-	DestroyStub        func(logger lager.Logger, guid string) error
-	destroyMutex       sync.RWMutex
-	destroyArgsForCall []struct {
-		logger lager.Logger
-		guid   string
+	GetFilesStub        func(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
+	getFilesMutex       sync.RWMutex
+	getFilesArgsForCall []struct {
+		logger     lager.Logger
+		guid       string
+		sourcePath string
 	}
-	destroyReturns struct {
-		result1 error
+	getFilesReturns struct {
+		result1 io.ReadCloser
+		result2 error
 	}
 	GetStub        func(logger lager.Logger, guid string) (executor.Container, error)
 	getMutex       sync.RWMutex
@@ -115,33 +114,20 @@ type FakeContainerStore struct {
 	remainingResourcesReturns struct {
 		result1 executor.ExecutorResources
 	}
-	GetFilesStub        func(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
-	getFilesMutex       sync.RWMutex
-	getFilesArgsForCall []struct {
-		logger     lager.Logger
-		guid       string
-		sourcePath string
+	NewRegistryPrunerStub        func(logger lager.Logger) ifrit.Runner
+	newRegistryPrunerMutex       sync.RWMutex
+	newRegistryPrunerArgsForCall []struct {
+		logger lager.Logger
 	}
-	getFilesReturns struct {
-		result1 io.ReadCloser
-		result2 error
-	}
-	RegistryPrunerStub        func(logger lager.Logger, expirationTime time.Duration) ifrit.Runner
-	registryPrunerMutex       sync.RWMutex
-	registryPrunerArgsForCall []struct {
-		logger         lager.Logger
-		expirationTime time.Duration
-	}
-	registryPrunerReturns struct {
+	newRegistryPrunerReturns struct {
 		result1 ifrit.Runner
 	}
-	ContainerReaperStub        func(logger lager.Logger, reapInterval time.Duration) ifrit.Runner
-	containerReaperMutex       sync.RWMutex
-	containerReaperArgsForCall []struct {
-		logger       lager.Logger
-		reapInterval time.Duration
+	NewContainerReaperStub        func(logger lager.Logger) ifrit.Runner
+	newContainerReaperMutex       sync.RWMutex
+	newContainerReaperArgsForCall []struct {
+		logger lager.Logger
 	}
-	containerReaperReturns struct {
+	newContainerReaperReturns struct {
 		result1 ifrit.Runner
 	}
 }
@@ -178,6 +164,39 @@ func (fake *FakeContainerStore) ReserveReturns(result1 executor.Container, resul
 		result1 executor.Container
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeContainerStore) Destroy(logger lager.Logger, guid string) error {
+	fake.destroyMutex.Lock()
+	fake.destroyArgsForCall = append(fake.destroyArgsForCall, struct {
+		logger lager.Logger
+		guid   string
+	}{logger, guid})
+	fake.destroyMutex.Unlock()
+	if fake.DestroyStub != nil {
+		return fake.DestroyStub(logger, guid)
+	} else {
+		return fake.destroyReturns.result1
+	}
+}
+
+func (fake *FakeContainerStore) DestroyCallCount() int {
+	fake.destroyMutex.RLock()
+	defer fake.destroyMutex.RUnlock()
+	return len(fake.destroyArgsForCall)
+}
+
+func (fake *FakeContainerStore) DestroyArgsForCall(i int) (lager.Logger, string) {
+	fake.destroyMutex.RLock()
+	defer fake.destroyMutex.RUnlock()
+	return fake.destroyArgsForCall[i].logger, fake.destroyArgsForCall[i].guid
+}
+
+func (fake *FakeContainerStore) DestroyReturns(result1 error) {
+	fake.DestroyStub = nil
+	fake.destroyReturns = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeContainerStore) Initialize(logger lager.Logger, req *executor.RunRequest) error {
@@ -280,41 +299,6 @@ func (fake *FakeContainerStore) RunReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeContainerStore) Fail(logger lager.Logger, guid string, reason string) (executor.Container, error) {
-	fake.failMutex.Lock()
-	fake.failArgsForCall = append(fake.failArgsForCall, struct {
-		logger lager.Logger
-		guid   string
-		reason string
-	}{logger, guid, reason})
-	fake.failMutex.Unlock()
-	if fake.FailStub != nil {
-		return fake.FailStub(logger, guid, reason)
-	} else {
-		return fake.failReturns.result1, fake.failReturns.result2
-	}
-}
-
-func (fake *FakeContainerStore) FailCallCount() int {
-	fake.failMutex.RLock()
-	defer fake.failMutex.RUnlock()
-	return len(fake.failArgsForCall)
-}
-
-func (fake *FakeContainerStore) FailArgsForCall(i int) (lager.Logger, string, string) {
-	fake.failMutex.RLock()
-	defer fake.failMutex.RUnlock()
-	return fake.failArgsForCall[i].logger, fake.failArgsForCall[i].guid, fake.failArgsForCall[i].reason
-}
-
-func (fake *FakeContainerStore) FailReturns(result1 executor.Container, result2 error) {
-	fake.FailStub = nil
-	fake.failReturns = struct {
-		result1 executor.Container
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeContainerStore) Stop(logger lager.Logger, guid string) error {
 	fake.stopMutex.Lock()
 	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
@@ -348,37 +332,39 @@ func (fake *FakeContainerStore) StopReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeContainerStore) Destroy(logger lager.Logger, guid string) error {
-	fake.destroyMutex.Lock()
-	fake.destroyArgsForCall = append(fake.destroyArgsForCall, struct {
-		logger lager.Logger
-		guid   string
-	}{logger, guid})
-	fake.destroyMutex.Unlock()
-	if fake.DestroyStub != nil {
-		return fake.DestroyStub(logger, guid)
+func (fake *FakeContainerStore) GetFiles(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {
+	fake.getFilesMutex.Lock()
+	fake.getFilesArgsForCall = append(fake.getFilesArgsForCall, struct {
+		logger     lager.Logger
+		guid       string
+		sourcePath string
+	}{logger, guid, sourcePath})
+	fake.getFilesMutex.Unlock()
+	if fake.GetFilesStub != nil {
+		return fake.GetFilesStub(logger, guid, sourcePath)
 	} else {
-		return fake.destroyReturns.result1
+		return fake.getFilesReturns.result1, fake.getFilesReturns.result2
 	}
 }
 
-func (fake *FakeContainerStore) DestroyCallCount() int {
-	fake.destroyMutex.RLock()
-	defer fake.destroyMutex.RUnlock()
-	return len(fake.destroyArgsForCall)
+func (fake *FakeContainerStore) GetFilesCallCount() int {
+	fake.getFilesMutex.RLock()
+	defer fake.getFilesMutex.RUnlock()
+	return len(fake.getFilesArgsForCall)
 }
 
-func (fake *FakeContainerStore) DestroyArgsForCall(i int) (lager.Logger, string) {
-	fake.destroyMutex.RLock()
-	defer fake.destroyMutex.RUnlock()
-	return fake.destroyArgsForCall[i].logger, fake.destroyArgsForCall[i].guid
+func (fake *FakeContainerStore) GetFilesArgsForCall(i int) (lager.Logger, string, string) {
+	fake.getFilesMutex.RLock()
+	defer fake.getFilesMutex.RUnlock()
+	return fake.getFilesArgsForCall[i].logger, fake.getFilesArgsForCall[i].guid, fake.getFilesArgsForCall[i].sourcePath
 }
 
-func (fake *FakeContainerStore) DestroyReturns(result1 error) {
-	fake.DestroyStub = nil
-	fake.destroyReturns = struct {
-		result1 error
-	}{result1}
+func (fake *FakeContainerStore) GetFilesReturns(result1 io.ReadCloser, result2 error) {
+	fake.GetFilesStub = nil
+	fake.getFilesReturns = struct {
+		result1 io.ReadCloser
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeContainerStore) Get(logger lager.Logger, guid string) (executor.Container, error) {
@@ -512,103 +498,66 @@ func (fake *FakeContainerStore) RemainingResourcesReturns(result1 executor.Execu
 	}{result1}
 }
 
-func (fake *FakeContainerStore) GetFiles(logger lager.Logger, guid string, sourcePath string) (io.ReadCloser, error) {
-	fake.getFilesMutex.Lock()
-	fake.getFilesArgsForCall = append(fake.getFilesArgsForCall, struct {
-		logger     lager.Logger
-		guid       string
-		sourcePath string
-	}{logger, guid, sourcePath})
-	fake.getFilesMutex.Unlock()
-	if fake.GetFilesStub != nil {
-		return fake.GetFilesStub(logger, guid, sourcePath)
+func (fake *FakeContainerStore) NewRegistryPruner(logger lager.Logger) ifrit.Runner {
+	fake.newRegistryPrunerMutex.Lock()
+	fake.newRegistryPrunerArgsForCall = append(fake.newRegistryPrunerArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.newRegistryPrunerMutex.Unlock()
+	if fake.NewRegistryPrunerStub != nil {
+		return fake.NewRegistryPrunerStub(logger)
 	} else {
-		return fake.getFilesReturns.result1, fake.getFilesReturns.result2
+		return fake.newRegistryPrunerReturns.result1
 	}
 }
 
-func (fake *FakeContainerStore) GetFilesCallCount() int {
-	fake.getFilesMutex.RLock()
-	defer fake.getFilesMutex.RUnlock()
-	return len(fake.getFilesArgsForCall)
+func (fake *FakeContainerStore) NewRegistryPrunerCallCount() int {
+	fake.newRegistryPrunerMutex.RLock()
+	defer fake.newRegistryPrunerMutex.RUnlock()
+	return len(fake.newRegistryPrunerArgsForCall)
 }
 
-func (fake *FakeContainerStore) GetFilesArgsForCall(i int) (lager.Logger, string, string) {
-	fake.getFilesMutex.RLock()
-	defer fake.getFilesMutex.RUnlock()
-	return fake.getFilesArgsForCall[i].logger, fake.getFilesArgsForCall[i].guid, fake.getFilesArgsForCall[i].sourcePath
+func (fake *FakeContainerStore) NewRegistryPrunerArgsForCall(i int) lager.Logger {
+	fake.newRegistryPrunerMutex.RLock()
+	defer fake.newRegistryPrunerMutex.RUnlock()
+	return fake.newRegistryPrunerArgsForCall[i].logger
 }
 
-func (fake *FakeContainerStore) GetFilesReturns(result1 io.ReadCloser, result2 error) {
-	fake.GetFilesStub = nil
-	fake.getFilesReturns = struct {
-		result1 io.ReadCloser
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeContainerStore) RegistryPruner(logger lager.Logger, expirationTime time.Duration) ifrit.Runner {
-	fake.registryPrunerMutex.Lock()
-	fake.registryPrunerArgsForCall = append(fake.registryPrunerArgsForCall, struct {
-		logger         lager.Logger
-		expirationTime time.Duration
-	}{logger, expirationTime})
-	fake.registryPrunerMutex.Unlock()
-	if fake.RegistryPrunerStub != nil {
-		return fake.RegistryPrunerStub(logger, expirationTime)
-	} else {
-		return fake.registryPrunerReturns.result1
-	}
-}
-
-func (fake *FakeContainerStore) RegistryPrunerCallCount() int {
-	fake.registryPrunerMutex.RLock()
-	defer fake.registryPrunerMutex.RUnlock()
-	return len(fake.registryPrunerArgsForCall)
-}
-
-func (fake *FakeContainerStore) RegistryPrunerArgsForCall(i int) (lager.Logger, time.Duration) {
-	fake.registryPrunerMutex.RLock()
-	defer fake.registryPrunerMutex.RUnlock()
-	return fake.registryPrunerArgsForCall[i].logger, fake.registryPrunerArgsForCall[i].expirationTime
-}
-
-func (fake *FakeContainerStore) RegistryPrunerReturns(result1 ifrit.Runner) {
-	fake.RegistryPrunerStub = nil
-	fake.registryPrunerReturns = struct {
+func (fake *FakeContainerStore) NewRegistryPrunerReturns(result1 ifrit.Runner) {
+	fake.NewRegistryPrunerStub = nil
+	fake.newRegistryPrunerReturns = struct {
 		result1 ifrit.Runner
 	}{result1}
 }
 
-func (fake *FakeContainerStore) ContainerReaper(logger lager.Logger, reapInterval time.Duration) ifrit.Runner {
-	fake.containerReaperMutex.Lock()
-	fake.containerReaperArgsForCall = append(fake.containerReaperArgsForCall, struct {
-		logger       lager.Logger
-		reapInterval time.Duration
-	}{logger, reapInterval})
-	fake.containerReaperMutex.Unlock()
-	if fake.ContainerReaperStub != nil {
-		return fake.ContainerReaperStub(logger, reapInterval)
+func (fake *FakeContainerStore) NewContainerReaper(logger lager.Logger) ifrit.Runner {
+	fake.newContainerReaperMutex.Lock()
+	fake.newContainerReaperArgsForCall = append(fake.newContainerReaperArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.newContainerReaperMutex.Unlock()
+	if fake.NewContainerReaperStub != nil {
+		return fake.NewContainerReaperStub(logger)
 	} else {
-		return fake.containerReaperReturns.result1
+		return fake.newContainerReaperReturns.result1
 	}
 }
 
-func (fake *FakeContainerStore) ContainerReaperCallCount() int {
-	fake.containerReaperMutex.RLock()
-	defer fake.containerReaperMutex.RUnlock()
-	return len(fake.containerReaperArgsForCall)
+func (fake *FakeContainerStore) NewContainerReaperCallCount() int {
+	fake.newContainerReaperMutex.RLock()
+	defer fake.newContainerReaperMutex.RUnlock()
+	return len(fake.newContainerReaperArgsForCall)
 }
 
-func (fake *FakeContainerStore) ContainerReaperArgsForCall(i int) (lager.Logger, time.Duration) {
-	fake.containerReaperMutex.RLock()
-	defer fake.containerReaperMutex.RUnlock()
-	return fake.containerReaperArgsForCall[i].logger, fake.containerReaperArgsForCall[i].reapInterval
+func (fake *FakeContainerStore) NewContainerReaperArgsForCall(i int) lager.Logger {
+	fake.newContainerReaperMutex.RLock()
+	defer fake.newContainerReaperMutex.RUnlock()
+	return fake.newContainerReaperArgsForCall[i].logger
 }
 
-func (fake *FakeContainerStore) ContainerReaperReturns(result1 ifrit.Runner) {
-	fake.ContainerReaperStub = nil
-	fake.containerReaperReturns = struct {
+func (fake *FakeContainerStore) NewContainerReaperReturns(result1 ifrit.Runner) {
+	fake.NewContainerReaperStub = nil
+	fake.newContainerReaperReturns = struct {
 		result1 ifrit.Runner
 	}{result1}
 }

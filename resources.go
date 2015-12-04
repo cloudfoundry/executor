@@ -49,6 +49,31 @@ func NewContainerFromResource(guid string, resource *Resource, tags Tags) Contai
 	}
 }
 
+func (c *Container) TransistionToInitialize(req *RunRequest) error {
+	if c.State != StateReserved {
+		return ErrInvalidTransition
+	}
+	c.State = StateInitializing
+	c.RunInfo = req.RunInfo
+	c.Tags.Add(req.Tags)
+	return nil
+}
+
+func (c *Container) TransistionToCreate() error {
+	if c.State != StateInitializing {
+		return ErrInvalidTransition
+	}
+
+	c.State = StateCreated
+	return nil
+}
+
+func (c *Container) TransitionToComplete(failed bool, failureReason string) {
+	c.RunResult.Failed = failed
+	c.RunResult.FailureReason = failureReason
+	c.State = StateCompleted
+}
+
 func (newContainer Container) Copy() Container {
 	newContainer.Tags = newContainer.Tags.Copy()
 	return newContainer

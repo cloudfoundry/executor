@@ -13,7 +13,6 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerStoppedBeforeRunMessage = "Container stopped by user"
 const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
@@ -154,7 +153,6 @@ func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() 
 		_, err := c.containerStore.Create(logger, guid)
 		if err != nil {
 			logger.Error("failed-creating-container-in-garden", err)
-			c.containerStore.Fail(logger, guid, ContainerInitializationFailedMessage)
 			return
 		}
 		GardenContainerCreationDuration.Send(time.Now().Sub(startTime))

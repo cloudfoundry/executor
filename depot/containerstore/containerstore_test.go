@@ -62,10 +62,17 @@ var _ = Describe("Container Store", func() {
 		containerGuid = "container-guid"
 
 		megatron = &faketransformer.FakeTransformer{}
+
+		containerConfig := containerstore.ContainerConfig{
+			OwnerName:              ownerName,
+			INodeLimit:             iNodeLimit,
+			MaxCPUShares:           maxCPUShares,
+			ReapInterval:           20 * time.Millisecond,
+			ReservedExpirationTime: 20 * time.Millisecond,
+		}
+
 		containerStore = containerstore.New(
-			ownerName,
-			iNodeLimit,
-			maxCPUShares,
+			containerConfig,
 			&totalCapacity,
 			gardenClient,
 			clock,
@@ -368,7 +375,6 @@ var _ = Describe("Container Store", func() {
 			})
 
 			Context("when egress rules are requested", func() {
-
 				BeforeEach(func() {
 					egressRules := []*models.SecurityGroupRule{
 						{
@@ -417,6 +423,17 @@ var _ = Describe("Container Store", func() {
 						Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 
 						Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
+					})
+
+					It("transitions to a completed state", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(HaveOccurred())
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
 					})
 				})
 
@@ -490,6 +507,17 @@ var _ = Describe("Container Store", func() {
 						Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 						Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
 					})
+
+					It("transitions to a completed state", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(HaveOccurred())
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
+					})
 				})
 			})
 
@@ -517,6 +545,17 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(Equal(errors.New("boom!")))
 				})
+
+				It("transitions to a completed state", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(Equal(errors.New("boom!")))
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.State).To(Equal(executor.StateCompleted))
+					Expect(container.RunResult.Failed).To(BeTrue())
+					Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
+				})
 			})
 
 			Context("when requesting the external IP for the created fails", func() {
@@ -531,56 +570,16 @@ var _ = Describe("Container Store", func() {
 					Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 					Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
 				})
-			})
 
-			Context("when comparing and swapping fails", func() {
-				var (
-					finishInfo, infoCalled chan struct{}
-					createErrCh            chan error
-					done                   chan struct{}
-				)
+				It("transitions to a completed state", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
 
-				BeforeEach(func() {
-					finishInfo = make(chan struct{})
-					infoCalled = make(chan struct{})
-					createErrCh = make(chan error)
-					done = make(chan struct{})
-
-					gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
-						close(infoCalled)
-						<-finishInfo
-						return garden.ContainerInfo{}, nil
-					}
-				})
-
-				JustBeforeEach(func() {
-					go func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						createErrCh <- err
-					}()
-					Eventually(infoCalled).Should(BeClosed())
-					_, err := containerStore.Fail(logger, containerGuid, "i failed.")
-					Expect(err).NotTo(HaveOccurred())
-					close(finishInfo)
-
-					Eventually(createErrCh).Should(Receive(Equal(containerstore.ErrFailedToCAS)))
-				})
-
-				AfterEach(func() {
-					close(done)
-				})
-
-				It("deletes the garden container", func() {
-					Eventually(gardenClient.DestroyCallCount).Should(Equal(1))
-				})
-
-				It("does not update the container in the container store", func() {
 					container, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-
 					Expect(container.State).To(Equal(executor.StateCompleted))
-					Expect(container.RunResult.Failed).To(Equal(true))
-					Expect(container.RunResult.FailureReason).To(Equal("i failed."))
+					Expect(container.RunResult.Failed).To(BeTrue())
+					Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
 				})
 			})
 		})
@@ -815,69 +814,6 @@ var _ = Describe("Container Store", func() {
 		})
 	})
 
-	Describe("Fail", func() {
-		var containerFailureReason string
-
-		BeforeEach(func() {
-			containerFailureReason = "error creating container"
-
-		})
-
-		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("sets the garden container state to completed", func() {
-			container, err := containerStore.Fail(logger, containerGuid, containerFailureReason)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(container.State).To(Equal(executor.StateCompleted))
-
-			fetchedContainer, err := containerStore.Get(logger, containerGuid)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(fetchedContainer).To(Equal(container))
-		})
-
-		It("sets the container result", func() {
-			container, err := containerStore.Fail(logger, containerGuid, containerFailureReason)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(container.RunResult.Failed).To(BeTrue())
-			Expect(container.RunResult.FailureReason).To(Equal(containerFailureReason))
-
-			fetchedContainer, err := containerStore.Get(logger, containerGuid)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(fetchedContainer).To(Equal(container))
-		})
-
-		It("emits a container complete event", func() {
-			container, err := containerStore.Fail(logger, containerGuid, containerFailureReason)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
-			event := eventEmitter.EmitArgsForCall(1)
-			Expect(event).To(Equal(executor.ContainerCompleteEvent{RawContainer: container}))
-		})
-
-		Context("when the container is already completed", func() {
-			JustBeforeEach(func() {
-				_, err := containerStore.Fail(logger, containerGuid, containerFailureReason)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("returns an ErrInvalidTransition", func() {
-				_, err := containerStore.Fail(logger, containerGuid, containerFailureReason)
-				Expect(err).To(Equal(executor.ErrInvalidTransition))
-			})
-		})
-
-		Context("when the container does not exist", func() {
-			It("returns a ErrContainerNotFound", func() {
-				_, err := containerStore.Fail(logger, "", containerFailureReason)
-				Expect(err).To(Equal(executor.ErrContainerNotFound))
-			})
-		})
-	})
-
 	Describe("Stop", func() {
 		var (
 			actionStep *stepfakes.FakeStep
@@ -942,21 +878,18 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.RunResult.Stopped).To(BeTrue())
 			})
-
-			It("removes the runningProcess", func() {
-				close(finishRun)
-				err := containerStore.Stop(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = containerStore.Stop(logger, containerGuid)
-				Expect(err).To(Equal(executor.ErrNoProcessToStop))
-			})
 		})
 
 		Context("when the container does not have processes associated with it", func() {
-			It("returns a ErrFailedToStop", func() {
+			It("transitions to the completed state", func() {
 				err := containerStore.Stop(logger, containerGuid)
-				Expect(err).To(Equal(executor.ErrNoProcessToStop))
+				Expect(err).NotTo(HaveOccurred())
+
+				container, err := containerStore.Get(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(container.RunResult.Stopped).To(BeTrue())
+				Expect(container.State).To(Equal(executor.StateCompleted))
 			})
 		})
 
@@ -1345,7 +1278,7 @@ var _ = Describe("Container Store", func() {
 
 			expirationTime = 20 * time.Millisecond
 
-			pruner := containerStore.RegistryPruner(logger, expirationTime)
+			pruner := containerStore.NewRegistryPruner(logger)
 			process = ginkgomon.Invoke(pruner)
 		})
 
@@ -1376,16 +1309,18 @@ var _ = Describe("Container Store", func() {
 				clock.Increment(2 * expirationTime)
 			})
 
-			It("removes only RESERVED containers from the list", func() {
-				Eventually(func() []executor.Container {
-					return containerStore.List(logger)
-				}).Should(HaveLen(1))
-				Expect(containerStore.List(logger)[0].Guid).To(Equal("eventually-initialized"))
+			It("completes only RESERVED containers from the list", func() {
+				Eventually(func() executor.State {
+					container, err := containerStore.Get(logger, "forever-reserved")
+					Expect(err).NotTo(HaveOccurred())
+					return container.State
+				}).Should(Equal(executor.StateCompleted))
 
-				resources := containerStore.RemainingResources(logger)
-				expectedResources := totalCapacity.Copy()
-				expectedResources.Subtract(&resource)
-				Expect(resources).To(Equal(expectedResources))
+				Consistently(func() executor.State {
+					container, err := containerStore.Get(logger, "eventually-initialized")
+					Expect(err).NotTo(HaveOccurred())
+					return container.State
+				}).ShouldNot(Equal(executor.StateCompleted))
 			})
 		})
 	})
@@ -1442,8 +1377,8 @@ var _ = Describe("Container Store", func() {
 			_, err = containerStore.Create(logger, containerGuid5)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Fail One of the containers
-			_, err = containerStore.Fail(logger, containerGuid6, "failed-yo")
+			// Stop One of the containers
+			err = containerStore.Stop(logger, containerGuid6)
 			Expect(err).NotTo(HaveOccurred())
 
 			extraGardenContainer = &gfakes.FakeContainer{}
@@ -1454,7 +1389,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			reaper := containerStore.ContainerReaper(logger, 20*time.Millisecond)
+			reaper := containerStore.NewContainerReaper(logger)
 			process = ginkgomon.Invoke(reaper)
 		})
 

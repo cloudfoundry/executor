@@ -98,7 +98,13 @@ var _ = Describe("Transformer", func() {
 				}
 				return &gfakes.FakeProcess{}, nil
 			}
-			monitorProcess.WaitReturns(1, errors.New("boom"))
+			monitorProcess.WaitStub = func() (int, error) {
+				if monitorProcess.WaitCallCount() == 1 {
+					return 1, errors.New("boom")
+				} else {
+					return 0, nil
+				}
+			}
 
 			action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
@@ -128,7 +134,6 @@ var _ = Describe("Transformer", func() {
 			Expect(processSpec.Path).To(Equal("/monitor/path"))
 			Consistently(hasStartedRunning).ShouldNot(Receive())
 
-			monitorProcess.WaitReturns(0, nil)
 			clock.Increment(1 * time.Second)
 			Eventually(gardenContainer.RunCallCount).Should(Equal(4))
 			processSpec, _ = gardenContainer.RunArgsForCall(3)
