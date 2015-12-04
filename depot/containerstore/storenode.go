@@ -177,13 +177,13 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 		netOutRules = append(netOutRules, netOutRule)
 	}
 
-	logger.Debug("creating-container-in-garden")
+	logger.Info("creating-container-in-garden")
 	gardenContainer, err := n.gardenClient.Create(containerSpec)
 	if err != nil {
 		logger.Error("failed-to-creating-container-in-garden", err)
 		return err
 	}
-	logger.Debug("created-container-in-garden")
+	logger.Info("created-container-in-garden")
 
 	for _, rule := range netOutRules {
 		logger.Debug("net-out")

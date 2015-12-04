@@ -148,11 +148,11 @@ func (c *client) RunContainer(request *executor.RunRequest) error {
 
 func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() {
 	return func() {
-		logger.Info("creating-container-in-garden")
+		logger.Info("creating-container")
 		startTime := time.Now()
 		_, err := c.containerStore.Create(logger, guid)
 		if err != nil {
-			logger.Error("failed-creating-container-in-garden", err)
+			logger.Error("failed-creating-container", err)
 			return
 		}
 		GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
