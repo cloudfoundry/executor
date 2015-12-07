@@ -69,7 +69,7 @@ func newStoreNode(
 func (n *storeNode) acquireOpLock(logger lager.Logger) {
 	startTime := time.Now()
 	n.opLock.Lock()
-	logger.Info("ops-lock-aquired", lager.Data{"lock-wait-time": time.Now().Sub(startTime)})
+	logger.Info("ops-lock-aquired", lager.Data{"lock-wait-time": time.Now().Sub(startTime).String()})
 }
 
 func (n *storeNode) releaseOpLock(logger lager.Logger) {
