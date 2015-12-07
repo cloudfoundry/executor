@@ -12,12 +12,15 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/server"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/lager"
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
+
+const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
 type storeNode struct {
 	modifiedIndex uint
@@ -63,6 +66,17 @@ func newStoreNode(
 	}
 }
 
+func (n *storeNode) acquireOpLock(logger lager.Logger) {
+	startTime := time.Now()
+	n.opLock.Lock()
+	logger.Info("ops-lock-aquired", lager.Data{"lock-wait-time": time.Now().Sub(startTime)})
+}
+
+func (n *storeNode) releaseOpLock(logger lager.Logger) {
+	n.opLock.Unlock()
+	logger.Info("ops-lock-released")
+}
+
 func (n *storeNode) Info() executor.Container {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
@@ -92,8 +106,8 @@ func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) er
 }
 
 func (n *storeNode) Create(logger lager.Logger) error {
-	n.opLock.Lock()
-	defer n.opLock.Unlock()
+	n.acquireOpLock(logger)
+	defer n.releaseOpLock(logger)
 
 	var initialized bool
 	n.infoLock.Lock()
@@ -178,11 +192,13 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 	}
 
 	logger.Info("creating-container-in-garden")
+	startTime := time.Now()
 	gardenContainer, err := n.gardenClient.Create(containerSpec)
 	if err != nil {
 		logger.Error("failed-to-creating-container-in-garden", err)
 		return err
 	}
+	GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
 	logger.Info("created-container-in-garden")
 
 	for _, rule := range netOutRules {
@@ -247,8 +263,8 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 }
 
 func (n *storeNode) Run(logger lager.Logger) error {
-	n.opLock.Lock()
-	defer n.opLock.Unlock()
+	n.acquireOpLock(logger)
+	defer n.releaseOpLock(logger)
 
 	if n.info.State != executor.StateCreated {
 		logger.Error("failed-to-run", executor.ErrInvalidTransition)
@@ -301,8 +317,8 @@ func (n *storeNode) run(logger lager.Logger) {
 }
 
 func (n *storeNode) Stop(logger lager.Logger) error {
-	n.opLock.Lock()
-	defer n.opLock.Unlock()
+	n.acquireOpLock(logger)
+	defer n.releaseOpLock(logger)
 
 	return n.stop(logger)
 }
@@ -322,8 +338,8 @@ func (n *storeNode) stop(logger lager.Logger) error {
 }
 
 func (n *storeNode) Destroy(logger lager.Logger) error {
-	n.opLock.Lock()
-	defer n.opLock.Unlock()
+	n.acquireOpLock(logger)
+	defer n.releaseOpLock(logger)
 
 	err := n.stop(logger)
 	if err != nil {
