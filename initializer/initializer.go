@@ -371,7 +371,7 @@ func initializeTransformer(
 	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
 ) transformer.Transformer {
-	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification)
+	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification, cacheddownloader.TarTransform)
 	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()

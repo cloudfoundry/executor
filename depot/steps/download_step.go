@@ -104,7 +104,7 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 		return nil, 0, err
 	}
 
-	tarStream, downlodedSize, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, cacheddownloader.TarTransform, step.Cancelled())
+	tarStream, downlodedSize, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, step.Cancelled())
 	if err != nil {
 		step.logger.Error("fetch-failed", err)
 		return nil, 0, err

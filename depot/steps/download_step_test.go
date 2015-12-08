@@ -8,9 +8,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"reflect"
 
-	"github.com/cloudfoundry-incubator/cacheddownloader"
 	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/fakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -86,15 +84,10 @@ var _ = Describe("DownloadAction", func() {
 		It("downloads via the cache with a tar transformer", func() {
 			Expect(cache.FetchCallCount()).To(Equal(1))
 
-			url, cacheKey, transformer, cancelChan := cache.FetchArgsForCall(0)
+			url, cacheKey, cancelChan := cache.FetchArgsForCall(0)
 			Expect(url.Host).To(ContainSubstring("mr_jones"))
 			Expect(cacheKey).To(Equal("the-cache-key"))
 			Expect(cancelChan).NotTo(BeNil())
-
-			tVal := reflect.ValueOf(transformer)
-			expectedVal := reflect.ValueOf(cacheddownloader.TarTransform)
-
-			Expect(tVal.Pointer()).To(Equal(expectedVal.Pointer()))
 		})
 
 		It("logs the step", func() {
@@ -290,7 +283,7 @@ var _ = Describe("DownloadAction", func() {
 			BeforeEach(func() {
 				calledChan = make(chan struct{})
 
-				cache.FetchStub = func(u *url.URL, key string, t cacheddownloader.CacheTransformer, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
+				cache.FetchStub = func(u *url.URL, key string, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
 					Expect(cancelCh).NotTo(BeNil())
 					Expect(cancelCh).NotTo(BeClosed())
 
@@ -411,7 +404,7 @@ var _ = Describe("DownloadAction", func() {
 			fetchCh := make(chan struct{}, 3)
 			barrier := make(chan struct{})
 			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
-			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, transformer cacheddownloader.CacheTransformer, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
+			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
 				fetchCh <- struct{}{}
 				<-barrier
 				return nopCloser, 42, nil
