@@ -10,6 +10,7 @@ import (
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dmetrics "github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/pivotal-golang/clock/fakeclock"
+	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -112,7 +113,7 @@ var _ = Describe("StatsReporter", func() {
 
 		metricsResults = make(chan map[string]executor.Metrics, 10)
 
-		fakeExecutorClient.GetBulkMetricsStub = func() (map[string]executor.Metrics, error) {
+		fakeExecutorClient.GetBulkMetricsStub = func(lager.Logger) (map[string]executor.Metrics, error) {
 			result, ok := <-metricsResults
 			if !ok || result == nil {
 				return nil, errors.New("closed")

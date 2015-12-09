@@ -115,7 +115,8 @@ var _ = Describe("Runner", func() {
 		Context("When garden is healthy", func() {
 			It("Sets healthy to true only once", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
-				Expect(executorClient.SetHealthyArgsForCall(0)).Should(Equal(true))
+				_, healthy := executorClient.SetHealthyArgsForCall(0)
+				Expect(healthy).Should(Equal(true))
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Expect(executorClient.SetHealthyCallCount()).To(Equal(1))
 			})
@@ -134,17 +135,20 @@ var _ = Describe("Runner", func() {
 
 			It("Sets healthy to false after it fails, then to true after success", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
-				Expect(executorClient.SetHealthyArgsForCall(0)).Should(Equal(true))
+				_, healthy := executorClient.SetHealthyArgsForCall(0)
+				Expect(healthy).Should(Equal(true))
 
 				checker.HealthcheckReturns(checkErr)
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
-				Expect(executorClient.SetHealthyArgsForCall(1)).Should(Equal(false))
+				_, healthy = executorClient.SetHealthyArgsForCall(1)
+				Expect(healthy).Should(Equal(false))
 
 				checker.HealthcheckReturns(nil)
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
-				Expect(executorClient.SetHealthyArgsForCall(2)).Should(Equal(true))
+				_, healthy = executorClient.SetHealthyArgsForCall(2)
+				Expect(healthy).Should(Equal(true))
 			})
 		})
 
@@ -176,7 +180,8 @@ var _ = Describe("Runner", func() {
 
 			It("sets the executor to unhealthy", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
-				Expect(executorClient.SetHealthyArgsForCall(1)).Should(Equal(false))
+				_, healthy := executorClient.SetHealthyArgsForCall(1)
+				Expect(healthy).Should(Equal(false))
 			})
 
 			It("does not set the executor to healthy when the healtcheck completes", func() {

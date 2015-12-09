@@ -140,7 +140,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 func (r *Runner) setHealthy() {
 	if !r.healthy {
 		r.logger.Info("set-state-healthy")
-		r.executorClient.SetHealthy(true)
+		r.executorClient.SetHealthy(r.logger, true)
 		r.healthy = true
 	}
 }
@@ -148,7 +148,7 @@ func (r *Runner) setHealthy() {
 func (r *Runner) setUnhealthy() {
 	if r.healthy {
 		r.logger.Error("set-state-unhealthy", nil)
-		r.executorClient.SetHealthy(false)
+		r.executorClient.SetHealthy(r.logger, false)
 		r.healthy = false
 	}
 }

@@ -202,16 +202,13 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		MetricsWorkPoolSize: config.MetricsWorkPoolSize,
 	}
 
-	depotClientProvider, err := depot.NewClientProvider(
+	depotClient := depot.NewClient(
 		totalCapacity,
 		containerStore,
 		gardenStore,
 		hub,
 		workPoolSettings,
 	)
-	if err != nil {
-		return nil, grouper.Members{}, err
-	}
 
 	healthcheckSpec := garden.ProcessSpec{
 		Path: config.GardenHealthcheckProcessPath,
@@ -230,29 +227,26 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		guidgen.DefaultGenerator,
 	)
 
-	metricsLogger := logger.Session("metrics-reporter")
-	containerMetricsLogger := logger.Session("container-metrics-reporter")
-
-	return depotClientProvider.WithLogger(logger),
+	return depotClient,
 		grouper.Members{
 			{"metrics-reporter", &metrics.Reporter{
-				ExecutorSource: depotClientProvider.WithLogger(metricsLogger),
+				ExecutorSource: depotClient,
 				Interval:       metricsReportInterval,
-				Logger:         metricsLogger,
+				Logger:         logger,
 			}},
 			{"hub-closer", closeHub(hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
-				containerMetricsLogger,
+				logger,
 				containerMetricsReportInterval,
 				clock,
-				depotClientProvider.WithLogger(containerMetricsLogger),
+				depotClient,
 			)},
 			{"garden_health_checker", gardenhealth.NewRunner(
 				config.GardenHealthcheckInterval,
 				config.GardenHealthcheckTimeout,
 				logger,
 				gardenHealthcheck,
-				depotClientProvider.WithLogger(logger),
+				depotClient,
 				clock,
 			)},
 			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
