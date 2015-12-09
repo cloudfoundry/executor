@@ -33,13 +33,13 @@ type ContainerStore interface {
 	Create(logger lager.Logger, guid string) (executor.Container, error)
 	Run(logger lager.Logger, guid string) error
 	Stop(logger lager.Logger, guid string) error
-	GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
 
 	// Getters
 	Get(logger lager.Logger, guid string) (executor.Container, error)
 	List(logger lager.Logger) []executor.Container
 	Metrics(logger lager.Logger) (map[string]executor.ContainerMetrics, error)
 	RemainingResources(logger lager.Logger) executor.ExecutorResources
+	GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error)
 
 	// Cleanup
 	NewRegistryPruner(logger lager.Logger) ifrit.Runner

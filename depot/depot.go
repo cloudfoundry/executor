@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
@@ -14,14 +15,9 @@ import (
 const ContainerStoppedBeforeRunMessage = "Container stopped by user"
 
 type client struct {
-	*clientProvider
-	logger lager.Logger
-}
-
-type clientProvider struct {
 	totalCapacity    executor.ExecutorResources
 	containerStore   containerstore.ContainerStore
-	gardenStore      GardenStore
+	gardenClient     garden.Client
 	eventHub         event.Hub
 	creationWorkPool *workpool.WorkPool
 	deletionWorkPool *workpool.WorkPool
@@ -32,65 +28,53 @@ type clientProvider struct {
 	healthy     bool
 }
 
-//go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
-type GardenStore interface {
-	// This should probably live somewhere else.
-	Ping() error
-}
-
-func NewClientProvider(
+func NewClient(
 	totalCapacity executor.ExecutorResources,
 	containerStore containerstore.ContainerStore,
-	gardenStore GardenStore,
+	gardenClient garden.Client,
 	eventHub event.Hub,
 	workPoolSettings executor.WorkPoolSettings,
-) (executor.ClientProvider, error) {
+) executor.Client {
+	// A misconfigured WorkPool is non-recoverable, so we panic here
 	creationWorkPool, err := workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	deletionWorkPool, err := workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	readWorkPool, err := workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	metricsWorkPool, err := workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	return &clientProvider{
+	return &client{
 		totalCapacity:    totalCapacity,
 		containerStore:   containerStore,
-		gardenStore:      gardenStore,
+		gardenClient:     gardenClient,
 		eventHub:         eventHub,
 		creationWorkPool: creationWorkPool,
 		deletionWorkPool: deletionWorkPool,
 		readWorkPool:     readWorkPool,
 		metricsWorkPool:  metricsWorkPool,
 		healthy:          true,
-	}, nil
-}
-
-func (provider *clientProvider) WithLogger(logger lager.Logger) executor.Client {
-	return &client{
-		provider,
-		logger.Session("depot-client"),
 	}
 }
 
-func (c *client) Cleanup() {
+func (c *client) Cleanup(logger lager.Logger) {
 	c.creationWorkPool.Stop()
 	c.deletionWorkPool.Stop()
 	c.readWorkPool.Stop()
 	c.metricsWorkPool.Stop()
 }
 
-func (c *client) AllocateContainers(requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
-	logger := c.logger.Session("allocate-containers")
+func (c *client) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
+	logger = logger.Session("allocate-containers")
 	failures := make([]executor.AllocationFailure, 0)
 
 	for i := range requests {
@@ -113,8 +97,8 @@ func (c *client) AllocateContainers(requests []executor.AllocationRequest) ([]ex
 	return failures, nil
 }
 
-func (c *client) GetContainer(guid string) (executor.Container, error) {
-	logger := c.logger.Session("get-container", lager.Data{
+func (c *client) GetContainer(logger lager.Logger, guid string) (executor.Container, error) {
+	logger = logger.Session("get-container", lager.Data{
 		"guid": guid,
 	})
 
@@ -126,8 +110,8 @@ func (c *client) GetContainer(guid string) (executor.Container, error) {
 	return container, err
 }
 
-func (c *client) RunContainer(request *executor.RunRequest) error {
-	logger := c.logger.Session("run-container", lager.Data{
+func (c *client) RunContainer(logger lager.Logger, request *executor.RunRequest) error {
+	logger = logger.Session("run-container", lager.Data{
 		"guid": request.Guid,
 	})
 
@@ -172,15 +156,15 @@ func tagsMatch(needles, haystack executor.Tags) bool {
 	return true
 }
 
-func (c *client) ListContainers() ([]executor.Container, error) {
-	return c.containerStore.List(c.logger), nil
+func (c *client) ListContainers(logger lager.Logger) ([]executor.Container, error) {
+	return c.containerStore.List(logger), nil
 }
 
-func (c *client) GetBulkMetrics() (map[string]executor.Metrics, error) {
+func (c *client) GetBulkMetrics(logger lager.Logger) (map[string]executor.Metrics, error) {
 	errChannel := make(chan error, 1)
 	metricsChannel := make(chan map[string]executor.Metrics, 1)
 
-	logger := c.logger.Session("get-all-metrics")
+	logger = logger.Session("get-all-metrics")
 
 	c.metricsWorkPool.Submit(func() {
 		containers := c.containerStore.List(logger)
@@ -226,16 +210,16 @@ func (c *client) GetBulkMetrics() (map[string]executor.Metrics, error) {
 	return metrics, err
 }
 
-func (c *client) StopContainer(guid string) error {
-	logger := c.logger.Session("stop-container")
+func (c *client) StopContainer(logger lager.Logger, guid string) error {
+	logger = logger.Session("stop-container")
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	return c.containerStore.Stop(c.logger, guid)
+	return c.containerStore.Stop(logger, guid)
 }
 
-func (c *client) DeleteContainer(guid string) error {
-	logger := c.logger.Session("delete-container", lager.Data{"guid": guid})
+func (c *client) DeleteContainer(logger lager.Logger, guid string) error {
+	logger = logger.Session("delete-container", lager.Data{"guid": guid})
 
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -254,16 +238,17 @@ func (c *client) DeleteContainer(guid string) error {
 	return err
 }
 
-func (c *client) RemainingResources() (executor.ExecutorResources, error) {
-	logger := c.logger.Session("remaining-resources")
+func (c *client) RemainingResources(logger lager.Logger) (executor.ExecutorResources, error) {
+	logger = logger.Session("remaining-resources")
 	return c.containerStore.RemainingResources(logger), nil
 }
 
-func (c *client) Ping() error {
-	return c.gardenStore.Ping()
+func (c *client) Ping(logger lager.Logger) error {
+	return c.gardenClient.Ping()
+
 }
 
-func (c *client) TotalResources() (executor.ExecutorResources, error) {
+func (c *client) TotalResources(logger lager.Logger) (executor.ExecutorResources, error) {
 	totalCapacity := c.totalCapacity
 
 	return executor.ExecutorResources{
@@ -273,8 +258,8 @@ func (c *client) TotalResources() (executor.ExecutorResources, error) {
 	}, nil
 }
 
-func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
-	logger := c.logger.Session("get-files", lager.Data{
+func (c *client) GetFiles(logger lager.Logger, guid, sourcePath string) (io.ReadCloser, error) {
+	logger = logger.Session("get-files", lager.Data{
 		"guid": guid,
 	})
 
@@ -299,17 +284,17 @@ func (c *client) GetFiles(guid, sourcePath string) (io.ReadCloser, error) {
 	return readCloser, err
 }
 
-func (c *client) SubscribeToEvents() (executor.EventSource, error) {
+func (c *client) SubscribeToEvents(logger lager.Logger) (executor.EventSource, error) {
 	return c.eventHub.Subscribe()
 }
 
-func (c *client) Healthy() bool {
+func (c *client) Healthy(logger lager.Logger) bool {
 	c.healthyLock.RLock()
 	defer c.healthyLock.RUnlock()
 	return c.healthy
 }
 
-func (c *client) SetHealthy(healthy bool) {
+func (c *client) SetHealthy(logger lager.Logger, healthy bool) {
 	c.healthyLock.Lock()
 	defer c.healthyLock.Unlock()
 	c.healthy = healthy

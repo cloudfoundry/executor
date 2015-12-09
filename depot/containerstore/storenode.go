@@ -3,17 +3,18 @@ package containerstore
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
@@ -33,18 +34,8 @@ type storeNode struct {
 	gardenContainer garden.Container
 	eventEmitter    event.Hub
 	transformer     transformer.Transformer
-	process         *runningProcess
+	process         ifrit.Process
 	config          *ContainerConfig
-}
-
-type runningProcess struct {
-	action            steps.Step
-	done              chan struct{}
-	healthCheckPassed <-chan struct{}
-}
-
-func newRunningProcess(action steps.Step, healthCheckPassed <-chan struct{}) *runningProcess {
-	return &runningProcess{action: action, done: make(chan struct{}), healthCheckPassed: healthCheckPassed}
 }
 
 func newStoreNode(
@@ -273,46 +264,31 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromContainer(n.info)
 
-	action, healthCheckPassed, err := n.transformer.StepsForContainer(logger, n.info, n.gardenContainer, logStreamer)
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
 	if err != nil {
 		logger.Error("failed-to-build-steps", err)
 		return err
 	}
 
-	process := newRunningProcess(action, healthCheckPassed)
-	n.process = process
+	n.process = ifrit.Background(runner)
 	go n.run(logger)
 	return nil
 }
 
 func (n *storeNode) run(logger lager.Logger) {
-	resultCh := make(chan error)
-	go func() {
-		resultCh <- n.process.action.Perform()
-	}()
+	<-n.process.Ready()
 
-	for {
-		select {
-		case err := <-resultCh:
-			defer close(n.process.done)
-			var failed bool
-			var failureReason string
+	n.infoLock.Lock()
+	n.info.State = executor.StateRunning
+	info := n.info
+	n.infoLock.Unlock()
+	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
-			if err != nil {
-				failed = true
-				failureReason = err.Error()
-			}
-
-			n.complete(logger, failed, failureReason)
-			return
-
-		case <-n.process.healthCheckPassed:
-			n.infoLock.Lock()
-			n.info.State = executor.StateRunning
-			info := n.info
-			n.infoLock.Unlock()
-			go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
-		}
+	err := <-n.process.Wait()
+	if err != nil {
+		n.complete(logger, true, err.Error())
+	} else {
+		n.complete(logger, false, "")
 	}
 }
 
@@ -329,8 +305,8 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	n.infoLock.Unlock()
 
 	if n.process != nil {
-		n.process.action.Cancel()
-		<-n.process.done
+		n.process.Signal(os.Interrupt)
+		<-n.process.Wait()
 	} else {
 		n.complete(logger, true, "stopped-before-running")
 	}

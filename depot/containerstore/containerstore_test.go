@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -21,7 +22,6 @@ import (
 	"github.com/pivotal-golang/lager/lagertest"
 
 	eventfakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
-	stepfakes "github.com/cloudfoundry-incubator/executor/depot/steps/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/garden/server"
 )
@@ -46,6 +46,14 @@ var _ = Describe("Container Store", func() {
 
 		logger *lagertest.TestLogger
 	)
+
+	var pollForComplete = func(guid string) func() bool {
+		return func() bool {
+			container, err := containerStore.Get(logger, guid)
+			Expect(err).NotTo(HaveOccurred())
+			return container.RunResult.Stopped
+		}
+	}
 
 	BeforeEach(func() {
 		gardenContainer = &gfakes.FakeContainer{}
@@ -623,14 +631,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		Context("when it is in the created state", func() {
-			var (
-				runReq            *executor.RunRequest
-				actionStep        *stepfakes.FakeStep
-				healthCheckPassed chan struct{}
-				finishPerforming  chan struct{}
-				done              chan struct{}
-				result            error
-			)
+			var runReq *executor.RunRequest
 
 			BeforeEach(func() {
 				runAction := &models.Action{
@@ -645,24 +646,9 @@ var _ = Describe("Container Store", func() {
 						Action: runAction,
 					},
 				}
-
-				actionStep = &stepfakes.FakeStep{}
-				healthCheckPassed = make(chan struct{})
-
-				megatron.StepsForContainerReturns(actionStep, healthCheckPassed, nil)
-
-				finishPerforming = make(chan struct{}, 1)
-				done = make(chan struct{})
 			})
 
 			JustBeforeEach(func() {
-				errResult := result
-				actionStep.PerformStub = func() error {
-					<-finishPerforming
-					close(done)
-					return errResult
-				}
-
 				_, err := containerStore.Reserve(logger, allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -673,86 +659,101 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			AfterEach(func() {
-				close(finishPerforming)
-				Eventually(done).Should(BeClosed())
-			})
-
-			It("performs the step", func() {
-				err := containerStore.Run(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(megatron.StepsForContainerCallCount()).To(Equal(1))
-				Eventually(actionStep.PerformCallCount).Should(Equal(1))
-			})
-
-			It("sets the container state to running once the healthcheck passes", func() {
-				err := containerStore.Run(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				container, err := containerStore.Get(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(container.State).To(Equal(executor.StateCreated))
-
-				healthCheckPassed <- struct{}{}
-				Eventually(func() executor.State {
-					container, err := containerStore.Get(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-					return container.State
-				}).Should(Equal(executor.StateRunning))
-			})
-
-			It("emits a container running event after the health check passes", func() {
-				err := containerStore.Run(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				healthCheckPassed <- struct{}{}
-
-				container, err := containerStore.Get(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
-				event := eventEmitter.EmitArgsForCall(1)
-				Expect(event).To(Equal(executor.ContainerRunningEvent{RawContainer: container}))
-			})
-
-			Context("when the action exits", func() {
+			Context("when the action runs indefinitely", func() {
+				var readyChan chan struct{}
 				BeforeEach(func() {
-					finishPerforming <- struct{}{}
+					readyChan = make(chan struct{})
+					var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						readyChan <- struct{}{}
+						close(ready)
+						<-signals
+						return nil
+					}
+					megatron.StepsRunnerReturns(testRunner, nil)
 				})
 
-				It("sets its state to completed", func() {
+				It("performs the step", func() {
 					err := containerStore.Run(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Eventually(actionStep.PerformCallCount).Should(Equal(1))
+					Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+					Eventually(readyChan).Should(Receive())
+				})
+
+				It("sets the container state to running once the healthcheck passes", func() {
+					err := containerStore.Run(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
 
 					container, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(container.State).To(Equal(executor.StateCompleted))
+					Expect(container.State).To(Equal(executor.StateCreated))
+
+					Eventually(readyChan).Should(Receive())
+
+					Eventually(func() executor.State {
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						return container.State
+					}).Should(Equal(executor.StateRunning))
 				})
 
-				It("emits a container completed event", func() {
+				It("emits a container running event after the health check passes", func() {
 					err := containerStore.Run(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(readyChan).Should(Receive())
+
+					container, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
-
-					container, err := containerStore.Get(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
 					event := eventEmitter.EmitArgsForCall(1)
-					Expect(event).To(Equal(executor.ContainerCompleteEvent{
-						RawContainer: container,
-					}))
+					Expect(event).To(Equal(executor.ContainerRunningEvent{RawContainer: container}))
 				})
+			})
 
+			Context("when the action exits", func() {
 				Context("successfully", func() {
+					BeforeEach(func() {
+						var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+							return nil
+						}
+						megatron.StepsRunnerReturns(testRunner, nil)
+					})
+
+					It("sets its state to completed", func() {
+						err := containerStore.Run(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+					})
+
+					It("emits a container completed event", func() {
+						err := containerStore.Run(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+
+						Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						event := eventEmitter.EmitArgsForCall(1)
+						Expect(event).To(Equal(executor.ContainerCompleteEvent{
+							RawContainer: container,
+						}))
+					})
+
 					It("sets the result on the container", func() {
 						err := containerStore.Run(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						Eventually(actionStep.PerformCallCount).Should(Equal(1))
+						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
 
 						container, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
@@ -763,14 +764,17 @@ var _ = Describe("Container Store", func() {
 
 				Context("unsuccessfully", func() {
 					BeforeEach(func() {
-						result = errors.New("BOOOOOOM!!!!!!!")
+						var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+							return errors.New("BOOOOM!!!!")
+						}
+						megatron.StepsRunnerReturns(testRunner, nil)
 					})
 
 					It("sets the run result on the container", func() {
 						err := containerStore.Run(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						Eventually(actionStep.PerformCallCount).Should(Equal(1))
+						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
 
 						container, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
@@ -783,13 +787,12 @@ var _ = Describe("Container Store", func() {
 
 			Context("when the transformer fails to generate steps", func() {
 				BeforeEach(func() {
-					megatron.StepsForContainerReturns(nil, nil, errors.New("defeated by the auto bots"))
+					megatron.StepsRunnerReturns(nil, errors.New("defeated by the auto bots"))
 				})
 
 				It("returns an error", func() {
 					err := containerStore.Run(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
-					close(done)
 				})
 			})
 		})
@@ -815,15 +818,16 @@ var _ = Describe("Container Store", func() {
 	})
 
 	Describe("Stop", func() {
-		var (
-			actionStep *stepfakes.FakeStep
-		)
-
+		var finishRun chan struct{}
 		BeforeEach(func() {
-			actionStep = &stepfakes.FakeStep{}
-
+			finishRun = make(chan struct{})
+			var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+				<-signals
+				finishRun <- struct{}{}
+				return nil
+			}
 			gardenClient.CreateReturns(gardenContainer, nil)
-			megatron.StepsForContainerReturns(actionStep, nil, nil)
+			megatron.StepsRunnerReturns(testRunner, nil)
 		})
 
 		JustBeforeEach(func() {
@@ -838,15 +842,6 @@ var _ = Describe("Container Store", func() {
 		})
 
 		Context("when the container has processes associated with it", func() {
-			var finishRun chan struct{}
-			BeforeEach(func() {
-				finishRun = make(chan struct{})
-				actionStep.PerformStub = func() error {
-					<-finishRun
-					return nil
-				}
-			})
-
 			JustBeforeEach(func() {
 				err := containerStore.Run(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -859,9 +854,8 @@ var _ = Describe("Container Store", func() {
 					errCh <- containerStore.Stop(logger, containerGuid)
 				}()
 
-				Eventually(actionStep.CancelCallCount).Should(Equal(1))
 				Consistently(errCh).ShouldNot(Receive())
-				close(finishRun)
+				Eventually(finishRun).Should(Receive())
 				Eventually(errCh).Should(Receive())
 			})
 
@@ -870,8 +864,8 @@ var _ = Describe("Container Store", func() {
 				go func() {
 					errCh <- containerStore.Stop(logger, containerGuid)
 				}()
-				Eventually(actionStep.CancelCallCount).Should(Equal(1))
-				close(finishRun)
+
+				Eventually(finishRun).Should(Receive())
 				Eventually(errCh).Should(Receive())
 
 				container, err := containerStore.Get(logger, containerGuid)
@@ -1006,21 +1000,15 @@ var _ = Describe("Container Store", func() {
 		})
 
 		Context("when there is a running process associated with the container", func() {
-			var (
-				finishRun  chan struct{}
-				actionStep *stepfakes.FakeStep
-			)
-
+			var finishRun chan struct{}
 			BeforeEach(func() {
-				actionStep = &stepfakes.FakeStep{}
-
-				megatron.StepsForContainerReturns(actionStep, nil, nil)
-
-				finishRun = make(chan struct{})
-				actionStep.PerformStub = func() error {
-					<-finishRun
+				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					<-signals
+					finishRun <- struct{}{}
 					return nil
 				}
+
+				megatron.StepsRunnerReturns(testRunner, nil)
 			})
 
 			JustBeforeEach(func() {
@@ -1034,9 +1022,8 @@ var _ = Describe("Container Store", func() {
 					errCh <- containerStore.Destroy(logger, containerGuid)
 				}()
 
-				Eventually(actionStep.CancelCallCount).Should(Equal(1))
 				Consistently(errCh).ShouldNot(Receive())
-				close(finishRun)
+				Eventually(finishRun).Should(Receive())
 				Eventually(errCh).Should(Receive())
 			})
 		})

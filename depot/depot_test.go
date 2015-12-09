@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
-	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
+	fakes "github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -30,7 +30,7 @@ var _ = Describe("Depot", func() {
 		logger         lager.Logger
 		fakeClock      *fakeclock.FakeClock
 		eventHub       *efakes.FakeHub
-		gardenStore    *fakes.FakeGardenStore
+		gardenClient   *fakes.FakeGardenClient
 		containerStore *containerstorefakes.FakeContainerStore
 		resources      executor.ExecutorResources
 	)
@@ -39,7 +39,7 @@ var _ = Describe("Depot", func() {
 		logger = lagertest.NewTestLogger("test")
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		eventHub = new(efakes.FakeHub)
-		gardenStore = new(fakes.FakeGardenStore)
+		gardenClient = new(fakes.FakeGardenClient)
 		containerStore = new(containerstorefakes.FakeContainerStore)
 
 		resources = executor.ExecutorResources{
@@ -55,10 +55,7 @@ var _ = Describe("Depot", func() {
 			MetricsWorkPoolSize: 5,
 		}
 
-		d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, workPoolSettings)
-		Expect(err).NotTo(HaveOccurred())
-
-		depotClient = d.WithLogger(logger)
+		depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -71,7 +68,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate the container", func() {
-				errMessageMap, err := depotClient.AllocateContainers(requests)
+				errMessageMap, err := depotClient.AllocateContainers(logger, requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 
@@ -93,7 +90,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate all the containers", func() {
-				errMessageMap, err := depotClient.AllocateContainers(requests)
+				errMessageMap, err := depotClient.AllocateContainers(logger, requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessageMap).To(BeEmpty())
 
@@ -131,7 +128,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with duplicate guid", func() {
-				failures, err := depotClient.AllocateContainers(requests)
+				failures, err := depotClient.AllocateContainers(logger, requests)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(failures).To(HaveLen(1))
@@ -158,7 +155,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with empty guid", func() {
-				failures, err := depotClient.AllocateContainers(requests)
+				failures, err := depotClient.AllocateContainers(logger, requests)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(failures).To(HaveLen(1))
 				expectedFailure := executor.NewAllocationFailure(&requests[1], executor.ErrGuidNotSpecified.Error())
@@ -193,7 +190,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should create garden container, run it, and remove from allocation store", func() {
-				err := depotClient.RunContainer(runRequest)
+				err := depotClient.RunContainer(logger, runRequest)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(containerStore.InitializeCallCount()).To(Equal(1))
@@ -216,7 +213,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should return error", func() {
-				err := depotClient.RunContainer(newRunRequest("missing-guid"))
+				err := depotClient.RunContainer(logger, newRunRequest("missing-guid"))
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
@@ -229,7 +226,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("returns an error", func() {
-				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
+				err := depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -240,11 +237,11 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should log the error", func() {
-				err := depotClient.RunContainer(newRunRequest(gardenStoreGuid))
+				err := depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
-				Expect(logger).To(gbytes.Say("test.depot-client.run-container.failed-running-container-in-garden"))
+				Expect(logger).To(gbytes.Say("run-container.failed-running-container-in-garden"))
 			})
 		})
 	})
@@ -271,10 +268,7 @@ var _ = Describe("Depot", func() {
 				MetricsWorkPoolSize: 5,
 			}
 
-			d, err := depot.NewClientProvider(resources, containerStore, gardenStore, eventHub, workPoolSettings)
-			Expect(err).NotTo(HaveOccurred())
-
-			depotClient = d.WithLogger(logger)
+			depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
 		})
 
 		Context("Container creation", func() {
@@ -296,7 +290,7 @@ var _ = Describe("Depot", func() {
 
 			It("throttles the requests to Garden", func() {
 				for i := 0; i < numRequests; i++ {
-					go depotClient.RunContainer(newRunRequest(gardenStoreGuid))
+					go depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
 				}
 
 				Eventually(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
@@ -344,7 +338,7 @@ var _ = Describe("Depot", func() {
 				deleteContainerCount := 0
 				for i := 0; i < numRequests; i++ {
 					deleteContainerCount++
-					go depotClient.DeleteContainer(gardenStoreGuid)
+					go depotClient.DeleteContainer(logger, gardenStoreGuid)
 				}
 
 				Eventually(func() int {
@@ -392,7 +386,7 @@ var _ = Describe("Depot", func() {
 				getFilesCount := 0
 				for i := 0; i < numRequests; i++ {
 					getFilesCount++
-					go depotClient.GetFiles(gardenStoreGuid, "/some/path")
+					go depotClient.GetFiles(logger, gardenStoreGuid, "/some/path")
 				}
 
 				Eventually(throttleChan).Should(HaveLen(workPoolSettings.ReadWorkPoolSize))
@@ -432,7 +426,7 @@ var _ = Describe("Depot", func() {
 
 			It("throttles the requests to Garden", func() {
 				for i := 0; i < numRequests; i++ {
-					go depotClient.GetBulkMetrics()
+					go depotClient.GetBulkMetrics(logger)
 				}
 
 				Eventually(func() int {
@@ -462,7 +456,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("lists the containers in the container store", func() {
-			returnedContainers, err := depotClient.ListContainers()
+			returnedContainers, err := depotClient.ListContainers(logger)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(returnedContainers).To(Equal(containers))
 			Expect(containerStore.ListCallCount()).To(Equal(1))
@@ -493,7 +487,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		JustBeforeEach(func() {
-			metrics, metricsErr = depotClient.GetBulkMetrics()
+			metrics, metricsErr = depotClient.GetBulkMetrics(logger)
 		})
 
 		Context("with no tags", func() {
@@ -577,7 +571,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("removes the container from the container store", func() {
-			err := depotClient.DeleteContainer("guid-1")
+			err := depotClient.DeleteContainer(logger, "guid-1")
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(containerStore.DestroyCallCount()).To(Equal(1))
@@ -592,7 +586,7 @@ var _ = Describe("Depot", func() {
 
 			It("should return an error", func() {
 				Expect(containerStore.DestroyCallCount()).To(Equal(0))
-				err := depotClient.DeleteContainer("guid-1")
+				err := depotClient.DeleteContainer(logger, "guid-1")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -607,7 +601,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		JustBeforeEach(func() {
-			stopError = depotClient.StopContainer(stopGuid)
+			stopError = depotClient.StopContainer(logger, stopGuid)
 		})
 
 		It("stops the container in the container store", func() {
@@ -637,7 +631,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("retrieves the container from the container store", func() {
-			fetchedContainer, err := depotClient.GetContainer("the-container-guid")
+			fetchedContainer, err := depotClient.GetContainer(logger, "the-container-guid")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fetchedContainer).To(Equal(container))
 
@@ -652,7 +646,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("returns the error", func() {
-				_, err := depotClient.GetContainer("any-guid")
+				_, err := depotClient.GetContainer(logger, "any-guid")
 				Expect(err).To(Equal(errors.New("failed-to-get-container")))
 			})
 		})
@@ -667,7 +661,7 @@ var _ = Describe("Depot", func() {
 		})
 
 		It("should reduce resources used by allocated and running containers", func() {
-			actualResources, err := depotClient.RemainingResources()
+			actualResources, err := depotClient.RemainingResources(logger)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(actualResources).To(Equal(resources))
 		})
@@ -676,7 +670,7 @@ var _ = Describe("Depot", func() {
 	Describe("TotalResources", func() {
 		Context("when asked for total resources", func() {
 			It("should return the resources it was configured with", func() {
-				Expect(depotClient.TotalResources()).To(Equal(resources))
+				Expect(depotClient.TotalResources(logger)).To(Equal(resources))
 			})
 		})
 	})

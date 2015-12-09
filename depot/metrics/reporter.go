@@ -22,9 +22,9 @@ const (
 )
 
 type ExecutorSource interface {
-	RemainingResources() (executor.ExecutorResources, error)
-	TotalResources() (executor.ExecutorResources, error)
-	ListContainers() ([]executor.Container, error)
+	RemainingResources(lager.Logger) (executor.ExecutorResources, error)
+	TotalResources(lager.Logger) (executor.ExecutorResources, error)
+	ListContainers(lager.Logger) ([]executor.Container, error)
 }
 
 type Reporter struct {
@@ -34,6 +34,8 @@ type Reporter struct {
 }
 
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	logger := reporter.Logger.Session("metrics-reporter")
+
 	close(ready)
 
 	for {
@@ -42,7 +44,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			return nil
 
 		case <-time.After(reporter.Interval):
-			remainingCapacity, err := reporter.ExecutorSource.RemainingResources()
+			remainingCapacity, err := reporter.ExecutorSource.RemainingResources(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-remaining-resources", err)
 				remainingCapacity.Containers = -1
@@ -50,7 +52,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				remainingCapacity.MemoryMB = -1
 			}
 
-			totalCapacity, err := reporter.ExecutorSource.TotalResources()
+			totalCapacity, err := reporter.ExecutorSource.TotalResources(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-total-resources", err)
 				totalCapacity.Containers = -1
@@ -59,7 +61,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			}
 
 			var nContainers int
-			containers, err := reporter.ExecutorSource.ListContainers()
+			containers, err := reporter.ExecutorSource.ListContainers(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-to-list-containers", err)
 				nContainers = -1
