@@ -313,7 +313,6 @@ func (n *storeNode) stop(logger lager.Logger) error {
 
 	if n.process != nil {
 		n.process.Signal(os.Interrupt)
-		<-n.process.Wait()
 	} else {
 		n.complete(logger, true, "stopped-before-running")
 	}
@@ -328,6 +327,10 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	err := n.stop(logger)
 	if err != nil {
 		return err
+	}
+
+	if n.process != nil {
+		<-n.process.Wait()
 	}
 
 	logger.Debug("destroying-garden-container")

@@ -842,26 +842,11 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("calls cancel and waits for the running process to return", func() {
-				errCh := make(chan error)
-
-				go func() {
-					errCh <- containerStore.Stop(logger, containerGuid)
-				}()
-
-				Consistently(errCh).ShouldNot(Receive())
-				Eventually(finishRun).Should(Receive())
-				Eventually(errCh).Should(Receive())
-			})
-
 			It("sets stopped to true on the run result", func() {
-				errCh := make(chan error)
-				go func() {
-					errCh <- containerStore.Stop(logger, containerGuid)
-				}()
+				err := containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(finishRun).Should(Receive())
-				Eventually(errCh).Should(Receive())
 
 				container, err := containerStore.Get(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
