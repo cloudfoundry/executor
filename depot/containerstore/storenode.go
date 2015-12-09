@@ -3,17 +3,18 @@ package containerstore
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 const ContainerInitializationFailedMessage = "failed to initialize container"
@@ -33,18 +34,8 @@ type storeNode struct {
 	gardenContainer garden.Container
 	eventEmitter    event.Hub
 	transformer     transformer.Transformer
-	process         *runningProcess
+	process         ifrit.Process
 	config          *ContainerConfig
-}
-
-type runningProcess struct {
-	action            steps.Step
-	done              chan struct{}
-	healthCheckPassed <-chan struct{}
-}
-
-func newRunningProcess(action steps.Step, healthCheckPassed <-chan struct{}) *runningProcess {
-	return &runningProcess{action: action, done: make(chan struct{}), healthCheckPassed: healthCheckPassed}
 }
 
 func newStoreNode(
@@ -85,14 +76,15 @@ func (n *storeNode) Info() executor.Container {
 }
 
 func (n *storeNode) GetFiles(logger lager.Logger, sourcePath string) (io.ReadCloser, error) {
-	if n.gardenContainer == nil {
+	gc := n.gardenContainer
+	if gc == nil {
 		return nil, executor.ErrContainerNotFound
 	}
-
-	return n.gardenContainer.StreamOut(garden.StreamOutSpec{Path: sourcePath, User: "root"})
+	return gc.StreamOut(garden.StreamOutSpec{Path: sourcePath, User: "root"})
 }
 
 func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) error {
+	logger = logger.Session("node-initialize")
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
@@ -106,6 +98,7 @@ func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) er
 }
 
 func (n *storeNode) Create(logger lager.Logger) error {
+	logger = logger.Session("node-create")
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
@@ -263,6 +256,8 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 }
 
 func (n *storeNode) Run(logger lager.Logger) error {
+	logger = logger.Session("node-run")
+
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
@@ -273,50 +268,38 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromContainer(n.info)
 
-	action, healthCheckPassed, err := n.transformer.StepsForContainer(logger, n.info, n.gardenContainer, logStreamer)
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
 	if err != nil {
 		logger.Error("failed-to-build-steps", err)
 		return err
 	}
 
-	process := newRunningProcess(action, healthCheckPassed)
-	n.process = process
+	logger.Debug("execute-process")
+	n.process = ifrit.Background(runner)
 	go n.run(logger)
 	return nil
 }
 
 func (n *storeNode) run(logger lager.Logger) {
-	resultCh := make(chan error)
-	go func() {
-		resultCh <- n.process.action.Perform()
-	}()
+	<-n.process.Ready()
+	logger.Debug("healthcheck-passed")
 
-	for {
-		select {
-		case err := <-resultCh:
-			defer close(n.process.done)
-			var failed bool
-			var failureReason string
+	n.infoLock.Lock()
+	n.info.State = executor.StateRunning
+	info := n.info
+	n.infoLock.Unlock()
+	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
-			if err != nil {
-				failed = true
-				failureReason = err.Error()
-			}
-
-			n.complete(logger, failed, failureReason)
-			return
-
-		case <-n.process.healthCheckPassed:
-			n.infoLock.Lock()
-			n.info.State = executor.StateRunning
-			info := n.info
-			n.infoLock.Unlock()
-			go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
-		}
+	err := <-n.process.Wait()
+	if err != nil {
+		n.complete(logger, true, err.Error())
+	} else {
+		n.complete(logger, false, "")
 	}
 }
 
 func (n *storeNode) Stop(logger lager.Logger) error {
+	logger = logger.Session("node-stop")
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
@@ -329,8 +312,8 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	n.infoLock.Unlock()
 
 	if n.process != nil {
-		n.process.action.Cancel()
-		<-n.process.done
+		n.process.Signal(os.Interrupt)
+		<-n.process.Wait()
 	} else {
 		n.complete(logger, true, "stopped-before-running")
 	}
@@ -338,6 +321,7 @@ func (n *storeNode) stop(logger lager.Logger) error {
 }
 
 func (n *storeNode) Destroy(logger lager.Logger) error {
+	logger = logger.Session("node-destroy")
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
@@ -395,6 +379,7 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 }
 
 func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason string) {
+	logger.Debug("node-complete", lager.Data{"failed": failed, "reason": failureReason})
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason)

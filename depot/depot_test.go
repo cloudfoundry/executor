@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
-	fakes "github.com/cloudfoundry-incubator/executor/depot/fakes"
+	fakes "github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -30,7 +30,7 @@ var _ = Describe("Depot", func() {
 		logger         lager.Logger
 		fakeClock      *fakeclock.FakeClock
 		eventHub       *efakes.FakeHub
-		gardenStore    *fakes.FakeGardenStore
+		gardenClient   *fakes.FakeGardenClient
 		containerStore *containerstorefakes.FakeContainerStore
 		resources      executor.ExecutorResources
 	)
@@ -39,7 +39,7 @@ var _ = Describe("Depot", func() {
 		logger = lagertest.NewTestLogger("test")
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		eventHub = new(efakes.FakeHub)
-		gardenStore = new(fakes.FakeGardenStore)
+		gardenClient = new(fakes.FakeGardenClient)
 		containerStore = new(containerstorefakes.FakeContainerStore)
 
 		resources = executor.ExecutorResources{
@@ -55,7 +55,7 @@ var _ = Describe("Depot", func() {
 			MetricsWorkPoolSize: 5,
 		}
 
-		depotClient = depot.NewClient(resources, containerStore, gardenStore, eventHub, workPoolSettings)
+		depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -171,17 +171,17 @@ var _ = Describe("Depot", func() {
 
 	Describe("RunContainer", func() {
 		var (
-			gardenStoreGuid string
-			allocRequests   []executor.AllocationRequest
-			runRequest      *executor.RunRequest
+			containerGuid string
+			allocRequests []executor.AllocationRequest
+			runRequest    *executor.RunRequest
 		)
 
 		BeforeEach(func() {
-			gardenStoreGuid = "garden-store-guid"
+			containerGuid = "container-guid"
 			allocRequests = []executor.AllocationRequest{
-				newAllocationRequest(gardenStoreGuid, 512, 512),
+				newAllocationRequest(containerGuid, 512, 512),
 			}
-			runRequest = newRunRequest(gardenStoreGuid)
+			runRequest = newRunRequest(containerGuid)
 		})
 
 		Context("when the container is valid", func() {
@@ -189,7 +189,7 @@ var _ = Describe("Depot", func() {
 				containerStore.InitializeReturns(nil)
 			})
 
-			It("should create garden container, run it, and remove from allocation store", func() {
+			It("should move the container state machine from reserved to initialize, create, and run", func() {
 				err := depotClient.RunContainer(logger, runRequest)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -200,10 +200,10 @@ var _ = Describe("Depot", func() {
 				Eventually(containerStore.CreateCallCount).Should(Equal(1))
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
 				_, guid := containerStore.CreateArgsForCall(0)
-				Expect(guid).To(Equal(gardenStoreGuid))
+				Expect(guid).To(Equal(containerGuid))
 
 				_, guid = containerStore.RunArgsForCall(0)
-				Expect(guid).To(Equal(gardenStoreGuid))
+				Expect(guid).To(Equal(containerGuid))
 			})
 		})
 
@@ -226,7 +226,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("returns an error", func() {
-				err := depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
+				err := depotClient.RunContainer(logger, newRunRequest(containerGuid))
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -237,7 +237,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should log the error", func() {
-				err := depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
+				err := depotClient.RunContainer(logger, newRunRequest(containerGuid))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
@@ -249,7 +249,7 @@ var _ = Describe("Depot", func() {
 	Describe("Throttling", func() {
 		var (
 			numRequests      int
-			gardenStoreGuid  = "garden-store-guid"
+			containerGuid    = "garden-store-guid"
 			workPoolSettings executor.WorkPoolSettings
 		)
 
@@ -268,7 +268,7 @@ var _ = Describe("Depot", func() {
 				MetricsWorkPoolSize: 5,
 			}
 
-			depotClient = depot.NewClient(resources, containerStore, gardenStore, eventHub, workPoolSettings)
+			depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
 		})
 
 		Context("Container creation", func() {
@@ -290,7 +290,7 @@ var _ = Describe("Depot", func() {
 
 			It("throttles the requests to Garden", func() {
 				for i := 0; i < numRequests; i++ {
-					go depotClient.RunContainer(logger, newRunRequest(gardenStoreGuid))
+					go depotClient.RunContainer(logger, newRunRequest(containerGuid))
 				}
 
 				Eventually(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
@@ -338,7 +338,7 @@ var _ = Describe("Depot", func() {
 				deleteContainerCount := 0
 				for i := 0; i < numRequests; i++ {
 					deleteContainerCount++
-					go depotClient.DeleteContainer(logger, gardenStoreGuid)
+					go depotClient.DeleteContainer(logger, containerGuid)
 				}
 
 				Eventually(func() int {
@@ -386,7 +386,7 @@ var _ = Describe("Depot", func() {
 				getFilesCount := 0
 				for i := 0; i < numRequests; i++ {
 					getFilesCount++
-					go depotClient.GetFiles(logger, gardenStoreGuid, "/some/path")
+					go depotClient.GetFiles(logger, containerGuid, "/some/path")
 				}
 
 				Eventually(throttleChan).Should(HaveLen(workPoolSettings.ReadWorkPoolSize))

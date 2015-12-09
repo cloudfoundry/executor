@@ -17,6 +17,7 @@ import (
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 var ErrNoCheck = errors.New("no check configured")
@@ -25,7 +26,7 @@ var ErrNoCheck = errors.New("no check configured")
 
 type Transformer interface {
 	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, []executor.PortMapping, lager.Logger) steps.Step
-	StepsForContainer(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (steps.Step, <-chan struct{}, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
 type transformer struct {
@@ -209,12 +210,12 @@ func (t *transformer) StepFor(
 	panic(fmt.Sprintf("unknown action: %T", action))
 }
 
-func (t *transformer) StepsForContainer(
+func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
-) (steps.Step, <-chan struct{}, error) {
+) (ifrit.Runner, error) {
 	var setup, action, monitor steps.Step
 	if container.Setup != nil {
 		setup = t.StepFor(
@@ -230,7 +231,7 @@ func (t *transformer) StepsForContainer(
 	if container.Action == nil {
 		err := errors.New("container cannot have empty action")
 		logger.Error("empty-action", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	action = t.StepFor(
@@ -284,5 +285,5 @@ func (t *transformer) StepsForContainer(
 		step = steps.NewSerial([]steps.Step{setup, longLivedAction})
 	}
 
-	return step, hasStartedRunning, nil
+	return newStepRunner(step, hasStartedRunning), nil
 }

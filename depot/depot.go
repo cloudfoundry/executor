@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
+	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
@@ -16,7 +17,7 @@ const ContainerStoppedBeforeRunMessage = "Container stopped by user"
 type client struct {
 	totalCapacity    executor.ExecutorResources
 	containerStore   containerstore.ContainerStore
-	gardenStore      GardenStore
+	gardenClient     garden.Client
 	eventHub         event.Hub
 	creationWorkPool *workpool.WorkPool
 	deletionWorkPool *workpool.WorkPool
@@ -27,16 +28,10 @@ type client struct {
 	healthy     bool
 }
 
-//go:generate counterfeiter -o fakes/fake_garden_store.go . GardenStore
-type GardenStore interface {
-	// This should probably live somewhere else.
-	Ping() error
-}
-
 func NewClient(
 	totalCapacity executor.ExecutorResources,
 	containerStore containerstore.ContainerStore,
-	gardenStore GardenStore,
+	gardenClient garden.Client,
 	eventHub event.Hub,
 	workPoolSettings executor.WorkPoolSettings,
 ) executor.Client {
@@ -61,7 +56,7 @@ func NewClient(
 	return &client{
 		totalCapacity:    totalCapacity,
 		containerStore:   containerStore,
-		gardenStore:      gardenStore,
+		gardenClient:     gardenClient,
 		eventHub:         eventHub,
 		creationWorkPool: creationWorkPool,
 		deletionWorkPool: deletionWorkPool,
@@ -248,8 +243,8 @@ func (c *client) RemainingResources(logger lager.Logger) (executor.ExecutorResou
 	return c.containerStore.RemainingResources(logger), nil
 }
 
-func (c *client) Ping(lager.Logger) error {
-	return c.gardenStore.Ping()
+func (c *client) Ping(logger lager.Logger) error {
+	return c.gardenClient.Ping()
 }
 
 func (c *client) TotalResources(logger lager.Logger) (executor.ExecutorResources, error) {

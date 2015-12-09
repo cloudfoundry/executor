@@ -16,12 +16,13 @@ import (
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/tedsuo/ifrit"
 
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 )
 
 var _ = Describe("Transformer", func() {
-	Describe("StepsForContainer", func() {
+	Describe("StepsRunner", func() {
 		var (
 			logger          lager.Logger
 			optimusPrime    transformer.Transformer
@@ -82,7 +83,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, _, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
+				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -106,13 +107,10 @@ var _ = Describe("Transformer", func() {
 				}
 			}
 
-			action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
+			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 
-			errCh := make(chan error)
-			go func() {
-				errCh <- action.Perform()
-			}()
+			process := ifrit.Background(runner)
 
 			Eventually(gardenContainer.RunCallCount).Should(Equal(1))
 			processSpec, _ := gardenContainer.RunArgsForCall(0)
@@ -126,23 +124,23 @@ var _ = Describe("Transformer", func() {
 			Expect(processSpec.Path).To(Equal("/action/path"))
 			Consistently(gardenContainer.RunCallCount).Should(Equal(2))
 
-			Consistently(hasStartedRunning).ShouldNot(Receive())
+			Consistently(process.Ready()).ShouldNot(Receive())
 
 			clock.Increment(1 * time.Second)
 			Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 			processSpec, _ = gardenContainer.RunArgsForCall(2)
 			Expect(processSpec.Path).To(Equal("/monitor/path"))
-			Consistently(hasStartedRunning).ShouldNot(Receive())
+			Consistently(process.Ready()).ShouldNot(Receive())
 
 			clock.Increment(1 * time.Second)
 			Eventually(gardenContainer.RunCallCount).Should(Equal(4))
 			processSpec, _ = gardenContainer.RunArgsForCall(3)
 			Expect(processSpec.Path).To(Equal("/monitor/path"))
-			Eventually(hasStartedRunning).Should(Receive())
+			Eventually(process.Ready()).Should(BeClosed())
 
-			action.Cancel()
+			process.Signal(os.Interrupt)
 			clock.Increment(1 * time.Second)
-			Eventually(errCh).Should(Receive(nil))
+			Eventually(process.Wait()).Should(Receive(nil))
 		})
 
 		Context("when there is no setup", func() {
@@ -153,13 +151,10 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
 
-				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
-				errCh := make(chan error)
-				go func() {
-					errCh <- action.Perform()
-				}()
+				process := ifrit.Background(runner)
 
 				Eventually(gardenContainer.RunCallCount).Should(Equal(1))
 				processSpec, _ := gardenContainer.RunArgsForCall(0)
@@ -170,11 +165,11 @@ var _ = Describe("Transformer", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 				processSpec, _ = gardenContainer.RunArgsForCall(1)
 				Expect(processSpec.Path).To(Equal("/monitor/path"))
-				Eventually(hasStartedRunning).Should(Receive())
+				Eventually(process.Ready()).Should(BeClosed())
 
-				action.Cancel()
+				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
-				Eventually(errCh).Should(Receive(nil))
+				Eventually(process.Wait()).Should(Receive(nil))
 			})
 		})
 
@@ -186,15 +181,11 @@ var _ = Describe("Transformer", func() {
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
 				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
 
-				action, hasStartedRunning, err := optimusPrime.StepsForContainer(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
-				errCh := make(chan error)
-				go func() {
-					errCh <- action.Perform()
-				}()
-
-				Expect(hasStartedRunning).To(Receive())
+				process := ifrit.Background(runner)
+				Eventually(process.Ready()).Should(BeClosed())
 
 				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 				processSpec, _ := gardenContainer.RunArgsForCall(1)
