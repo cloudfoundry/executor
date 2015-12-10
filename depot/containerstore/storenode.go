@@ -313,6 +313,7 @@ func (n *storeNode) stop(logger lager.Logger) error {
 
 	if n.process != nil {
 		n.process.Signal(os.Interrupt)
+		logger.Debug("signaled-process")
 	} else {
 		n.complete(logger, true, "stopped-before-running")
 	}

@@ -21,15 +21,20 @@ func (p *StepRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 		resultCh <- p.action.Perform()
 	}()
 
-	<-p.healthCheckPassed
-	close(ready)
-
 	for {
 		select {
+		case <-p.healthCheckPassed:
+			p.healthCheckPassed = nil
+			close(ready)
+
 		case <-signals:
-			p.action.Cancel()
 			signals = nil
+			p.action.Cancel()
+
 		case err := <-resultCh:
+			if p.healthCheckPassed != nil {
+				close(ready)
+			}
 			return err
 		}
 	}
