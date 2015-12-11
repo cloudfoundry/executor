@@ -26,16 +26,18 @@ const GardenContainerCreationDuration = metric.Duration("GardenContainerCreation
 type storeNode struct {
 	modifiedIndex uint
 
-	info     executor.Container
-	infoLock *sync.Mutex
-
-	opLock          *sync.Mutex
-	gardenClient    garden.Client
+	// infoLock protects modifying info and swapping gardenContainer pointers
+	infoLock        *sync.Mutex
+	info            executor.Container
 	gardenContainer garden.Container
-	eventEmitter    event.Hub
-	transformer     transformer.Transformer
-	process         ifrit.Process
-	config          *ContainerConfig
+
+	// opLock serializes public methods that involve garden interactions
+	opLock       *sync.Mutex
+	gardenClient garden.Client
+	eventEmitter event.Hub
+	transformer  transformer.Transformer
+	process      ifrit.Process
+	config       *ContainerConfig
 }
 
 func newStoreNode(
@@ -76,7 +78,9 @@ func (n *storeNode) Info() executor.Container {
 }
 
 func (n *storeNode) GetFiles(logger lager.Logger, sourcePath string) (io.ReadCloser, error) {
+	n.infoLock.Lock()
 	gc := n.gardenContainer
+	n.infoLock.Unlock()
 	if gc == nil {
 		return nil, executor.ErrContainerNotFound
 	}
@@ -89,7 +93,6 @@ func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) er
 	defer n.infoLock.Unlock()
 
 	err := n.info.TransistionToInitialize(req)
-
 	if err != nil {
 		logger.Error("failed-to-initialize", err)
 		return err
@@ -102,18 +105,19 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
-	var initialized bool
 	n.infoLock.Lock()
-	initialized = n.info.State == executor.StateInitializing
+	info := n.info.Copy()
 	n.infoLock.Unlock()
-	if !initialized {
+
+	if !info.ValidateTransitionTo(executor.StateCreated) {
 		logger.Error("failed-to-create", executor.ErrInvalidTransition)
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromContainer(n.info)
+	logStreamer := logStreamerFromContainer(info)
+
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
-	err := n.createInGarden(logger)
+	gardenContainer, err := n.createInGarden(logger, &info)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
@@ -123,29 +127,19 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
 
 	n.infoLock.Lock()
-	err = n.info.TransistionToCreate()
+	n.gardenContainer = gardenContainer
+	n.info = info
 	n.infoLock.Unlock()
-	if err != nil {
-		logger.Error("failed-to-transition-to-created", err)
-		n.complete(logger, true, ContainerInitializationFailedMessage)
-		return err
-	}
 
 	return nil
 }
 
-func (n *storeNode) createInGarden(logger lager.Logger) error {
-	info := n.info.Copy()
-
-	diskScope := garden.DiskLimitScopeExclusive
-	if info.DiskScope == executor.TotalDiskLimit {
-		diskScope = garden.DiskLimitScopeTotal
-	}
-
+func (n *storeNode) createInGarden(logger lager.Logger, info *executor.Container) (garden.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
 		RootFSPath: info.RootFSPath,
+		Env:        convertEnvVars(info.Env),
 		Limits: garden.Limits{
 			Memory: garden.MemoryLimits{
 				LimitInBytes: uint64(info.MemoryMB * 1024 * 1024),
@@ -153,7 +147,7 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 			Disk: garden.DiskLimits{
 				ByteHard:  uint64(info.DiskMB * 1024 * 1024),
 				InodeHard: n.config.INodeLimit,
-				Scope:     diskScope,
+				Scope:     convertDiskScope(info.DiskScope),
 			},
 			CPU: garden.CPULimits{
 				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(info.CPUWeight) / 100.0),
@@ -164,95 +158,41 @@ func (n *storeNode) createInGarden(logger lager.Logger) error {
 		},
 	}
 
-	for _, envVar := range info.Env {
-		containerSpec.Env = append(containerSpec.Env, envVar.Name+"="+envVar.Value)
-	}
-
-	netOutRules := []garden.NetOutRule{}
-	for _, rule := range info.EgressRules {
-		if err := rule.Validate(); err != nil {
-			logger.Error("invalid-egress-rule", err)
-			return err
-		}
-
-		netOutRule, err := securityGroupRuleToNetOutRule(rule)
-		if err != nil {
-			logger.Error("failed-to-convert-to-net-out-rule", err)
-			return err
-		}
-
-		netOutRules = append(netOutRules, netOutRule)
-	}
-
-	logger.Info("creating-container-in-garden")
-	startTime := time.Now()
-	gardenContainer, err := n.gardenClient.Create(containerSpec)
+	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
 	if err != nil {
-		logger.Error("failed-to-creating-container-in-garden", err)
-		return err
-	}
-	GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
-	logger.Info("created-container-in-garden")
-
-	for _, rule := range netOutRules {
-		logger.Debug("net-out")
-		err = gardenContainer.NetOut(rule)
-		if err != nil {
-			destroyErr := n.gardenClient.Destroy(n.info.Guid)
-			if destroyErr != nil {
-				logger.Error("failed-destroy-container", err)
-			}
-			logger.Error("net-out-failed", err)
-			return err
-		}
-		logger.Debug("net-out-complete")
+		return nil, err
 	}
 
-	if info.Ports != nil {
-		actualPortMappings := make([]executor.PortMapping, len(info.Ports))
-		for i, portMapping := range info.Ports {
-			logger.Debug("net-in")
-			actualHost, actualContainerPort, err := gardenContainer.NetIn(uint32(portMapping.HostPort), uint32(portMapping.ContainerPort))
-			if err != nil {
-				logger.Error("net-in-failed", err)
-
-				destroyErr := n.gardenClient.Destroy(info.Guid)
-				if destroyErr != nil {
-					logger.Error("failed-destroy-container", destroyErr)
-				}
-
-				return err
-			}
-			logger.Debug("net-in-complete")
-			actualPortMappings[i].ContainerPort = uint16(actualContainerPort)
-			actualPortMappings[i].HostPort = uint16(actualHost)
-		}
-
-		info.Ports = actualPortMappings
-	}
-
-	logger.Debug("container-info")
-	gardenInfo, err := gardenContainer.Info()
+	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient)
 	if err != nil {
-		logger.Error("failed-container-info", err)
-
-		destroyErr := n.gardenClient.Destroy(info.Guid)
-		if destroyErr != nil {
-			logger.Error("failed-destroy-container", destroyErr)
-		}
-
-		return err
+		return nil, err
 	}
-	logger.Debug("container-info-complete")
 
-	info.ExternalIP = gardenInfo.ExternalIP
-	n.gardenContainer = gardenContainer
+	err = setupNetOutOnContainer(logger, netOutRules, gardenContainer)
+	if err != nil {
+		n.destroyContainer(logger)
+		return nil, err
+	}
 
-	n.infoLock.Lock()
-	n.info = info
-	n.infoLock.Unlock()
+	info.Ports, err = setupNetInOnContainer(logger, info.Ports, gardenContainer)
+	if err != nil {
+		n.destroyContainer(logger)
+		return nil, err
+	}
 
-	return nil
+	externalIP, err := fetchExternalIp(logger, gardenContainer)
+	if err != nil {
+		n.destroyContainer(logger)
+		return nil, err
+	}
+	info.ExternalIP = externalIP
+
+	err = info.TransistionToCreate()
+	if err != nil {
+		return nil, err
+	}
+
+	return gardenContainer, nil
 }
 
 func (n *storeNode) Run(logger lager.Logger) error {
@@ -270,17 +210,16 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
 	if err != nil {
-		logger.Error("failed-to-build-steps", err)
 		return err
 	}
 
-	logger.Debug("execute-process")
 	n.process = ifrit.Background(runner)
 	go n.run(logger)
 	return nil
 }
 
 func (n *storeNode) run(logger lager.Logger) {
+	logger.Debug("execute-process")
 	<-n.process.Ready()
 	logger.Debug("healthcheck-passed")
 
@@ -334,8 +273,13 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		<-n.process.Wait()
 	}
 
+	return n.destroyContainer(logger)
+}
+
+func (n *storeNode) destroyContainer(logger lager.Logger) error {
 	logger.Debug("destroying-garden-container")
-	err = n.gardenClient.Destroy(n.info.Guid)
+
+	err := n.gardenClient.Destroy(n.info.Guid)
 	if err != nil {
 		if _, ok := err.(garden.ContainerNotFoundError); ok {
 			logger.Error("container-not-found-in-garden", err)
@@ -389,4 +333,58 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	n.info.TransitionToComplete(failed, failureReason)
 
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
+}
+
+func setupNetInOnContainer(logger lager.Logger, ports []executor.PortMapping, gardenContainer garden.Container) ([]executor.PortMapping, error) {
+	actualPortMappings := make([]executor.PortMapping, len(ports))
+	for i, portMapping := range ports {
+		logger.Debug("net-in")
+		actualHost, actualContainerPort, err := gardenContainer.NetIn(uint32(portMapping.HostPort), uint32(portMapping.ContainerPort))
+		if err != nil {
+			logger.Error("net-in-failed", err)
+			return nil, err
+		}
+		logger.Debug("net-in-complete")
+		actualPortMappings[i].ContainerPort = uint16(actualContainerPort)
+		actualPortMappings[i].HostPort = uint16(actualHost)
+	}
+	return actualPortMappings, nil
+}
+
+func setupNetOutOnContainer(logger lager.Logger, netOutRules []garden.NetOutRule, gardenContainer garden.Container) error {
+	for i := range netOutRules {
+		logger.Debug("net-out")
+		err := gardenContainer.NetOut(netOutRules[i])
+		if err != nil {
+			logger.Error("net-out-failed", err)
+			return err
+		}
+		logger.Debug("net-out-complete")
+	}
+	return nil
+}
+
+func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client) (garden.Container, error) {
+	logger.Info("creating-container-in-garden")
+	startTime := time.Now()
+	container, err := client.Create(spec)
+	if err != nil {
+		logger.Error("failed-to-creating-container-in-garden", err)
+		return nil, err
+	}
+	GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
+	logger.Info("created-container-in-garden")
+	return container, nil
+}
+
+func fetchExternalIp(logger lager.Logger, gardenContainer garden.Container) (string, error) {
+	logger.Debug("container-info")
+	gardenInfo, err := gardenContainer.Info()
+	if err != nil {
+		logger.Error("failed-container-info", err)
+		return "", err
+	}
+	logger.Debug("container-info-complete")
+
+	return gardenInfo.ExternalIP, nil
 }

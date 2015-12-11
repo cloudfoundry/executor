@@ -49,8 +49,24 @@ func NewContainerFromResource(guid string, resource *Resource, tags Tags) Contai
 	}
 }
 
+func (c *Container) ValidateTransitionTo(newState State) bool {
+	if newState == StateCompleted {
+		return true
+	}
+	switch c.State {
+	case StateReserved:
+		return newState == StateInitializing
+	case StateInitializing:
+		return newState == StateCreated
+	case StateCreated:
+		return newState == StateRunning
+	default:
+		return false
+	}
+}
+
 func (c *Container) TransistionToInitialize(req *RunRequest) error {
-	if c.State != StateReserved {
+	if !c.ValidateTransitionTo(StateInitializing) {
 		return ErrInvalidTransition
 	}
 	c.State = StateInitializing
@@ -60,7 +76,7 @@ func (c *Container) TransistionToInitialize(req *RunRequest) error {
 }
 
 func (c *Container) TransistionToCreate() error {
-	if c.State != StateInitializing {
+	if !c.ValidateTransitionTo(StateCreated) {
 		return ErrInvalidTransition
 	}
 

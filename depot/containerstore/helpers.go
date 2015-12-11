@@ -6,10 +6,47 @@ import (
 	"strings"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
+	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/pivotal-golang/lager"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
+
+func convertDiskScope(scope executor.DiskLimitScope) garden.DiskLimitScope {
+	if scope == executor.TotalDiskLimit {
+		return garden.DiskLimitScopeTotal
+	}
+	return garden.DiskLimitScopeExclusive
+}
+
+func convertEnvVars(execEnv []executor.EnvironmentVariable) []string {
+	env := make([]string, len(execEnv))
+	for i := range execEnv {
+		envVar := &execEnv[i]
+		env[i] = envVar.Name + "=" + envVar.Value
+	}
+	return env
+}
+
+func convertEgressToNetOut(logger lager.Logger, egressRules []*models.SecurityGroupRule) ([]garden.NetOutRule, error) {
+	netOutRules := make([]garden.NetOutRule, len(egressRules))
+	for i, rule := range egressRules {
+		if err := rule.Validate(); err != nil {
+			logger.Error("invalid-egress-rule", err)
+			return nil, err
+		}
+
+		netOutRule, err := securityGroupRuleToNetOutRule(rule)
+		if err != nil {
+			logger.Error("failed-to-convert-to-net-out-rule", err)
+			return nil, err
+		}
+
+		netOutRules[i] = netOutRule
+	}
+	return netOutRules, nil
+}
 
 func securityGroupRuleToNetOutRule(securityRule *models.SecurityGroupRule) (garden.NetOutRule, error) {
 	var protocol garden.Protocol

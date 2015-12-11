@@ -230,7 +230,7 @@ func (t *transformer) StepsRunner(
 
 	if container.Action == nil {
 		err := errors.New("container cannot have empty action")
-		logger.Error("empty-action", err)
+		logger.Error("steps-runner-empty-action", err)
 		return nil, err
 	}
 
