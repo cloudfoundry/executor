@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor/gardenhealth"
+	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -50,6 +52,7 @@ var _ = Describe("Runner", func() {
 	var timerProvider *fakegardenhealth.FakeTimerProvider
 	var checkTimer *fakeTimer
 	var timeoutTimer *fakeTimer
+	var sender *fake.FakeMetricSender
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -65,6 +68,9 @@ var _ = Describe("Runner", func() {
 			timers = timers[1:]
 			return timer
 		}
+
+		sender = fake.NewFakeMetricSender()
+		metrics.Initialize(sender, nil)
 	})
 
 	JustBeforeEach(func() {
@@ -86,6 +92,11 @@ var _ = Describe("Runner", func() {
 				It("fails without becoming ready", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
 					Consistently(process.Ready()).ShouldNot(BeClosed())
+				})
+
+				It("emits a metric for unhealthy cell", func() {
+					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
+					Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
 				})
 			})
 
@@ -109,6 +120,12 @@ var _ = Describe("Runner", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
 					Consistently(process.Ready()).ShouldNot(BeClosed())
 				})
+
+				It("emits a metric for unhealthy cell", func() {
+					Eventually(timeoutTimer.TimeChan).Should(BeSent(time.Time{}))
+					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
+					Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+				})
 			})
 		})
 
@@ -128,27 +145,34 @@ var _ = Describe("Runner", func() {
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Eventually(checker.HealthcheckCallCount).Should(Equal(4))
 			})
+
+			It("emits a metric for healthy cell", func() {
+				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(0)))
+			})
 		})
 
 		Context("When garden is intermittently healthy", func() {
 			var checkErr = errors.New("nope")
 
-			It("Sets healthy to false after it fails, then to true after success", func() {
+			It("Sets healthy to false after it fails, then to true after success and emits respective metrics", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				_, healthy := executorClient.SetHealthyArgsForCall(0)
 				Expect(healthy).Should(Equal(true))
+				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(0)))
 
 				checker.HealthcheckReturns(checkErr)
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy = executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
+				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(1)))
 
 				checker.HealthcheckReturns(nil)
 				Eventually(checkTimer.TimeChan).Should(BeSent(time.Time{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
 				_, healthy = executorClient.SetHealthyArgsForCall(2)
 				Expect(healthy).Should(Equal(true))
+				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(0)))
 			})
 		})
 
@@ -178,10 +202,11 @@ var _ = Describe("Runner", func() {
 				close(blockHealthcheck)
 			})
 
-			It("sets the executor to unhealthy", func() {
+			It("sets the executor to unhealthy and emits the unhealthy metric", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
+				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
 			})
 
 			It("does not set the executor to healthy when the healtcheck completes", func() {

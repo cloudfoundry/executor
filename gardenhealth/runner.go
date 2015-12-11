@@ -5,9 +5,12 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
+
+const unhealthyCell = metric.Metric("UnhealthyCell")
 
 type HealthcheckTimeoutError struct{}
 
@@ -84,11 +87,13 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	case <-healthcheckTimeout.C():
 		r.logger.Error("failed-initial-healthcheck-timeout", nil)
+		r.setUnhealthy()
 		return HealthcheckTimeoutError{}
 
 	case err := <-healthcheckComplete:
 		if err != nil {
 			r.logger.Error("failed-initial-healthcheck", err)
+			r.setUnhealthy()
 			return err
 		}
 		healthcheckTimeout.Stop()
@@ -138,6 +143,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 }
 
 func (r *Runner) setHealthy() {
+	unhealthyCell.Send(0)
 	if !r.healthy {
 		r.logger.Info("set-state-healthy")
 		r.executorClient.SetHealthy(r.logger, true)
@@ -146,6 +152,7 @@ func (r *Runner) setHealthy() {
 }
 
 func (r *Runner) setUnhealthy() {
+	unhealthyCell.Send(1)
 	if r.healthy {
 		r.logger.Error("set-state-unhealthy", nil)
 		r.executorClient.SetHealthy(r.logger, false)
