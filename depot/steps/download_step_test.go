@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"os"
 
-	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/fakes"
+	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/cacheddownloaderfakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/bbs/models"

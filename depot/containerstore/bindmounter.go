@@ -1,0 +1,103 @@
+package containerstore
+
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/cloudfoundry-incubator/cacheddownloader"
+	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
+	"github.com/cloudfoundry-incubator/garden"
+	"github.com/pivotal-golang/bytefmt"
+	"github.com/pivotal-golang/lager"
+)
+
+//go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . BindMounter
+
+type BindMounter interface {
+	DownloadBindMounts(logger lager.Logger, mounts []executor.BindMount, logStreamer log_streamer.LogStreamer) (BindMounts, error)
+	ExpireCacheKeys(logger lager.Logger, keys []BindMountCacheKey) error
+}
+
+type bindMounter struct {
+	cache cacheddownloader.CachedDownloader
+}
+
+func NewBindMounter(cache cacheddownloader.CachedDownloader) BindMounter {
+	return &bindMounter{cache}
+}
+
+func (bm *bindMounter) DownloadBindMounts(logger lager.Logger, mounts []executor.BindMount, streamer log_streamer.LogStreamer) (BindMounts, error) {
+	bindMounts := NewBindMounts(len(mounts))
+
+	for i := range mounts {
+		mount := &mounts[i]
+		emit(streamer, "Downloading %s...\n", mount.Name)
+
+		downloadURL, err := url.Parse(mount.From)
+		if err != nil {
+			logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
+			emit(streamer, "Downloading %s failed", mount.Name)
+			return BindMounts{}, err
+		}
+
+		dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
+		if err != nil {
+			logger.Error("failed-fetching-bind-mount-directory", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
+			emit(streamer, "Downloading %s failed", mount.Name)
+			return BindMounts{}, err
+		}
+
+		if downloadedSize != 0 {
+			emit(streamer, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
+		} else {
+			emit(streamer, "Downloaded %s\n", mount.Name)
+		}
+
+		bindMounts.AddBindMount(mount.CacheKey, newBindMount(dirPath, mount.To))
+	}
+
+	return bindMounts, nil
+}
+
+func (bm *bindMounter) ExpireCacheKeys(logger lager.Logger, keys []BindMountCacheKey) error {
+	for i := range keys {
+		key := &keys[i]
+		err := bm.cache.CloseDirectory(key.CacheKey, key.Dir)
+		if err != nil {
+			logger.Error("failed-expiring-cache-keys", err, lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
+			return err
+		}
+	}
+	return nil
+}
+
+func emit(streamer log_streamer.LogStreamer, format string, a ...interface{}) {
+	fmt.Fprintf(streamer.Stdout(), format, a...)
+}
+
+type BindMounts struct {
+	CacheKeys        []BindMountCacheKey
+	GardenBindMounts []garden.BindMount
+}
+
+func NewBindMounts(capacity int) BindMounts {
+	return BindMounts{
+		CacheKeys:        make([]BindMountCacheKey, 0, capacity),
+		GardenBindMounts: make([]garden.BindMount, 0, capacity),
+	}
+}
+
+func (b *BindMounts) AddBindMount(cacheKey string, mount garden.BindMount) {
+	b.CacheKeys = append(b.CacheKeys, NewbindMountCacheKey(cacheKey, mount.SrcPath))
+	b.GardenBindMounts = append(b.GardenBindMounts, mount)
+}
+
+type BindMountCacheKey struct {
+	CacheKey string
+	Dir      string
+}
+
+func NewbindMountCacheKey(cacheKey, dir string) BindMountCacheKey {
+	return BindMountCacheKey{CacheKey: cacheKey, Dir: dir}
+}

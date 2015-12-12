@@ -139,6 +139,14 @@ func NewResource(memoryMB, diskMB int, rootFSPath string) Resource {
 	}
 }
 
+type BindMount struct {
+	Name      string `json:"name"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	CacheKey  string `json:"cache_key"`
+	LogSource string `json:"log_source"`
+}
+
 type RunInfo struct {
 	CPUWeight     uint                        `json:"cpu_weight"`
 	DiskScope     DiskLimitScope              `json:"disk_scope,omitempty"`
@@ -147,6 +155,7 @@ type RunInfo struct {
 	MetricsConfig MetricsConfig               `json:"metrics_config"`
 	StartTimeout  uint                        `json:"start_timeout"`
 	Privileged    bool                        `json:"privileged"`
+	BindMounts    []BindMount                 `json:"bind_mounts"`
 	Setup         *models.Action              `json:"setup"`
 	Action        *models.Action              `json:"run"`
 	Monitor       *models.Action              `json:"monitor"`

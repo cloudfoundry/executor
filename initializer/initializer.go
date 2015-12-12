@@ -156,11 +156,20 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		return nil, grouper.Members{}, err
 	}
 
-	transformer := initializeTransformer(
-		logger,
+	cache := cacheddownloader.New(
 		config.CachePath,
 		workDir,
-		config.MaxCacheSizeInBytes,
+		int64(config.MaxCacheSizeInBytes),
+		10*time.Minute,
+		int(math.MaxInt8),
+		config.SkipCertVerify,
+		cacheddownloader.TarTransform,
+	)
+
+	transformer := initializeTransformer(
+		logger,
+		cache,
+		workDir,
 		uint(config.MaxConcurrentDownloads),
 		maxConcurrentUploads,
 		config.SkipCertVerify,
@@ -187,6 +196,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
+		containerstore.NewBindMounter(cache),
 		clock,
 		hub,
 		transformer,
@@ -352,8 +362,8 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 
 func initializeTransformer(
 	logger lager.Logger,
-	cachePath, workDir string,
-	maxCacheSizeInBytes uint64,
+	cache cacheddownloader.CachedDownloader,
+	workDir string,
 	maxConcurrentDownloads, maxConcurrentUploads uint,
 	skipSSLVerification bool,
 	exportNetworkEnvVars bool,
@@ -362,7 +372,6 @@ func initializeTransformer(
 	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
 ) transformer.Transformer {
-	cache := cacheddownloader.New(cachePath, workDir, int64(maxCacheSizeInBytes), 10*time.Minute, int(math.MaxInt8), skipSSLVerification, cacheddownloader.TarTransform)
 	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()

@@ -7,7 +7,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/clock"
@@ -58,19 +57,18 @@ type ContainerConfig struct {
 type containerStore struct {
 	containerConfig ContainerConfig
 	gardenClient    garden.Client
+	bindMounter     BindMounter
 	transformer     transformer.Transformer
-
-	containers *nodeMap
-
-	eventEmitter event.Hub
-
-	clock clock.Clock
+	containers      *nodeMap
+	eventEmitter    event.Hub
+	clock           clock.Clock
 }
 
 func New(
 	containerConfig ContainerConfig,
 	totalCapacity *executor.ExecutorResources,
 	gardenClient garden.Client,
+	bindMounter BindMounter,
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
@@ -78,6 +76,7 @@ func New(
 	return &containerStore{
 		containerConfig: containerConfig,
 		gardenClient:    gardenClient,
+		bindMounter:     bindMounter,
 		containers:      newNodeMap(totalCapacity),
 		eventEmitter:    eventEmitter,
 		transformer:     transformer,
@@ -91,7 +90,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	defer logger.Debug("complete")
 
 	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
-	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.eventEmitter, cs.transformer))
+	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.bindMounter, cs.eventEmitter, cs.transformer))
 	if err != nil {
 		logger.Error("failed-to-reserve", err)
 		return executor.Container{}, err
@@ -282,14 +281,6 @@ func (cs *containerStore) GetFiles(logger lager.Logger, guid, sourcePath string)
 	}
 
 	return node.GetFiles(logger, sourcePath)
-}
-
-func logStreamerFromContainer(container executor.Container) log_streamer.LogStreamer {
-	return log_streamer.New(
-		container.LogConfig.Guid,
-		container.LogConfig.SourceName,
-		container.LogConfig.Index,
-	)
 }
 
 func (cs *containerStore) NewRegistryPruner(logger lager.Logger) ifrit.Runner {

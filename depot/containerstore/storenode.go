@@ -17,6 +17,7 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
+const DownloadBindMountsFailedMessage = "failed to download bind mount artifacts"
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
@@ -27,13 +28,15 @@ type storeNode struct {
 	modifiedIndex uint
 
 	// infoLock protects modifying info and swapping gardenContainer pointers
-	infoLock        *sync.Mutex
-	info            executor.Container
-	gardenContainer garden.Container
+	infoLock           *sync.Mutex
+	info               executor.Container
+	bindMountCacheKeys []BindMountCacheKey
+	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
 	opLock       *sync.Mutex
 	gardenClient garden.Client
+	bindMounter  BindMounter
 	eventEmitter event.Hub
 	transformer  transformer.Transformer
 	process      ifrit.Process
@@ -44,6 +47,7 @@ func newStoreNode(
 	config *ContainerConfig,
 	container executor.Container,
 	gardenClient garden.Client,
+	bindMounter BindMounter,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 ) *storeNode {
@@ -53,6 +57,7 @@ func newStoreNode(
 		infoLock:      &sync.Mutex{},
 		opLock:        &sync.Mutex{},
 		gardenClient:  gardenClient,
+		bindMounter:   bindMounter,
 		eventEmitter:  eventEmitter,
 		transformer:   transformer,
 		modifiedIndex: 0,
@@ -114,10 +119,16 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromContainer(info)
+	logStreamer := logStreamerFromLogConfig(info.LogConfig)
+
+	mounts, err := n.bindMounter.DownloadBindMounts(logger, info.BindMounts, logStreamer)
+	if err != nil {
+		n.complete(logger, true, DownloadBindMountsFailedMessage)
+		return err
+	}
 
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
-	gardenContainer, err := n.createInGarden(logger, &info)
+	gardenContainer, err := n.createGardenContainer(logger, &info, mounts.GardenBindMounts)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
@@ -129,17 +140,19 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	n.infoLock.Lock()
 	n.gardenContainer = gardenContainer
 	n.info = info
+	n.bindMountCacheKeys = mounts.CacheKeys
 	n.infoLock.Unlock()
 
 	return nil
 }
 
-func (n *storeNode) createInGarden(logger lager.Logger, info *executor.Container) (garden.Container, error) {
+func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container, mounts []garden.BindMount) (garden.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
 		RootFSPath: info.RootFSPath,
 		Env:        convertEnvVars(info.Env),
+		BindMounts: mounts,
 		Limits: garden.Limits{
 			Memory: garden.MemoryLimits{
 				LimitInBytes: uint64(info.MemoryMB * 1024 * 1024),
@@ -206,7 +219,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromContainer(n.info)
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig)
 
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
 	if err != nil {
@@ -225,7 +238,7 @@ func (n *storeNode) run(logger lager.Logger) {
 
 	n.infoLock.Lock()
 	n.info.State = executor.StateRunning
-	info := n.info
+	info := n.info.Copy()
 	n.infoLock.Unlock()
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
@@ -273,7 +286,16 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		<-n.process.Wait()
 	}
 
-	return n.destroyContainer(logger)
+	err = n.destroyContainer(logger)
+	if err != nil {
+		return err
+	}
+
+	n.infoLock.Lock()
+	cacheKeys := n.bindMountCacheKeys
+	n.infoLock.Unlock()
+
+	return n.bindMounter.ExpireCacheKeys(logger, cacheKeys)
 }
 
 func (n *storeNode) destroyContainer(logger lager.Logger) error {

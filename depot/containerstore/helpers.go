@@ -7,11 +7,29 @@ import (
 
 	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
+	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/lager"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
+
+func logStreamerFromLogConfig(conf executor.LogConfig) log_streamer.LogStreamer {
+	return log_streamer.New(
+		conf.Guid,
+		conf.SourceName,
+		conf.Index,
+	)
+}
+
+func newBindMount(src, dst string) garden.BindMount {
+	return garden.BindMount{
+		SrcPath: src,
+		DstPath: dst,
+		Mode:    garden.BindMountModeRO,
+		Origin:  garden.BindMountOriginHost,
+	}
+}
 
 func convertDiskScope(scope executor.DiskLimitScope) garden.DiskLimitScope {
 	if scope == executor.TotalDiskLimit {

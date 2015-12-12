@@ -16,10 +16,10 @@ import (
 	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
+	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer/faketransformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/clock/fakeclock"
-	"github.com/pivotal-golang/lager/lagertest"
 
 	eventfakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
@@ -40,11 +40,10 @@ var _ = Describe("Container Store", func() {
 		gardenClient    *gfakes.FakeClient
 		gardenContainer *gfakes.FakeContainer
 		megatron        *faketransformer.FakeTransformer
+		bindMounter     *containerstorefakes.FakeBindMounter
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
-
-		logger *lagertest.TestLogger
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -58,9 +57,9 @@ var _ = Describe("Container Store", func() {
 	BeforeEach(func() {
 		gardenContainer = &gfakes.FakeContainer{}
 		gardenClient = &gfakes.FakeClient{}
+		bindMounter = &containerstorefakes.FakeBindMounter{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
-		logger = lagertest.NewTestLogger("test-container-store")
 
 		iNodeLimit = 64
 		maxCPUShares = 100
@@ -83,6 +82,7 @@ var _ = Describe("Container Store", func() {
 			containerConfig,
 			&totalCapacity,
 			gardenClient,
+			bindMounter,
 			clock,
 			eventEmitter,
 			megatron,
@@ -293,6 +293,9 @@ var _ = Describe("Container Store", func() {
 					Privileged:   true,
 					CPUWeight:    50,
 					StartTimeout: 99,
+					BindMounts: []executor.BindMount{
+						{Name: "artifact", From: "https://example.com", To: "/etc/foo", CacheKey: "abc", LogSource: "source"},
+					},
 					LogConfig: executor.LogConfig{
 						Guid:       "log-guid",
 						Index:      1,
@@ -350,6 +353,30 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
 			})
 
+			It("downloads the correct bindmounts", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bindMounter.DownloadBindMountsCallCount()).To(Equal(1))
+				_, mounts, _ := bindMounter.DownloadBindMountsArgsForCall(0)
+				Expect(mounts).To(Equal(runReq.BindMounts))
+			})
+
+			It("creates the container in garden with the correct limits", func() {
+				expectedMounts := containerstore.BindMounts{
+					GardenBindMounts: []garden.BindMount{
+						{SrcPath: "foo", DstPath: "/etc/foo", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
+					},
+				}
+				bindMounter.DownloadBindMountsReturns(expectedMounts, nil)
+
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(gardenClient.CreateCallCount()).To(Equal(1))
+				containerSpec := gardenClient.CreateArgsForCall(0)
+				Expect(containerSpec.BindMounts).To(Equal(expectedMounts.GardenBindMounts))
+			})
+
 			It("creates the container with the correct properties", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -380,6 +407,23 @@ var _ = Describe("Container Store", func() {
 				container, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.ExternalIP).To(Equal(externalIP))
+			})
+
+			Context("when downloading bind mounts fails", func() {
+				BeforeEach(func() {
+					bindMounter.DownloadBindMountsReturns(containerstore.BindMounts{}, errors.New("no"))
+				})
+
+				It("transitions to a completed state", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.State).To(Equal(executor.StateCompleted))
+					Expect(container.RunResult.Failed).To(BeTrue())
+					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadBindMountsFailedMessage))
+				})
 			})
 
 			Context("when egress rules are requested", func() {
@@ -877,10 +921,17 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Destroy", func() {
 		var resource executor.Resource
+		var expectedMounts containerstore.BindMounts
 
 		BeforeEach(func() {
 			gardenClient.CreateReturns(gardenContainer, nil)
 			resource = executor.NewResource(1024, 2048, "foobar")
+			expectedMounts = containerstore.BindMounts{
+				CacheKeys: []containerstore.BindMountCacheKey{
+					{CacheKey: "cache-key", Dir: "foo"},
+				},
+			}
+			bindMounter.DownloadBindMountsReturns(expectedMounts, nil)
 		})
 
 		JustBeforeEach(func() {
@@ -892,6 +943,14 @@ var _ = Describe("Container Store", func() {
 
 			_, err = containerStore.Create(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("removes downloader cache references", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bindMounter.ExpireCacheKeysCallCount()).To(Equal(1))
+			_, keys := bindMounter.ExpireCacheKeysArgsForCall(0)
+			Expect(keys).To(Equal(expectedMounts.CacheKeys))
 		})
 
 		It("destroys the container", func() {
