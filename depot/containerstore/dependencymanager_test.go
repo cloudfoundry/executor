@@ -14,31 +14,31 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = Describe("Bindmounter", func() {
+var _ = Describe("DependencyManager", func() {
 	var (
-		bindMounter containerstore.BindMounter
-		cache       *cacheddownloaderfakes.FakeCachedDownloader
-		mounts      []executor.BindMount
-		logStreamer *fake_log_streamer.FakeLogStreamer
+		dependencyManager containerstore.DependencyManager
+		cache             *cacheddownloaderfakes.FakeCachedDownloader
+		dependencies      []executor.CacheDependency
+		logStreamer       *fake_log_streamer.FakeLogStreamer
 	)
 
 	BeforeEach(func() {
 		cache = &cacheddownloaderfakes.FakeCachedDownloader{}
 		logStreamer = fake_log_streamer.NewFakeLogStreamer()
-		bindMounter = containerstore.NewBindMounter(cache)
-		mounts = []executor.BindMount{
+		dependencyManager = containerstore.NewDependencyManager(cache)
+		dependencies = []executor.CacheDependency{
 			{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "https://user:pass@example.com:8080/download-1", To: "/var/data/buildpack-1"},
 			{Name: "name-2", CacheKey: "cache-key-2", LogSource: "log-source-2", From: "http://example.com:1515/download-2", To: "/var/data/buildpack-2"},
 		}
 	})
 
-	Context("when fetching all of the mounts succeeds", func() {
+	Context("when fetching all of the dependencies succeeds", func() {
 		var bindMounts containerstore.BindMounts
 
 		BeforeEach(func() {
-			cache.FetchAsDirectoryReturns("/tmp/download/mounts", 123, nil)
+			cache.FetchAsDirectoryReturns("/tmp/download/dependencies", 123, nil)
 			var err error
-			bindMounts, err = bindMounter.DownloadBindMounts(logger, mounts, logStreamer)
+			bindMounts, err = dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -50,13 +50,13 @@ var _ = Describe("Bindmounter", func() {
 
 		It("returns the expected mount information", func() {
 			expectedGardenMounts := []garden.BindMount{
-				{SrcPath: "/tmp/download/mounts", DstPath: "/var/data/buildpack-1", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
-				{SrcPath: "/tmp/download/mounts", DstPath: "/var/data/buildpack-2", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
+				{SrcPath: "/tmp/download/dependencies", DstPath: "/var/data/buildpack-1", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
+				{SrcPath: "/tmp/download/dependencies", DstPath: "/var/data/buildpack-2", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
 			}
 
 			expectedCacheKeys := []containerstore.BindMountCacheKey{
-				{CacheKey: "cache-key-1", Dir: "/tmp/download/mounts"},
-				{CacheKey: "cache-key-2", Dir: "/tmp/download/mounts"},
+				{CacheKey: "cache-key-1", Dir: "/tmp/download/dependencies"},
+				{CacheKey: "cache-key-2", Dir: "/tmp/download/dependencies"},
 			}
 
 			Expect(bindMounts.GardenBindMounts).To(Equal(expectedGardenMounts))
@@ -77,13 +77,13 @@ var _ = Describe("Bindmounter", func() {
 
 	Context("When a mount has an invlid 'From' field", func() {
 		BeforeEach(func() {
-			mounts = []executor.BindMount{
+			dependencies = []executor.CacheDependency{
 				{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "%", To: "/var/data/buildpack-1"},
 			}
 		})
 
 		It("returns the error", func() {
-			_, err := bindMounter.DownloadBindMounts(logger, mounts, logStreamer)
+			_, err := dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -94,14 +94,14 @@ var _ = Describe("Bindmounter", func() {
 		})
 
 		It("emits the download events", func() {
-			_, _ = bindMounter.DownloadBindMounts(logger, mounts, logStreamer)
+			_, _ = dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
 			stdout := logStreamer.Stdout().(*gbytes.Buffer)
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1 failed"))
 		})
 
 		It("returns the error", func() {
-			_, err := bindMounter.DownloadBindMounts(logger, mounts, logStreamer)
+			_, err := dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
 			Expect(err).To(HaveOccurred())
 		})
 	})

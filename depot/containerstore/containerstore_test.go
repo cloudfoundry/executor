@@ -37,10 +37,10 @@ var _ = Describe("Container Store", func() {
 
 		containerGuid string
 
-		gardenClient    *gfakes.FakeClient
-		gardenContainer *gfakes.FakeContainer
-		megatron        *faketransformer.FakeTransformer
-		bindMounter     *containerstorefakes.FakeBindMounter
+		gardenClient      *gfakes.FakeClient
+		gardenContainer   *gfakes.FakeContainer
+		megatron          *faketransformer.FakeTransformer
+		dependencyManager *containerstorefakes.FakeDependencyManager
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
@@ -57,7 +57,7 @@ var _ = Describe("Container Store", func() {
 	BeforeEach(func() {
 		gardenContainer = &gfakes.FakeContainer{}
 		gardenClient = &gfakes.FakeClient{}
-		bindMounter = &containerstorefakes.FakeBindMounter{}
+		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
 
@@ -82,7 +82,7 @@ var _ = Describe("Container Store", func() {
 			containerConfig,
 			&totalCapacity,
 			gardenClient,
-			bindMounter,
+			dependencyManager,
 			clock,
 			eventEmitter,
 			megatron,
@@ -293,7 +293,7 @@ var _ = Describe("Container Store", func() {
 					Privileged:   true,
 					CPUWeight:    50,
 					StartTimeout: 99,
-					BindMounts: []executor.BindMount{
+					CacheDependencies: []executor.CacheDependency{
 						{Name: "artifact", From: "https://example.com", To: "/etc/foo", CacheKey: "abc", LogSource: "source"},
 					},
 					LogConfig: executor.LogConfig{
@@ -353,12 +353,12 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
 			})
 
-			It("downloads the correct bindmounts", func() {
+			It("downloads the correct cache dependencies", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bindMounter.DownloadBindMountsCallCount()).To(Equal(1))
-				_, mounts, _ := bindMounter.DownloadBindMountsArgsForCall(0)
-				Expect(mounts).To(Equal(runReq.BindMounts))
+				Expect(dependencyManager.DownloadCacheDependenciesCallCount()).To(Equal(1))
+				_, mounts, _ := dependencyManager.DownloadCacheDependenciesArgsForCall(0)
+				Expect(mounts).To(Equal(runReq.CacheDependencies))
 			})
 
 			It("creates the container in garden with the correct limits", func() {
@@ -367,7 +367,7 @@ var _ = Describe("Container Store", func() {
 						{SrcPath: "foo", DstPath: "/etc/foo", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
 					},
 				}
-				bindMounter.DownloadBindMountsReturns(expectedMounts, nil)
+				dependencyManager.DownloadCacheDependenciesReturns(expectedMounts, nil)
 
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -411,7 +411,7 @@ var _ = Describe("Container Store", func() {
 
 			Context("when downloading bind mounts fails", func() {
 				BeforeEach(func() {
-					bindMounter.DownloadBindMountsReturns(containerstore.BindMounts{}, errors.New("no"))
+					dependencyManager.DownloadCacheDependenciesReturns(containerstore.BindMounts{}, errors.New("no"))
 				})
 
 				It("transitions to a completed state", func() {
@@ -422,7 +422,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadBindMountsFailedMessage))
+					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadCacheDependenciesFailed))
 				})
 			})
 
@@ -931,7 +931,7 @@ var _ = Describe("Container Store", func() {
 					{CacheKey: "cache-key", Dir: "foo"},
 				},
 			}
-			bindMounter.DownloadBindMountsReturns(expectedMounts, nil)
+			dependencyManager.DownloadCacheDependenciesReturns(expectedMounts, nil)
 		})
 
 		JustBeforeEach(func() {
@@ -948,8 +948,8 @@ var _ = Describe("Container Store", func() {
 		It("removes downloader cache references", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bindMounter.ExpireCacheKeysCallCount()).To(Equal(1))
-			_, keys := bindMounter.ExpireCacheKeysArgsForCall(0)
+			Expect(dependencyManager.ReleaseCacheDependenciesCallCount()).To(Equal(1))
+			_, keys := dependencyManager.ReleaseCacheDependenciesArgsForCall(0)
 			Expect(keys).To(Equal(expectedMounts.CacheKeys))
 		})
 

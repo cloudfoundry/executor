@@ -12,22 +12,22 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-//go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . BindMounter
+//go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . DependencyManager
 
-type BindMounter interface {
-	DownloadBindMounts(logger lager.Logger, mounts []executor.BindMount, logStreamer log_streamer.LogStreamer) (BindMounts, error)
-	ExpireCacheKeys(logger lager.Logger, keys []BindMountCacheKey) error
+type DependencyManager interface {
+	DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
+	ReleaseCacheDependencies(logger lager.Logger, keys []BindMountCacheKey) error
 }
 
-type bindMounter struct {
+type dependencyManager struct {
 	cache cacheddownloader.CachedDownloader
 }
 
-func NewBindMounter(cache cacheddownloader.CachedDownloader) BindMounter {
-	return &bindMounter{cache}
+func NewDependencyManager(cache cacheddownloader.CachedDownloader) DependencyManager {
+	return &dependencyManager{cache}
 }
 
-func (bm *bindMounter) DownloadBindMounts(logger lager.Logger, mounts []executor.BindMount, streamer log_streamer.LogStreamer) (BindMounts, error) {
+func (bm *dependencyManager) DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
 	bindMounts := NewBindMounts(len(mounts))
 
 	for i := range mounts {
@@ -60,7 +60,7 @@ func (bm *bindMounter) DownloadBindMounts(logger lager.Logger, mounts []executor
 	return bindMounts, nil
 }
 
-func (bm *bindMounter) ExpireCacheKeys(logger lager.Logger, keys []BindMountCacheKey) error {
+func (bm *dependencyManager) ReleaseCacheDependencies(logger lager.Logger, keys []BindMountCacheKey) error {
 	for i := range keys {
 		key := &keys[i]
 		err := bm.cache.CloseDirectory(key.CacheKey, key.Dir)

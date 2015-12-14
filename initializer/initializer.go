@@ -196,7 +196,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
-		containerstore.NewBindMounter(cache),
+		containerstore.NewDependencyManager(cache),
 		clock,
 		hub,
 		transformer,

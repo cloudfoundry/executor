@@ -17,7 +17,7 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
-const DownloadBindMountsFailedMessage = "failed to download bind mount artifacts"
+const DownloadCacheDependenciesFailed = "failed to download cached artifacts"
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
@@ -34,33 +34,33 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock       *sync.Mutex
-	gardenClient garden.Client
-	bindMounter  BindMounter
-	eventEmitter event.Hub
-	transformer  transformer.Transformer
-	process      ifrit.Process
-	config       *ContainerConfig
+	opLock            *sync.Mutex
+	gardenClient      garden.Client
+	dependencyManager DependencyManager
+	eventEmitter      event.Hub
+	transformer       transformer.Transformer
+	process           ifrit.Process
+	config            *ContainerConfig
 }
 
 func newStoreNode(
 	config *ContainerConfig,
 	container executor.Container,
 	gardenClient garden.Client,
-	bindMounter BindMounter,
+	dependencyManager DependencyManager,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 ) *storeNode {
 	return &storeNode{
-		config:        config,
-		info:          container,
-		infoLock:      &sync.Mutex{},
-		opLock:        &sync.Mutex{},
-		gardenClient:  gardenClient,
-		bindMounter:   bindMounter,
-		eventEmitter:  eventEmitter,
-		transformer:   transformer,
-		modifiedIndex: 0,
+		config:            config,
+		info:              container,
+		infoLock:          &sync.Mutex{},
+		opLock:            &sync.Mutex{},
+		gardenClient:      gardenClient,
+		dependencyManager: dependencyManager,
+		eventEmitter:      eventEmitter,
+		transformer:       transformer,
+		modifiedIndex:     0,
 	}
 }
 
@@ -121,9 +121,9 @@ func (n *storeNode) Create(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(info.LogConfig)
 
-	mounts, err := n.bindMounter.DownloadBindMounts(logger, info.BindMounts, logStreamer)
+	mounts, err := n.dependencyManager.DownloadCacheDependencies(logger, info.CacheDependencies, logStreamer)
 	if err != nil {
-		n.complete(logger, true, DownloadBindMountsFailedMessage)
+		n.complete(logger, true, DownloadCacheDependenciesFailed)
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	cacheKeys := n.bindMountCacheKeys
 	n.infoLock.Unlock()
 
-	return n.bindMounter.ExpireCacheKeys(logger, cacheKeys)
+	return n.dependencyManager.ReleaseCacheDependencies(logger, cacheKeys)
 }
 
 func (n *storeNode) destroyContainer(logger lager.Logger) error {

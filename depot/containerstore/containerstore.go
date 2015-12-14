@@ -55,32 +55,32 @@ type ContainerConfig struct {
 }
 
 type containerStore struct {
-	containerConfig ContainerConfig
-	gardenClient    garden.Client
-	bindMounter     BindMounter
-	transformer     transformer.Transformer
-	containers      *nodeMap
-	eventEmitter    event.Hub
-	clock           clock.Clock
+	containerConfig   ContainerConfig
+	gardenClient      garden.Client
+	dependencyManager DependencyManager
+	transformer       transformer.Transformer
+	containers        *nodeMap
+	eventEmitter      event.Hub
+	clock             clock.Clock
 }
 
 func New(
 	containerConfig ContainerConfig,
 	totalCapacity *executor.ExecutorResources,
 	gardenClient garden.Client,
-	bindMounter BindMounter,
+	dependencyManager DependencyManager,
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 ) ContainerStore {
 	return &containerStore{
-		containerConfig: containerConfig,
-		gardenClient:    gardenClient,
-		bindMounter:     bindMounter,
-		containers:      newNodeMap(totalCapacity),
-		eventEmitter:    eventEmitter,
-		transformer:     transformer,
-		clock:           clock,
+		containerConfig:   containerConfig,
+		gardenClient:      gardenClient,
+		dependencyManager: dependencyManager,
+		containers:        newNodeMap(totalCapacity),
+		eventEmitter:      eventEmitter,
+		transformer:       transformer,
+		clock:             clock,
 	}
 }
 
@@ -90,7 +90,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	defer logger.Debug("complete")
 
 	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
-	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.bindMounter, cs.eventEmitter, cs.transformer))
+	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.dependencyManager, cs.eventEmitter, cs.transformer))
 	if err != nil {
 		logger.Error("failed-to-reserve", err)
 		return executor.Container{}, err

@@ -10,95 +10,95 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type FakeBindMounter struct {
-	DownloadBindMountsStub        func(logger lager.Logger, mounts []executor.BindMount, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error)
-	downloadBindMountsMutex       sync.RWMutex
-	downloadBindMountsArgsForCall []struct {
+type FakeDependencyManager struct {
+	DownloadCacheDependenciesStub        func(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error)
+	downloadCacheDependenciesMutex       sync.RWMutex
+	downloadCacheDependenciesArgsForCall []struct {
 		logger      lager.Logger
-		mounts      []executor.BindMount
+		mounts      []executor.CacheDependency
 		logStreamer log_streamer.LogStreamer
 	}
-	downloadBindMountsReturns struct {
+	downloadCacheDependenciesReturns struct {
 		result1 containerstore.BindMounts
 		result2 error
 	}
-	ExpireCacheKeysStub        func(logger lager.Logger, keys []containerstore.BindMountCacheKey) error
-	expireCacheKeysMutex       sync.RWMutex
-	expireCacheKeysArgsForCall []struct {
+	ReleaseCacheDependenciesStub        func(logger lager.Logger, keys []containerstore.BindMountCacheKey) error
+	releaseCacheDependenciesMutex       sync.RWMutex
+	releaseCacheDependenciesArgsForCall []struct {
 		logger lager.Logger
 		keys   []containerstore.BindMountCacheKey
 	}
-	expireCacheKeysReturns struct {
+	releaseCacheDependenciesReturns struct {
 		result1 error
 	}
 }
 
-func (fake *FakeBindMounter) DownloadBindMounts(logger lager.Logger, mounts []executor.BindMount, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error) {
-	fake.downloadBindMountsMutex.Lock()
-	fake.downloadBindMountsArgsForCall = append(fake.downloadBindMountsArgsForCall, struct {
+func (fake *FakeDependencyManager) DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error) {
+	fake.downloadCacheDependenciesMutex.Lock()
+	fake.downloadCacheDependenciesArgsForCall = append(fake.downloadCacheDependenciesArgsForCall, struct {
 		logger      lager.Logger
-		mounts      []executor.BindMount
+		mounts      []executor.CacheDependency
 		logStreamer log_streamer.LogStreamer
 	}{logger, mounts, logStreamer})
-	fake.downloadBindMountsMutex.Unlock()
-	if fake.DownloadBindMountsStub != nil {
-		return fake.DownloadBindMountsStub(logger, mounts, logStreamer)
+	fake.downloadCacheDependenciesMutex.Unlock()
+	if fake.DownloadCacheDependenciesStub != nil {
+		return fake.DownloadCacheDependenciesStub(logger, mounts, logStreamer)
 	} else {
-		return fake.downloadBindMountsReturns.result1, fake.downloadBindMountsReturns.result2
+		return fake.downloadCacheDependenciesReturns.result1, fake.downloadCacheDependenciesReturns.result2
 	}
 }
 
-func (fake *FakeBindMounter) DownloadBindMountsCallCount() int {
-	fake.downloadBindMountsMutex.RLock()
-	defer fake.downloadBindMountsMutex.RUnlock()
-	return len(fake.downloadBindMountsArgsForCall)
+func (fake *FakeDependencyManager) DownloadCacheDependenciesCallCount() int {
+	fake.downloadCacheDependenciesMutex.RLock()
+	defer fake.downloadCacheDependenciesMutex.RUnlock()
+	return len(fake.downloadCacheDependenciesArgsForCall)
 }
 
-func (fake *FakeBindMounter) DownloadBindMountsArgsForCall(i int) (lager.Logger, []executor.BindMount, log_streamer.LogStreamer) {
-	fake.downloadBindMountsMutex.RLock()
-	defer fake.downloadBindMountsMutex.RUnlock()
-	return fake.downloadBindMountsArgsForCall[i].logger, fake.downloadBindMountsArgsForCall[i].mounts, fake.downloadBindMountsArgsForCall[i].logStreamer
+func (fake *FakeDependencyManager) DownloadCacheDependenciesArgsForCall(i int) (lager.Logger, []executor.CacheDependency, log_streamer.LogStreamer) {
+	fake.downloadCacheDependenciesMutex.RLock()
+	defer fake.downloadCacheDependenciesMutex.RUnlock()
+	return fake.downloadCacheDependenciesArgsForCall[i].logger, fake.downloadCacheDependenciesArgsForCall[i].mounts, fake.downloadCacheDependenciesArgsForCall[i].logStreamer
 }
 
-func (fake *FakeBindMounter) DownloadBindMountsReturns(result1 containerstore.BindMounts, result2 error) {
-	fake.DownloadBindMountsStub = nil
-	fake.downloadBindMountsReturns = struct {
+func (fake *FakeDependencyManager) DownloadCacheDependenciesReturns(result1 containerstore.BindMounts, result2 error) {
+	fake.DownloadCacheDependenciesStub = nil
+	fake.downloadCacheDependenciesReturns = struct {
 		result1 containerstore.BindMounts
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeBindMounter) ExpireCacheKeys(logger lager.Logger, keys []containerstore.BindMountCacheKey) error {
-	fake.expireCacheKeysMutex.Lock()
-	fake.expireCacheKeysArgsForCall = append(fake.expireCacheKeysArgsForCall, struct {
+func (fake *FakeDependencyManager) ReleaseCacheDependencies(logger lager.Logger, keys []containerstore.BindMountCacheKey) error {
+	fake.releaseCacheDependenciesMutex.Lock()
+	fake.releaseCacheDependenciesArgsForCall = append(fake.releaseCacheDependenciesArgsForCall, struct {
 		logger lager.Logger
 		keys   []containerstore.BindMountCacheKey
 	}{logger, keys})
-	fake.expireCacheKeysMutex.Unlock()
-	if fake.ExpireCacheKeysStub != nil {
-		return fake.ExpireCacheKeysStub(logger, keys)
+	fake.releaseCacheDependenciesMutex.Unlock()
+	if fake.ReleaseCacheDependenciesStub != nil {
+		return fake.ReleaseCacheDependenciesStub(logger, keys)
 	} else {
-		return fake.expireCacheKeysReturns.result1
+		return fake.releaseCacheDependenciesReturns.result1
 	}
 }
 
-func (fake *FakeBindMounter) ExpireCacheKeysCallCount() int {
-	fake.expireCacheKeysMutex.RLock()
-	defer fake.expireCacheKeysMutex.RUnlock()
-	return len(fake.expireCacheKeysArgsForCall)
+func (fake *FakeDependencyManager) ReleaseCacheDependenciesCallCount() int {
+	fake.releaseCacheDependenciesMutex.RLock()
+	defer fake.releaseCacheDependenciesMutex.RUnlock()
+	return len(fake.releaseCacheDependenciesArgsForCall)
 }
 
-func (fake *FakeBindMounter) ExpireCacheKeysArgsForCall(i int) (lager.Logger, []containerstore.BindMountCacheKey) {
-	fake.expireCacheKeysMutex.RLock()
-	defer fake.expireCacheKeysMutex.RUnlock()
-	return fake.expireCacheKeysArgsForCall[i].logger, fake.expireCacheKeysArgsForCall[i].keys
+func (fake *FakeDependencyManager) ReleaseCacheDependenciesArgsForCall(i int) (lager.Logger, []containerstore.BindMountCacheKey) {
+	fake.releaseCacheDependenciesMutex.RLock()
+	defer fake.releaseCacheDependenciesMutex.RUnlock()
+	return fake.releaseCacheDependenciesArgsForCall[i].logger, fake.releaseCacheDependenciesArgsForCall[i].keys
 }
 
-func (fake *FakeBindMounter) ExpireCacheKeysReturns(result1 error) {
-	fake.ExpireCacheKeysStub = nil
-	fake.expireCacheKeysReturns = struct {
+func (fake *FakeDependencyManager) ReleaseCacheDependenciesReturns(result1 error) {
+	fake.ReleaseCacheDependenciesStub = nil
+	fake.releaseCacheDependenciesReturns = struct {
 		result1 error
 	}{result1}
 }
 
-var _ containerstore.BindMounter = new(FakeBindMounter)
+var _ containerstore.DependencyManager = new(FakeDependencyManager)
