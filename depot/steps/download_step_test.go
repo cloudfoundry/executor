@@ -92,6 +92,8 @@ var _ = Describe("DownloadAction", func() {
 
 		It("logs the step", func() {
 			Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+				"test.download-step.acquiring-limiter",
+				"test.download-step.acquired-limiter",
 				"test.download-step.fetch-starting",
 				"test.download-step.fetch-complete",
 				"test.download-step.stream-in-starting",
@@ -154,10 +156,11 @@ var _ = Describe("DownloadAction", func() {
 
 			It("logs the step", func() {
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+					"test.download-step.acquiring-limiter",
+					"test.download-step.acquired-limiter",
 					"test.download-step.fetch-starting",
 					"test.download-step.parse-request-uri-error",
 				}))
-
 			})
 		})
 
@@ -209,6 +212,8 @@ var _ = Describe("DownloadAction", func() {
 
 				It("logs the step", func() {
 					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+						"test.download-step.acquiring-limiter",
+						"test.download-step.acquired-limiter",
 						"test.download-step.fetch-starting",
 						"test.download-step.fetch-complete",
 						"test.download-step.stream-in-starting",
@@ -230,6 +235,8 @@ var _ = Describe("DownloadAction", func() {
 
 			It("logs the step", func() {
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+					"test.download-step.acquiring-limiter",
+					"test.download-step.acquired-limiter",
 					"test.download-step.fetch-starting",
 					"test.download-step.fetch-failed",
 				}))

@@ -52,6 +52,7 @@ func NewDownload(
 }
 
 func (step *downloadStep) Perform() error {
+	step.logger.Info("acquiring-limiter")
 	select {
 	case step.rateLimiter <- struct{}{}:
 	case <-step.Cancelled():
@@ -60,6 +61,7 @@ func (step *downloadStep) Perform() error {
 	defer func() {
 		<-step.rateLimiter
 	}()
+	step.logger.Info("acquired-limiter")
 
 	err := step.perform()
 	if err != nil {
