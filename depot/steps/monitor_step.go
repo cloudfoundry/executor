@@ -81,6 +81,8 @@ func (step *monitorStep) Perform() error {
 	timer := step.clock.NewTimer(interval)
 	defer timer.Stop()
 
+	fmt.Fprint(step.logStreamer.Stdout(), "Starting health monitoring of container\n")
+
 	for {
 		select {
 		case now := <-timer.C():
@@ -98,11 +100,17 @@ func (step *monitorStep) Perform() error {
 
 				if healthy && !nowHealthy {
 					step.logger.Info("transitioned-to-unhealthy")
+
+					fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
+
 					return stepErr
 				} else if !healthy && nowHealthy {
 					step.logger.Info("transitioned-to-healthy")
 					healthy = true
 					step.hasStartedRunning <- struct{}{}
+
+					fmt.Fprint(step.logStreamer.Stdout(), "Container became healthy\n")
+
 					interval = step.healthyInterval
 					startBy = nil
 				}

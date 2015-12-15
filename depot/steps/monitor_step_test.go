@@ -189,6 +189,12 @@ var _ = Describe("MonitorStep", func() {
 			donePerforming.Wait()
 		})
 
+		It("emits a message to the applications log stream", func() {
+			Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+				gbytes.Say("Starting health monitoring of container\n"),
+			)
+		})
+
 		Context("when the check succeeds", func() {
 			BeforeEach(func() {
 				checkResults <- nil
@@ -203,11 +209,16 @@ var _ = Describe("MonitorStep", func() {
 					Eventually(hasBecomeHealthy).Should(Receive())
 				})
 
+				It("emits a log message for the success", func() {
+					Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+						gbytes.Say("Container became healthy\n"),
+					)
+				})
+
 				It("logs the step", func() {
 					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.monitor-step.transitioned-to-healthy",
 					}))
-
 				})
 
 				Context("and the healthy interval passes", func() {
@@ -243,7 +254,12 @@ var _ = Describe("MonitorStep", func() {
 								"test.monitor-step.transitioned-to-healthy",
 								"test.monitor-step.transitioned-to-unhealthy",
 							}))
+						})
 
+						It("emits a log message for the success", func() {
+							Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+								gbytes.Say("Container became unhealthy\n"),
+							)
 						})
 
 						It("completes with failure", func() {
