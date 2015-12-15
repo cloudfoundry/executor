@@ -41,9 +41,10 @@ func (bm *dependencyManager) DownloadCacheDependencies(logger lager.Logger, moun
 			return BindMounts{}, err
 		}
 
+		logger.Debug("fetching-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 		dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
 		if err != nil {
-			logger.Error("failed-fetching-bind-mount-directory", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
+			logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 			emit(streamer, "Downloading %s failed", mount.Name)
 			return BindMounts{}, err
 		}
@@ -63,9 +64,10 @@ func (bm *dependencyManager) DownloadCacheDependencies(logger lager.Logger, moun
 func (bm *dependencyManager) ReleaseCacheDependencies(logger lager.Logger, keys []BindMountCacheKey) error {
 	for i := range keys {
 		key := &keys[i]
+		logger.Debug("releasing-cache-key", lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
 		err := bm.cache.CloseDirectory(key.CacheKey, key.Dir)
 		if err != nil {
-			logger.Error("failed-expiring-cache-keys", err, lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
+			logger.Error("failed-releasing-cache-key", err, lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
 			return err
 		}
 	}
