@@ -139,7 +139,7 @@ func NewResource(memoryMB, diskMB int, rootFSPath string) Resource {
 	}
 }
 
-type CacheDependency struct {
+type CachedDependency struct {
 	Name      string `json:"name"`
 	From      string `json:"from"`
 	To        string `json:"to"`
@@ -148,19 +148,19 @@ type CacheDependency struct {
 }
 
 type RunInfo struct {
-	CPUWeight         uint                        `json:"cpu_weight"`
-	DiskScope         DiskLimitScope              `json:"disk_scope,omitempty"`
-	Ports             []PortMapping               `json:"ports"`
-	LogConfig         LogConfig                   `json:"log_config"`
-	MetricsConfig     MetricsConfig               `json:"metrics_config"`
-	StartTimeout      uint                        `json:"start_timeout"`
-	Privileged        bool                        `json:"privileged"`
-	CacheDependencies []CacheDependency           `json:"cache_dependencies"`
-	Setup             *models.Action              `json:"setup"`
-	Action            *models.Action              `json:"run"`
-	Monitor           *models.Action              `json:"monitor"`
-	EgressRules       []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
-	Env               []EnvironmentVariable       `json:"env,omitempty"`
+	CPUWeight          uint                        `json:"cpu_weight"`
+	DiskScope          DiskLimitScope              `json:"disk_scope,omitempty"`
+	Ports              []PortMapping               `json:"ports"`
+	LogConfig          LogConfig                   `json:"log_config"`
+	MetricsConfig      MetricsConfig               `json:"metrics_config"`
+	StartTimeout       uint                        `json:"start_timeout"`
+	Privileged         bool                        `json:"privileged"`
+	CachedDependencies []CachedDependency          `json:"cached_dependencies"`
+	Setup              *models.Action              `json:"setup"`
+	Action             *models.Action              `json:"run"`
+	Monitor            *models.Action              `json:"monitor"`
+	EgressRules        []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
+	Env                []EnvironmentVariable       `json:"env,omitempty"`
 }
 
 type InnerContainer Container

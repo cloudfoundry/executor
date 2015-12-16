@@ -15,8 +15,8 @@ import (
 //go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . DependencyManager
 
 type DependencyManager interface {
-	DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
-	ReleaseCacheDependencies(logger lager.Logger, keys []BindMountCacheKey) error
+	DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
+	ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error
 }
 
 type dependencyManager struct {
@@ -27,7 +27,7 @@ func NewDependencyManager(cache cacheddownloader.CachedDownloader) DependencyMan
 	return &dependencyManager{cache}
 }
 
-func (bm *dependencyManager) DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
+func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
 	bindMounts := NewBindMounts(len(mounts))
 
 	for i := range mounts {
@@ -61,7 +61,7 @@ func (bm *dependencyManager) DownloadCacheDependencies(logger lager.Logger, moun
 	return bindMounts, nil
 }
 
-func (bm *dependencyManager) ReleaseCacheDependencies(logger lager.Logger, keys []BindMountCacheKey) error {
+func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error {
 	for i := range keys {
 		key := &keys[i]
 		logger.Debug("releasing-cache-key", lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})

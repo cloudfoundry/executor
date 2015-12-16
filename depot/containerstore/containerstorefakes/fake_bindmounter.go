@@ -11,92 +11,92 @@ import (
 )
 
 type FakeDependencyManager struct {
-	DownloadCacheDependenciesStub        func(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error)
-	downloadCacheDependenciesMutex       sync.RWMutex
-	downloadCacheDependenciesArgsForCall []struct {
+	DownloadCachedDependenciesStub        func(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error)
+	downloadCachedDependenciesMutex       sync.RWMutex
+	downloadCachedDependenciesArgsForCall []struct {
 		logger      lager.Logger
-		mounts      []executor.CacheDependency
+		mounts      []executor.CachedDependency
 		logStreamer log_streamer.LogStreamer
 	}
-	downloadCacheDependenciesReturns struct {
+	downloadCachedDependenciesReturns struct {
 		result1 containerstore.BindMounts
 		result2 error
 	}
-	ReleaseCacheDependenciesStub        func(logger lager.Logger, keys []containerstore.BindMountCacheKey) error
-	releaseCacheDependenciesMutex       sync.RWMutex
-	releaseCacheDependenciesArgsForCall []struct {
+	ReleaseCachedDependenciesStub        func(logger lager.Logger, keys []containerstore.BindMountCacheKey) error
+	releaseCachedDependenciesMutex       sync.RWMutex
+	releaseCachedDependenciesArgsForCall []struct {
 		logger lager.Logger
 		keys   []containerstore.BindMountCacheKey
 	}
-	releaseCacheDependenciesReturns struct {
+	releaseCachedDependenciesReturns struct {
 		result1 error
 	}
 }
 
-func (fake *FakeDependencyManager) DownloadCacheDependencies(logger lager.Logger, mounts []executor.CacheDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error) {
-	fake.downloadCacheDependenciesMutex.Lock()
-	fake.downloadCacheDependenciesArgsForCall = append(fake.downloadCacheDependenciesArgsForCall, struct {
+func (fake *FakeDependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error) {
+	fake.downloadCachedDependenciesMutex.Lock()
+	fake.downloadCachedDependenciesArgsForCall = append(fake.downloadCachedDependenciesArgsForCall, struct {
 		logger      lager.Logger
-		mounts      []executor.CacheDependency
+		mounts      []executor.CachedDependency
 		logStreamer log_streamer.LogStreamer
 	}{logger, mounts, logStreamer})
-	fake.downloadCacheDependenciesMutex.Unlock()
-	if fake.DownloadCacheDependenciesStub != nil {
-		return fake.DownloadCacheDependenciesStub(logger, mounts, logStreamer)
+	fake.downloadCachedDependenciesMutex.Unlock()
+	if fake.DownloadCachedDependenciesStub != nil {
+		return fake.DownloadCachedDependenciesStub(logger, mounts, logStreamer)
 	} else {
-		return fake.downloadCacheDependenciesReturns.result1, fake.downloadCacheDependenciesReturns.result2
+		return fake.downloadCachedDependenciesReturns.result1, fake.downloadCachedDependenciesReturns.result2
 	}
 }
 
-func (fake *FakeDependencyManager) DownloadCacheDependenciesCallCount() int {
-	fake.downloadCacheDependenciesMutex.RLock()
-	defer fake.downloadCacheDependenciesMutex.RUnlock()
-	return len(fake.downloadCacheDependenciesArgsForCall)
+func (fake *FakeDependencyManager) DownloadCachedDependenciesCallCount() int {
+	fake.downloadCachedDependenciesMutex.RLock()
+	defer fake.downloadCachedDependenciesMutex.RUnlock()
+	return len(fake.downloadCachedDependenciesArgsForCall)
 }
 
-func (fake *FakeDependencyManager) DownloadCacheDependenciesArgsForCall(i int) (lager.Logger, []executor.CacheDependency, log_streamer.LogStreamer) {
-	fake.downloadCacheDependenciesMutex.RLock()
-	defer fake.downloadCacheDependenciesMutex.RUnlock()
-	return fake.downloadCacheDependenciesArgsForCall[i].logger, fake.downloadCacheDependenciesArgsForCall[i].mounts, fake.downloadCacheDependenciesArgsForCall[i].logStreamer
+func (fake *FakeDependencyManager) DownloadCachedDependenciesArgsForCall(i int) (lager.Logger, []executor.CachedDependency, log_streamer.LogStreamer) {
+	fake.downloadCachedDependenciesMutex.RLock()
+	defer fake.downloadCachedDependenciesMutex.RUnlock()
+	return fake.downloadCachedDependenciesArgsForCall[i].logger, fake.downloadCachedDependenciesArgsForCall[i].mounts, fake.downloadCachedDependenciesArgsForCall[i].logStreamer
 }
 
-func (fake *FakeDependencyManager) DownloadCacheDependenciesReturns(result1 containerstore.BindMounts, result2 error) {
-	fake.DownloadCacheDependenciesStub = nil
-	fake.downloadCacheDependenciesReturns = struct {
+func (fake *FakeDependencyManager) DownloadCachedDependenciesReturns(result1 containerstore.BindMounts, result2 error) {
+	fake.DownloadCachedDependenciesStub = nil
+	fake.downloadCachedDependenciesReturns = struct {
 		result1 containerstore.BindMounts
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeDependencyManager) ReleaseCacheDependencies(logger lager.Logger, keys []containerstore.BindMountCacheKey) error {
-	fake.releaseCacheDependenciesMutex.Lock()
-	fake.releaseCacheDependenciesArgsForCall = append(fake.releaseCacheDependenciesArgsForCall, struct {
+func (fake *FakeDependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys []containerstore.BindMountCacheKey) error {
+	fake.releaseCachedDependenciesMutex.Lock()
+	fake.releaseCachedDependenciesArgsForCall = append(fake.releaseCachedDependenciesArgsForCall, struct {
 		logger lager.Logger
 		keys   []containerstore.BindMountCacheKey
 	}{logger, keys})
-	fake.releaseCacheDependenciesMutex.Unlock()
-	if fake.ReleaseCacheDependenciesStub != nil {
-		return fake.ReleaseCacheDependenciesStub(logger, keys)
+	fake.releaseCachedDependenciesMutex.Unlock()
+	if fake.ReleaseCachedDependenciesStub != nil {
+		return fake.ReleaseCachedDependenciesStub(logger, keys)
 	} else {
-		return fake.releaseCacheDependenciesReturns.result1
+		return fake.releaseCachedDependenciesReturns.result1
 	}
 }
 
-func (fake *FakeDependencyManager) ReleaseCacheDependenciesCallCount() int {
-	fake.releaseCacheDependenciesMutex.RLock()
-	defer fake.releaseCacheDependenciesMutex.RUnlock()
-	return len(fake.releaseCacheDependenciesArgsForCall)
+func (fake *FakeDependencyManager) ReleaseCachedDependenciesCallCount() int {
+	fake.releaseCachedDependenciesMutex.RLock()
+	defer fake.releaseCachedDependenciesMutex.RUnlock()
+	return len(fake.releaseCachedDependenciesArgsForCall)
 }
 
-func (fake *FakeDependencyManager) ReleaseCacheDependenciesArgsForCall(i int) (lager.Logger, []containerstore.BindMountCacheKey) {
-	fake.releaseCacheDependenciesMutex.RLock()
-	defer fake.releaseCacheDependenciesMutex.RUnlock()
-	return fake.releaseCacheDependenciesArgsForCall[i].logger, fake.releaseCacheDependenciesArgsForCall[i].keys
+func (fake *FakeDependencyManager) ReleaseCachedDependenciesArgsForCall(i int) (lager.Logger, []containerstore.BindMountCacheKey) {
+	fake.releaseCachedDependenciesMutex.RLock()
+	defer fake.releaseCachedDependenciesMutex.RUnlock()
+	return fake.releaseCachedDependenciesArgsForCall[i].logger, fake.releaseCachedDependenciesArgsForCall[i].keys
 }
 
-func (fake *FakeDependencyManager) ReleaseCacheDependenciesReturns(result1 error) {
-	fake.ReleaseCacheDependenciesStub = nil
-	fake.releaseCacheDependenciesReturns = struct {
+func (fake *FakeDependencyManager) ReleaseCachedDependenciesReturns(result1 error) {
+	fake.ReleaseCachedDependenciesStub = nil
+	fake.releaseCachedDependenciesReturns = struct {
 		result1 error
 	}{result1}
 }

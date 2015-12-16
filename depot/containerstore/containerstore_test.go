@@ -293,7 +293,7 @@ var _ = Describe("Container Store", func() {
 					Privileged:   true,
 					CPUWeight:    50,
 					StartTimeout: 99,
-					CacheDependencies: []executor.CacheDependency{
+					CachedDependencies: []executor.CachedDependency{
 						{Name: "artifact", From: "https://example.com", To: "/etc/foo", CacheKey: "abc", LogSource: "source"},
 					},
 					LogConfig: executor.LogConfig{
@@ -356,9 +356,9 @@ var _ = Describe("Container Store", func() {
 			It("downloads the correct cache dependencies", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(dependencyManager.DownloadCacheDependenciesCallCount()).To(Equal(1))
-				_, mounts, _ := dependencyManager.DownloadCacheDependenciesArgsForCall(0)
-				Expect(mounts).To(Equal(runReq.CacheDependencies))
+				Expect(dependencyManager.DownloadCachedDependenciesCallCount()).To(Equal(1))
+				_, mounts, _ := dependencyManager.DownloadCachedDependenciesArgsForCall(0)
+				Expect(mounts).To(Equal(runReq.CachedDependencies))
 			})
 
 			It("creates the container in garden with the correct limits", func() {
@@ -367,7 +367,7 @@ var _ = Describe("Container Store", func() {
 						{SrcPath: "foo", DstPath: "/etc/foo", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost},
 					},
 				}
-				dependencyManager.DownloadCacheDependenciesReturns(expectedMounts, nil)
+				dependencyManager.DownloadCachedDependenciesReturns(expectedMounts, nil)
 
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -411,7 +411,7 @@ var _ = Describe("Container Store", func() {
 
 			Context("when downloading bind mounts fails", func() {
 				BeforeEach(func() {
-					dependencyManager.DownloadCacheDependenciesReturns(containerstore.BindMounts{}, errors.New("no"))
+					dependencyManager.DownloadCachedDependenciesReturns(containerstore.BindMounts{}, errors.New("no"))
 				})
 
 				It("transitions to a completed state", func() {
@@ -422,7 +422,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadCacheDependenciesFailed))
+					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadCachedDependenciesFailed))
 				})
 			})
 
@@ -931,7 +931,7 @@ var _ = Describe("Container Store", func() {
 					{CacheKey: "cache-key", Dir: "foo"},
 				},
 			}
-			dependencyManager.DownloadCacheDependenciesReturns(expectedMounts, nil)
+			dependencyManager.DownloadCachedDependenciesReturns(expectedMounts, nil)
 		})
 
 		JustBeforeEach(func() {
@@ -948,8 +948,8 @@ var _ = Describe("Container Store", func() {
 		It("removes downloader cache references", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dependencyManager.ReleaseCacheDependenciesCallCount()).To(Equal(1))
-			_, keys := dependencyManager.ReleaseCacheDependenciesArgsForCall(0)
+			Expect(dependencyManager.ReleaseCachedDependenciesCallCount()).To(Equal(1))
+			_, keys := dependencyManager.ReleaseCachedDependenciesArgsForCall(0)
 			Expect(keys).To(Equal(expectedMounts.CacheKeys))
 		})
 

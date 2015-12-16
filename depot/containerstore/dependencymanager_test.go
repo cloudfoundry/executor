@@ -18,7 +18,7 @@ var _ = Describe("DependencyManager", func() {
 	var (
 		dependencyManager containerstore.DependencyManager
 		cache             *cacheddownloaderfakes.FakeCachedDownloader
-		dependencies      []executor.CacheDependency
+		dependencies      []executor.CachedDependency
 		logStreamer       *fake_log_streamer.FakeLogStreamer
 	)
 
@@ -26,7 +26,7 @@ var _ = Describe("DependencyManager", func() {
 		cache = &cacheddownloaderfakes.FakeCachedDownloader{}
 		logStreamer = fake_log_streamer.NewFakeLogStreamer()
 		dependencyManager = containerstore.NewDependencyManager(cache)
-		dependencies = []executor.CacheDependency{
+		dependencies = []executor.CachedDependency{
 			{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "https://user:pass@example.com:8080/download-1", To: "/var/data/buildpack-1"},
 			{Name: "name-2", CacheKey: "cache-key-2", LogSource: "log-source-2", From: "http://example.com:1515/download-2", To: "/var/data/buildpack-2"},
 		}
@@ -38,7 +38,7 @@ var _ = Describe("DependencyManager", func() {
 		BeforeEach(func() {
 			cache.FetchAsDirectoryReturns("/tmp/download/dependencies", 123, nil)
 			var err error
-			bindMounts, err = dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
+			bindMounts, err = dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -77,13 +77,13 @@ var _ = Describe("DependencyManager", func() {
 
 	Context("When a mount has an invlid 'From' field", func() {
 		BeforeEach(func() {
-			dependencies = []executor.CacheDependency{
+			dependencies = []executor.CachedDependency{
 				{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "%", To: "/var/data/buildpack-1"},
 			}
 		})
 
 		It("returns the error", func() {
-			_, err := dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
+			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -94,14 +94,14 @@ var _ = Describe("DependencyManager", func() {
 		})
 
 		It("emits the download events", func() {
-			_, _ = dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
+			_, _ = dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
 			stdout := logStreamer.Stdout().(*gbytes.Buffer)
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1 failed"))
 		})
 
 		It("returns the error", func() {
-			_, err := dependencyManager.DownloadCacheDependencies(logger, dependencies, logStreamer)
+			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
 			Expect(err).To(HaveOccurred())
 		})
 	})

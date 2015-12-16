@@ -17,7 +17,7 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
-const DownloadCacheDependenciesFailed = "failed to download cached artifacts"
+const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
@@ -121,9 +121,9 @@ func (n *storeNode) Create(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(info.LogConfig)
 
-	mounts, err := n.dependencyManager.DownloadCacheDependencies(logger, info.CacheDependencies, logStreamer)
+	mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
 	if err != nil {
-		n.complete(logger, true, DownloadCacheDependenciesFailed)
+		n.complete(logger, true, DownloadCachedDependenciesFailed)
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	cacheKeys := n.bindMountCacheKeys
 	n.infoLock.Unlock()
 
-	return n.dependencyManager.ReleaseCacheDependencies(logger, cacheKeys)
+	return n.dependencyManager.ReleaseCachedDependencies(logger, cacheKeys)
 }
 
 func (n *storeNode) destroyContainer(logger lager.Logger) error {
