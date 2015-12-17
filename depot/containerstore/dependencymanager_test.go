@@ -28,7 +28,7 @@ var _ = Describe("DependencyManager", func() {
 		dependencyManager = containerstore.NewDependencyManager(cache)
 		dependencies = []executor.CachedDependency{
 			{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "https://user:pass@example.com:8080/download-1", To: "/var/data/buildpack-1"},
-			{Name: "name-2", CacheKey: "cache-key-2", LogSource: "log-source-2", From: "http://example.com:1515/download-2", To: "/var/data/buildpack-2"},
+			{CacheKey: "cache-key-2", LogSource: "log-source-2", From: "http://example.com:1515/download-2", To: "/var/data/buildpack-2"},
 		}
 	})
 
@@ -42,10 +42,13 @@ var _ = Describe("DependencyManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("emits the download events", func() {
+		It("emits the download log messages for downloads with names", func() {
 			stdout := logStreamer.Stdout().(*gbytes.Buffer)
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
 			Expect(stdout.Contents()).To(ContainSubstring("Downloaded name-1 (123B)"))
+
+			Expect(stdout.Contents()).ToNot(ContainSubstring("Downloading ..."))
+			Expect(stdout.Contents()).ToNot(ContainSubstring("Downloaded  (123B)"))
 		})
 
 		It("returns the expected mount information", func() {
@@ -75,7 +78,7 @@ var _ = Describe("DependencyManager", func() {
 		})
 	})
 
-	Context("When a mount has an invlid 'From' field", func() {
+	Context("When a mount has an invalid 'From' field", func() {
 		BeforeEach(func() {
 			dependencies = []executor.CachedDependency{
 				{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "%", To: "/var/data/buildpack-1"},

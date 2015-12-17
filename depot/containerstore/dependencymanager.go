@@ -32,12 +32,13 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 	for i := range mounts {
 		mount := &mounts[i]
-		emit(streamer, "Downloading %s...\n", mount.Name)
+
+		emit(streamer, mount, "Downloading %s...\n", mount.Name)
 
 		downloadURL, err := url.Parse(mount.From)
 		if err != nil {
 			logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
-			emit(streamer, "Downloading %s failed", mount.Name)
+			emit(streamer, mount, "Downloading %s failed", mount.Name)
 			return BindMounts{}, err
 		}
 
@@ -45,14 +46,14 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 		dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
 		if err != nil {
 			logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
-			emit(streamer, "Downloading %s failed", mount.Name)
+			emit(streamer, mount, "Downloading %s failed", mount.Name)
 			return BindMounts{}, err
 		}
 
 		if downloadedSize != 0 {
-			emit(streamer, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
+			emit(streamer, mount, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
 		} else {
-			emit(streamer, "Downloaded %s\n", mount.Name)
+			emit(streamer, mount, "Downloaded %s\n", mount.Name)
 		}
 
 		bindMounts.AddBindMount(mount.CacheKey, newBindMount(dirPath, mount.To))
@@ -74,8 +75,10 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 	return nil
 }
 
-func emit(streamer log_streamer.LogStreamer, format string, a ...interface{}) {
-	fmt.Fprintf(streamer.Stdout(), format, a...)
+func emit(streamer log_streamer.LogStreamer, mount *executor.CachedDependency, format string, a ...interface{}) {
+	if mount.Name != "" {
+		fmt.Fprintf(streamer.Stdout(), format, a...)
+	}
 }
 
 type BindMounts struct {
