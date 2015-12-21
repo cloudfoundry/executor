@@ -97,6 +97,15 @@ func (t *transformer) StepFor(
 			t.clock,
 		)
 
+	case *models.NetCheckAction:
+		return steps.NewNetCheck(
+			*actionModel,
+			logStreamer.WithSource(actionModel.LogSource),
+			logger,
+			externalIP,
+			ports,
+		)
+
 	case *models.DownloadAction:
 		return steps.NewDownload(
 			container,
