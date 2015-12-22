@@ -390,12 +390,13 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
 	container, err := client.Create(spec)
+	createDuration := time.Now().Sub(startTime)
 	if err != nil {
-		logger.Error("failed-to-creating-container-in-garden", err)
+		logger.Error("failed-to-creating-container-in-garden", err, lager.Data{"create-took": createDuration.String()})
 		return nil, err
 	}
-	GardenContainerCreationDuration.Send(time.Now().Sub(startTime))
-	logger.Info("created-container-in-garden")
+	logger.Info("created-container-in-garden", lager.Data{"create-took": createDuration.String()})
+	GardenContainerCreationDuration.Send(createDuration)
 	return container, nil
 }
 
