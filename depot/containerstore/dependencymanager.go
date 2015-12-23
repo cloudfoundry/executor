@@ -28,38 +28,61 @@ func NewDependencyManager(cache cacheddownloader.CachedDownloader) DependencyMan
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
-	bindMounts := NewBindMounts(len(mounts))
+	total := len(mounts)
+	completed := 0
+	mountChan := make(chan *cachedBindMount, total)
+	errChan := make(chan error, total)
+	bindMounts := NewBindMounts(total)
 
 	for i := range mounts {
-		mount := &mounts[i]
-
-		emit(streamer, mount, "Downloading %s...\n", mount.Name)
-
-		downloadURL, err := url.Parse(mount.From)
-		if err != nil {
-			logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
-			emit(streamer, mount, "Downloading %s failed", mount.Name)
-			return BindMounts{}, err
-		}
-
-		logger.Debug("fetching-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
-		dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
-		if err != nil {
-			logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
-			emit(streamer, mount, "Downloading %s failed", mount.Name)
-			return BindMounts{}, err
-		}
-
-		if downloadedSize != 0 {
-			emit(streamer, mount, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
-		} else {
-			emit(streamer, mount, "Downloaded %s\n", mount.Name)
-		}
-
-		bindMounts.AddBindMount(mount.CacheKey, newBindMount(dirPath, mount.To))
+		go func(mount *executor.CachedDependency) {
+			cachedMount, err := bm.downloadCachedDependency(logger, mount, streamer)
+			if err != nil {
+				errChan <- err
+			} else {
+				mountChan <- cachedMount
+			}
+		}(&mounts[i])
 	}
 
-	return bindMounts, nil
+	for {
+		select {
+		case err := <-errChan:
+			return bindMounts, err
+		case cachedMount := <-mountChan:
+			bindMounts.AddBindMount(cachedMount.CacheKey, cachedMount.BindMount)
+			completed++
+			if total == completed {
+				return bindMounts, nil
+			}
+		}
+	}
+}
+
+func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, streamer log_streamer.LogStreamer) (*cachedBindMount, error) {
+	emit(streamer, mount, "Downloading %s...\n", mount.Name)
+
+	downloadURL, err := url.Parse(mount.From)
+	if err != nil {
+		logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
+		emit(streamer, mount, "Downloading %s failed", mount.Name)
+		return nil, err
+	}
+
+	logger.Debug("fetching-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
+	dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
+	if err != nil {
+		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
+		emit(streamer, mount, "Downloading %s failed", mount.Name)
+		return nil, err
+	}
+
+	if downloadedSize != 0 {
+		emit(streamer, mount, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
+	} else {
+		emit(streamer, mount, "Downloaded %s\n", mount.Name)
+	}
+	return newCachedBindMount(mount.CacheKey, newBindMount(dirPath, mount.To)), nil
 }
 
 func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error {
@@ -78,6 +101,18 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 func emit(streamer log_streamer.LogStreamer, mount *executor.CachedDependency, format string, a ...interface{}) {
 	if mount.Name != "" {
 		fmt.Fprintf(streamer.Stdout(), format, a...)
+	}
+}
+
+type cachedBindMount struct {
+	CacheKey  string
+	BindMount garden.BindMount
+}
+
+func newCachedBindMount(key string, mount garden.BindMount) *cachedBindMount {
+	return &cachedBindMount{
+		CacheKey:  key,
+		BindMount: mount,
 	}
 }
 
