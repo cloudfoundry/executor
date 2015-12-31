@@ -106,14 +106,14 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 		return nil, 0, err
 	}
 
-	tarStream, downlodedSize, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, step.Cancelled())
+	tarStream, downloadedSize, err := step.cachedDownloader.Fetch(url, step.model.CacheKey, step.Cancelled())
 	if err != nil {
 		step.logger.Error("fetch-failed", err)
 		return nil, 0, err
 	}
 
-	step.logger.Info("fetch-complete")
-	return tarStream, downlodedSize, nil
+	step.logger.Info("fetch-complete", lager.Data{"size": downloadedSize})
+	return tarStream, downloadedSize, nil
 }
 
 func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
