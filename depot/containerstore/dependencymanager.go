@@ -28,11 +28,18 @@ func NewDependencyManager(cache cacheddownloader.CachedDownloader) DependencyMan
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
+	logger.Debug("downloading-cached-dependencies")
+	defer logger.Debug("downloading-cached-dependencies-complete")
+
 	total := len(mounts)
 	completed := 0
 	mountChan := make(chan *cachedBindMount, total)
 	errChan := make(chan error, total)
 	bindMounts := NewBindMounts(total)
+
+	if total == 0 {
+		return bindMounts, nil
+	}
 
 	for i := range mounts {
 		go func(mount *executor.CachedDependency) {

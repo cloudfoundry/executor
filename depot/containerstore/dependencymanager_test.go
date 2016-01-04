@@ -108,4 +108,13 @@ var _ = Describe("DependencyManager", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Context("When there are no cached dependencies ", func() {
+		It("returns an empty list of bindmounts", func() {
+			bindMounts, err := dependencyManager.DownloadCachedDependencies(logger, nil, logStreamer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bindMounts.CacheKeys).To(HaveLen(0))
+			Expect(bindMounts.GardenBindMounts).To(HaveLen(0))
+		})
+	})
 })
