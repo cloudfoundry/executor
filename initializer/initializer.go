@@ -239,6 +239,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 			{"metrics-reporter", &metrics.Reporter{
 				ExecutorSource: depotClient,
 				Interval:       metricsReportInterval,
+				Clock:          clock,
 				Logger:         logger,
 			}},
 			{"hub-closer", closeHub(hub)},

@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
@@ -22,6 +23,7 @@ var _ = Describe("Reporter", func() {
 		reportInterval time.Duration
 		sender         *fake.FakeMetricSender
 		executorClient *fakes.FakeClient
+		fakeClock      *fakeclock.FakeClock
 
 		reporter ifrit.Process
 		logger   *lagertest.TestLogger
@@ -34,6 +36,7 @@ var _ = Describe("Reporter", func() {
 
 		sender = fake.NewFakeMetricSender()
 		dropsonde_metrics.Initialize(sender, nil)
+		fakeClock = fakeclock.NewFakeClock(time.Now())
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
@@ -55,11 +58,14 @@ var _ = Describe("Reporter", func() {
 	})
 
 	JustBeforeEach(func() {
-		reporter = ifrit.Envoke(&metrics.Reporter{
+		reporter = ifrit.Invoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
 			Interval:       reportInterval,
+			Clock:          fakeClock,
 			Logger:         logger,
 		})
+
+		fakeClock.Increment(reportInterval)
 	})
 
 	AfterEach(func() {
@@ -127,6 +133,8 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-1"},
 			{Guid: "container-2"},
 		}, nil)
+
+		fakeClock.Increment(reportInterval)
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingMemory")

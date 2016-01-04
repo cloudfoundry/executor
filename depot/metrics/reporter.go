@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -30,6 +31,7 @@ type ExecutorSource interface {
 type Reporter struct {
 	Interval       time.Duration
 	ExecutorSource ExecutorSource
+	Clock          clock.Clock
 	Logger         lager.Logger
 }
 
@@ -38,12 +40,14 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 
 	close(ready)
 
+	timer := reporter.Clock.NewTimer(reporter.Interval)
+
 	for {
 		select {
 		case <-signals:
 			return nil
 
-		case <-time.After(reporter.Interval):
+		case <-timer.C():
 			remainingCapacity, err := reporter.ExecutorSource.RemainingResources(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-remaining-resources", err)
@@ -78,6 +82,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			remainingContainers.Send(remainingCapacity.Containers)
 
 			containerCount.Send(nContainers)
+			timer.Reset(reporter.Interval)
 		}
 	}
 }
