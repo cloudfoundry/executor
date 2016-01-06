@@ -890,11 +890,28 @@ var _ = Describe("Container Store", func() {
 				err := containerStore.Stop(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(finishRun).Should(Receive())
-
 				container, err := containerStore.Get(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.RunResult.Stopped).To(BeTrue())
+			})
+
+			It("it stops the step tree and the garden container", func() {
+				err := containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(finishRun).Should(Receive())
+				Eventually(gardenContainer.StopCallCount()).Should(Equal(1))
+			})
+
+			Context("when gardenContainer.Stop returns an error", func() {
+				BeforeEach(func() {
+					gardenContainer.StopReturns(errors.New("oh noes"))
+				})
+
+				It("returns the error", func() {
+					err := containerStore.Stop(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+				})
 			})
 		})
 
@@ -908,6 +925,17 @@ var _ = Describe("Container Store", func() {
 
 				Expect(container.RunResult.Stopped).To(BeTrue())
 				Expect(container.State).To(Equal(executor.StateCompleted))
+			})
+
+			Context("when gardenContainer.Stop returns an error", func() {
+				BeforeEach(func() {
+					gardenContainer.StopReturns(errors.New("oh noes"))
+				})
+
+				It("returns the error", func() {
+					err := containerStore.Stop(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+				})
 			})
 		})
 
