@@ -9,6 +9,7 @@ func NewFakeLogStreamer() *FakeLogStreamer {
 	stderrBuffer := gbytes.NewBuffer()
 	fakeStreamer.StdoutReturns(stdoutBuffer)
 	fakeStreamer.StderrReturns(stderrBuffer)
+	fakeStreamer.WithSourceReturns(fakeStreamer)
 
 	return fakeStreamer
 }

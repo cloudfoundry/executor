@@ -67,6 +67,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 }
 
 func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, streamer log_streamer.LogStreamer) (*cachedBindMount, error) {
+	streamer = streamer.WithSource(mount.LogSource)
 	emit(streamer, mount, "Downloading %s...\n", mount.Name)
 
 	downloadURL, err := url.Parse(mount.From)

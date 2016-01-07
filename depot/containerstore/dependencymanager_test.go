@@ -42,6 +42,12 @@ var _ = Describe("DependencyManager", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("uses the log source of the cached dependency", func() {
+			Expect(logStreamer.WithSourceCallCount()).To(Equal(2))
+			Expect(logStreamer.WithSourceArgsForCall(0)).To(Equal("log-source-1"))
+			Expect(logStreamer.WithSourceArgsForCall(1)).To(Equal("log-source-2"))
+		})
+
 		It("emits the download log messages for downloads with names", func() {
 			stdout := logStreamer.Stdout().(*gbytes.Buffer)
 			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
