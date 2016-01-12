@@ -22,6 +22,7 @@ var _ = Describe("Initializer", func() {
 	var fakeClock *fakeclock.FakeClock
 	var errCh chan error
 	var done chan struct{}
+	var config initializer.Configuration
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -37,6 +38,7 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
 			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
+		config = initializer.DefaultConfiguration
 	})
 
 	AfterEach(func() {
@@ -46,7 +48,6 @@ var _ = Describe("Initializer", func() {
 
 	JustBeforeEach(func() {
 		fakeGarden.Start()
-		config := initializer.DefaultConfiguration
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
@@ -131,6 +132,16 @@ var _ = Describe("Initializer", func() {
 			It("returns an error", func() {
 				Eventually(errCh).Should(Receive(HaveOccurred()))
 			})
+		})
+	})
+
+	Context("when the post setup hook is invalid", func() {
+		BeforeEach(func() {
+			config.PostSetupHook = "unescaped quote\\"
+		})
+
+		It("fails fast", func() {
+			Eventually(errCh).Should(Receive(HaveOccurred()))
 		})
 	})
 })

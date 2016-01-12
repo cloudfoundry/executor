@@ -40,6 +40,9 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
+	postSetupHook []string
+	postSetupUser string
+
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 	healthCheckWorkPool         *workpool.WorkPool
@@ -58,6 +61,8 @@ func NewTransformer(
 	unhealthyMonitoringInterval time.Duration,
 	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
+	postSetupHook []string,
+	postSetupUser string,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -72,6 +77,8 @@ func NewTransformer(
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 		healthCheckWorkPool:         healthCheckWorkPool,
 		clock:                       clock,
+		postSetupHook:               postSetupHook,
+		postSetupUser:               postSetupUser,
 	}
 }
 
@@ -216,7 +223,7 @@ func (t *transformer) StepsRunner(
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
-	var setup, action, monitor steps.Step
+	var setup, action, postSetup, monitor steps.Step
 	if container.Setup != nil {
 		setup = t.StepFor(
 			logStreamer,
@@ -225,6 +232,24 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.Ports,
 			logger.Session("setup"),
+		)
+	}
+
+	if len(t.postSetupHook) > 0 {
+		actionModel := models.RunAction{
+			Path: t.postSetupHook[0],
+			Args: t.postSetupHook[1:],
+			User: t.postSetupUser,
+		}
+		postSetup = steps.NewRun(
+			gardenContainer,
+			actionModel,
+			log_streamer.NewNoopStreamer(),
+			logger,
+			container.ExternalIP,
+			container.Ports,
+			t.exportNetworkEnvVars,
+			t.clock,
 		)
 	}
 
@@ -282,7 +307,11 @@ func (t *transformer) StepsRunner(
 	if setup == nil {
 		step = longLivedAction
 	} else {
-		step = steps.NewSerial([]steps.Step{setup, longLivedAction})
+		if postSetup == nil {
+			step = steps.NewSerial([]steps.Step{setup, longLivedAction})
+		} else {
+			step = steps.NewSerial([]steps.Step{setup, postSetup, longLivedAction})
+		}
 	}
 
 	return newStepRunner(step, hasStartedRunning), nil

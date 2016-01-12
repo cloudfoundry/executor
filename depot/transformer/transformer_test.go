@@ -54,6 +54,8 @@ var _ = Describe("Transformer", func() {
 				unhealthyMonitoringInterval,
 				healthCheckWoorkPool,
 				clock,
+				[]string{"/post-setup/path", "-x", "argument"},
+				"jim",
 			)
 
 			container = executor.Container{
@@ -88,17 +90,21 @@ var _ = Describe("Transformer", func() {
 			})
 		})
 
-		It("returns a step encapsulating setup, monitor, and action", func() {
+		It("returns a step encapsulating setup, post-setup, monitor, and action", func() {
 			setupReceived := make(chan struct{})
+			postSetupReceived := make(chan struct{})
 			monitorProcess := &gfakes.FakeProcess{}
 			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 				if processSpec.Path == "/setup/path" {
 					setupReceived <- struct{}{}
+				} else if processSpec.Path == "/post-setup/path" {
+					postSetupReceived <- struct{}{}
 				} else if processSpec.Path == "/monitor/path" {
 					return monitorProcess, nil
 				}
 				return &gfakes.FakeProcess{}, nil
 			}
+
 			monitorProcess.WaitStub = func() (int, error) {
 				if monitorProcess.WaitCallCount() == 1 {
 					return 1, errors.New("boom")
@@ -121,20 +127,29 @@ var _ = Describe("Transformer", func() {
 
 			Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 			processSpec, _ = gardenContainer.RunArgsForCall(1)
-			Expect(processSpec.Path).To(Equal("/action/path"))
+			Expect(processSpec.Path).To(Equal("/post-setup/path"))
+			Expect(processSpec.Args).To(Equal([]string{"-x", "argument"}))
+			Expect(processSpec.User).To(Equal("jim"))
 			Consistently(gardenContainer.RunCallCount).Should(Equal(2))
 
-			Consistently(process.Ready()).ShouldNot(Receive())
+			<-postSetupReceived
 
-			clock.Increment(1 * time.Second)
 			Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 			processSpec, _ = gardenContainer.RunArgsForCall(2)
-			Expect(processSpec.Path).To(Equal("/monitor/path"))
+			Expect(processSpec.Path).To(Equal("/action/path"))
+			Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+
 			Consistently(process.Ready()).ShouldNot(Receive())
 
 			clock.Increment(1 * time.Second)
 			Eventually(gardenContainer.RunCallCount).Should(Equal(4))
 			processSpec, _ = gardenContainer.RunArgsForCall(3)
+			Expect(processSpec.Path).To(Equal("/monitor/path"))
+			Consistently(process.Ready()).ShouldNot(Receive())
+
+			clock.Increment(1 * time.Second)
+			Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+			processSpec, _ = gardenContainer.RunArgsForCall(4)
 			Expect(processSpec.Path).To(Equal("/monitor/path"))
 			Eventually(process.Ready()).Should(BeClosed())
 
@@ -187,10 +202,10 @@ var _ = Describe("Transformer", func() {
 				process := ifrit.Background(runner)
 				Eventually(process.Ready()).Should(BeClosed())
 
-				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-				processSpec, _ := gardenContainer.RunArgsForCall(1)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				processSpec, _ := gardenContainer.RunArgsForCall(2)
 				Expect(processSpec.Path).To(Equal("/action/path"))
-				Consistently(gardenContainer.RunCallCount).Should(Equal(2))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(3))
 			})
 		})
 	})
