@@ -269,11 +269,6 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	} else {
 		n.complete(logger, true, "stopped-before-running")
 	}
-
-	if n.gardenContainer != nil {
-		return n.gardenContainer.Stop(false)
-	}
-
 	return nil
 }
 
