@@ -401,7 +401,10 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		return nil, err
 	}
 	logger.Info("created-container-in-garden", lager.Data{"create-took": createDuration.String()})
-	GardenContainerCreationDuration.Send(createDuration)
+	err = GardenContainerCreationDuration.Send(createDuration)
+	if err != nil {
+		logger.Error("failed-to-send-garden-container-creation-duration-metric", err)
+	}
 	return container, nil
 }
 

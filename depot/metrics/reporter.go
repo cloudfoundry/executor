@@ -73,15 +73,37 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				nContainers = len(containers)
 			}
 
-			totalMemory.Send(totalCapacity.MemoryMB)
-			totalDisk.Send(totalCapacity.DiskMB)
-			totalContainers.Send(totalCapacity.Containers)
+			err = totalMemory.Send(totalCapacity.MemoryMB)
+			if err != nil {
+				logger.Error("failed-to-send-total-memory-metric", err)
+			}
+			err = totalDisk.Send(totalCapacity.DiskMB)
+			if err != nil {
+				logger.Error("failed-to-send-total-disk-metric", err)
+			}
+			err = totalContainers.Send(totalCapacity.Containers)
+			if err != nil {
+				logger.Error("failed-to-send-total-container-metric", err)
+			}
 
-			remainingMemory.Send(remainingCapacity.MemoryMB)
-			remainingDisk.Send(remainingCapacity.DiskMB)
-			remainingContainers.Send(remainingCapacity.Containers)
+			err = remainingMemory.Send(remainingCapacity.MemoryMB)
+			if err != nil {
+				logger.Error("failed-to-send-remaining-memory-metric", err)
+			}
+			err = remainingDisk.Send(remainingCapacity.DiskMB)
+			if err != nil {
+				logger.Error("failed-to-send-remaining-disk-metric", err)
+			}
+			err = remainingContainers.Send(remainingCapacity.Containers)
+			if err != nil {
+				logger.Error("failed-to-send-remaining-containers-metric", err)
+			}
 
-			containerCount.Send(nContainers)
+			err = containerCount.Send(nContainers)
+			if err != nil {
+				logger.Error("failed-to-send-container-count-metric", err)
+			}
+
 			timer.Reset(reporter.Interval)
 		}
 	}

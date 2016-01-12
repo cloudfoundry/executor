@@ -286,7 +286,10 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 			case nil:
 				logger.Info("ping-garden-success", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
 				// send 0 to indicate ping responded successfully
-				stalledDuration.Send(0)
+				sendError := stalledDuration.Send(0)
+				if sendError != nil {
+					logger.Error("failed-to-send-stalled-duration-metric", sendError)
+				}
 				return nil
 			case garden.UnrecoverableError:
 				logger.Error("failed-to-ping-garden-with-unrecoverable-error", err)
@@ -298,7 +301,11 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 
 		case <-heartbeatTimer.C():
 			logger.Info("emitting-stalled-garden-heartbeat", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
-			stalledDuration.Send(clock.Since(pingStart))
+			sendError := stalledDuration.Send(clock.Since(pingStart))
+			if sendError != nil {
+				logger.Error("failed-to-send-stalled-duration-heartbeat-metric", sendError)
+			}
+
 			heartbeatTimer.Reset(StalledMetricHeartbeatInterval)
 		}
 	}

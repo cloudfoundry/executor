@@ -143,7 +143,10 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 }
 
 func (r *Runner) setHealthy() {
-	unhealthyCell.Send(0)
+	err := unhealthyCell.Send(0)
+	if err != nil {
+		r.logger.Error("failed-to-send-unhealthy-cell-metric", err)
+	}
 	if !r.healthy {
 		r.logger.Info("set-state-healthy")
 		r.executorClient.SetHealthy(r.logger, true)
@@ -152,7 +155,10 @@ func (r *Runner) setHealthy() {
 }
 
 func (r *Runner) setUnhealthy() {
-	unhealthyCell.Send(1)
+	err := unhealthyCell.Send(1)
+	if err != nil {
+		r.logger.Error("failed-to-send-unhealthy-cell-metric", err)
+	}
 	if r.healthy {
 		r.logger.Error("set-state-unhealthy", nil)
 		r.executorClient.SetHealthy(r.logger, false)
