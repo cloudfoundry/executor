@@ -22,6 +22,7 @@ import (
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/google/shlex"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
@@ -79,6 +80,9 @@ type Configuration struct {
 
 	MemoryMB string
 	DiskMB   string
+
+	PostSetupHook string
+	PostSetupUser string
 }
 
 const (
@@ -115,8 +119,14 @@ var DefaultConfiguration = Configuration{
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
+	postSetupHook, err := shlex.Split(config.PostSetupHook)
+	if err != nil {
+		logger.Error("failed-to-parse-post-setup-hook", err)
+		return nil, grouper.Members{}, err
+	}
+
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
-	err := waitForGarden(logger, gardenClient, clock)
+	err = waitForGarden(logger, gardenClient, clock)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -155,6 +165,8 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		clock,
 		hub,
 		config.HealthCheckWorkPoolSize,
+		postSetupHook,
+		config.PostSetupUser,
 	)
 	if err != nil {
 		return nil, grouper.Members{}, err
@@ -218,6 +230,11 @@ func ValidateExecutor(logger lager.Logger, config Configuration) bool {
 
 	if config.UnhealthyMonitoringInterval <= 0 {
 		logger.Error("unhealthy-monitoring-interval-invalid", nil)
+		valid = false
+	}
+
+	if config.PostSetupHook != "" && config.PostSetupUser == "" {
+		logger.Error("post-setup-hook-requires-a-user", nil)
 		valid = false
 	}
 

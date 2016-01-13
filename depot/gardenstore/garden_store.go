@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/steps"
@@ -36,6 +37,9 @@ type GardenStore struct {
 	processesL       sync.Mutex
 
 	workPool *workpool.WorkPool
+
+	postSetupHook []string
+	postSetupUser string
 }
 
 func NewGardenStore(
@@ -49,6 +53,8 @@ func NewGardenStore(
 	clock clock.Clock,
 	eventEmitter EventEmitter,
 	healthCheckWorkPoolSize int,
+	postSetupHook []string,
+	postSetupUser string,
 ) (*GardenStore, error) {
 	workPool, err := workpool.NewWorkPool(healthCheckWorkPoolSize)
 	if err != nil {
@@ -71,6 +77,9 @@ func NewGardenStore(
 		runningProcesses: map[string]ifrit.Process{},
 
 		workPool: workPool,
+
+		postSetupHook: postSetupHook,
+		postSetupUser: postSetupUser,
 	}, nil
 }
 
@@ -266,7 +275,7 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 		container.LogConfig.Index,
 	)
 
-	var setupStep, actionStep, monitorStep steps.Step
+	var setupStep, postSetupStep, actionStep, monitorStep steps.Step
 
 	if container.Setup != nil {
 		setupStep = store.transformer.StepFor(
@@ -277,6 +286,23 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 			container.Ports,
 			logger.Session("setup"),
 		)
+
+		if len(store.postSetupHook) > 0 {
+			actionModel := &models.RunAction{
+				Path: store.postSetupHook[0],
+				Args: store.postSetupHook[1:],
+				User: store.postSetupUser,
+			}
+
+			postSetupStep = store.transformer.StepFor(
+				log_streamer.NewNoopStreamer(),
+				models.WrapAction(actionModel),
+				gardenContainer,
+				container.ExternalIP,
+				container.Ports,
+				logger.Session("post-setup"),
+			)
+		}
 	}
 
 	actionStep = store.transformer.StepFor(
@@ -325,7 +351,11 @@ func (store *GardenStore) Run(logger lager.Logger, container executor.Container)
 
 	var step steps.Step
 	if setupStep != nil {
-		step = steps.NewSerial([]steps.Step{setupStep, longLivedAction})
+		if postSetupStep != nil {
+			step = steps.NewSerial([]steps.Step{setupStep, postSetupStep, longLivedAction})
+		} else {
+			step = steps.NewSerial([]steps.Step{setupStep, longLivedAction})
+		}
 	} else {
 		step = longLivedAction
 	}
