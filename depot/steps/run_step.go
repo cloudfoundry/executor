@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
@@ -83,6 +84,20 @@ func (step *runStep) Perform() error {
 	if step.model.ResourceLimits != nil {
 		nofile = step.model.ResourceLimits.Nofile
 	}
+
+	var processIO garden.ProcessIO
+	if step.model.SuppressLogOutput {
+		processIO = garden.ProcessIO{
+			Stdout: ioutil.Discard,
+			Stderr: ioutil.Discard,
+		}
+	} else {
+		processIO = garden.ProcessIO{
+			Stdout: step.streamer.Stdout(),
+			Stderr: step.streamer.Stderr(),
+		}
+	}
+
 	process, err := step.container.Run(garden.ProcessSpec{
 		Path: step.model.Path,
 		Args: step.model.Args,
@@ -91,10 +106,7 @@ func (step *runStep) Perform() error {
 		User: step.model.User,
 
 		Limits: garden.ResourceLimits{Nofile: nofile},
-	}, garden.ProcessIO{
-		Stdout: step.streamer.Stdout(),
-		Stderr: step.streamer.Stderr(),
-	})
+	}, processIO)
 	if err != nil {
 		step.logger.Error("failed-creating-process", err)
 		return err
@@ -124,8 +136,11 @@ func (step *runStep) Perform() error {
 				"exitStatus": exitStatus,
 				"cancelled":  cancelled,
 			})
-			step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
-			step.streamer.Flush()
+
+			if !step.model.SuppressLogOutput {
+				step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
+				step.streamer.Flush()
+			}
 
 			if cancelled {
 				return ErrCancelled

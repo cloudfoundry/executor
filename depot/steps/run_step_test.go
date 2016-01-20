@@ -141,18 +141,44 @@ var _ = Describe("RunAction", func() {
 				spawnedProcess.WaitReturns(0, waitErr)
 			})
 
-			It("returns an error", func() {
-				Expect(stepErr).To(MatchError(waitErr))
+			Context("when logs are suppressed", func() {
+				BeforeEach(func() {
+					runAction.SuppressLogOutput = true
+				})
+
+				It("returns an error", func() {
+					Expect(stepErr).To(MatchError(waitErr))
+				})
+
+				It("logs the step", func() {
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+						"test.run-step.running",
+						"test.run-step.creating-process",
+						"test.run-step.successful-process-create",
+						"test.run-step.running-error",
+					}))
+
+				})
 			})
 
-			It("logs the step", func() {
-				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
-					"test.run-step.running",
-					"test.run-step.creating-process",
-					"test.run-step.successful-process-create",
-					"test.run-step.running-error",
-				}))
+			Context("when logs are not suppressed", func() {
+				BeforeEach(func() {
+					runAction.SuppressLogOutput = false
+				})
 
+				It("returns an error", func() {
+					Expect(stepErr).To(MatchError(waitErr))
+				})
+
+				It("logs the step", func() {
+					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+						"test.run-step.running",
+						"test.run-step.creating-process",
+						"test.run-step.successful-process-create",
+						"test.run-step.running-error",
+					}))
+
+				})
 			})
 		})
 
@@ -234,8 +260,24 @@ var _ = Describe("RunAction", func() {
 				spawnedProcess.WaitReturns(19, nil)
 			})
 
-			It("should return an emittable error with the exit code", func() {
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+			Context("when logs are not suppressed", func() {
+				BeforeEach(func() {
+					runAction.SuppressLogOutput = false
+				})
+
+				It("should return an emittable error with the exit code", func() {
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+				})
+			})
+
+			Context("when logs are suppressed", func() {
+				BeforeEach(func() {
+					runAction.SuppressLogOutput = true
+				})
+
+				It("should return an emittable error with the exit code", func() {
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+				})
 			})
 		})
 
@@ -318,18 +360,38 @@ var _ = Describe("RunAction", func() {
 				}
 			})
 
-			It("emits the output chunks as they come in", func() {
-				Expect(stdoutBuffer).To(gbytes.Say("hi out"))
-				Expect(stderrBuffer).To(gbytes.Say("hi err"))
+			Context("when logs are not suppressed", func() {
+
+				It("emits the output chunks as they come in", func() {
+					Expect(stdoutBuffer).To(gbytes.Say("hi out"))
+					Expect(stderrBuffer).To(gbytes.Say("hi err"))
+				})
+
+				It("should flush the output when the code exits", func() {
+					Expect(fakeStreamer.FlushCallCount()).To(Equal(1))
+				})
+
+				It("emits the exit status code", func() {
+					Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
+				})
 			})
 
-			It("should flush the output when the code exits", func() {
-				Expect(fakeStreamer.FlushCallCount()).To(Equal(1))
+			Context("when logs are suppressed", func() {
+
+				BeforeEach(func() {
+					runAction.SuppressLogOutput = true
+				})
+
+				It("does not emit the output chunks as they come in", func() {
+					Expect(stdoutBuffer).ToNot(gbytes.Say("hi out"))
+					Expect(stderrBuffer).ToNot(gbytes.Say("hi err"))
+				})
+
+				It("does not emit the exit status code", func() {
+					Expect(stdoutBuffer).ToNot(gbytes.Say("Exit status 34"))
+				})
 			})
 
-			It("emits the exit status code", func() {
-				Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
-			})
 		})
 	})
 
