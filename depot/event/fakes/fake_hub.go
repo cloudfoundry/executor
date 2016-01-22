@@ -17,14 +17,14 @@ type FakeHub struct {
 	SubscribeStub        func() (executor.EventSource, error)
 	subscribeMutex       sync.RWMutex
 	subscribeArgsForCall []struct{}
-	subscribeReturns struct {
+	subscribeReturns     struct {
 		result1 executor.EventSource
 		result2 error
 	}
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 }

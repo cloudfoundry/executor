@@ -44,8 +44,13 @@ var _ = Describe("DependencyManager", func() {
 
 		It("uses the log source of the cached dependency", func() {
 			Expect(logStreamer.WithSourceCallCount()).To(Equal(2))
-			Expect(logStreamer.WithSourceArgsForCall(0)).To(Equal("log-source-1"))
-			Expect(logStreamer.WithSourceArgsForCall(1)).To(Equal("log-source-2"))
+			expectedSources := []string{
+				"log-source-1",
+				"log-source-2",
+			}
+
+			Expect(expectedSources).To(ContainElement(logStreamer.WithSourceArgsForCall(0)))
+			Expect(expectedSources).To(ContainElement(logStreamer.WithSourceArgsForCall(1)))
 		})
 
 		It("emits the download log messages for downloads with names", func() {
@@ -68,19 +73,32 @@ var _ = Describe("DependencyManager", func() {
 				{CacheKey: "cache-key-2", Dir: "/tmp/download/dependencies"},
 			}
 
-			Expect(bindMounts.GardenBindMounts).To(Equal(expectedGardenMounts))
-			Expect(bindMounts.CacheKeys).To(Equal(expectedCacheKeys))
+			Expect(bindMounts.GardenBindMounts).To(ConsistOf(expectedGardenMounts))
+			Expect(bindMounts.CacheKeys).To(ConsistOf(expectedCacheKeys))
 		})
 
 		It("Downloads the directories", func() {
 			Expect(cache.FetchAsDirectoryCallCount()).To(Equal(2))
-			downloadUrl, cacheKey, _ := cache.FetchAsDirectoryArgsForCall(0)
-			Expect(*downloadUrl).To(Equal(url.URL{Scheme: "https", Host: "example.com:8080", Path: "/download-1", User: url.UserPassword("user", "pass")}))
-			Expect(cacheKey).To(Equal("cache-key-1"))
+			// Again order here will not necessisarily be preserved!
+			expectedUrls := []url.URL{
+				{Scheme: "https", Host: "example.com:8080", Path: "/download-1", User: url.UserPassword("user", "pass")},
+				{Scheme: "http", Host: "example.com:1515", Path: "/download-2"},
+			}
+			expectedCacheKeys := []string{
+				"cache-key-1",
+				"cache-key-2",
+			}
 
+			downloadURLs := make([]url.URL, 2)
+			cacheKeys := make([]string, 2)
+			downloadUrl, cacheKey, _ := cache.FetchAsDirectoryArgsForCall(0)
+			downloadURLs[0] = *downloadUrl
+			cacheKeys[0] = cacheKey
 			downloadUrl, cacheKey, _ = cache.FetchAsDirectoryArgsForCall(1)
-			Expect(*downloadUrl).To(Equal(url.URL{Scheme: "http", Host: "example.com:1515", Path: "/download-2"}))
-			Expect(cacheKey).To(Equal("cache-key-2"))
+			downloadURLs[1] = *downloadUrl
+			cacheKeys[1] = cacheKey
+			Expect(downloadURLs).To(ConsistOf(expectedUrls))
+			Expect(cacheKeys).To(ConsistOf(expectedCacheKeys))
 		})
 	})
 
@@ -104,9 +122,10 @@ var _ = Describe("DependencyManager", func() {
 
 		It("emits the download events", func() {
 			_, _ = dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
-			stdout := logStreamer.Stdout().(*gbytes.Buffer)
-			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
-			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1 failed"))
+			Eventually(func() []byte {
+				stdout := logStreamer.Stdout().(*gbytes.Buffer)
+				return stdout.Contents()
+			}).Should(And(ContainSubstring("Downloading name-1..."), ContainSubstring("Downloading name-1 failed")))
 		})
 
 		It("returns the error", func() {

@@ -456,7 +456,7 @@ var _ = Describe("RunAction", func() {
 				It("sends a kill signal to the process", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-					fakeClock.Increment(steps.TERMINATE_TIMEOUT + 1*time.Second)
+					fakeClock.WaitForWatcherAndIncrement(steps.TERMINATE_TIMEOUT + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))

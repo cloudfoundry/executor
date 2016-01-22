@@ -781,8 +781,11 @@ var _ = Describe("Container Store", func() {
 						container, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						event := eventEmitter.EmitArgsForCall(2)
-						Expect(event).To(Equal(executor.ContainerCompleteEvent{
+						emittedEvents := []executor.Event{}
+						for i := 0; i < 3; i++ {
+							emittedEvents = append(emittedEvents, eventEmitter.EmitArgsForCall(i))
+						}
+						Expect(emittedEvents).To(ContainElement(executor.ContainerCompleteEvent{
 							RawContainer: container,
 						}))
 					})
