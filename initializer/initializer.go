@@ -214,6 +214,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		clock,
 		hub,
 		transformer,
+		config.TrustedSystemCertificatesPath,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
