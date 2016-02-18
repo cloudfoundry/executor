@@ -25,7 +25,8 @@ const ContainerMissingMessage = "missing garden container"
 const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
 type storeNode struct {
-	modifiedIndex uint
+	modifiedIndex               uint
+	hostTrustedCertificatesPath string
 
 	// infoLock protects modifying info and swapping gardenContainer pointers
 	infoLock           *sync.Mutex
@@ -50,17 +51,19 @@ func newStoreNode(
 	dependencyManager DependencyManager,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
+	hostTrustedCertificatesPath string,
 ) *storeNode {
 	return &storeNode{
-		config:            config,
-		info:              container,
-		infoLock:          &sync.Mutex{},
-		opLock:            &sync.Mutex{},
-		gardenClient:      gardenClient,
-		dependencyManager: dependencyManager,
-		eventEmitter:      eventEmitter,
-		transformer:       transformer,
-		modifiedIndex:     0,
+		config:                      config,
+		info:                        container,
+		infoLock:                    &sync.Mutex{},
+		opLock:                      &sync.Mutex{},
+		gardenClient:                gardenClient,
+		dependencyManager:           dependencyManager,
+		eventEmitter:                eventEmitter,
+		transformer:                 transformer,
+		modifiedIndex:               0,
+		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 	}
 }
 
@@ -125,6 +128,16 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	if err != nil {
 		n.complete(logger, true, DownloadCachedDependenciesFailed)
 		return err
+	}
+
+	if n.hostTrustedCertificatesPath != "" && info.TrustedSystemCertificatesPath != "" {
+		mount := garden.BindMount{
+			SrcPath: n.hostTrustedCertificatesPath,
+			DstPath: info.TrustedSystemCertificatesPath,
+			Mode:    garden.BindMountModeRO,
+			Origin:  garden.BindMountOriginHost,
+		}
+		mounts.GardenBindMounts = append(mounts.GardenBindMounts, mount)
 	}
 
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")

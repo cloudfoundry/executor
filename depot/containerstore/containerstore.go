@@ -62,6 +62,8 @@ type containerStore struct {
 	containers        *nodeMap
 	eventEmitter      event.Hub
 	clock             clock.Clock
+
+	trustedSystemCertificatesPath string
 }
 
 func New(
@@ -72,6 +74,7 @@ func New(
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
+	trustedSystemCertificatesPath string,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:   containerConfig,
@@ -81,6 +84,7 @@ func New(
 		eventEmitter:      eventEmitter,
 		transformer:       transformer,
 		clock:             clock,
+		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 	}
 }
 
@@ -90,7 +94,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	defer logger.Debug("complete")
 
 	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
-	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.dependencyManager, cs.eventEmitter, cs.transformer))
+	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.dependencyManager, cs.eventEmitter, cs.transformer, cs.trustedSystemCertificatesPath))
 	if err != nil {
 		logger.Error("failed-to-reserve", err)
 		return executor.Container{}, err

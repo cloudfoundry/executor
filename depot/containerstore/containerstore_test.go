@@ -86,6 +86,7 @@ var _ = Describe("Container Store", func() {
 			clock,
 			eventEmitter,
 			megatron,
+			"/var/vcap/data/cf-system-trusted-certs",
 		)
 	})
 
@@ -306,6 +307,7 @@ var _ = Describe("Container Store", func() {
 						Index: 1,
 					},
 					Env: env,
+					TrustedSystemCertificatesPath: "",
 				}
 				runReq = &executor.RunRequest{
 					Guid:    containerGuid,
@@ -407,6 +409,44 @@ var _ = Describe("Container Store", func() {
 				container, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.ExternalIP).To(Equal(externalIP))
+			})
+
+			Context("when there are trusted system certificates", func() {
+				Context("and the desired LRP has a certificates path", func() {
+					var mounts []garden.BindMount
+
+					BeforeEach(func() {
+						runReq.RunInfo.TrustedSystemCertificatesPath = "/etc/cf-system-certificates"
+						mounts = []garden.BindMount{
+							{
+								SrcPath: "/var/vcap/data/cf-system-trusted-certs",
+								DstPath: runReq.RunInfo.TrustedSystemCertificatesPath,
+								Mode:    garden.BindMountModeRO,
+								Origin:  garden.BindMountOriginHost,
+							},
+						}
+					})
+
+					It("creates a bind mount", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						gardenContainerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(gardenContainerSpec.BindMounts).To(Equal(mounts))
+					})
+				})
+
+				Context("and the desired LRP does not have a certificates path", func() {
+					It("does not create a bind mount", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						gardenContainerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(gardenContainerSpec.BindMounts).To(BeEmpty())
+					})
+				})
 			})
 
 			Context("when downloading bind mounts fails", func() {

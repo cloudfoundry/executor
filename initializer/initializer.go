@@ -97,6 +97,8 @@ type Configuration struct {
 
 	PostSetupHook string
 	PostSetupUser string
+
+	TrustedSystemCertificatesPath string
 }
 
 const (
