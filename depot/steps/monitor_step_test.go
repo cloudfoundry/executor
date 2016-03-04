@@ -277,7 +277,7 @@ var _ = Describe("MonitorStep", func() {
 
 			Context("and the start timeout is exceeded", func() {
 				BeforeEach(func() {
-					startTimeout = 50 * time.Millisecond
+					startTimeout = 60 * time.Millisecond
 					unhealthyInterval = 30 * time.Millisecond
 				})
 
