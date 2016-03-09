@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry-incubator/volman"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -58,6 +59,7 @@ type containerStore struct {
 	containerConfig   ContainerConfig
 	gardenClient      garden.Client
 	dependencyManager DependencyManager
+	volumeManager     volman.Manager
 	transformer       transformer.Transformer
 	containers        *nodeMap
 	eventEmitter      event.Hub
@@ -71,6 +73,7 @@ func New(
 	totalCapacity *executor.ExecutorResources,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
+	volumeManager volman.Manager,
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
@@ -80,6 +83,7 @@ func New(
 		containerConfig:   containerConfig,
 		gardenClient:      gardenClient,
 		dependencyManager: dependencyManager,
+		volumeManager:     volumeManager,
 		containers:        newNodeMap(totalCapacity),
 		eventEmitter:      eventEmitter,
 		transformer:       transformer,
@@ -94,7 +98,18 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	defer logger.Debug("complete")
 
 	container := executor.NewReservedContainerFromAllocationRequest(req, cs.clock.Now().UnixNano())
-	err := cs.containers.Add(newStoreNode(&cs.containerConfig, container, cs.gardenClient, cs.dependencyManager, cs.eventEmitter, cs.transformer, cs.trustedSystemCertificatesPath))
+
+	err := cs.containers.Add(
+		newStoreNode(&cs.containerConfig,
+			container,
+			cs.gardenClient,
+			cs.dependencyManager,
+			cs.volumeManager,
+			cs.eventEmitter,
+			cs.transformer,
+			cs.trustedSystemCertificatesPath,
+		))
+
 	if err != nil {
 		logger.Error("failed-to-reserve", err)
 		return executor.Container{}, err

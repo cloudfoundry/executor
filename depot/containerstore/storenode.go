@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/cloudfoundry-incubator/volman"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )
@@ -21,6 +22,7 @@ const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
 const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
+const VolmanMountFailed = "failed to mount volume"
 
 const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
@@ -38,6 +40,7 @@ type storeNode struct {
 	opLock            *sync.Mutex
 	gardenClient      garden.Client
 	dependencyManager DependencyManager
+	volumeManager     volman.Manager
 	eventEmitter      event.Hub
 	transformer       transformer.Transformer
 	process           ifrit.Process
@@ -49,6 +52,7 @@ func newStoreNode(
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
+	volumeManager volman.Manager,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
@@ -60,6 +64,7 @@ func newStoreNode(
 		opLock:                      &sync.Mutex{},
 		gardenClient:                gardenClient,
 		dependencyManager:           dependencyManager,
+		volumeManager:               volumeManager,
 		eventEmitter:                eventEmitter,
 		transformer:                 transformer,
 		modifiedIndex:               0,
@@ -140,6 +145,15 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		mounts.GardenBindMounts = append(mounts.GardenBindMounts, mount)
 	}
 
+	volumeMounts, err := n.mountVolumes(logger, info)
+	if err != nil {
+		logger.Error("failed-to-mount-volume", err)
+		fmt.Fprintf(logStreamer.Stderr(), "Failed to mount volume\n")
+		n.complete(logger, true, VolmanMountFailed)
+		return err
+	}
+	mounts.GardenBindMounts = append(mounts.GardenBindMounts, volumeMounts...)
+
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
 	gardenContainer, err := n.createGardenContainer(logger, &info, mounts.GardenBindMounts)
 	if err != nil {
@@ -157,6 +171,19 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	n.infoLock.Unlock()
 
 	return nil
+}
+
+func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) ([]garden.BindMount, error) {
+	gardenMounts := []garden.BindMount{}
+	for _, volume := range info.VolumeMounts {
+		hostMount, err := n.volumeManager.Mount(logger, volume.Driver, volume.VolumeId, volume.Config)
+		if err != nil {
+			return nil, err
+		}
+		gardenMounts = append(gardenMounts,
+			garden.BindMount{SrcPath: hostMount.Path, DstPath: volume.ContainerPath, Origin: garden.BindMountOriginHost, Mode: garden.BindMountModeRW})
+	}
+	return gardenMounts, nil
 }
 
 func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container, mounts []garden.BindMount) (garden.Container, error) {

@@ -19,7 +19,10 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer/faketransformer"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry-incubator/volman"
+	"github.com/cloudfoundry-incubator/volman/volmanfakes"
 	"github.com/pivotal-golang/clock/fakeclock"
+	"github.com/pivotal-golang/lager"
 
 	eventfakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
@@ -41,6 +44,7 @@ var _ = Describe("Container Store", func() {
 		gardenContainer   *gfakes.FakeContainer
 		megatron          *faketransformer.FakeTransformer
 		dependencyManager *containerstorefakes.FakeDependencyManager
+		volumeManager     *volmanfakes.FakeManager
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
@@ -58,6 +62,7 @@ var _ = Describe("Container Store", func() {
 		gardenContainer = &gfakes.FakeContainer{}
 		gardenClient = &gfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
+		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
 
@@ -83,6 +88,7 @@ var _ = Describe("Container Store", func() {
 			&totalCapacity,
 			gardenClient,
 			dependencyManager,
+			volumeManager,
 			clock,
 			eventEmitter,
 			megatron,
@@ -409,6 +415,70 @@ var _ = Describe("Container Store", func() {
 				container, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.ExternalIP).To(Equal(externalIP))
+			})
+
+			Context("when there are volume mounts configured", func() {
+				BeforeEach(func() {
+					runReq.RunInfo.VolumeMounts = []executor.VolumeMount{
+						executor.VolumeMount{ContainerPath: "cpath1", Driver: "some-driver", VolumeId: "some-volume", Config: "some-config"},
+						executor.VolumeMount{ContainerPath: "cpath2", Driver: "some-other-driver", VolumeId: "some-other-volume", Config: "some-other-config"},
+					}
+
+					count := 0
+					volumeManager.MountStub = // first call mounts at a different point than second call
+						func(lager.Logger, string, string, string) (volman.MountResponse, error) {
+							defer func() { count = count + 1 }()
+							if count == 0 {
+								return volman.MountResponse{Path: "hpath1"}, nil
+							}
+							return volman.MountResponse{Path: "hpath2"}, nil
+						}
+				})
+
+				It("mounts the correct volumes via the volume manager", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(volumeManager.MountCallCount()).To(Equal(2))
+
+					_, driverName, volumeId, config := volumeManager.MountArgsForCall(0)
+					Expect(driverName).To(Equal(runReq.VolumeMounts[0].Driver))
+					Expect(volumeId).To(Equal(runReq.VolumeMounts[0].VolumeId))
+					Expect(config).To(Equal(runReq.VolumeMounts[0].Config))
+
+					_, driverName, volumeId, config = volumeManager.MountArgsForCall(1)
+					Expect(driverName).To(Equal(runReq.VolumeMounts[1].Driver))
+					Expect(volumeId).To(Equal(runReq.VolumeMounts[1].VolumeId))
+					Expect(config).To(Equal(runReq.VolumeMounts[1].Config))
+				})
+
+				It("correctly maps container and host directories in garden", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+
+					expectedBindMount1 := garden.BindMount{SrcPath: "hpath1", DstPath: "cpath1"}
+					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount1))
+					expectedBindMount2 := garden.BindMount{SrcPath: "hpath2", DstPath: "cpath2"}
+					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount2))
+				})
+
+				Context("when it errors on mount", func() {
+					BeforeEach(func() {
+						volumeManager.MountReturns(volman.MountResponse{Path: "host-path"}, errors.New("some-error"))
+					})
+
+					It("fails fast and completes the container", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(HaveOccurred())
+						Expect(volumeManager.MountCallCount()).To(Equal(1))
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(Equal(containerstore.VolmanMountFailed))
+					})
+				})
 			})
 
 			Context("when there are trusted system certificates", func() {

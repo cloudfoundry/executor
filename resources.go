@@ -162,6 +162,14 @@ type RunInfo struct {
 	EgressRules                   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
 	Env                           []EnvironmentVariable       `json:"env,omitempty"`
 	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
+	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
+}
+
+type VolumeMount struct {
+	Driver        string `json:"driver"`
+	VolumeId      string `json:"volume_id"`
+	Config        string `json:"config"`
+	ContainerPath string `json:"destination_path"`
 }
 
 type InnerContainer Container

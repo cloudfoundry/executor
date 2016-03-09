@@ -22,6 +22,7 @@ import (
 	GardenClient "github.com/cloudfoundry-incubator/garden/client"
 	GardenConnection "github.com/cloudfoundry-incubator/garden/client/connection"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/cloudfoundry-incubator/volman/vollocal"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/google/shlex"
 	"github.com/pivotal-golang/archiver/compressor"
@@ -64,6 +65,8 @@ type Configuration struct {
 	MaxCacheSizeInBytes  uint64
 	SkipCertVerify       bool
 	ExportNetworkEnvVars bool
+
+	VolManDriverPath string
 
 	ContainerMaxCpuShares       uint64
 	ContainerInodeLimit         uint64
@@ -211,6 +214,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		&totalCapacity,
 		gardenClient,
 		containerstore.NewDependencyManager(cache),
+		vollocal.NewLocalClient(config.VolManDriverPath),
 		clock,
 		hub,
 		transformer,
