@@ -166,10 +166,11 @@ type RunInfo struct {
 }
 
 type VolumeMount struct {
-	Driver        string `json:"driver"`
-	VolumeId      string `json:"volume_id"`
-	Config        string `json:"config"`
-	ContainerPath string `json:"destination_path"`
+	Driver        string                 `json:"driver"`
+	VolumeId      string                 `json:"volume_id"`
+	Config        map[string]interface{} `json:"config"`
+	ContainerPath string                 `json:"container_path"`
+	Mode          uint8                  `json:"mode"`
 }
 
 type InnerContainer Container

@@ -1,6 +1,7 @@
 package containerstore
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,7 @@ const ContainerInitializationFailedMessage = "failed to initialize container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
+const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 
 const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
 
@@ -148,7 +150,6 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	volumeMounts, err := n.mountVolumes(logger, info)
 	if err != nil {
 		logger.Error("failed-to-mount-volume", err)
-		fmt.Fprintf(logStreamer.Stderr(), "Failed to mount volume\n")
 		n.complete(logger, true, VolmanMountFailed)
 		return err
 	}
@@ -181,7 +182,12 @@ func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) (
 			return nil, err
 		}
 		gardenMounts = append(gardenMounts,
-			garden.BindMount{SrcPath: hostMount.Path, DstPath: volume.ContainerPath, Origin: garden.BindMountOriginHost, Mode: garden.BindMountModeRW})
+			garden.BindMount{
+				SrcPath: hostMount.Path,
+				DstPath: volume.ContainerPath,
+				Origin:  garden.BindMountOriginHost,
+				Mode:    garden.BindMountMode(volume.Mode),
+			})
 	}
 	return gardenMounts, nil
 }
@@ -335,7 +341,22 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	cacheKeys := n.bindMountCacheKeys
 	n.infoLock.Unlock()
 
-	return n.dependencyManager.ReleaseCachedDependencies(logger, cacheKeys)
+	var bindMountCleanupErr error
+	err = n.dependencyManager.ReleaseCachedDependencies(logger, cacheKeys)
+	if err != nil {
+		logger.Error("failed-to-release-cached-deps", err)
+		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
+	}
+
+	for _, volume := range n.info.VolumeMounts {
+		err = n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId)
+		if err != nil {
+			logger.Error("failed-to-unmount-volume", err)
+			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
+		}
+	}
+
+	return bindMountCleanupErr
 }
 
 func (n *storeNode) destroyContainer(logger lager.Logger) error {
