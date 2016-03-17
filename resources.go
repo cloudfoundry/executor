@@ -165,12 +165,19 @@ type RunInfo struct {
 	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
 }
 
+type BindMountMode uint8
+
+const (
+	BindMountModeRO BindMountMode = 0
+	BindMountModeRW BindMountMode = 1
+)
+
 type VolumeMount struct {
 	Driver        string                 `json:"driver"`
 	VolumeId      string                 `json:"volume_id"`
 	Config        map[string]interface{} `json:"config"`
 	ContainerPath string                 `json:"container_path"`
-	Mode          uint8                  `json:"mode"`
+	Mode          BindMountMode          `json:"mode"`
 }
 
 type InnerContainer Container

@@ -422,8 +422,8 @@ var _ = Describe("Container Store", func() {
 				BeforeEach(func() {
 					someConfig := map[string]interface{}{"some-config": "interface"}
 					runReq.RunInfo.VolumeMounts = []executor.VolumeMount{
-						executor.VolumeMount{ContainerPath: "cpath1", Mode: uint8(garden.BindMountModeRW), Driver: "some-driver", VolumeId: "some-volume", Config: someConfig},
-						executor.VolumeMount{ContainerPath: "cpath2", Mode: uint8(garden.BindMountModeRO), Driver: "some-other-driver", VolumeId: "some-other-volume", Config: someConfig},
+						executor.VolumeMount{ContainerPath: "cpath1", Mode: executor.BindMountModeRW, Driver: "some-driver", VolumeId: "some-volume", Config: someConfig},
+						executor.VolumeMount{ContainerPath: "cpath2", Mode: executor.BindMountModeRO, Driver: "some-other-driver", VolumeId: "some-other-volume", Config: someConfig},
 					}
 
 					count := 0
