@@ -37,10 +37,11 @@ func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.C
 
 func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	logger := reporter.logger.Session("container-metrics-reporter")
-	close(ready)
 
 	ticker := reporter.clock.NewTicker(reporter.interval)
 	defer ticker.Stop()
+
+	close(ready)
 
 	cpuInfos := make(map[string]*cpuInfo)
 	for {
@@ -48,15 +49,15 @@ func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct
 		case <-signals:
 			return nil
 
-		case <-ticker.C():
-			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos)
+		case now := <-ticker.C():
+			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos, now)
 		}
 	}
 
 	return nil
 }
 
-func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo) map[string]*cpuInfo {
+func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
 	logger = logger.Session("tick")
 
 	startTime := reporter.clock.Now()
@@ -80,7 +81,6 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	})
 
 	newCpuInfos := make(map[string]*cpuInfo)
-	now := reporter.clock.Now()
 	for guid, metric := range metrics {
 		previousCpuInfo := previousCpuInfos[guid]
 		cpu := reporter.calculateAndSendMetrics(logger, &metric.MetricsConfig, &metric.ContainerMetrics, previousCpuInfo, now)

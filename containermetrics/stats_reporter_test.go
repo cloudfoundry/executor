@@ -105,7 +105,7 @@ var _ = Describe("StatsReporter", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		interval = 10 * time.Second
-		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
+		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeExecutorClient = new(efakes.FakeClient)
 
 		fakeMetricSender = msfake.NewFakeMetricSender()
@@ -133,7 +133,7 @@ var _ = Describe("StatsReporter", func() {
 		BeforeEach(func() {
 			sendResults()
 
-			fakeClock.Increment(interval)
+			fakeClock.WaitForWatcherAndIncrement(interval)
 			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
 		})
 
@@ -167,7 +167,7 @@ var _ = Describe("StatsReporter", func() {
 
 		Context("and the interval elapses again", func() {
 			BeforeEach(func() {
-				fakeClock.Increment(interval)
+				fakeClock.WaitForWatcherAndIncrement(interval)
 				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 			})
 
@@ -195,7 +195,7 @@ var _ = Describe("StatsReporter", func() {
 
 			Context("and the interval elapses again", func() {
 				BeforeEach(func() {
-					fakeClock.Increment(interval)
+					fakeClock.WaitForWatcherAndIncrement(interval)
 					Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
 				})
 
