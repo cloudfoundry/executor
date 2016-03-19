@@ -66,7 +66,7 @@ type Configuration struct {
 	SkipCertVerify       bool
 	ExportNetworkEnvVars bool
 
-	VolManDriverPath string
+	VolmanDriverPath string
 
 	ContainerMaxCpuShares       uint64
 	ContainerInodeLimit         uint64
@@ -214,7 +214,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		&totalCapacity,
 		gardenClient,
 		containerstore.NewDependencyManager(cache),
-		vollocal.NewLocalClient(config.VolManDriverPath),
+		vollocal.NewLocalClient(config.VolmanDriverPath),
 		clock,
 		hub,
 		transformer,
