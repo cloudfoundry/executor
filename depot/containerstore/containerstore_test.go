@@ -1608,7 +1608,7 @@ var _ = Describe("Container Store", func() {
 		It("marks containers completed that no longer have corresponding garden containers", func() {
 			initialEmitCallCount := eventEmitter.EmitCallCount()
 
-			clock.Increment(30 * time.Millisecond)
+			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
 			Eventually(func() executor.State {
 				container, err := containerStore.Get(logger, containerGuid4)
