@@ -112,7 +112,10 @@ var _ = Describe("Runner", func() {
 				})
 
 				AfterEach(func() {
+					// Send to the channel to eliminate the race
+					blockHealthcheck <- struct{}{}
 					close(blockHealthcheck)
+					blockHealthcheck = nil
 				})
 
 				It("fails without becoming ready", func() {

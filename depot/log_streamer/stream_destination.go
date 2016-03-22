@@ -14,7 +14,7 @@ type streamDestination struct {
 	sourceId    string
 	messageType events.LogMessage_MessageType
 	buffer      []byte
-	bufferLock  sync.Mutex
+	processLock sync.Mutex
 }
 
 func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType) *streamDestination {
@@ -45,10 +45,8 @@ func (destination *streamDestination) flush() {
 	}
 }
 
+// Not thread safe.  should only be called when holding the processLock
 func (destination *streamDestination) copyAndResetBuffer() []byte {
-	destination.bufferLock.Lock()
-	defer destination.bufferLock.Unlock()
-
 	if len(destination.buffer) > 0 {
 		msg := make([]byte, len(destination.buffer))
 		copy(msg, destination.buffer)
@@ -75,6 +73,9 @@ func (destination *streamDestination) processMessage(message string) {
 }
 
 func (destination *streamDestination) processString(message string, terminates bool) {
+	destination.processLock.Lock()
+	defer destination.processLock.Unlock()
+
 	for {
 		message = destination.appendToBuffer(message)
 		if len(message) == 0 {
@@ -88,10 +89,8 @@ func (destination *streamDestination) processString(message string, terminates b
 	}
 }
 
+// Not thread safe.  should only be called when holding the processLock
 func (destination *streamDestination) appendToBuffer(message string) string {
-	destination.bufferLock.Lock()
-	defer destination.bufferLock.Unlock()
-
 	if len(message)+len(destination.buffer) >= MAX_MESSAGE_SIZE {
 		remainingSpaceInBuffer := MAX_MESSAGE_SIZE - len(destination.buffer)
 		destination.buffer = append(destination.buffer, []byte(message[0:remainingSpaceInBuffer])...)
