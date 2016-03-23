@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/event"
 	"github.com/cloudfoundry-incubator/garden"
+	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
@@ -18,6 +19,7 @@ type client struct {
 	totalCapacity    executor.ExecutorResources
 	containerStore   containerstore.ContainerStore
 	gardenClient     garden.Client
+	volmanClient     volman.Manager
 	eventHub         event.Hub
 	creationWorkPool *workpool.WorkPool
 	deletionWorkPool *workpool.WorkPool
@@ -32,6 +34,7 @@ func NewClient(
 	totalCapacity executor.ExecutorResources,
 	containerStore containerstore.ContainerStore,
 	gardenClient garden.Client,
+	volmanClient volman.Manager,
 	eventHub event.Hub,
 	workPoolSettings executor.WorkPoolSettings,
 ) executor.Client {
@@ -57,6 +60,7 @@ func NewClient(
 		totalCapacity:    totalCapacity,
 		containerStore:   containerStore,
 		gardenClient:     gardenClient,
+		volmanClient:     volmanClient,
 		eventHub:         eventHub,
 		creationWorkPool: creationWorkPool,
 		deletionWorkPool: deletionWorkPool,
@@ -281,6 +285,22 @@ func (c *client) GetFiles(logger lager.Logger, guid, sourcePath string) (io.Read
 	case err = <-errChannel:
 	}
 	return readCloser, err
+}
+
+func (c *client) VolumeDrivers(logger lager.Logger) ([]string, error) {
+	logger = logger.Session("volume-drivers")
+
+	response, err := c.volmanClient.ListDrivers(logger)
+	if err != nil {
+		logger.Error("cannot-fetch-drivers", err)
+		return nil, err
+	}
+
+	actualDrivers := make([]string, 0, len(response.Drivers))
+	for _, driver := range response.Drivers {
+		actualDrivers = append(actualDrivers, driver.Name)
+	}
+	return actualDrivers, nil
 }
 
 func (c *client) SubscribeToEvents(logger lager.Logger) (executor.EventSource, error) {

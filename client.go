@@ -20,6 +20,7 @@ type Client interface {
 	RemainingResources(lager.Logger) (ExecutorResources, error)
 	TotalResources(lager.Logger) (ExecutorResources, error)
 	GetFiles(logger lager.Logger, guid string, path string) (io.ReadCloser, error)
+	VolumeDrivers(logger lager.Logger) ([]string, error)
 	SubscribeToEvents(lager.Logger) (EventSource, error)
 	Healthy(lager.Logger) bool
 	SetHealthy(lager.Logger, bool)

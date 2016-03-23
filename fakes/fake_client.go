@@ -112,6 +112,15 @@ type FakeClient struct {
 		result1 io.ReadCloser
 		result2 error
 	}
+	VolumeDriversStub        func(logger lager.Logger) ([]string, error)
+	volumeDriversMutex       sync.RWMutex
+	volumeDriversArgsForCall []struct {
+		logger lager.Logger
+	}
+	volumeDriversReturns struct {
+		result1 []string
+		result2 error
+	}
 	SubscribeToEventsStub        func(lager.Logger) (executor.EventSource, error)
 	subscribeToEventsMutex       sync.RWMutex
 	subscribeToEventsArgsForCall []struct {
@@ -504,6 +513,39 @@ func (fake *FakeClient) GetFilesReturns(result1 io.ReadCloser, result2 error) {
 	fake.GetFilesStub = nil
 	fake.getFilesReturns = struct {
 		result1 io.ReadCloser
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeClient) VolumeDrivers(logger lager.Logger) ([]string, error) {
+	fake.volumeDriversMutex.Lock()
+	fake.volumeDriversArgsForCall = append(fake.volumeDriversArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.volumeDriversMutex.Unlock()
+	if fake.VolumeDriversStub != nil {
+		return fake.VolumeDriversStub(logger)
+	} else {
+		return fake.volumeDriversReturns.result1, fake.volumeDriversReturns.result2
+	}
+}
+
+func (fake *FakeClient) VolumeDriversCallCount() int {
+	fake.volumeDriversMutex.RLock()
+	defer fake.volumeDriversMutex.RUnlock()
+	return len(fake.volumeDriversArgsForCall)
+}
+
+func (fake *FakeClient) VolumeDriversArgsForCall(i int) lager.Logger {
+	fake.volumeDriversMutex.RLock()
+	defer fake.volumeDriversMutex.RUnlock()
+	return fake.volumeDriversArgsForCall[i].logger
+}
+
+func (fake *FakeClient) VolumeDriversReturns(result1 []string, result2 error) {
+	fake.VolumeDriversStub = nil
+	fake.volumeDriversReturns = struct {
+		result1 []string
 		result2 error
 	}{result1, result2}
 }

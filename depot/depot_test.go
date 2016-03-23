@@ -10,6 +10,9 @@ import (
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/fakes"
+	"github.com/cloudfoundry-incubator/volman"
+	"github.com/cloudfoundry-incubator/volman/voldriver"
+	"github.com/cloudfoundry-incubator/volman/volmanfakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -26,13 +29,16 @@ var _ = Describe("Depot", func() {
 	)
 
 	var (
-		depotClient    executor.Client
-		logger         lager.Logger
-		fakeClock      *fakeclock.FakeClock
-		eventHub       *efakes.FakeHub
-		gardenClient   *fakes.FakeGardenClient
-		containerStore *containerstorefakes.FakeContainerStore
-		resources      executor.ExecutorResources
+		depotClient      executor.Client
+		logger           lager.Logger
+		fakeClock        *fakeclock.FakeClock
+		eventHub         *efakes.FakeHub
+		gardenClient     *fakes.FakeGardenClient
+		volmanClient     *volmanfakes.FakeManager
+		containerStore   *containerstorefakes.FakeContainerStore
+		resources        executor.ExecutorResources
+		volumeDrivers    []string
+		workPoolSettings executor.WorkPoolSettings
 	)
 
 	BeforeEach(func() {
@@ -40,6 +46,7 @@ var _ = Describe("Depot", func() {
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		eventHub = new(efakes.FakeHub)
 		gardenClient = new(fakes.FakeGardenClient)
+		volmanClient = new(volmanfakes.FakeManager)
 		containerStore = new(containerstorefakes.FakeContainerStore)
 
 		resources = executor.ExecutorResources{
@@ -48,14 +55,16 @@ var _ = Describe("Depot", func() {
 			Containers: 3,
 		}
 
-		workPoolSettings := executor.WorkPoolSettings{
+		workPoolSettings = executor.WorkPoolSettings{
 			CreateWorkPoolSize:  5,
 			DeleteWorkPoolSize:  5,
 			ReadWorkPoolSize:    5,
 			MetricsWorkPoolSize: 5,
 		}
+	})
 
-		depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
+	JustBeforeEach(func() {
+		depotClient = depot.NewClient(resources, containerStore, gardenClient, volmanClient, eventHub, workPoolSettings)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -248,9 +257,8 @@ var _ = Describe("Depot", func() {
 
 	Describe("Throttling", func() {
 		var (
-			numRequests      int
-			containerGuid    = "garden-store-guid"
-			workPoolSettings executor.WorkPoolSettings
+			numRequests   int
+			containerGuid = "garden-store-guid"
 		)
 
 		BeforeEach(func() {
@@ -267,8 +275,6 @@ var _ = Describe("Depot", func() {
 				ReadWorkPoolSize:    4,
 				MetricsWorkPoolSize: 5,
 			}
-
-			depotClient = depot.NewClient(resources, containerStore, gardenClient, eventHub, workPoolSettings)
 		})
 
 		Context("Container creation", func() {
@@ -671,6 +677,36 @@ var _ = Describe("Depot", func() {
 		Context("when asked for total resources", func() {
 			It("should return the resources it was configured with", func() {
 				Expect(depotClient.TotalResources(logger)).To(Equal(resources))
+			})
+		})
+	})
+
+	Describe("VolumeDrivers", func() {
+		Context("when getting volume drivers succeeds", func() {
+			BeforeEach(func() {
+				volmanClient.ListDriversReturns(volman.ListDriversResponse{Drivers: []voldriver.InfoResponse{
+					{Name: "ayrton", Path: "/ayrton"},
+					{Name: "damon", Path: "/damon"},
+					{Name: "michael", Path: "/michael"},
+				}}, nil)
+				volumeDrivers = []string{"ayrton", "damon", "michael"}
+			})
+
+			It("should return the list of volume drivers", func() {
+				actualDrivers, err := depotClient.VolumeDrivers(logger)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actualDrivers).To(ConsistOf(volumeDrivers))
+			})
+		})
+
+		Context("when getting volume drivers fails", func() {
+			BeforeEach(func() {
+				volmanClient.ListDriversReturns(volman.ListDriversResponse{}, errors.New("the wheels fell off"))
+			})
+
+			It("returns an error", func() {
+				_, err := depotClient.VolumeDrivers(logger)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})

@@ -232,6 +232,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		totalCapacity,
 		containerStore,
 		gardenClient,
+		vollocal.NewLocalClient(config.VolmanDriverPath),
 		hub,
 		workPoolSettings,
 	)
