@@ -1589,6 +1589,8 @@ var _ = Describe("Container Store", func() {
 			err = containerStore.Stop(logger, containerGuid6)
 			Expect(err).NotTo(HaveOccurred())
 
+			Eventually(eventEmitter.EmitCallCount).Should(Equal(7))
+
 			extraGardenContainer = &gfakes.FakeContainer{}
 			extraGardenContainer.HandleReturns("foobar")
 			gardenContainer.HandleReturns(containerGuid3)
@@ -1608,7 +1610,7 @@ var _ = Describe("Container Store", func() {
 		It("marks containers completed that no longer have corresponding garden containers", func() {
 			initialEmitCallCount := eventEmitter.EmitCallCount()
 
-			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
+			clock.Increment(30 * time.Millisecond)
 
 			Eventually(func() executor.State {
 				container, err := containerStore.Get(logger, containerGuid4)
