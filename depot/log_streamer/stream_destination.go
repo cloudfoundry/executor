@@ -27,6 +27,12 @@ func newStreamDestination(guid, sourceName, sourceId string, messageType events.
 	}
 }
 
+func (destination *streamDestination) lockAndFlush() {
+	destination.processLock.Lock()
+	defer destination.processLock.Unlock()
+	destination.flush()
+}
+
 func (destination *streamDestination) Write(data []byte) (int, error) {
 	destination.processMessage(string(data))
 	return len(data), nil

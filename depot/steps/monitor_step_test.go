@@ -89,7 +89,7 @@ var _ = Describe("MonitorStep", func() {
 		clock.Increment(d - 1*time.Microsecond)
 		Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
 
-		clock.Increment(d)
+		clock.WaitForWatcherAndIncrement(d)
 		Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
 	}
 
@@ -216,7 +216,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.monitor-step.transitioned-to-healthy",
 					}))
 				})

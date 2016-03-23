@@ -64,8 +64,8 @@ func (e *logStreamer) Stderr() io.Writer {
 }
 
 func (e *logStreamer) Flush() {
-	e.stdout.flush()
-	e.stderr.flush()
+	e.stdout.lockAndFlush()
+	e.stderr.lockAndFlush()
 }
 
 func (e *logStreamer) WithSource(sourceName string) LogStreamer {
