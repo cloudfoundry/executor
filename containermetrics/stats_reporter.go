@@ -62,9 +62,9 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 	startTime := reporter.clock.Now()
 
-	logger.Info("started")
+	logger.Debug("started")
 	defer func() {
-		logger.Info("done", lager.Data{
+		logger.Debug("done", lager.Data{
 			"took": reporter.clock.Now().Sub(startTime).String(),
 		})
 	}()
@@ -75,7 +75,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 		return previousCpuInfos
 	}
 
-	logger.Info("emitting", lager.Data{
+	logger.Debug("emitting", lager.Data{
 		"total-containers": len(metrics),
 		"get-metrics-took": reporter.clock.Now().Sub(startTime).String(),
 	})
