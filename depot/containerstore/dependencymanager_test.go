@@ -125,7 +125,7 @@ var _ = Describe("DependencyManager", func() {
 			Eventually(func() []byte {
 				stdout := logStreamer.Stdout().(*gbytes.Buffer)
 				return stdout.Contents()
-			}).Should(And(ContainSubstring("Downloading name-1..."), ContainSubstring("Downloading name-1 failed")))
+			}).Should(And(ContainSubstring("Downloading name-1..."), ContainSubstring("Downloading name-1 failed\n")))
 		})
 
 		It("returns the error", func() {

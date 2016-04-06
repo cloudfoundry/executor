@@ -68,7 +68,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, streamer log_streamer.LogStreamer) (*cachedBindMount, error) {
 	streamer = streamer.WithSource(mount.LogSource)
-	emit(streamer, mount, "Downloading %s...\n", mount.Name)
+	emit(streamer, mount, "Downloading %s...", mount.Name)
 
 	downloadURL, err := url.Parse(mount.From)
 	if err != nil {
@@ -86,9 +86,9 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 	}
 
 	if downloadedSize != 0 {
-		emit(streamer, mount, "Downloaded %s (%s)\n", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
+		emit(streamer, mount, "Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
 	} else {
-		emit(streamer, mount, "Downloaded %s\n", mount.Name)
+		emit(streamer, mount, "Downloaded %s", mount.Name)
 	}
 	return newCachedBindMount(mount.CacheKey, newBindMount(dirPath, mount.To)), nil
 }
@@ -108,7 +108,7 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 
 func emit(streamer log_streamer.LogStreamer, mount *executor.CachedDependency, format string, a ...interface{}) {
 	if mount.Name != "" {
-		fmt.Fprintf(streamer.Stdout(), format, a...)
+		fmt.Fprintf(streamer.Stdout(), format+"\n", a...)
 	}
 }
 
