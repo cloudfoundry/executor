@@ -1,7 +1,6 @@
 package initializer
 
 import (
-	"crypto/x509"
 	"errors"
 	"math"
 	"os"
@@ -26,6 +25,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry-incubator/volman/vollocal"
 	"github.com/cloudfoundry/gunk/workpool"
+	"github.com/cloudfoundry/systemcerts"
 	"github.com/google/shlex"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/archiver/extractor"
@@ -175,7 +175,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		return nil, grouper.Members{}, err
 	}
 
-	caCertPool := x509.NewCertPool()
+	caCertPool := systemcerts.SystemRootsPool()
 	if ok := caCertPool.AppendCertsFromPEM([]byte(config.CACertBundle)); !ok {
 		return nil, grouper.Members{}, errors.New("Unable to load caCert")
 	}
