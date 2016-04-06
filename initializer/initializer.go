@@ -1,6 +1,8 @@
 package initializer
 
 import (
+	"crypto/x509"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -64,6 +66,7 @@ type Configuration struct {
 	CachePath            string
 	MaxCacheSizeInBytes  uint64
 	SkipCertVerify       bool
+	CACertBundle         string
 	ExportNetworkEnvVars bool
 
 	VolmanDriverPath string
@@ -126,6 +129,7 @@ var DefaultConfiguration = Configuration{
 	CachePath:                          "/tmp/cache",
 	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
 	SkipCertVerify:                     false,
+	CACertBundle:                       "",
 	HealthyMonitoringInterval:          30 * time.Second,
 	UnhealthyMonitoringInterval:        500 * time.Millisecond,
 	ExportNetworkEnvVars:               false,
@@ -171,6 +175,11 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		return nil, grouper.Members{}, err
 	}
 
+	caCertPool := x509.NewCertPool()
+	if ok := caCertPool.AppendCertsFromPEM([]byte(config.CACertBundle)); !ok {
+		return nil, grouper.Members{}, errors.New("Unable to load caCert")
+	}
+
 	cache := cacheddownloader.New(
 		config.CachePath,
 		workDir,
@@ -178,6 +187,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		10*time.Minute,
 		int(math.MaxInt8),
 		config.SkipCertVerify,
+		caCertPool,
 		cacheddownloader.TarTransform,
 	)
 
