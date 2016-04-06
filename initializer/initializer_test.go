@@ -146,10 +146,9 @@ var _ = Describe("Initializer", func() {
 	})
 
 	Describe("configuring trusted CA bundle", func() {
-
 		Context("when valid", func() {
 			BeforeEach(func() {
-				config.CACertBundle = `-----BEGIN CERTIFICATE-----
+				config.CACertsForDownloads = []byte(`-----BEGIN CERTIFICATE-----
 MIIBdzCCASOgAwIBAgIBADALBgkqhkiG9w0BAQUwEjEQMA4GA1UEChMHQWNtZSBD
 bzAeFw03MDAxMDEwMDAwMDBaFw00OTEyMzEyMzU5NTlaMBIxEDAOBgNVBAoTB0Fj
 bWUgQ28wWjALBgkqhkiG9w0BAQEDSwAwSAJBAN55NcYKZeInyTuhcCwFMhDHCmwa
@@ -187,7 +186,7 @@ WFqiKTO8VKl1/eGwG0l9dI26qisIAa/I7kLjlqboKycGDmAAarsmcJBLPzS+ytiu
 hoxA/fLhSWJvPXbdGemXLWQGf5DLN/8QGB63Rjp9WC3HhwSoU0NvmNmHoh+AdRRT
 dYbCU/DMZjsv+Pt9flhj7ELLo+WKHyI767hJSq9A7IT3GzFt8iGiEAt1qj2yS0DX
 36hwbfc1Gh/8nKgFeLmPOlBfKncjTjL2FvBNap6a8tVHXO9FvQ==
------END CERTIFICATE-----`
+-----END CERTIFICATE-----`)
 			})
 
 			It("uses it for the cached downloader", func() {
@@ -199,7 +198,7 @@ dYbCU/DMZjsv+Pt9flhj7ELLo+WKHyI767hJSq9A7IT3GzFt8iGiEAt1qj2yS0DX
 
 		Context("when invalid", func() {
 			BeforeEach(func() {
-				config.CACertBundle = "some-stuff"
+				config.CACertsForDownloads = []byte("some-stuff")
 			})
 
 			It("fails", func() {

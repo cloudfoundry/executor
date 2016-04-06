@@ -66,7 +66,7 @@ type Configuration struct {
 	CachePath            string
 	MaxCacheSizeInBytes  uint64
 	SkipCertVerify       bool
-	CACertBundle         string
+	CACertsForDownloads  []byte
 	ExportNetworkEnvVars bool
 
 	VolmanDriverPath string
@@ -129,7 +129,6 @@ var DefaultConfiguration = Configuration{
 	CachePath:                          "/tmp/cache",
 	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
 	SkipCertVerify:                     false,
-	CACertBundle:                       "",
 	HealthyMonitoringInterval:          30 * time.Second,
 	UnhealthyMonitoringInterval:        500 * time.Millisecond,
 	ExportNetworkEnvVars:               false,
@@ -176,8 +175,10 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	}
 
 	caCertPool := systemcerts.SystemRootsPool()
-	if ok := caCertPool.AppendCertsFromPEM([]byte(config.CACertBundle)); !ok {
-		return nil, grouper.Members{}, errors.New("Unable to load caCert")
+	if len(config.CACertsForDownloads) > 0 {
+		if ok := caCertPool.AppendCertsFromPEM(config.CACertsForDownloads); !ok {
+			return nil, grouper.Members{}, errors.New("unable to load CA certificate")
+		}
 	}
 
 	cache := cacheddownloader.New(
