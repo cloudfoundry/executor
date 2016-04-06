@@ -79,7 +79,7 @@ func (step *runStep) Perform() error {
 	exitStatusChan := make(chan int, 1)
 	errChan := make(chan error, 1)
 
-	step.logger.Info("creating-process")
+	step.logger.Debug("creating-process")
 	var nofile *uint64
 	if step.model.ResourceLimits != nil {
 		nofile = step.model.ResourceLimits.Nofile
@@ -113,7 +113,7 @@ func (step *runStep) Perform() error {
 	}
 
 	logger := step.logger.WithData(lager.Data{"process": process.ID()})
-	logger.Info("successful-process-create")
+	logger.Debug("successful-process-create")
 
 	go func() {
 		exitStatus, err := process.Wait()
