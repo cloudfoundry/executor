@@ -1610,7 +1610,7 @@ var _ = Describe("Container Store", func() {
 		It("marks containers completed that no longer have corresponding garden containers", func() {
 			initialEmitCallCount := eventEmitter.EmitCallCount()
 
-			clock.Increment(30 * time.Millisecond)
+			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
 			Eventually(func() executor.State {
 				container, err := containerStore.Get(logger, containerGuid4)
@@ -1624,7 +1624,7 @@ var _ = Describe("Container Store", func() {
 				return container.State
 			}).Should(Equal(executor.StateCompleted))
 
-			Expect(eventEmitter.EmitCallCount()).To(Equal(initialEmitCallCount + 2))
+			Eventually(eventEmitter.EmitCallCount).Should(Equal(initialEmitCallCount + 2))
 
 			container4, err := containerStore.Get(logger, containerGuid4)
 			Expect(err).NotTo(HaveOccurred())
@@ -1645,7 +1645,7 @@ var _ = Describe("Container Store", func() {
 			properties = gardenClient.ContainersArgsForCall(1)
 			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
 
-			clock.Increment(30 * time.Millisecond)
+			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
 			Eventually(gardenClient.ContainersCallCount).Should(Equal(4))
 		})
