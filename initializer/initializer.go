@@ -175,6 +175,10 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	}
 
 	caCertPool := systemcerts.SystemRootsPool()
+	if caCertPool == nil {
+		caCertPool = systemcerts.NewCertPool()
+	}
+
 	if len(config.CACertsForDownloads) > 0 {
 		if ok := caCertPool.AppendCertsFromPEM(config.CACertsForDownloads); !ok {
 			return nil, grouper.Members{}, errors.New("unable to load CA certificate")
