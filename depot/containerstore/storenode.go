@@ -192,6 +192,16 @@ func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) (
 	return gardenMounts, nil
 }
 
+func (n *storeNode) gardenProperties(container *executor.Container) garden.Properties {
+	properties := garden.Properties{}
+	for key, value := range container.Properties {
+		properties[key] = value
+	}
+	properties[ContainerOwnerProperty] = n.config.OwnerName
+
+	return properties
+}
+
 func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container, mounts []garden.BindMount) (garden.Container, error) {
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
@@ -212,9 +222,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(info.CPUWeight) / 100.0),
 			},
 		},
-		Properties: garden.Properties{
-			ContainerOwnerProperty: n.config.OwnerName,
-		},
+		Properties: n.gardenProperties(info),
 	}
 
 	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
