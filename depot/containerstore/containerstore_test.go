@@ -315,9 +315,8 @@ var _ = Describe("Container Store", func() {
 					Env: env,
 					TrustedSystemCertificatesPath: "",
 					NetworkProperties: map[string]string{
-						containerstore.ContainerOwnerProperty: "should-not-propagate",
-						"some-key":                            "some-value",
-						"some-other-key":                      "some-other-value",
+						"some-key":       "some-value",
+						"some-other-key": "some-other-value",
 					},
 				}
 				runReq = &executor.RunRequest{
@@ -399,8 +398,8 @@ var _ = Describe("Container Store", func() {
 
 				Expect(containerSpec.Properties).To(Equal(garden.Properties{
 					containerstore.ContainerOwnerProperty: ownerName,
-					"some-key":                            "some-value",
-					"some-other-key":                      "some-other-value",
+					"network.some-key":                    "some-value",
+					"network.some-other-key":              "some-other-value",
 				}))
 			})
 

@@ -195,7 +195,7 @@ func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) (
 func (n *storeNode) gardenProperties(container *executor.Container) garden.Properties {
 	properties := garden.Properties{}
 	for key, value := range container.NetworkProperties {
-		properties[key] = value
+		properties["network."+key] = value
 	}
 	properties[ContainerOwnerProperty] = n.config.OwnerName
 
