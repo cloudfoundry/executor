@@ -163,7 +163,7 @@ type RunInfo struct {
 	Env                           []EnvironmentVariable       `json:"env,omitempty"`
 	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
 	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
-	NetworkProperties             map[string]string           `json:"network_properties,omitempty"`
+	Network                       *Network                    `json:"network,omitempty"`
 }
 
 type BindMountMode uint8
@@ -179,6 +179,10 @@ type VolumeMount struct {
 	Config        map[string]interface{} `json:"config"`
 	ContainerPath string                 `json:"container_path"`
 	Mode          BindMountMode          `json:"mode"`
+}
+
+type Network struct {
+	Properties map[string]string `json:"properties",omitempty"`
 }
 
 type InnerContainer Container

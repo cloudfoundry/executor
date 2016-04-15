@@ -314,9 +314,11 @@ var _ = Describe("Container Store", func() {
 					},
 					Env: env,
 					TrustedSystemCertificatesPath: "",
-					NetworkProperties: map[string]string{
-						"some-key":       "some-value",
-						"some-other-key": "some-other-value",
+					Network: &executor.Network{
+						Properties: map[string]string{
+							"some-key":       "some-value",
+							"some-other-key": "some-other-value",
+						},
 					},
 				}
 				runReq = &executor.RunRequest{
@@ -401,6 +403,22 @@ var _ = Describe("Container Store", func() {
 					"network.some-key":                    "some-value",
 					"network.some-other-key":              "some-other-value",
 				}))
+			})
+
+			Context("if the network is not set", func() {
+				BeforeEach(func() {
+					runReq.RunInfo.Network = nil
+				})
+				It("sets the owner property", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					containerSpec := gardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Properties).To(Equal(garden.Properties{
+						containerstore.ContainerOwnerProperty: ownerName,
+					}))
+				})
 			})
 
 			It("creates the container with the correct environment", func() {
