@@ -314,7 +314,7 @@ var _ = Describe("Container Store", func() {
 					},
 					Env: env,
 					TrustedSystemCertificatesPath: "",
-					Properties: map[string]string{
+					NetworkProperties: map[string]string{
 						containerstore.ContainerOwnerProperty: "should-not-propagate",
 						"some-key":                            "some-value",
 						"some-other-key":                      "some-other-value",
