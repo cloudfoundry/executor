@@ -224,12 +224,14 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		ReapInterval:           config.ContainerReapInterval,
 	}
 
+	volmanClient, volmanDriverSyncer := vollocal.NewLocalClient(logger, config.VolmanDriverPath)
+
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
 		containerstore.NewDependencyManager(cache),
-		vollocal.NewLocalClient(config.VolmanDriverPath),
+		volmanClient,
 		clock,
 		hub,
 		transformer,
@@ -247,7 +249,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		totalCapacity,
 		containerStore,
 		gardenClient,
-		vollocal.NewLocalClient(config.VolmanDriverPath),
+		volmanClient,
 		hub,
 		workPoolSettings,
 	)
@@ -271,6 +273,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 
 	return depotClient,
 		grouper.Members{
+			{"volman-driver-syncer", volmanDriverSyncer},
 			{"metrics-reporter", &metrics.Reporter{
 				ExecutorSource: depotClient,
 				Interval:       metricsReportInterval,
