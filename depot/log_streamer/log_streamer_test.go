@@ -166,17 +166,17 @@ var _ = Describe("LogStreamer", func() {
 				})
 			})
 
-			Context("when having to deal with byte boundaries", func() {
+			Context("when having to deal with byte boundaries and long utf characters", func() {
 				BeforeEach(func() {
-					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-1)
-					message += "\u0623\n"
+					message = strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)
+					message += "\U0001F428\n"
 					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
-				It("should break the message up and send multiple messages", func() {
+				It("should break the message up and send multiple messages without sending error runes", func() {
 					Expect(fakeSender.GetLogs()).To(HaveLen(2))
-					Expect(string(fakeSender.GetLogs()[0].Message)).To(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-1)))
-					Expect(string(fakeSender.GetLogs()[1].Message)).To(Equal("\u0623"))
+					Expect(string(fakeSender.GetLogs()[0].Message)).To(Equal(strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)))
+					Expect(string(fakeSender.GetLogs()[1].Message)).To(Equal("\U0001F428"))
 				})
 			})
 
