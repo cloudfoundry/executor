@@ -11,7 +11,6 @@ import (
 	efakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
 	fakes "github.com/cloudfoundry-incubator/executor/fakes"
 	"github.com/cloudfoundry-incubator/volman"
-	"github.com/cloudfoundry-incubator/volman/voldriver"
 	"github.com/cloudfoundry-incubator/volman/volmanfakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
@@ -684,10 +683,10 @@ var _ = Describe("Depot", func() {
 	Describe("VolumeDrivers", func() {
 		Context("when getting volume drivers succeeds", func() {
 			BeforeEach(func() {
-				volmanClient.ListDriversReturns(volman.ListDriversResponse{Drivers: []voldriver.InfoResponse{
-					{Name: "ayrton", Path: "/ayrton"},
-					{Name: "damon", Path: "/damon"},
-					{Name: "michael", Path: "/michael"},
+				volmanClient.ListDriversReturns(volman.ListDriversResponse{Drivers: []volman.InfoResponse{
+					{Name: "ayrton"},
+					{Name: "damon"},
+					{Name: "michael"},
 				}}, nil)
 				volumeDrivers = []string{"ayrton", "damon", "michael"}
 			})
