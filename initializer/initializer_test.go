@@ -78,7 +78,7 @@ var _ = Describe("Initializer", func() {
 
 		It("emits metrics when garden doesn't respond", func() {
 			Consistently(checkStalledMetric, 10*time.Millisecond).Should(BeEquivalentTo(0))
-			fakeClock.Increment(initializer.StalledMetricHeartbeatInterval)
+			fakeClock.WaitForWatcherAndIncrement(initializer.StalledMetricHeartbeatInterval)
 			Eventually(checkStalledMetric).Should(BeNumerically("~", fakeClock.Since(initialTime)))
 		})
 	})
