@@ -224,7 +224,9 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		ReapInterval:           config.ContainerReapInterval,
 	}
 
-	volmanClient, volmanDriverSyncer := vollocal.NewLocalClient(logger, config.VolmanDriverPath)
+	driverConfig := vollocal.NewDriverConfig()
+	driverConfig.DriverPath = config.VolmanDriverPath
+	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
 
 	containerStore := containerstore.New(
 		containerConfig,
