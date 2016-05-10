@@ -56,39 +56,39 @@ func (containers *executorContainers) Containers() ([]garden.Container, error) {
 }
 
 type Configuration struct {
-	GardenNetwork string
-	GardenAddr    string
+	GardenNetwork                 string
+	GardenAddr                    string
 
 	ContainerOwnerName            string
 	HealthCheckContainerOwnerName string
 
-	TempDir              string
-	CachePath            string
-	MaxCacheSizeInBytes  uint64
-	SkipCertVerify       bool
-	CACertsForDownloads  []byte
-	ExportNetworkEnvVars bool
+	TempDir                       string
+	CachePath                     string
+	MaxCacheSizeInBytes           uint64
+	SkipCertVerify                bool
+	CACertsForDownloads           []byte
+	ExportNetworkEnvVars          bool
 
-	VolmanDriverPath string
+	VolmanDriverPaths             []string
 
-	ContainerMaxCpuShares       uint64
-	ContainerInodeLimit         uint64
-	HealthyMonitoringInterval   time.Duration
-	UnhealthyMonitoringInterval time.Duration
-	HealthCheckWorkPoolSize     int
+	ContainerMaxCpuShares         uint64
+	ContainerInodeLimit           uint64
+	HealthyMonitoringInterval     time.Duration
+	UnhealthyMonitoringInterval   time.Duration
+	HealthCheckWorkPoolSize       int
 
-	MaxConcurrentDownloads int
+	MaxConcurrentDownloads        int
 
-	CreateWorkPoolSize  int
-	DeleteWorkPoolSize  int
-	ReadWorkPoolSize    int
-	MetricsWorkPoolSize int
+	CreateWorkPoolSize            int
+	DeleteWorkPoolSize            int
+	ReadWorkPoolSize              int
+	MetricsWorkPoolSize           int
 
-	ReservedExpirationTime time.Duration
-	ContainerReapInterval  time.Duration
+	ReservedExpirationTime        time.Duration
+	ContainerReapInterval         time.Duration
 
-	GardenHealthcheckRootFS            string
-	GardenHealthcheckInterval          time.Duration
+	GardenHealthcheckRootFS       string
+	GardenHealthcheckInterval     time.Duration
 	GardenHealthcheckTimeout           time.Duration
 	GardenHealthcheckCommandRetryPause time.Duration
 
@@ -225,7 +225,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	}
 
 	driverConfig := vollocal.NewDriverConfig()
-	driverConfig.DriverPath = config.VolmanDriverPath
+	driverConfig.DriverPaths = config.VolmanDriverPaths
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
 
 	containerStore := containerstore.New(
