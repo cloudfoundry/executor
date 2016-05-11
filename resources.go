@@ -153,7 +153,7 @@ type RunInfo struct {
 	Ports                         []PortMapping               `json:"ports"`
 	LogConfig                     LogConfig                   `json:"log_config"`
 	MetricsConfig                 MetricsConfig               `json:"metrics_config"`
-	StartTimeout                  uint                        `json:"start_timeout"`
+	StartTimeoutMs                uint                        `json:"start_timeout_ms"`
 	Privileged                    bool                        `json:"privileged"`
 	CachedDependencies            []CachedDependency          `json:"cached_dependencies"`
 	Setup                         *models.Action              `json:"setup"`
