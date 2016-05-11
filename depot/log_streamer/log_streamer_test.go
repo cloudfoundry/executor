@@ -170,13 +170,53 @@ var _ = Describe("LogStreamer", func() {
 				BeforeEach(func() {
 					message = strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)
 					message += "\U0001F428\n"
-					fmt.Fprintf(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages without sending error runes", func() {
+					fmt.Fprintf(streamer.Stdout(), message)
+
 					Expect(fakeSender.GetLogs()).To(HaveLen(2))
 					Expect(string(fakeSender.GetLogs()[0].Message)).To(Equal(strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)))
 					Expect(string(fakeSender.GetLogs()[1].Message)).To(Equal("\U0001F428"))
+				})
+
+				Context("with an invalid utf8 character in the message", func() {
+					var utfChar string
+
+					BeforeEach(func() {
+						message = strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE-4)
+						utfChar = "\U0001F428"
+					})
+
+					It("emits both messages correctly", func() {
+						fmt.Fprintf(streamer.Stdout(), message+utfChar[0:2])
+						fmt.Fprintf(streamer.Stdout(), utfChar+"\n")
+
+						Expect(fakeSender.GetLogs()).To(HaveLen(2))
+						emission := fakeSender.GetLogs()[0]
+						Expect(string(emission.Message)).To(Equal(message + utfChar[0:2]))
+
+						emission = fakeSender.GetLogs()[1]
+						Expect(string(emission.Message)).To(Equal(utfChar))
+					})
+				})
+
+				Context("when the entire message is invalid utf8 characters", func() {
+					var utfChar string
+
+					BeforeEach(func() {
+						utfChar = "\U0001F428"
+						message = strings.Repeat(utfChar[0:2], log_streamer.MAX_MESSAGE_SIZE/2)
+						Expect(len(message)).To(Equal(log_streamer.MAX_MESSAGE_SIZE))
+					})
+
+					It("drops the last 3 bytes", func() {
+						fmt.Fprintf(streamer.Stdout(), message)
+
+						Expect(fakeSender.GetLogs()).To(HaveLen(1))
+						emission := fakeSender.GetLogs()[0]
+						Expect(string(emission.Message)).To(Equal(message[0 : len(message)-3]))
+					})
 				})
 			})
 

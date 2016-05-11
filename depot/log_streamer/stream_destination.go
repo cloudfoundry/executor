@@ -105,13 +105,20 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 
 		// if we error initially, go back to preserve utf8 boundaries
 		bytesToCut := 0
-		for r == utf8.RuneError {
+		for r == utf8.RuneError && bytesToCut < 3 {
 			bytesToCut++
 			r, _ = utf8.DecodeLastRune(destination.buffer[0 : len(destination.buffer)-bytesToCut])
 		}
 
-		destination.buffer = destination.buffer[0 : len(destination.buffer)-bytesToCut]
-		return message[remainingSpaceInBuffer-bytesToCut:]
+		index := remainingSpaceInBuffer - bytesToCut
+		if index < 0 {
+			index = 0
+			destination.buffer = destination.buffer[0 : len(destination.buffer)-remainingSpaceInBuffer]
+		} else {
+			destination.buffer = destination.buffer[0 : len(destination.buffer)-bytesToCut]
+		}
+
+		return message[index:]
 	}
 
 	destination.buffer = append(destination.buffer, []byte(message)...)
