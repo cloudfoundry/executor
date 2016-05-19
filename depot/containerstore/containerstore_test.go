@@ -194,9 +194,9 @@ var _ = Describe("Container Store", func() {
 
 		BeforeEach(func() {
 			runInfo = executor.RunInfo{
-				CPUWeight:      2,
-				StartTimeoutMs: 50000,
-				Privileged:     true,
+				CPUWeight:    2,
+				StartTimeout: 50,
+				Privileged:   true,
 			}
 
 			runTags = executor.Tags{
@@ -297,9 +297,9 @@ var _ = Describe("Container Store", func() {
 				}
 
 				runInfo := executor.RunInfo{
-					Privileged:     true,
-					CPUWeight:      50,
-					StartTimeoutMs: 99000,
+					Privileged:   true,
+					CPUWeight:    50,
+					StartTimeout: 99,
 					CachedDependencies: []executor.CachedDependency{
 						{Name: "artifact", From: "https://example.com", To: "/etc/foo", CacheKey: "abc", LogSource: "source"},
 					},

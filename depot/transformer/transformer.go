@@ -153,7 +153,7 @@ func (t *transformer) StepFor(
 				ports,
 				logger,
 			),
-			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
+			time.Duration(actionModel.Timeout),
 			logger,
 		)
 
@@ -286,7 +286,7 @@ func (t *transformer) StepsRunner(
 			logger.Session("monitor"),
 			t.clock,
 			logStreamer,
-			time.Duration(container.StartTimeoutMs)*time.Millisecond,
+			time.Duration(container.StartTimeout)*time.Second,
 			t.healthyMonitoringInterval,
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
