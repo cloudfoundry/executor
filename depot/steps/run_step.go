@@ -152,7 +152,7 @@ func (step *runStep) Perform() error {
 					logger.Error("failed-to-get-info", err)
 				} else {
 					for _, ev := range info.Events {
-						if ev == "out of memory" {
+						if ev == "out of memory" || ev == "Out of memory" {
 							return NewEmittableError(nil, "Exited with status %d (out of memory)", exitStatus)
 						}
 					}

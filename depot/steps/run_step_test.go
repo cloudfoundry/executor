@@ -302,6 +302,24 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
+		// Garden-RunC capitalizes out the O in out of memory whereas Garden-linux does not
+		Context("regardless of status code, when an Out of memory event has occured", func() {
+			BeforeEach(func() {
+				gardenClient.Connection.InfoReturns(
+					garden.ContainerInfo{
+						Events: []string{"happy land", "Out of memory", "another event"},
+					},
+					nil,
+				)
+
+				spawnedProcess.WaitReturns(19, nil)
+			})
+
+			It("returns an emittable error", func() {
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+			})
+		})
+
 		Context("regardless of status code, when an out of memory event has occured", func() {
 			BeforeEach(func() {
 				gardenClient.Connection.InfoReturns(
