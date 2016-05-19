@@ -15,8 +15,8 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-const TERMINATE_TIMEOUT = 10 * time.Second
-const EXIT_TIMEOUT = 1 * time.Minute
+const TerminateTimeout = 10 * time.Second
+const ExitTimeout = 1 * time.Second
 
 var ErrExitTimeout = errors.New("process did not exit")
 
@@ -177,7 +177,7 @@ func (step *runStep) Perform() error {
 			logger.Debug("signalling-terminate-success")
 			cancel = nil
 
-			killTimer := step.clock.NewTimer(TERMINATE_TIMEOUT)
+			killTimer := step.clock.NewTimer(TerminateTimeout)
 			defer killTimer.Stop()
 
 			killSwitch = killTimer.C()
@@ -192,14 +192,14 @@ func (step *runStep) Perform() error {
 			logger.Debug("signalling-kill-success")
 			killSwitch = nil
 
-			exitTimer := step.clock.NewTimer(EXIT_TIMEOUT)
+			exitTimer := step.clock.NewTimer(ExitTimeout)
 			defer exitTimer.Stop()
 
 			exitTimeout = exitTimer.C()
 
 		case <-exitTimeout:
 			logger.Error("process-did-not-exit", nil, lager.Data{
-				"timeout": EXIT_TIMEOUT,
+				"timeout": ExitTimeout,
 			})
 
 			return ErrExitTimeout

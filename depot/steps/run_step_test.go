@@ -474,7 +474,7 @@ var _ = Describe("RunAction", func() {
 				It("sends a kill signal to the process", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-					fakeClock.WaitForWatcherAndIncrement(steps.TERMINATE_TIMEOUT + 1*time.Second)
+					fakeClock.WaitForWatcherAndIncrement(steps.TerminateTimeout + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
@@ -488,23 +488,22 @@ var _ = Describe("RunAction", func() {
 					It("finishes performing with failure", func() {
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-						fakeClock.WaitForWatcherAndIncrement(steps.TERMINATE_TIMEOUT + 1*time.Second)
+						fakeClock.WaitForWatcherAndIncrement(steps.TerminateTimeout)
 
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 						Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
 
-						fakeClock.WaitForWatcherAndIncrement(steps.TERMINATE_TIMEOUT + 1*time.Second)
+						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
 						Consistently(performErr).ShouldNot(Receive())
 
-						fakeClock.WaitForWatcherAndIncrement(steps.EXIT_TIMEOUT + 1*time.Second)
+						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
 						Eventually(performErr).Should(Receive(Equal(steps.ErrExitTimeout)))
 
 						Expect(logger.TestSink.LogMessages()).To(ContainElement(
 							ContainSubstring("process-did-not-exit"),
 						))
-
 					})
 				})
 			})
