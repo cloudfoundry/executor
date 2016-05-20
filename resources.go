@@ -140,11 +140,13 @@ func NewResource(memoryMB, diskMB int, rootFSPath string) Resource {
 }
 
 type CachedDependency struct {
-	Name      string `json:"name"`
-	From      string `json:"from"`
-	To        string `json:"to"`
-	CacheKey  string `json:"cache_key"`
-	LogSource string `json:"log_source"`
+	Name              string `json:"name"`
+	From              string `json:"from"`
+	To                string `json:"to"`
+	CacheKey          string `json:"cache_key"`
+	LogSource         string `json:"log_source"`
+	ChecksumValue     string `json:"checksum_value"`
+	ChecksumAlgorithm string `json:"checksum_value"`
 }
 
 type RunInfo struct {
