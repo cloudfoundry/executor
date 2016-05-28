@@ -78,7 +78,14 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 	}
 
 	logger.Debug("fetching-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
-	dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(downloadURL, mount.CacheKey, nil)
+	dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(
+		downloadURL,
+		mount.CacheKey,
+		cacheddownloader.ChecksumInfoType{
+			Algorithm: mount.ChecksumAlgorithm,
+			Value:     mount.ChecksumValue,
+		},
+		nil)
 	if err != nil {
 		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 		emit(streamer, mount, "Downloading %s failed", mount.Name)
