@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	MAX_MESSAGE_SIZE = 4096
+	MAX_MESSAGE_SIZE = 61440
 
 	DefaultLogSource = "LOG"
 )
