@@ -91,10 +91,10 @@ var _ = Describe("DependencyManager", func() {
 
 			downloadURLs := make([]url.URL, 2)
 			cacheKeys := make([]string, 2)
-			downloadUrl, cacheKey, _ := cache.FetchAsDirectoryArgsForCall(0)
+			downloadUrl, cacheKey, _, _ := cache.FetchAsDirectoryArgsForCall(0)
 			downloadURLs[0] = *downloadUrl
 			cacheKeys[0] = cacheKey
-			downloadUrl, cacheKey, _ = cache.FetchAsDirectoryArgsForCall(1)
+			downloadUrl, cacheKey, _, _ = cache.FetchAsDirectoryArgsForCall(1)
 			downloadURLs[1] = *downloadUrl
 			cacheKeys[1] = cacheKey
 			Expect(downloadURLs).To(ConsistOf(expectedUrls))

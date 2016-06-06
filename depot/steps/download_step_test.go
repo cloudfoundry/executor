@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/cloudfoundry-incubator/cacheddownloader"
 	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/cacheddownloaderfakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -84,10 +85,30 @@ var _ = Describe("DownloadAction", func() {
 		It("downloads via the cache with a tar transformer", func() {
 			Expect(cache.FetchCallCount()).To(Equal(1))
 
-			url, cacheKey, cancelChan := cache.FetchArgsForCall(0)
+			url, cacheKey, checksumInfo, cancelChan := cache.FetchArgsForCall(0)
 			Expect(url.Host).To(ContainSubstring("mr_jones"))
 			Expect(cacheKey).To(Equal("the-cache-key"))
+			Expect(checksumInfo.Algorithm).To(Equal(""))
+			Expect(checksumInfo.Value).To(Equal(""))
 			Expect(cancelChan).NotTo(BeNil())
+		})
+
+		Context("when checksum is provided", func() {
+			BeforeEach(func() {
+				downloadAction.ChecksumAlgorithm = "md5"
+				downloadAction.ChecksumValue = "checksum-value"
+			})
+
+			It("downloads via the cache with a tar tranformer and specified checksum", func() {
+				Expect(cache.FetchCallCount()).To(Equal(1))
+
+				url, cacheKey, checksumInfo, cancelChan := cache.FetchArgsForCall(0)
+				Expect(url.Host).To(ContainSubstring("mr_jones"))
+				Expect(cacheKey).To(Equal("the-cache-key"))
+				Expect(checksumInfo.Algorithm).To(Equal("md5"))
+				Expect(checksumInfo.Value).To(Equal("checksum-value"))
+				Expect(cancelChan).NotTo(BeNil())
+			})
 		})
 
 		It("logs the step", func() {
@@ -290,7 +311,7 @@ var _ = Describe("DownloadAction", func() {
 			BeforeEach(func() {
 				calledChan = make(chan struct{})
 
-				cache.FetchStub = func(u *url.URL, key string, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
+				cache.FetchStub = func(u *url.URL, key string, checksumInfo cacheddownloader.ChecksumInfoType, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
 					Expect(cancelCh).NotTo(BeNil())
 					Expect(cancelCh).NotTo(BeClosed())
 
@@ -411,7 +432,7 @@ var _ = Describe("DownloadAction", func() {
 			fetchCh := make(chan struct{}, 3)
 			barrier := make(chan struct{})
 			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
-			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
+			cache.FetchStub = func(urlToFetch *url.URL, cacheKey string, checksumInfo cacheddownloader.ChecksumInfoType, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
 				fetchCh <- struct{}{}
 				<-barrier
 				return nopCloser, 42, nil
