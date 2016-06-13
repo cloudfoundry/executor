@@ -31,7 +31,7 @@ var _ = Describe("Reporter", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
-		reportInterval = 100 * time.Millisecond
+		reportInterval = 1 * time.Millisecond
 		executorClient = new(fakes.FakeClient)
 
 		sender = fake.NewFakeMetricSender()
@@ -65,7 +65,7 @@ var _ = Describe("Reporter", func() {
 			Logger:         logger,
 		})
 
-		fakeClock.Increment(reportInterval)
+		fakeClock.WaitForWatcherAndIncrement(reportInterval)
 	})
 
 	AfterEach(func() {
@@ -76,49 +76,49 @@ var _ = Describe("Reporter", func() {
 	It("reports the current capacity on the given interval", func() {
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityTotalMemory")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 1024,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityTotalDisk")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 2048,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityTotalContainers")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 4096,
 			Unit:  "Metric",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingMemory")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 128,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingDisk")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 256,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingContainers")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 512,
 			Unit:  "Metric",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("ContainerCount")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 3,
 			Unit:  "Metric",
 		}))
@@ -138,28 +138,28 @@ var _ = Describe("Reporter", func() {
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingMemory")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 129,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingDisk")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 257,
 			Unit:  "MiB",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("CapacityRemainingContainers")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 513,
 			Unit:  "Metric",
 		}))
 
 		Eventually(func() fake.Metric {
 			return sender.GetValue("ContainerCount")
-		}, reportInterval*2).Should(Equal(fake.Metric{
+		}).Should(Equal(fake.Metric{
 			Value: 2,
 			Unit:  "Metric",
 		}))
@@ -173,21 +173,21 @@ var _ = Describe("Reporter", func() {
 		It("sends missing remaining resources", func() {
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityRemainingMemory")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "MiB",
 			}))
 
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityRemainingDisk")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "MiB",
 			}))
 
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityRemainingContainers")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "Metric",
 			}))
@@ -202,21 +202,21 @@ var _ = Describe("Reporter", func() {
 		It("sends missing total resources", func() {
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityTotalMemory")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "MiB",
 			}))
 
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityTotalDisk")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "MiB",
 			}))
 
 			Eventually(func() fake.Metric {
 				return sender.GetValue("CapacityTotalContainers")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "Metric",
 			}))
@@ -229,9 +229,11 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("reports garden.containers as -1", func() {
+			logger.Info("checking this stuff")
 			Eventually(func() fake.Metric {
+				logger.Info("checking this stuff again and again")
 				return sender.GetValue("ContainerCount")
-			}, reportInterval*2).Should(Equal(fake.Metric{
+			}).Should(Equal(fake.Metric{
 				Value: -1,
 				Unit:  "Metric",
 			}))
