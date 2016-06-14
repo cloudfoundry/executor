@@ -18,12 +18,6 @@ func (HealthcheckTimeoutError) Error() string {
 	return "garden healthcheck timed out"
 }
 
-//go:generate counterfeiter -o fakegardenhealth/fake_timerprovider.go . TimerProvider
-
-type TimerProvider interface {
-	NewTimer(time.Duration) clock.Timer
-}
-
 // Runner coordinates health checks against an executor client.  When checks fail or
 // time out, its executor will be marked as unhealthy until a successful check occurs.
 //
@@ -36,7 +30,7 @@ type Runner struct {
 	logger          lager.Logger
 	checker         Checker
 	executorClient  executor.Client
-	timerProvider   TimerProvider
+	clock           clock.Clock
 }
 
 // NewRunner constructs a healthcheck runner.
@@ -50,7 +44,7 @@ func NewRunner(
 	logger lager.Logger,
 	checker Checker,
 	executorClient executor.Client,
-	timerProvider TimerProvider,
+	clock clock.Clock,
 ) *Runner {
 	return &Runner{
 		checkInterval:   checkInterval,
@@ -58,7 +52,7 @@ func NewRunner(
 		logger:          logger.Session("garden-healthcheck"),
 		checker:         checker,
 		executorClient:  executorClient,
-		timerProvider:   timerProvider,
+		clock:           clock,
 		healthy:         false,
 		failures:        0,
 	}
@@ -73,8 +67,7 @@ func NewRunner(
 // inspect the long running container to debug the problem.
 func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	var (
-		startHealthcheck    = r.timerProvider.NewTimer(0)
-		healthcheckTimeout  = r.timerProvider.NewTimer(r.timeoutInterval)
+		healthcheckTimeout  = r.clock.NewTimer(r.timeoutInterval)
 		healthcheckComplete = make(chan error, 1)
 	)
 	r.logger.Info("starting")
@@ -105,7 +98,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	close(ready)
 	r.logger.Info("started")
 
-	startHealthcheck.Reset(r.checkInterval)
+	startHealthcheck := r.clock.NewTimer(r.checkInterval)
 
 	for {
 		select {
