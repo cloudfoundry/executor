@@ -23,14 +23,15 @@ func (HealthcheckTimeoutError) Error() string {
 //
 // See NewRunner and Runner.Run for more details.
 type Runner struct {
-	failures        int
-	healthy         bool
-	checkInterval   time.Duration
-	timeoutInterval time.Duration
-	logger          lager.Logger
-	checker         Checker
-	executorClient  executor.Client
-	clock           clock.Clock
+	failures         int
+	healthy          bool
+	checkInterval    time.Duration
+	emissionInterval time.Duration
+	timeoutInterval  time.Duration
+	logger           lager.Logger
+	checker          Checker
+	executorClient   executor.Client
+	clock            clock.Clock
 }
 
 // NewRunner constructs a healthcheck runner.
@@ -40,6 +41,7 @@ type Runner struct {
 // marking the executor as unhealthy.
 func NewRunner(
 	checkInterval time.Duration,
+	emissionInterval time.Duration,
 	timeoutInterval time.Duration,
 	logger lager.Logger,
 	checker Checker,
@@ -47,14 +49,15 @@ func NewRunner(
 	clock clock.Clock,
 ) *Runner {
 	return &Runner{
-		checkInterval:   checkInterval,
-		timeoutInterval: timeoutInterval,
-		logger:          logger.Session("garden-healthcheck"),
-		checker:         checker,
-		executorClient:  executorClient,
-		clock:           clock,
-		healthy:         false,
-		failures:        0,
+		checkInterval:    checkInterval,
+		emissionInterval: emissionInterval,
+		timeoutInterval:  timeoutInterval,
+		logger:           logger.Session("garden-healthcheck"),
+		checker:          checker,
+		executorClient:   executorClient,
+		clock:            clock,
+		healthy:          false,
+		failures:         0,
 	}
 }
 
@@ -66,99 +69,106 @@ func NewRunner(
 // until the existing healthcheck exits. It may be necessary for an operator to
 // inspect the long running container to debug the problem.
 func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	var (
-		healthcheckTimeout  = r.clock.NewTimer(r.timeoutInterval)
-		healthcheckComplete = make(chan error, 1)
-	)
-	r.logger.Info("starting")
+	logger := r.logger.Session("garden-health")
+	healthcheckTimeout := r.clock.NewTimer(r.timeoutInterval)
+	healthcheckComplete := make(chan error, 1)
 
-	go r.healthcheckCycle(healthcheckComplete)
+	logger.Info("starting")
+
+	go r.healthcheckCycle(logger, healthcheckComplete)
 
 	select {
 	case <-signals:
 		return nil
 
 	case <-healthcheckTimeout.C():
-		r.logger.Error("failed-initial-healthcheck-timeout", nil)
-		r.setUnhealthy()
+		logger.Error("failed-initial-healthcheck-timeout", nil)
+		r.setUnhealthy(logger)
 		return HealthcheckTimeoutError{}
 
 	case err := <-healthcheckComplete:
 		if err != nil {
-			r.logger.Error("failed-initial-healthcheck", err)
-			r.setUnhealthy()
+			logger.Error("failed-initial-healthcheck", err)
+			r.setUnhealthy(logger)
 			return err
 		}
 		healthcheckTimeout.Stop()
 	}
 
-	r.logger.Info("passed-initial-healthcheck")
-	r.setHealthy()
+	logger.Info("passed-initial-healthcheck")
+	r.setHealthy(logger)
 
 	close(ready)
-	r.logger.Info("started")
+	logger.Info("started")
 
 	startHealthcheck := r.clock.NewTimer(r.checkInterval)
+	emitInterval := r.clock.NewTicker(r.emissionInterval)
+	defer emitInterval.Stop()
 
 	for {
 		select {
 		case <-signals:
-			r.logger.Info("complete")
+			logger.Info("complete")
 			return nil
 
 		case <-startHealthcheck.C():
-			r.logger.Info("check-starting")
-			go r.healthcheckCycle(healthcheckComplete)
+			logger.Info("check-starting")
 			healthcheckTimeout.Reset(r.timeoutInterval)
+			go r.healthcheckCycle(logger, healthcheckComplete)
 
 		case <-healthcheckTimeout.C():
-			r.logger.Error("failed-healthcheck-timeout", nil)
-			r.setUnhealthy()
+			logger.Error("failed-healthcheck-timeout", nil)
+			r.setUnhealthy(logger)
+
+		case <-emitInterval.C():
+			r.emitUnhealthyCellMetric(logger)
 
 		case err := <-healthcheckComplete:
+
 			timeoutOk := healthcheckTimeout.Stop()
 			switch err.(type) {
 			case nil:
-				r.logger.Info("passed-health-check")
+				logger.Info("passed-health-check")
 				if timeoutOk {
-					r.setHealthy()
+					r.setHealthy(logger)
 				}
 
 			default:
-				r.logger.Error("failed-health-check", err)
-				r.setUnhealthy()
+				logger.Error("failed-health-check", err)
+				r.setUnhealthy(logger)
 			}
 
 			startHealthcheck.Reset(r.checkInterval)
-			r.logger.Info("check-complete")
+			logger.Info("check-complete")
 		}
 	}
 }
 
-func (r *Runner) setHealthy() {
-	err := unhealthyCell.Send(0)
-	if err != nil {
-		r.logger.Error("failed-to-send-unhealthy-cell-metric", err)
+func (r *Runner) setHealthy(logger lager.Logger) {
+	r.logger.Info("set-state-healthy")
+	r.executorClient.SetHealthy(logger, true)
+	r.emitUnhealthyCellMetric(logger)
+}
+
+func (r *Runner) setUnhealthy(logger lager.Logger) {
+	r.logger.Error("set-state-unhealthy", nil)
+	r.executorClient.SetHealthy(logger, false)
+	r.emitUnhealthyCellMetric(logger)
+}
+
+func (r *Runner) emitUnhealthyCellMetric(logger lager.Logger) {
+	var err error
+	if r.executorClient.Healthy(logger) {
+		err = unhealthyCell.Send(0)
+	} else {
+		err = unhealthyCell.Send(1)
 	}
-	if !r.healthy {
-		r.logger.Info("set-state-healthy")
-		r.executorClient.SetHealthy(r.logger, true)
-		r.healthy = true
+
+	if err != nil {
+		logger.Error("failed-to-send-unhealthy-cell-metric", err)
 	}
 }
 
-func (r *Runner) setUnhealthy() {
-	err := unhealthyCell.Send(1)
-	if err != nil {
-		r.logger.Error("failed-to-send-unhealthy-cell-metric", err)
-	}
-	if r.healthy {
-		r.logger.Error("set-state-unhealthy", nil)
-		r.executorClient.SetHealthy(r.logger, false)
-		r.healthy = false
-	}
-}
-
-func (r *Runner) healthcheckCycle(healthcheckComplete chan<- error) {
-	healthcheckComplete <- r.checker.Healthcheck(r.logger)
+func (r *Runner) healthcheckCycle(logger lager.Logger, healthcheckComplete chan<- error) {
+	healthcheckComplete <- r.checker.Healthcheck(logger)
 }
