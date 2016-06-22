@@ -198,11 +198,13 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		cacheddownloader.TarTransform,
 	)
 
+	downloadRateLimiter := make(chan struct{}, uint(config.MaxConcurrentDownloads))
+
 	transformer := initializeTransformer(
 		logger,
 		cache,
 		workDir,
-		uint(config.MaxConcurrentDownloads),
+		downloadRateLimiter,
 		maxConcurrentUploads,
 		config.SkipCertVerify,
 		config.ExportNetworkEnvVars,
@@ -234,7 +236,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
-		containerstore.NewDependencyManager(cache),
+		containerstore.NewDependencyManager(cache, downloadRateLimiter),
 		volmanClient,
 		clock,
 		hub,
@@ -415,7 +417,8 @@ func initializeTransformer(
 	logger lager.Logger,
 	cache cacheddownloader.CachedDownloader,
 	workDir string,
-	maxConcurrentDownloads, maxConcurrentUploads uint,
+	downloadRateLimiter chan struct{},
+	maxConcurrentUploads uint,
 	skipSSLVerification bool,
 	exportNetworkEnvVars bool,
 	healthyMonitoringInterval time.Duration,
@@ -434,7 +437,7 @@ func initializeTransformer(
 		uploader,
 		extractor,
 		compressor,
-		make(chan struct{}, maxConcurrentDownloads),
+		downloadRateLimiter,
 		make(chan struct{}, maxConcurrentUploads),
 		workDir,
 		exportNetworkEnvVars,

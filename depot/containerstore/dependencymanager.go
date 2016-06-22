@@ -20,11 +20,12 @@ type DependencyManager interface {
 }
 
 type dependencyManager struct {
-	cache cacheddownloader.CachedDownloader
+	cache               cacheddownloader.CachedDownloader
+	downloadRateLimiter chan struct{}
 }
 
-func NewDependencyManager(cache cacheddownloader.CachedDownloader) DependencyManager {
-	return &dependencyManager{cache}
+func NewDependencyManager(cache cacheddownloader.CachedDownloader, downloadRateLimiter chan struct{}) DependencyManager {
+	return &dependencyManager{cache, downloadRateLimiter}
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
@@ -43,6 +44,11 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 	for i := range mounts {
 		go func(mount *executor.CachedDependency) {
+			bm.downloadRateLimiter <- struct{}{}
+			defer func() {
+				<-bm.downloadRateLimiter
+			}()
+
 			cachedMount, err := bm.downloadCachedDependency(logger, mount, streamer)
 			if err != nil {
 				errChan <- err
@@ -85,7 +91,8 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 			Algorithm: mount.ChecksumAlgorithm,
 			Value:     mount.ChecksumValue,
 		},
-		nil)
+		nil,
+	)
 	if err != nil {
 		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 		emit(streamer, mount, "Downloading %s failed", mount.Name)
