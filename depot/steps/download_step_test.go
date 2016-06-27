@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/cloudfoundry-incubator/cacheddownloader"
-	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/cacheddownloaderfakes"
+	"code.cloudfoundry.org/cacheddownloader"
+	cdfakes "code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	"code.cloudfoundry.org/bbs/models"

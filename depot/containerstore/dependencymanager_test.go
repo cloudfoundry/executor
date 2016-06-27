@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/url"
 
-	"github.com/cloudfoundry-incubator/cacheddownloader"
-	"github.com/cloudfoundry-incubator/cacheddownloader/cacheddownloaderfakes"
+	"code.cloudfoundry.org/cacheddownloader"
+	"code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
