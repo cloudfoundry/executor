@@ -13,7 +13,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
 	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"

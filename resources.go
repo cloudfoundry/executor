@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 )
 
 type State string

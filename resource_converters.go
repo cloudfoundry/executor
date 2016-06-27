@@ -1,6 +1,6 @@
 package executor
 
-import "github.com/cloudfoundry-incubator/bbs/models"
+import "code.cloudfoundry.org/bbs/models"
 
 func EnvironmentVariablesToModel(envVars []EnvironmentVariable) []models.EnvironmentVariable {
 	out := make([]models.EnvironmentVariable, len(envVars))

@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/executor"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/transformer"

@@ -12,7 +12,7 @@ import (
 	"os/user"
 	"time"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -51,8 +51,7 @@ func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
 
 var _ = Describe("UploadStep", func() {
 	var (
-		step   steps.Step
-		result chan error
+		step steps.Step
 
 		uploadAction    *models.UploadAction
 		uploader        Uploader.Uploader
@@ -61,15 +60,12 @@ var _ = Describe("UploadStep", func() {
 		logger          *lagertest.TestLogger
 		compressor      Compressor.Compressor
 		fakeStreamer    *fake_log_streamer.FakeLogStreamer
-		currentUser     *user.User
 		uploadTarget    *httptest.Server
 		uploadedPayload []byte
 	)
 
 	BeforeEach(func() {
 		var err error
-
-		result = make(chan error)
 
 		uploadTarget = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			var err error
@@ -98,7 +94,7 @@ var _ = Describe("UploadStep", func() {
 
 		fakeStreamer = newFakeStreamer()
 
-		currentUser, err = user.Current()
+		_, err = user.Current()
 		Expect(err).NotTo(HaveOccurred())
 	})
 

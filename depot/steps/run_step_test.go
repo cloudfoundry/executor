@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/pivotal-golang/clock/fakeclock"

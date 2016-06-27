@@ -13,7 +13,7 @@ import (
 	cdfakes "github.com/cloudfoundry-incubator/cacheddownloader/cacheddownloaderfakes"
 	"github.com/pivotal-golang/lager/lagertest"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
 
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"

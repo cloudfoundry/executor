@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
