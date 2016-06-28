@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/depot/uploader"
+	"code.cloudfoundry.org/executor/depot/uploader"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"

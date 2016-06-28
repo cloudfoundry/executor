@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
-	"github.com/cloudfoundry-incubator/executor/guidgen"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/guidgen"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/garden/server"
 	"github.com/pivotal-golang/lager"

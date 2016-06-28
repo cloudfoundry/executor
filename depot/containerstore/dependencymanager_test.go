@@ -6,9 +6,9 @@ import (
 
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

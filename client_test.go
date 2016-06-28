@@ -1,7 +1,7 @@
 package executor_test
 
 import (
-	. "github.com/cloudfoundry-incubator/executor"
+	. "code.cloudfoundry.org/executor"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

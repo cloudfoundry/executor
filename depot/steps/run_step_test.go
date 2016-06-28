@@ -16,10 +16,10 @@ import (
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
-	"github.com/cloudfoundry-incubator/executor/fakes"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
+	"code.cloudfoundry.org/executor/depot/steps"
+	"code.cloudfoundry.org/executor/fakes"
 )
 
 var _ = Describe("RunAction", func() {

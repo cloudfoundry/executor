@@ -3,7 +3,7 @@ package transformer
 import (
 	"os"
 
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
+	"code.cloudfoundry.org/executor/depot/steps"
 )
 
 type StepRunner struct {

@@ -4,7 +4,7 @@ package fakeguidgen
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor/guidgen"
+	"code.cloudfoundry.org/executor/guidgen"
 	"github.com/pivotal-golang/lager"
 )
 

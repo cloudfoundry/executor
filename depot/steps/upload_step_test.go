@@ -18,11 +18,11 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
-	Uploader "github.com/cloudfoundry-incubator/executor/depot/uploader"
-	"github.com/cloudfoundry-incubator/executor/depot/uploader/fake_uploader"
-	"github.com/cloudfoundry-incubator/executor/fakes"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
+	"code.cloudfoundry.org/executor/depot/steps"
+	Uploader "code.cloudfoundry.org/executor/depot/uploader"
+	"code.cloudfoundry.org/executor/depot/uploader/fake_uploader"
+	"code.cloudfoundry.org/executor/fakes"
 	Compressor "github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/lager/lagertest"
 )

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/containermetrics"
-	efakes "github.com/cloudfoundry-incubator/executor/fakes"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/containermetrics"
+	efakes "code.cloudfoundry.org/executor/fakes"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dmetrics "github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/pivotal-golang/clock/fakeclock"

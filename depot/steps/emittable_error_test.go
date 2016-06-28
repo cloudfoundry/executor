@@ -3,7 +3,7 @@ package steps_test
 import (
 	"errors"
 
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
+	"code.cloudfoundry.org/executor/depot/steps"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

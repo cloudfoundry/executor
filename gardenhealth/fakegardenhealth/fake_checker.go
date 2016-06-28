@@ -4,7 +4,7 @@ package fakegardenhealth
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor/gardenhealth"
+	"code.cloudfoundry.org/executor/gardenhealth"
 	"github.com/pivotal-golang/lager"
 )
 

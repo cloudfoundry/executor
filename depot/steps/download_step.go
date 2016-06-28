@@ -7,7 +7,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/cacheddownloader"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"

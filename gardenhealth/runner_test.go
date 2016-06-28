@@ -5,14 +5,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor/gardenhealth"
+	"code.cloudfoundry.org/executor/gardenhealth"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	fakeexecutor "github.com/cloudfoundry-incubator/executor/fakes"
-	"github.com/cloudfoundry-incubator/executor/gardenhealth/fakegardenhealth"
+	fakeexecutor "code.cloudfoundry.org/executor/fakes"
+	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"

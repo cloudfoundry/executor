@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )

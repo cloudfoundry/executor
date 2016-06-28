@@ -4,9 +4,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
-	"github.com/cloudfoundry-incubator/executor/depot/event"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/event"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry/gunk/workpool"

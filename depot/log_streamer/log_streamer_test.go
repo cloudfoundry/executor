@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

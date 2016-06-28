@@ -16,9 +16,9 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"
 
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer/fake_log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/steps"
-	"github.com/cloudfoundry-incubator/executor/fakes"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
+	"code.cloudfoundry.org/executor/depot/steps"
+	"code.cloudfoundry.org/executor/fakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"

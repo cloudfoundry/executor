@@ -14,17 +14,17 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore"
-	"github.com/cloudfoundry-incubator/executor/depot/containerstore/containerstorefakes"
-	"github.com/cloudfoundry-incubator/executor/depot/transformer/faketransformer"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
+	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry-incubator/volman/volmanfakes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 
-	eventfakes "github.com/cloudfoundry-incubator/executor/depot/event/fakes"
+	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 	"github.com/cloudfoundry-incubator/garden/server"
 )

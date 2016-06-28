@@ -9,8 +9,8 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/executor/depot/log_streamer"
-	"github.com/cloudfoundry-incubator/executor/depot/uploader"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/pivotal-golang/archiver/compressor"
 	"github.com/pivotal-golang/bytefmt"

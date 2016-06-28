@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor"
+	"code.cloudfoundry.org/executor"
 	"github.com/pivotal-golang/lager"
 )
 

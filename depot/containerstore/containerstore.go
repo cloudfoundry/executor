@@ -5,9 +5,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/cloudfoundry-incubator/executor"
-	"github.com/cloudfoundry-incubator/executor/depot/event"
-	"github.com/cloudfoundry-incubator/executor/depot/transformer"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/event"
+	"code.cloudfoundry.org/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/pivotal-golang/clock"
