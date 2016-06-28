@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/executor"
-	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"code.cloudfoundry.org/runtimeschema/metric"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
