@@ -10,10 +10,10 @@ import (
 
 	"code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bytefmt"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/pivotal-golang/bytefmt"
 	"github.com/pivotal-golang/lager"
 )
 
