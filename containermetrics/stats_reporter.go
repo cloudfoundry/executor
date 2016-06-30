@@ -6,8 +6,8 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/lager"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/pivotal-golang/lager"
 )
 
 type StatsReporter struct {

@@ -24,7 +24,7 @@ import (
 	Uploader "code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/executor/depot/uploader/fake_uploader"
 	"code.cloudfoundry.org/executor/fakes"
-	"github.com/pivotal-golang/lager/lagertest"
+	"code.cloudfoundry.org/lager/lagertest"
 )
 
 type fakeUploader struct {

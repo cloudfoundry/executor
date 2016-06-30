@@ -1,8 +1,8 @@
 package guidgen
 
 import (
+	"code.cloudfoundry.org/lager"
 	"github.com/nu7hatch/gouuid"
-	"github.com/pivotal-golang/lager"
 )
 
 var DefaultGenerator Generator = &generator{}

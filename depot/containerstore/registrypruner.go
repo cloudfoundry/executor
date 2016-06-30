@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/clock"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type registryPruner struct {

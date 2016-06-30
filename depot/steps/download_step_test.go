@@ -11,7 +11,7 @@ import (
 
 	"code.cloudfoundry.org/cacheddownloader"
 	cdfakes "code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
-	"github.com/pivotal-golang/lager/lagertest"
+	"code.cloudfoundry.org/lager/lagertest"
 
 	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/garden"

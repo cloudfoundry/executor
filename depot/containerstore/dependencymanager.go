@@ -8,8 +8,8 @@ import (
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/lager"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/pivotal-golang/lager"
 )
 
 //go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . DependencyManager

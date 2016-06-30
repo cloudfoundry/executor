@@ -13,8 +13,8 @@ import (
 	"code.cloudfoundry.org/bytefmt"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/uploader"
+	"code.cloudfoundry.org/lager"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/pivotal-golang/lager"
 )
 
 type uploadStep struct {

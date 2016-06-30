@@ -3,7 +3,7 @@ package steps
 import (
 	"time"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type timeoutStep struct {

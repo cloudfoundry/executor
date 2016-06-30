@@ -19,10 +19,10 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
+	"code.cloudfoundry.org/lager"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry-incubator/volman/volmanfakes"
-	"github.com/pivotal-golang/lager"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"

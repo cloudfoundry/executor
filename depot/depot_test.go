@@ -10,10 +10,10 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	efakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	"code.cloudfoundry.org/executor/fakes"
+	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry-incubator/volman/volmanfakes"
-	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

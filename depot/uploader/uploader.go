@@ -14,7 +14,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 var ErrUploadCancelled = errors.New("upload cancelled")

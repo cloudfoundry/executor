@@ -3,7 +3,7 @@ package steps
 import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type emitProgressStep struct {

@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor/guidgen"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type FakeGenerator struct {

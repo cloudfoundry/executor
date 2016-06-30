@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/pivotal-golang/lager/lagertest"
+	"code.cloudfoundry.org/lager/lagertest"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 

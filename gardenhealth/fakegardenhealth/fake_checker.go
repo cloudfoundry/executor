@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor/gardenhealth"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type FakeChecker struct {

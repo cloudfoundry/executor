@@ -3,7 +3,7 @@ package executor
 import (
 	"io"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 //go:generate counterfeiter -o fakes/fake_client.go . Client

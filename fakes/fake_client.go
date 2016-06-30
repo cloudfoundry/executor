@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type FakeClient struct {
