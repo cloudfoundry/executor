@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"code.cloudfoundry.org/archiver/compressor"
+	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/executor"
@@ -13,8 +15,6 @@ import (
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry/gunk/workpool"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"

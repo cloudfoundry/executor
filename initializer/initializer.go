@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"code.cloudfoundry.org/archiver/compressor"
+	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
@@ -27,8 +29,6 @@ import (
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/cloudfoundry/systemcerts"
 	"github.com/google/shlex"
-	"github.com/pivotal-golang/archiver/compressor"
-	"github.com/pivotal-golang/archiver/extractor"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"

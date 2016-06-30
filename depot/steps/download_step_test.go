@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 
-	archiveHelper "github.com/pivotal-golang/archiver/extractor/test_helper"
+	archiveHelper "code.cloudfoundry.org/archiver/extractor/test_helper"
 )
 
 var _ = Describe("DownloadAction", func() {
