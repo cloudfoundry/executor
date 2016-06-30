@@ -4,12 +4,12 @@ import (
 	"errors"
 	"time"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dmetrics "github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"

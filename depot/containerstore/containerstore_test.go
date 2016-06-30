@@ -14,6 +14,7 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
@@ -21,7 +22,6 @@ import (
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry-incubator/volman/volmanfakes"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"

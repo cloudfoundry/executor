@@ -3,8 +3,8 @@ package containerstore
 import (
 	"os"
 
+	"code.cloudfoundry.org/clock"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 

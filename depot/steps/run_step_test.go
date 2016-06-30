@@ -12,9 +12,9 @@ import (
 	"github.com/onsi/gomega/gbytes"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/clock/fakeclock"
 	"github.com/cloudfoundry-incubator/garden"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
-	"github.com/pivotal-golang/clock/fakeclock"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"

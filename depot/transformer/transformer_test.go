@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/transformer"
@@ -13,7 +14,6 @@ import (
 	"github.com/cloudfoundry/gunk/workpool"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"

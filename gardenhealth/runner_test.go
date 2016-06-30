@@ -11,9 +11,9 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	fakeexecutor "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"github.com/cloudfoundry/gunk/workpool"
-	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 

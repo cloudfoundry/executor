@@ -5,12 +5,12 @@ import (
 	"io"
 	"time"
 
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry-incubator/volman"
-	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 )

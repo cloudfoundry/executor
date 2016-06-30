@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/initializer"
 	"github.com/cloudfoundry-incubator/garden"
 	fake_metric "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -11,7 +12,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 )
 

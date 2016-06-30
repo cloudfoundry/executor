@@ -8,12 +8,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
