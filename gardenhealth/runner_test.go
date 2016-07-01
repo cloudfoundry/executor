@@ -73,7 +73,9 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
-					Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+					Eventually(func() float64 {
+						return sender.GetValue("UnhealthyCell").Value
+					}).Should(Equal(float64(1)))
 				})
 			})
 
@@ -106,7 +108,9 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
-					Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+					Eventually(func() float64 {
+						return sender.GetValue("UnhealthyCell").Value
+					}).Should(Equal(float64(1)))
 				})
 			})
 		})
@@ -137,7 +141,9 @@ var _ = Describe("Runner", func() {
 			})
 
 			It("emits a metric for healthy cell", func() {
-				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(0)))
+				Eventually(func () float64 {
+					return sender.GetValue("UnhealthyCell").Value
+				}).Should(Equal(float64(0)))
 			})
 		})
 
@@ -203,7 +209,9 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+				Eventually(func() float64 {
+					return sender.GetValue("UnhealthyCell").Value
+				}).Should(Equal(float64(1)))
 			})
 		})
 
@@ -241,19 +249,25 @@ var _ = Describe("Runner", func() {
 		Context("UnhealthyCell metric emission", func() {
 			It("emits the UnhealthyCell every emitInterval", func() {
 				Eventually(executorClient.HealthyCallCount).Should(Equal(1))
-				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+				Eventually(func() float64 {
+					return sender.GetValue("UnhealthyCell").Value
+				}).Should(Equal(float64(1)))
 
 				executorClient.HealthyReturns(true)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(2))
-				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(0)))
+				Eventually(func() float64 {
+					return sender.GetValue("UnhealthyCell").Value
+				}).Should(Equal(float64(0)))
 
 				executorClient.HealthyReturns(false)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(3))
-				Eventually(sender.GetValue("UnhealthyCell").Value).Should(Equal(float64(1)))
+				Eventually(func() float64 {
+					return sender.GetValue("UnhealthyCell").Value
+				}).Should(Equal(float64(1)))
 			})
 		})
 	})
