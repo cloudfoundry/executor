@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry/dropsonde/log_sender/fake"
+	"github.com/cloudfoundry/dropsonde/logs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -48,6 +50,7 @@ var _ = Describe("Container Store", func() {
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
+		fakeSender   *fake.FakeLogSender
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -74,6 +77,8 @@ var _ = Describe("Container Store", func() {
 		containerGuid = "container-guid"
 
 		megatron = &faketransformer.FakeTransformer{}
+		fakeSender = fake.NewFakeLogSender()
+		logs.Initialize(fakeSender)
 
 		containerConfig := containerstore.ContainerConfig{
 			OwnerName:              ownerName,
@@ -1064,7 +1069,14 @@ var _ = Describe("Container Store", func() {
 		var runReq *executor.RunRequest
 
 		BeforeEach(func() {
-			runReq = &executor.RunRequest{Guid: containerGuid}
+			runInfo := executor.RunInfo{
+				LogConfig: executor.LogConfig{
+					Guid:       containerGuid,
+					Index:      1,
+					SourceName: "test-source",
+				},
+			}
+			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
 			resource = executor.NewResource(1024, 2048, "foobar")
 			expectedMounts = containerstore.BindMounts{
@@ -1205,6 +1217,26 @@ var _ = Describe("Container Store", func() {
 				It("does not return an error", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("logs the container is detrroyed", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					logMessages := fakeSender.GetLogs()
+					Expect(logMessages).To(HaveLen(4))
+					emission := logMessages[2]
+					Expect(emission.AppId).To(Equal(containerGuid))
+					Expect(emission.SourceType).To(Equal("test-source"))
+					Expect(string(emission.Message)).To(Equal("Destroying container"))
+					Expect(emission.MessageType).To(Equal("OUT"))
+					Expect(emission.SourceInstance).To(Equal("1"))
+
+					emission = logMessages[3]
+					Expect(emission.AppId).To(Equal(containerGuid))
+					Expect(emission.SourceType).To(Equal("test-source"))
+					Expect(string(emission.Message)).To(Equal("Successfully destroyed container"))
+					Expect(emission.MessageType).To(Equal("OUT"))
+					Expect(emission.SourceInstance).To(Equal("1"))
 				})
 			})
 

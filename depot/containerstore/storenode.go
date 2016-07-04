@@ -342,10 +342,15 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		<-n.process.Wait()
 	}
 
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig)
+
+	fmt.Fprintf(logStreamer.Stdout(), "Destroying container\n")
 	err = n.destroyContainer(logger)
 	if err != nil {
+		fmt.Fprintf(logStreamer.Stderr(), "Failed to destroy container\n")
 		return err
 	}
+	fmt.Fprintf(logStreamer.Stdout(), "Successfully destroyed container\n")
 
 	n.infoLock.Lock()
 	cacheKeys := n.bindMountCacheKeys
