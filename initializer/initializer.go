@@ -41,7 +41,6 @@ const (
 	stalledDuration                = metric.Duration("StalledGardenDuration")
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
-	containerMetricsReportInterval = 30 * time.Second
 )
 
 type executorContainers struct {
@@ -105,7 +104,8 @@ type Configuration struct {
 	PostSetupHook string
 	PostSetupUser string
 
-	TrustedSystemCertificatesPath string
+	TrustedSystemCertificatesPath  string
+	ContainerMetricsReportInterval time.Duration
 }
 
 const (
@@ -147,6 +147,7 @@ var DefaultConfiguration = Configuration{
 	GardenHealthcheckCommandRetryPause: time.Second,
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
+	ContainerMetricsReportInterval:     30 * time.Second,
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -289,7 +290,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 			{"hub-closer", closeHub(hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
 				logger,
-				containerMetricsReportInterval,
+				config.ContainerMetricsReportInterval,
 				clock,
 				depotClient,
 			)},
