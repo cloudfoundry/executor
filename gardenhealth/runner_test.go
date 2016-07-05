@@ -116,6 +116,10 @@ var _ = Describe("Runner", func() {
 		})
 
 		Context("When garden is healthy", func() {
+			BeforeEach(func() {
+				executorClient.HealthyReturns(true)
+			})
+
 			It("sets healthy to true only once", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				_, healthy := executorClient.SetHealthyArgsForCall(0)
@@ -141,7 +145,7 @@ var _ = Describe("Runner", func() {
 			})
 
 			It("emits a metric for healthy cell", func() {
-				Eventually(func () float64 {
+				Eventually(func() float64 {
 					return sender.GetValue("UnhealthyCell").Value
 				}).Should(Equal(float64(0)))
 			})
