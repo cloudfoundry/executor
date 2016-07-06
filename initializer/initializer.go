@@ -147,7 +147,7 @@ var DefaultConfiguration = Configuration{
 	GardenHealthcheckCommandRetryPause: time.Second,
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
-	ContainerMetricsReportInterval:     30 * time.Second,
+	ContainerMetricsReportInterval:     15 * time.Second,
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
