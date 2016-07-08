@@ -86,6 +86,7 @@ func (step *downloadStep) perform() error {
 
 	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
+		step.emitError("Copying into the container failed: %v", err)
 		return NewEmittableError(err, "Copying into the container failed")
 	}
 
@@ -144,4 +145,14 @@ func (step *downloadStep) emit(format string, a ...interface{}) {
 	if step.model.Artifact != "" {
 		fmt.Fprintf(step.streamer.Stdout(), format, a...)
 	}
+}
+
+func (step *downloadStep) emitError(format string, a ...interface{}) {
+	err_bytes := []byte(fmt.Sprintf(format, a...))
+	if len(err_bytes) > 1024 {
+		truncation_length := 1024 - len([]byte(" (error truncated)"))
+		err_bytes = append(err_bytes[:truncation_length], []byte(" (error truncated)")...)
+	}
+
+	fmt.Fprintf(step.streamer.Stderr(), string(err_bytes))
 }

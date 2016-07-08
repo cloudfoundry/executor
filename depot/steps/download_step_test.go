@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"strings"
 
 	"code.cloudfoundry.org/cacheddownloader"
 	cdfakes "code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
@@ -221,26 +222,54 @@ var _ = Describe("DownloadAction", func() {
 			})
 
 			Context("when there is an error copying the extracted files into the container", func() {
-				var expectedErr = errors.New("oh no!")
+				var expectedErr error
 
-				BeforeEach(func() {
-					gardenClient.Connection.StreamInReturns(expectedErr)
+				Context("when the error message is under 1kb", func() {
+					BeforeEach(func() {
+						expectedErr = errors.New("oh no!")
+						gardenClient.Connection.StreamInReturns(expectedErr)
+					})
+
+					It("returns an error", func() {
+						Expect(stepErr.Error()).To(ContainSubstring("Copying into the container failed"))
+					})
+
+					It("streams an error", func() {
+						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
+						Expect(stderr.Contents()).To(ContainSubstring("oh no!"))
+					})
+
+					It("logs the step", func() {
+						Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+							"test.download-step.acquiring-limiter",
+							"test.download-step.acquired-limiter",
+							"test.download-step.fetch-starting",
+							"test.download-step.fetch-complete",
+							"test.download-step.stream-in-starting",
+							"test.download-step.stream-in-failed",
+						}))
+
+					})
 				})
 
-				It("returns an error", func() {
-					Expect(stepErr.Error()).To(ContainSubstring("Copying into the container failed"))
-				})
+				Context("when the error message is over 1kb", func() {
+					BeforeEach(func() {
+						error_message := strings.Repeat("error", 1024)
+						expectedErr = errors.New(error_message)
 
-				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
-						"test.download-step.acquiring-limiter",
-						"test.download-step.acquired-limiter",
-						"test.download-step.fetch-starting",
-						"test.download-step.fetch-complete",
-						"test.download-step.stream-in-starting",
-						"test.download-step.stream-in-failed",
-					}))
+						gardenClient.Connection.StreamInReturns(expectedErr)
 
+					})
+
+					It("truncates the error", func() {
+
+						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+						println(stderr.Contents())
+						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
+						Expect(stderr.Contents()).To(ContainSubstring("(error truncated)"))
+						Expect([]byte(stderr.Contents())).Should(HaveLen(1024))
+					})
 				})
 			})
 		})
