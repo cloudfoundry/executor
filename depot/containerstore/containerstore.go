@@ -151,6 +151,7 @@ func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Con
 
 	err = node.Create(logger)
 	if err != nil {
+		logger.Error("failed-to-create-container", err)
 		return executor.Container{}, err
 	}
 
