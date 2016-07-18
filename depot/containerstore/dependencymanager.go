@@ -17,6 +17,7 @@ import (
 type DependencyManager interface {
 	DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
 	ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error
+	Stop()
 }
 
 type dependencyManager struct {
@@ -26,6 +27,10 @@ type dependencyManager struct {
 
 func NewDependencyManager(cache cacheddownloader.CachedDownloader, downloadRateLimiter chan struct{}) DependencyManager {
 	return &dependencyManager{cache, downloadRateLimiter}
+}
+
+func (bm *dependencyManager) Stop() {
+	bm.cache.SaveState()
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {

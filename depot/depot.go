@@ -75,6 +75,7 @@ func (c *client) Cleanup(logger lager.Logger) {
 	c.deletionWorkPool.Stop()
 	c.readWorkPool.Stop()
 	c.metricsWorkPool.Stop()
+	c.containerStore.Cleanup()
 }
 
 func (c *client) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {

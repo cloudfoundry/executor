@@ -44,6 +44,9 @@ type ContainerStore interface {
 	// Cleanup
 	NewRegistryPruner(logger lager.Logger) ifrit.Runner
 	NewContainerReaper(logger lager.Logger) ifrit.Runner
+
+	// shutdown the dependency manager
+	Cleanup()
 }
 
 type ContainerConfig struct {
@@ -90,6 +93,10 @@ func New(
 		clock:             clock,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 	}
+}
+
+func (cs *containerStore) Cleanup() {
+	cs.dependencyManager.Stop()
 }
 
 func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {

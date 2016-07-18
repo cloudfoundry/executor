@@ -199,6 +199,11 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		cacheddownloader.TarTransform,
 	)
 
+	err = cache.RecoverState()
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
+
 	downloadRateLimiter := make(chan struct{}, uint(config.MaxConcurrentDownloads))
 
 	transformer := initializeTransformer(
