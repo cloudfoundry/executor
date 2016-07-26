@@ -131,15 +131,15 @@ var _ = Describe("Runner", func() {
 				Eventually(checker.HealthcheckCallCount).Should(Equal(1))
 				Eventually(process.Ready()).Should(BeClosed())
 
-				fakeClock.WaitForNWatcherAndIncrement(checkInterval, 2)
+				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(2))
 				Eventually(logger).Should(gbytes.Say("check-complete"))
 
-				fakeClock.WaitForNWatcherAndIncrement(checkInterval, 2)
+				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(3))
 				Eventually(logger).Should(gbytes.Say("check-complete"))
 
-				fakeClock.WaitForNWatcherAndIncrement(checkInterval, 2)
+				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(4))
 				Eventually(logger).Should(gbytes.Say("check-complete"))
 			})
@@ -175,7 +175,7 @@ var _ = Describe("Runner", func() {
 
 				checker.HealthcheckReturns(nil)
 				executorClient.HealthyReturns(true)
-				fakeClock.WaitForNWatcherAndIncrement(checkInterval, 2)
+				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
 				_, healthy = executorClient.SetHealthyArgsForCall(2)
@@ -205,10 +205,10 @@ var _ = Describe("Runner", func() {
 				Eventually(blockHealthcheck).Should(BeSent(struct{}{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 
-				fakeClock.WaitForNWatcherAndIncrement(checkInterval, 2)
+				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(2))
 
-				fakeClock.WaitForNWatcherAndIncrement(timeoutDuration, 2)
+				fakeClock.WaitForNWatchersAndIncrement(timeoutDuration, 2)
 
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
