@@ -8,8 +8,8 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/volman"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/volman"
 	"github.com/cloudfoundry/gunk/workpool"
 )
 

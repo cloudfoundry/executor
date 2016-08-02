@@ -12,8 +12,8 @@ import (
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry-incubator/volman"
-	"github.com/cloudfoundry-incubator/volman/volmanfakes"
+	"code.cloudfoundry.org/volman"
+	"code.cloudfoundry.org/volman/volmanfakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

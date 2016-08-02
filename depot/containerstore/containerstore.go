@@ -10,8 +10,8 @@ import (
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/volman"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/volman"
 	"github.com/tedsuo/ifrit"
 )
 

@@ -22,9 +22,9 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/volman"
+	"code.cloudfoundry.org/volman/volmanfakes"
 	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/volman"
-	"github.com/cloudfoundry-incubator/volman/volmanfakes"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
