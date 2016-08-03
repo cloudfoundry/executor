@@ -27,8 +27,6 @@ type FakeHub struct {
 	closeReturns     struct {
 		result1 error
 	}
-	invocations      map[string][][]interface{}
-	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeHub) Emit(arg1 executor.Event) {
@@ -36,7 +34,6 @@ func (fake *FakeHub) Emit(arg1 executor.Event) {
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
 		arg1 executor.Event
 	}{arg1})
-	fake.recordInvocation("Emit", []interface{}{arg1})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
 		fake.EmitStub(arg1)
@@ -58,7 +55,6 @@ func (fake *FakeHub) EmitArgsForCall(i int) executor.Event {
 func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	fake.subscribeMutex.Lock()
 	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct{}{})
-	fake.recordInvocation("Subscribe", []interface{}{})
 	fake.subscribeMutex.Unlock()
 	if fake.SubscribeStub != nil {
 		return fake.SubscribeStub()
@@ -84,7 +80,6 @@ func (fake *FakeHub) SubscribeReturns(result1 executor.EventSource, result2 erro
 func (fake *FakeHub) Close() error {
 	fake.closeMutex.Lock()
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct{}{})
-	fake.recordInvocation("Close", []interface{}{})
 	fake.closeMutex.Unlock()
 	if fake.CloseStub != nil {
 		return fake.CloseStub()
@@ -104,30 +99,6 @@ func (fake *FakeHub) CloseReturns(result1 error) {
 	fake.closeReturns = struct {
 		result1 error
 	}{result1}
-}
-
-func (fake *FakeHub) Invocations() map[string][][]interface{} {
-	fake.invocationsMutex.RLock()
-	defer fake.invocationsMutex.RUnlock()
-	fake.emitMutex.RLock()
-	defer fake.emitMutex.RUnlock()
-	fake.subscribeMutex.RLock()
-	defer fake.subscribeMutex.RUnlock()
-	fake.closeMutex.RLock()
-	defer fake.closeMutex.RUnlock()
-	return fake.invocations
-}
-
-func (fake *FakeHub) recordInvocation(key string, args []interface{}) {
-	fake.invocationsMutex.Lock()
-	defer fake.invocationsMutex.Unlock()
-	if fake.invocations == nil {
-		fake.invocations = map[string][][]interface{}{}
-	}
-	if fake.invocations[key] == nil {
-		fake.invocations[key] = [][]interface{}{}
-	}
-	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ event.Hub = new(FakeHub)

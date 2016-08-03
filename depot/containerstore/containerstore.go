@@ -263,8 +263,14 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 
 	nodes := cs.containers.List()
 	containerGuids := make([]string, 0, len(nodes))
+	memoryLimitMap := make(map[string]uint64)
+	diskLimitMap := make(map[string]uint64)
+
 	for i := range nodes {
-		containerGuids = append(containerGuids, nodes[i].Info().Guid)
+		nodeInfo := nodes[i].Info()
+		containerGuids = append(containerGuids, nodeInfo.Guid)
+		memoryLimitMap[nodeInfo.Guid] = nodeInfo.MemoryLimit
+		diskLimitMap[nodeInfo.Guid] = nodeInfo.DiskLimit
 	}
 
 	logger.Debug("getting-metrics-in-garden")
@@ -283,6 +289,8 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 				containerMetrics[guid] = executor.ContainerMetrics{
 					MemoryUsageInBytes: gardenMetric.MemoryStat.TotalUsageTowardLimit,
 					DiskUsageInBytes:   gardenMetric.DiskStat.ExclusiveBytesUsed,
+					MemoryLimitInBytes: memoryLimitMap[guid],
+					DiskLimitInBytes:   diskLimitMap[guid],
 					TimeSpentInCPU:     time.Duration(gardenMetric.CPUStat.Usage),
 				}
 			}

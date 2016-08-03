@@ -40,16 +40,9 @@ type FakeTransformer struct {
 		result1 ifrit.Runner
 		result2 error
 	}
-	invocations      map[string][][]interface{}
-	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeTransformer) StepFor(arg1 log_streamer.LogStreamer, arg2 *models.Action, arg3 garden.Container, arg4 string, arg5 []executor.PortMapping, arg6 lager.Logger) steps.Step {
-	var arg5Copy []executor.PortMapping
-	if arg5 != nil {
-		arg5Copy = make([]executor.PortMapping, len(arg5))
-		copy(arg5Copy, arg5)
-	}
 	fake.stepForMutex.Lock()
 	fake.stepForArgsForCall = append(fake.stepForArgsForCall, struct {
 		arg1 log_streamer.LogStreamer
@@ -58,8 +51,7 @@ func (fake *FakeTransformer) StepFor(arg1 log_streamer.LogStreamer, arg2 *models
 		arg4 string
 		arg5 []executor.PortMapping
 		arg6 lager.Logger
-	}{arg1, arg2, arg3, arg4, arg5Copy, arg6})
-	fake.recordInvocation("StepFor", []interface{}{arg1, arg2, arg3, arg4, arg5Copy, arg6})
+	}{arg1, arg2, arg3, arg4, arg5, arg6})
 	fake.stepForMutex.Unlock()
 	if fake.StepForStub != nil {
 		return fake.StepForStub(arg1, arg2, arg3, arg4, arg5, arg6)
@@ -95,7 +87,6 @@ func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Contai
 		arg3 garden.Container
 		arg4 log_streamer.LogStreamer
 	}{arg1, arg2, arg3, arg4})
-	fake.recordInvocation("StepsRunner", []interface{}{arg1, arg2, arg3, arg4})
 	fake.stepsRunnerMutex.Unlock()
 	if fake.StepsRunnerStub != nil {
 		return fake.StepsRunnerStub(arg1, arg2, arg3, arg4)
@@ -122,28 +113,6 @@ func (fake *FakeTransformer) StepsRunnerReturns(result1 ifrit.Runner, result2 er
 		result1 ifrit.Runner
 		result2 error
 	}{result1, result2}
-}
-
-func (fake *FakeTransformer) Invocations() map[string][][]interface{} {
-	fake.invocationsMutex.RLock()
-	defer fake.invocationsMutex.RUnlock()
-	fake.stepForMutex.RLock()
-	defer fake.stepForMutex.RUnlock()
-	fake.stepsRunnerMutex.RLock()
-	defer fake.stepsRunnerMutex.RUnlock()
-	return fake.invocations
-}
-
-func (fake *FakeTransformer) recordInvocation(key string, args []interface{}) {
-	fake.invocationsMutex.Lock()
-	defer fake.invocationsMutex.Unlock()
-	if fake.invocations == nil {
-		fake.invocations = map[string][][]interface{}{}
-	}
-	if fake.invocations[key] == nil {
-		fake.invocations[key] = [][]interface{}{}
-	}
-	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ transformer.Transformer = new(FakeTransformer)

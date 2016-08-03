@@ -1363,6 +1363,13 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Metrics", func() {
 		var containerGuid1, containerGuid2, containerGuid3, containerGuid4 string
+		var container1, container2 executor.Container
+		var (
+			req1    *executor.RunRequest
+			req2    *executor.RunRequest
+			runInfo executor.RunInfo
+			err     error
+		)
 
 		BeforeEach(func() {
 			containerGuid1 = "container-guid-1"
@@ -1370,17 +1377,74 @@ var _ = Describe("Container Store", func() {
 			containerGuid3 = "container-guid-3"
 			containerGuid4 = "container-guid-4"
 
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1})
+			// Reserve
+			resource := executor.Resource{
+				MemoryMB:   2048,
+				DiskMB:     1024,
+				RootFSPath: "/foo/bar",
+			}
+
+			tags := executor.Tags{}
+
+			container1, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2})
+			container2, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3, Tags: executor.Tags{}})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid4})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid4, Tags: executor.Tags{}})
 			Expect(err).NotTo(HaveOccurred())
+
+			runInfo = executor.RunInfo{
+				CPUWeight:          2,
+				StartTimeoutMs:     50000,
+				Privileged:         true,
+				CachedDependencies: []executor.CachedDependency{},
+				LogConfig: executor.LogConfig{
+					Guid:       "log-guid",
+					Index:      1,
+					SourceName: "test-source",
+				},
+				MetricsConfig: executor.MetricsConfig{
+					Guid:  "metric-guid",
+					Index: 1,
+				},
+				Env: []executor.EnvironmentVariable{},
+				TrustedSystemCertificatesPath: "",
+				Network: &executor.Network{
+					Properties: map[string]string{},
+				},
+			}
+
+			// Initialize
+			req1 = &executor.RunRequest{
+				Guid:    containerGuid1,
+				RunInfo: runInfo,
+				Tags:    executor.Tags{},
+			}
+
+			req2 = &executor.RunRequest{
+				Guid:    containerGuid2,
+				RunInfo: runInfo,
+				Tags:    executor.Tags{},
+			}
+			err = containerStore.Initialize(logger, req1)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = containerStore.Initialize(logger, req2)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create
+			gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: "6.6.6.6"}, nil)
+			gardenClient.CreateReturns(gardenContainer, nil)
+			_, err = containerStore.Create(logger, containerGuid1)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = containerStore.Create(logger, containerGuid2)
+			Expect(err).ToNot(HaveOccurred())
 
 			bulkMetrics := map[string]garden.ContainerMetricsEntry{
 				containerGuid1: garden.ContainerMetricsEntry{
@@ -1425,13 +1489,14 @@ var _ = Describe("Container Store", func() {
 				},
 				"BOGUS-GUID": garden.ContainerMetricsEntry{},
 			}
-
 			gardenClient.BulkMetricsReturns(bulkMetrics, nil)
 		})
 
 		It("returns metrics for all known containers", func() {
 			metrics, err := containerStore.Metrics(logger)
 			Expect(err).NotTo(HaveOccurred())
+			containerSpec1 := gardenClient.CreateArgsForCall(0)
+			containerSpec2 := gardenClient.CreateArgsForCall(1)
 
 			Expect(gardenClient.BulkMetricsCallCount()).To(Equal(1))
 			Expect(gardenClient.BulkMetricsArgsForCall(0)).To(ConsistOf(
@@ -1444,12 +1509,16 @@ var _ = Describe("Container Store", func() {
 			Expect(ok).To(BeTrue())
 			Expect(container1Metrics.MemoryUsageInBytes).To(BeEquivalentTo(1024))
 			Expect(container1Metrics.DiskUsageInBytes).To(BeEquivalentTo(2048))
+			Expect(container1Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Memory.LimitInBytes))
+			Expect(container1Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Disk.ByteHard))
 			Expect(container1Metrics.TimeSpentInCPU).To(Equal(5 * time.Second))
 
 			container2Metrics, ok := metrics[containerGuid2]
 			Expect(ok).To(BeTrue())
 			Expect(container2Metrics.MemoryUsageInBytes).To(BeEquivalentTo(512))
 			Expect(container2Metrics.DiskUsageInBytes).To(BeEquivalentTo(128))
+			Expect(container2Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Memory.LimitInBytes))
+			Expect(container2Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Disk.ByteHard))
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))
 		})
 
