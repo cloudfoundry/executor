@@ -4,10 +4,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry/dropsonde/metrics"
+	"github.com/cloudfoundry/sonde-go/events"
+
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry/dropsonde/metrics"
 )
 
 type StatsReporter struct {
@@ -83,7 +85,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	newCpuInfos := make(map[string]*cpuInfo)
 	for guid, metric := range metrics {
 		previousCpuInfo := previousCpuInfos[guid]
-		cpu := reporter.calculateAndSendMetrics(logger, &metric.MetricsConfig, &metric.ContainerMetrics, previousCpuInfo, now)
+		cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCpuInfo, now)
 		if cpu != nil {
 			newCpuInfos[guid] = cpu
 		}
@@ -94,8 +96,8 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 func (reporter *StatsReporter) calculateAndSendMetrics(
 	logger lager.Logger,
-	metricsConfig *executor.MetricsConfig,
-	containerMetrics *executor.ContainerMetrics,
+	metricsConfig executor.MetricsConfig,
+	containerMetrics executor.ContainerMetrics,
 	previousInfo *cpuInfo,
 	now time.Time,
 ) *cpuInfo {
@@ -120,7 +122,17 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 		)
 	}
 
-	err := metrics.SendContainerMetric(metricsConfig.Guid, int32(metricsConfig.Index), cpuPercent, containerMetrics.MemoryUsageInBytes, containerMetrics.DiskUsageInBytes)
+	instanceIndex := int32(metricsConfig.Index)
+	err := metrics.Send(&events.ContainerMetric{
+		ApplicationId:    &metricsConfig.Guid,
+		InstanceIndex:    &instanceIndex,
+		CpuPercentage:    &cpuPercent,
+		MemoryBytes:      &containerMetrics.MemoryUsageInBytes,
+		DiskBytes:        &containerMetrics.DiskUsageInBytes,
+		MemoryBytesQuota: &containerMetrics.MemoryLimitInBytes,
+		DiskBytesQuota:   &containerMetrics.DiskLimitInBytes,
+	})
+
 	if err != nil {
 		logger.Error("failed-to-send-container-metrics", err, lager.Data{
 			"metrics_guid":  metricsConfig.Guid,

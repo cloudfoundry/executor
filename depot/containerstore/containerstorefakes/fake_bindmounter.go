@@ -31,26 +31,18 @@ type FakeDependencyManager struct {
 	releaseCachedDependenciesReturns struct {
 		result1 error
 	}
-	StopStub         func()
-	stopMutex        sync.RWMutex
-	stopArgsForCall  []struct{}
-	invocations      map[string][][]interface{}
-	invocationsMutex sync.RWMutex
+	StopStub        func()
+	stopMutex       sync.RWMutex
+	stopArgsForCall []struct{}
 }
 
 func (fake *FakeDependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (containerstore.BindMounts, error) {
-	var mountsCopy []executor.CachedDependency
-	if mounts != nil {
-		mountsCopy = make([]executor.CachedDependency, len(mounts))
-		copy(mountsCopy, mounts)
-	}
 	fake.downloadCachedDependenciesMutex.Lock()
 	fake.downloadCachedDependenciesArgsForCall = append(fake.downloadCachedDependenciesArgsForCall, struct {
 		logger      lager.Logger
 		mounts      []executor.CachedDependency
 		logStreamer log_streamer.LogStreamer
-	}{logger, mountsCopy, logStreamer})
-	fake.recordInvocation("DownloadCachedDependencies", []interface{}{logger, mountsCopy, logStreamer})
+	}{logger, mounts, logStreamer})
 	fake.downloadCachedDependenciesMutex.Unlock()
 	if fake.DownloadCachedDependenciesStub != nil {
 		return fake.DownloadCachedDependenciesStub(logger, mounts, logStreamer)
@@ -80,17 +72,11 @@ func (fake *FakeDependencyManager) DownloadCachedDependenciesReturns(result1 con
 }
 
 func (fake *FakeDependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys []containerstore.BindMountCacheKey) error {
-	var keysCopy []containerstore.BindMountCacheKey
-	if keys != nil {
-		keysCopy = make([]containerstore.BindMountCacheKey, len(keys))
-		copy(keysCopy, keys)
-	}
 	fake.releaseCachedDependenciesMutex.Lock()
 	fake.releaseCachedDependenciesArgsForCall = append(fake.releaseCachedDependenciesArgsForCall, struct {
 		logger lager.Logger
 		keys   []containerstore.BindMountCacheKey
-	}{logger, keysCopy})
-	fake.recordInvocation("ReleaseCachedDependencies", []interface{}{logger, keysCopy})
+	}{logger, keys})
 	fake.releaseCachedDependenciesMutex.Unlock()
 	if fake.ReleaseCachedDependenciesStub != nil {
 		return fake.ReleaseCachedDependenciesStub(logger, keys)
@@ -121,7 +107,6 @@ func (fake *FakeDependencyManager) ReleaseCachedDependenciesReturns(result1 erro
 func (fake *FakeDependencyManager) Stop() {
 	fake.stopMutex.Lock()
 	fake.stopArgsForCall = append(fake.stopArgsForCall, struct{}{})
-	fake.recordInvocation("Stop", []interface{}{})
 	fake.stopMutex.Unlock()
 	if fake.StopStub != nil {
 		fake.StopStub()
@@ -132,30 +117,6 @@ func (fake *FakeDependencyManager) StopCallCount() int {
 	fake.stopMutex.RLock()
 	defer fake.stopMutex.RUnlock()
 	return len(fake.stopArgsForCall)
-}
-
-func (fake *FakeDependencyManager) Invocations() map[string][][]interface{} {
-	fake.invocationsMutex.RLock()
-	defer fake.invocationsMutex.RUnlock()
-	fake.downloadCachedDependenciesMutex.RLock()
-	defer fake.downloadCachedDependenciesMutex.RUnlock()
-	fake.releaseCachedDependenciesMutex.RLock()
-	defer fake.releaseCachedDependenciesMutex.RUnlock()
-	fake.stopMutex.RLock()
-	defer fake.stopMutex.RUnlock()
-	return fake.invocations
-}
-
-func (fake *FakeDependencyManager) recordInvocation(key string, args []interface{}) {
-	fake.invocationsMutex.Lock()
-	defer fake.invocationsMutex.Unlock()
-	if fake.invocations == nil {
-		fake.invocations = map[string][][]interface{}{}
-	}
-	if fake.invocations[key] == nil {
-		fake.invocations[key] = [][]interface{}{}
-	}
-	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ containerstore.DependencyManager = new(FakeDependencyManager)

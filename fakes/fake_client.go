@@ -149,8 +149,6 @@ type FakeClient struct {
 	cleanupArgsForCall []struct {
 		arg1 lager.Logger
 	}
-	invocations      map[string][][]interface{}
-	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeClient) Ping(logger lager.Logger) error {
@@ -158,7 +156,6 @@ func (fake *FakeClient) Ping(logger lager.Logger) error {
 	fake.pingArgsForCall = append(fake.pingArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
-	fake.recordInvocation("Ping", []interface{}{logger})
 	fake.pingMutex.Unlock()
 	if fake.PingStub != nil {
 		return fake.PingStub(logger)
@@ -187,17 +184,11 @@ func (fake *FakeClient) PingReturns(result1 error) {
 }
 
 func (fake *FakeClient) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
-	var requestsCopy []executor.AllocationRequest
-	if requests != nil {
-		requestsCopy = make([]executor.AllocationRequest, len(requests))
-		copy(requestsCopy, requests)
-	}
 	fake.allocateContainersMutex.Lock()
 	fake.allocateContainersArgsForCall = append(fake.allocateContainersArgsForCall, struct {
 		logger   lager.Logger
 		requests []executor.AllocationRequest
-	}{logger, requestsCopy})
-	fake.recordInvocation("AllocateContainers", []interface{}{logger, requestsCopy})
+	}{logger, requests})
 	fake.allocateContainersMutex.Unlock()
 	if fake.AllocateContainersStub != nil {
 		return fake.AllocateContainersStub(logger, requests)
@@ -232,7 +223,6 @@ func (fake *FakeClient) GetContainer(logger lager.Logger, guid string) (executor
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
-	fake.recordInvocation("GetContainer", []interface{}{logger, guid})
 	fake.getContainerMutex.Unlock()
 	if fake.GetContainerStub != nil {
 		return fake.GetContainerStub(logger, guid)
@@ -267,7 +257,6 @@ func (fake *FakeClient) RunContainer(arg1 lager.Logger, arg2 *executor.RunReques
 		arg1 lager.Logger
 		arg2 *executor.RunRequest
 	}{arg1, arg2})
-	fake.recordInvocation("RunContainer", []interface{}{arg1, arg2})
 	fake.runContainerMutex.Unlock()
 	if fake.RunContainerStub != nil {
 		return fake.RunContainerStub(arg1, arg2)
@@ -301,7 +290,6 @@ func (fake *FakeClient) StopContainer(logger lager.Logger, guid string) error {
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
-	fake.recordInvocation("StopContainer", []interface{}{logger, guid})
 	fake.stopContainerMutex.Unlock()
 	if fake.StopContainerStub != nil {
 		return fake.StopContainerStub(logger, guid)
@@ -335,7 +323,6 @@ func (fake *FakeClient) DeleteContainer(logger lager.Logger, guid string) error 
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
-	fake.recordInvocation("DeleteContainer", []interface{}{logger, guid})
 	fake.deleteContainerMutex.Unlock()
 	if fake.DeleteContainerStub != nil {
 		return fake.DeleteContainerStub(logger, guid)
@@ -368,7 +355,6 @@ func (fake *FakeClient) ListContainers(arg1 lager.Logger) ([]executor.Container,
 	fake.listContainersArgsForCall = append(fake.listContainersArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("ListContainers", []interface{}{arg1})
 	fake.listContainersMutex.Unlock()
 	if fake.ListContainersStub != nil {
 		return fake.ListContainersStub(arg1)
@@ -402,7 +388,6 @@ func (fake *FakeClient) GetBulkMetrics(arg1 lager.Logger) (map[string]executor.M
 	fake.getBulkMetricsArgsForCall = append(fake.getBulkMetricsArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("GetBulkMetrics", []interface{}{arg1})
 	fake.getBulkMetricsMutex.Unlock()
 	if fake.GetBulkMetricsStub != nil {
 		return fake.GetBulkMetricsStub(arg1)
@@ -436,7 +421,6 @@ func (fake *FakeClient) RemainingResources(arg1 lager.Logger) (executor.Executor
 	fake.remainingResourcesArgsForCall = append(fake.remainingResourcesArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("RemainingResources", []interface{}{arg1})
 	fake.remainingResourcesMutex.Unlock()
 	if fake.RemainingResourcesStub != nil {
 		return fake.RemainingResourcesStub(arg1)
@@ -470,7 +454,6 @@ func (fake *FakeClient) TotalResources(arg1 lager.Logger) (executor.ExecutorReso
 	fake.totalResourcesArgsForCall = append(fake.totalResourcesArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("TotalResources", []interface{}{arg1})
 	fake.totalResourcesMutex.Unlock()
 	if fake.TotalResourcesStub != nil {
 		return fake.TotalResourcesStub(arg1)
@@ -506,7 +489,6 @@ func (fake *FakeClient) GetFiles(logger lager.Logger, guid string, path string) 
 		guid   string
 		path   string
 	}{logger, guid, path})
-	fake.recordInvocation("GetFiles", []interface{}{logger, guid, path})
 	fake.getFilesMutex.Unlock()
 	if fake.GetFilesStub != nil {
 		return fake.GetFilesStub(logger, guid, path)
@@ -540,7 +522,6 @@ func (fake *FakeClient) VolumeDrivers(logger lager.Logger) ([]string, error) {
 	fake.volumeDriversArgsForCall = append(fake.volumeDriversArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
-	fake.recordInvocation("VolumeDrivers", []interface{}{logger})
 	fake.volumeDriversMutex.Unlock()
 	if fake.VolumeDriversStub != nil {
 		return fake.VolumeDriversStub(logger)
@@ -574,7 +555,6 @@ func (fake *FakeClient) SubscribeToEvents(arg1 lager.Logger) (executor.EventSour
 	fake.subscribeToEventsArgsForCall = append(fake.subscribeToEventsArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("SubscribeToEvents", []interface{}{arg1})
 	fake.subscribeToEventsMutex.Unlock()
 	if fake.SubscribeToEventsStub != nil {
 		return fake.SubscribeToEventsStub(arg1)
@@ -608,7 +588,6 @@ func (fake *FakeClient) Healthy(arg1 lager.Logger) bool {
 	fake.healthyArgsForCall = append(fake.healthyArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("Healthy", []interface{}{arg1})
 	fake.healthyMutex.Unlock()
 	if fake.HealthyStub != nil {
 		return fake.HealthyStub(arg1)
@@ -642,7 +621,6 @@ func (fake *FakeClient) SetHealthy(arg1 lager.Logger, arg2 bool) {
 		arg1 lager.Logger
 		arg2 bool
 	}{arg1, arg2})
-	fake.recordInvocation("SetHealthy", []interface{}{arg1, arg2})
 	fake.setHealthyMutex.Unlock()
 	if fake.SetHealthyStub != nil {
 		fake.SetHealthyStub(arg1, arg2)
@@ -666,7 +644,6 @@ func (fake *FakeClient) Cleanup(arg1 lager.Logger) {
 	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
-	fake.recordInvocation("Cleanup", []interface{}{arg1})
 	fake.cleanupMutex.Unlock()
 	if fake.CleanupStub != nil {
 		fake.CleanupStub(arg1)
@@ -683,56 +660,6 @@ func (fake *FakeClient) CleanupArgsForCall(i int) lager.Logger {
 	fake.cleanupMutex.RLock()
 	defer fake.cleanupMutex.RUnlock()
 	return fake.cleanupArgsForCall[i].arg1
-}
-
-func (fake *FakeClient) Invocations() map[string][][]interface{} {
-	fake.invocationsMutex.RLock()
-	defer fake.invocationsMutex.RUnlock()
-	fake.pingMutex.RLock()
-	defer fake.pingMutex.RUnlock()
-	fake.allocateContainersMutex.RLock()
-	defer fake.allocateContainersMutex.RUnlock()
-	fake.getContainerMutex.RLock()
-	defer fake.getContainerMutex.RUnlock()
-	fake.runContainerMutex.RLock()
-	defer fake.runContainerMutex.RUnlock()
-	fake.stopContainerMutex.RLock()
-	defer fake.stopContainerMutex.RUnlock()
-	fake.deleteContainerMutex.RLock()
-	defer fake.deleteContainerMutex.RUnlock()
-	fake.listContainersMutex.RLock()
-	defer fake.listContainersMutex.RUnlock()
-	fake.getBulkMetricsMutex.RLock()
-	defer fake.getBulkMetricsMutex.RUnlock()
-	fake.remainingResourcesMutex.RLock()
-	defer fake.remainingResourcesMutex.RUnlock()
-	fake.totalResourcesMutex.RLock()
-	defer fake.totalResourcesMutex.RUnlock()
-	fake.getFilesMutex.RLock()
-	defer fake.getFilesMutex.RUnlock()
-	fake.volumeDriversMutex.RLock()
-	defer fake.volumeDriversMutex.RUnlock()
-	fake.subscribeToEventsMutex.RLock()
-	defer fake.subscribeToEventsMutex.RUnlock()
-	fake.healthyMutex.RLock()
-	defer fake.healthyMutex.RUnlock()
-	fake.setHealthyMutex.RLock()
-	defer fake.setHealthyMutex.RUnlock()
-	fake.cleanupMutex.RLock()
-	defer fake.cleanupMutex.RUnlock()
-	return fake.invocations
-}
-
-func (fake *FakeClient) recordInvocation(key string, args []interface{}) {
-	fake.invocationsMutex.Lock()
-	defer fake.invocationsMutex.Unlock()
-	if fake.invocations == nil {
-		fake.invocations = map[string][][]interface{}{}
-	}
-	if fake.invocations[key] == nil {
-		fake.invocations[key] = [][]interface{}{}
-	}
-	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ executor.Client = new(FakeClient)

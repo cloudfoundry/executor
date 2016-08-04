@@ -39,6 +39,8 @@ type Container struct {
 	AllocatedAt int64              `json:"allocated_at"`
 	ExternalIP  string             `json:"external_ip"`
 	RunResult   ContainerRunResult `json:"run_result"`
+	MemoryLimit uint64             `json:"memory_limit"`
+	DiskLimit   uint64             `json:"disk_limit"`
 }
 
 func NewContainerFromResource(guid string, resource *Resource, tags Tags) Container {
@@ -205,6 +207,8 @@ type EnvironmentVariable struct {
 type ContainerMetrics struct {
 	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
 	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
+	MemoryLimitInBytes uint64        `json:"memory_limit_in_bytes"`
+	DiskLimitInBytes   uint64        `json:"disk_limit_in_bytes"`
 	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
 }
 

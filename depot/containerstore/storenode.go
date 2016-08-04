@@ -261,6 +261,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
+	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
+	info.DiskLimit = containerSpec.Limits.Disk.ByteHard
+
 	return gardenContainer, nil
 }
 
