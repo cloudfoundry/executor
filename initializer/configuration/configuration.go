@@ -39,7 +39,7 @@ func ConfigureCapacity(
 	return executor.ExecutorResources{
 		MemoryMB:   memory,
 		DiskMB:     disk,
-		Containers: int(gardenCapacity.MaxContainers),
+		Containers: int(gardenCapacity.MaxContainers) - 1,
 	}, nil
 }
 

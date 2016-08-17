@@ -154,7 +154,7 @@ var _ = Describe("configuration", func() {
 
 			Describe("Containers Limit", func() {
 				It("uses the garden server's max containers", func() {
-					Expect(capacity.Containers).To(Equal(5))
+					Expect(capacity.Containers).To(Equal(4))
 				})
 			})
 		})
