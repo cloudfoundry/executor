@@ -17,6 +17,8 @@ type FakeChecker struct {
 	healthcheckReturns struct {
 		result1 error
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
@@ -24,6 +26,7 @@ func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
 	fake.healthcheckArgsForCall = append(fake.healthcheckArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	fake.recordInvocation("Healthcheck", []interface{}{arg1})
 	fake.healthcheckMutex.Unlock()
 	if fake.HealthcheckStub != nil {
 		return fake.HealthcheckStub(arg1)
@@ -49,6 +52,26 @@ func (fake *FakeChecker) HealthcheckReturns(result1 error) {
 	fake.healthcheckReturns = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeChecker) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.healthcheckMutex.RLock()
+	defer fake.healthcheckMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeChecker) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ gardenhealth.Checker = new(FakeChecker)

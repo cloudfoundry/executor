@@ -133,6 +133,8 @@ type FakeContainerStore struct {
 	CleanupStub        func()
 	cleanupMutex       sync.RWMutex
 	cleanupArgsForCall []struct{}
+	invocations        map[string][][]interface{}
+	invocationsMutex   sync.RWMutex
 }
 
 func (fake *FakeContainerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
@@ -141,6 +143,7 @@ func (fake *FakeContainerStore) Reserve(logger lager.Logger, req *executor.Alloc
 		logger lager.Logger
 		req    *executor.AllocationRequest
 	}{logger, req})
+	fake.recordInvocation("Reserve", []interface{}{logger, req})
 	fake.reserveMutex.Unlock()
 	if fake.ReserveStub != nil {
 		return fake.ReserveStub(logger, req)
@@ -175,6 +178,7 @@ func (fake *FakeContainerStore) Destroy(logger lager.Logger, guid string) error 
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
+	fake.recordInvocation("Destroy", []interface{}{logger, guid})
 	fake.destroyMutex.Unlock()
 	if fake.DestroyStub != nil {
 		return fake.DestroyStub(logger, guid)
@@ -208,6 +212,7 @@ func (fake *FakeContainerStore) Initialize(logger lager.Logger, req *executor.Ru
 		logger lager.Logger
 		req    *executor.RunRequest
 	}{logger, req})
+	fake.recordInvocation("Initialize", []interface{}{logger, req})
 	fake.initializeMutex.Unlock()
 	if fake.InitializeStub != nil {
 		return fake.InitializeStub(logger, req)
@@ -241,6 +246,7 @@ func (fake *FakeContainerStore) Create(logger lager.Logger, guid string) (execut
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
+	fake.recordInvocation("Create", []interface{}{logger, guid})
 	fake.createMutex.Unlock()
 	if fake.CreateStub != nil {
 		return fake.CreateStub(logger, guid)
@@ -275,6 +281,7 @@ func (fake *FakeContainerStore) Run(logger lager.Logger, guid string) error {
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
+	fake.recordInvocation("Run", []interface{}{logger, guid})
 	fake.runMutex.Unlock()
 	if fake.RunStub != nil {
 		return fake.RunStub(logger, guid)
@@ -308,6 +315,7 @@ func (fake *FakeContainerStore) Stop(logger lager.Logger, guid string) error {
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
+	fake.recordInvocation("Stop", []interface{}{logger, guid})
 	fake.stopMutex.Unlock()
 	if fake.StopStub != nil {
 		return fake.StopStub(logger, guid)
@@ -341,6 +349,7 @@ func (fake *FakeContainerStore) Get(logger lager.Logger, guid string) (executor.
 		logger lager.Logger
 		guid   string
 	}{logger, guid})
+	fake.recordInvocation("Get", []interface{}{logger, guid})
 	fake.getMutex.Unlock()
 	if fake.GetStub != nil {
 		return fake.GetStub(logger, guid)
@@ -374,6 +383,7 @@ func (fake *FakeContainerStore) List(logger lager.Logger) []executor.Container {
 	fake.listArgsForCall = append(fake.listArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
+	fake.recordInvocation("List", []interface{}{logger})
 	fake.listMutex.Unlock()
 	if fake.ListStub != nil {
 		return fake.ListStub(logger)
@@ -406,6 +416,7 @@ func (fake *FakeContainerStore) Metrics(logger lager.Logger) (map[string]executo
 	fake.metricsArgsForCall = append(fake.metricsArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
+	fake.recordInvocation("Metrics", []interface{}{logger})
 	fake.metricsMutex.Unlock()
 	if fake.MetricsStub != nil {
 		return fake.MetricsStub(logger)
@@ -439,6 +450,7 @@ func (fake *FakeContainerStore) RemainingResources(logger lager.Logger) executor
 	fake.remainingResourcesArgsForCall = append(fake.remainingResourcesArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
+	fake.recordInvocation("RemainingResources", []interface{}{logger})
 	fake.remainingResourcesMutex.Unlock()
 	if fake.RemainingResourcesStub != nil {
 		return fake.RemainingResourcesStub(logger)
@@ -473,6 +485,7 @@ func (fake *FakeContainerStore) GetFiles(logger lager.Logger, guid string, sourc
 		guid       string
 		sourcePath string
 	}{logger, guid, sourcePath})
+	fake.recordInvocation("GetFiles", []interface{}{logger, guid, sourcePath})
 	fake.getFilesMutex.Unlock()
 	if fake.GetFilesStub != nil {
 		return fake.GetFilesStub(logger, guid, sourcePath)
@@ -506,6 +519,7 @@ func (fake *FakeContainerStore) NewRegistryPruner(logger lager.Logger) ifrit.Run
 	fake.newRegistryPrunerArgsForCall = append(fake.newRegistryPrunerArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
+	fake.recordInvocation("NewRegistryPruner", []interface{}{logger})
 	fake.newRegistryPrunerMutex.Unlock()
 	if fake.NewRegistryPrunerStub != nil {
 		return fake.NewRegistryPrunerStub(logger)
@@ -538,6 +552,7 @@ func (fake *FakeContainerStore) NewContainerReaper(logger lager.Logger) ifrit.Ru
 	fake.newContainerReaperArgsForCall = append(fake.newContainerReaperArgsForCall, struct {
 		logger lager.Logger
 	}{logger})
+	fake.recordInvocation("NewContainerReaper", []interface{}{logger})
 	fake.newContainerReaperMutex.Unlock()
 	if fake.NewContainerReaperStub != nil {
 		return fake.NewContainerReaperStub(logger)
@@ -568,6 +583,7 @@ func (fake *FakeContainerStore) NewContainerReaperReturns(result1 ifrit.Runner) 
 func (fake *FakeContainerStore) Cleanup() {
 	fake.cleanupMutex.Lock()
 	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct{}{})
+	fake.recordInvocation("Cleanup", []interface{}{})
 	fake.cleanupMutex.Unlock()
 	if fake.CleanupStub != nil {
 		fake.CleanupStub()
@@ -578,6 +594,52 @@ func (fake *FakeContainerStore) CleanupCallCount() int {
 	fake.cleanupMutex.RLock()
 	defer fake.cleanupMutex.RUnlock()
 	return len(fake.cleanupArgsForCall)
+}
+
+func (fake *FakeContainerStore) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.reserveMutex.RLock()
+	defer fake.reserveMutex.RUnlock()
+	fake.destroyMutex.RLock()
+	defer fake.destroyMutex.RUnlock()
+	fake.initializeMutex.RLock()
+	defer fake.initializeMutex.RUnlock()
+	fake.createMutex.RLock()
+	defer fake.createMutex.RUnlock()
+	fake.runMutex.RLock()
+	defer fake.runMutex.RUnlock()
+	fake.stopMutex.RLock()
+	defer fake.stopMutex.RUnlock()
+	fake.getMutex.RLock()
+	defer fake.getMutex.RUnlock()
+	fake.listMutex.RLock()
+	defer fake.listMutex.RUnlock()
+	fake.metricsMutex.RLock()
+	defer fake.metricsMutex.RUnlock()
+	fake.remainingResourcesMutex.RLock()
+	defer fake.remainingResourcesMutex.RUnlock()
+	fake.getFilesMutex.RLock()
+	defer fake.getFilesMutex.RUnlock()
+	fake.newRegistryPrunerMutex.RLock()
+	defer fake.newRegistryPrunerMutex.RUnlock()
+	fake.newContainerReaperMutex.RLock()
+	defer fake.newContainerReaperMutex.RUnlock()
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeContainerStore) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ containerstore.ContainerStore = new(FakeContainerStore)

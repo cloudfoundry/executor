@@ -17,6 +17,8 @@ type FakeGenerator struct {
 	guidReturns struct {
 		result1 string
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeGenerator) Guid(arg1 lager.Logger) string {
@@ -24,6 +26,7 @@ func (fake *FakeGenerator) Guid(arg1 lager.Logger) string {
 	fake.guidArgsForCall = append(fake.guidArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	fake.recordInvocation("Guid", []interface{}{arg1})
 	fake.guidMutex.Unlock()
 	if fake.GuidStub != nil {
 		return fake.GuidStub(arg1)
@@ -49,6 +52,26 @@ func (fake *FakeGenerator) GuidReturns(result1 string) {
 	fake.guidReturns = struct {
 		result1 string
 	}{result1}
+}
+
+func (fake *FakeGenerator) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.guidMutex.RLock()
+	defer fake.guidMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeGenerator) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ guidgen.Generator = new(FakeGenerator)

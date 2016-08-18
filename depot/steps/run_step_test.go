@@ -30,6 +30,7 @@ var _ = Describe("RunAction", func() {
 	var gardenClient *fakes.FakeGardenClient
 	var logger *lagertest.TestLogger
 	var fileDescriptorLimit uint64
+	var processesLimit uint64
 	var externalIP string
 	var portMappings []executor.PortMapping
 	var exportNetworkEnvVars bool
@@ -40,6 +41,7 @@ var _ = Describe("RunAction", func() {
 
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
+		processesLimit = 1024
 
 		runAction = models.RunAction{
 			Path: "sudo",
@@ -51,6 +53,7 @@ var _ = Describe("RunAction", func() {
 			},
 			ResourceLimits: &models.ResourceLimits{
 				Nofile: &fileDescriptorLimit,
+				Nproc:  &processesLimit,
 			},
 			User: "notroot",
 		}
@@ -117,6 +120,7 @@ var _ = Describe("RunAction", func() {
 				Expect(spec.Args).To(Equal([]string{"reboot"}))
 				Expect(spec.Dir).To(Equal("/some-dir"))
 				Expect(*spec.Limits.Nofile).To(BeNumerically("==", fileDescriptorLimit))
+				Expect(*spec.Limits.Nproc).To(BeNumerically("==", processesLimit))
 				Expect(spec.Env).To(ContainElement("A=1"))
 				Expect(spec.Env).To(ContainElement("B=2"))
 				Expect(spec.User).To(Equal("notroot"))
@@ -243,15 +247,20 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when a file descriptor limit is not configured", func() {
+		Context("when resource limits are not configured", func() {
 			BeforeEach(func() {
 				runAction.ResourceLimits = nil
 				spawnedProcess.WaitReturns(0, nil)
 			})
 
-			It("does not enforce it on the process", func() {
+			It("does not enforce a file descriptor limit on the process", func() {
 				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Expect(spec.Limits.Nofile).To(BeNil())
+			})
+
+			It("does not enforce a process limit on the process", func() {
+				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+				Expect(spec.Limits.Nproc).To(BeNil())
 			})
 		})
 
