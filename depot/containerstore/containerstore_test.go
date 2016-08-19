@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry/dropsonde/log_sender/fake"
+	logfake "github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
+	metricfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -48,9 +50,10 @@ var _ = Describe("Container Store", func() {
 		dependencyManager *containerstorefakes.FakeDependencyManager
 		volumeManager     *volmanfakes.FakeManager
 
-		clock        *fakeclock.FakeClock
-		eventEmitter *eventfakes.FakeHub
-		fakeSender   *fake.FakeLogSender
+		clock            *fakeclock.FakeClock
+		eventEmitter     *eventfakes.FakeHub
+		fakeLogSender    *logfake.FakeLogSender
+		fakeMetricSender *metricfake.FakeMetricSender
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -59,6 +62,10 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return container.State == executor.StateCompleted
 		}
+	}
+
+	expectSentMetric := func(metricName string) {
+		Expect(fakeMetricSender.GetValue(metricName).Unit).NotTo(BeEmpty())
 	}
 
 	BeforeEach(func() {
@@ -77,8 +84,12 @@ var _ = Describe("Container Store", func() {
 		containerGuid = "container-guid"
 
 		megatron = &faketransformer.FakeTransformer{}
-		fakeSender = fake.NewFakeLogSender()
-		logs.Initialize(fakeSender)
+
+		fakeLogSender = logfake.NewFakeLogSender()
+		logs.Initialize(fakeLogSender)
+
+		fakeMetricSender = metricfake.NewFakeMetricSender()
+		dropsonde_metrics.Initialize(fakeMetricSender, nil)
 
 		containerConfig := containerstore.ContainerConfig{
 			OwnerName:              ownerName,
@@ -446,6 +457,20 @@ var _ = Describe("Container Store", func() {
 				Expect(container.ExternalIP).To(Equal(externalIP))
 			})
 
+			It("sends a metric", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				expectSentMetric(string(containerstore.GardenContainerCreationDuration))
+				expectSentMetric(string(containerstore.GardenContainerCreationSucceededDuration))
+			})
+
+			It("sends a log", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(fakeLogSender.GetLogs())).To(BeNumerically("==", 2))
+				Expect(fakeLogSender.GetLogs()[1].Message).To(ContainSubstring("Successfully created container"))
+			})
+
 			Context("when there are volume mounts configured", func() {
 
 				BeforeEach(func() {
@@ -748,6 +773,12 @@ var _ = Describe("Container Store", func() {
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
 					Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
+				})
+
+				It("sends a metric", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+					expectSentMetric(string(containerstore.GardenContainerCreationFailedDuration))
 				})
 			})
 
@@ -1180,6 +1211,13 @@ var _ = Describe("Container Store", func() {
 			Expect(err).To(Equal(executor.ErrContainerNotFound))
 		})
 
+		It("emits metrics after destroying the container", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectSentMetric(string(containerstore.GardenContainerDestructionSucceededDuration))
+		})
+
 		It("frees the containers resources", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
@@ -1222,7 +1260,7 @@ var _ = Describe("Container Store", func() {
 				It("logs the container is detrroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					logMessages := fakeSender.GetLogs()
+					logMessages := fakeLogSender.GetLogs()
 					Expect(logMessages).To(HaveLen(4))
 					emission := logMessages[2]
 					Expect(emission.AppId).To(Equal(containerGuid))
@@ -1244,6 +1282,12 @@ var _ = Describe("Container Store", func() {
 				It("returns an error", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
+				})
+
+				It("sends a metric", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).To(Equal(destroyErr))
+					expectSentMetric(string(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
 				It("does remove the container from the container store", func() {

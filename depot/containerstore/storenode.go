@@ -483,11 +483,8 @@ func setupNetOutOnContainer(logger lager.Logger, netOutRules []garden.NetOutRule
 }
 
 func sendMetricDuration(logger lager.Logger, metric metric.Duration, value time.Duration) {
-	logger.Info("JOACHIM", lager.Data{})
 	err := metric.Send(value)
-	logger.Info("JOACHIMsendmetric", lager.Data{})
 	if err != nil {
-		logger.Info("JOACHIMerrnil", lager.Data{})
 		switch metric {
 		case GardenContainerCreationDuration:
 			logger.Error("failed-to-send-garden-container-creation-duration-metric", err)
@@ -502,9 +499,7 @@ func sendMetricDuration(logger lager.Logger, metric metric.Duration, value time.
 		default:
 			logger.Error("failed-to-send-metric", err)
 		}
-		logger.Info("JOACHIMloggedit", lager.Data{})
 	}
-	logger.Info("JOACHIMdone", lager.Data{})
 }
 
 func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client) (garden.Container, error) {
