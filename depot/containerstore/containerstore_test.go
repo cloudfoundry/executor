@@ -64,8 +64,8 @@ var _ = Describe("Container Store", func() {
 		}
 	}
 
-	expectSentMetric := func(metricName string) {
-		Expect(fakeMetricSender.GetValue(metricName).Unit).NotTo(BeEmpty())
+	expectMetricInNanos := func(metricName string) {
+		Expect(fakeMetricSender.GetValue(metricName).Unit).To(Equal("nanos"))
 	}
 
 	BeforeEach(func() {
@@ -460,8 +460,8 @@ var _ = Describe("Container Store", func() {
 			It("sends a metric", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				expectSentMetric(string(containerstore.GardenContainerCreationDuration))
-				expectSentMetric(string(containerstore.GardenContainerCreationSucceededDuration))
+				expectMetricInNanos(string(containerstore.GardenContainerCreationDuration))
+				expectMetricInNanos(string(containerstore.GardenContainerCreationSucceededDuration))
 			})
 
 			It("sends a log", func() {
@@ -778,7 +778,7 @@ var _ = Describe("Container Store", func() {
 				It("sends a metric", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
-					expectSentMetric(string(containerstore.GardenContainerCreationFailedDuration))
+					expectMetricInNanos(string(containerstore.GardenContainerCreationFailedDuration))
 				})
 			})
 
@@ -1215,7 +1215,7 @@ var _ = Describe("Container Store", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectSentMetric(string(containerstore.GardenContainerDestructionSucceededDuration))
+			expectMetricInNanos(string(containerstore.GardenContainerDestructionSucceededDuration))
 		})
 
 		It("frees the containers resources", func() {
@@ -1287,7 +1287,7 @@ var _ = Describe("Container Store", func() {
 				It("sends a metric", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
-					expectSentMetric(string(containerstore.GardenContainerDestructionFailedDuration))
+					expectMetricInNanos(string(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
 				It("does remove the container from the container store", func() {
