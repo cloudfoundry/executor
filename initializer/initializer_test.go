@@ -6,8 +6,8 @@ import (
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/initializer"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry-incubator/garden"
 	fake_metric "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"

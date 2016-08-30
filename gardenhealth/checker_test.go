@@ -6,9 +6,9 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/guidgen/fakeguidgen"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry-incubator/garden"
-	gardenFakes "github.com/cloudfoundry-incubator/garden/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,7 +22,7 @@ var _ = Describe("Checker", func() {
 	)
 	var (
 		gardenChecker   gardenhealth.Checker
-		gardenClient    *gardenFakes.FakeClient
+		gardenClient    *gardenfakes.FakeClient
 		healthcheckSpec garden.ProcessSpec
 		logger          *lagertest.TestLogger
 	)
@@ -34,22 +34,22 @@ var _ = Describe("Checker", func() {
 			User: "vcap",
 		}
 		logger = lagertest.NewTestLogger("test")
-		gardenClient = &gardenFakes.FakeClient{}
+		gardenClient = &gardenfakes.FakeClient{}
 		guidGenerator := &fakeguidgen.FakeGenerator{}
 		guidGenerator.GuidReturns("abc-123")
 		gardenChecker = gardenhealth.NewChecker(rootfsPath, containerOwnerName, 0, healthcheckSpec, gardenClient, guidGenerator)
 	})
 
 	Describe("Healthcheck", func() {
-		var fakeContainer *gardenFakes.FakeContainer
-		var oldContainer *gardenFakes.FakeContainer
-		var fakeProcess *gardenFakes.FakeProcess
+		var fakeContainer *gardenfakes.FakeContainer
+		var oldContainer *gardenfakes.FakeContainer
+		var fakeProcess *gardenfakes.FakeProcess
 
 		BeforeEach(func() {
-			fakeContainer = &gardenFakes.FakeContainer{}
-			oldContainer = &gardenFakes.FakeContainer{}
+			fakeContainer = &gardenfakes.FakeContainer{}
+			oldContainer = &gardenfakes.FakeContainer{}
 			oldContainer.HandleReturns("old-guid")
-			fakeProcess = &gardenFakes.FakeProcess{}
+			fakeProcess = &gardenfakes.FakeProcess{}
 		})
 
 		Context("When garden is healthy", func() {

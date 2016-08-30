@@ -8,8 +8,8 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry-incubator/garden"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")

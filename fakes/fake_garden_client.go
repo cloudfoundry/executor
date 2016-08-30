@@ -1,9 +1,9 @@
 package fakes
 
 import (
-	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/client"
-	"github.com/cloudfoundry-incubator/garden/client/connection/fakes"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/client"
+	"code.cloudfoundry.org/garden/client/connection/fakes"
 )
 
 type FakeGardenClient struct {

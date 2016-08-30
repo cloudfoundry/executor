@@ -7,9 +7,9 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/guidgen"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/server"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry-incubator/garden"
-	"github.com/cloudfoundry-incubator/garden/server"
 )
 
 const (

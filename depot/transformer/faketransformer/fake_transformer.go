@@ -9,8 +9,8 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry-incubator/garden"
 	"github.com/tedsuo/ifrit"
 )
 

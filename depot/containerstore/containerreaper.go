@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry-incubator/garden"
 )
 
 type containerReaper struct {

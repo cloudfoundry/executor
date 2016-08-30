@@ -6,7 +6,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/initializer/configuration"
-	"github.com/cloudfoundry-incubator/garden"
+	"code.cloudfoundry.org/garden"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

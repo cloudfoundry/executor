@@ -10,15 +10,14 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/transformer"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry-incubator/garden"
 	"github.com/cloudfoundry/gunk/workpool"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
-
-	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
 )
 
 var _ = Describe("Transformer", func() {
@@ -28,12 +27,12 @@ var _ = Describe("Transformer", func() {
 			optimusPrime    transformer.Transformer
 			container       executor.Container
 			logStreamer     log_streamer.LogStreamer
-			gardenContainer *gfakes.FakeContainer
+			gardenContainer *gardenfakes.FakeContainer
 			clock           *fakeclock.FakeClock
 		)
 
 		BeforeEach(func() {
-			gardenContainer = &gfakes.FakeContainer{}
+			gardenContainer = &gardenfakes.FakeContainer{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
 			logStreamer = log_streamer.New("test", "test", 1)
@@ -93,7 +92,7 @@ var _ = Describe("Transformer", func() {
 		It("returns a step encapsulating setup, post-setup, monitor, and action", func() {
 			setupReceived := make(chan struct{})
 			postSetupReceived := make(chan struct{})
-			monitorProcess := &gfakes.FakeProcess{}
+			monitorProcess := &gardenfakes.FakeProcess{}
 			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 				if processSpec.Path == "/setup/path" {
 					setupReceived <- struct{}{}
@@ -102,7 +101,7 @@ var _ = Describe("Transformer", func() {
 				} else if processSpec.Path == "/monitor/path" {
 					return monitorProcess, nil
 				}
-				return &gfakes.FakeProcess{}, nil
+				return &gardenfakes.FakeProcess{}, nil
 			}
 
 			monitorProcess.WaitStub = func() (int, error) {
@@ -164,7 +163,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns a codependent step for the action/monitor", func() {
-				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
+				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
 				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
@@ -194,7 +193,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
-				gardenContainer.RunReturns(&gfakes.FakeProcess{}, nil)
+				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
 				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())

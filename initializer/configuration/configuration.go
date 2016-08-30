@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"code.cloudfoundry.org/executor"
-	"github.com/cloudfoundry-incubator/garden"
-	garden_client "github.com/cloudfoundry-incubator/garden/client"
+	"code.cloudfoundry.org/garden"
+	garden_client "code.cloudfoundry.org/garden/client"
 )
 
 const Automatic = "auto"

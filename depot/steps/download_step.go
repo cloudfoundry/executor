@@ -9,8 +9,8 @@ import (
 	"code.cloudfoundry.org/bytefmt"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry-incubator/garden"
 )
 
 type downloadStep struct {

@@ -13,8 +13,8 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
-	"github.com/cloudfoundry-incubator/garden"
-	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/gardenfakes"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
@@ -36,7 +36,7 @@ var _ = Describe("RunAction", func() {
 	var exportNetworkEnvVars bool
 	var fakeClock *fakeclock.FakeClock
 
-	var spawnedProcess *gfakes.FakeProcess
+	var spawnedProcess *gardenfakes.FakeProcess
 	var runError error
 
 	BeforeEach(func() {
@@ -64,7 +64,7 @@ var _ = Describe("RunAction", func() {
 
 		logger = lagertest.NewTestLogger("test")
 
-		spawnedProcess = new(gfakes.FakeProcess)
+		spawnedProcess = new(gardenfakes.FakeProcess)
 		runError = nil
 
 		gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {

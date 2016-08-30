@@ -21,14 +21,14 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
+	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
-	"github.com/cloudfoundry-incubator/garden"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
-	gfakes "github.com/cloudfoundry-incubator/garden/fakes"
-	"github.com/cloudfoundry-incubator/garden/server"
+	"code.cloudfoundry.org/garden/gardenfakes"
+	"code.cloudfoundry.org/garden/server"
 )
 
 var _ = Describe("Container Store", func() {
@@ -42,8 +42,8 @@ var _ = Describe("Container Store", func() {
 
 		containerGuid string
 
-		gardenClient      *gfakes.FakeClient
-		gardenContainer   *gfakes.FakeContainer
+		gardenClient      *gardenfakes.FakeClient
+		gardenContainer   *gardenfakes.FakeContainer
 		megatron          *faketransformer.FakeTransformer
 		dependencyManager *containerstorefakes.FakeDependencyManager
 		volumeManager     *volmanfakes.FakeManager
@@ -62,8 +62,8 @@ var _ = Describe("Container Store", func() {
 	}
 
 	BeforeEach(func() {
-		gardenContainer = &gfakes.FakeContainer{}
-		gardenClient = &gfakes.FakeClient{}
+		gardenContainer = &gardenfakes.FakeContainer{}
+		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -800,7 +800,7 @@ var _ = Describe("Container Store", func() {
 	Describe("Run", func() {
 		var (
 			allocationReq *executor.AllocationRequest
-			runProcess    *gfakes.FakeProcess
+			runProcess    *gardenfakes.FakeProcess
 		)
 
 		BeforeEach(func() {
@@ -808,7 +808,7 @@ var _ = Describe("Container Store", func() {
 				Guid: containerGuid,
 			}
 
-			runProcess = &gfakes.FakeProcess{}
+			runProcess = &gardenfakes.FakeProcess{}
 
 			gardenContainer.RunReturns(runProcess, nil)
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -1663,7 +1663,7 @@ var _ = Describe("Container Store", func() {
 			containerGuid1, containerGuid2, containerGuid3 string
 			containerGuid4, containerGuid5, containerGuid6 string
 			process                                        ifrit.Process
-			extraGardenContainer                           *gfakes.FakeContainer
+			extraGardenContainer                           *gardenfakes.FakeContainer
 		)
 
 		BeforeEach(func() {
@@ -1716,7 +1716,7 @@ var _ = Describe("Container Store", func() {
 
 			Eventually(eventEmitter.EmitCallCount).Should(Equal(7))
 
-			extraGardenContainer = &gfakes.FakeContainer{}
+			extraGardenContainer = &gardenfakes.FakeContainer{}
 			extraGardenContainer.HandleReturns("foobar")
 			gardenContainer.HandleReturns(containerGuid3)
 			gardenContainers := []garden.Container{gardenContainer, extraGardenContainer}
