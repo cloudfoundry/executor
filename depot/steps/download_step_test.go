@@ -265,7 +265,6 @@ var _ = Describe("DownloadAction", func() {
 					It("truncates the error", func() {
 
 						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
-						println(stderr.Contents())
 						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
 						Expect(stderr.Contents()).To(ContainSubstring("(error truncated)"))
 						Expect([]byte(stderr.Contents())).Should(HaveLen(1024))
