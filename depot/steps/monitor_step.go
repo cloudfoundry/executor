@@ -7,7 +7,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry/gunk/workpool"
+	"code.cloudfoundry.org/workpool"
 )
 
 func invalidInterval(field string, interval time.Duration) error {

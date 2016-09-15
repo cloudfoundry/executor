@@ -16,7 +16,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry/gunk/workpool"
+	"code.cloudfoundry.org/workpool"
 	"github.com/tedsuo/ifrit"
 )
 

@@ -28,7 +28,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/volman/vollocal"
-	"github.com/cloudfoundry/gunk/workpool"
+	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/systemcerts"
 	"github.com/google/shlex"
 	"github.com/tedsuo/ifrit"
