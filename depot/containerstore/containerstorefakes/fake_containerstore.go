@@ -130,11 +130,13 @@ type FakeContainerStore struct {
 	newContainerReaperReturns struct {
 		result1 ifrit.Runner
 	}
-	CleanupStub        func()
+	CleanupStub        func(logger lager.Logger)
 	cleanupMutex       sync.RWMutex
-	cleanupArgsForCall []struct{}
-	invocations        map[string][][]interface{}
-	invocationsMutex   sync.RWMutex
+	cleanupArgsForCall []struct {
+		logger lager.Logger
+	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeContainerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
@@ -580,13 +582,15 @@ func (fake *FakeContainerStore) NewContainerReaperReturns(result1 ifrit.Runner) 
 	}{result1}
 }
 
-func (fake *FakeContainerStore) Cleanup() {
+func (fake *FakeContainerStore) Cleanup(logger lager.Logger) {
 	fake.cleanupMutex.Lock()
-	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct{}{})
-	fake.recordInvocation("Cleanup", []interface{}{})
+	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.recordInvocation("Cleanup", []interface{}{logger})
 	fake.cleanupMutex.Unlock()
 	if fake.CleanupStub != nil {
-		fake.CleanupStub()
+		fake.CleanupStub(logger)
 	}
 }
 
@@ -594,6 +598,12 @@ func (fake *FakeContainerStore) CleanupCallCount() int {
 	fake.cleanupMutex.RLock()
 	defer fake.cleanupMutex.RUnlock()
 	return len(fake.cleanupArgsForCall)
+}
+
+func (fake *FakeContainerStore) CleanupArgsForCall(i int) lager.Logger {
+	fake.cleanupMutex.RLock()
+	defer fake.cleanupMutex.RUnlock()
+	return fake.cleanupArgsForCall[i].logger
 }
 
 func (fake *FakeContainerStore) Invocations() map[string][][]interface{} {

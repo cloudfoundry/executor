@@ -46,7 +46,7 @@ type ContainerStore interface {
 	NewContainerReaper(logger lager.Logger) ifrit.Runner
 
 	// shutdown the dependency manager
-	Cleanup()
+	Cleanup(logger lager.Logger)
 }
 
 type ContainerConfig struct {
@@ -95,8 +95,8 @@ func New(
 	}
 }
 
-func (cs *containerStore) Cleanup() {
-	cs.dependencyManager.Stop()
+func (cs *containerStore) Cleanup(logger lager.Logger) {
+	cs.dependencyManager.Stop(logger)
 }
 
 func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {

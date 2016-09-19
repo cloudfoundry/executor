@@ -17,7 +17,7 @@ import (
 type DependencyManager interface {
 	DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
 	ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error
-	Stop()
+	Stop(logger lager.Logger)
 }
 
 type dependencyManager struct {
@@ -29,8 +29,13 @@ func NewDependencyManager(cache cacheddownloader.CachedDownloader, downloadRateL
 	return &dependencyManager{cache, downloadRateLimiter}
 }
 
-func (bm *dependencyManager) Stop() {
-	bm.cache.SaveState()
+func (bm *dependencyManager) Stop(logger lager.Logger) {
+	logger.Debug("stopping")
+	defer logger.Debug("stopping-complete")
+	err := bm.cache.SaveState()
+	if err != nil {
+		logger.Error("failed-saving-cache-state", err, lager.Data{"err": err})
+	}
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {

@@ -31,9 +31,11 @@ type FakeDependencyManager struct {
 	releaseCachedDependenciesReturns struct {
 		result1 error
 	}
-	StopStub         func()
-	stopMutex        sync.RWMutex
-	stopArgsForCall  []struct{}
+	StopStub        func(logger lager.Logger)
+	stopMutex       sync.RWMutex
+	stopArgsForCall []struct {
+		logger lager.Logger
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
@@ -118,13 +120,15 @@ func (fake *FakeDependencyManager) ReleaseCachedDependenciesReturns(result1 erro
 	}{result1}
 }
 
-func (fake *FakeDependencyManager) Stop() {
+func (fake *FakeDependencyManager) Stop(logger lager.Logger) {
 	fake.stopMutex.Lock()
-	fake.stopArgsForCall = append(fake.stopArgsForCall, struct{}{})
-	fake.recordInvocation("Stop", []interface{}{})
+	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
+		logger lager.Logger
+	}{logger})
+	fake.recordInvocation("Stop", []interface{}{logger})
 	fake.stopMutex.Unlock()
 	if fake.StopStub != nil {
-		fake.StopStub()
+		fake.StopStub(logger)
 	}
 }
 
@@ -132,6 +136,12 @@ func (fake *FakeDependencyManager) StopCallCount() int {
 	fake.stopMutex.RLock()
 	defer fake.stopMutex.RUnlock()
 	return len(fake.stopArgsForCall)
+}
+
+func (fake *FakeDependencyManager) StopArgsForCall(i int) lager.Logger {
+	fake.stopMutex.RLock()
+	defer fake.stopMutex.RUnlock()
+	return fake.stopArgsForCall[i].logger
 }
 
 func (fake *FakeDependencyManager) Invocations() map[string][][]interface{} {
