@@ -65,7 +65,7 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 		if !r.containers.Contains(key) {
 			err := r.gardenClient.Destroy(key)
 			if err != nil {
-				logger.Error("failed-to-destroy-container", err)
+				logger.Error("failed-to-destroy-container", err, lager.Data{"handle": key})
 			}
 		}
 	}
