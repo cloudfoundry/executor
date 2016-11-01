@@ -453,15 +453,13 @@ func setupNetInOnContainer(logger lager.Logger, ports []executor.PortMapping, ga
 }
 
 func setupNetOutOnContainer(logger lager.Logger, netOutRules []garden.NetOutRule, gardenContainer garden.Container) error {
-	for i := range netOutRules {
-		logger.Debug("net-out")
-		err := gardenContainer.NetOut(netOutRules[i])
-		if err != nil {
-			logger.Error("net-out-failed", err)
-			return err
-		}
-		logger.Debug("net-out-complete")
+	logger.Debug("net-out")
+	err := gardenContainer.BulkNetOut(netOutRules)
+	if err != nil {
+		logger.Error("net-out-failed", err)
+		return err
 	}
+	logger.Debug("net-out-complete")
 	return nil
 }
 

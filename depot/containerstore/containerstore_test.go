@@ -594,17 +594,13 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(gardenContainer.NetOutCallCount()).To(Equal(2))
+					Expect(gardenContainer.BulkNetOutCallCount()).To(Equal(1))
 				})
 
 				Context("when NetOut fails", func() {
 					BeforeEach(func() {
-						gardenContainer.NetOutStub = func(garden.NetOutRule) error {
-							if gardenContainer.NetOutCallCount() == 1 {
-								return nil
-							} else {
-								return errors.New("failed net out!")
-							}
+						gardenContainer.BulkNetOutStub = func([]garden.NetOutRule) error {
+							return errors.New("failed net out!")
 						}
 					})
 
