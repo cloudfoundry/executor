@@ -26,6 +26,7 @@ type runStep struct {
 	streamer             log_streamer.LogStreamer
 	logger               lager.Logger
 	externalIP           string
+	internalIP           string
 	portMappings         []executor.PortMapping
 	exportNetworkEnvVars bool
 	clock                clock.Clock
@@ -39,6 +40,7 @@ func NewRun(
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
 	externalIP string,
+	internalIP string,
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
@@ -50,6 +52,7 @@ func NewRun(
 		streamer:             streamer,
 		logger:               logger,
 		externalIP:           externalIP,
+		internalIP:           internalIP,
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		clock:                clock,
@@ -229,6 +232,7 @@ func (step *runStep) networkingEnvVars() []string {
 	var envVars []string
 
 	envVars = append(envVars, "CF_INSTANCE_IP="+step.externalIP)
+	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IP="+step.internalIP)
 
 	if len(step.portMappings) > 0 {
 		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))

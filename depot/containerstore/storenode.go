@@ -256,12 +256,13 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	externalIP, err := fetchExternalIp(logger, gardenContainer)
+	externalIP, containerIP, err := fetchIPs(logger, gardenContainer)
 	if err != nil {
 		n.destroyContainer(logger)
 		return nil, err
 	}
 	info.ExternalIP = externalIP
+	info.InternalIP = containerIP
 
 	err = info.TransistionToCreate()
 	if err != nil {
@@ -519,14 +520,14 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 	return container, nil
 }
 
-func fetchExternalIp(logger lager.Logger, gardenContainer garden.Container) (string, error) {
+func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, string, error) {
 	logger.Debug("container-info")
 	gardenInfo, err := gardenContainer.Info()
 	if err != nil {
 		logger.Error("failed-container-info", err)
-		return "", err
+		return "", "", err
 	}
 	logger.Debug("container-info-complete")
 
-	return gardenInfo.ExternalIP, nil
+	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
 }

@@ -38,6 +38,7 @@ type Container struct {
 	State       State              `json:"state"`
 	AllocatedAt int64              `json:"allocated_at"`
 	ExternalIP  string             `json:"external_ip"`
+	InternalIP  string             `json:"internal_ip"`
 	RunResult   ContainerRunResult `json:"run_result"`
 	MemoryLimit uint64             `json:"memory_limit"`
 	DiskLimit   uint64             `json:"disk_limit"`

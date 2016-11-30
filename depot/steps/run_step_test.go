@@ -23,21 +23,22 @@ import (
 )
 
 var _ = Describe("RunAction", func() {
-	var step steps.Step
+	var (
+		step steps.Step
 
-	var runAction models.RunAction
-	var fakeStreamer *fake_log_streamer.FakeLogStreamer
-	var gardenClient *fakes.FakeGardenClient
-	var logger *lagertest.TestLogger
-	var fileDescriptorLimit uint64
-	var processesLimit uint64
-	var externalIP string
-	var portMappings []executor.PortMapping
-	var exportNetworkEnvVars bool
-	var fakeClock *fakeclock.FakeClock
+		runAction                           models.RunAction
+		fakeStreamer                        *fake_log_streamer.FakeLogStreamer
+		gardenClient                        *fakes.FakeGardenClient
+		logger                              *lagertest.TestLogger
+		fileDescriptorLimit, processesLimit uint64
+		externalIP, internalIP              string
+		portMappings                        []executor.PortMapping
+		exportNetworkEnvVars                bool
+		fakeClock                           *fakeclock.FakeClock
 
-	var spawnedProcess *gardenfakes.FakeProcess
-	var runError error
+		spawnedProcess *gardenfakes.FakeProcess
+		runError       error
+	)
 
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
@@ -72,6 +73,7 @@ var _ = Describe("RunAction", func() {
 		}
 
 		externalIP = "external-ip"
+		internalIP = "internal-ip"
 		portMappings = nil
 		exportNetworkEnvVars = false
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
@@ -91,6 +93,7 @@ var _ = Describe("RunAction", func() {
 			fakeStreamer,
 			logger,
 			externalIP,
+			internalIP,
 			portMappings,
 			exportNetworkEnvVars,
 			fakeClock,
@@ -195,6 +198,11 @@ var _ = Describe("RunAction", func() {
 				It("sets CF_INSTANCE_IP on the container", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 					Expect(spec.Env).To(ContainElement("CF_INSTANCE_IP=external-ip"))
+				})
+
+				It("sets CF_INSTANCE_INTERNAL_IP on the container", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IP=internal-ip"))
 				})
 
 				Context("when the container has port mappings configured", func() {

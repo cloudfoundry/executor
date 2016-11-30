@@ -301,12 +301,13 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container is initializing", func() {
 			var (
-				externalIP string
-				runReq     *executor.RunRequest
+				externalIP, internalIP string
+				runReq                 *executor.RunRequest
 			)
 
 			BeforeEach(func() {
 				externalIP = "6.6.6.6"
+				internalIP = "7.7.7.7"
 				env := []executor.EnvironmentVariable{
 					{Name: "foo", Value: "bar"},
 					{Name: "beep", Value: "booop"},
@@ -342,7 +343,7 @@ var _ = Describe("Container Store", func() {
 					RunInfo: runInfo,
 				}
 
-				gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: externalIP}, nil)
+				gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: externalIP, ContainerIP: internalIP}, nil)
 				gardenClient.CreateReturns(gardenContainer, nil)
 			})
 
@@ -451,10 +452,11 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Env).To(Equal(expectedEnv))
 			})
 
-			It("sets the correct external ip", func() {
+			It("sets the correct external and internal ip", func() {
 				container, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.ExternalIP).To(Equal(externalIP))
+				Expect(container.InternalIP).To(Equal(internalIP))
 			})
 
 			It("emits metrics after creating the container", func() {
@@ -778,7 +780,7 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
-			Context("when requesting the external IP for the created fails", func() {
+			Context("when requesting the container info for the created container fails", func() {
 				BeforeEach(func() {
 					gardenContainer.InfoReturns(garden.ContainerInfo{}, errors.New("could not obtain info"))
 				})

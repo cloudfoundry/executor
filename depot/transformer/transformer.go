@@ -25,7 +25,7 @@ var ErrNoCheck = errors.New("no check configured")
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, []executor.PortMapping, lager.Logger) steps.Step
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, lager.Logger) steps.Step
 	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
@@ -87,6 +87,7 @@ func (t *transformer) StepFor(
 	action *models.Action,
 	container garden.Container,
 	externalIP string,
+	internalIP string,
 	ports []executor.PortMapping,
 	logger lager.Logger,
 ) steps.Step {
@@ -99,6 +100,7 @@ func (t *transformer) StepFor(
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
 			externalIP,
+			internalIP,
 			ports,
 			t.exportNetworkEnvVars,
 			t.clock,
@@ -133,6 +135,7 @@ func (t *transformer) StepFor(
 				actionModel.Action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			),
@@ -150,6 +153,7 @@ func (t *transformer) StepFor(
 				actionModel.Action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			),
@@ -164,6 +168,7 @@ func (t *transformer) StepFor(
 				actionModel.Action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			),
@@ -178,6 +183,7 @@ func (t *transformer) StepFor(
 				action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			)
@@ -192,6 +198,7 @@ func (t *transformer) StepFor(
 				action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			)
@@ -207,6 +214,7 @@ func (t *transformer) StepFor(
 				action,
 				container,
 				externalIP,
+				internalIP,
 				ports,
 				logger,
 			)
@@ -230,6 +238,7 @@ func (t *transformer) StepsRunner(
 			container.Setup,
 			gardenContainer,
 			container.ExternalIP,
+			container.InternalIP,
 			container.Ports,
 			logger.Session("setup"),
 		)
@@ -247,6 +256,7 @@ func (t *transformer) StepsRunner(
 			log_streamer.NewNoopStreamer(),
 			logger,
 			container.ExternalIP,
+			container.InternalIP,
 			container.Ports,
 			t.exportNetworkEnvVars,
 			t.clock,
@@ -264,6 +274,7 @@ func (t *transformer) StepsRunner(
 		container.Action,
 		gardenContainer,
 		container.ExternalIP,
+		container.InternalIP,
 		container.Ports,
 		logger.Session("action"),
 	)
@@ -278,6 +289,7 @@ func (t *transformer) StepsRunner(
 					container.Monitor,
 					gardenContainer,
 					container.ExternalIP,
+					container.InternalIP,
 					container.Ports,
 					logger.Session("monitor-run"),
 				)
