@@ -1,7 +1,9 @@
 package initializer
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -54,100 +56,81 @@ func (containers *executorContainers) Containers() ([]garden.Container, error) {
 	})
 }
 
-type Configuration struct {
-	GardenNetwork string
-	GardenAddr    string
+type Duration time.Duration
 
-	ContainerOwnerName            string
-	HealthCheckContainerOwnerName string
+func (d *Duration) UnmarshalJSON(data []byte) error {
+	var s string
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
 
-	TempDir              string
-	CachePath            string
-	MaxCacheSizeInBytes  uint64
-	SkipCertVerify       bool
-	CACertsForDownloads  []byte
-	ExportNetworkEnvVars bool
+	dur, err := time.ParseDuration(s)
+	if err != nil {
+		return err
+	}
 
-	VolmanDriverPaths []string
-
-	ContainerMaxCpuShares       uint64
-	ContainerInodeLimit         uint64
-	HealthyMonitoringInterval   time.Duration
-	UnhealthyMonitoringInterval time.Duration
-	HealthCheckWorkPoolSize     int
-
-	MaxConcurrentDownloads int
-
-	CreateWorkPoolSize  int
-	DeleteWorkPoolSize  int
-	ReadWorkPoolSize    int
-	MetricsWorkPoolSize int
-
-	ReservedExpirationTime time.Duration
-	ContainerReapInterval  time.Duration
-
-	GardenHealthcheckRootFS            string
-	GardenHealthcheckInterval          time.Duration
-	GardenHealthcheckEmissionInterval  time.Duration
-	GardenHealthcheckTimeout           time.Duration
-	GardenHealthcheckCommandRetryPause time.Duration
-
-	GardenHealthcheckProcessPath string
-	GardenHealthcheckProcessArgs []string
-	GardenHealthcheckProcessUser string
-	GardenHealthcheckProcessEnv  []string
-	GardenHealthcheckProcessDir  string
-
-	MemoryMB string
-	DiskMB   string
-
-	PostSetupHook string
-	PostSetupUser string
-
-	TrustedSystemCertificatesPath  string
-	ContainerMetricsReportInterval time.Duration
+	*d = Duration(dur)
+	return nil
 }
 
-const (
-	defaultMaxConcurrentDownloads  = 5
-	defaultCreateWorkPoolSize      = 32
-	defaultDeleteWorkPoolSize      = 32
-	defaultReadWorkPoolSize        = 64
-	defaultMetricsWorkPoolSize     = 8
-	defaultHealthCheckWorkPoolSize = 64
-)
+func (d *Duration) MarshalJSON() ([]byte, error) {
+	t := time.Duration(*d)
+	return []byte(fmt.Sprintf(`"%s"`, t.String())), nil
+}
 
-var DefaultConfiguration = Configuration{
-	GardenNetwork:                      "unix",
-	GardenAddr:                         "/tmp/garden.sock",
-	MemoryMB:                           configuration.Automatic,
-	DiskMB:                             configuration.Automatic,
-	TempDir:                            "/tmp",
-	ReservedExpirationTime:             time.Minute,
-	ContainerReapInterval:              time.Minute,
-	ContainerInodeLimit:                200000,
-	ContainerMaxCpuShares:              0,
-	CachePath:                          "/tmp/cache",
-	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
-	SkipCertVerify:                     false,
-	HealthyMonitoringInterval:          30 * time.Second,
-	UnhealthyMonitoringInterval:        500 * time.Millisecond,
-	ExportNetworkEnvVars:               false,
-	ContainerOwnerName:                 "executor",
-	HealthCheckContainerOwnerName:      "executor-health-check",
-	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
-	DeleteWorkPoolSize:                 defaultDeleteWorkPoolSize,
-	ReadWorkPoolSize:                   defaultReadWorkPoolSize,
-	MetricsWorkPoolSize:                defaultMetricsWorkPoolSize,
-	HealthCheckWorkPoolSize:            defaultHealthCheckWorkPoolSize,
-	MaxConcurrentDownloads:             defaultMaxConcurrentDownloads,
-	GardenHealthcheckInterval:          10 * time.Minute,
-	GardenHealthcheckEmissionInterval:  30 * time.Second,
-	GardenHealthcheckTimeout:           10 * time.Minute,
-	GardenHealthcheckCommandRetryPause: time.Second,
-	GardenHealthcheckProcessArgs:       []string{},
-	GardenHealthcheckProcessEnv:        []string{},
-	ContainerMetricsReportInterval:     15 * time.Second,
+type Configuration struct {
+	GardenNetwork string `json:"garden_network"`
+	GardenAddr    string `json:"garden_addr"`
+
+	ContainerOwnerName            string `json:"container_owner_name"`
+	HealthCheckContainerOwnerName string `json:"healthcheck_container_owner_name"`
+
+	TempDir              string `json:"temp_dir"`
+	CachePath            string `json:"cache_path"`
+	MaxCacheSizeInBytes  uint64 `json:"max_cache_in_bytes"`
+	SkipCertVerify       bool   `json:"skip_cert_verify"`
+	CACertsForDownloads  []byte `json:"ca_certs_for_downloads"`
+	ExportNetworkEnvVars bool   `json:"export_network_env_vars"`
+
+	VolmanDriverPaths []string `json:"volman_driver_paths"`
+
+	ContainerMaxCpuShares       uint64   `json:"container_max_cpu_shares"`
+	ContainerInodeLimit         uint64   `json:"container_inode_limit"`
+	HealthyMonitoringInterval   Duration `json:"healthy_monitoring_interval"`
+	UnhealthyMonitoringInterval Duration `json:"unhealthy_monitoring_interval"`
+	HealthCheckWorkPoolSize     int      `json:"healthcheck_work_pool_size"`
+
+	MaxConcurrentDownloads int `json:"max_concurrent_downloads"`
+
+	CreateWorkPoolSize  int `json:"create_work_pool_size"`
+	DeleteWorkPoolSize  int `json:"delete_work_pool_size"`
+	ReadWorkPoolSize    int `json:"read_work_pool_size"`
+	MetricsWorkPoolSize int `json:"metrics_work_pool_size"`
+
+	ReservedExpirationTime Duration `json:"reserved_expiration_time"`
+	ContainerReapInterval  Duration `json:"container_reap_interval"`
+
+	GardenHealthcheckRootFS            string   `json:"garden_healthcheck_rootfs"`
+	GardenHealthcheckInterval          Duration `json:"garden_healthcheck_interval"`
+	GardenHealthcheckEmissionInterval  Duration `json:"garden_healthcheck_emission_interval"`
+	GardenHealthcheckTimeout           Duration `json:"garden_healthcheck_timeout"`
+	GardenHealthcheckCommandRetryPause Duration `json:"garden_healthcheck_command_retry_pause"`
+
+	GardenHealthcheckProcessPath string   `json:"garden_healthcheck_process_path"`
+	GardenHealthcheckProcessArgs []string `json:"garden_healthcheck_process_args"`
+	GardenHealthcheckProcessUser string   `json:"garden_healthcheck_process_user"`
+	GardenHealthcheckProcessEnv  []string `json:"garden_healthcheck_process_env"`
+	GardenHealthcheckProcessDir  string   `json:"garden_healthcheck_process_dir"`
+
+	MemoryMB string `json:"memory_mb"`
+	DiskMB   string `json:"disk_mb"`
+
+	PostSetupHook string `json:"post_setup_hook"`
+	PostSetupUser string `json:"post_setup_user"`
+
+	TrustedSystemCertificatesPath  string   `json:"trusted_system_certificates_path"`
+	ContainerMetricsReportInterval Duration `json:"container_metrics_report_interval"`
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -214,8 +197,8 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		maxConcurrentUploads,
 		config.SkipCertVerify,
 		config.ExportNetworkEnvVars,
-		config.HealthyMonitoringInterval,
-		config.UnhealthyMonitoringInterval,
+		time.Duration(config.HealthyMonitoringInterval),
+		time.Duration(config.UnhealthyMonitoringInterval),
 		healthCheckWorkPool,
 		clock,
 		postSetupHook,
@@ -230,8 +213,8 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		OwnerName:              config.ContainerOwnerName,
 		INodeLimit:             config.ContainerInodeLimit,
 		MaxCPUShares:           config.ContainerMaxCpuShares,
-		ReservedExpirationTime: config.ReservedExpirationTime,
-		ReapInterval:           config.ContainerReapInterval,
+		ReservedExpirationTime: time.Duration(config.ReservedExpirationTime),
+		ReapInterval:           time.Duration(config.ContainerReapInterval),
 	}
 
 	driverConfig := vollocal.NewDriverConfig()
@@ -277,7 +260,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	gardenHealthcheck := gardenhealth.NewChecker(
 		config.GardenHealthcheckRootFS,
 		config.HealthCheckContainerOwnerName,
-		config.GardenHealthcheckCommandRetryPause,
+		time.Duration(config.GardenHealthcheckCommandRetryPause),
 		healthcheckSpec,
 		gardenClient,
 		guidgen.DefaultGenerator,
@@ -295,14 +278,14 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 			{"hub-closer", closeHub(hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
 				logger,
-				config.ContainerMetricsReportInterval,
+				time.Duration(config.ContainerMetricsReportInterval),
 				clock,
 				depotClient,
 			)},
 			{"garden_health_checker", gardenhealth.NewRunner(
-				config.GardenHealthcheckInterval,
-				config.GardenHealthcheckEmissionInterval,
-				config.GardenHealthcheckTimeout,
+				time.Duration(config.GardenHealthcheckInterval),
+				time.Duration(config.GardenHealthcheckEmissionInterval),
+				time.Duration(config.GardenHealthcheckTimeout),
 				logger,
 				gardenHealthcheck,
 				depotClient,
