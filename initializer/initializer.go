@@ -80,57 +80,45 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 type Configuration struct {
-	GardenNetwork string `json:"garden_network"`
-	GardenAddr    string `json:"garden_addr"`
-
-	ContainerOwnerName            string `json:"container_owner_name"`
-	HealthCheckContainerOwnerName string `json:"healthcheck_container_owner_name"`
-
-	TempDir              string `json:"temp_dir"`
-	CachePath            string `json:"cache_path"`
-	MaxCacheSizeInBytes  uint64 `json:"max_cache_in_bytes"`
-	SkipCertVerify       bool   `json:"skip_cert_verify"`
-	CACertsForDownloads  []byte `json:"ca_certs_for_downloads"`
-	ExportNetworkEnvVars bool   `json:"export_network_env_vars"`
-
-	VolmanDriverPaths []string `json:"volman_driver_paths"`
-
-	ContainerMaxCpuShares       uint64   `json:"container_max_cpu_shares"`
-	ContainerInodeLimit         uint64   `json:"container_inode_limit"`
-	HealthyMonitoringInterval   Duration `json:"healthy_monitoring_interval"`
-	UnhealthyMonitoringInterval Duration `json:"unhealthy_monitoring_interval"`
-	HealthCheckWorkPoolSize     int      `json:"healthcheck_work_pool_size"`
-
-	MaxConcurrentDownloads int `json:"max_concurrent_downloads"`
-
-	CreateWorkPoolSize  int `json:"create_work_pool_size"`
-	DeleteWorkPoolSize  int `json:"delete_work_pool_size"`
-	ReadWorkPoolSize    int `json:"read_work_pool_size"`
-	MetricsWorkPoolSize int `json:"metrics_work_pool_size"`
-
-	ReservedExpirationTime Duration `json:"reserved_expiration_time"`
-	ContainerReapInterval  Duration `json:"container_reap_interval"`
-
-	GardenHealthcheckRootFS            string   `json:"garden_healthcheck_rootfs"`
-	GardenHealthcheckInterval          Duration `json:"garden_healthcheck_interval"`
-	GardenHealthcheckEmissionInterval  Duration `json:"garden_healthcheck_emission_interval"`
-	GardenHealthcheckTimeout           Duration `json:"garden_healthcheck_timeout"`
-	GardenHealthcheckCommandRetryPause Duration `json:"garden_healthcheck_command_retry_pause"`
-
-	GardenHealthcheckProcessPath string   `json:"garden_healthcheck_process_path"`
-	GardenHealthcheckProcessArgs []string `json:"garden_healthcheck_process_args"`
-	GardenHealthcheckProcessUser string   `json:"garden_healthcheck_process_user"`
-	GardenHealthcheckProcessEnv  []string `json:"garden_healthcheck_process_env"`
-	GardenHealthcheckProcessDir  string   `json:"garden_healthcheck_process_dir"`
-
-	MemoryMB string `json:"memory_mb"`
-	DiskMB   string `json:"disk_mb"`
-
-	PostSetupHook string `json:"post_setup_hook"`
-	PostSetupUser string `json:"post_setup_user"`
-
-	TrustedSystemCertificatesPath  string   `json:"trusted_system_certificates_path"`
-	ContainerMetricsReportInterval Duration `json:"container_metrics_report_interval"`
+	CACertsForDownloads                []byte
+	CachePath                          string
+	ContainerInodeLimit                uint64
+	ContainerMaxCpuShares              uint64
+	ContainerMetricsReportInterval     Duration
+	ContainerOwnerName                 string
+	ContainerReapInterval              Duration
+	CreateWorkPoolSize                 int
+	DeleteWorkPoolSize                 int
+	DiskMB                             string
+	ExportNetworkEnvVars               bool
+	GardenAddr                         string
+	GardenHealthcheckCommandRetryPause Duration
+	GardenHealthcheckEmissionInterval  Duration
+	GardenHealthcheckInterval          Duration
+	GardenHealthcheckProcessArgs       []string
+	GardenHealthcheckProcessDir        string
+	GardenHealthcheckProcessEnv        []string
+	GardenHealthcheckProcessPath       string
+	GardenHealthcheckProcessUser       string
+	GardenHealthcheckTimeout           Duration
+	GardenHealthcheckRootFS            string
+	GardenNetwork                      string
+	HealthCheckContainerOwnerName      string
+	HealthCheckWorkPoolSize            int
+	HealthyMonitoringInterval          Duration
+	MaxCacheSizeInBytes                uint64
+	MaxConcurrentDownloads             int
+	MemoryMB                           string
+	MetricsWorkPoolSize                int
+	PostSetupHook                      string
+	PostSetupUser                      string
+	ReadWorkPoolSize                   int
+	ReservedExpirationTime             Duration
+	SkipCertVerify                     bool
+	TempDir                            string
+	TrustedSystemCertificatesPath      string
+	UnhealthyMonitoringInterval        Duration
+	VolmanDriverPaths                  []string
 }
 
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {

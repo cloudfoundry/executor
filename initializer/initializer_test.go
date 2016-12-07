@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/initializer"
+	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/lagertest"
 	fake_metric "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -38,7 +39,38 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
 			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-		config = initializer.DefaultConfiguration
+		config = initializer.Configuration{
+			CachePath:                          "/tmp/cache",
+			ContainerInodeLimit:                200000,
+			ContainerMaxCpuShares:              0,
+			ContainerMetricsReportInterval:     initializer.Duration(15 * time.Second),
+			ContainerOwnerName:                 "executor",
+			ContainerReapInterval:              initializer.Duration(time.Minute),
+			CreateWorkPoolSize:                 32,
+			DeleteWorkPoolSize:                 32,
+			DiskMB:                             configuration.Automatic,
+			ExportNetworkEnvVars:               false,
+			GardenAddr:                         "/tmp/garden.sock",
+			GardenHealthcheckCommandRetryPause: initializer.Duration(1 * time.Second),
+			GardenHealthcheckEmissionInterval:  initializer.Duration(30 * time.Second),
+			GardenHealthcheckInterval:          initializer.Duration(10 * time.Minute),
+			GardenHealthcheckProcessArgs:       []string{},
+			GardenHealthcheckProcessEnv:        []string{},
+			GardenHealthcheckTimeout:           initializer.Duration(10 * time.Minute),
+			GardenNetwork:                      "unix",
+			HealthCheckContainerOwnerName:      "executor-health-check",
+			HealthCheckWorkPoolSize:            64,
+			HealthyMonitoringInterval:          initializer.Duration(30 * time.Second),
+			MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
+			MaxConcurrentDownloads:             5,
+			MemoryMB:                           configuration.Automatic,
+			MetricsWorkPoolSize:                8,
+			ReadWorkPoolSize:                   64,
+			ReservedExpirationTime:             initializer.Duration(time.Minute),
+			SkipCertVerify:                     false,
+			TempDir:                            "/tmp",
+			UnhealthyMonitoringInterval:        initializer.Duration(500 * time.Millisecond),
+		}
 	})
 
 	AfterEach(func() {
