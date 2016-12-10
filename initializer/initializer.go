@@ -121,6 +121,48 @@ type Configuration struct {
 	VolmanDriverPaths                  []string
 }
 
+const (
+	defaultMaxConcurrentDownloads  = 5
+	defaultCreateWorkPoolSize      = 32
+	defaultDeleteWorkPoolSize      = 32
+	defaultReadWorkPoolSize        = 64
+	defaultMetricsWorkPoolSize     = 8
+	defaultHealthCheckWorkPoolSize = 64
+)
+
+var DefaultConfiguration = Configuration{
+	GardenNetwork:                      "unix",
+	GardenAddr:                         "/tmp/garden.sock",
+	MemoryMB:                           configuration.Automatic,
+	DiskMB:                             configuration.Automatic,
+	TempDir:                            "/tmp",
+	ReservedExpirationTime:             Duration(time.Minute),
+	ContainerReapInterval:              Duration(time.Minute),
+	ContainerInodeLimit:                200000,
+	ContainerMaxCpuShares:              0,
+	CachePath:                          "/tmp/cache",
+	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
+	SkipCertVerify:                     false,
+	HealthyMonitoringInterval:          Duration(30 * time.Second),
+	UnhealthyMonitoringInterval:        Duration(500 * time.Millisecond),
+	ExportNetworkEnvVars:               false,
+	ContainerOwnerName:                 "executor",
+	HealthCheckContainerOwnerName:      "executor-health-check",
+	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
+	DeleteWorkPoolSize:                 defaultDeleteWorkPoolSize,
+	ReadWorkPoolSize:                   defaultReadWorkPoolSize,
+	MetricsWorkPoolSize:                defaultMetricsWorkPoolSize,
+	HealthCheckWorkPoolSize:            defaultHealthCheckWorkPoolSize,
+	MaxConcurrentDownloads:             defaultMaxConcurrentDownloads,
+	GardenHealthcheckInterval:          Duration(10 * time.Minute),
+	GardenHealthcheckEmissionInterval:  Duration(30 * time.Second),
+	GardenHealthcheckTimeout:           Duration(10 * time.Minute),
+	GardenHealthcheckCommandRetryPause: Duration(time.Second),
+	GardenHealthcheckProcessArgs:       []string{},
+	GardenHealthcheckProcessEnv:        []string{},
+	ContainerMetricsReportInterval:     Duration(15 * time.Second),
+}
+
 func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
