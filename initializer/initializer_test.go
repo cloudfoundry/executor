@@ -120,6 +120,7 @@ var _ = Describe("Initializer", func() {
 		It("emits 0", func() {
 			Eventually(func() bool { return sender.HasValue("StalledGardenDuration") }).Should(BeTrue())
 			Expect(checkStalledMetric()).To(BeEquivalentTo(0))
+			Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
 		})
 	})
 
@@ -163,7 +164,7 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("returns an error", func() {
-				Eventually(errCh).Should(Receive(HaveOccurred()))
+				Eventually(errCh).Should(Receive(BeAssignableToTypeOf(garden.UnrecoverableError{})))
 			})
 		})
 	})
@@ -174,7 +175,7 @@ var _ = Describe("Initializer", func() {
 		})
 
 		It("fails fast", func() {
-			Eventually(errCh).Should(Receive(HaveOccurred()))
+			Eventually(errCh).Should(Receive(MatchError("EOF found after escape character")))
 		})
 	})
 
@@ -186,6 +187,36 @@ var _ = Describe("Initializer", func() {
 
 			It("uses it for the cached downloader", func() {
 				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
+
+			Context("when the cert bundle has extra leading and trailing spaces", func() {
+				BeforeEach(func() {
+					config.PathToCACertsForDownloads = "fixtures/ca-certs-with-spaces"
+				})
+
+				It("does not error", func() {
+					Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+				})
+			})
+
+			Context("when the cert bundle is empty", func() {
+				BeforeEach(func() {
+					config.PathToCACertsForDownloads = "fixtures/ca-certs-empty"
+				})
+
+				It("does not error", func() {
+					Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+				})
+			})
+		})
+
+		Context("when certs are invalid", func() {
+			BeforeEach(func() {
+				config.PathToCACertsForDownloads = "fixtures/ca-certs-invalid"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError("unable to load CA certificate")))
 			})
 		})
 

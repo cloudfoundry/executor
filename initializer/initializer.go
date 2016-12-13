@@ -1,6 +1,7 @@
 package initializer
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,7 +101,6 @@ type Configuration struct {
 	GardenHealthcheckProcessEnv        []string `json:"garden_healthcheck_process_env,omitempty"`
 	GardenHealthcheckProcessPath       string   `json:"garden_healthcheck_process_path"`
 	GardenHealthcheckProcessUser       string   `json:"garden_healthcheck_process_user"`
-	GardenHealthcheckRootFS            string   `json:"garden_healthcheck_rootfs"`
 	GardenHealthcheckTimeout           Duration `json:"garden_healthcheck_timeout,omitempty"`
 	GardenNetwork                      string   `json:"garden_network,omitempty"`
 	HealthCheckContainerOwnerName      string   `json:"healthcheck_container_owner_name,omitempty"`
@@ -196,14 +196,19 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		caCertPool = systemcerts.NewCertPool()
 	}
 
-	certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
+	if config.PathToCACertsForDownloads != "" {
+		certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
+		if err != nil {
+			return nil, grouper.Members{}, fmt.Errorf("Unable to open CA cert bundle '%s'", config.PathToCACertsForDownloads)
+		}
 
-	if err != nil {
-		return nil, grouper.Members{}, fmt.Errorf("Unable to open CA cert bundle '%s'", config.PathToCACertsForDownloads)
-	}
+		certBytes = bytes.TrimSpace(certBytes)
 
-	if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
-		return nil, grouper.Members{}, errors.New("unable to load CA certificate")
+		if len(certBytes) > 0 {
+			if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
+				return nil, grouper.Members{}, errors.New("unable to load CA certificate")
+			}
+		}
 	}
 
 	cache := cacheddownloader.New(
@@ -292,8 +297,10 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		Dir:  config.GardenHealthcheckProcessDir,
 	}
 
+	gardenHealthcheckRootFS := "foo"
+
 	gardenHealthcheck := gardenhealth.NewChecker(
-		config.GardenHealthcheckRootFS,
+		gardenHealthcheckRootFS,
 		config.HealthCheckContainerOwnerName,
 		time.Duration(config.GardenHealthcheckCommandRetryPause),
 		healthcheckSpec,
