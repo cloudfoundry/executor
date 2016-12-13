@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -80,45 +81,45 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 type Configuration struct {
-	CACertsForDownloads                []byte
-	CachePath                          string
-	ContainerInodeLimit                uint64
-	ContainerMaxCpuShares              uint64
-	ContainerMetricsReportInterval     Duration
-	ContainerOwnerName                 string
-	ContainerReapInterval              Duration
-	CreateWorkPoolSize                 int
-	DeleteWorkPoolSize                 int
-	DiskMB                             string
-	ExportNetworkEnvVars               bool
-	GardenAddr                         string
-	GardenHealthcheckCommandRetryPause Duration
-	GardenHealthcheckEmissionInterval  Duration
-	GardenHealthcheckInterval          Duration
-	GardenHealthcheckProcessArgs       []string
-	GardenHealthcheckProcessDir        string
-	GardenHealthcheckProcessEnv        []string
-	GardenHealthcheckProcessPath       string
-	GardenHealthcheckProcessUser       string
-	GardenHealthcheckTimeout           Duration
-	GardenHealthcheckRootFS            string
-	GardenNetwork                      string
-	HealthCheckContainerOwnerName      string
-	HealthCheckWorkPoolSize            int
-	HealthyMonitoringInterval          Duration
-	MaxCacheSizeInBytes                uint64
-	MaxConcurrentDownloads             int
-	MemoryMB                           string
-	MetricsWorkPoolSize                int
-	PostSetupHook                      string
-	PostSetupUser                      string
-	ReadWorkPoolSize                   int
-	ReservedExpirationTime             Duration
-	SkipCertVerify                     bool
-	TempDir                            string
-	TrustedSystemCertificatesPath      string
-	UnhealthyMonitoringInterval        Duration
-	VolmanDriverPaths                  []string
+	CachePath                          string   `json:"cache_path,omitempty"`
+	ContainerInodeLimit                uint64   `json:"container_inode_limit,omitempty"`
+	ContainerMaxCpuShares              uint64   `json:"container_max_cpu_shares,omitempty"`
+	ContainerMetricsReportInterval     Duration `json:"container_metrics_report_interval,omitempty"`
+	ContainerOwnerName                 string   `json:"container_owner_name,omitempty"`
+	ContainerReapInterval              Duration `json:"container_reap_interval,omitempty"`
+	CreateWorkPoolSize                 int      `json:"create_work_pool_size,omitempty"`
+	DeleteWorkPoolSize                 int      `json:"delete_work_pool_size,omitempty"`
+	DiskMB                             string   `json:"disk_mb,omitempty"`
+	ExportNetworkEnvVars               bool     `json:"export_network_env_vars,omitempty"`
+	GardenAddr                         string   `json:"garden_addr,omitempty"`
+	GardenHealthcheckCommandRetryPause Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
+	GardenHealthcheckEmissionInterval  Duration `json:"garden_healthcheck_emission_interval,omitempty"`
+	GardenHealthcheckInterval          Duration `json:"garden_healthcheck_interval,omitempty"`
+	GardenHealthcheckProcessArgs       []string `json:"garden_healthcheck_process_args,omitempty"`
+	GardenHealthcheckProcessDir        string   `json:"garden_healthcheck_process_dir"`
+	GardenHealthcheckProcessEnv        []string `json:"garden_healthcheck_process_env,omitempty"`
+	GardenHealthcheckProcessPath       string   `json:"garden_healthcheck_process_path"`
+	GardenHealthcheckProcessUser       string   `json:"garden_healthcheck_process_user"`
+	GardenHealthcheckRootFS            string   `json:"garden_healthcheck_rootfs"`
+	GardenHealthcheckTimeout           Duration `json:"garden_healthcheck_timeout,omitempty"`
+	GardenNetwork                      string   `json:"garden_network,omitempty"`
+	HealthCheckContainerOwnerName      string   `json:"healthcheck_container_owner_name,omitempty"`
+	HealthCheckWorkPoolSize            int      `json:"healthcheck_work_pool_size,omitempty"`
+	HealthyMonitoringInterval          Duration `json:"healthy_monitoring_interval,omitempty"`
+	MaxCacheSizeInBytes                uint64   `json:"max_cache_size_in_bytes,omitempty"`
+	MaxConcurrentDownloads             int      `json:"max_concurrent_downloads,omitempty"`
+	MemoryMB                           string   `json:"memory_mb,omitempty"`
+	MetricsWorkPoolSize                int      `json:"metrics_work_pool_size,omitempty"`
+	PathToCACertsForDownloads          string   `json:"path_to_ca_certs_for_downloads"`
+	PostSetupHook                      string   `json:"post_setup_hook"`
+	PostSetupUser                      string   `json:"post_setup_user"`
+	ReadWorkPoolSize                   int      `json:"read_work_pool_size,omitempty"`
+	ReservedExpirationTime             Duration `json:"reserved_expiration_time,omitempty"`
+	SkipCertVerify                     bool     `json:"skip_cert_verify,omitempty"`
+	TempDir                            string   `json:"temp_dir,omitempty"`
+	TrustedSystemCertificatesPath      string   `json:"trusted_system_certificates_path"`
+	UnhealthyMonitoringInterval        Duration `json:"unhealthy_monitoring_interval,omitempty"`
+	VolmanDriverPaths                  string   `json:"volman_driver_paths"`
 }
 
 const (
@@ -195,10 +196,14 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		caCertPool = systemcerts.NewCertPool()
 	}
 
-	if len(config.CACertsForDownloads) > 0 {
-		if ok := caCertPool.AppendCertsFromPEM(config.CACertsForDownloads); !ok {
-			return nil, grouper.Members{}, errors.New("unable to load CA certificate")
-		}
+	certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
+
+	if err != nil {
+		return nil, grouper.Members{}, fmt.Errorf("Unable to open CA cert bundle '%s'", config.PathToCACertsForDownloads)
+	}
+
+	if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
+		return nil, grouper.Members{}, errors.New("unable to load CA certificate")
 	}
 
 	cache := cacheddownloader.New(
@@ -248,7 +253,7 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 	}
 
 	driverConfig := vollocal.NewDriverConfig()
-	driverConfig.DriverPaths = config.VolmanDriverPaths
+	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
 
 	containerStore := containerstore.New(
