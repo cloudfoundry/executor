@@ -164,7 +164,7 @@ var DefaultConfiguration = Configuration{
 	ContainerMetricsReportInterval:     Duration(15 * time.Second),
 }
 
-func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config Configuration, gardenHealthcheckRootFS string, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
@@ -296,8 +296,6 @@ func Initialize(logger lager.Logger, config Configuration, clock clock.Clock) (e
 		Env:  config.GardenHealthcheckProcessEnv,
 		Dir:  config.GardenHealthcheckProcessDir,
 	}
-
-	gardenHealthcheckRootFS := "foo"
 
 	gardenHealthcheck := gardenhealth.NewChecker(
 		gardenHealthcheckRootFS,

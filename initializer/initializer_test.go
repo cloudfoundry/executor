@@ -84,7 +84,7 @@ var _ = Describe("Initializer", func() {
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
-			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, fakeClock)
+			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, "fake-rootfs", fakeClock)
 			errCh <- err
 			close(done)
 		}()
