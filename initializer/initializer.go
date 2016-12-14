@@ -81,7 +81,7 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%s"`, t.String())), nil
 }
 
-type Configuration struct {
+type ExecutorConfig struct {
 	CachePath                          string   `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64   `json:"container_inode_limit,omitempty"`
 	ContainerMaxCpuShares              uint64   `json:"container_max_cpu_shares,omitempty"`
@@ -131,7 +131,7 @@ const (
 	defaultHealthCheckWorkPoolSize = 64
 )
 
-var DefaultConfiguration = Configuration{
+var DefaultConfiguration = ExecutorConfig{
 	GardenNetwork:                      "unix",
 	GardenAddr:                         "/tmp/garden.sock",
 	MemoryMB:                           configuration.Automatic,
@@ -164,7 +164,7 @@ var DefaultConfiguration = Configuration{
 	ContainerMetricsReportInterval:     Duration(15 * time.Second),
 }
 
-func Initialize(logger lager.Logger, config Configuration, gardenHealthcheckRootFS string, clock clock.Clock) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
@@ -385,7 +385,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 	}
 }
 
-func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config Configuration) executor.ExecutorResources {
+func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config ExecutorConfig) executor.ExecutorResources {
 	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)
@@ -488,7 +488,7 @@ func closeHub(hub event.Hub) ifrit.Runner {
 	})
 }
 
-func (config *Configuration) Validate(logger lager.Logger) bool {
+func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 	valid := true
 
 	if config.ContainerMaxCpuShares == 0 {

@@ -23,7 +23,7 @@ var _ = Describe("Initializer", func() {
 	var fakeClock *fakeclock.FakeClock
 	var errCh chan error
 	var done chan struct{}
-	var config initializer.Configuration
+	var config initializer.ExecutorConfig
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -39,7 +39,7 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
 			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
-		config = initializer.Configuration{
+		config = initializer.ExecutorConfig{
 			CachePath:                          "/tmp/cache",
 			ContainerInodeLimit:                200000,
 			ContainerMaxCpuShares:              0,
