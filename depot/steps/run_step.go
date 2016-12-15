@@ -136,6 +136,8 @@ func (step *runStep) Perform() error {
 	var killSwitch <-chan time.Time
 	var exitTimeout <-chan time.Time
 
+	oomCount := 0
+
 	for {
 		select {
 		case exitStatus := <-exitStatusChan:
@@ -171,6 +173,23 @@ func (step *runStep) Perform() error {
 			}
 
 			return nil
+
+		case <-time.After(30 * time.Second):
+			info, err := step.container.Info()
+			if err != nil {
+				logger.Error("failed-to-get-info", err)
+			} else {
+				ooms := 0
+				for _, ev := range info.Events {
+					if ev == "out of memory" || ev == "Out of memory" {
+						ooms++
+						if ooms > oomCount {
+							fmt.Fprintf(step.streamer.Stderr(), "Process in container killed by OOM killer")
+						}
+					}
+				}
+				oomCount = ooms
+			}
 
 		case err := <-errChan:
 			logger.Error("running-error", err)
