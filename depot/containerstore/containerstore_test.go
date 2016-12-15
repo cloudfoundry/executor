@@ -287,6 +287,7 @@ var _ = Describe("Container Store", func() {
 			resource = executor.Resource{
 				MemoryMB:   1024,
 				DiskMB:     1024,
+				MaxPids:    1024,
 				RootFSPath: "/foo/bar",
 			}
 
@@ -379,6 +380,8 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeExclusive))
 				Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(resource.DiskMB * 1024 * 1024))
 				Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
+
+				Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
 
 				expectedCPUShares := uint64(float64(maxCPUShares) * float64(runReq.CPUWeight) / 100.0)
 				Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
@@ -1107,7 +1110,7 @@ var _ = Describe("Container Store", func() {
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
-			resource = executor.NewResource(1024, 2048, "foobar")
+			resource = executor.NewResource(1024, 2048, 1024, "foobar")
 			expectedMounts = containerstore.BindMounts{
 				CacheKeys: []containerstore.BindMountCacheKey{
 					{CacheKey: "cache-key", Dir: "foo"},
@@ -1635,13 +1638,13 @@ var _ = Describe("Container Store", func() {
 		)
 
 		BeforeEach(func() {
-			resource = executor.NewResource(512, 512, "")
+			resource = executor.NewResource(512, 512, 1024, "")
 			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
 
 			_, err := containerStore.Reserve(logger, &req)
 			Expect(err).NotTo(HaveOccurred())
 
-			resource = executor.NewResource(512, 512, "")
+			resource = executor.NewResource(512, 512, 1024, "")
 			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
 
 			_, err = containerStore.Reserve(logger, &req)

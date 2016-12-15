@@ -21,11 +21,6 @@ import (
 )
 
 var _ = Describe("Depot", func() {
-	const (
-		defaultMemoryMB = 256
-		defaultDiskMB   = 256
-	)
-
 	var (
 		depotClient      executor.Client
 		logger           lager.Logger
@@ -68,7 +63,7 @@ var _ = Describe("Depot", func() {
 			var requests []executor.AllocationRequest
 			BeforeEach(func() {
 				requests = []executor.AllocationRequest{
-					newAllocationRequest("guid-1", 512, 512),
+					newAllocationRequest("guid-1"),
 				}
 			})
 
@@ -88,9 +83,9 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				requests = []executor.AllocationRequest{
-					newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
-					newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
-					newAllocationRequest("guid-3", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-1"),
+					newAllocationRequest("guid-2"),
+					newAllocationRequest("guid-3"),
 				}
 			})
 
@@ -116,8 +111,8 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				requests = []executor.AllocationRequest{
-					newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
-					newAllocationRequest("guid-2", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-1"),
+					newAllocationRequest("guid-2"),
 				}
 
 				containerStore.ReserveStub = func(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
@@ -154,8 +149,8 @@ var _ = Describe("Depot", func() {
 
 			BeforeEach(func() {
 				requests = []executor.AllocationRequest{
-					newAllocationRequest("guid-1", defaultMemoryMB, defaultDiskMB),
-					newAllocationRequest("", defaultMemoryMB, defaultDiskMB),
+					newAllocationRequest("guid-1"),
+					newAllocationRequest(""),
 				}
 			})
 
@@ -702,8 +697,8 @@ func convertSliceToMap(containers []executor.Container) map[string]executor.Cont
 	return containersMap
 }
 
-func newAllocationRequest(guid string, memoryMB, diskMB int, tagses ...executor.Tags) executor.AllocationRequest {
-	resource := executor.NewResource(memoryMB, diskMB, "linux")
+func newAllocationRequest(guid string, tagses ...executor.Tags) executor.AllocationRequest {
+	resource := executor.NewResource(256, 256, -1, "linux")
 	var tags executor.Tags
 	if len(tagses) > 0 {
 		tags = tagses[0]

@@ -227,6 +227,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 				InodeHard: n.config.INodeLimit,
 				Scope:     convertDiskScope(info.DiskScope),
 			},
+			Pid: garden.PidLimits{
+				Max: uint64(info.MaxPids),
+			},
 			CPU: garden.CPULimits{
 				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(info.CPUWeight) / 100.0),
 			},

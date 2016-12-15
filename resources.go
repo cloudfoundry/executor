@@ -131,13 +131,15 @@ func NewReservedContainerFromAllocationRequest(req *AllocationRequest, allocated
 type Resource struct {
 	MemoryMB   int    `json:"memory_mb"`
 	DiskMB     int    `json:"disk_mb"`
+	MaxPids    int    `json:"max_pids"`
 	RootFSPath string `json:"rootfs"`
 }
 
-func NewResource(memoryMB, diskMB int, rootFSPath string) Resource {
+func NewResource(memoryMB, diskMB, maxPids int, rootFSPath string) Resource {
 	return Resource{
 		MemoryMB:   memoryMB,
 		DiskMB:     diskMB,
+		MaxPids:    maxPids,
 		RootFSPath: rootFSPath,
 	}
 }

@@ -9,7 +9,7 @@ import (
 
 var _ = Describe("Allocation Request", func() {
 	It("is invalid when the guid is empty", func() {
-		allocationInfo := NewResource(20, 30, "rootfs")
+		allocationInfo := NewResource(20, 30, 1024, "rootfs")
 		allocRequest := NewAllocationRequest("", &allocationInfo, nil)
 		err := allocRequest.Validate()
 		Expect(err).To(HaveOccurred())
