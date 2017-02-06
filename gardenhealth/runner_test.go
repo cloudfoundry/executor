@@ -152,10 +152,26 @@ var _ = Describe("Runner", func() {
 		})
 
 		Context("when garden is intermittently healthy", func() {
-			var checkErr = errors.New("nope")
+			var (
+				checkValues   chan error
+				healthyValues chan bool
+			)
 
 			BeforeEach(func() {
-				executorClient.HealthyReturns(true)
+				healthyValues = make(chan bool, 1)
+				checkValues = make(chan error, 1)
+				executorClient.HealthyStub = func(lager.Logger) bool {
+					return <-healthyValues
+				}
+				checker.HealthcheckStub = func(lager.Logger) error {
+					return <-checkValues
+				}
+
+				Expect(healthyValues).To(BeSent(true))
+				checkValues <- nil
+
+				// Set emission interval to a high value so that it doesn't trigger in this test
+				emissionInterval = 100 * time.Minute
 			})
 
 			It("Sets healthy to false after it fails, then to true after success and emits respective metrics", func() {
@@ -164,8 +180,8 @@ var _ = Describe("Runner", func() {
 				Expect(healthy).Should(Equal(true))
 				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(0)))
 
-				checker.HealthcheckReturns(checkErr)
-				executorClient.HealthyReturns(false)
+				Expect(healthyValues).To(BeSent(false))
+				checkValues <- errors.New("boom")
 				fakeClock.WaitForWatcherAndIncrement(checkInterval)
 
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
@@ -173,8 +189,8 @@ var _ = Describe("Runner", func() {
 				Expect(healthy).Should(Equal(false))
 				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(1)))
 
-				checker.HealthcheckReturns(nil)
-				executorClient.HealthyReturns(true)
+				Expect(healthyValues).To(BeSent(true))
+				checkValues <- nil
 				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
