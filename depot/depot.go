@@ -135,12 +135,28 @@ func (c *client) RunContainer(logger lager.Logger, request *executor.RunRequest)
 func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() {
 	return func() {
 		logger.Info("creating-container")
-		_, err := c.containerStore.Create(logger, guid)
+		container, err := c.containerStore.Create(logger, guid)
 		if err != nil {
 			logger.Error("failed-creating-container", err)
 			return
 		}
 		logger.Info("succeeded-creating-container-in-garden")
+
+		logger.Info("creating-credentials", lager.Data{"container-guid": container.Guid})
+		credGenerator := NewCredGenerator(logger, createCertificateTemplate(container.InternalIP))
+		err = credGenerator.CreateKeys()
+		if err != nil {
+			logger.Error("failed-to-create-keys", err)
+		}
+		err = credGenerator.CreateCert()
+		if err != nil {
+			logger.Error("failed-to-create-cert", err)
+		}
+
+		err = credGenerator.Save()
+		if err != nil {
+			logger.Error("failed-to-save-certs", err)
+		}
 
 		logger.Info("running-container-in-garden")
 		err = c.containerStore.Run(logger, guid)
