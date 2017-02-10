@@ -63,6 +63,7 @@ type containerStore struct {
 	gardenClient      garden.Client
 	dependencyManager DependencyManager
 	volumeManager     volman.Manager
+	credManager       CredManager
 	transformer       transformer.Transformer
 	containers        *nodeMap
 	eventEmitter      event.Hub
@@ -77,6 +78,7 @@ func New(
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
+	credManager CredManager,
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
@@ -87,6 +89,7 @@ func New(
 		gardenClient:      gardenClient,
 		dependencyManager: dependencyManager,
 		volumeManager:     volumeManager,
+		credManager:       credManager,
 		containers:        newNodeMap(totalCapacity),
 		eventEmitter:      eventEmitter,
 		transformer:       transformer,
@@ -112,6 +115,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.gardenClient,
 			cs.dependencyManager,
 			cs.volumeManager,
+			cs.credManager,
 			cs.eventEmitter,
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,

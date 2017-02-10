@@ -48,6 +48,7 @@ var _ = Describe("Container Store", func() {
 		gardenContainer   *gardenfakes.FakeContainer
 		megatron          *faketransformer.FakeTransformer
 		dependencyManager *containerstorefakes.FakeDependencyManager
+		credManager       *containerstorefakes.FakeCredManager
 		volumeManager     *volmanfakes.FakeManager
 
 		clock            *fakeclock.FakeClock
@@ -72,6 +73,7 @@ var _ = Describe("Container Store", func() {
 		gardenContainer = &gardenfakes.FakeContainer{}
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
+		credManager = &containerstorefakes.FakeCredManager{}
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
@@ -105,6 +107,7 @@ var _ = Describe("Container Store", func() {
 			gardenClient,
 			dependencyManager,
 			volumeManager,
+			credManager,
 			clock,
 			eventEmitter,
 			megatron,
@@ -474,6 +477,72 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(fakeLogSender.GetLogs())).To(BeNumerically("==", 2))
 				Expect(fakeLogSender.GetLogs()[1].Message).To(ContainSubstring("Successfully created container"))
+			})
+
+			It("generates container credential directory and credentials", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
+				_, container := credManager.CreateCredDirArgsForCall(0)
+				Expect(container.Guid).To(Equal(containerGuid))
+
+				Expect(credManager.GenerateCredsCallCount()).To(Equal(1))
+				_, container = credManager.GenerateCredsArgsForCall(0)
+				Expect(container.Guid).To(Equal(containerGuid))
+				Expect(container.InternalIP).To(Equal(internalIP))
+			})
+
+			Context("when credential mounts are configured", func() {
+				var (
+					expectedBindMount garden.BindMount
+				)
+
+				BeforeEach(func() {
+					expectedBindMount = garden.BindMount{SrcPath: "hpath1", DstPath: "cpath1", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost}
+					credManager.CreateCredDirReturns([]garden.BindMount{expectedBindMount}, nil)
+				})
+
+				It("mounts the credential directory into the container", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount))
+				})
+
+				Context("when failing to create credential directory on host", func() {
+					BeforeEach(func() {
+						credManager.CreateCredDirReturns([]garden.BindMount{}, errors.New("failed to create dir"))
+					})
+
+					It("fails fast and completes the container", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(HaveOccurred())
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(Equal(containerstore.CredDirFailed))
+					})
+				})
+
+				Context("when failing to create credentials", func() {
+					BeforeEach(func() {
+						credManager.GenerateCredsReturns(errors.New("failed to generate"))
+					})
+
+					It("destroys the container and returns an error", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(HaveOccurred())
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(Equal(containerstore.CredGenerationFailed))
+					})
+				})
 			})
 
 			Context("when there are volume mounts configured", func() {
@@ -1199,6 +1268,15 @@ var _ = Describe("Container Store", func() {
 			Expect(dependencyManager.ReleaseCachedDependenciesCallCount()).To(Equal(1))
 			_, keys := dependencyManager.ReleaseCachedDependenciesArgsForCall(0)
 			Expect(keys).To(Equal(expectedMounts.CacheKeys))
+		})
+
+		It("removes instance credentials", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(credManager.RemoveCredsCallCount()).To(Equal(1))
+			Expect(credManager.GenerateCredsCallCount()).To(Equal(1))
+			_, container := credManager.GenerateCredsArgsForCall(0)
+			Expect(container.Guid).To(Equal(containerGuid))
 		})
 
 		It("destroys the container", func() {

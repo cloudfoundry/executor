@@ -1,13 +1,17 @@
 package initializer_test
 
 import (
+	"encoding/asn1"
 	"net/http"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/initializer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	fake_metric "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -24,6 +28,7 @@ var _ = Describe("Initializer", func() {
 	var errCh chan error
 	var done chan struct{}
 	var config initializer.ExecutorConfig
+	var logger lager.Logger
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -33,6 +38,7 @@ var _ = Describe("Initializer", func() {
 		fakeClock = fakeclock.NewFakeClock(initialTime)
 		errCh = make(chan error, 1)
 		done = make(chan struct{})
+		logger = lagertest.NewTestLogger("test")
 
 		fakeGarden.RouteToHandler("GET", "/ping", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
@@ -84,7 +90,7 @@ var _ = Describe("Initializer", func() {
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
-			_, _, err := initializer.Initialize(lagertest.NewTestLogger("test"), config, "fake-rootfs", fakeClock)
+			_, _, err := initializer.Initialize(logger, config, "fake-rootfs", fakeClock)
 			errCh <- err
 			close(done)
 		}()
@@ -229,6 +235,108 @@ var _ = Describe("Initializer", func() {
 
 			It("fails", func() {
 				Eventually(errCh).Should(Receive(MatchError("Unable to open CA cert bundle 'sandwich'")))
+			})
+		})
+	})
+
+	Describe("CredManagerFromConfig", func() {
+		var credManager containerstore.CredManager
+		var err error
+		var container executor.Container
+		var logger *lagertest.TestLogger
+
+		JustBeforeEach(func() {
+			logger = lagertest.NewTestLogger("executor")
+			container = executor.Container{
+				Guid: "1234",
+			}
+			credManager, err = initializer.CredManagerFromConfig(logger, config, fakeClock)
+		})
+
+		Describe("when instance identity creds directory is not set", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = ""
+			})
+
+			It("returns a noop credential manager", func() {
+				bindMounts, err := credManager.CreateCredDir(logger, container)
+				Expect(bindMounts).To(BeEmpty())
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Describe("when the instance identity creds directory is set", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
+			})
+
+			It("returns a credential manager", func() {
+				bindMounts, err := credManager.CreateCredDir(logger, container)
+				defer credManager.RemoveCreds(logger, container)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bindMounts).NotTo(BeEmpty())
+			})
+
+			Context("when the private key does not exist", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/notexist.key"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(MatchError(ContainSubstring("no such file")))
+				})
+			})
+
+			Context("when the private key is not PEM-encoded", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/non-pem.key"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(MatchError(ContainSubstring("instance ID key is not PEM-encoded")))
+				})
+			})
+
+			Context("when the private key is invalid", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/invalid.key"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(BeAssignableToTypeOf(asn1.StructuralError{}))
+				})
+			})
+
+			Context("when the certificate does not exist", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityCAPath = "fixtures/instance-id/notexist.crt"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(MatchError(ContainSubstring("no such file")))
+				})
+			})
+
+			Context("when the certificate is not PEM-encoded", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityCAPath = "fixtures/instance-id/non-pem.crt"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(MatchError(ContainSubstring("instance ID CA is not PEM-encoded")))
+				})
+			})
+
+			Context("when the certificate is invalid", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityCAPath = "fixtures/instance-id/invalid.crt"
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(BeAssignableToTypeOf(asn1.StructuralError{}))
+				})
 			})
 		})
 	})
