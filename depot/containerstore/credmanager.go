@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"io"
 	"math/big"
 	"net"
@@ -88,6 +89,11 @@ func (c *credManager) CreateCredDir(logger lager.Logger, containerGUID string) (
 	}, nil
 }
 
+const (
+	certificatePEMBlockType = "CERTIFICATE"
+	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
+)
+
 func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Container) error {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
@@ -107,24 +113,14 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 	}
 
 	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
-	instanceKeyFile, err := os.Create(instanceKeyPath)
-	if err != nil {
-		return err
-	}
-
-	_, err = instanceKeyFile.Write(x509.MarshalPKCS1PrivateKey(privateKey))
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, instanceKeyPath)
 	if err != nil {
 		return err
 	}
 
 	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
-	certificateFile, err := os.Create(certificatePath)
-	if err != nil {
-		return err
-	}
-	certificateFile.Write(certBytes)
-
-	return nil
+	return pemEncode(certBytes, certificatePEMBlockType, certificatePath)
 }
 
 func (c *credManager) RemoveCreds(logger lager.Logger, container executor.Container) error {
@@ -133,6 +129,21 @@ func (c *credManager) RemoveCreds(logger lager.Logger, container executor.Contai
 	defer logger.Info("complete")
 
 	return os.RemoveAll(filepath.Join(c.credDir, container.Guid))
+}
+
+func pemEncode(bytes []byte, blockType, destination string) error {
+	file, err := os.Create(destination)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	block := &pem.Block{
+		Type:  blockType,
+		Bytes: bytes,
+	}
+	return pem.Encode(file, block)
 }
 
 func createCertificateTemplate(ipaddress, guid string, notAfter time.Time) *x509.Certificate {

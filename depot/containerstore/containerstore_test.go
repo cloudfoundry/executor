@@ -490,6 +490,7 @@ var _ = Describe("Container Store", func() {
 				Expect(credManager.GenerateCredsCallCount()).To(Equal(1))
 				_, container := credManager.GenerateCredsArgsForCall(0)
 				Expect(container.Guid).To(Equal(containerGuid))
+				Expect(container.InternalIP).To(Equal(internalIP))
 			})
 
 			Context("when credential mounts are configured", func() {

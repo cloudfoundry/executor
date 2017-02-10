@@ -184,7 +184,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
 
-	err = n.credManager.GenerateCreds(logger, n.info)
+	err = n.credManager.GenerateCreds(logger, info)
 	if err != nil {
 		n.complete(logger, true, CredGenerationFailed)
 		return err

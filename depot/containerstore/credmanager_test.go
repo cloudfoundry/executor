@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -96,7 +97,12 @@ var _ = Describe("CredManager", func() {
 			data, err := ioutil.ReadFile(keyFile)
 			Expect(err).NotTo(HaveOccurred())
 
-			key, err := x509.ParsePKCS1PrivateKey(data)
+			block, rest := pem.Decode(data)
+			Expect(block).NotTo(BeNil())
+			Expect(rest).To(BeEmpty())
+
+			Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
+			key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 			Expect(err).NotTo(HaveOccurred())
 
 			var bits int
@@ -137,7 +143,12 @@ var _ = Describe("CredManager", func() {
 				certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
 				data, err := ioutil.ReadFile(certFile)
 				Expect(err).NotTo(HaveOccurred())
-				certs, err := x509.ParseCertificates(data)
+				block, rest := pem.Decode(data)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(block).NotTo(BeNil())
+				Expect(rest).To(BeEmpty())
+				Expect(block.Type).To(Equal("CERTIFICATE"))
+				certs, err := x509.ParseCertificates(block.Bytes)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(certs).To(HaveLen(1))
 				cert = certs[0]
@@ -145,7 +156,7 @@ var _ = Describe("CredManager", func() {
 
 			It("has the container ip", func() {
 				ip := net.ParseIP(container.InternalIP)
-				Expect(cert.IPAddresses).To(ContainElement(ip[12:]))
+				Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
 			})
 
 			It("signed by the rep intermediate CA", func() {
