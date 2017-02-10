@@ -25,6 +25,8 @@ const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
+const CredDirFailed = "failed to create credentials directory"
+const CredGenerationFailed = "failed to generate container credentials"
 
 // To be deprecated
 const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
@@ -50,6 +52,7 @@ type storeNode struct {
 	gardenClient      garden.Client
 	dependencyManager DependencyManager
 	volumeManager     volman.Manager
+	credManager       CredManager
 	eventEmitter      event.Hub
 	transformer       transformer.Transformer
 	process           ifrit.Process
@@ -62,6 +65,7 @@ func newStoreNode(
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
+	credManager CredManager,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
@@ -74,6 +78,7 @@ func newStoreNode(
 		gardenClient:                gardenClient,
 		dependencyManager:           dependencyManager,
 		volumeManager:               volumeManager,
+		credManager:                 credManager,
 		eventEmitter:                eventEmitter,
 		transformer:                 transformer,
 		modifiedIndex:               0,
@@ -162,6 +167,13 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	mounts.GardenBindMounts = append(mounts.GardenBindMounts, volumeMounts...)
 
+	credMounts, err := n.credManager.CreateCredDir(logger, n.info.Guid)
+	if err != nil {
+		n.complete(logger, true, CredDirFailed)
+		return err
+	}
+	mounts.GardenBindMounts = append(mounts.GardenBindMounts, credMounts...)
+
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
 	gardenContainer, err := n.createGardenContainer(logger, &info, mounts.GardenBindMounts)
 	if err != nil {
@@ -171,6 +183,12 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return err
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
+
+	err = n.credManager.GenerateCreds(logger, n.info)
+	if err != nil {
+		n.complete(logger, true, CredGenerationFailed)
+		return err
+	}
 
 	n.infoLock.Lock()
 	n.gardenContainer = gardenContainer
@@ -383,6 +401,12 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 			logger.Error("failed-to-unmount-volume", err)
 			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
 		}
+	}
+
+	err = n.credManager.RemoveCreds(logger, n.info)
+	if err != nil {
+		logger.Error("failed-to-instance-credentials", err)
+		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
 	}
 
 	return bindMountCleanupErr

@@ -2,7 +2,10 @@ package initializer
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -106,6 +109,9 @@ type ExecutorConfig struct {
 	HealthCheckContainerOwnerName      string   `json:"healthcheck_container_owner_name,omitempty"`
 	HealthCheckWorkPoolSize            int      `json:"healthcheck_work_pool_size,omitempty"`
 	HealthyMonitoringInterval          Duration `json:"healthy_monitoring_interval,omitempty"`
+	InstanceIdentityCAPath             string   `json:"instance_identity_ca_path,omitempty"`
+	InstanceIdentityCredDir            string   `json:"instance_identity_cred_dir,omitempty"`
+	InstanceIdentityPrivateKeyPath     string   `json:"instance_identity_private_key_path,omitempty"`
 	MaxCacheSizeInBytes                uint64   `json:"max_cache_size_in_bytes,omitempty"`
 	MaxConcurrentDownloads             int      `json:"max_concurrent_downloads,omitempty"`
 	MemoryMB                           string   `json:"memory_mb,omitempty"`
@@ -261,12 +267,18 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
 
+	credManager, err := initializeCredManager(config, clock)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
+
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
 		containerstore.NewDependencyManager(cache, downloadRateLimiter),
 		volmanClient,
+		credManager,
 		clock,
 		hub,
 		transformer,
@@ -486,6 +498,47 @@ func closeHub(hub event.Hub) ifrit.Runner {
 		hub.Close()
 		return nil
 	})
+}
+
+func initializeCredManager(config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
+	if config.InstanceIdentityCredDir != "" {
+		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)
+		if err != nil {
+			return nil, err
+		}
+		keyBlock, _ := pem.Decode(keyData)
+		if keyBlock == nil {
+			return nil, errors.New("instance ID key is not PEM-encoded")
+		}
+		privateKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		certData, err := ioutil.ReadFile(config.InstanceIdentityCAPath)
+		if err != nil {
+			return nil, err
+		}
+		certBlock, _ := pem.Decode(certData)
+		if certBlock == nil {
+			return nil, errors.New("instance ID CA is not PEM-encoded")
+		}
+		certs, err := x509.ParseCertificates(certBlock.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		return containerstore.NewCredManager(
+			config.InstanceIdentityCredDir,
+			rand.Reader,
+			clock,
+			certs[0],
+			privateKey,
+			"/etc/cf-instance-credentials",
+		), nil
+	}
+
+	return nil, nil
 }
 
 func (config *ExecutorConfig) Validate(logger lager.Logger) bool {

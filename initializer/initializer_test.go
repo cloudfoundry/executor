@@ -1,6 +1,7 @@
 package initializer_test
 
 import (
+	"encoding/asn1"
 	"net/http"
 	"time"
 
@@ -229,6 +230,80 @@ var _ = Describe("Initializer", func() {
 
 			It("fails", func() {
 				Eventually(errCh).Should(Receive(MatchError("Unable to open CA cert bundle 'sandwich'")))
+			})
+		})
+	})
+
+	Describe("configuring intermediate CA certificate", func() {
+		Context("when the private key does not exist", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/notexist.key"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("no such file"))))
+			})
+		})
+
+		Context("when the private key is not PEM-encoded", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/non-pem.key"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("instance ID key is not PEM-encoded"))))
+			})
+		})
+
+		Context("when the private key is invalid", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/invalid.key"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(BeAssignableToTypeOf(asn1.StructuralError{})))
+			})
+		})
+
+		Context("when the certificate does not exist", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/notexist.crt"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("no such file"))))
+			})
+		})
+
+		Context("when the certificate is not PEM-encoded", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/non-pem.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("instance ID CA is not PEM-encoded"))))
+			})
+		})
+
+		Context("when the certificate is invalid", func() {
+			BeforeEach(func() {
+				config.InstanceIdentityCredDir = "fixtures/instance-id/"
+				config.InstanceIdentityCAPath = "fixtures/instance-id/invalid.crt"
+				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
+			})
+
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(BeAssignableToTypeOf(asn1.StructuralError{})))
 			})
 		})
 	})
