@@ -53,7 +53,7 @@ var _ = Describe("CredManager", func() {
 
 	Context("CreateCredDir", func() {
 		It("returns a valid directory path", func() {
-			mount, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+			mount, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
 			Expect(err).To(Succeed())
 
 			Expect(mount).To(HaveLen(1))
@@ -63,13 +63,27 @@ var _ = Describe("CredManager", func() {
 			Expect(mount[0].Origin).To(Equal(garden.BindMountOriginHost))
 		})
 
+		It("returns CF_INSTANCE_CERT and CF_INSTANCE_KEY environment variable values", func() {
+			_, envVariables, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+			Expect(err).To(Succeed())
+
+			Expect(envVariables).To(HaveLen(2))
+			values := map[string]string{}
+			values[envVariables[0].Name] = envVariables[0].Value
+			values[envVariables[1].Name] = envVariables[1].Value
+			Expect(values).To(Equal(map[string]string{
+				"CF_INSTANCE_CERT": "containerpath/instance.crt",
+				"CF_INSTANCE_KEY":  "containerpath/instance.key",
+			}))
+		})
+
 		Context("when making directory fails", func() {
 			BeforeEach(func() {
 				os.Chmod(tmpdir, 0400)
 			})
 
 			It("returns an error", func() {
-				_, err := credManager.CreateCredDir(logger, executor.Container{Guid: "somefailure"})
+				_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "somefailure"})
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -83,7 +97,7 @@ var _ = Describe("CredManager", func() {
 				Guid:       "container-guid",
 				InternalIP: "127.0.0.1",
 			}
-			_, err := credManager.CreateCredDir(logger, container)
+			_, _, err := credManager.CreateCredDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -196,7 +210,7 @@ var _ = Describe("CredManager", func() {
 		})
 
 		It("removes container credentials from the filesystem", func() {
-			certMount, err := credManager.CreateCredDir(logger, container)
+			certMount, _, err := credManager.CreateCredDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certMount[0].SrcPath).To(BeADirectory())
 

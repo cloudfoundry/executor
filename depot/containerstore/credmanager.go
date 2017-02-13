@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
-	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, error)
+	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	GenerateCreds(lager.Logger, executor.Container) error
 	RemoveCreds(lager.Logger, executor.Container) error
 }
@@ -31,8 +32,8 @@ func NewNoopCredManager() CredManager {
 	return &noopManager{}
 }
 
-func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
-	return []garden.BindMount{}, nil
+func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+	return nil, nil, nil
 }
 func (c *noopManager) GenerateCreds(logger lager.Logger, container executor.Container) error {
 	return nil
@@ -68,7 +69,7 @@ func NewCredManager(
 	}
 }
 
-func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
+func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	logger = logger.Session("create-cred-dir")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -76,17 +77,20 @@ func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Cont
 	containerDir := filepath.Join(c.credDir, container.Guid)
 	err := os.Mkdir(containerDir, 0755)
 	if err != nil {
-		return []garden.BindMount{}, err
+		return nil, nil, err
 	}
 
 	return []garden.BindMount{
-		{
-			SrcPath: containerDir,
-			DstPath: c.containerMountPath,
-			Mode:    garden.BindMountModeRO,
-			Origin:  garden.BindMountOriginHost,
-		},
-	}, nil
+			{
+				SrcPath: containerDir,
+				DstPath: c.containerMountPath,
+				Mode:    garden.BindMountModeRO,
+				Origin:  garden.BindMountOriginHost,
+			},
+		}, []executor.EnvironmentVariable{
+			{Name: "CF_INSTANCE_CERT", Value: path.Join(c.containerMountPath, "instance.crt")},
+			{Name: "CF_INSTANCE_KEY", Value: path.Join(c.containerMountPath, "instance.key")},
+		}, nil
 }
 
 const (

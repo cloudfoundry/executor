@@ -11,7 +11,7 @@ import (
 )
 
 type FakeCredManager struct {
-	CreateCredDirStub        func(lager.Logger, executor.Container) ([]garden.BindMount, error)
+	CreateCredDirStub        func(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	createCredDirMutex       sync.RWMutex
 	createCredDirArgsForCall []struct {
 		arg1 lager.Logger
@@ -19,7 +19,8 @@ type FakeCredManager struct {
 	}
 	createCredDirReturns struct {
 		result1 []garden.BindMount
-		result2 error
+		result2 []executor.EnvironmentVariable
+		result3 error
 	}
 	GenerateCredsStub        func(lager.Logger, executor.Container) error
 	generateCredsMutex       sync.RWMutex
@@ -43,7 +44,7 @@ type FakeCredManager struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, error) {
+func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	fake.createCredDirMutex.Lock()
 	fake.createCredDirArgsForCall = append(fake.createCredDirArgsForCall, struct {
 		arg1 lager.Logger
@@ -54,7 +55,7 @@ func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Cont
 	if fake.CreateCredDirStub != nil {
 		return fake.CreateCredDirStub(arg1, arg2)
 	} else {
-		return fake.createCredDirReturns.result1, fake.createCredDirReturns.result2
+		return fake.createCredDirReturns.result1, fake.createCredDirReturns.result2, fake.createCredDirReturns.result3
 	}
 }
 
@@ -70,12 +71,13 @@ func (fake *FakeCredManager) CreateCredDirArgsForCall(i int) (lager.Logger, exec
 	return fake.createCredDirArgsForCall[i].arg1, fake.createCredDirArgsForCall[i].arg2
 }
 
-func (fake *FakeCredManager) CreateCredDirReturns(result1 []garden.BindMount, result2 error) {
+func (fake *FakeCredManager) CreateCredDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
 	fake.CreateCredDirStub = nil
 	fake.createCredDirReturns = struct {
 		result1 []garden.BindMount
-		result2 error
-	}{result1, result2}
+		result2 []executor.EnvironmentVariable
+		result3 error
+	}{result1, result2, result3}
 }
 
 func (fake *FakeCredManager) GenerateCreds(arg1 lager.Logger, arg2 executor.Container) error {

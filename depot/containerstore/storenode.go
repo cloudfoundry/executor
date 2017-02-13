@@ -167,12 +167,13 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	mounts.GardenBindMounts = append(mounts.GardenBindMounts, volumeMounts...)
 
-	credMounts, err := n.credManager.CreateCredDir(logger, n.info)
+	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
 	if err != nil {
 		n.complete(logger, true, CredDirFailed)
 		return err
 	}
 	mounts.GardenBindMounts = append(mounts.GardenBindMounts, credMounts...)
+	info.Env = append(info.Env, envs...)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
 	gardenContainer, err := n.createGardenContainer(logger, &info, mounts.GardenBindMounts)

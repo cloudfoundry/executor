@@ -500,7 +500,10 @@ var _ = Describe("Container Store", func() {
 
 				BeforeEach(func() {
 					expectedBindMount = garden.BindMount{SrcPath: "hpath1", DstPath: "cpath1", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost}
-					credManager.CreateCredDirReturns([]garden.BindMount{expectedBindMount}, nil)
+					envVariables := []executor.EnvironmentVariable{
+						{Name: "CF_INSTANCE_CERT", Value: "some-cert"},
+					}
+					credManager.CreateCredDirReturns([]garden.BindMount{expectedBindMount}, envVariables, nil)
 				})
 
 				It("mounts the credential directory into the container", func() {
@@ -510,9 +513,16 @@ var _ = Describe("Container Store", func() {
 					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount))
 				})
 
+				It("add the instance identity environment variables to the container", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					Expect(gardenClient.CreateArgsForCall(0).Env).To(ContainElement("CF_INSTANCE_CERT=some-cert"))
+				})
+
 				Context("when failing to create credential directory on host", func() {
 					BeforeEach(func() {
-						credManager.CreateCredDirReturns([]garden.BindMount{}, errors.New("failed to create dir"))
+						credManager.CreateCredDirReturns(nil, nil, errors.New("failed to create dir"))
 					})
 
 					It("fails fast and completes the container", func() {
