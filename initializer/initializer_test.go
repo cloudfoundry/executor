@@ -259,7 +259,7 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("returns a noop credential manager", func() {
-				bindMounts, err := credManager.CreateCredDir(logger, container)
+				bindMounts, _, err := credManager.CreateCredDir(logger, container)
 				Expect(bindMounts).To(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -273,7 +273,7 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("returns a credential manager", func() {
-				bindMounts, err := credManager.CreateCredDir(logger, container)
+				bindMounts, _, err := credManager.CreateCredDir(logger, container)
 				defer credManager.RemoveCreds(logger, container)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bindMounts).NotTo(BeEmpty())
