@@ -118,13 +118,31 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 
 	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, instanceKeyPath)
+	instanceKey, err := os.Create(instanceKeyPath)
+	if err != nil {
+		return err
+	}
+
+	defer instanceKey.Close()
+
+	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, instanceKey)
 	if err != nil {
 		return err
 	}
 
 	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
-	return pemEncode(certBytes, certificatePEMBlockType, certificatePath)
+	certificate, err := os.Create(certificatePath)
+	if err != nil {
+		return err
+	}
+
+	defer certificate.Close()
+	err = pemEncode(certBytes, certificatePEMBlockType, certificate)
+	if err != nil {
+		return err
+	}
+
+	return pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificate)
 }
 
 func (c *credManager) RemoveCreds(logger lager.Logger, container executor.Container) error {
@@ -135,19 +153,12 @@ func (c *credManager) RemoveCreds(logger lager.Logger, container executor.Contai
 	return os.RemoveAll(filepath.Join(c.credDir, container.Guid))
 }
 
-func pemEncode(bytes []byte, blockType, destination string) error {
-	file, err := os.Create(destination)
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-
+func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 	block := &pem.Block{
 		Type:  blockType,
 		Bytes: bytes,
 	}
-	return pem.Encode(file, block)
+	return pem.Encode(writer, block)
 }
 
 func createCertificateTemplate(ipaddress, guid string, notAfter time.Time) *x509.Certificate {

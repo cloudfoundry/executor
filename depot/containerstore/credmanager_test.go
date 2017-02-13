@@ -149,7 +149,10 @@ var _ = Describe("CredManager", func() {
 		})
 
 		Describe("the cert", func() {
-			var cert *x509.Certificate
+			var (
+				cert *x509.Certificate
+				rest []byte
+			)
 
 			BeforeEach(func() {
 				err := credManager.GenerateCreds(logger, container)
@@ -157,10 +160,10 @@ var _ = Describe("CredManager", func() {
 				certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
 				data, err := ioutil.ReadFile(certFile)
 				Expect(err).NotTo(HaveOccurred())
-				block, rest := pem.Decode(data)
+				var block *pem.Block
+				block, rest = pem.Decode(data)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(block).NotTo(BeNil())
-				Expect(rest).To(BeEmpty())
 				Expect(block.Type).To(Equal("CERTIFICATE"))
 				certs, err := x509.ParseCertificates(block.Bytes)
 				Expect(err).NotTo(HaveOccurred())
@@ -195,6 +198,18 @@ var _ = Describe("CredManager", func() {
 				expected.SetBytes([]byte(container.Guid))
 
 				Expect(expected).To(Equal(cert.SerialNumber))
+			})
+
+			It("has the rep intermediate CA", func() {
+				block, rest := pem.Decode(rest)
+				Expect(block).NotTo(BeNil())
+				Expect(rest).To(BeEmpty())
+				Expect(block.Type).To(Equal("CERTIFICATE"))
+				certs, err := x509.ParseCertificates(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(certs).To(HaveLen(1))
+				cert = certs[0]
+				Expect(cert).To(Equal(CaCert))
 			})
 		})
 	})
