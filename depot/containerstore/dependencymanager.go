@@ -108,6 +108,7 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 		emit(streamer, mount, "Downloading %s failed", mount.Name)
 		return nil, err
 	}
+	logger.Debug("fetched-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey, "size": downloadedSize})
 
 	if downloadedSize != 0 {
 		emit(streamer, mount, "Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
