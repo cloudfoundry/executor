@@ -193,6 +193,10 @@ var _ = Describe("CredManager", func() {
 				Expect(cert.NotAfter).To(Equal(clock.Now().Add(24 * time.Hour)))
 			})
 
+			It("not before is set to current timestamp", func() {
+				Expect(cert.NotBefore).To(Equal(clock.Now()))
+			})
+
 			It("sets the serial number to the container guid", func() {
 				expected := big.NewInt(0)
 				expected.SetBytes([]byte(container.Guid))
