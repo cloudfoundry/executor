@@ -125,6 +125,7 @@ func NewReservedContainerFromAllocationRequest(req *AllocationRequest, allocated
 	c := NewContainerFromResource(req.Guid, &req.Resource, req.Tags)
 	c.State = StateReserved
 	c.AllocatedAt = allocatedAt
+	c.OrganizationalUnits = req.OrganizationalUnits
 	return c
 }
 
@@ -169,6 +170,7 @@ type RunInfo struct {
 	EgressRules                   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
 	Env                           []EnvironmentVariable       `json:"env,omitempty"`
 	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
+	OrganizationalUnits           []string                    `json:"organizational_units"`
 	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
 	Network                       *Network                    `json:"network,omitempty"`
 }

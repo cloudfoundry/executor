@@ -45,13 +45,21 @@ type AllocationRequest struct {
 	Guid string
 	Resource
 	Tags
+	CertProperties
 }
 
-func NewAllocationRequest(guid string, resource *Resource, tags Tags) AllocationRequest {
+type CertProperties struct {
+	OrganizationalUnits []string
+}
+
+func NewAllocationRequest(guid string, resource *Resource, tags Tags, organizationalUnits []string) AllocationRequest {
 	return AllocationRequest{
 		Guid:     guid,
 		Resource: *resource,
 		Tags:     tags,
+		CertProperties: CertProperties{
+			OrganizationalUnits: organizationalUnits,
+		},
 	}
 }
 

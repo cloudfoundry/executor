@@ -108,7 +108,7 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 		return err
 	}
 
-	template := createCertificateTemplate(container.InternalIP, container.Guid, c.clock.Now(), c.clock.Now().Add(24*time.Hour))
+	template := createCertificateTemplate(container.InternalIP, container.Guid, c.clock.Now(), c.clock.Now().Add(24*time.Hour), container.OrganizationalUnits)
 	template.SerialNumber.SetBytes([]byte(container.Guid))
 
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)
@@ -161,11 +161,12 @@ func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 	return pem.Encode(writer, block)
 }
 
-func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.Time) *x509.Certificate {
+func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.Time, organizationalUnits []string) *x509.Certificate {
 	return &x509.Certificate{
 		SerialNumber: big.NewInt(0),
 		Subject: pkix.Name{
-			CommonName: guid,
+			CommonName:         guid,
+			OrganizationalUnit: organizationalUnits,
 		},
 		IPAddresses: []net.IP{net.ParseIP(ipaddress)},
 		NotBefore:   notBefore,

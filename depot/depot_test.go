@@ -703,7 +703,7 @@ func newAllocationRequest(guid string, tagses ...executor.Tags) executor.Allocat
 	if len(tagses) > 0 {
 		tags = tagses[0]
 	}
-	return executor.NewAllocationRequest(guid, &resource, tags)
+	return executor.NewAllocationRequest(guid, &resource, tags, nil)
 }
 
 func newRunRequest(guid string) *executor.RunRequest {

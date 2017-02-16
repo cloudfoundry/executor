@@ -119,6 +119,7 @@ var _ = Describe("Container Store", func() {
 		var (
 			containerTags     executor.Tags
 			containerResource executor.Resource
+			certProperties    executor.CertProperties
 			req               *executor.AllocationRequest
 		)
 
@@ -131,6 +132,7 @@ var _ = Describe("Container Store", func() {
 				DiskMB:     1024,
 				RootFSPath: "/foo/bar",
 			}
+
 			req = &executor.AllocationRequest{
 				Guid:     containerGuid,
 				Tags:     containerTags,
@@ -178,6 +180,29 @@ var _ = Describe("Container Store", func() {
 			Expect(remainingCapacity.MemoryMB).To(Equal(totalCapacity.MemoryMB - req.MemoryMB))
 			Expect(remainingCapacity.DiskMB).To(Equal(totalCapacity.DiskMB - req.DiskMB))
 			Expect(remainingCapacity.Containers).To(Equal(totalCapacity.Containers - 1))
+		})
+
+		Context("when cert properties are provided", func() {
+			BeforeEach(func() {
+
+				certProperties = executor.CertProperties{
+					OrganizationalUnits: []string{"app:iamthelizardking"},
+				}
+
+				req = &executor.AllocationRequest{
+					Guid:           containerGuid,
+					Tags:           containerTags,
+					Resource:       containerResource,
+					CertProperties: certProperties,
+				}
+			})
+
+			It("adds the organizational units to the container", func() {
+				container, err := containerStore.Reserve(logger, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(container.OrganizationalUnits).To(ContainElement("app:iamthelizardking"))
+			})
 		})
 
 		Context("when the container guid is already reserved", func() {
@@ -1727,13 +1752,13 @@ var _ = Describe("Container Store", func() {
 
 		BeforeEach(func() {
 			resource = executor.NewResource(512, 512, 1024, "")
-			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
+			req := executor.NewAllocationRequest("forever-reserved", &resource, nil, nil)
 
 			_, err := containerStore.Reserve(logger, &req)
 			Expect(err).NotTo(HaveOccurred())
 
 			resource = executor.NewResource(512, 512, 1024, "")
-			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
+			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil, nil)
 
 			_, err = containerStore.Reserve(logger, &req)
 			Expect(err).NotTo(HaveOccurred())
