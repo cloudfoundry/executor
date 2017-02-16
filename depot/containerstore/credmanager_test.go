@@ -101,6 +101,9 @@ var _ = Describe("CredManager", func() {
 			container = executor.Container{
 				Guid:       "container-guid",
 				InternalIP: "127.0.0.1",
+				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+					OrganizationalUnits: []string{"app:iamthelizardking"}},
+				},
 			}
 			_, _, err := credManager.CreateCredDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
@@ -219,6 +222,10 @@ var _ = Describe("CredManager", func() {
 				Expect(certs).To(HaveLen(1))
 				cert = certs[0]
 				Expect(cert).To(Equal(CaCert))
+			})
+
+			It("has the app guid in the subject's organizational units", func() {
+				Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
 			})
 		})
 	})

@@ -154,6 +154,10 @@ type CachedDependency struct {
 	ChecksumAlgorithm string `json:"checksum_value"`
 }
 
+type CertificateProperties struct {
+	OrganizationalUnits []string `json:"organizational_units"`
+}
+
 type RunInfo struct {
 	CPUWeight                     uint                        `json:"cpu_weight"`
 	DiskScope                     DiskLimitScope              `json:"disk_scope,omitempty"`
@@ -171,6 +175,7 @@ type RunInfo struct {
 	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
 	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
 	Network                       *Network                    `json:"network,omitempty"`
+	CertificateProperties         CertificateProperties       `json:"certificate_properties"`
 }
 
 type BindMountMode uint8

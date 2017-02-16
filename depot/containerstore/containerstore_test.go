@@ -131,6 +131,7 @@ var _ = Describe("Container Store", func() {
 				DiskMB:     1024,
 				RootFSPath: "/foo/bar",
 			}
+
 			req = &executor.AllocationRequest{
 				Guid:     containerGuid,
 				Tags:     containerTags,
