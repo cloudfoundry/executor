@@ -226,7 +226,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		cacheddownloader.TarTransform,
 	)
 
-	err = cachedDownloader.RecoverState()
+	err = cachedDownloader.RecoverState(logger.Session("downloader"))
 	if err != nil {
 		return nil, grouper.Members{}, err
 	}

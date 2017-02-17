@@ -32,7 +32,7 @@ func NewDependencyManager(cache cacheddownloader.CachedDownloader, downloadRateL
 func (bm *dependencyManager) Stop(logger lager.Logger) {
 	logger.Debug("stopping")
 	defer logger.Debug("stopping-complete")
-	err := bm.cache.SaveState()
+	err := bm.cache.SaveState(logger.Session("downloader"))
 	if err != nil {
 		logger.Error("failed-saving-cache-state", err, lager.Data{"err": err})
 	}
@@ -95,6 +95,7 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 
 	logger.Debug("fetching-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 	dirPath, downloadedSize, err := bm.cache.FetchAsDirectory(
+		logger.Session("downloader"),
 		downloadURL,
 		mount.CacheKey,
 		cacheddownloader.ChecksumInfoType{
@@ -122,7 +123,7 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 	for i := range keys {
 		key := &keys[i]
 		logger.Debug("releasing-cache-key", lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
-		err := bm.cache.CloseDirectory(key.CacheKey, key.Dir)
+		err := bm.cache.CloseDirectory(logger, key.CacheKey, key.Dir)
 		if err != nil {
 			logger.Error("failed-releasing-cache-key", err, lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
 			return err

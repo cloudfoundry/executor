@@ -10,6 +10,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/lager"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -94,10 +95,10 @@ var _ = Describe("DependencyManager", func() {
 
 			downloadURLs := make([]url.URL, 2)
 			cacheKeys := make([]string, 2)
-			downloadUrl, cacheKey, _, _ := cache.FetchAsDirectoryArgsForCall(0)
+			_, downloadUrl, cacheKey, _, _ := cache.FetchAsDirectoryArgsForCall(0)
 			downloadURLs[0] = *downloadUrl
 			cacheKeys[0] = cacheKey
-			downloadUrl, cacheKey, _, _ = cache.FetchAsDirectoryArgsForCall(1)
+			_, downloadUrl, cacheKey, _, _ = cache.FetchAsDirectoryArgsForCall(1)
 			downloadURLs[1] = *downloadUrl
 			cacheKeys[1] = cacheKey
 			Expect(downloadURLs).To(ConsistOf(expectedUrls))
@@ -151,7 +152,7 @@ var _ = Describe("DependencyManager", func() {
 
 		BeforeEach(func() {
 			downloadBlocker = make(chan struct{})
-			cache.FetchAsDirectoryStub = func(downloadUrl *url.URL, cacheKey string, checksum cacheddownloader.ChecksumInfoType, cancelChan <-chan struct{}) (string, int64, error) {
+			cache.FetchAsDirectoryStub = func(_ lager.Logger, downloadUrl *url.URL, cacheKey string, checksum cacheddownloader.ChecksumInfoType, cancelChan <-chan struct{}) (string, int64, error) {
 				<-downloadBlocker
 				return cacheKey, 0, nil
 			}

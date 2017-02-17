@@ -108,6 +108,7 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 	}
 
 	tarStream, downloadedSize, err := step.cachedDownloader.Fetch(
+		step.logger.Session("downloader"),
 		url,
 		step.model.CacheKey,
 		cacheddownloader.ChecksumInfoType{
