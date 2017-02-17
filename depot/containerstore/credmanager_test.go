@@ -102,7 +102,7 @@ var _ = Describe("CredManager", func() {
 				Guid:       "container-guid",
 				InternalIP: "127.0.0.1",
 				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-					OrganizationalUnits: []string{"app:iamthelizardking"}},
+					OrganizationalUnit: []string{"app:iamthelizardking"}},
 				},
 			}
 			_, _, err := credManager.CreateCredDir(logger, container)

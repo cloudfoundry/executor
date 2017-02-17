@@ -155,7 +155,7 @@ type CachedDependency struct {
 }
 
 type CertificateProperties struct {
-	OrganizationalUnits []string `json:"organizational_units"`
+	OrganizationalUnit []string `json:"organizational_unit"`
 }
 
 type RunInfo struct {

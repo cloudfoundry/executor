@@ -108,7 +108,7 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 		return err
 	}
 
-	template := createCertificateTemplate(container.InternalIP, container.Guid, c.clock.Now(), c.clock.Now().Add(24*time.Hour), container.CertificateProperties.OrganizationalUnits)
+	template := createCertificateTemplate(container.InternalIP, container.Guid, c.clock.Now(), c.clock.Now().Add(24*time.Hour), container.CertificateProperties.OrganizationalUnit)
 	template.SerialNumber.SetBytes([]byte(container.Guid))
 
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)
