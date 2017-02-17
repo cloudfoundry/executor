@@ -217,18 +217,16 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		}
 	}
 
-	cache := cacheddownloader.New(
-		config.CachePath,
+	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
+	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), config.SkipCertVerify, caCertPool)
+	cachedDownloader := cacheddownloader.New(
 		workDir,
-		int64(config.MaxCacheSizeInBytes),
-		10*time.Minute,
-		int(math.MaxInt8),
-		config.SkipCertVerify,
-		caCertPool,
+		downloader,
+		cache,
 		cacheddownloader.TarTransform,
 	)
 
-	err = cache.RecoverState()
+	err = cachedDownloader.RecoverState()
 	if err != nil {
 		return nil, grouper.Members{}, err
 	}
@@ -237,7 +235,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	transformer := initializeTransformer(
 		logger,
-		cache,
+		cachedDownloader,
 		workDir,
 		downloadRateLimiter,
 		maxConcurrentUploads,
@@ -276,7 +274,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		containerConfig,
 		&totalCapacity,
 		gardenClient,
-		containerstore.NewDependencyManager(cache, downloadRateLimiter),
+		containerstore.NewDependencyManager(cachedDownloader, downloadRateLimiter),
 		volmanClient,
 		credManager,
 		clock,
