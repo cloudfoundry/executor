@@ -3,6 +3,7 @@ package initializer_test
 import (
 	"encoding/asn1"
 	"net/http"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -285,7 +286,7 @@ var _ = Describe("Initializer", func() {
 				})
 
 				It("fails", func() {
-					Eventually(err).Should(MatchError(ContainSubstring("no such file")))
+					Eventually(os.IsNotExist(err)).Should(BeTrue())
 				})
 			})
 
@@ -315,7 +316,7 @@ var _ = Describe("Initializer", func() {
 				})
 
 				It("fails", func() {
-					Eventually(err).Should(MatchError(ContainSubstring("no such file")))
+					Eventually(os.IsNotExist(err)).Should(BeTrue())
 				})
 			})
 
