@@ -286,7 +286,7 @@ var _ = Describe("Initializer", func() {
 				})
 
 				It("fails", func() {
-					Eventually(os.IsNotExist(err)).Should(BeTrue())
+					Eventually(os.IsNotExist(err)).Should(BeTrue(), "Private key does not exist")
 				})
 			})
 
@@ -316,7 +316,7 @@ var _ = Describe("Initializer", func() {
 				})
 
 				It("fails", func() {
-					Eventually(os.IsNotExist(err)).Should(BeTrue())
+					Eventually(os.IsNotExist(err)).Should(BeTrue(), "Instance certificate does not exist")
 				})
 			})
 
