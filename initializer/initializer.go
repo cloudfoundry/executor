@@ -85,6 +85,7 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 type ExecutorConfig struct {
+	AutoDiskOverheadMB                 int      `json:"auto_disk_capacity_overhead_mb"`
 	CachePath                          string   `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64   `json:"container_inode_limit,omitempty"`
 	ContainerMaxCpuShares              uint64   `json:"container_max_cpu_shares,omitempty"`
@@ -251,7 +252,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	hub := event.NewHub()
 
-	totalCapacity := fetchCapacity(logger, gardenClient, config)
+	totalCapacity, err := fetchCapacity(logger, gardenClient, config)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
 
 	containerConfig := containerstore.ContainerConfig{
 		OwnerName:              config.ContainerOwnerName,
@@ -395,18 +399,18 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 	}
 }
 
-func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config ExecutorConfig) executor.ExecutorResources {
-	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB)
+func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config ExecutorConfig) (executor.ExecutorResources, error) {
+	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB, config.MaxCacheSizeInBytes, config.AutoDiskOverheadMB)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)
-		os.Exit(1)
+		return executor.ExecutorResources{}, err
 	}
 
 	logger.Info("initial-capacity", lager.Data{
 		"capacity": capacity,
 	})
 
-	return capacity
+	return capacity, nil
 }
 
 func destroyContainers(gardenClient garden.Client, containersFetcher *executorContainers, logger lager.Logger) {

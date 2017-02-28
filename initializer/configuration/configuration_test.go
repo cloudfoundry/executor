@@ -19,13 +19,23 @@ var _ = Describe("configuration", func() {
 	})
 
 	Describe("ConfigureCapacity", func() {
-		var capacity executor.ExecutorResources
-		var err error
-		var memLimit string
-		var diskLimit string
+		var (
+			capacity            executor.ExecutorResources
+			err                 error
+			memLimit, diskLimit string
+			maxCacheSizeInBytes uint64
+			autoDiskMBOverhead  int
+		)
+
+		BeforeEach(func() {
+			maxCacheSizeInBytes = 0
+			autoDiskMBOverhead = 0
+			memLimit = ""
+			diskLimit = ""
+		})
 
 		JustBeforeEach(func() {
-			capacity, err = configuration.ConfigureCapacity(gardenClient, memLimit, diskLimit)
+			capacity, err = configuration.ConfigureCapacity(gardenClient, memLimit, diskLimit, maxCacheSizeInBytes, autoDiskMBOverhead)
 		})
 
 		Context("when getting the capacity fails", func() {
@@ -108,12 +118,40 @@ var _ = Describe("configuration", func() {
 						diskLimit = "auto"
 					})
 
-					It("does not return an error", func() {
+					It("uses the garden server's memory capacity", func() {
 						Expect(err).NotTo(HaveOccurred())
+						Expect(capacity.DiskMB).To(Equal(4))
 					})
 
-					It("uses the garden server's memory capacity", func() {
-						Expect(capacity.DiskMB).To(Equal(4))
+					Context("when the max cache size in bytes is non zero", func() {
+						BeforeEach(func() {
+							maxCacheSizeInBytes = 1024 * 1024 * 2
+						})
+
+						It("subtracts the cache size from the disk capacity", func() {
+							Expect(capacity.DiskMB).To(Equal(2))
+						})
+
+						Context("when the max cache size in bytes is larger than the available disk capacity", func() {
+							BeforeEach(func() {
+								maxCacheSizeInBytes = 1024 * 1024 * 4
+							})
+
+							It("returns an error", func() {
+								Expect(err).To(HaveOccurred())
+							})
+						})
+					})
+
+					Context("when the auto disk mb overhead property is set", func() {
+						BeforeEach(func() {
+							autoDiskMBOverhead = 2
+						})
+
+						It("adds the overhead to the disk capacity", func() {
+							Expect(err).NotTo(HaveOccurred())
+							Expect(capacity.DiskMB).To(Equal(6))
+						})
 					})
 				})
 

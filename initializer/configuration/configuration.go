@@ -12,14 +12,17 @@ import (
 const Automatic = "auto"
 
 var (
-	ErrMemoryFlagInvalid = fmt.Errorf("memory limit must be a positive number or '%s'", Automatic)
-	ErrDiskFlagInvalid   = fmt.Errorf("disk limit must be a positive number or '%s'", Automatic)
+	ErrMemoryFlagInvalid       = fmt.Errorf("memory limit must be a positive number or '%s'", Automatic)
+	ErrDiskFlagInvalid         = fmt.Errorf("disk limit must be a positive number or '%s'", Automatic)
+	ErrAutoDiskCapacityInvalid = fmt.Errorf("auto disk limit must result in a positive number")
 )
 
 func ConfigureCapacity(
 	gardenClient garden_client.Client,
 	memoryMBFlag string,
 	diskMBFlag string,
+	maxCacheSizeInBytes uint64,
+	autoDiskMBOverhead int,
 ) (executor.ExecutorResources, error) {
 	gardenCapacity, err := gardenClient.Capacity()
 	if err != nil {
@@ -31,7 +34,7 @@ func ConfigureCapacity(
 		return executor.ExecutorResources{}, err
 	}
 
-	disk, err := diskInMB(gardenCapacity, diskMBFlag)
+	disk, err := diskInMB(gardenCapacity, diskMBFlag, maxCacheSizeInBytes, autoDiskMBOverhead)
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
@@ -55,9 +58,13 @@ func memoryInMB(capacity garden.Capacity, memoryMBFlag string) (int, error) {
 	}
 }
 
-func diskInMB(capacity garden.Capacity, diskMBFlag string) (int, error) {
+func diskInMB(capacity garden.Capacity, diskMBFlag string, maxCacheSizeInBytes uint64, autoDiskMBOverhead int) (int, error) {
 	if diskMBFlag == Automatic {
-		return int(capacity.DiskInBytes / (1024 * 1024)), nil
+		diskMB := ((int(capacity.DiskInBytes) - int(maxCacheSizeInBytes)) / (1024 * 1024)) + autoDiskMBOverhead
+		if diskMB <= 0 {
+			return 0, ErrAutoDiskCapacityInvalid
+		}
+		return diskMB, nil
 	} else {
 		diskMB, err := strconv.Atoi(diskMBFlag)
 		if err != nil || diskMB <= 0 {

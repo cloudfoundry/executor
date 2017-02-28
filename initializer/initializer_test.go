@@ -44,9 +44,10 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.RouteToHandler("GET", "/ping", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
-			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 2048 * 1024 * 1024, MaxContainers: 4}))
+			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 20 * 1048 * 1024 * 1024, MaxContainers: 4}))
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		config = initializer.ExecutorConfig{
+			AutoDiskOverheadMB:                 1,
 			CachePath:                          "/tmp/cache",
 			ContainerInodeLimit:                200000,
 			ContainerMaxCpuShares:              0,
