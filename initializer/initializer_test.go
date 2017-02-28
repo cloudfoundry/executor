@@ -4,6 +4,7 @@ import (
 	"encoding/asn1"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -187,6 +188,20 @@ var _ = Describe("Initializer", func() {
 	})
 
 	Describe("configuring trusted CA bundle", func() {
+
+		Context("when running on Windows", func() {
+			BeforeEach(func() {
+				if runtime.GOOS != "windows" {
+					Skip("not applicable to non-Windows machines")
+				}
+				config.SkipCertVerify = false
+			})
+
+			It("defers to the job script when setting the CA cert pool", func() {
+				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
+		})
+
 		Context("when valid", func() {
 			BeforeEach(func() {
 				config.PathToCACertsForDownloads = "fixtures/ca-certs"
