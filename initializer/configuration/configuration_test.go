@@ -145,12 +145,12 @@ var _ = Describe("configuration", func() {
 
 					Context("when the auto disk mb overhead property is set", func() {
 						BeforeEach(func() {
-							autoDiskMBOverhead = 2
+							autoDiskMBOverhead = 1
 						})
 
-						It("adds the overhead to the disk capacity", func() {
+						It("subtracts the overhead to the disk capacity", func() {
 							Expect(err).NotTo(HaveOccurred())
-							Expect(capacity.DiskMB).To(Equal(6))
+							Expect(capacity.DiskMB).To(Equal(3))
 						})
 					})
 				})

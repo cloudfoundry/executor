@@ -60,7 +60,7 @@ func memoryInMB(capacity garden.Capacity, memoryMBFlag string) (int, error) {
 
 func diskInMB(capacity garden.Capacity, diskMBFlag string, maxCacheSizeInBytes uint64, autoDiskMBOverhead int) (int, error) {
 	if diskMBFlag == Automatic {
-		diskMB := ((int(capacity.DiskInBytes) - int(maxCacheSizeInBytes)) / (1024 * 1024)) + autoDiskMBOverhead
+		diskMB := ((int(capacity.DiskInBytes) - int(maxCacheSizeInBytes)) / (1024 * 1024)) - autoDiskMBOverhead
 		if diskMB <= 0 {
 			return 0, ErrAutoDiskCapacityInvalid
 		}
