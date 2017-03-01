@@ -4,12 +4,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/sonde-go/events"
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/loggregator_v2"
 )
 
 type StatsReporter struct {
@@ -20,6 +20,7 @@ type StatsReporter struct {
 	executorClient executor.Client
 
 	cpuInfos map[string]cpuInfo
+	reporter loggregator_v2.Client
 }
 
 type cpuInfo struct {
@@ -27,13 +28,14 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client) *StatsReporter {
+func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client, reporter loggregator_v2.Client) *StatsReporter {
 	return &StatsReporter{
 		logger: logger,
 
 		interval:       interval,
 		clock:          clock,
 		executorClient: executorClient,
+		reporter:       reporter,
 	}
 }
 
@@ -123,7 +125,7 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	}
 
 	instanceIndex := int32(metricsConfig.Index)
-	err := metrics.Send(&events.ContainerMetric{
+	err := reporter.reporter.SendAppMetrics(&events.ContainerMetric{
 		ApplicationId:    &metricsConfig.Guid,
 		InstanceIndex:    &instanceIndex,
 		CpuPercentage:    &cpuPercent,

@@ -10,8 +10,8 @@ import (
 	efakes "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	dmetrics "github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -38,6 +38,7 @@ var _ = Describe("StatsReporter", func() {
 		fakeClock          *fakeclock.FakeClock
 		fakeExecutorClient *efakes.FakeClient
 		fakeMetricSender   *msfake.FakeMetricSender
+		fakeMetronClient   *mfakes.FakeClient
 
 		metricsResults chan map[string]executor.Metrics
 		process        ifrit.Process
@@ -113,14 +114,6 @@ var _ = Describe("StatsReporter", func() {
 		}
 	}
 
-	containerMetrics := func(eventList []events.Event) []events.ContainerMetric {
-		metrics := make([]events.ContainerMetric, 0)
-		for _, event := range eventList {
-			metrics = append(metrics, *event.(*events.ContainerMetric))
-		}
-		return metrics
-	}
-
 	createEventContainerMetric := func(metrics executor.Metrics, cpuPercentage float64) events.ContainerMetric {
 		instanceIndex := int32(metrics.MetricsConfig.Index)
 		return events.ContainerMetric{
@@ -140,9 +133,9 @@ var _ = Describe("StatsReporter", func() {
 		interval = 10 * time.Second
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeExecutorClient = new(efakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeClient)
 
 		fakeMetricSender = msfake.NewFakeMetricSender()
-		dmetrics.Initialize(fakeMetricSender, nil)
 
 		metricsResults = make(chan map[string]executor.Metrics, 10)
 
@@ -154,13 +147,21 @@ var _ = Describe("StatsReporter", func() {
 			return result, nil
 		}
 
-		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, fakeExecutorClient))
+		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, fakeExecutorClient, fakeMetronClient))
 	})
 
 	AfterEach(func() {
 		close(metricsResults)
 		ginkgomon.Interrupt(process)
 	})
+
+	sentMetrics := func() []events.ContainerMetric {
+		evs := []events.ContainerMetric{}
+		for i := 0; i < fakeMetronClient.SendAppMetricsCallCount(); i++ {
+			evs = append(evs, *fakeMetronClient.SendAppMetricsArgsForCall(i))
+		}
+		return evs
+	}
 
 	Context("when the interval elapses", func() {
 		BeforeEach(func() {
@@ -171,9 +172,7 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		It("emits memory and disk usage for each container, but no CPU", func() {
-			Eventually(func() []events.ContainerMetric {
-				return containerMetrics(fakeMetricSender.Events())
-			}).Should(ConsistOf([]events.ContainerMetric{
+			Eventually(sentMetrics).Should(ConsistOf([]events.ContainerMetric{
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 					ContainerMetrics: executor.ContainerMetrics{
@@ -195,7 +194,6 @@ var _ = Describe("StatsReporter", func() {
 				},
 					0.0),
 			}))
-
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
@@ -211,9 +209,7 @@ var _ = Describe("StatsReporter", func() {
 			})
 
 			It("emits the new memory and disk usage, and the computed CPU percent", func() {
-				Eventually(func() []events.ContainerMetric {
-					return containerMetrics(fakeMetricSender.Events())
-				}).Should(ContainElement(
+				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						ContainerMetrics: executor.ContainerMetrics{
@@ -223,9 +219,7 @@ var _ = Describe("StatsReporter", func() {
 							DiskLimitInBytes:   4096,
 						},
 					}, 50.0)))
-				Eventually(func() []events.ContainerMetric {
-					return containerMetrics(fakeMetricSender.Events())
-				}).Should(ContainElement(
+				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						ContainerMetrics: executor.ContainerMetrics{
@@ -245,9 +239,7 @@ var _ = Describe("StatsReporter", func() {
 				})
 
 				It("emits the new memory and disk usage, and the computed CPU percent", func() {
-					Eventually(func() []events.ContainerMetric {
-						return containerMetrics(fakeMetricSender.Events())
-					}).Should(ContainElement(
+					Eventually(sentMetrics).Should(ContainElement(
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 							ContainerMetrics: executor.ContainerMetrics{
@@ -258,9 +250,7 @@ var _ = Describe("StatsReporter", func() {
 							}},
 							20.0),
 					))
-					Eventually(func() []events.ContainerMetric {
-						return containerMetrics(fakeMetricSender.Events())
-					}).Should(ContainElement(
+					Eventually(sentMetrics).Should(ContainElement(
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 							ContainerMetrics: executor.ContainerMetrics{
@@ -296,9 +286,7 @@ var _ = Describe("StatsReporter", func() {
 			})
 
 			It("processes the containers happily", func() {
-				Eventually(func() []events.ContainerMetric {
-					return containerMetrics(fakeMetricSender.Events())
-				}).Should(ContainElement(
+				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index", Index: 0},
 						ContainerMetrics: executor.ContainerMetrics{
@@ -309,9 +297,7 @@ var _ = Describe("StatsReporter", func() {
 						}},
 						0.0),
 				))
-				Eventually(func() []events.ContainerMetric {
-					return containerMetrics(fakeMetricSender.Events())
-				}).Should(ContainElement(
+				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						ContainerMetrics: executor.ContainerMetrics{
@@ -344,9 +330,7 @@ var _ = Describe("StatsReporter", func() {
 		}
 
 		waitForMetrics := func(id string, instance int32, cpu float64, memoryUsage, diskUsage, memoryLimit, diskLimit uint64) {
-			Eventually(func() []events.ContainerMetric {
-				return containerMetrics(fakeMetricSender.Events())
-			}).Should(ContainElement(
+			Eventually(sentMetrics).Should(ContainElement(
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: id, Index: int(instance)},
 					ContainerMetrics: executor.ContainerMetrics{

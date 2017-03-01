@@ -4,6 +4,8 @@ import (
 	"io"
 	"strconv"
 
+	"code.cloudfoundry.org/loggregator_v2"
+
 	"github.com/cloudfoundry/sonde-go/events"
 )
 
@@ -27,7 +29,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index int) LogStreamer {
+func New(guid string, sourceName string, index int, metronClient loggregator_v2.Client) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -44,6 +46,7 @@ func New(guid string, sourceName string, index int) LogStreamer {
 			sourceName,
 			sourceIndex,
 			events.LogMessage_OUT,
+			metronClient,
 		),
 
 		stderr: newStreamDestination(
@@ -51,6 +54,7 @@ func New(guid string, sourceName string, index int) LogStreamer {
 			sourceName,
 			sourceIndex,
 			events.LogMessage_ERR,
+			metronClient,
 		),
 	}
 }

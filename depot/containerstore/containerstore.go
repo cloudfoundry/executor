@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
 )
@@ -68,6 +69,7 @@ type containerStore struct {
 	containers        *nodeMap
 	eventEmitter      event.Hub
 	clock             clock.Clock
+	metronClient      loggregator_v2.Client
 
 	trustedSystemCertificatesPath string
 }
@@ -83,17 +85,19 @@ func New(
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	trustedSystemCertificatesPath string,
+	metronClient loggregator_v2.Client,
 ) ContainerStore {
 	return &containerStore{
-		containerConfig:   containerConfig,
-		gardenClient:      gardenClient,
-		dependencyManager: dependencyManager,
-		volumeManager:     volumeManager,
-		credManager:       credManager,
-		containers:        newNodeMap(totalCapacity),
-		eventEmitter:      eventEmitter,
-		transformer:       transformer,
-		clock:             clock,
+		containerConfig:               containerConfig,
+		gardenClient:                  gardenClient,
+		dependencyManager:             dependencyManager,
+		volumeManager:                 volumeManager,
+		credManager:                   credManager,
+		containers:                    newNodeMap(totalCapacity),
+		eventEmitter:                  eventEmitter,
+		transformer:                   transformer,
+		clock:                         clock,
+		metronClient:                  metronClient,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 	}
 }
@@ -119,6 +123,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.eventEmitter,
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
+			cs.metronClient,
 		))
 
 	if err != nil {
