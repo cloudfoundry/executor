@@ -276,7 +276,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		return nil, grouper.Members{}, err
 	}
 
-	metronClient := loggregator_v2.NewClient(config.MetronConfig)
+	metronClient, err := loggregator_v2.NewClient(logger, config.MetronConfig)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
 
 	containerStore := containerstore.New(
 		containerConfig,
