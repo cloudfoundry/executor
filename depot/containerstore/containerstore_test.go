@@ -343,6 +343,7 @@ var _ = Describe("Container Store", func() {
 						},
 					},
 				}
+
 				runReq = &executor.RunRequest{
 					Guid:    containerGuid,
 					RunInfo: runInfo,
@@ -369,16 +370,41 @@ var _ = Describe("Container Store", func() {
 				Expect(container.State).To(Equal(executor.StateCreated))
 			})
 
-			It("creates the container in garden with the correct limits", func() {
+			It("creates the container in garden with correct image parameters", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
 				containerSpec := gardenClient.CreateArgsForCall(0)
 				Expect(containerSpec.Handle).To(Equal(containerGuid))
-				Expect(containerSpec.RootFSPath).To(Equal(resource.RootFSPath))
+				Expect(containerSpec.Image.URI).To(Equal(resource.RootFSPath))
 				Expect(containerSpec.Privileged).To(Equal(true))
+			})
 
+			Context("when setting image credentials", func() {
+				BeforeEach(func() {
+					runReq.RunInfo.ImageUsername = "some-username"
+					runReq.RunInfo.ImagePassword = "some-password"
+				})
+
+				It("creates the container in garden with correct image credentials", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.Image.URI).To(Equal(resource.RootFSPath))
+					Expect(containerSpec.Image.Username).To(Equal("some-username"))
+					Expect(containerSpec.Image.Password).To(Equal("some-password"))
+				})
+			})
+
+			It("creates the container in garden with the correct limits", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(gardenClient.CreateCallCount()).To(Equal(1))
+				containerSpec := gardenClient.CreateArgsForCall(0)
 				Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
 
 				Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeExclusive))

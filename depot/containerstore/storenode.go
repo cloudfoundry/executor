@@ -234,7 +234,11 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
-		RootFSPath: info.RootFSPath,
+		Image: garden.ImageRef{
+			URI:      info.RootFSPath,
+			Username: info.ImageUsername,
+			Password: info.ImagePassword,
+		},
 		Env:        convertEnvVars(info.Env),
 		BindMounts: mounts,
 		Limits: garden.Limits{

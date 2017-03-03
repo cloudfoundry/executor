@@ -176,6 +176,8 @@ type RunInfo struct {
 	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
 	Network                       *Network                    `json:"network,omitempty"`
 	CertificateProperties         CertificateProperties       `json:"certificate_properties"`
+	ImageUsername                 string                      `json:"image_username"`
+	ImagePassword                 string                      `json:"image_password"`
 }
 
 type BindMountMode uint8
