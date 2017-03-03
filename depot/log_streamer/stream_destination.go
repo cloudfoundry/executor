@@ -4,26 +4,29 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/cloudfoundry/dropsonde/logs"
+	"code.cloudfoundry.org/loggregator_v2"
+
 	"github.com/cloudfoundry/sonde-go/events"
 )
 
 type streamDestination struct {
-	guid        string
-	sourceName  string
-	sourceId    string
-	messageType events.LogMessage_MessageType
-	buffer      []byte
-	processLock sync.Mutex
+	guid         string
+	sourceName   string
+	sourceId     string
+	messageType  events.LogMessage_MessageType
+	buffer       []byte
+	processLock  sync.Mutex
+	metronClient loggregator_v2.Client
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType) *streamDestination {
+func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, metronClient loggregator_v2.Client) *streamDestination {
 	return &streamDestination{
-		guid:        guid,
-		sourceName:  sourceName,
-		sourceId:    sourceId,
-		messageType: messageType,
-		buffer:      make([]byte, 0, MAX_MESSAGE_SIZE),
+		guid:         guid,
+		sourceName:   sourceName,
+		sourceId:     sourceId,
+		messageType:  messageType,
+		buffer:       make([]byte, 0, MAX_MESSAGE_SIZE),
+		metronClient: metronClient,
 	}
 }
 
@@ -44,9 +47,9 @@ func (destination *streamDestination) flush() {
 	if len(msg) > 0 {
 		switch destination.messageType {
 		case events.LogMessage_OUT:
-			logs.SendAppLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+			destination.metronClient.SendAppLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
 		case events.LogMessage_ERR:
-			logs.SendAppErrorLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+			destination.metronClient.SendAppErrorLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
 		}
 	}
 }
@@ -126,5 +129,5 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 }
 
 func (d *streamDestination) withSource(sourceName string) *streamDestination {
-	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType)
+	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType, d.metronClient)
 }

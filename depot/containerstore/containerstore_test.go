@@ -5,10 +5,9 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"sync"
 	"time"
 
-	logfake "github.com/cloudfoundry/dropsonde/log_sender/fake"
-	"github.com/cloudfoundry/dropsonde/logs"
 	metricfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
@@ -25,6 +24,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 
@@ -32,6 +32,19 @@ import (
 	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/garden/server"
 )
+
+const (
+	out = "OUT"
+	err = "ERR"
+)
+
+type log struct {
+	AppId          string
+	Message        string
+	SourceType     string
+	SourceInstance string
+	MessageType    string
+}
 
 var _ = Describe("Container Store", func() {
 	var (
@@ -53,8 +66,10 @@ var _ = Describe("Container Store", func() {
 
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
-		fakeLogSender    *logfake.FakeLogSender
 		fakeMetricSender *metricfake.FakeMetricSender
+		fakeMetronClient *mfakes.FakeClient
+		logs             []log
+		logsLock         sync.Mutex
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -69,7 +84,16 @@ var _ = Describe("Container Store", func() {
 		Expect(fakeMetricSender.GetValue(metricName).Unit).To(Equal("nanos"))
 	}
 
+	getLogs := func() []log {
+		logsLock.Lock()
+		defer logsLock.Unlock()
+		logsCopy := make([]log, len(logs))
+		copy(logsCopy, logs)
+		return logsCopy
+	}
+
 	BeforeEach(func() {
+		logs = []log{}
 		gardenContainer = &gardenfakes.FakeContainer{}
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
@@ -87,9 +111,6 @@ var _ = Describe("Container Store", func() {
 
 		megatron = &faketransformer.FakeTransformer{}
 
-		fakeLogSender = logfake.NewFakeLogSender()
-		logs.Initialize(fakeLogSender)
-
 		fakeMetricSender = metricfake.NewFakeMetricSender()
 		dropsonde_metrics.Initialize(fakeMetricSender, nil)
 
@@ -99,6 +120,32 @@ var _ = Describe("Container Store", func() {
 			MaxCPUShares:           maxCPUShares,
 			ReapInterval:           20 * time.Millisecond,
 			ReservedExpirationTime: 20 * time.Millisecond,
+		}
+
+		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient.SendAppErrorLogStub = func(appId, message, sourceType, sourceInstance string) error {
+			logsLock.Lock()
+			defer logsLock.Unlock()
+			logs = append(logs, log{
+				AppId:          appId,
+				Message:        message,
+				SourceType:     sourceType,
+				SourceInstance: sourceInstance,
+				MessageType:    err,
+			})
+			return nil
+		}
+		fakeMetronClient.SendAppLogStub = func(appId, message, sourceType, sourceInstance string) error {
+			logsLock.Lock()
+			defer logsLock.Unlock()
+			logs = append(logs, log{
+				AppId:          appId,
+				Message:        message,
+				SourceType:     sourceType,
+				SourceInstance: sourceInstance,
+				MessageType:    out,
+			})
+			return nil
 		}
 
 		containerStore = containerstore.New(
@@ -112,6 +159,7 @@ var _ = Describe("Container Store", func() {
 			eventEmitter,
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
+			fakeMetronClient,
 		)
 	})
 
@@ -502,8 +550,8 @@ var _ = Describe("Container Store", func() {
 			It("sends a log after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(fakeLogSender.GetLogs())).To(BeNumerically("==", 2))
-				Expect(fakeLogSender.GetLogs()[1].Message).To(ContainSubstring("Successfully created container"))
+				Expect(len(getLogs())).To(BeNumerically("==", 2))
+				Expect(getLogs()[1].Message).To(ContainSubstring("Successfully created container"))
 			})
 
 			It("generates container credential directory and credentials", func() {
@@ -1376,7 +1424,7 @@ var _ = Describe("Container Store", func() {
 				It("logs the container is detrroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					logMessages := fakeLogSender.GetLogs()
+					logMessages := getLogs()
 					Expect(logMessages).To(HaveLen(4))
 					emission := logMessages[2]
 					Expect(emission.AppId).To(Equal(containerGuid))

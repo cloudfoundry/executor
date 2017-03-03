@@ -10,15 +10,17 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/loggregator_v2"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
 
-func logStreamerFromLogConfig(conf executor.LogConfig) log_streamer.LogStreamer {
+func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggregator_v2.Client) log_streamer.LogStreamer {
 	return log_streamer.New(
 		conf.Guid,
 		conf.SourceName,
 		conf.Index,
+		metronClient,
 	)
 }
 

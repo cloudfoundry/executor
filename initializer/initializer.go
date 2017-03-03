@@ -33,6 +33,7 @@ import (
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
@@ -85,6 +86,7 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 type ExecutorConfig struct {
+	loggregator_v2.MetronConfig
 	AutoDiskOverheadMB                 int      `json:"auto_disk_capacity_overhead_mb"`
 	CachePath                          string   `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64   `json:"container_inode_limit,omitempty"`
@@ -274,6 +276,11 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		return nil, grouper.Members{}, err
 	}
 
+	metronClient, err := loggregator_v2.NewClient(logger, config.MetronConfig)
+	if err != nil {
+		return nil, grouper.Members{}, err
+	}
+
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
@@ -285,6 +292,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		hub,
 		transformer,
 		config.TrustedSystemCertificatesPath,
+		metronClient,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
@@ -335,6 +343,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				time.Duration(config.ContainerMetricsReportInterval),
 				clock,
 				depotClient,
+				metronClient,
 			)},
 			{"garden_health_checker", gardenhealth.NewRunner(
 				time.Duration(config.GardenHealthcheckInterval),

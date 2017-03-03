@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
@@ -40,6 +41,7 @@ const GardenContainerDestructionFailedDuration = metric.Duration("GardenContaine
 type storeNode struct {
 	modifiedIndex               uint
 	hostTrustedCertificatesPath string
+	metronClient                loggregator_v2.Client
 
 	// infoLock protects modifying info and swapping gardenContainer pointers
 	infoLock           *sync.Mutex
@@ -69,6 +71,7 @@ func newStoreNode(
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
+	metronClient loggregator_v2.Client,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -83,6 +86,7 @@ func newStoreNode(
 		transformer:                 transformer,
 		modifiedIndex:               0,
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
+		metronClient:                metronClient,
 	}
 }
 
@@ -141,7 +145,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(info.LogConfig)
+	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
 
 	mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
 	if err != nil {
@@ -312,7 +316,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig)
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
 	if err != nil {
@@ -379,7 +383,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		<-n.process.Wait()
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig)
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Destroying container\n")
 	err = n.destroyContainer(logger)
