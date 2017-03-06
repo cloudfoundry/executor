@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"sync"
 	"time"
 
 	metricfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -33,19 +32,6 @@ import (
 	"code.cloudfoundry.org/garden/server"
 )
 
-const (
-	out = "OUT"
-	err = "ERR"
-)
-
-type log struct {
-	AppId          string
-	Message        string
-	SourceType     string
-	SourceInstance string
-	MessageType    string
-}
-
 var _ = Describe("Container Store", func() {
 	var (
 		containerStore containerstore.ContainerStore
@@ -67,9 +53,7 @@ var _ = Describe("Container Store", func() {
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
 		fakeMetricSender *metricfake.FakeMetricSender
-		fakeMetronClient *mfakes.FakeClient
-		logs             []log
-		logsLock         sync.Mutex
+		fakeMetronClient *mfakes.FakeLogSender
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -84,16 +68,7 @@ var _ = Describe("Container Store", func() {
 		Expect(fakeMetricSender.GetValue(metricName).Unit).To(Equal("nanos"))
 	}
 
-	getLogs := func() []log {
-		logsLock.Lock()
-		defer logsLock.Unlock()
-		logsCopy := make([]log, len(logs))
-		copy(logsCopy, logs)
-		return logsCopy
-	}
-
 	BeforeEach(func() {
-		logs = []log{}
 		gardenContainer = &gardenfakes.FakeContainer{}
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
@@ -122,31 +97,7 @@ var _ = Describe("Container Store", func() {
 			ReservedExpirationTime: 20 * time.Millisecond,
 		}
 
-		fakeMetronClient = new(mfakes.FakeClient)
-		fakeMetronClient.SendAppErrorLogStub = func(appId, message, sourceType, sourceInstance string) error {
-			logsLock.Lock()
-			defer logsLock.Unlock()
-			logs = append(logs, log{
-				AppId:          appId,
-				Message:        message,
-				SourceType:     sourceType,
-				SourceInstance: sourceInstance,
-				MessageType:    err,
-			})
-			return nil
-		}
-		fakeMetronClient.SendAppLogStub = func(appId, message, sourceType, sourceInstance string) error {
-			logsLock.Lock()
-			defer logsLock.Unlock()
-			logs = append(logs, log{
-				AppId:          appId,
-				Message:        message,
-				SourceType:     sourceType,
-				SourceInstance: sourceInstance,
-				MessageType:    out,
-			})
-			return nil
-		}
+		fakeMetronClient = mfakes.NewFakeLogSender()
 
 		containerStore = containerstore.New(
 			containerConfig,
@@ -550,8 +501,8 @@ var _ = Describe("Container Store", func() {
 			It("sends a log after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(getLogs())).To(BeNumerically("==", 2))
-				Expect(getLogs()[1].Message).To(ContainSubstring("Successfully created container"))
+				Expect(len(fakeMetronClient.Logs())).To(BeNumerically("==", 2))
+				Expect(fakeMetronClient.Logs()[1].Message).To(ContainSubstring("Successfully created container"))
 			})
 
 			It("generates container credential directory and credentials", func() {
@@ -1424,20 +1375,20 @@ var _ = Describe("Container Store", func() {
 				It("logs the container is detrroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					logMessages := getLogs()
+					logMessages := fakeMetronClient.Logs()
 					Expect(logMessages).To(HaveLen(4))
 					emission := logMessages[2]
 					Expect(emission.AppId).To(Equal(containerGuid))
 					Expect(emission.SourceType).To(Equal("test-source"))
 					Expect(string(emission.Message)).To(Equal("Destroying container"))
-					Expect(emission.MessageType).To(Equal("OUT"))
+					Expect(emission.MessageType).To(Equal(mfakes.OUT))
 					Expect(emission.SourceInstance).To(Equal("1"))
 
 					emission = logMessages[3]
 					Expect(emission.AppId).To(Equal(containerGuid))
 					Expect(emission.SourceType).To(Equal("test-source"))
 					Expect(string(emission.Message)).To(Equal("Successfully destroyed container"))
-					Expect(emission.MessageType).To(Equal("OUT"))
+					Expect(emission.MessageType).To(Equal(mfakes.OUT))
 					Expect(emission.SourceInstance).To(Equal("1"))
 				})
 			})
