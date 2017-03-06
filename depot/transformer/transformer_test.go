@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	"code.cloudfoundry.org/workpool"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,19 +24,21 @@ import (
 var _ = Describe("Transformer", func() {
 	Describe("StepsRunner", func() {
 		var (
-			logger          lager.Logger
-			optimusPrime    transformer.Transformer
-			container       executor.Container
-			logStreamer     log_streamer.LogStreamer
-			gardenContainer *gardenfakes.FakeContainer
-			clock           *fakeclock.FakeClock
+			logger           lager.Logger
+			optimusPrime     transformer.Transformer
+			container        executor.Container
+			logStreamer      log_streamer.LogStreamer
+			gardenContainer  *gardenfakes.FakeContainer
+			clock            *fakeclock.FakeClock
+			fakeMetronClient *mfakes.FakeClient
 		)
 
 		BeforeEach(func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			logStreamer = log_streamer.New("test", "test", 1)
+			fakeMetronClient = &mfakes.FakeClient{}
+			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
 
 			healthyMonitoringInterval := 1 * time.Millisecond
 			unhealthyMonitoringInterval := 1 * time.Millisecond
