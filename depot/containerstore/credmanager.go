@@ -44,6 +44,7 @@ func (c *noopManager) RemoveCreds(logger lager.Logger, container executor.Contai
 
 type credManager struct {
 	credDir            string
+	validityPeriod     time.Duration
 	entropyReader      io.Reader
 	clock              clock.Clock
 	CaCert             *x509.Certificate
@@ -53,6 +54,7 @@ type credManager struct {
 
 func NewCredManager(
 	credDir string,
+	validityPeriod time.Duration,
 	entropyReader io.Reader,
 	clock clock.Clock,
 	CaCert *x509.Certificate,
@@ -61,6 +63,7 @@ func NewCredManager(
 ) CredManager {
 	return &credManager{
 		credDir:            credDir,
+		validityPeriod:     validityPeriod,
 		entropyReader:      entropyReader,
 		clock:              clock,
 		CaCert:             CaCert,
@@ -108,7 +111,8 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 		return err
 	}
 
-	template := createCertificateTemplate(container.InternalIP, container.Guid, c.clock.Now(), c.clock.Now().Add(24*time.Hour), container.CertificateProperties.OrganizationalUnit)
+	now := c.clock.Now()
+	template := createCertificateTemplate(container.InternalIP, container.Guid, now, now.Add(c.validityPeriod), container.CertificateProperties.OrganizationalUnit)
 	template.SerialNumber.SetBytes([]byte(container.Guid))
 
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)

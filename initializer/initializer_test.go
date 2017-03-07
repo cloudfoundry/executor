@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/initializer"
@@ -51,33 +52,33 @@ var _ = Describe("Initializer", func() {
 			CachePath:                          "/tmp/cache",
 			ContainerInodeLimit:                200000,
 			ContainerMaxCpuShares:              0,
-			ContainerMetricsReportInterval:     initializer.Duration(15 * time.Second),
+			ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 			ContainerOwnerName:                 "executor",
-			ContainerReapInterval:              initializer.Duration(time.Minute),
+			ContainerReapInterval:              durationjson.Duration(time.Minute),
 			CreateWorkPoolSize:                 32,
 			DeleteWorkPoolSize:                 32,
 			DiskMB:                             configuration.Automatic,
 			ExportNetworkEnvVars:               false,
 			GardenAddr:                         "/tmp/garden.sock",
-			GardenHealthcheckCommandRetryPause: initializer.Duration(1 * time.Second),
-			GardenHealthcheckEmissionInterval:  initializer.Duration(30 * time.Second),
-			GardenHealthcheckInterval:          initializer.Duration(10 * time.Minute),
+			GardenHealthcheckCommandRetryPause: durationjson.Duration(1 * time.Second),
+			GardenHealthcheckEmissionInterval:  durationjson.Duration(30 * time.Second),
+			GardenHealthcheckInterval:          durationjson.Duration(10 * time.Minute),
 			GardenHealthcheckProcessArgs:       []string{},
 			GardenHealthcheckProcessEnv:        []string{},
-			GardenHealthcheckTimeout:           initializer.Duration(10 * time.Minute),
+			GardenHealthcheckTimeout:           durationjson.Duration(10 * time.Minute),
 			GardenNetwork:                      "unix",
 			HealthCheckContainerOwnerName:      "executor-health-check",
 			HealthCheckWorkPoolSize:            64,
-			HealthyMonitoringInterval:          initializer.Duration(30 * time.Second),
+			HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
 			MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
 			MaxConcurrentDownloads:             5,
 			MemoryMB:                           configuration.Automatic,
 			MetricsWorkPoolSize:                8,
 			ReadWorkPoolSize:                   64,
-			ReservedExpirationTime:             initializer.Duration(time.Minute),
+			ReservedExpirationTime:             durationjson.Duration(time.Minute),
 			SkipCertVerify:                     false,
 			TempDir:                            "/tmp",
-			UnhealthyMonitoringInterval:        initializer.Duration(500 * time.Millisecond),
+			UnhealthyMonitoringInterval:        durationjson.Duration(500 * time.Millisecond),
 			VolmanDriverPaths:                  "/tmpvolman1:/tmp/volman2",
 		}
 	})
@@ -272,6 +273,7 @@ var _ = Describe("Initializer", func() {
 				config.InstanceIdentityCredDir = "fixtures/instance-id/"
 				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
 				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
+				config.InstanceIdentityValidityPeriod = durationjson.Duration(1 * time.Minute)
 			})
 
 			It("returns a credential manager", func() {
@@ -338,6 +340,16 @@ var _ = Describe("Initializer", func() {
 
 				It("fails", func() {
 					Eventually(err).Should(BeAssignableToTypeOf(asn1.StructuralError{}))
+				})
+			})
+
+			Context("when the validity period is not set", func() {
+				BeforeEach(func() {
+					config.InstanceIdentityValidityPeriod = 0
+				})
+
+				It("fails", func() {
+					Eventually(err).Should(MatchError(ContainSubstring("instance ID validity period needs to be set and positive")))
 				})
 			})
 		})

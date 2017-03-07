@@ -26,12 +26,13 @@ import (
 
 var _ = Describe("CredManager", func() {
 	var (
-		credManager containerstore.CredManager
-		CaCert      *x509.Certificate
-		privateKey  *rsa.PrivateKey
-		tmpdir      string
-		logger      lager.Logger
-		clock       *fakeclock.FakeClock
+		credManager    containerstore.CredManager
+		validityPeriod time.Duration
+		CaCert         *x509.Certificate
+		privateKey     *rsa.PrivateKey
+		tmpdir         string
+		logger         lager.Logger
+		clock          *fakeclock.FakeClock
 	)
 
 	BeforeEach(func() {
@@ -39,13 +40,15 @@ var _ = Describe("CredManager", func() {
 		tmpdir, err = ioutil.TempDir("", "credsmanager")
 		Expect(err).ToNot(HaveOccurred())
 
+		validityPeriod = time.Minute
+
 		logger = lagertest.NewTestLogger("credmanager")
 		// Truncate and set to UTC time because of parsing time from certificate
 		// and only has second granularity
 		clock = fakeclock.NewFakeClock(time.Now().UTC().Truncate(time.Second))
 
 		CaCert, privateKey = createIntermediateCert()
-		credManager = containerstore.NewCredManager(tmpdir, rand.Reader, clock, CaCert, privateKey, "containerpath")
+		credManager = containerstore.NewCredManager(tmpdir, validityPeriod, rand.Reader, clock, CaCert, privateKey, "containerpath")
 	})
 
 	AfterEach(func() {
@@ -137,7 +140,7 @@ var _ = Describe("CredManager", func() {
 		Context("when generating private key fails", func() {
 			BeforeEach(func() {
 				reader := io.LimitReader(rand.Reader, 0)
-				credManager = containerstore.NewCredManager(tmpdir, reader, clock, CaCert, privateKey, "")
+				credManager = containerstore.NewCredManager(tmpdir, validityPeriod, reader, clock, CaCert, privateKey, "")
 			})
 
 			It("returns an error", func() {
@@ -197,8 +200,8 @@ var _ = Describe("CredManager", func() {
 				Expect(cert.Subject.CommonName).To(Equal(container.Guid))
 			})
 
-			It("expires in the next 24 hours", func() {
-				Expect(cert.NotAfter).To(Equal(clock.Now().Add(24 * time.Hour)))
+			It("expires in after the configured validity period", func() {
+				Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
 			})
 
 			It("not before is set to current timestamp", func() {

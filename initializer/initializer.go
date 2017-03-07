@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -18,6 +17,7 @@ import (
 	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	"code.cloudfoundry.org/executor/depot"
@@ -62,73 +62,51 @@ func (containers *executorContainers) Containers() ([]garden.Container, error) {
 	})
 }
 
-type Duration time.Duration
-
-func (d *Duration) UnmarshalJSON(data []byte) error {
-	var s string
-	err := json.Unmarshal(data, &s)
-	if err != nil {
-		return err
-	}
-
-	dur, err := time.ParseDuration(s)
-	if err != nil {
-		return err
-	}
-
-	*d = Duration(dur)
-	return nil
-}
-
-func (d *Duration) MarshalJSON() ([]byte, error) {
-	t := time.Duration(*d)
-	return []byte(fmt.Sprintf(`"%s"`, t.String())), nil
-}
-
 type ExecutorConfig struct {
 	loggregator_v2.MetronConfig
-	AutoDiskOverheadMB                 int      `json:"auto_disk_capacity_overhead_mb"`
-	CachePath                          string   `json:"cache_path,omitempty"`
-	ContainerInodeLimit                uint64   `json:"container_inode_limit,omitempty"`
-	ContainerMaxCpuShares              uint64   `json:"container_max_cpu_shares,omitempty"`
-	ContainerMetricsReportInterval     Duration `json:"container_metrics_report_interval,omitempty"`
-	ContainerOwnerName                 string   `json:"container_owner_name,omitempty"`
-	ContainerReapInterval              Duration `json:"container_reap_interval,omitempty"`
-	CreateWorkPoolSize                 int      `json:"create_work_pool_size,omitempty"`
-	DeleteWorkPoolSize                 int      `json:"delete_work_pool_size,omitempty"`
-	DiskMB                             string   `json:"disk_mb,omitempty"`
-	ExportNetworkEnvVars               bool     `json:"export_network_env_vars,omitempty"`
-	GardenAddr                         string   `json:"garden_addr,omitempty"`
-	GardenHealthcheckCommandRetryPause Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
-	GardenHealthcheckEmissionInterval  Duration `json:"garden_healthcheck_emission_interval,omitempty"`
-	GardenHealthcheckInterval          Duration `json:"garden_healthcheck_interval,omitempty"`
-	GardenHealthcheckProcessArgs       []string `json:"garden_healthcheck_process_args,omitempty"`
-	GardenHealthcheckProcessDir        string   `json:"garden_healthcheck_process_dir"`
-	GardenHealthcheckProcessEnv        []string `json:"garden_healthcheck_process_env,omitempty"`
-	GardenHealthcheckProcessPath       string   `json:"garden_healthcheck_process_path"`
-	GardenHealthcheckProcessUser       string   `json:"garden_healthcheck_process_user"`
-	GardenHealthcheckTimeout           Duration `json:"garden_healthcheck_timeout,omitempty"`
-	GardenNetwork                      string   `json:"garden_network,omitempty"`
-	HealthCheckContainerOwnerName      string   `json:"healthcheck_container_owner_name,omitempty"`
-	HealthCheckWorkPoolSize            int      `json:"healthcheck_work_pool_size,omitempty"`
-	HealthyMonitoringInterval          Duration `json:"healthy_monitoring_interval,omitempty"`
-	InstanceIdentityCAPath             string   `json:"instance_identity_ca_path,omitempty"`
-	InstanceIdentityCredDir            string   `json:"instance_identity_cred_dir,omitempty"`
-	InstanceIdentityPrivateKeyPath     string   `json:"instance_identity_private_key_path,omitempty"`
-	MaxCacheSizeInBytes                uint64   `json:"max_cache_size_in_bytes,omitempty"`
-	MaxConcurrentDownloads             int      `json:"max_concurrent_downloads,omitempty"`
-	MemoryMB                           string   `json:"memory_mb,omitempty"`
-	MetricsWorkPoolSize                int      `json:"metrics_work_pool_size,omitempty"`
-	PathToCACertsForDownloads          string   `json:"path_to_ca_certs_for_downloads"`
-	PostSetupHook                      string   `json:"post_setup_hook"`
-	PostSetupUser                      string   `json:"post_setup_user"`
-	ReadWorkPoolSize                   int      `json:"read_work_pool_size,omitempty"`
-	ReservedExpirationTime             Duration `json:"reserved_expiration_time,omitempty"`
-	SkipCertVerify                     bool     `json:"skip_cert_verify,omitempty"`
-	TempDir                            string   `json:"temp_dir,omitempty"`
-	TrustedSystemCertificatesPath      string   `json:"trusted_system_certificates_path"`
-	UnhealthyMonitoringInterval        Duration `json:"unhealthy_monitoring_interval,omitempty"`
-	VolmanDriverPaths                  string   `json:"volman_driver_paths"`
+	AutoDiskOverheadMB                 int                   `json:"auto_disk_capacity_overhead_mb"`
+	CachePath                          string                `json:"cache_path,omitempty"`
+	ContainerInodeLimit                uint64                `json:"container_inode_limit,omitempty"`
+	ContainerMaxCpuShares              uint64                `json:"container_max_cpu_shares,omitempty"`
+	ContainerMetricsReportInterval     durationjson.Duration `json:"container_metrics_report_interval,omitempty"`
+	ContainerOwnerName                 string                `json:"container_owner_name,omitempty"`
+	ContainerReapInterval              durationjson.Duration `json:"container_reap_interval,omitempty"`
+	CreateWorkPoolSize                 int                   `json:"create_work_pool_size,omitempty"`
+	DeleteWorkPoolSize                 int                   `json:"delete_work_pool_size,omitempty"`
+	DiskMB                             string                `json:"disk_mb,omitempty"`
+	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
+	GardenAddr                         string                `json:"garden_addr,omitempty"`
+	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
+	GardenHealthcheckEmissionInterval  durationjson.Duration `json:"garden_healthcheck_emission_interval,omitempty"`
+	GardenHealthcheckInterval          durationjson.Duration `json:"garden_healthcheck_interval,omitempty"`
+	GardenHealthcheckProcessArgs       []string              `json:"garden_healthcheck_process_args,omitempty"`
+	GardenHealthcheckProcessDir        string                `json:"garden_healthcheck_process_dir"`
+	GardenHealthcheckProcessEnv        []string              `json:"garden_healthcheck_process_env,omitempty"`
+	GardenHealthcheckProcessPath       string                `json:"garden_healthcheck_process_path"`
+	GardenHealthcheckProcessUser       string                `json:"garden_healthcheck_process_user"`
+	GardenHealthcheckTimeout           durationjson.Duration `json:"garden_healthcheck_timeout,omitempty"`
+	GardenNetwork                      string                `json:"garden_network,omitempty"`
+	HealthCheckContainerOwnerName      string                `json:"healthcheck_container_owner_name,omitempty"`
+	HealthCheckWorkPoolSize            int                   `json:"healthcheck_work_pool_size,omitempty"`
+	HealthyMonitoringInterval          durationjson.Duration `json:"healthy_monitoring_interval,omitempty"`
+	InstanceIdentityCAPath             string                `json:"instance_identity_ca_path,omitempty"`
+	InstanceIdentityCredDir            string                `json:"instance_identity_cred_dir,omitempty"`
+	InstanceIdentityPrivateKeyPath     string                `json:"instance_identity_private_key_path,omitempty"`
+	InstanceIdentityValidityPeriod     durationjson.Duration `json:"instance_identity_validity_period,omitempty"`
+	MaxCacheSizeInBytes                uint64                `json:"max_cache_size_in_bytes,omitempty"`
+	MaxConcurrentDownloads             int                   `json:"max_concurrent_downloads,omitempty"`
+	MemoryMB                           string                `json:"memory_mb,omitempty"`
+	MetricsWorkPoolSize                int                   `json:"metrics_work_pool_size,omitempty"`
+	PathToCACertsForDownloads          string                `json:"path_to_ca_certs_for_downloads"`
+	PostSetupHook                      string                `json:"post_setup_hook"`
+	PostSetupUser                      string                `json:"post_setup_user"`
+	ReadWorkPoolSize                   int                   `json:"read_work_pool_size,omitempty"`
+	ReservedExpirationTime             durationjson.Duration `json:"reserved_expiration_time,omitempty"`
+	SkipCertVerify                     bool                  `json:"skip_cert_verify,omitempty"`
+	TempDir                            string                `json:"temp_dir,omitempty"`
+	TrustedSystemCertificatesPath      string                `json:"trusted_system_certificates_path"`
+	UnhealthyMonitoringInterval        durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
+	VolmanDriverPaths                  string                `json:"volman_driver_paths"`
 }
 
 const (
@@ -146,15 +124,15 @@ var DefaultConfiguration = ExecutorConfig{
 	MemoryMB:                           configuration.Automatic,
 	DiskMB:                             configuration.Automatic,
 	TempDir:                            "/tmp",
-	ReservedExpirationTime:             Duration(time.Minute),
-	ContainerReapInterval:              Duration(time.Minute),
+	ReservedExpirationTime:             durationjson.Duration(time.Minute),
+	ContainerReapInterval:              durationjson.Duration(time.Minute),
 	ContainerInodeLimit:                200000,
 	ContainerMaxCpuShares:              0,
 	CachePath:                          "/tmp/cache",
 	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
 	SkipCertVerify:                     false,
-	HealthyMonitoringInterval:          Duration(30 * time.Second),
-	UnhealthyMonitoringInterval:        Duration(500 * time.Millisecond),
+	HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
+	UnhealthyMonitoringInterval:        durationjson.Duration(500 * time.Millisecond),
 	ExportNetworkEnvVars:               false,
 	ContainerOwnerName:                 "executor",
 	HealthCheckContainerOwnerName:      "executor-health-check",
@@ -164,13 +142,13 @@ var DefaultConfiguration = ExecutorConfig{
 	MetricsWorkPoolSize:                defaultMetricsWorkPoolSize,
 	HealthCheckWorkPoolSize:            defaultHealthCheckWorkPoolSize,
 	MaxConcurrentDownloads:             defaultMaxConcurrentDownloads,
-	GardenHealthcheckInterval:          Duration(10 * time.Minute),
-	GardenHealthcheckEmissionInterval:  Duration(30 * time.Second),
-	GardenHealthcheckTimeout:           Duration(10 * time.Minute),
-	GardenHealthcheckCommandRetryPause: Duration(time.Second),
+	GardenHealthcheckInterval:          durationjson.Duration(10 * time.Minute),
+	GardenHealthcheckEmissionInterval:  durationjson.Duration(30 * time.Second),
+	GardenHealthcheckTimeout:           durationjson.Duration(10 * time.Minute),
+	GardenHealthcheckCommandRetryPause: durationjson.Duration(time.Second),
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
-	ContainerMetricsReportInterval:     Duration(15 * time.Second),
+	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 }
 
 func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -540,8 +518,13 @@ func CredManagerFromConfig(logger lager.Logger, config ExecutorConfig, clock clo
 			return nil, err
 		}
 
+		if config.InstanceIdentityValidityPeriod <= 0 {
+			return nil, errors.New("instance ID validity period needs to be set and positive")
+		}
+
 		return containerstore.NewCredManager(
 			config.InstanceIdentityCredDir,
+			time.Duration(config.InstanceIdentityValidityPeriod),
 			rand.Reader,
 			clock,
 			certs[0],
