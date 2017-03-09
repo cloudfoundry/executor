@@ -498,33 +498,6 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 }
 
-func setupNetInOnContainer(logger lager.Logger, ports []executor.PortMapping, gardenContainer garden.Container) ([]executor.PortMapping, error) {
-	actualPortMappings := make([]executor.PortMapping, len(ports))
-	for i, portMapping := range ports {
-		logger.Debug("net-in")
-		actualHost, actualContainerPort, err := gardenContainer.NetIn(uint32(portMapping.HostPort), uint32(portMapping.ContainerPort))
-		if err != nil {
-			logger.Error("net-in-failed", err)
-			return nil, err
-		}
-		logger.Debug("net-in-complete")
-		actualPortMappings[i].ContainerPort = uint16(actualContainerPort)
-		actualPortMappings[i].HostPort = uint16(actualHost)
-	}
-	return actualPortMappings, nil
-}
-
-func setupNetOutOnContainer(logger lager.Logger, netOutRules []garden.NetOutRule, gardenContainer garden.Container) error {
-	logger.Debug("net-out")
-	err := gardenContainer.BulkNetOut(netOutRules)
-	if err != nil {
-		logger.Error("net-out-failed", err)
-		return err
-	}
-	logger.Debug("net-out-complete")
-	return nil
-}
-
 func sendMetricDuration(logger lager.Logger, metric metric.Duration, value time.Duration) {
 	err := metric.Send(value)
 	if err != nil {
