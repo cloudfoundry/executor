@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
+	"net"
 	"os"
 	"time"
 
@@ -715,9 +716,9 @@ var _ = Describe("Container Store", func() {
 						},
 						{
 							Protocol:     "icmp",
-							Destinations: []string{"1.1.1.1"},
+							Destinations: []string{"1.1.1.2"},
 							IcmpInfo: &models.ICMPInfo{
-								Type: 2,
+								Type: 3,
 								Code: 10,
 							},
 						},
@@ -729,36 +730,36 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(gardenContainer.BulkNetOutCallCount()).To(Equal(1))
-				})
-
-				Context("when NetOut fails", func() {
-					BeforeEach(func() {
-						gardenContainer.BulkNetOutStub = func([]garden.NetOutRule) error {
-							return errors.New("failed net out!")
-						}
-					})
-
-					It("destroys the created container and returns an error", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(Equal(errors.New("failed net out!")))
-
-						Expect(gardenClient.CreateCallCount()).To(Equal(1))
-						Expect(gardenClient.DestroyCallCount()).To(Equal(1))
-
-						Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
-					})
-
-					It("transitions to a completed state", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(HaveOccurred())
-
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(container.State).To(Equal(executor.StateCompleted))
-						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
-					})
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.NetOut).To(HaveLen(2))
+					icmpCode := garden.ICMPCode(10)
+					Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+						Protocol: garden.Protocol(3),
+						Networks: []garden.IPRange{
+							{
+								Start: net.ParseIP("1.1.1.1"),
+								End:   net.ParseIP("1.1.1.1"),
+							},
+						},
+						ICMPs: &garden.ICMPControl{
+							Type: 2,
+							Code: &icmpCode,
+						},
+					}))
+					Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+						Protocol: garden.Protocol(3),
+						Networks: []garden.IPRange{
+							{
+								Start: net.ParseIP("1.1.1.2"),
+								End:   net.ParseIP("1.1.1.2"),
+							},
+						},
+						ICMPs: &garden.ICMPControl{
+							Type: 3,
+							Code: &icmpCode,
+						},
+					}))
 				})
 
 				Context("when a egress rule is not valid", func() {
@@ -786,15 +787,23 @@ var _ = Describe("Container Store", func() {
 					}
 					runReq.Ports = portMapping
 
-					gardenContainer.NetInStub = func(uint32, containerPort uint32) (uint32, uint32, error) {
-						switch containerPort {
-						case 8080:
-							return 16000, 8080, nil
-						case 9090:
-							return 32000, 9090, nil
-						default:
-							return 0, 0, errors.New("failed-net-in")
+					gardenClient.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
+						gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
+							info := garden.ContainerInfo{}
+							info.MappedPorts = []garden.PortMapping{}
+							for _, netIn := range spec.NetIn {
+								switch netIn.ContainerPort {
+								case 8080:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16000, ContainerPort: 8080})
+								case 9090:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 32000, ContainerPort: 9090})
+								default:
+									return info, errors.New("failed-net-in")
+								}
+							}
+							return info, nil
 						}
+						return gardenContainer, nil
 					}
 				})
 
@@ -802,7 +811,14 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(gardenContainer.NetInCallCount()).To(Equal(2))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.NetIn).To(HaveLen(2))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 8080,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 9090,
+					}))
 				})
 
 				It("saves the actual port mappings on the container", func() {
@@ -817,31 +833,6 @@ var _ = Describe("Container Store", func() {
 					fetchedContainer, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(fetchedContainer).To(Equal(container))
-				})
-
-				Context("when NetIn fails", func() {
-					BeforeEach(func() {
-						gardenContainer.NetInReturns(0, 0, errors.New("failed generating net in rules"))
-					})
-
-					It("destroys the container and returns an error", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(HaveOccurred())
-
-						Expect(gardenClient.DestroyCallCount()).To(Equal(1))
-						Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
-					})
-
-					It("transitions to a completed state", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(HaveOccurred())
-
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(container.State).To(Equal(executor.StateCompleted))
-						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
-					})
 				})
 			})
 
@@ -890,7 +881,12 @@ var _ = Describe("Container Store", func() {
 
 			Context("when requesting the container info for the created container fails", func() {
 				BeforeEach(func() {
-					gardenContainer.InfoReturns(garden.ContainerInfo{}, errors.New("could not obtain info"))
+					gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
+						if gardenContainer.InfoCallCount() == 1 {
+							return garden.ContainerInfo{}, nil
+						}
+						return garden.ContainerInfo{}, errors.New("could not obtain info")
+					}
 				})
 
 				It("returns an error", func() {

@@ -235,6 +235,19 @@ func (n *storeNode) gardenProperties(container *executor.Container) garden.Prope
 }
 
 func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container, mounts []garden.BindMount) (garden.Container, error) {
+	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
+	if err != nil {
+		return nil, err
+	}
+
+	netInRules := make([]garden.NetIn, len(info.Ports))
+	for i, portMapping := range info.Ports {
+		netInRules[i] = garden.NetIn{
+			HostPort:      uint32(portMapping.HostPort),
+			ContainerPort: uint32(portMapping.ContainerPort),
+		}
+	}
+
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
@@ -262,11 +275,8 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			},
 		},
 		Properties: n.gardenProperties(info),
-	}
-
-	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
-	if err != nil {
-		return nil, err
+		NetIn:      netInRules,
+		NetOut:     netOutRules,
 	}
 
 	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient)
@@ -274,16 +284,14 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	err = setupNetOutOnContainer(logger, netOutRules, gardenContainer)
+	containerInfo, err := gardenContainer.Info()
 	if err != nil {
-		n.destroyContainer(logger)
 		return nil, err
 	}
 
-	info.Ports, err = setupNetInOnContainer(logger, info.Ports, gardenContainer)
-	if err != nil {
-		n.destroyContainer(logger)
-		return nil, err
+	info.Ports = make([]executor.PortMapping, len(containerInfo.MappedPorts))
+	for i, portMapping := range containerInfo.MappedPorts {
+		info.Ports[i] = executor.PortMapping{HostPort: uint16(portMapping.HostPort), ContainerPort: uint16(portMapping.ContainerPort)}
 	}
 
 	externalIP, containerIP, err := fetchIPs(logger, gardenContainer)
