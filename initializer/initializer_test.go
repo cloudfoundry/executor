@@ -2,6 +2,7 @@ package initializer_test
 
 import (
 	"encoding/asn1"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -185,6 +186,54 @@ var _ = Describe("Initializer", func() {
 
 		It("fails fast", func() {
 			Eventually(errCh).Should(Receive(MatchError("EOF found after escape character")))
+		})
+	})
+
+	FDescribe("with the TLS configuration", func() {
+		Context("when the TLS config is valid", func() {
+			BeforeEach(func() {
+				config.PathToAssetTLSCert = "fixtures/downloader/client.crt"
+				config.PathToAssetTLSKey = "fixtures/downloader/client.key"
+				config.PathToAssetTLSCACert = "fixtures/downloader/ca.crt"
+			})
+
+			It("uses the certs for the uploader and cacheddownloader", func() {
+				dir, err := os.Getwd()
+				Expect(err).NotTo(HaveOccurred())
+				fmt.Printf("working dir '%s'\n", dir)
+				// not really an easy way to check this at this layer -- inigo
+				// let's just check that our validation passes
+				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
+		})
+
+		Context("when the certs are invalid", func() {
+			BeforeEach(func() {
+				config.PathToAssetTLSCert = "fixtures/ca-certs-invalid"
+				config.PathToAssetTLSKey = "fixtures/downloader/client.key"
+				config.PathToAssetTLSCACert = "fixtures/downloader/ca.crt"
+			})
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("failed to find any PEM data in certificate input"))))
+			})
+
+			Context("when some, but not all, credentials are missing", func() {
+				BeforeEach(func() {
+					config.PathToAssetTLSCert = ""
+				})
+
+				It("fails", func() {
+					Eventually(errCh).Should(Receive(MatchError(ContainSubstring("One or more TLS credentials are missing"))))
+				})
+			})
+		})
+
+		Context("when the TLS properties are missing", func() {
+			It("succeeds", func() {
+				// not really an easy way to check this at this layer -- inigo
+				// let's just check that our validation passes
+				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
 		})
 	})
 

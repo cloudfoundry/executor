@@ -2,6 +2,8 @@ package uploader_test
 
 import (
 	"crypto/md5"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/lager/lagertest"
 
@@ -22,11 +25,18 @@ import (
 )
 
 var _ = Describe("Uploader", func() {
-	var upldr uploader.Uploader
-	var testServer *httptest.Server
-	var serverRequests []*http.Request
-	var serverRequestBody []string
-	var logger *lagertest.TestLogger
+	var (
+		upldr             uploader.Uploader
+		testServer        *httptest.Server
+		serverRequests    []*http.Request
+		serverRequestBody []string
+
+		logger        *lagertest.TestLogger
+		url           *url.URL
+		file          *os.File
+		expectedBytes int
+		expectedMD5   string
+	)
 
 	BeforeEach(func() {
 		testServer = nil
@@ -34,30 +44,25 @@ var _ = Describe("Uploader", func() {
 		serverRequests = []*http.Request{}
 		logger = lagertest.NewTestLogger("test")
 
-		upldr = uploader.New(100*time.Millisecond, false, logger)
+		file, _ = ioutil.TempFile("", "foo")
+		contentString := "content that we can check later"
+		expectedBytes, _ = file.WriteString(contentString)
+		rawMD5 := md5.Sum([]byte(contentString))
+		expectedMD5 = base64.StdEncoding.EncodeToString(rawMD5[:])
+		file.Close()
 	})
 
-	Describe("Upload", func() {
-		var url *url.URL
-		var file *os.File
-		var expectedBytes int
-		var expectedMD5 string
+	AfterEach(func() {
+		file.Close()
+		if testServer != nil {
+			testServer.Close()
+		}
+		os.Remove(file.Name())
+	})
 
+	Describe("Insecure Upload", func() {
 		BeforeEach(func() {
-			file, _ = ioutil.TempFile("", "foo")
-			contentString := "content that we can check later"
-			expectedBytes, _ = file.WriteString(contentString)
-			rawMD5 := md5.Sum([]byte(contentString))
-			expectedMD5 = base64.StdEncoding.EncodeToString(rawMD5[:])
-			file.Close()
-		})
-
-		AfterEach(func() {
-			file.Close()
-			if testServer != nil {
-				testServer.Close()
-			}
-			os.Remove(file.Name())
+			upldr = uploader.New(logger, 100*time.Millisecond, nil)
 		})
 
 		Context("when the upload is successful", func() {
@@ -127,7 +132,7 @@ var _ = Describe("Uploader", func() {
 			})
 
 			It("interrupts the client and returns an error", func() {
-				upldrWithoutTimeout := uploader.New(0, false, logger)
+				upldrWithoutTimeout := uploader.New(logger, 0, nil)
 
 				cancel := make(chan struct{})
 				errs := make(chan error)
@@ -212,6 +217,112 @@ var _ = Describe("Uploader", func() {
 			It("should return the error", func() {
 				_, err := upldr.Upload(file.Name(), url, nil)
 				Expect(err).NotTo(BeNil())
+			})
+		})
+	})
+
+	Describe("Secure Upload", func() {
+		Context("when the server supports tls", func() {
+			var (
+				err      error
+				numBytes int64
+			)
+
+			BeforeEach(func() {
+				testServer = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					serverRequests = append(serverRequests, r)
+
+					data, err := ioutil.ReadAll(r.Body)
+					Expect(err).NotTo(HaveOccurred())
+					serverRequestBody = append(serverRequestBody, string(data))
+
+					fmt.Fprintln(w, "Hello, client")
+				}))
+				certs, err := tls.LoadX509KeyPair("fixtures/correct/server.crt", "fixtures/correct/server.key")
+				Expect(err).NotTo(HaveOccurred())
+
+				caCert, err := ioutil.ReadFile("fixtures/correct/server-ca.crt")
+				Expect(err).NotTo(HaveOccurred())
+				caCertPool := x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM(caCert)
+				testServer.TLS = &tls.Config{
+					ClientCAs:          caCertPool,
+					Certificates:       []tls.Certificate{certs},
+					InsecureSkipVerify: false,
+					ClientAuth:         tls.RequireAndVerifyClientCert,
+				}
+				testServer.StartTLS()
+				serverUrl := testServer.URL + "/somepath"
+				url, _ = url.Parse(serverUrl)
+			})
+
+			Context("when the client has correct certs", func() {
+				BeforeEach(func() {
+					tlsConfig, err := cfhttp.NewTLSConfig(
+						"fixtures/correct/client.crt",
+						"fixtures/correct/client.key",
+						"fixtures/correct/server-ca.crt",
+					)
+					Expect(err).NotTo(HaveOccurred())
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+				})
+
+				JustBeforeEach(func() {
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+				})
+
+				It("uploads the file to the url", func() {
+					Expect(len(serverRequests)).To(Equal(1))
+
+					request := serverRequests[0]
+					data := serverRequestBody[0]
+
+					Expect(request.URL.Path).To(Equal("/somepath"))
+					Expect(request.Header.Get("Content-Type")).To(Equal("application/octet-stream"))
+					Expect(request.Header.Get("Content-MD5")).To(Equal(expectedMD5))
+					Expect(strconv.Atoi(request.Header.Get("Content-Length"))).To(BeNumerically("==", 31))
+					Expect(string(data)).To(Equal("content that we can check later"))
+				})
+
+				It("returns the number of bytes written", func() {
+					Expect(numBytes).To(Equal(int64(expectedBytes)))
+				})
+
+				It("does not return an error", func() {
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("when the client has incorrect certs", func() {
+				It("fails when no certs are provided", func() {
+					upldr = uploader.New(logger, 100*time.Millisecond, nil)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("fails when wrong certs are provided", func() {
+					tlsConfig, err := cfhttp.NewTLSConfig(
+						"fixtures/incorrect/client.crt",
+						"fixtures/incorrect/client.key",
+						"fixtures/correct/server-ca.crt",
+					)
+					Expect(err).NotTo(HaveOccurred())
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("fails when ca cert is wrong", func() {
+					tlsConfig, err := cfhttp.NewTLSConfig(
+						"fixtures/correct/client.crt",
+						"fixtures/correct/client.key",
+						"fixtures/incorrect/server-ca.crt",
+					)
+					Expect(err).NotTo(HaveOccurred())
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+					Expect(err).To(HaveOccurred())
+				})
 			})
 		})
 	})

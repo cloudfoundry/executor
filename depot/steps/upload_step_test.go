@@ -90,7 +90,7 @@ var _ = Describe("UploadStep", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		compressor = Compressor.NewTgz()
-		uploader = Uploader.New(5*time.Second, false, logger)
+		uploader = Uploader.New(logger, 5*time.Second, nil)
 
 		fakeStreamer = newFakeStreamer()
 
