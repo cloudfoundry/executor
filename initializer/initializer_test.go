@@ -188,6 +188,51 @@ var _ = Describe("Initializer", func() {
 		})
 	})
 
+	Describe("with the TLS configuration", func() {
+		Context("when the TLS config is valid", func() {
+			BeforeEach(func() {
+				config.PathToTLSCert = "fixtures/downloader/client.crt"
+				config.PathToTLSKey = "fixtures/downloader/client.key"
+				config.PathToTLSCACert = "fixtures/downloader/ca.crt"
+			})
+
+			It("uses the certs for the uploader and cacheddownloader", func() {
+				// not really an easy way to check this at this layer -- inigo
+				// let's just check that our validation passes
+				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
+		})
+
+		Context("when the certs are invalid", func() {
+			BeforeEach(func() {
+				config.PathToTLSCert = "fixtures/ca-certs-invalid"
+				config.PathToTLSKey = "fixtures/downloader/client.key"
+				config.PathToTLSCACert = "fixtures/downloader/ca.crt"
+			})
+			It("fails", func() {
+				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("failed to find any PEM data in certificate input"))))
+			})
+
+			Context("when some, but not all, credentials are missing", func() {
+				BeforeEach(func() {
+					config.PathToTLSCert = ""
+				})
+
+				It("fails", func() {
+					Eventually(errCh).Should(Receive(MatchError(ContainSubstring("One or more TLS credentials are missing"))))
+				})
+			})
+		})
+
+		Context("when the TLS properties are missing", func() {
+			It("succeeds", func() {
+				// not really an easy way to check this at this layer -- inigo
+				// let's just check that our validation passes
+				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+			})
+		})
+	})
+
 	Describe("configuring trusted CA bundle", func() {
 		Context("when valid", func() {
 			BeforeEach(func() {

@@ -3,6 +3,7 @@ package initializer
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/cacheddownloader"
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
@@ -98,6 +100,9 @@ type ExecutorConfig struct {
 	MemoryMB                           string                `json:"memory_mb,omitempty"`
 	MetricsWorkPoolSize                int                   `json:"metrics_work_pool_size,omitempty"`
 	PathToCACertsForDownloads          string                `json:"path_to_ca_certs_for_downloads"`
+	PathToTLSCert                      string                `json:"path_to_tls_cert"`
+	PathToTLSKey                       string                `json:"path_to_tls_key"`
+	PathToTLSCACert                    string                `json:"path_to_tls_ca_cert"`
 	PostSetupHook                      string                `json:"post_setup_hook"`
 	PostSetupUser                      string                `json:"post_setup_user"`
 	ReadWorkPoolSize                   int                   `json:"read_work_pool_size,omitempty"`
@@ -183,6 +188,18 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		caCertPool = systemcerts.NewCertPool()
 	}
 
+	var tlsConfig *tls.Config
+	if config.PathToTLSKey != "" && config.PathToTLSCert != "" && config.PathToTLSCACert != "" {
+		tlsConfig, err = cfhttp.NewTLSConfig(config.PathToTLSCert, config.PathToTLSKey, config.PathToTLSCACert)
+		if err != nil {
+			logger.Error("failed-to-configure-tls", err)
+			return nil, grouper.Members{}, err
+		}
+		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
+	} else if config.PathToTLSKey != "" || config.PathToTLSCert != "" || config.PathToTLSCACert != "" {
+		return nil, grouper.Members{}, errors.New("One or more TLS credentials are missing")
+	}
+
 	if config.PathToCACertsForDownloads != "" {
 		certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
 		if err != nil {
@@ -196,10 +213,20 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				return nil, grouper.Members{}, errors.New("unable to load CA certificate")
 			}
 		}
+
+		if tlsConfig != nil {
+			tlsConfig.RootCAs.AppendCertsFromPEM(certBytes)
+		} else {
+			tlsConfig = &tls.Config{
+				RootCAs:            caCertPool.AsX509CertPool(),
+				InsecureSkipVerify: config.SkipCertVerify,
+				MinVersion:         tls.VersionTLS10,
+			}
+		}
 	}
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
-	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), config.SkipCertVerify, caCertPool)
+	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), tlsConfig)
 	cachedDownloader := cacheddownloader.New(
 		workDir,
 		downloader,
@@ -214,13 +241,14 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	downloadRateLimiter := make(chan struct{}, uint(config.MaxConcurrentDownloads))
 
+	uploader := uploader.New(logger, 10*time.Minute, tlsConfig)
+
 	transformer := initializeTransformer(
-		logger,
 		cachedDownloader,
 		workDir,
 		downloadRateLimiter,
 		maxConcurrentUploads,
-		config.SkipCertVerify,
+		uploader,
 		config.ExportNetworkEnvVars,
 		time.Duration(config.HealthyMonitoringInterval),
 		time.Duration(config.UnhealthyMonitoringInterval),
@@ -444,12 +472,11 @@ func setupWorkDir(logger lager.Logger, tempDir string) string {
 }
 
 func initializeTransformer(
-	logger lager.Logger,
 	cache cacheddownloader.CachedDownloader,
 	workDir string,
 	downloadRateLimiter chan struct{},
 	maxConcurrentUploads uint,
-	skipSSLVerification bool,
+	uploader uploader.Uploader,
 	exportNetworkEnvVars bool,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
@@ -458,7 +485,6 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 ) transformer.Transformer {
-	uploader := uploader.New(10*time.Minute, skipSSLVerification, logger)
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
 

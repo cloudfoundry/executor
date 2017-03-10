@@ -25,11 +25,12 @@ type Uploader interface {
 
 type URLUploader struct {
 	httpClient *http.Client
+	tlsConfig  *tls.Config
 	transport  *http.Transport
 	logger     lager.Logger
 }
 
-func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) Uploader {
+func New(logger lager.Logger, timeout time.Duration, tlsConfig *tls.Config) Uploader {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{
@@ -37,10 +38,7 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 			KeepAlive: 30 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: skipSSLVerification,
-			MinVersion:         tls.VersionTLS10,
-		},
+		TLSClientConfig:     tlsConfig,
 	}
 
 	httpClient := &http.Client{
@@ -50,6 +48,7 @@ func New(timeout time.Duration, skipSSLVerification bool, logger lager.Logger) U
 
 	return &URLUploader{
 		httpClient: httpClient,
+		tlsConfig:  tlsConfig,
 		transport:  transport,
 		logger:     logger.Session("URLUploader"),
 	}
