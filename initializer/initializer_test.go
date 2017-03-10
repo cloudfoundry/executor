@@ -2,7 +2,6 @@ package initializer_test
 
 import (
 	"encoding/asn1"
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -189,7 +188,7 @@ var _ = Describe("Initializer", func() {
 		})
 	})
 
-	FDescribe("with the TLS configuration", func() {
+	Describe("with the TLS configuration", func() {
 		Context("when the TLS config is valid", func() {
 			BeforeEach(func() {
 				config.PathToAssetTLSCert = "fixtures/downloader/client.crt"
@@ -198,9 +197,6 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("uses the certs for the uploader and cacheddownloader", func() {
-				dir, err := os.Getwd()
-				Expect(err).NotTo(HaveOccurred())
-				fmt.Printf("working dir '%s'\n", dir)
 				// not really an easy way to check this at this layer -- inigo
 				// let's just check that our validation passes
 				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))

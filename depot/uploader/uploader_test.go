@@ -2,8 +2,6 @@ package uploader_test
 
 import (
 	"crypto/md5"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -238,19 +236,14 @@ var _ = Describe("Uploader", func() {
 
 					fmt.Fprintln(w, "Hello, client")
 				}))
-				certs, err := tls.LoadX509KeyPair("fixtures/correct/server.crt", "fixtures/correct/server.key")
-				Expect(err).NotTo(HaveOccurred())
 
-				caCert, err := ioutil.ReadFile("fixtures/correct/server-ca.crt")
+				tlsConfig, err := cfhttp.NewTLSConfig(
+					"fixtures/correct/server.crt",
+					"fixtures/correct/server.key",
+					"fixtures/correct/server-ca.crt",
+				)
 				Expect(err).NotTo(HaveOccurred())
-				caCertPool := x509.NewCertPool()
-				caCertPool.AppendCertsFromPEM(caCert)
-				testServer.TLS = &tls.Config{
-					ClientCAs:          caCertPool,
-					Certificates:       []tls.Certificate{certs},
-					InsecureSkipVerify: false,
-					ClientAuth:         tls.RequireAndVerifyClientCert,
-				}
+				testServer.TLS = tlsConfig
 				testServer.StartTLS()
 				serverUrl := testServer.URL + "/somepath"
 				url, _ = url.Parse(serverUrl)
@@ -300,7 +293,7 @@ var _ = Describe("Uploader", func() {
 					Expect(err).To(HaveOccurred())
 				})
 
-				It("fails when wrong certs are provided", func() {
+				It("fails when wrong cert/keypair is provided", func() {
 					tlsConfig, err := cfhttp.NewTLSConfig(
 						"fixtures/incorrect/client.crt",
 						"fixtures/incorrect/client.key",

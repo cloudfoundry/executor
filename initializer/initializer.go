@@ -188,10 +188,19 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		caCertPool = systemcerts.NewCertPool()
 	}
 
-	var certBytes []byte
 	var tlsConfig *tls.Config
+	if config.PathToAssetTLSKey != "" && config.PathToAssetTLSCert != "" && config.PathToAssetTLSCACert != "" {
+		tlsConfig, err = cfhttp.NewTLSConfig(config.PathToAssetTLSCert, config.PathToAssetTLSKey, config.PathToAssetTLSCACert)
+		if err != nil {
+			logger.Error("failed-to-configure-tls", err)
+			return nil, grouper.Members{}, err
+		}
+	} else if config.PathToAssetTLSKey != "" || config.PathToAssetTLSCert != "" || config.PathToAssetTLSCACert != "" {
+		return nil, grouper.Members{}, errors.New("One or more TLS credentials are missing")
+	}
+
 	if config.PathToCACertsForDownloads != "" {
-		certBytes, err = ioutil.ReadFile(config.PathToCACertsForDownloads)
+		certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
 		if err != nil {
 			return nil, grouper.Members{}, fmt.Errorf("Unable to open CA cert bundle '%s'", config.PathToCACertsForDownloads)
 		}
@@ -204,24 +213,15 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 			}
 		}
 
-		tlsConfig = &tls.Config{
-			RootCAs:            caCertPool.AsX509CertPool(),
-			InsecureSkipVerify: config.SkipCertVerify,
-			MinVersion:         tls.VersionTLS10,
-		}
-	}
-
-	if config.PathToAssetTLSKey != "" && config.PathToAssetTLSCert != "" && config.PathToAssetTLSCACert != "" {
-		tlsConfig, err = cfhttp.NewTLSConfig(config.PathToAssetTLSCert, config.PathToAssetTLSKey, config.PathToAssetTLSCACert)
-		if err != nil {
-			logger.Error("failed-to-configure-tls", err)
-			return nil, grouper.Members{}, err
-		}
-		if config.PathToCACertsForDownloads != "" {
+		if tlsConfig != nil {
 			tlsConfig.RootCAs.AppendCertsFromPEM(certBytes)
+		} else {
+			tlsConfig = &tls.Config{
+				RootCAs:            caCertPool.AsX509CertPool(),
+				InsecureSkipVerify: config.SkipCertVerify,
+				MinVersion:         tls.VersionTLS10,
+			}
 		}
-	} else if config.PathToAssetTLSKey != "" || config.PathToAssetTLSCert != "" || config.PathToAssetTLSCACert != "" {
-		return nil, grouper.Members{}, errors.New("One or more TLS credentials are missing")
 	}
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
