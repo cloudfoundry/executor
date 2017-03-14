@@ -402,8 +402,10 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully destroyed container\n")
 
 	n.infoLock.Lock()
-	cacheKeys := n.bindMountCacheKeys
+	info := n.info.Copy()
 	n.infoLock.Unlock()
+
+	cacheKeys := n.bindMountCacheKeys
 
 	var bindMountCleanupErr error
 	err = n.dependencyManager.ReleaseCachedDependencies(logger, cacheKeys)
@@ -412,7 +414,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
 	}
 
-	for _, volume := range n.info.VolumeMounts {
+	for _, volume := range info.VolumeMounts {
 		err = n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId)
 		if err != nil {
 			logger.Error("failed-to-unmount-volume", err)
@@ -420,7 +422,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		}
 	}
 
-	err = n.credManager.RemoveCreds(logger, n.info)
+	err = n.credManager.RemoveCreds(logger, info)
 	if err != nil {
 		logger.Error("failed-to-instance-credentials", err)
 		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
