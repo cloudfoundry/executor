@@ -15,7 +15,6 @@ import (
 	"code.cloudfoundry.org/garden/server"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/loggregator_v2"
-	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
 )
@@ -30,13 +29,13 @@ const CredDirFailed = "failed to create credentials directory"
 const CredGenerationFailed = "failed to generate container credentials"
 
 // To be deprecated
-const GardenContainerCreationDuration = metric.Duration("GardenContainerCreationDuration")
-
-const GardenContainerCreationSucceededDuration = metric.Duration("GardenContainerCreationSucceededDuration")
-const GardenContainerCreationFailedDuration = metric.Duration("GardenContainerCreationFailedDuration")
-
-const GardenContainerDestructionSucceededDuration = metric.Duration("GardenContainerDestructionSucceededDuration")
-const GardenContainerDestructionFailedDuration = metric.Duration("GardenContainerDestructionFailedDuration")
+const (
+	GardenContainerCreationDuration             = "GardenContainerCreationDuration"
+	GardenContainerCreationSucceededDuration    = "GardenContainerCreationSucceededDuration"
+	GardenContainerCreationFailedDuration       = "GardenContainerCreationFailedDuration"
+	GardenContainerDestructionSucceededDuration = "GardenContainerDestructionSucceededDuration"
+	GardenContainerDestructionFailedDuration    = "GardenContainerDestructionFailedDuration"
+)
 
 type storeNode struct {
 	modifiedIndex               uint
@@ -279,7 +278,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		NetOut:     netOutRules,
 	}
 
-	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient)
+	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient, n.metronClient)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +447,7 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 			logger.Info("failed-to-destroy-container-in-garden", lager.Data{
 				"destroy-took": destroyDuration.String(),
 			})
-			sendMetricDuration(logger, GardenContainerDestructionFailedDuration, destroyDuration)
+			sendMetricDuration(logger, GardenContainerDestructionFailedDuration, destroyDuration, n.metronClient)
 			return err
 		}
 	}
@@ -456,7 +455,7 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 	logger.Info("destroyed-container-in-garden", lager.Data{
 		"destroy-took": destroyDuration.String(),
 	})
-	sendMetricDuration(logger, GardenContainerDestructionSucceededDuration, destroyDuration)
+	sendMetricDuration(logger, GardenContainerDestructionSucceededDuration, destroyDuration, n.metronClient)
 	return nil
 }
 
@@ -500,8 +499,8 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 }
 
-func sendMetricDuration(logger lager.Logger, metric metric.Duration, value time.Duration) {
-	err := metric.Send(value)
+func sendMetricDuration(logger lager.Logger, metric string, value time.Duration, metronClient loggregator_v2.Client) {
+	err := metronClient.SendDuration(metric, value)
 	if err != nil {
 		switch metric {
 		case GardenContainerCreationDuration:
@@ -520,7 +519,7 @@ func sendMetricDuration(logger lager.Logger, metric metric.Duration, value time.
 	}
 }
 
-func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client) (garden.Container, error) {
+func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggregator_v2.Client) (garden.Container, error) {
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
 	container, err := client.Create(spec)
@@ -530,12 +529,12 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Info("failed-to-create-container-in-garden", lager.Data{
 			"create-took": createDuration.String(),
 		})
-		sendMetricDuration(logger, GardenContainerCreationFailedDuration, createDuration)
+		sendMetricDuration(logger, GardenContainerCreationFailedDuration, createDuration, metronClient)
 		return nil, err
 	}
 	logger.Info("created-container-in-garden", lager.Data{"create-took": createDuration.String()})
-	sendMetricDuration(logger, GardenContainerCreationDuration, createDuration)
-	sendMetricDuration(logger, GardenContainerCreationSucceededDuration, createDuration)
+	sendMetricDuration(logger, GardenContainerCreationDuration, createDuration, metronClient)
+	sendMetricDuration(logger, GardenContainerCreationSucceededDuration, createDuration, metronClient)
 	return container, nil
 }
 

@@ -6,10 +6,9 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"sync"
 	"time"
 
-	metricfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -44,6 +43,9 @@ var _ = Describe("Container Store", func() {
 
 		containerGuid string
 
+		metricMap     map[string]struct{}
+		metricMapLock sync.RWMutex
+
 		gardenClient      *gardenfakes.FakeClient
 		gardenContainer   *gardenfakes.FakeContainer
 		megatron          *faketransformer.FakeTransformer
@@ -53,8 +55,7 @@ var _ = Describe("Container Store", func() {
 
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
-		fakeMetricSender *metricfake.FakeMetricSender
-		fakeMetronClient *mfakes.FakeLogSender
+		fakeMetronClient *mfakes.FakeClient
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -65,11 +66,18 @@ var _ = Describe("Container Store", func() {
 		}
 	}
 
-	expectMetricInNanos := func(metricName string) {
-		Expect(fakeMetricSender.GetValue(metricName).Unit).To(Equal("nanos"))
+	getMetrics := func() map[string]struct{} {
+		metricMapLock.Lock()
+		defer metricMapLock.Unlock()
+		m := make(map[string]struct{}, len(metricMap))
+		for k, v := range metricMap {
+			m[k] = v
+		}
+		return m
 	}
 
 	BeforeEach(func() {
+		metricMap = map[string]struct{}{}
 		gardenContainer = &gardenfakes.FakeContainer{}
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
@@ -87,8 +95,7 @@ var _ = Describe("Container Store", func() {
 
 		megatron = &faketransformer.FakeTransformer{}
 
-		fakeMetricSender = metricfake.NewFakeMetricSender()
-		dropsonde_metrics.Initialize(fakeMetricSender, nil)
+		fakeMetronClient = new(mfakes.FakeClient)
 
 		containerConfig := containerstore.ContainerConfig{
 			OwnerName:              ownerName,
@@ -97,8 +104,6 @@ var _ = Describe("Container Store", func() {
 			ReapInterval:           20 * time.Millisecond,
 			ReservedExpirationTime: 20 * time.Millisecond,
 		}
-
-		fakeMetronClient = mfakes.NewFakeLogSender()
 
 		containerStore = containerstore.New(
 			containerConfig,
@@ -113,6 +118,13 @@ var _ = Describe("Container Store", func() {
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
 		)
+
+		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
+			metricMapLock.Lock()
+			defer metricMapLock.Unlock()
+			metricMap[name] = struct{}{}
+			return nil
+		}
 	})
 
 	Describe("Reserve", func() {
@@ -495,15 +507,18 @@ var _ = Describe("Container Store", func() {
 			It("emits metrics after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				expectMetricInNanos(string(containerstore.GardenContainerCreationDuration))
-				expectMetricInNanos(string(containerstore.GardenContainerCreationSucceededDuration))
+				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationDuration))
+				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationSucceededDuration))
 			})
 
 			It("sends a log after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(fakeMetronClient.Logs())).To(BeNumerically("==", 2))
-				Expect(fakeMetronClient.Logs()[1].Message).To(ContainSubstring("Successfully created container"))
+				Eventually(fakeMetronClient.SendAppLogCallCount()).Should(Equal(2))
+				Eventually(func() string {
+					_, msg, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+					return msg
+				}).Should(ContainSubstring("Successfully created container"))
 			})
 
 			It("generates container credential directory and credentials", func() {
@@ -875,7 +890,7 @@ var _ = Describe("Container Store", func() {
 				It("emits a metric after failing to create the container", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
-					expectMetricInNanos(string(containerstore.GardenContainerCreationFailedDuration))
+					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationFailedDuration))
 				})
 			})
 
@@ -1326,7 +1341,7 @@ var _ = Describe("Container Store", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectMetricInNanos(string(containerstore.GardenContainerDestructionSucceededDuration))
+			Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionSucceededDuration))
 		})
 
 		It("frees the containers resources", func() {
@@ -1371,21 +1386,18 @@ var _ = Describe("Container Store", func() {
 				It("logs the container is detrroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					logMessages := fakeMetronClient.Logs()
-					Expect(logMessages).To(HaveLen(4))
-					emission := logMessages[2]
-					Expect(emission.AppId).To(Equal(containerGuid))
-					Expect(emission.SourceType).To(Equal("test-source"))
-					Expect(string(emission.Message)).To(Equal("Destroying container"))
-					Expect(emission.MessageType).To(Equal(mfakes.OUT))
-					Expect(emission.SourceInstance).To(Equal("1"))
+					Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(4))
+					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
+					Expect(appId).To(Equal(containerGuid))
+					Expect(sourceType).To(Equal("test-source"))
+					Expect(msg).To(Equal("Destroying container"))
+					Expect(sourceInstance).To(Equal("1"))
 
-					emission = logMessages[3]
-					Expect(emission.AppId).To(Equal(containerGuid))
-					Expect(emission.SourceType).To(Equal("test-source"))
-					Expect(string(emission.Message)).To(Equal("Successfully destroyed container"))
-					Expect(emission.MessageType).To(Equal(mfakes.OUT))
-					Expect(emission.SourceInstance).To(Equal("1"))
+					appId, msg, sourceType, sourceInstance = fakeMetronClient.SendAppLogArgsForCall(3)
+					Expect(appId).To(Equal(containerGuid))
+					Expect(sourceType).To(Equal("test-source"))
+					Expect(msg).To(Equal("Successfully destroyed container"))
+					Expect(sourceInstance).To(Equal("1"))
 				})
 			})
 
@@ -1398,7 +1410,7 @@ var _ = Describe("Container Store", func() {
 				It("emits a metric after failing to destroy the container", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
-					expectMetricInNanos(string(containerstore.GardenContainerDestructionFailedDuration))
+					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
 				It("does remove the container from the container store", func() {
@@ -1518,7 +1530,6 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Metrics", func() {
 		var containerGuid1, containerGuid2, containerGuid3, containerGuid4 string
-		var container1, container2 executor.Container
 		var (
 			req1    *executor.RunRequest
 			req2    *executor.RunRequest
@@ -1541,10 +1552,10 @@ var _ = Describe("Container Store", func() {
 
 			tags := executor.Tags{}
 
-			container1, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
-			container2, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3, Tags: executor.Tags{}})

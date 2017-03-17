@@ -3,6 +3,7 @@ package metrics_test
 import (
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -13,20 +14,21 @@ import (
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	"github.com/tedsuo/ifrit"
 )
 
 var _ = Describe("Reporter", func() {
 	var (
-		reportInterval time.Duration
-		sender         *fake.FakeMetricSender
-		executorClient *fakes.FakeClient
-		fakeClock      *fakeclock.FakeClock
+		reportInterval   time.Duration
+		executorClient   *fakes.FakeClient
+		fakeClock        *fakeclock.FakeClock
+		fakeMetronClient *mfakes.FakeClient
 
-		reporter ifrit.Process
-		logger   *lagertest.TestLogger
+		reporter  ifrit.Process
+		logger    *lagertest.TestLogger
+		metricMap map[string]int
+		m         sync.RWMutex
 	)
 
 	BeforeEach(func() {
@@ -34,9 +36,8 @@ var _ = Describe("Reporter", func() {
 		reportInterval = 1 * time.Millisecond
 		executorClient = new(fakes.FakeClient)
 
-		sender = fake.NewFakeMetricSender()
-		dropsonde_metrics.Initialize(sender, nil)
 		fakeClock = fakeclock.NewFakeClock(time.Now())
+		fakeMetronClient = new(mfakes.FakeClient)
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
@@ -55,17 +56,34 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-2"},
 			{Guid: "container-3"},
 		}, nil)
+
+		m = sync.RWMutex{}
 	})
 
 	JustBeforeEach(func() {
+		metricMap = make(map[string]int)
+		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+			m.Lock()
+			metricMap[name] = value
+			m.Unlock()
+			return nil
+		}
+		fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
+			m.Lock()
+			metricMap[name] = value
+			m.Unlock()
+			return nil
+		}
+
 		reporter = ifrit.Invoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
 			Interval:       reportInterval,
 			Clock:          fakeClock,
 			Logger:         logger,
+			MetronClient:   fakeMetronClient,
 		})
-
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
+
 	})
 
 	AfterEach(func() {
@@ -74,54 +92,18 @@ var _ = Describe("Reporter", func() {
 	})
 
 	It("reports the current capacity on the given interval", func() {
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 1024,
-			Unit:  "MiB",
-		}))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 2048,
-			Unit:  "MiB",
-		}))
+		m.RLock()
+		Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(1024))
+		Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(4096))
+		Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(2048))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 4096,
-			Unit:  "Metric",
-		}))
+		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(128))
+		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(256))
+		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(512))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 128,
-			Unit:  "MiB",
-		}))
-
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 256,
-			Unit:  "MiB",
-		}))
-
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 512,
-			Unit:  "Metric",
-		}))
-
-		Eventually(func() fake.Metric {
-			return sender.GetValue("ContainerCount")
-		}).Should(Equal(fake.Metric{
-			Value: 3,
-			Unit:  "Metric",
-		}))
+		Eventually(metricMap["ContainerCount"]).Should(Equal(3))
 
 		executorClient.RemainingResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   129,
@@ -136,33 +118,17 @@ var _ = Describe("Reporter", func() {
 
 		fakeClock.Increment(reportInterval)
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 129,
-			Unit:  "MiB",
-		}))
+		m.RUnlock()
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 257,
-			Unit:  "MiB",
-		}))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 513,
-			Unit:  "Metric",
-		}))
+		m.RLock()
+		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
+		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(257))
+		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(513))
+		Eventually(metricMap["ContainerCount"]).Should(Equal(2))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("ContainerCount")
-		}).Should(Equal(fake.Metric{
-			Value: 2,
-			Unit:  "Metric",
-		}))
+		m.RUnlock()
 	})
 
 	Context("when getting remaining resources fails", func() {
@@ -171,26 +137,13 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing remaining resources", func() {
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingMemory")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingDisk")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
-
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingContainers")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			m.RLock()
+			Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 
@@ -200,26 +153,13 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing total resources", func() {
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalMemory")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalDisk")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
-
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalContainers")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			m.RLock()
+			Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 
@@ -230,13 +170,11 @@ var _ = Describe("Reporter", func() {
 
 		It("reports garden.containers as -1", func() {
 			logger.Info("checking this stuff")
-			Eventually(func() fake.Metric {
-				logger.Info("checking this stuff again and again")
-				return sender.GetValue("ContainerCount")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
+
+			m.RLock()
+			Eventually(metricMap["ContainerCount"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 })

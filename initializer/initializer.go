@@ -36,7 +36,6 @@ import (
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/loggregator_v2"
-	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/systemcerts"
@@ -48,7 +47,7 @@ import (
 const (
 	PingGardenInterval             = time.Second
 	StalledMetricHeartbeatInterval = 5 * time.Second
-	stalledDuration                = metric.Duration("StalledGardenDuration")
+	StalledGardenDuration          = "StalledGardenDuration"
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
 )
@@ -80,7 +79,6 @@ func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
 }
 
 type ExecutorConfig struct {
-	loggregator_v2.MetronConfig
 	AutoDiskOverheadMB                 int                   `json:"auto_disk_capacity_overhead_mb"`
 	CachePath                          string                `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64                `json:"container_inode_limit,omitempty"`
@@ -171,7 +169,7 @@ var DefaultConfiguration = ExecutorConfig{
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 }
 
-func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, clock clock.Clock) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggregator_v2.Client, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
@@ -179,7 +177,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	}
 
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
-	err = waitForGarden(logger, gardenClient, clock)
+	err = waitForGarden(logger, gardenClient, metronClient, clock)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -254,14 +252,9 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
-	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
+	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	credManager, err := CredManagerFromConfig(logger, config, clock)
-	if err != nil {
-		return nil, grouper.Members{}, err
-	}
-
-	metronClient, err := loggregator_v2.NewClient(logger, config.MetronConfig)
 	if err != nil {
 		return nil, grouper.Members{}, err
 	}
@@ -321,6 +314,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				Interval:       metricsReportInterval,
 				Clock:          clock,
 				Logger:         logger,
+				MetronClient:   metronClient,
 			}},
 			{"hub-closer", closeHub(hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
@@ -337,6 +331,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				logger,
 				gardenHealthcheck,
 				depotClient,
+				metronClient,
 				clock,
 			)},
 			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
@@ -348,7 +343,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 // Until we get a successful response from garden,
 // periodically emit metrics saying how long we've been trying
 // while retrying the connection indefinitely.
-func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock clock.Clock) error {
+func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, metronClient loggregator_v2.Client, clock clock.Clock) error {
 	pingStart := clock.Now()
 	logger = logger.Session("wait-for-garden", lager.Data{"initialTime:": pingStart})
 	pingRequest := clock.NewTimer(0)
@@ -368,7 +363,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 			case nil:
 				logger.Info("ping-garden-success", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
 				// send 0 to indicate ping responded successfully
-				sendError := stalledDuration.Send(0)
+				sendError := metronClient.SendDuration(StalledGardenDuration, 0)
 				if sendError != nil {
 					logger.Error("failed-to-send-stalled-duration-metric", sendError)
 				}
@@ -383,7 +378,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, clock 
 
 		case <-heartbeatTimer.C():
 			logger.Info("emitting-stalled-garden-heartbeat", lager.Data{"wait-time-ns:": clock.Since(pingStart)})
-			sendError := stalledDuration.Send(clock.Since(pingStart))
+			sendError := metronClient.SendDuration(StalledGardenDuration, clock.Since(pingStart))
 			if sendError != nil {
 				logger.Error("failed-to-send-stalled-duration-heartbeat-metric", sendError)
 			}
