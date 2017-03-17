@@ -19,8 +19,8 @@ type StatsReporter struct {
 	clock          clock.Clock
 	executorClient executor.Client
 
-	cpuInfos map[string]cpuInfo
-	reporter loggregator_v2.Client
+	cpuInfos     map[string]cpuInfo
+	metronClient loggregator_v2.Client
 }
 
 type cpuInfo struct {
@@ -28,14 +28,14 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client, reporter loggregator_v2.Client) *StatsReporter {
+func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client, metronClient loggregator_v2.Client) *StatsReporter {
 	return &StatsReporter{
 		logger: logger,
 
 		interval:       interval,
 		clock:          clock,
 		executorClient: executorClient,
-		reporter:       reporter,
+		metronClient:   metronClient,
 	}
 }
 
@@ -125,7 +125,7 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	}
 
 	instanceIndex := int32(metricsConfig.Index)
-	err := reporter.reporter.SendAppMetrics(&events.ContainerMetric{
+	err := reporter.metronClient.SendAppMetrics(&events.ContainerMetric{
 		ApplicationId:    &metricsConfig.Guid,
 		InstanceIndex:    &instanceIndex,
 		CpuPercentage:    &cpuPercent,

@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	dropsonde_metrics "github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
@@ -20,10 +21,11 @@ import (
 
 var _ = Describe("Reporter", func() {
 	var (
-		reportInterval time.Duration
-		sender         *fake.FakeMetricSender
-		executorClient *fakes.FakeClient
-		fakeClock      *fakeclock.FakeClock
+		reportInterval   time.Duration
+		sender           *fake.FakeMetricSender
+		executorClient   *fakes.FakeClient
+		fakeClock        *fakeclock.FakeClock
+		fakeMetronClient *mfakes.FakeClient
 
 		reporter ifrit.Process
 		logger   *lagertest.TestLogger
@@ -37,6 +39,7 @@ var _ = Describe("Reporter", func() {
 		sender = fake.NewFakeMetricSender()
 		dropsonde_metrics.Initialize(sender, nil)
 		fakeClock = fakeclock.NewFakeClock(time.Now())
+		fakeMetronClient = new(mfakes.FakeClient)
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
@@ -63,6 +66,7 @@ var _ = Describe("Reporter", func() {
 			Interval:       reportInterval,
 			Clock:          fakeClock,
 			Logger:         logger,
+			MetronClient:   fakeMetronClient,
 		})
 
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
