@@ -249,7 +249,7 @@ var _ = Describe("Uploader", func() {
 				url, _ = url.Parse(serverUrl)
 			})
 
-			Context("when the client has correct certs", func() {
+			Context("when the client has the correct certs and CA", func() {
 				BeforeEach(func() {
 					tlsConfig, err := cfhttp.NewTLSConfig(
 						"fixtures/correct/client.crt",
@@ -315,6 +315,26 @@ var _ = Describe("Uploader", func() {
 					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).To(HaveOccurred())
+				})
+			})
+
+			Context("when keypair is provided, but no CA cert is specified", func() {
+
+				BeforeEach(func() {
+					tlsConfig, err := cfhttp.NewTLSConfig(
+						"fixtures/correct/client.crt",
+						"fixtures/correct/client.key",
+						"",
+					)
+
+					Expect(err).NotTo(HaveOccurred())
+
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+				})
+
+				It("should succeed using the system cert pool", func() {
+					_, err := upldr.Upload(file.Name(), url, nil)
+					Expect(err).NotTo(HaveOccurred())
 				})
 			})
 		})
