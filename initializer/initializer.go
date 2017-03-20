@@ -321,6 +321,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				Interval:       metricsReportInterval,
 				Clock:          clock,
 				Logger:         logger,
+				MetronClient:   metronClient,
 			}},
 			{"hub-closer", closeHub(hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(

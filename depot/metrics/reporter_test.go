@@ -68,7 +68,6 @@ var _ = Describe("Reporter", func() {
 			Logger:         logger,
 			MetronClient:   fakeMetronClient,
 		})
-
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
 	})
 
@@ -78,54 +77,41 @@ var _ = Describe("Reporter", func() {
 	})
 
 	It("reports the current capacity on the given interval", func() {
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 1024,
-			Unit:  "MiB",
-		}))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(0)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityTotalMemory", 1024}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 2048,
-			Unit:  "MiB",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(1)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityTotalDisk", 2048}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityTotalContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 4096,
-			Unit:  "Metric",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(2)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingMemory", 128}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 128,
-			Unit:  "MiB",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(3)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingDisk", 256}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 256,
-			Unit:  "MiB",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMetricArgsForCall(0)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityTotalContainers", 4096}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 512,
-			Unit:  "Metric",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMetricArgsForCall(1)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingContainers", 512}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("ContainerCount")
-		}).Should(Equal(fake.Metric{
-			Value: 3,
-			Unit:  "Metric",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMetricArgsForCall(2)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"ContainerCount", 3}))
 
 		executorClient.RemainingResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   129,
@@ -140,33 +126,26 @@ var _ = Describe("Reporter", func() {
 
 		fakeClock.Increment(reportInterval)
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingMemory")
-		}).Should(Equal(fake.Metric{
-			Value: 129,
-			Unit:  "MiB",
-		}))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(6)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingMemory", 129}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingDisk")
-		}).Should(Equal(fake.Metric{
-			Value: 257,
-			Unit:  "MiB",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMebiBytesArgsForCall(7)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingDisk", 257}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("CapacityRemainingContainers")
-		}).Should(Equal(fake.Metric{
-			Value: 513,
-			Unit:  "Metric",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMetricArgsForCall(4)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"CapacityRemainingContainers", 513}))
 
-		Eventually(func() fake.Metric {
-			return sender.GetValue("ContainerCount")
-		}).Should(Equal(fake.Metric{
-			Value: 2,
-			Unit:  "Metric",
-		}))
+		Eventually(func() []interface{} {
+			metric, value := fakeMetronClient.SendMetricArgsForCall(5)
+			return []interface{}{metric, value}
+		}).Should(Equal([]interface{}{"ContainerCount", 2}))
 	})
 
 	Context("when getting remaining resources fails", func() {
@@ -175,26 +154,21 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing remaining resources", func() {
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingMemory")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMebiBytesArgsForCall(2)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityRemainingMemory", -1}))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingDisk")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMebiBytesArgsForCall(3)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityRemainingDisk", -1}))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityRemainingContainers")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMetricArgsForCall(1)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityRemainingContainers", -1}))
 		})
 	})
 
@@ -204,26 +178,21 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing total resources", func() {
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalMemory")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMebiBytesArgsForCall(0)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityTotalMemory", -1}))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalDisk")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "MiB",
-			}))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMebiBytesArgsForCall(1)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityTotalDisk", -1}))
 
-			Eventually(func() fake.Metric {
-				return sender.GetValue("CapacityTotalContainers")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMetricArgsForCall(0)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"CapacityTotalContainers", -1}))
 		})
 	})
 
@@ -234,13 +203,11 @@ var _ = Describe("Reporter", func() {
 
 		It("reports garden.containers as -1", func() {
 			logger.Info("checking this stuff")
-			Eventually(func() fake.Metric {
-				logger.Info("checking this stuff again and again")
-				return sender.GetValue("ContainerCount")
-			}).Should(Equal(fake.Metric{
-				Value: -1,
-				Unit:  "Metric",
-			}))
+			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
+			Eventually(func() []interface{} {
+				metric, value := fakeMetronClient.SendMetricArgsForCall(2)
+				return []interface{}{metric, value}
+			}).Should(Equal([]interface{}{"ContainerCount", -1}))
 		})
 	})
 })
