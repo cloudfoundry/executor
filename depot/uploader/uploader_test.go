@@ -2,6 +2,8 @@ package uploader_test
 
 import (
 	"crypto/md5"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -222,8 +224,10 @@ var _ = Describe("Uploader", func() {
 	Describe("Secure Upload", func() {
 		Context("when the server supports tls", func() {
 			var (
-				err      error
-				numBytes int64
+				err                 error
+				numBytes            int64
+				fileserverTLSConfig *tls.Config
+				tlsConfig           *tls.Config
 			)
 
 			BeforeEach(func() {
@@ -237,34 +241,38 @@ var _ = Describe("Uploader", func() {
 					fmt.Fprintln(w, "Hello, client")
 				}))
 
-				tlsConfig, err := cfhttp.NewTLSConfig(
+				fileserverTLSConfig, err = cfhttp.NewTLSConfig(
 					"fixtures/correct/server.crt",
 					"fixtures/correct/server.key",
 					"fixtures/correct/server-ca.crt",
 				)
+
 				Expect(err).NotTo(HaveOccurred())
-				testServer.TLS = tlsConfig
-				testServer.StartTLS()
-				serverUrl := testServer.URL + "/somepath"
-				url, _ = url.Parse(serverUrl)
 			})
 
-			Context("when the client has correct certs", func() {
+			JustBeforeEach(func() {
+				testServer.TLS = fileserverTLSConfig
+				testServer.StartTLS()
+				serverUrl := testServer.URL + "/somepath"
+				url, err = url.Parse(serverUrl)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("when the client has the correct credentials", func() {
 				BeforeEach(func() {
-					tlsConfig, err := cfhttp.NewTLSConfig(
+					tlsConfig, err = cfhttp.NewTLSConfig(
 						"fixtures/correct/client.crt",
 						"fixtures/correct/client.key",
 						"fixtures/correct/server-ca.crt",
 					)
 					Expect(err).NotTo(HaveOccurred())
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
-				})
-
-				JustBeforeEach(func() {
-					numBytes, err = upldr.Upload(file.Name(), url, nil)
 				})
 
 				It("uploads the file to the url", func() {
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+					Expect(err).NotTo(HaveOccurred())
+
 					Expect(len(serverRequests)).To(Equal(1))
 
 					request := serverRequests[0]
@@ -278,10 +286,38 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("returns the number of bytes written", func() {
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
+					Expect(err).NotTo(HaveOccurred())
+
 					Expect(numBytes).To(Equal(int64(expectedBytes)))
 				})
+			})
 
-				It("does not return an error", func() {
+			Context("when the client has a CA, but no keypair", func() {
+				BeforeEach(func() {
+					fileserverTLSConfig.ClientAuth = tls.NoClientCert
+
+					tlsConfig = &tls.Config{
+						Certificates:       []tls.Certificate{},
+						InsecureSkipVerify: false,
+						CipherSuites:       cfhttp.SUPPORTED_CIPHER_SUITES,
+						MinVersion:         tls.VersionTLS12,
+					}
+
+					certBytes, err := ioutil.ReadFile("fixtures/correct/server-ca.crt")
+					Expect(err).NotTo(HaveOccurred())
+
+					caCertPool := x509.NewCertPool()
+					ok := caCertPool.AppendCertsFromPEM(certBytes)
+					Expect(ok).To(BeTrue())
+
+					tlsConfig.RootCAs = caCertPool
+				})
+
+				It("can communicate with the fileserver via one-sided TLS", func() {
+					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})

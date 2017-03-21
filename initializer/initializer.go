@@ -189,15 +189,19 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	}
 
 	var tlsConfig *tls.Config
-	if config.PathToTLSKey != "" && config.PathToTLSCert != "" && config.PathToTLSCACert != "" {
+
+	// returns an error when one is empty and the other is not
+	if (config.PathToTLSKey != "") != (config.PathToTLSCert != "") {
+		return nil, grouper.Members{}, errors.New("The TLS certificate or key is missing")
+	}
+
+	if config.PathToTLSKey != "" && config.PathToTLSCert != "" {
 		tlsConfig, err = cfhttp.NewTLSConfig(config.PathToTLSCert, config.PathToTLSKey, config.PathToTLSCACert)
 		if err != nil {
 			logger.Error("failed-to-configure-tls", err)
 			return nil, grouper.Members{}, err
 		}
 		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
-	} else if config.PathToTLSKey != "" || config.PathToTLSCert != "" || config.PathToTLSCACert != "" {
-		return nil, grouper.Members{}, errors.New("One or more TLS credentials are missing")
 	}
 
 	if config.PathToCACertsForDownloads != "" {

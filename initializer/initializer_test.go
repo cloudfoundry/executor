@@ -201,6 +201,27 @@ var _ = Describe("Initializer", func() {
 				// let's just check that our validation passes
 				Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
 			})
+
+			Context("when no CA cert is provided", func() {
+				BeforeEach(func() {
+					config.PathToTLSCACert = ""
+				})
+
+				It("still passes validation", func() {
+					Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+				})
+			})
+
+			Context("when a CA cert is provided, but no keypair", func() {
+				BeforeEach(func() {
+					config.PathToTLSCert = ""
+					config.PathToTLSKey = ""
+				})
+
+				It("passes still passes validation", func() {
+					Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+				})
+			})
 		})
 
 		Context("when the certs are invalid", func() {
@@ -209,17 +230,28 @@ var _ = Describe("Initializer", func() {
 				config.PathToTLSKey = "fixtures/downloader/client.key"
 				config.PathToTLSCACert = "fixtures/downloader/ca.crt"
 			})
+
 			It("fails", func() {
 				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("failed to find any PEM data in certificate input"))))
 			})
 
-			Context("when some, but not all, credentials are missing", func() {
+			Context("when the cert is missing", func() {
 				BeforeEach(func() {
 					config.PathToTLSCert = ""
 				})
 
 				It("fails", func() {
-					Eventually(errCh).Should(Receive(MatchError(ContainSubstring("One or more TLS credentials are missing"))))
+					Eventually(errCh).Should(Receive(MatchError(ContainSubstring("The TLS certificate or key is missing"))))
+				})
+			})
+
+			Context("when the key is missing", func() {
+				BeforeEach(func() {
+					config.PathToTLSKey = ""
+				})
+
+				It("fails", func() {
+					Eventually(errCh).Should(Receive(MatchError(ContainSubstring("The TLS certificate or key is missing"))))
 				})
 			})
 		})
