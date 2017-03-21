@@ -189,39 +189,43 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	}
 
 	var tlsConfig *tls.Config
-	if config.PathToTLSKey != "" && config.PathToTLSCert != "" && config.PathToTLSCACert != "" {
-		tlsConfig, err = cfhttp.NewTLSConfig(config.PathToTLSCert, config.PathToTLSKey, config.PathToTLSCACert)
+
+	// returns an error when one is empty and the other is not
+	if (config.PathToTLSKey != "" && config.PathToTLSCert == "") || (config.PathToTLSKey == "" && config.PathToTLSCert != "") {
+		return nil, grouper.Members{}, errors.New("The TLS certificate or key is missing")
+	}
+
+	if config.PathToTLSCACert != "" && (config.PathToTLSKey == "" && config.PathToTLSCert == "") {
+		caCertPool, err = appendCACerts(caCertPool, config.PathToTLSCACert)
+		if err != nil {
+			return nil, grouper.Members{}, err
+		}
+	}
+
+	if config.PathToCACertsForDownloads != "" {
+		caCertPool, err = appendCACerts(caCertPool, config.PathToCACertsForDownloads)
+		if err != nil {
+			return nil, grouper.Members{}, err
+		}
+	}
+
+	if config.PathToTLSKey != "" && config.PathToTLSCert != "" {
+		tlsConfig, err = cfhttp.NewTLSConfigWithCertPool(
+			config.PathToTLSCert,
+			config.PathToTLSKey,
+			config.PathToTLSCACert,
+			caCertPool.AsX509CertPool(),
+		)
 		if err != nil {
 			logger.Error("failed-to-configure-tls", err)
 			return nil, grouper.Members{}, err
 		}
 		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
-	} else if config.PathToTLSKey != "" || config.PathToTLSCert != "" || config.PathToTLSCACert != "" {
-		return nil, grouper.Members{}, errors.New("One or more TLS credentials are missing")
-	}
-
-	if config.PathToCACertsForDownloads != "" {
-		certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
-		if err != nil {
-			return nil, grouper.Members{}, fmt.Errorf("Unable to open CA cert bundle '%s'", config.PathToCACertsForDownloads)
-		}
-
-		certBytes = bytes.TrimSpace(certBytes)
-
-		if len(certBytes) > 0 {
-			if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
-				return nil, grouper.Members{}, errors.New("unable to load CA certificate")
-			}
-		}
-
-		if tlsConfig != nil {
-			tlsConfig.RootCAs.AppendCertsFromPEM(certBytes)
-		} else {
-			tlsConfig = &tls.Config{
-				RootCAs:            caCertPool.AsX509CertPool(),
-				InsecureSkipVerify: config.SkipCertVerify,
-				MinVersion:         tls.VersionTLS10,
-			}
+	} else {
+		tlsConfig = &tls.Config{
+			RootCAs:            caCertPool.AsX509CertPool(),
+			InsecureSkipVerify: config.SkipCertVerify,
+			MinVersion:         tls.VersionTLS10,
 		}
 	}
 
@@ -602,4 +606,21 @@ func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 	}
 
 	return valid
+}
+
+func appendCACerts(caCertPool *systemcerts.CertPool, pathToCA string) (*systemcerts.CertPool, error) {
+	certBytes, err := ioutil.ReadFile(pathToCA)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to open CA cert bundle '%s'", pathToCA)
+	}
+
+	certBytes = bytes.TrimSpace(certBytes)
+
+	if len(certBytes) > 0 {
+		if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
+			return nil, errors.New("unable to load CA certificate")
+		}
+	}
+
+	return caCertPool, nil
 }
