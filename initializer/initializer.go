@@ -234,8 +234,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	downloader := cacheddownloader.NewDownloader(
 		10*time.Minute,
 		int(math.MaxInt8),
-		config.SkipCertVerify,
-		caCertPool,
+		tlsConfig,
 	)
 
 	cachedDownloader := cacheddownloader.New(
