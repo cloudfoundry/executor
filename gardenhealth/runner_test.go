@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/executor/gardenhealth"
-	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -16,6 +14,7 @@ import (
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -29,11 +28,14 @@ var _ = Describe("Runner", func() {
 		logger                          *lagertest.TestLogger
 		checker                         *fakegardenhealth.FakeChecker
 		executorClient                  *fakeexecutor.FakeClient
-		sender                          *fake.FakeMetricSender
 		fakeClock                       *fakeclock.FakeClock
+		fakeMetronClient                *mfakes.FakeClient
 		checkInterval, emissionInterval time.Duration
 		timeoutDuration                 time.Duration
+		metricMap                       map[string]float64
 	)
+
+	const UnhealthyCell = "UnhealthyCell"
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -44,12 +46,17 @@ var _ = Describe("Runner", func() {
 		timeoutDuration = 1 * time.Minute
 		emissionInterval = 30 * time.Second
 
-		sender = fake.NewFakeMetricSender()
-		metrics.Initialize(sender, nil)
+		fakeMetronClient = new(mfakes.FakeClient)
+
+		metricMap = make(map[string]float64)
+		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+			metricMap[name] = float64(value)
+			return nil
+		}
 	})
 
 	JustBeforeEach(func() {
-		runner = gardenhealth.NewRunner(checkInterval, emissionInterval, timeoutDuration, logger, checker, executorClient, fakeClock)
+		runner = gardenhealth.NewRunner(checkInterval, emissionInterval, timeoutDuration, logger, checker, executorClient, fakeMetronClient, fakeClock)
 		process = ifrit.Background(runner)
 	})
 
@@ -73,9 +80,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
-					Eventually(func() float64 {
-						return sender.GetValue("UnhealthyCell").Value
-					}).Should(Equal(float64(1)))
+					Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 				})
 			})
 
@@ -108,9 +113,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
-					Eventually(func() float64 {
-						return sender.GetValue("UnhealthyCell").Value
-					}).Should(Equal(float64(1)))
+					Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 				})
 			})
 		})
@@ -145,9 +148,7 @@ var _ = Describe("Runner", func() {
 			})
 
 			It("emits a metric for healthy cell", func() {
-				Eventually(func() float64 {
-					return sender.GetValue("UnhealthyCell").Value
-				}).Should(Equal(float64(0)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 			})
 		})
 
@@ -178,7 +179,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				_, healthy := executorClient.SetHealthyArgsForCall(0)
 				Expect(healthy).Should(Equal(true))
-				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(0)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 
 				Expect(healthyValues).To(BeSent(false))
 				checkValues <- errors.New("boom")
@@ -187,7 +188,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy = executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(1)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 
 				Expect(healthyValues).To(BeSent(true))
 				checkValues <- nil
@@ -196,7 +197,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
 				_, healthy = executorClient.SetHealthyArgsForCall(2)
 				Expect(healthy).Should(Equal(true))
-				Expect(sender.GetValue("UnhealthyCell").Value).To(Equal(float64(0)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 			})
 		})
 
@@ -229,9 +230,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				Eventually(func() float64 {
-					return sender.GetValue("UnhealthyCell").Value
-				}).Should(Equal(float64(1)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 			})
 		})
 
@@ -269,25 +268,19 @@ var _ = Describe("Runner", func() {
 		Context("UnhealthyCell metric emission", func() {
 			It("emits the UnhealthyCell every emitInterval", func() {
 				Eventually(executorClient.HealthyCallCount).Should(Equal(1))
-				Eventually(func() float64 {
-					return sender.GetValue("UnhealthyCell").Value
-				}).Should(Equal(float64(1)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 
 				executorClient.HealthyReturns(true)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(2))
-				Eventually(func() float64 {
-					return sender.GetValue("UnhealthyCell").Value
-				}).Should(Equal(float64(0)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 
 				executorClient.HealthyReturns(false)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(3))
-				Eventually(func() float64 {
-					return sender.GetValue("UnhealthyCell").Value
-				}).Should(Equal(float64(1)))
+				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 			})
 		})
 	})

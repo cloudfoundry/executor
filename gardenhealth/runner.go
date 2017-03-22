@@ -7,10 +7,10 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/runtimeschema/metric"
+	"code.cloudfoundry.org/loggregator_v2"
 )
 
-const unhealthyCell = metric.Metric("UnhealthyCell")
+const UnhealthyCell = "UnhealthyCell"
 
 type HealthcheckTimeoutError struct{}
 
@@ -31,6 +31,7 @@ type Runner struct {
 	logger           lager.Logger
 	checker          Checker
 	executorClient   executor.Client
+	metronClient     loggregator_v2.Client
 	clock            clock.Clock
 }
 
@@ -46,6 +47,7 @@ func NewRunner(
 	logger lager.Logger,
 	checker Checker,
 	executorClient executor.Client,
+	metronClient loggregator_v2.Client,
 	clock clock.Clock,
 ) *Runner {
 	return &Runner{
@@ -55,6 +57,7 @@ func NewRunner(
 		logger:           logger.Session("garden-healthcheck"),
 		checker:          checker,
 		executorClient:   executorClient,
+		metronClient:     metronClient,
 		clock:            clock,
 		healthy:          false,
 		failures:         0,
@@ -159,9 +162,9 @@ func (r *Runner) setUnhealthy(logger lager.Logger) {
 func (r *Runner) emitUnhealthyCellMetric(logger lager.Logger) {
 	var err error
 	if r.executorClient.Healthy(logger) {
-		err = unhealthyCell.Send(0)
+		err = r.metronClient.SendMetric(UnhealthyCell, 0)
 	} else {
-		err = unhealthyCell.Send(1)
+		err = r.metronClient.SendMetric(UnhealthyCell, 1)
 	}
 
 	if err != nil {
