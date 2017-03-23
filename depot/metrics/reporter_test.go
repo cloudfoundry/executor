@@ -3,6 +3,7 @@ package metrics_test
 import (
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -24,9 +25,12 @@ var _ = Describe("Reporter", func() {
 		fakeClock        *fakeclock.FakeClock
 		fakeMetronClient *mfakes.FakeClient
 
-		reporter  ifrit.Process
-		logger    *lagertest.TestLogger
-		metricMap map[string]int
+		reporter                ifrit.Process
+		logger                  *lagertest.TestLogger
+		metricMap               map[string]int
+		m                       sync.RWMutex
+		createSendMebiBytesStub func(map[string]int)
+		createSendMetricStub    func(map[string]int)
 	)
 
 	BeforeEach(func() {
@@ -55,15 +59,23 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-3"},
 		}, nil)
 
-		metricMap = make(map[string]int)
-		fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
-			metricMap[name] = value
-			return nil
+		m = sync.RWMutex{}
+		createSendMebiBytesStub = func(metricMap map[string]int) {
+			fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
+				m.Lock()
+				metricMap[name] = value
+				m.Unlock()
+				return nil
+			}
 		}
 
-		fakeMetronClient.SendMetricStub = func(name string, value int) error {
-			metricMap[name] = value
-			return nil
+		createSendMetricStub = func(metricMap map[string]int) {
+			fakeMetronClient.SendMetricStub = func(name string, value int) error {
+				m.Lock()
+				metricMap[name] = value
+				m.Unlock()
+				return nil
+			}
 		}
 	})
 
@@ -76,6 +88,12 @@ var _ = Describe("Reporter", func() {
 			MetronClient:   fakeMetronClient,
 		})
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
+
+		m.Lock()
+		metricMap = make(map[string]int)
+		m.Unlock()
+		createSendMebiBytesStub(metricMap)
+		createSendMetricStub(metricMap)
 	})
 
 	AfterEach(func() {
@@ -85,6 +103,8 @@ var _ = Describe("Reporter", func() {
 
 	It("reports the current capacity on the given interval", func() {
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+
+		m.RLock()
 		Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(1024))
 		Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(4096))
 		Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(2048))
@@ -108,12 +128,17 @@ var _ = Describe("Reporter", func() {
 
 		fakeClock.Increment(reportInterval)
 
+		m.RUnlock()
+
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+
+		m.RLock()
 		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
 		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(257))
 		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(513))
 
 		Eventually(metricMap["ContainerCount"]).Should(Equal(2))
+		m.RUnlock()
 	})
 
 	Context("when getting remaining resources fails", func() {
@@ -123,9 +148,12 @@ var _ = Describe("Reporter", func() {
 
 		It("sends missing remaining resources", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+
+			m.RLock()
 			Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 
@@ -136,9 +164,12 @@ var _ = Describe("Reporter", func() {
 
 		It("sends missing total resources", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+
+			m.RLock()
 			Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 
@@ -150,7 +181,10 @@ var _ = Describe("Reporter", func() {
 		It("reports garden.containers as -1", func() {
 			logger.Info("checking this stuff")
 			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
+
+			m.RLock()
 			Eventually(metricMap["ContainerCount"]).Should(Equal(-1))
+			m.RUnlock()
 		})
 	})
 })

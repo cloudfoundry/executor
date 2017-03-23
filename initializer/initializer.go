@@ -253,7 +253,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
-	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, driverConfig)
+	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	credManager, err := CredManagerFromConfig(logger, config, clock)
 	if err != nil {
