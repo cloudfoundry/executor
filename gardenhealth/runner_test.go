@@ -53,12 +53,14 @@ var _ = Describe("Runner", func() {
 
 		m = sync.RWMutex{}
 		createSendMetricStub = func(metricMap map[string]float64) {
+			m.Lock()
 			fakeMetronClient.SendMetricStub = func(name string, value int) error {
 				m.Lock()
 				metricMap[name] = float64(value)
 				m.Unlock()
 				return nil
 			}
+			m.Unlock()
 		}
 	})
 

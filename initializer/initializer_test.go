@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -29,15 +30,19 @@ import (
 var _ = Describe("Initializer", func() {
 	const StalledGardenDuration = "StalledGardenDuration"
 
-	var initialTime time.Time
-	var fakeGarden *ghttp.Server
-	var fakeClock *fakeclock.FakeClock
-	var errCh chan error
-	var done chan struct{}
-	var config initializer.ExecutorConfig
-	var logger lager.Logger
-	var fakeMetronClient *mfakes.FakeClient
-	var durationMetricMap map[string]time.Duration
+	var (
+		initialTime        time.Time
+		fakeGarden         *ghttp.Server
+		fakeClock          *fakeclock.FakeClock
+		errCh              chan error
+		done               chan struct{}
+		config             initializer.ExecutorConfig
+		logger             lager.Logger
+		fakeMetronClient   *mfakes.FakeClient
+		durationMetricMap  map[string]time.Duration
+		m                  sync.RWMutex
+		createDurationStub func(map[string]time.Duration)
+	)
 
 	BeforeEach(func() {
 		initialTime = time.Now()
@@ -88,10 +93,15 @@ var _ = Describe("Initializer", func() {
 		}
 
 		fakeMetronClient = new(mfakes.FakeClient)
-		durationMetricMap = make(map[string]time.Duration)
-		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
-			durationMetricMap[name] = value
-			return nil
+
+		m = sync.RWMutex{}
+		createDurationStub = func(metricMap map[string]time.Duration) {
+			fakeMetronClient.SendDurationStub = func(name string, time time.Duration) error {
+				m.Lock()
+				durationMetricMap[name] = time
+				m.Unlock()
+				return nil
+			}
 		}
 	})
 
@@ -109,6 +119,11 @@ var _ = Describe("Initializer", func() {
 			errCh <- err
 			close(done)
 		}()
+
+		m.Lock()
+		durationMetricMap = make(map[string]time.Duration)
+		m.Unlock()
+		createDurationStub(durationMetricMap)
 	})
 
 	Context("when garden doesn't respond", func() {
