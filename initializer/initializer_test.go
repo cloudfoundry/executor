@@ -1,7 +1,11 @@
 package initializer_test
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/asn1"
+	"encoding/pem"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -12,6 +16,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/initializer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
+	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -315,6 +320,105 @@ var _ = Describe("Initializer", func() {
 
 			It("fails", func() {
 				Eventually(errCh).Should(Receive(MatchError("Unable to open CA cert bundle 'sandwich'")))
+			})
+		})
+	})
+
+	Describe("TLSConfigFromConfig", func() {
+		var (
+			tlsConfig             *tls.Config
+			caCert                *x509.Certificate
+			tlsClientCert         tls.Certificate
+			fakeCertPoolRetriever *fakes.FakeCertPoolRetriever
+			err                   error
+			logger                *lagertest.TestLogger
+		)
+
+		BeforeEach(func() {
+			logger = lagertest.NewTestLogger("executor")
+			fakeCertPoolRetriever = &fakes.FakeCertPoolRetriever{}
+			config.PathToTLSCert = "fixtures/downloader/client.crt"
+			config.PathToTLSKey = "fixtures/downloader/client.key"
+			config.PathToTLSCACert = "fixtures/downloader/ca.crt"
+
+			fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool())
+
+			certBytes, err := ioutil.ReadFile(config.PathToTLSCACert)
+			Expect(err).NotTo(HaveOccurred())
+			block, _ := pem.Decode(certBytes)
+			caCert, err = x509.ParseCertificate(block.Bytes)
+			Expect(err).NotTo(HaveOccurred())
+
+			tlsClientCert, err = tls.LoadX509KeyPair(config.PathToTLSCert, config.PathToTLSKey)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns a valid mutual TLS config", func() {
+			tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+			Expect(err).To(Succeed())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.MinVersion).To(BeEquivalentTo(tls.VersionTLS12))
+			Expect(tlsConfig.InsecureSkipVerify).To(Equal(config.SkipCertVerify))
+			Expect(tlsConfig.Certificates).To(ContainElement(tlsClientCert))
+			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+			Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+		})
+
+		It("adds any system certs to the CA pools", func() {
+			certBytes, err := ioutil.ReadFile("fixtures/systemcerts/extra-ca.crt")
+			Expect(err).NotTo(HaveOccurred())
+			block, _ := pem.Decode(certBytes)
+			caCert, err = x509.ParseCertificate(block.Bytes)
+			Expect(err).NotTo(HaveOccurred())
+
+			systemCAs := x509.NewCertPool()
+			ok := systemCAs.AppendCertsFromPEM(certBytes)
+			Expect(ok).To(BeTrue())
+			fakeCertPoolRetriever.SystemCertsReturns(systemCAs)
+
+			tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+			Expect(err).To(Succeed())
+			Expect(tlsConfig).NotTo(BeNil())
+
+			Expect(fakeCertPoolRetriever.SystemCertsCallCount()).To(Equal(1))
+			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+			Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+		})
+
+		Context("when mutual is using PathToCACertsForDownloads", func() {
+			BeforeEach(func() {
+				config.PathToTLSCACert = ""
+				config.PathToCACertsForDownloads = "fixtures/downloader/ca.crt"
+
+				certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
+				Expect(err).NotTo(HaveOccurred())
+				block, _ := pem.Decode(certBytes)
+				caCert, err = x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns a valid mutual TLS config", func() {
+				tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+				Expect(err).To(Succeed())
+				Expect(tlsConfig).NotTo(BeNil())
+				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+				Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+			})
+		})
+
+		Context("when tls cert and key are not configured", func() {
+			BeforeEach(func() {
+				logger = lagertest.NewTestLogger("executor")
+				config.PathToTLSKey = ""
+				config.PathToTLSCert = ""
+			})
+
+			It("returns a valid, non-mutual TLS enabled, config", func() {
+				tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+				Expect(err).To(Succeed())
+				Expect(tlsConfig).NotTo(BeNil())
+				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+				Expect(tlsConfig.ClientCAs).To(BeNil())
 			})
 		})
 	})

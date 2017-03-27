@@ -64,6 +64,21 @@ func (containers *executorContainers) Containers() ([]garden.Container, error) {
 	})
 }
 
+//go:generate counterfeiter -o fakes/fake_cert_pool_retriever.go . CertPoolRetriever
+type CertPoolRetriever interface {
+	SystemCerts() *x509.CertPool
+}
+
+type systemcertsRetriever struct{}
+
+func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
+	caCertPool := systemcerts.SystemRootsPool()
+	if caCertPool == nil {
+		caCertPool = systemcerts.NewCertPool()
+	}
+	return caCertPool.AsX509CertPool()
+}
+
 type ExecutorConfig struct {
 	loggregator_v2.MetronConfig
 	AutoDiskOverheadMB                 int                   `json:"auto_disk_capacity_overhead_mb"`
@@ -183,50 +198,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		return nil, grouper.Members{}, err
 	}
 
-	caCertPool := systemcerts.SystemRootsPool()
-	if caCertPool == nil {
-		caCertPool = systemcerts.NewCertPool()
-	}
-
-	var tlsConfig *tls.Config
-
-	// returns an error when one is empty and the other is not
-	if (config.PathToTLSKey != "" && config.PathToTLSCert == "") || (config.PathToTLSKey == "" && config.PathToTLSCert != "") {
-		return nil, grouper.Members{}, errors.New("The TLS certificate or key is missing")
-	}
-
-	if config.PathToTLSCACert != "" && (config.PathToTLSKey == "" && config.PathToTLSCert == "") {
-		caCertPool, err = appendCACerts(caCertPool, config.PathToTLSCACert)
-		if err != nil {
-			return nil, grouper.Members{}, err
-		}
-	}
-
-	if config.PathToCACertsForDownloads != "" {
-		caCertPool, err = appendCACerts(caCertPool, config.PathToCACertsForDownloads)
-		if err != nil {
-			return nil, grouper.Members{}, err
-		}
-	}
-
-	if config.PathToTLSKey != "" && config.PathToTLSCert != "" {
-		tlsConfig, err = cfhttp.NewTLSConfigWithCertPool(
-			config.PathToTLSCert,
-			config.PathToTLSKey,
-			config.PathToTLSCACert,
-			caCertPool.AsX509CertPool(),
-		)
-		if err != nil {
-			logger.Error("failed-to-configure-tls", err)
-			return nil, grouper.Members{}, err
-		}
-		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
-	} else {
-		tlsConfig = &tls.Config{
-			RootCAs:            caCertPool.AsX509CertPool(),
-			InsecureSkipVerify: config.SkipCertVerify,
-			MinVersion:         tls.VersionTLS10,
-		}
+	certsRetriever := systemcertsRetriever{}
+	tlsConfig, err := TLSConfigFromConfig(logger, certsRetriever, config)
+	if err != nil {
+		return nil, grouper.Members{}, err
 	}
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
@@ -519,6 +494,51 @@ func closeHub(hub event.Hub) ifrit.Runner {
 	})
 }
 
+func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, config ExecutorConfig) (*tls.Config, error) {
+	var tlsConfig *tls.Config
+	var err error
+
+	caCertPool := certsRetriever.SystemCerts()
+	if (config.PathToTLSKey != "" && config.PathToTLSCert == "") || (config.PathToTLSKey == "" && config.PathToTLSCert != "") {
+		return nil, errors.New("The TLS certificate or key is missing")
+	}
+
+	if config.PathToTLSCACert != "" {
+		caCertPool, err = appendCACerts(caCertPool, config.PathToTLSCACert)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if config.PathToCACertsForDownloads != "" {
+		caCertPool, err = appendCACerts(caCertPool, config.PathToCACertsForDownloads)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if config.PathToTLSKey != "" && config.PathToTLSCert != "" {
+		tlsConfig, err = cfhttp.NewTLSConfigWithCertPool(
+			config.PathToTLSCert,
+			config.PathToTLSKey,
+			caCertPool,
+		)
+		if err != nil {
+			logger.Error("failed-to-configure-tls", err)
+			return nil, err
+		}
+		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
+	} else {
+		tlsConfig = &tls.Config{
+			RootCAs:            caCertPool,
+			InsecureSkipVerify: config.SkipCertVerify,
+			MinVersion:         tls.VersionTLS12,
+		}
+	}
+
+	return tlsConfig, nil
+}
+
 func CredManagerFromConfig(logger lager.Logger, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
@@ -608,7 +628,7 @@ func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 	return valid
 }
 
-func appendCACerts(caCertPool *systemcerts.CertPool, pathToCA string) (*systemcerts.CertPool, error) {
+func appendCACerts(caCertPool *x509.CertPool, pathToCA string) (*x509.CertPool, error) {
 	certBytes, err := ioutil.ReadFile(pathToCA)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to open CA cert bundle '%s'", pathToCA)
