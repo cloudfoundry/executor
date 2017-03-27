@@ -25,12 +25,10 @@ var _ = Describe("Reporter", func() {
 		fakeClock        *fakeclock.FakeClock
 		fakeMetronClient *mfakes.FakeClient
 
-		reporter                ifrit.Process
-		logger                  *lagertest.TestLogger
-		metricMap               map[string]int
-		m                       sync.RWMutex
-		createSendMebiBytesStub func(map[string]int)
-		createSendMetricStub    func(map[string]int)
+		reporter  ifrit.Process
+		logger    *lagertest.TestLogger
+		metricMap map[string]int
+		m         sync.RWMutex
 	)
 
 	BeforeEach(func() {
@@ -60,26 +58,23 @@ var _ = Describe("Reporter", func() {
 		}, nil)
 
 		m = sync.RWMutex{}
-		createSendMebiBytesStub = func(metricMap map[string]int) {
-			fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
-				m.Lock()
-				metricMap[name] = value
-				m.Unlock()
-				return nil
-			}
-		}
-
-		createSendMetricStub = func(metricMap map[string]int) {
-			fakeMetronClient.SendMetricStub = func(name string, value int) error {
-				m.Lock()
-				metricMap[name] = value
-				m.Unlock()
-				return nil
-			}
-		}
 	})
 
 	JustBeforeEach(func() {
+		metricMap = make(map[string]int)
+		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+			m.Lock()
+			metricMap[name] = value
+			m.Unlock()
+			return nil
+		}
+		fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
+			m.Lock()
+			metricMap[name] = value
+			m.Unlock()
+			return nil
+		}
+
 		reporter = ifrit.Invoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
 			Interval:       reportInterval,
@@ -89,11 +84,6 @@ var _ = Describe("Reporter", func() {
 		})
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
 
-		m.Lock()
-		metricMap = make(map[string]int)
-		m.Unlock()
-		createSendMebiBytesStub(metricMap)
-		createSendMetricStub(metricMap)
 	})
 
 	AfterEach(func() {

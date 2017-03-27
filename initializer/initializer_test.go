@@ -31,17 +31,16 @@ var _ = Describe("Initializer", func() {
 	const StalledGardenDuration = "StalledGardenDuration"
 
 	var (
-		initialTime        time.Time
-		fakeGarden         *ghttp.Server
-		fakeClock          *fakeclock.FakeClock
-		errCh              chan error
-		done               chan struct{}
-		config             initializer.ExecutorConfig
-		logger             lager.Logger
-		fakeMetronClient   *mfakes.FakeClient
-		durationMetricMap  map[string]time.Duration
-		m                  sync.RWMutex
-		createDurationStub func(map[string]time.Duration)
+		initialTime       time.Time
+		fakeGarden        *ghttp.Server
+		fakeClock         *fakeclock.FakeClock
+		errCh             chan error
+		done              chan struct{}
+		config            initializer.ExecutorConfig
+		logger            lager.Logger
+		fakeMetronClient  *mfakes.FakeClient
+		durationMetricMap map[string]time.Duration
+		m                 sync.RWMutex
 	)
 
 	BeforeEach(func() {
@@ -95,14 +94,6 @@ var _ = Describe("Initializer", func() {
 		fakeMetronClient = new(mfakes.FakeClient)
 
 		m = sync.RWMutex{}
-		createDurationStub = func(metricMap map[string]time.Duration) {
-			fakeMetronClient.SendDurationStub = func(name string, time time.Duration) error {
-				m.Lock()
-				durationMetricMap[name] = time
-				m.Unlock()
-				return nil
-			}
-		}
 	})
 
 	AfterEach(func() {
@@ -111,7 +102,6 @@ var _ = Describe("Initializer", func() {
 	})
 
 	JustBeforeEach(func() {
-		fakeGarden.Start()
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
@@ -120,16 +110,21 @@ var _ = Describe("Initializer", func() {
 			close(done)
 		}()
 
-		m.Lock()
 		durationMetricMap = make(map[string]time.Duration)
-		m.Unlock()
-		createDurationStub(durationMetricMap)
+		fakeMetronClient.SendDurationStub = func(name string, time time.Duration) error {
+			m.Lock()
+			durationMetricMap[name] = time
+			m.Unlock()
+			return nil
+		}
+
+		fakeGarden.Start()
 	})
 
 	Context("when garden doesn't respond", func() {
 		var waitChan chan struct{}
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			waitChan = make(chan struct{})
 			fakeGarden.RouteToHandler("GET", "/ping", func(w http.ResponseWriter, req *http.Request) {
 				<-waitChan
@@ -142,16 +137,27 @@ var _ = Describe("Initializer", func() {
 		})
 
 		It("emits metrics when garden doesn't respond", func() {
+			m.RLock()
 			Consistently(durationMetricMap[StalledGardenDuration], 10*time.Millisecond).Should(BeEquivalentTo(0))
+			m.RUnlock()
+
 			fakeClock.WaitForWatcherAndIncrement(initializer.StalledMetricHeartbeatInterval)
+			Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
+
+			m.RLock()
 			Eventually(durationMetricMap).Should(HaveKeyWithValue(StalledGardenDuration, fakeClock.Since(initialTime)))
+			m.RUnlock()
 		})
 	})
 
 	Context("when garden responds", func() {
 		It("emits 0", func() {
-			Eventually(durationMetricMap).Should(HaveKey(StalledGardenDuration))
-			Expect(durationMetricMap[StalledGardenDuration]).To(BeEquivalentTo(0))
+			Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
+
+			m.RLock()
+			Eventually(durationMetricMap).Should(HaveKeyWithValue(StalledGardenDuration, BeEquivalentTo(0)))
+			m.RUnlock()
+
 			Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
 		})
 	})
@@ -180,10 +186,16 @@ var _ = Describe("Initializer", func() {
 		})
 
 		It("emits zero once it succeeds", func() {
+			m.RLock()
 			Consistently(durationMetricMap).ShouldNot(HaveKey(StalledGardenDuration))
+			m.RUnlock()
+
 			fakeClock.Increment(initializer.PingGardenInterval)
-			Eventually(durationMetricMap).Should(HaveKey(StalledGardenDuration))
-			Expect(durationMetricMap[StalledGardenDuration]).To(BeEquivalentTo(0))
+			Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
+
+			m.RLock()
+			Eventually(durationMetricMap).Should(HaveKeyWithValue(StalledGardenDuration, BeEquivalentTo(0)))
+			m.RUnlock()
 		})
 
 		Context("when the error is unrecoverable", func() {

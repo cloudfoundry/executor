@@ -35,7 +35,6 @@ var _ = Describe("Runner", func() {
 		timeoutDuration                 time.Duration
 		metricMap                       map[string]float64
 		m                               sync.RWMutex
-		createSendMetricStub            func(map[string]float64)
 	)
 
 	const UnhealthyCell = "UnhealthyCell"
@@ -52,26 +51,20 @@ var _ = Describe("Runner", func() {
 		fakeMetronClient = new(mfakes.FakeClient)
 
 		m = sync.RWMutex{}
-		createSendMetricStub = func(metricMap map[string]float64) {
-			m.Lock()
-			fakeMetronClient.SendMetricStub = func(name string, value int) error {
-				m.Lock()
-				metricMap[name] = float64(value)
-				m.Unlock()
-				return nil
-			}
-			m.Unlock()
-		}
 	})
 
 	JustBeforeEach(func() {
+		metricMap = make(map[string]float64)
+		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+			m.Lock()
+			metricMap[name] = float64(value)
+			m.Unlock()
+			return nil
+		}
+
 		runner = gardenhealth.NewRunner(checkInterval, emissionInterval, timeoutDuration, logger, checker, executorClient, fakeMetronClient, fakeClock)
 		process = ifrit.Background(runner)
 
-		m.Lock()
-		metricMap = make(map[string]float64)
-		m.Unlock()
-		createSendMetricStub(metricMap)
 	})
 
 	AfterEach(func() {
@@ -166,6 +159,7 @@ var _ = Describe("Runner", func() {
 			})
 
 			It("emits a metric for healthy cell", func() {
+				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				m.RLock()
 				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 				m.RUnlock()
