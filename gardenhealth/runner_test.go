@@ -53,6 +53,16 @@ var _ = Describe("Runner", func() {
 		m = sync.RWMutex{}
 	})
 
+	getMetrics := func() map[string]float64 {
+		m.Lock()
+		defer m.Unlock()
+		m := make(map[string]float64, len(metricMap))
+		for k, v := range metricMap {
+			m[k] = v
+		}
+		return m
+	}
+
 	JustBeforeEach(func() {
 		metricMap = make(map[string]float64)
 		fakeMetronClient.SendMetricStub = func(name string, value int) error {
@@ -87,9 +97,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
-					m.RLock()
-					Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-					m.RUnlock()
+					Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 				})
 			})
 
@@ -122,9 +130,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
-					m.RLock()
-					Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-					m.RUnlock()
+					Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 				})
 			})
 		})
@@ -160,9 +166,7 @@ var _ = Describe("Runner", func() {
 
 			It("emits a metric for healthy cell", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 			})
 		})
 
@@ -193,9 +197,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				_, healthy := executorClient.SetHealthyArgsForCall(0)
 				Expect(healthy).Should(Equal(true))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 
 				Expect(healthyValues).To(BeSent(false))
 				checkValues <- errors.New("boom")
@@ -204,9 +206,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy = executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 
 				Expect(healthyValues).To(BeSent(true))
 				checkValues <- nil
@@ -215,9 +215,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
 				_, healthy = executorClient.SetHealthyArgsForCall(2)
 				Expect(healthy).Should(Equal(true))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 			})
 		})
 
@@ -238,7 +236,7 @@ var _ = Describe("Runner", func() {
 				close(blockHealthcheck)
 			})
 
-			It("sets the executor to unhealthy and emits the unhealthy metric", func() {
+			JustBeforeEach(func() {
 				Eventually(blockHealthcheck).Should(BeSent(struct{}{}))
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 
@@ -246,13 +244,13 @@ var _ = Describe("Runner", func() {
 				Eventually(checker.HealthcheckCallCount).Should(Equal(2))
 
 				fakeClock.WaitForNWatchersAndIncrement(timeoutDuration, 2)
+			})
 
+			It("sets the executor to unhealthy and emits the unhealthy metric", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 			})
 		})
 
@@ -290,25 +288,19 @@ var _ = Describe("Runner", func() {
 		Context("UnhealthyCell metric emission", func() {
 			It("emits the UnhealthyCell every emitInterval", func() {
 				Eventually(executorClient.HealthyCallCount).Should(Equal(1))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 
 				executorClient.HealthyReturns(true)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(2))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
 
 				executorClient.HealthyReturns(false)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(3))
-				m.RLock()
-				Eventually(metricMap).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
-				m.RUnlock()
+				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 			})
 		})
 	})

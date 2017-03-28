@@ -79,7 +79,6 @@ func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
 }
 
 type ExecutorConfig struct {
-	loggregator_v2.MetronConfig
 	AutoDiskOverheadMB                 int                   `json:"auto_disk_capacity_overhead_mb"`
 	CachePath                          string                `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64                `json:"container_inode_limit,omitempty"`

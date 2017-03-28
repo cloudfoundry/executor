@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -42,7 +43,8 @@ var _ = Describe("Container Store", func() {
 
 		containerGuid string
 
-		durationMetricList []string
+		metricMap     map[string]struct{}
+		metricMapLock sync.RWMutex
 
 		gardenClient      *gardenfakes.FakeClient
 		gardenContainer   *gardenfakes.FakeContainer
@@ -64,7 +66,18 @@ var _ = Describe("Container Store", func() {
 		}
 	}
 
+	getMetrics := func() map[string]struct{} {
+		metricMapLock.Lock()
+		defer metricMapLock.Unlock()
+		m := make(map[string]struct{}, len(metricMap))
+		for k, v := range metricMap {
+			m[k] = v
+		}
+		return m
+	}
+
 	BeforeEach(func() {
+		metricMap = map[string]struct{}{}
 		gardenContainer = &gardenfakes.FakeContainer{}
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
@@ -106,9 +119,10 @@ var _ = Describe("Container Store", func() {
 			fakeMetronClient,
 		)
 
-		durationMetricList = make([]string, 5)
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
-			durationMetricList = append(durationMetricList, name)
+			metricMapLock.Lock()
+			defer metricMapLock.Unlock()
+			metricMap[name] = struct{}{}
 			return nil
 		}
 	})
@@ -493,8 +507,8 @@ var _ = Describe("Container Store", func() {
 			It("emits metrics after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(durationMetricList).Should(ContainElement(containerstore.GardenContainerCreationDuration))
-				Eventually(durationMetricList).Should(ContainElement(containerstore.GardenContainerCreationSucceededDuration))
+				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationDuration))
+				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationSucceededDuration))
 			})
 
 			It("sends a log after creating the container", func() {
@@ -876,7 +890,7 @@ var _ = Describe("Container Store", func() {
 				It("emits a metric after failing to create the container", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
-					Eventually(durationMetricList).Should(ContainElement(containerstore.GardenContainerCreationFailedDuration))
+					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationFailedDuration))
 				})
 			})
 
@@ -1327,7 +1341,7 @@ var _ = Describe("Container Store", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(durationMetricList).Should(ContainElement(containerstore.GardenContainerDestructionSucceededDuration))
+			Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionSucceededDuration))
 		})
 
 		It("frees the containers resources", func() {
@@ -1396,7 +1410,7 @@ var _ = Describe("Container Store", func() {
 				It("emits a metric after failing to destroy the container", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
-					Eventually(durationMetricList).Should(ContainElement(containerstore.GardenContainerDestructionFailedDuration))
+					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
 				It("does remove the container from the container store", func() {
@@ -1516,7 +1530,6 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Metrics", func() {
 		var containerGuid1, containerGuid2, containerGuid3, containerGuid4 string
-		var container1, container2 executor.Container
 		var (
 			req1    *executor.RunRequest
 			req2    *executor.RunRequest
@@ -1539,10 +1552,10 @@ var _ = Describe("Container Store", func() {
 
 			tags := executor.Tags{}
 
-			container1, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
-			container2, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
+			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3, Tags: executor.Tags{}})
