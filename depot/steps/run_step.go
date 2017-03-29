@@ -167,6 +167,7 @@ func (step *runStep) Perform() error {
 					}
 				}
 
+				logger.Error("run-step-failed-with-nonzero-status-code", err, lager.Data{"status-code": exitStatus})
 				return NewEmittableError(nil, "Exited with status %d", exitStatus)
 			}
 

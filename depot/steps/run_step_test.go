@@ -367,6 +367,7 @@ var _ = Describe("RunAction", func() {
 					"test.run-step.successful-process-create",
 					"test.run-step.process-exit",
 					"test.run-step.failed-to-get-info",
+					"test.run-step.run-step-failed-with-nonzero-status-code",
 				}))
 
 			})
