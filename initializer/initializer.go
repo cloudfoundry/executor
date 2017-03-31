@@ -568,6 +568,7 @@ func CredManagerFromConfig(logger lager.Logger, config ExecutorConfig, clock clo
 		}
 
 		return containerstore.NewCredManager(
+			logger,
 			config.InstanceIdentityCredDir,
 			time.Duration(config.InstanceIdentityValidityPeriod),
 			rand.Reader,

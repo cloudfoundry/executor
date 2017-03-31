@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -489,7 +490,7 @@ var _ = Describe("Initializer", func() {
 
 			It("returns a credential manager", func() {
 				bindMounts, _, err := credManager.CreateCredDir(logger, container)
-				defer credManager.RemoveCreds(logger, container)
+				defer os.RemoveAll(filepath.Join(config.InstanceIdentityCredDir, container.Guid))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bindMounts).NotTo(BeEmpty())
 			})

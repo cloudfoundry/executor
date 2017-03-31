@@ -66,6 +66,14 @@ var _ = Describe("Container Store", func() {
 		}
 	}
 
+	var pollForRunning = func(guid string) func() bool {
+		return func() bool {
+			container, err := containerStore.Get(logger, guid)
+			Expect(err).NotTo(HaveOccurred())
+			return container.State == executor.StateRunning
+		}
+	}
+
 	getMetrics := func() map[string]struct{} {
 		metricMapLock.Lock()
 		defer metricMapLock.Unlock()
@@ -521,18 +529,13 @@ var _ = Describe("Container Store", func() {
 				}).Should(ContainSubstring("Successfully created container"))
 			})
 
-			It("generates container credential directory and credentials", func() {
+			It("generates container credential directory", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
 				_, container := credManager.CreateCredDirArgsForCall(0)
 				Expect(container.Guid).To(Equal(containerGuid))
-
-				Expect(credManager.GenerateCredsCallCount()).To(Equal(1))
-				_, container = credManager.GenerateCredsArgsForCall(0)
-				Expect(container.Guid).To(Equal(containerGuid))
-				Expect(container.InternalIP).To(Equal(internalIP))
 			})
 
 			Context("when credential mounts are configured", func() {
@@ -578,27 +581,9 @@ var _ = Describe("Container Store", func() {
 						Expect(container.RunResult.FailureReason).To(Equal(containerstore.CredDirFailed))
 					})
 				})
-
-				Context("when failing to create credentials", func() {
-					BeforeEach(func() {
-						credManager.GenerateCredsReturns(errors.New("failed to generate"))
-					})
-
-					It("destroys the container and returns an error", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(HaveOccurred())
-
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(container.State).To(Equal(executor.StateCompleted))
-						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect(container.RunResult.FailureReason).To(Equal(containerstore.CredGenerationFailed))
-					})
-				})
 			})
 
 			Context("when there are volume mounts configured", func() {
-
 				BeforeEach(func() {
 					someConfig := map[string]interface{}{"some-config": "interface"}
 					runReq.RunInfo.VolumeMounts = []executor.VolumeMount{
@@ -964,9 +949,23 @@ var _ = Describe("Container Store", func() {
 		})
 
 		Context("when it is in the created state", func() {
-			var runReq *executor.RunRequest
+			var (
+				runReq                    *executor.RunRequest
+				credManagerRunnerCalled   chan struct{}
+				credManagerRunnerSignaled chan struct{}
+			)
 
 			BeforeEach(func() {
+				credManagerRunnerCalled = make(chan struct{})
+				credManagerRunnerSignaled = make(chan struct{})
+				called := credManagerRunnerCalled
+				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					close(called)
+					close(ready)
+					<-signals
+					return nil
+				}))
+
 				runAction := &models.Action{
 					RunAction: &models.RunAction{
 						Path: "/foo/bar",
@@ -990,6 +989,110 @@ var _ = Describe("Container Store", func() {
 
 				_, err = containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("when instance credential is configured", func() {
+				var (
+					containerRunnerCalled chan struct{}
+				)
+
+				BeforeEach(func() {
+					containerRunnerCalled = make(chan struct{})
+
+					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						close(containerRunnerCalled)
+						close(ready)
+						<-signals
+						close(credManagerRunnerSignaled)
+						return nil
+					}), nil)
+				})
+
+				AfterEach(func() {
+					containerStore.Destroy(logger, containerGuid)
+				})
+
+				It("starts the cred manager runner", func() {
+					err := containerStore.Run(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(credManagerRunnerCalled).Should(BeClosed())
+				})
+
+				Context("when the runner fails the initial credential generation", func() {
+					BeforeEach(func() {
+						credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+							return errors.New("BOOOM")
+						}))
+					})
+
+					It("destroys the container and returns an error", func() {
+						err := containerStore.Run(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() executor.State {
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							return container.State
+						}).Should(Equal(executor.StateCompleted))
+						container, _ := containerStore.Get(logger, containerGuid)
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOM"))
+					})
+
+					It("tranistions immediately to Completed state", func() {
+						err := containerStore.Run(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() executor.State {
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							return container.State
+						}).Should(Equal(executor.StateCompleted))
+						Expect(eventEmitter.EmitCallCount()).To(Equal(2))
+					})
+				})
+
+				Context("when the runner fails subsequent credential generation", func() {
+					BeforeEach(func() {
+						credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+							close(ready)
+							select {
+							case <-containerRunnerCalled:
+								return errors.New("BOOOM")
+							case <-signals:
+								return nil
+							}
+						}))
+					})
+
+					It("destroys the container and returns an error", func() {
+						err := containerStore.Run(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(func() executor.State {
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							return container.State
+						}).Should(Equal(executor.StateCompleted))
+						container, _ := containerStore.Get(logger, containerGuid)
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOM"))
+					})
+				})
+
+				It("signals the cred manager runner", func() {
+					err := containerStore.Run(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(func() executor.State {
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						return container.State
+					}).Should(Equal(executor.StateRunning))
+					err = containerStore.Destroy(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(credManagerRunnerSignaled).To(BeClosed())
+				})
 			})
 
 			Context("when the action runs indefinitely", func() {
@@ -1040,9 +1143,16 @@ var _ = Describe("Container Store", func() {
 
 			Context("when the action exits", func() {
 				Context("successfully", func() {
+					var (
+						completeChan chan struct{}
+					)
+
 					BeforeEach(func() {
+						completeChan = make(chan struct{})
+
 						var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 							close(ready)
+							<-completeChan
 							return nil
 						}
 						megatron.StepsRunnerReturns(testRunner, nil)
@@ -1051,6 +1161,8 @@ var _ = Describe("Container Store", func() {
 					It("sets its state to completed", func() {
 						err := containerStore.Run(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
+
+						close(completeChan)
 
 						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
 
@@ -1063,15 +1175,17 @@ var _ = Describe("Container Store", func() {
 						err := containerStore.Run(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
+						Eventually(pollForRunning(containerGuid)).Should(BeTrue())
+						close(completeChan)
 						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
 
-						Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
+						Expect(eventEmitter.EmitCallCount()).To(Equal(3))
 
 						container, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						emittedEvents := []executor.Event{}
-						for i := 0; i < 3; i++ {
+						for i := 0; i < eventEmitter.EmitCallCount(); i++ {
 							emittedEvents = append(emittedEvents, eventEmitter.EmitArgsForCall(i))
 						}
 						Expect(emittedEvents).To(ContainElement(executor.ContainerCompleteEvent{
@@ -1082,6 +1196,8 @@ var _ = Describe("Container Store", func() {
 					It("sets the result on the container", func() {
 						err := containerStore.Run(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
+
+						close(completeChan)
 
 						Eventually(pollForComplete(containerGuid)).Should(BeTrue())
 
@@ -1110,7 +1226,7 @@ var _ = Describe("Container Store", func() {
 						container, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(container.RunResult.Failed).To(Equal(true))
-						Expect(container.RunResult.FailureReason).To(Equal("BOOOOM!!!!"))
+						Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOOM!!!!"))
 						Expect(container.RunResult.Stopped).To(Equal(false))
 					})
 				})
@@ -1317,15 +1433,6 @@ var _ = Describe("Container Store", func() {
 			Expect(keys).To(Equal(expectedMounts.CacheKeys))
 		})
 
-		It("removes instance credentials", func() {
-			err := containerStore.Destroy(logger, containerGuid)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(credManager.RemoveCredsCallCount()).To(Equal(1))
-			Expect(credManager.GenerateCredsCallCount()).To(Equal(1))
-			_, container := credManager.GenerateCredsArgsForCall(0)
-			Expect(container.Guid).To(Equal(containerGuid))
-		})
-
 		It("destroys the container", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
@@ -1453,6 +1560,11 @@ var _ = Describe("Container Store", func() {
 				}
 
 				megatron.StepsRunnerReturns(testRunner, nil)
+				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					close(ready)
+					<-signals
+					return nil
+				}))
 			})
 
 			JustBeforeEach(func() {

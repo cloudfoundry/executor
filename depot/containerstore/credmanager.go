@@ -6,12 +6,16 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
 	"path"
 	"path/filepath"
 	"time"
+
+	uuid "github.com/nu7hatch/gouuid"
+	"github.com/tedsuo/ifrit"
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
@@ -22,8 +26,7 @@ import (
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
-	GenerateCreds(lager.Logger, executor.Container) error
-	RemoveCreds(lager.Logger, executor.Container) error
+	Runner(lager.Logger, executor.Container) ifrit.Runner
 }
 
 type noopManager struct{}
@@ -35,11 +38,13 @@ func NewNoopCredManager() CredManager {
 func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	return nil, nil, nil
 }
-func (c *noopManager) GenerateCreds(logger lager.Logger, container executor.Container) error {
-	return nil
-}
-func (c *noopManager) RemoveCreds(logger lager.Logger, container executor.Container) error {
-	return nil
+
+func (c *noopManager) Runner(lager.Logger, executor.Container) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		close(ready)
+		<-signals
+		return nil
+	})
 }
 
 type credManager struct {
@@ -50,9 +55,11 @@ type credManager struct {
 	CaCert             *x509.Certificate
 	privateKey         *rsa.PrivateKey
 	containerMountPath string
+	logger             lager.Logger
 }
 
 func NewCredManager(
+	logger lager.Logger,
 	credDir string,
 	validityPeriod time.Duration,
 	entropyReader io.Reader,
@@ -62,6 +69,7 @@ func NewCredManager(
 	containerMountPath string,
 ) CredManager {
 	return &credManager{
+		logger:             logger,
 		credDir:            credDir,
 		validityPeriod:     validityPeriod,
 		entropyReader:      entropyReader,
@@ -70,6 +78,45 @@ func NewCredManager(
 		privateKey:         privateKey,
 		containerMountPath: containerMountPath,
 	}
+}
+
+func calculateCredentialRotationPeriod(validityPeriod time.Duration) time.Duration {
+	if validityPeriod > 4*time.Hour {
+		return validityPeriod - 30*time.Minute
+	} else {
+		eighth := validityPeriod / 8
+		return validityPeriod - eighth
+	}
+}
+
+func (c *credManager) Runner(logger lager.Logger, container executor.Container) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		logger = logger.Session("cred-manager-runner")
+		logger.Info("starting")
+		defer logger.Info("finished")
+
+		err := c.generateCreds(logger, container)
+		if err != nil {
+			logger.Error("failed-to-generate-credentials", err)
+			return err
+		}
+		logger.Info("generated")
+
+		rotationDuration := calculateCredentialRotationPeriod(c.validityPeriod)
+		regenCertTimer := c.clock.NewTimer(rotationDuration)
+
+		close(ready)
+		for {
+			select {
+			case <-regenCertTimer.C():
+				c.generateCreds(logger, container)
+				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
+				regenCertTimer.Reset(rotationDuration)
+			case <-signals:
+				return c.removeCreds(logger, container)
+			}
+		}
+	})
 }
 
 func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
@@ -101,7 +148,7 @@ const (
 	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
-func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Container) error {
+func (c *credManager) generateCreds(logger lager.Logger, container executor.Container) error {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -113,7 +160,13 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 
 	now := c.clock.Now()
 	template := createCertificateTemplate(container.InternalIP, container.Guid, now, now.Add(c.validityPeriod), container.CertificateProperties.OrganizationalUnit)
-	template.SerialNumber.SetBytes([]byte(container.Guid))
+	guid, err := uuid.NewV4()
+	if err != nil {
+		logger.Error("failed-to-generate-uuid", err)
+		return err
+	}
+	guidBytes := [16]byte(*guid)
+	template.SerialNumber.SetBytes(guidBytes[:])
 
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)
 	if err != nil {
@@ -121,8 +174,12 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 	}
 
 	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
+	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
+	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
+	tmpCertificatePath := certificatePath + ".tmp"
+
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	instanceKey, err := os.Create(instanceKeyPath)
+	instanceKey, err := os.Create(tmpInstanceKeyPath)
 	if err != nil {
 		return err
 	}
@@ -134,8 +191,7 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 		return err
 	}
 
-	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
-	certificate, err := os.Create(certificatePath)
+	certificate, err := os.Create(tmpCertificatePath)
 	if err != nil {
 		return err
 	}
@@ -146,15 +202,30 @@ func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Cont
 		return err
 	}
 
-	return pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificate)
+	err = pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificate)
+	if err != nil {
+		return err
+	}
+
+	err = os.Rename(tmpInstanceKeyPath, instanceKeyPath)
+	if err != nil {
+		return err
+	}
+
+	return os.Rename(tmpCertificatePath, certificatePath)
 }
 
-func (c *credManager) RemoveCreds(logger lager.Logger, container executor.Container) error {
+func (c *credManager) removeCreds(logger lager.Logger, container executor.Container) error {
 	logger = logger.Session("remove-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	return os.RemoveAll(filepath.Join(c.credDir, container.Guid))
+	err := os.RemoveAll(filepath.Join(c.credDir, container.Guid))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
@@ -176,4 +247,19 @@ func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
 	}
+}
+
+func certFromFile(certFile string) (*x509.Certificate, error) {
+	data, err := ioutil.ReadFile(certFile)
+	if err != nil {
+		return nil, err
+	}
+	var block *pem.Block
+	block, _ = pem.Decode(data)
+	certs, err := x509.ParseCertificates(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	cert := certs[0]
+	return cert, nil
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -22,17 +23,20 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
 )
 
 var _ = Describe("CredManager", func() {
 	var (
-		credManager    containerstore.CredManager
-		validityPeriod time.Duration
-		CaCert         *x509.Certificate
-		privateKey     *rsa.PrivateKey
-		tmpdir         string
-		logger         lager.Logger
-		clock          *fakeclock.FakeClock
+		credManager        containerstore.CredManager
+		validityPeriod     time.Duration
+		CaCert             *x509.Certificate
+		privateKey         *rsa.PrivateKey
+		reader             io.Reader
+		tmpdir             string
+		containerMountPath string
+		logger             lager.Logger
+		clock              *fakeclock.FakeClock
 	)
 
 	BeforeEach(func() {
@@ -41,6 +45,8 @@ var _ = Describe("CredManager", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		validityPeriod = time.Minute
+		containerMountPath = "containerpath"
+		reader = rand.Reader
 
 		logger = lagertest.NewTestLogger("credmanager")
 		// Truncate and set to UTC time because of parsing time from certificate
@@ -48,11 +54,33 @@ var _ = Describe("CredManager", func() {
 		clock = fakeclock.NewFakeClock(time.Now().UTC().Truncate(time.Second))
 
 		CaCert, privateKey = createIntermediateCert()
-		credManager = containerstore.NewCredManager(tmpdir, validityPeriod, rand.Reader, clock, CaCert, privateKey, "containerpath")
+	})
+
+	JustBeforeEach(func() {
+		credManager = containerstore.NewCredManager(logger, tmpdir, validityPeriod, reader, clock, CaCert, privateKey, containerMountPath)
 	})
 
 	AfterEach(func() {
 		os.RemoveAll(tmpdir)
+	})
+
+	Context("NoopCredManager", func() {
+		It("returns a dummy runner", func() {
+			container := executor.Container{
+				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+				InternalIP: "127.0.0.1",
+				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+					OrganizationalUnit: []string{"app:iamthelizardking"}},
+				},
+			}
+
+			runner := containerstore.NewNoopCredManager().Runner(logger, container)
+			process := ifrit.Background(runner)
+			Eventually(process.Ready()).Should(BeClosed())
+			Consistently(process.Wait()).ShouldNot(Receive())
+			process.Signal(os.Interrupt)
+			Eventually(process.Wait()).Should(Receive())
+		})
 	})
 
 	Context("CreateCredDir", func() {
@@ -97,159 +125,316 @@ var _ = Describe("CredManager", func() {
 		})
 	})
 
-	Context("GenerateCreds", func() {
-		var container executor.Container
+	Context("WithCreds", func() {
+		var (
+			container executor.Container
+			certMount []garden.BindMount
+			err       error
+			certPath  string
+		)
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			container = executor.Container{
-				Guid:       "container-guid",
+				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
 				InternalIP: "127.0.0.1",
 				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
 					OrganizationalUnit: []string{"app:iamthelizardking"}},
 				},
 			}
-			_, _, err := credManager.CreateCredDir(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("puts private key into container directory", func() {
-			err := credManager.GenerateCreds(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-
-			certPath := filepath.Join(tmpdir, container.Guid)
-
-			keyFile := filepath.Join(certPath, "instance.key")
-			data, err := ioutil.ReadFile(keyFile)
-			Expect(err).NotTo(HaveOccurred())
-
-			block, rest := pem.Decode(data)
-			Expect(block).NotTo(BeNil())
-			Expect(rest).To(BeEmpty())
-
-			Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
-			key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-			Expect(err).NotTo(HaveOccurred())
-
-			var bits int
-			for _, p := range key.Primes {
-				bits += p.BitLen()
-			}
-			Expect(bits).To(Equal(2048))
-		})
-
-		Context("when generating private key fails", func() {
-			BeforeEach(func() {
-				reader := io.LimitReader(rand.Reader, 0)
-				credManager = containerstore.NewCredManager(tmpdir, validityPeriod, reader, clock, CaCert, privateKey, "")
-			})
-
-			It("returns an error", func() {
-				err := credManager.GenerateCreds(logger, container)
-				Expect(err).To(MatchError("EOF"))
-			})
-		})
-
-		It("signs and puts the certificate into container directory", func() {
-			err := credManager.GenerateCreds(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-
-			certPath := filepath.Join(tmpdir, container.Guid)
-
-			certFile := filepath.Join(certPath, "instance.crt")
-			Expect(certFile).To(BeARegularFile())
-		})
-
-		Describe("the cert", func() {
-			var (
-				cert *x509.Certificate
-				rest []byte
-			)
-
-			BeforeEach(func() {
-				err := credManager.GenerateCreds(logger, container)
-				Expect(err).NotTo(HaveOccurred())
-				certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
-				data, err := ioutil.ReadFile(certFile)
-				Expect(err).NotTo(HaveOccurred())
-				var block *pem.Block
-				block, rest = pem.Decode(data)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(block).NotTo(BeNil())
-				Expect(block.Type).To(Equal("CERTIFICATE"))
-				certs, err := x509.ParseCertificates(block.Bytes)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(certs).To(HaveLen(1))
-				cert = certs[0]
-			})
-
-			It("has the container ip", func() {
-				ip := net.ParseIP(container.InternalIP)
-				Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
-			})
-
-			It("signed by the rep intermediate CA", func() {
-				CaCertPool := x509.NewCertPool()
-				CaCertPool.AddCert(CaCert)
-				verifyOpts := x509.VerifyOptions{Roots: CaCertPool}
-				Expect(cert.CheckSignatureFrom(CaCert)).To(Succeed())
-				_, err := cert.Verify(verifyOpts)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("common name should be set to the container guid", func() {
-				Expect(cert.Subject.CommonName).To(Equal(container.Guid))
-			})
-
-			It("expires in after the configured validity period", func() {
-				Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
-			})
-
-			It("not before is set to current timestamp", func() {
-				Expect(cert.NotBefore).To(Equal(clock.Now()))
-			})
-
-			It("sets the serial number to the container guid", func() {
-				expected := big.NewInt(0)
-				expected.SetBytes([]byte(container.Guid))
-
-				Expect(expected).To(Equal(cert.SerialNumber))
-			})
-
-			It("has the rep intermediate CA", func() {
-				block, rest := pem.Decode(rest)
-				Expect(block).NotTo(BeNil())
-				Expect(rest).To(BeEmpty())
-				Expect(block.Type).To(Equal("CERTIFICATE"))
-				certs, err := x509.ParseCertificates(block.Bytes)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(certs).To(HaveLen(1))
-				cert = certs[0]
-				Expect(cert).To(Equal(CaCert))
-			})
-
-			It("has the app guid in the subject's organizational units", func() {
-				Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
-			})
-		})
-	})
-
-	Context("RemoveCreds", func() {
-		var container executor.Container
-
-		BeforeEach(func() {
-			container = executor.Container{
-				Guid:       "container-guid",
-				InternalIP: "127.0.0.1",
-			}
-		})
-
-		It("removes container credentials from the filesystem", func() {
-			certMount, _, err := credManager.CreateCredDir(logger, container)
+			certMount, _, err = credManager.CreateCredDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certMount[0].SrcPath).To(BeADirectory())
 
-			credManager.RemoveCreds(logger, container)
-			Expect(certMount[0].SrcPath).ToNot(BeADirectory())
+			certPath = filepath.Join(tmpdir, container.Guid)
+		})
+
+		Context("Runner", func() {
+			var (
+				containerProcess ifrit.Process
+			)
+
+			JustBeforeEach(func() {
+				runner := credManager.Runner(logger, container)
+				containerProcess = ifrit.Background(runner)
+			})
+
+			AfterEach(func() {
+				containerProcess.Signal(os.Interrupt)
+				Eventually(containerProcess.Wait()).Should(Receive())
+			})
+
+			It("puts private key into container directory", func() {
+				Eventually(containerProcess.Ready()).Should(BeClosed())
+
+				keyFile := filepath.Join(certPath, "instance.key")
+				data, err := ioutil.ReadFile(keyFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				block, rest := pem.Decode(data)
+				Expect(block).NotTo(BeNil())
+				Expect(rest).To(BeEmpty())
+
+				Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
+				key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				var bits int
+				for _, p := range key.Primes {
+					bits += p.BitLen()
+				}
+				Expect(bits).To(Equal(2048))
+			})
+
+			It("signs and puts the certificate into container directory", func() {
+				Eventually(containerProcess.Ready()).Should(BeClosed())
+
+				certFile := filepath.Join(certPath, "instance.crt")
+				Expect(certFile).To(BeARegularFile())
+			})
+
+			Context("when the certificate is about to expire", func() {
+				var (
+					keyBefore    []byte
+					certBefore   []byte
+					serialNumber *big.Int
+				)
+
+				readCertAndKey := func() ([]byte, []byte) {
+					keyFile := filepath.Join(certPath, "instance.key")
+					key, err := ioutil.ReadFile(keyFile)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+					certFile := filepath.Join(certPath, "instance.crt")
+					cert, err := ioutil.ReadFile(certFile)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+					return key, cert
+				}
+
+				testCredentialRotation := func(durationPriorToExpiry time.Duration) {
+					JustBeforeEach(func() {
+						Eventually(containerProcess.Ready()).Should(BeClosed())
+						keyBefore, certBefore = readCertAndKey()
+						block, _ := pem.Decode(certBefore)
+						certs, err := x509.ParseCertificates(block.Bytes)
+						Expect(err).NotTo(HaveOccurred())
+						cert := certs[0]
+						increment := cert.NotAfter.Add(-durationPriorToExpiry).Sub(clock.Now())
+						serialNumber = cert.SerialNumber
+
+						Expect(increment).To(BeNumerically(">", 0))
+						clock.WaitForWatcherAndIncrement(increment)
+					})
+
+					It("generates a new certificate and keypair", func() {
+						Eventually(func() []byte {
+							key, _ := readCertAndKey()
+							return key
+						}).ShouldNot(Equal(keyBefore))
+
+						Eventually(func() []byte {
+							_, cert := readCertAndKey()
+							return cert
+						}).ShouldNot(Equal(certBefore))
+
+						var block *pem.Block
+						_, certAfter := readCertAndKey()
+						block, _ = pem.Decode(certAfter)
+						certs, err := x509.ParseCertificates(block.Bytes)
+						Expect(err).NotTo(HaveOccurred())
+						cert := certs[0]
+						Expect(cert.SerialNumber).ToNot(Equal(serialNumber))
+					})
+				}
+
+				testNoCredentialRotation := func(durationPriorToExpiry time.Duration) {
+					JustBeforeEach(func() {
+						Eventually(containerProcess.Ready()).Should(BeClosed())
+						keyFile := filepath.Join(certPath, "instance.key")
+						keyBefore, err = ioutil.ReadFile(keyFile)
+						Expect(err).NotTo(HaveOccurred())
+
+						certFile := filepath.Join(certPath, "instance.crt")
+						certBefore, err = ioutil.ReadFile(certFile)
+						Expect(err).NotTo(HaveOccurred())
+
+						var block *pem.Block
+						block, _ = pem.Decode(certBefore)
+						certs, err := x509.ParseCertificates(block.Bytes)
+						Expect(err).NotTo(HaveOccurred())
+						cert := certs[0]
+						increment := cert.NotAfter.Add(-durationPriorToExpiry).Sub(clock.Now())
+
+						Expect(increment).To(BeNumerically(">", 0))
+						clock.WaitForWatcherAndIncrement(increment)
+					})
+
+					It("does not rotate the credentials", func() {
+						Consistently(func() []byte {
+							keyFile := filepath.Join(certPath, "instance.key")
+							keyAfter, err := ioutil.ReadFile(keyFile)
+							Expect(err).NotTo(HaveOccurred())
+							return keyAfter
+						}).Should(Equal(keyBefore))
+
+						Consistently(func() []byte {
+							certFile := filepath.Join(certPath, "instance.crt")
+							certAfter, err := ioutil.ReadFile(certFile)
+							Expect(err).NotTo(HaveOccurred())
+							return certAfter
+						}).Should(Equal(certBefore))
+					})
+				}
+
+				Context("when the certificate validity is less than 4 hours", func() {
+					BeforeEach(func() {
+						validityPeriod = time.Minute
+					})
+
+					Context("when 15 seconds prior to expiry", func() {
+						testNoCredentialRotation(15 * time.Second)
+					})
+
+					Context("when 5 seconds prior to expiry", func() {
+						testCredentialRotation(5 * time.Second)
+
+						// test timer reset logic
+						Context("when 5 seconds prior to expiry", func() {
+							// wait for the cert to rotate from the outer context before running this test
+							JustBeforeEach(func() {
+								Eventually(func() []byte {
+									key, _ := readCertAndKey()
+									return key
+								}).ShouldNot(Equal(keyBefore))
+							})
+
+							testCredentialRotation(5 * time.Second)
+						})
+
+						Context("when 15 seconds prior to expiry", func() {
+							// wait for the cert to rotate from the outer context before running this test
+							JustBeforeEach(func() {
+								Eventually(func() []byte {
+									key, _ := readCertAndKey()
+									return key
+								}).ShouldNot(Equal(keyBefore))
+							})
+
+							testNoCredentialRotation(15 * time.Second)
+						})
+					})
+				})
+
+				Context("when certificate validity is longer than 4 hours", func() {
+					BeforeEach(func() {
+						validityPeriod = 24 * time.Hour
+					})
+
+					Context("when 90 minutes prior to expiry", func() {
+						testNoCredentialRotation(90 * time.Minute)
+					})
+
+					Context("when 30 minutes prior to expiry", func() {
+						testCredentialRotation(30 * time.Minute)
+					})
+				})
+
+				Context("when regenerating certificate and key fails", func() {
+					It("returns an error", func() {
+						os.RemoveAll(tmpdir)
+						var err error
+						Eventually(containerProcess.Wait()).Should(Receive(&err))
+						Expect(err).To(HaveOccurred())
+					})
+				})
+			})
+
+			Context("when signaled", func() {
+				JustBeforeEach(func() {
+					Eventually(certMount[0].SrcPath).Should(BeADirectory())
+					containerProcess.Signal(os.Interrupt)
+				})
+
+				It("removes container credentials from the filesystem", func() {
+					Eventually(certMount[0].SrcPath).ShouldNot(BeADirectory())
+				})
+			})
+
+			Context("when generating private key fails", func() {
+				BeforeEach(func() {
+					reader = io.LimitReader(rand.Reader, 0)
+				})
+
+				It("returns an error", func() {
+					var err error
+					Eventually(containerProcess.Wait()).Should(Receive(&err))
+					Expect(err).To(MatchError("EOF"))
+				})
+			})
+
+			Describe("the certificate", func() {
+				var (
+					cert *x509.Certificate
+					rest []byte
+				)
+
+				JustBeforeEach(func() {
+					Eventually(containerProcess.Ready()).Should(BeClosed())
+
+					certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
+					data, err := ioutil.ReadFile(certFile)
+					Expect(err).NotTo(HaveOccurred())
+					var block *pem.Block
+					block, rest = pem.Decode(data)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(block).NotTo(BeNil())
+					Expect(block.Type).To(Equal("CERTIFICATE"))
+					certs, err := x509.ParseCertificates(block.Bytes)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(certs).To(HaveLen(1))
+					cert = certs[0]
+				})
+
+				It("has the container ip", func() {
+					ip := net.ParseIP(container.InternalIP)
+					Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+				})
+
+				It("signed by the rep intermediate CA", func() {
+					CaCertPool := x509.NewCertPool()
+					CaCertPool.AddCert(CaCert)
+					verifyOpts := x509.VerifyOptions{Roots: CaCertPool}
+					Expect(cert.CheckSignatureFrom(CaCert)).To(Succeed())
+					_, err := cert.Verify(verifyOpts)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("common name should be set to the container guid", func() {
+					Expect(cert.Subject.CommonName).To(Equal(container.Guid))
+				})
+
+				It("expires in after the configured validity period", func() {
+					Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
+				})
+
+				It("not before is set to current timestamp", func() {
+					Expect(cert.NotBefore).To(Equal(clock.Now()))
+				})
+
+				It("has the rep intermediate CA", func() {
+					block, rest := pem.Decode(rest)
+					Expect(block).NotTo(BeNil())
+					Expect(rest).To(BeEmpty())
+					Expect(block.Type).To(Equal("CERTIFICATE"))
+					certs, err := x509.ParseCertificates(block.Bytes)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(certs).To(HaveLen(1))
+					cert = certs[0]
+					Expect(cert).To(Equal(CaCert))
+				})
+
+				It("has the app guid in the subject's organizational units", func() {
+					Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
+				})
+			})
 		})
 	})
 })

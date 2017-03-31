@@ -17,6 +17,7 @@ import (
 	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 )
 
 const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
@@ -26,7 +27,6 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
-const CredGenerationFailed = "failed to generate container credentials"
 
 // To be deprecated
 const (
@@ -188,12 +188,6 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
 
-	err = n.credManager.GenerateCreds(logger, info)
-	if err != nil {
-		n.complete(logger, true, CredGenerationFailed)
-		return err
-	}
-
 	n.infoLock.Lock()
 	n.gardenContainer = gardenContainer
 	n.info = info
@@ -330,15 +324,31 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return err
 	}
 
-	n.process = ifrit.Background(runner)
+	credManagerRunner := n.credManager.Runner(logger, n.info)
+
+	group := grouper.NewOrdered(os.Interrupt, []grouper.Member{
+		{"container-runner", runner},
+		{"cred-manager-runner", credManagerRunner},
+	})
+
+	n.process = ifrit.Background(group)
 	go n.run(logger)
 	return nil
 }
 
 func (n *storeNode) run(logger lager.Logger) {
 	logger.Debug("execute-process")
-	<-n.process.Ready()
-	logger.Debug("healthcheck-passed")
+	select {
+	case <-n.process.Ready():
+		logger.Debug("healthcheck-passed")
+	case err := <-n.process.Wait():
+		if err != nil {
+			n.complete(logger, true, err.Error())
+		} else {
+			n.complete(logger, false, "")
+		}
+		return
+	}
 
 	n.infoLock.Lock()
 	n.info.State = executor.StateRunning
@@ -420,13 +430,6 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
 		}
 	}
-
-	err = n.credManager.RemoveCreds(logger, info)
-	if err != nil {
-		logger.Error("failed-to-instance-credentials", err)
-		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
-	}
-
 	return bindMountCleanupErr
 }
 
