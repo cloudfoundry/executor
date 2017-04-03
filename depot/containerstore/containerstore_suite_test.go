@@ -1,6 +1,8 @@
 package containerstore_test
 
 import (
+	"time"
+
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -11,6 +13,8 @@ import (
 var logger *lagertest.TestLogger
 
 func TestContainerstore(t *testing.T) {
+	SetDefaultConsistentlyDuration(5 * time.Second)
+	SetDefaultEventuallyTimeout(5 * time.Second)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Containerstore Suite")
 }
