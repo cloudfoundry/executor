@@ -987,25 +987,33 @@ var _ = Describe("Container Store", func() {
 
 			Context("while the cred manager is still setting up", func() {
 				var (
+					finishSetup           chan struct{}
 					containerRunnerCalled chan struct{}
 				)
 
 				BeforeEach(func() {
+					finishSetup = make(chan struct{})
 					containerRunnerCalled = make(chan struct{})
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						<-finishSetup
+						close(ready)
 						<-signals
 						return nil
 					}))
+
 					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						close(containerRunnerCalled)
 						return nil
 					}), nil)
 				})
 
-				It("does not start the container while cred manager is setting up", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
+				AfterEach(func() {
+					close(finishSetup)
+					Expect(containerStore.Destroy(logger, containerGuid)).To(Succeed())
+				})
 
+				It("does not start the container while cred manager is setting up", func() {
+					go containerStore.Run(logger, containerGuid)
 					Consistently(containerRunnerCalled).ShouldNot(BeClosed())
 				})
 			})
@@ -1028,7 +1036,9 @@ var _ = Describe("Container Store", func() {
 					}).Should(Equal(executor.StateCompleted))
 					container, _ := containerStore.Get(logger, containerGuid)
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOM"))
+					// make sure the error message is at the end so that
+					// FailureReasonSanitizer can properly map the error messages
+					Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
 				})
 
 				It("tranistions immediately to Completed state", func() {
@@ -1040,7 +1050,15 @@ var _ = Describe("Container Store", func() {
 						Expect(err).NotTo(HaveOccurred())
 						return container.State
 					}).Should(Equal(executor.StateCompleted))
-					Expect(eventEmitter.EmitCallCount()).To(Equal(2))
+
+					Eventually(func() []string {
+						var events []string
+						for i := 0; i < eventEmitter.EmitCallCount(); i++ {
+							event := eventEmitter.EmitArgsForCall(i)
+							events = append(events, string(event.EventType()))
+						}
+						return events
+					}).Should(ConsistOf("container_reserved", "container_complete"))
 				})
 			})
 
@@ -1098,7 +1116,9 @@ var _ = Describe("Container Store", func() {
 						}).Should(Equal(executor.StateCompleted))
 						container, _ := containerStore.Get(logger, containerGuid)
 						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOM"))
+						// make sure the error message is at the end so that
+						// FailureReasonSanitizer can properly map the error messages
+						Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
 					})
 				})
 
@@ -1233,7 +1253,9 @@ var _ = Describe("Container Store", func() {
 							container, err := containerStore.Get(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(container.RunResult.Failed).To(Equal(true))
-							Expect(container.RunResult.FailureReason).To(ContainSubstring("BOOOOM!!!!"))
+							// make sure the error message is at the end so that
+							// FailureReasonSanitizer can properly map the error messages
+							Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOOM!!!!$"))
 							Expect(container.RunResult.Stopped).To(Equal(false))
 						})
 					})

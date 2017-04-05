@@ -17,7 +17,6 @@ import (
 	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/grouper"
 )
 
 const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
@@ -49,15 +48,16 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock            *sync.Mutex
-	gardenClient      garden.Client
-	dependencyManager DependencyManager
-	volumeManager     volman.Manager
-	credManager       CredManager
-	eventEmitter      event.Hub
-	transformer       transformer.Transformer
-	process           ifrit.Process
-	config            *ContainerConfig
+	opLock             *sync.Mutex
+	gardenClient       garden.Client
+	dependencyManager  DependencyManager
+	volumeManager      volman.Manager
+	credManager        CredManager
+	eventEmitter       event.Hub
+	transformer        transformer.Transformer
+	process            ifrit.Process
+	credManagerProcess ifrit.Process
+	config             *ContainerConfig
 }
 
 func newStoreNode(
@@ -326,24 +326,43 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	credManagerRunner := n.credManager.Runner(logger, n.info)
 
-	group := grouper.NewOrdered(os.Interrupt, []grouper.Member{
-		{"cred-manager-runner", credManagerRunner},
-		{"container-runner", runner},
-	})
+	n.credManagerProcess = ifrit.Background(credManagerRunner)
+	// we cannot use a group here because it messes up with the error messages returned from the runners, e.g.
+	//   cred-manager-runner exited with error: BOOOM
+	//   container-runner exited with nil
+	// instead of just
+	//   BOOM
+	// nomrally this is informative and good but looks like cc
+	// FailureReasonSanitizer depends on some errors messages having a specific
+	// structure
 
-	n.process = ifrit.Background(group)
-	go n.run(logger)
+	// wait for cred manager to start
+	select {
+	case <-n.credManagerProcess.Ready():
+		n.process = ifrit.Background(runner)
+		go n.run(logger)
+	case err := <-n.credManagerProcess.Wait():
+		if err != nil {
+			logger.Error("cred-manager-exited", err)
+			n.complete(logger, true, "cred-manager-runner exited: "+err.Error())
+		} else {
+			logger.Info("cred-manager-exited-without-error")
+			n.complete(logger, false, "")
+		}
+	}
 	return nil
 }
 
 func (n *storeNode) run(logger lager.Logger) {
+	// wait for container runner to start
 	logger.Debug("execute-process")
 	select {
 	case <-n.process.Ready():
 		logger.Debug("healthcheck-passed")
-	case err := <-n.process.Wait():
+	case err := <-n.credManagerProcess.Wait():
+		logger.Error("cred-manager-exited", err)
 		if err != nil {
-			n.complete(logger, true, err.Error())
+			n.complete(logger, true, "cred-manager-runner exited: "+err.Error())
 		} else {
 			n.complete(logger, false, "")
 		}
@@ -356,9 +375,24 @@ func (n *storeNode) run(logger lager.Logger) {
 	n.infoLock.Unlock()
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
-	err := <-n.process.Wait()
-	if err != nil {
-		n.complete(logger, true, err.Error())
+	var errorStr string
+	select {
+	case err := <-n.credManagerProcess.Wait():
+		if err != nil {
+			errorStr = "cred-manager-runner exited: " + err.Error()
+		}
+		n.process.Signal(os.Interrupt)
+		n.process.Wait()
+	case err := <-n.process.Wait():
+		if err != nil {
+			errorStr = err.Error()
+		}
+		n.credManagerProcess.Signal(os.Interrupt)
+		n.credManagerProcess.Wait()
+	}
+
+	if errorStr != "" {
+		n.complete(logger, true, errorStr)
 	} else {
 		n.complete(logger, false, "")
 	}
