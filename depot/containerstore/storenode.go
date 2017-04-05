@@ -356,18 +356,8 @@ func (n *storeNode) Run(logger lager.Logger) error {
 func (n *storeNode) run(logger lager.Logger) {
 	// wait for container runner to start
 	logger.Debug("execute-process")
-	select {
-	case <-n.process.Ready():
-		logger.Debug("healthcheck-passed")
-	case err := <-n.credManagerProcess.Wait():
-		logger.Error("cred-manager-exited", err)
-		if err != nil {
-			n.complete(logger, true, "cred-manager-runner exited: "+err.Error())
-		} else {
-			n.complete(logger, false, "")
-		}
-		return
-	}
+	<-n.process.Ready()
+	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
 	n.info.State = executor.StateRunning
