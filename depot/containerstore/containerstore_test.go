@@ -1586,7 +1586,6 @@ var _ = Describe("Container Store", func() {
 			)
 
 			BeforeEach(func() {
-				errCh = make(chan error)
 				credManagerRunnerSignaled = make(chan struct{})
 				finishRun = make(chan struct{})
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
