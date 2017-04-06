@@ -3,6 +3,7 @@ package containerstore
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"code.cloudfoundry.org/bytefmt"
 	"code.cloudfoundry.org/cacheddownloader"
@@ -54,7 +55,11 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 	for i := range mounts {
 		go func(mount *executor.CachedDependency) {
+			limiterStart := time.Now()
 			bm.downloadRateLimiter <- struct{}{}
+			limiterTime := time.Now().Sub(limiterStart)
+			logger.Info("cached-dependency-rate-limiter", lager.Data{"cache-key": mount.CacheKey, "duration-ns": limiterTime})
+
 			defer func() {
 				<-bm.downloadRateLimiter
 			}()
