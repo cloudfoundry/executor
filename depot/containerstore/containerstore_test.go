@@ -1582,7 +1582,7 @@ var _ = Describe("Container Store", func() {
 			var (
 				finishRun                 chan struct{}
 				credManagerRunnerSignaled chan struct{}
-				errCh                     chan error
+				destroyed                 chan struct{}
 			)
 
 			BeforeEach(func() {
@@ -1591,15 +1591,16 @@ var _ = Describe("Container Store", func() {
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					finishRun <- struct{}{}
+					<-finishRun
 					return nil
 				}
 
+				signaled := credManagerRunnerSignaled
 				megatron.StepsRunnerReturns(testRunner, nil)
 				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					close(credManagerRunnerSignaled)
+					close(signaled)
 					return nil
 				}))
 			})
@@ -1608,20 +1609,21 @@ var _ = Describe("Container Store", func() {
 				err := containerStore.Run(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(pollForRunning(containerGuid)).Should(BeTrue())
-				errCh = make(chan error)
-				go func() {
-					errCh <- containerStore.Destroy(logger, containerGuid)
-				}()
+				destroyed = make(chan struct{})
+				go func(ch chan struct{}) {
+					containerStore.Destroy(logger, containerGuid)
+					close(ch)
+				}(destroyed)
 			})
 
 			It("cancels the process", func() {
-				Consistently(errCh).ShouldNot(Receive())
-				Eventually(finishRun).Should(Receive())
-				Eventually(errCh).Should(Receive())
+				Consistently(destroyed).ShouldNot(Receive())
+				close(finishRun)
+				Eventually(destroyed).Should(BeClosed())
 			})
 
 			It("signals the cred manager runner", func() {
-				Eventually(finishRun).Should(Receive())
+				close(finishRun)
 				Eventually(credManagerRunnerSignaled).Should(BeClosed())
 			})
 		})
