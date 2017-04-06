@@ -46,7 +46,13 @@ var _ = Describe("CredManager", func() {
 
 		validityPeriod = time.Minute
 		containerMountPath = "containerpath"
-		reader = rand.Reader
+
+		// we have seen private key generation take a long time in CI, the
+		// suspicion is that `getrandom` is getting slower with the increased
+		// number of certs we create on the system. This is an experiment to see if
+		// using math/rand in the tests will make things less flaky. We are also
+		// suspicious that this is affecting cacheddownloader TLS tests
+		reader = fastRandReader{}
 
 		logger = lagertest.NewTestLogger("credmanager")
 		// Truncate and set to UTC time because of parsing time from certificate
