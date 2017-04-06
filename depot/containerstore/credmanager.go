@@ -158,25 +158,38 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	logger.Info("starting")
 	defer logger.Info("complete")
 
+	logger.Debug("generating-private-key")
 	privateKey, err := rsa.GenerateKey(c.entropyReader, 2048)
 	if err != nil {
 		return err
 	}
+	logger.Debug("generated-private-key")
 
 	now := c.clock.Now()
-	template := createCertificateTemplate(container.InternalIP, container.Guid, now, now.Add(c.validityPeriod), container.CertificateProperties.OrganizationalUnit)
+	template := createCertificateTemplate(container.InternalIP,
+		container.Guid,
+		now,
+		now.Add(c.validityPeriod),
+		container.CertificateProperties.OrganizationalUnit,
+	)
+
+	logger.Debug("generating-serial-number")
 	guid, err := uuid.NewV4()
 	if err != nil {
 		logger.Error("failed-to-generate-uuid", err)
 		return err
 	}
+	logger.Debug("generated-serial-number")
+
 	guidBytes := [16]byte(*guid)
 	template.SerialNumber.SetBytes(guidBytes[:])
 
+	logger.Debug("generating-certificate")
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)
 	if err != nil {
 		return err
 	}
+	logger.Debug("generated-certificate")
 
 	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
 	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
