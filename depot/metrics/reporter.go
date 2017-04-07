@@ -7,7 +7,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/loggregator_v2"
+	"github.com/cloudfoundry-incubator/diego-loggregator/loggregator_v2"
 )
 
 const (

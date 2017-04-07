@@ -10,7 +10,7 @@ import (
 	efakes "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
+	mfakes "github.com/cloudfoundry-incubator/diego-loggregator/loggregator_v2/fakes"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/tedsuo/ifrit"

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"code.cloudfoundry.org/loggregator_v2"
+	"github.com/cloudfoundry-incubator/diego-loggregator/loggregator_v2"
 
 	"github.com/cloudfoundry/sonde-go/events"
 )

@@ -15,7 +15,7 @@ import (
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
+	mfakes "github.com/cloudfoundry-incubator/diego-loggregator/loggregator_v2/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

@@ -23,9 +23,9 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	mfakes "code.cloudfoundry.org/loggregator_v2/fakes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
+	mfakes "github.com/cloudfoundry-incubator/diego-loggregator/loggregator_v2/fakes"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	"code.cloudfoundry.org/garden/gardenfakes"
