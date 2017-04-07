@@ -314,13 +314,17 @@ var _ = Describe("CredManager", func() {
 							// similar to eventually but faster, to ensure we sample the cert
 							// file as soon as it is overwritten. stop as soon as we see a
 							// change to the file
-							for {
+							//
+							// arbitrary limit to prevent infinite loop
+							limit := 100000
+							for ; limit > 0; limit-- {
 								_, certBytes := readKeyAndCert()
 								after = string(certBytes)
 								if after != before {
 									break
 								}
 							}
+							Expect(limit).To(BeNumerically(">", 0))
 
 							block, _ := pem.Decode([]byte(after))
 							Expect(block).NotTo(BeNil(), "invalid data in cert file")
@@ -334,13 +338,17 @@ var _ = Describe("CredManager", func() {
 							// similar to eventually but faster, to ensure we sample the key
 							// file as soon as it is overwritten. stop as soon as we see a
 							// change to the file
-							for {
+							//
+							// arbitrary limit to prevent infinite loop
+							limit := 100000
+							for ; limit > 0; limit-- {
 								keyBytes, _ := readKeyAndCert()
 								after = string(keyBytes)
 								if after != before {
 									break
 								}
 							}
+							Expect(limit).To(BeNumerically(">", 0))
 
 							block, _ := pem.Decode([]byte(after))
 							Expect(block).NotTo(BeNil(), "invalid data in key file")
