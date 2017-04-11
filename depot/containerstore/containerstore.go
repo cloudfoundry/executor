@@ -11,8 +11,8 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/loggregator_v2"
 	"code.cloudfoundry.org/volman"
+	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 	"github.com/tedsuo/ifrit"
 )
 
