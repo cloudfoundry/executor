@@ -9,7 +9,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/loggregator_v2"
+	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 )
 
 type StatsReporter struct {
