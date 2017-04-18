@@ -42,6 +42,9 @@ var _ = Describe("CredManager", func() {
 
 	BeforeEach(func() {
 		var err error
+
+		SetDefaultEventuallyTimeout(10 * time.Second)
+
 		tmpdir, err = ioutil.TempDir("", "credsmanager")
 		Expect(err).ToNot(HaveOccurred())
 
@@ -389,7 +392,7 @@ var _ = Describe("CredManager", func() {
 				Context("when regenerating certificate and key fails", func() {
 					It("returns an error", func() {
 						Eventually(filepath.Join(certPath, "instance.key")).Should(BeARegularFile())
-						os.RemoveAll(tmpdir)
+						Expect(os.RemoveAll(tmpdir)).To(Succeed())
 						clock.WaitForWatcherAndIncrement(1 * time.Hour)
 						var err error
 						Eventually(containerProcess.Wait()).Should(Receive(&err))
@@ -400,6 +403,7 @@ var _ = Describe("CredManager", func() {
 
 			Context("when signaled", func() {
 				JustBeforeEach(func() {
+					Eventually(containerProcess.Ready()).Should(BeClosed())
 					Eventually(certMount[0].SrcPath).Should(BeADirectory())
 					containerProcess.Signal(os.Interrupt)
 				})
