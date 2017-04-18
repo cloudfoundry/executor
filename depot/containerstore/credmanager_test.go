@@ -23,6 +23,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -228,6 +229,8 @@ var _ = Describe("CredManager", func() {
 
 						Expect(increment).To(BeNumerically(">", 0))
 						clock.WaitForWatcherAndIncrement(increment)
+
+						Eventually(logger).Should(gbytes.Say("regenerating-cert-and-key.completed"))
 					})
 
 					It("generates a new certificate and keypair", func() {

@@ -108,7 +108,8 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		for {
 			select {
 			case <-regenCertTimer.C():
-				logger.Debug("regenerating-cert-and-key")
+				logger = logger.Session("regenerating-cert-and-key")
+				logger.Debug("started")
 				err = c.generateCreds(logger, container)
 				if err != nil {
 					logger.Error("failed-to-generate-credentials", err)
@@ -116,6 +117,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				}
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
+				logger.Debug("completed")
 			case <-signals:
 				logger.Info("signaled")
 				return c.removeCreds(logger, container)
