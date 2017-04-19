@@ -109,6 +109,10 @@ var _ = Describe("RunAction", func() {
 
 		Context("when the script succeeds", func() {
 			BeforeEach(func() {
+				gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
+					fakeClock.Increment(time.Minute)
+					return spawnedProcess, runError
+				}
 				spawnedProcess.WaitReturns(0, nil)
 			})
 
@@ -137,6 +141,10 @@ var _ = Describe("RunAction", func() {
 					"test.run-step.process-exit",
 				}))
 
+			})
+
+			It("logs the duration for process creation", func() {
+				Eventually(logger).Should(gbytes.Say("test.run-step.successful-process-create.+\"duration\":%d", time.Minute))
 			})
 		})
 
@@ -315,7 +323,17 @@ var _ = Describe("RunAction", func() {
 					"test.run-step.creating-process",
 					"test.run-step.failed-creating-process",
 				}))
-
+			})
+			Context("", func() {
+				BeforeEach(func() {
+					gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
+						fakeClock.Increment(time.Minute)
+						return spawnedProcess, runError
+					}
+				})
+				It("logs the duration for process creation", func() {
+					Eventually(logger).Should(gbytes.Say("test.run-step.failed-creating-process.+\"duration\":%d", time.Minute))
+				})
 			})
 		})
 
@@ -524,6 +542,37 @@ var _ = Describe("RunAction", func() {
 						))
 					})
 				})
+			})
+
+		})
+
+		Context("when Garden hangs on spawning a process", func() {
+			var hangChan chan struct{}
+			BeforeEach(func() {
+				hangChan = make(chan struct{})
+				gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
+					//hang until test is finished
+					<-hangChan
+					return nil, nil
+				}
+			})
+
+			JustBeforeEach(func() {
+				go func() {
+					performErr <- step.Perform()
+					close(performErr)
+				}()
+
+				Eventually(gardenClient.Connection.RunCallCount).Should(Equal(1))
+				step.Cancel()
+			})
+
+			AfterEach(func() {
+				// close(hangChan)
+			})
+
+			It("finishes performing with failure", func() {
+				Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 
