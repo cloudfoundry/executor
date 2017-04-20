@@ -104,25 +104,43 @@ func (step *runStep) Perform() error {
 		}
 	}
 
-	process, err := step.container.Run(garden.ProcessSpec{
-		Path: step.model.Path,
-		Args: step.model.Args,
-		Dir:  step.model.Dir,
-		Env:  envVars,
-		User: step.model.User,
+	processChan := make(chan garden.Process, 1)
+	runStartTime := step.clock.Now()
+	go func() {
+		process, err := step.container.Run(garden.ProcessSpec{
+			Path: step.model.Path,
+			Args: step.model.Args,
+			Dir:  step.model.Dir,
+			Env:  envVars,
+			User: step.model.User,
 
-		Limits: garden.ResourceLimits{
-			Nofile: nofile,
-			Nproc:  nproc,
-		},
-	}, processIO)
-	if err != nil {
-		step.logger.Error("failed-creating-process", err)
-		return err
+			Limits: garden.ResourceLimits{
+				Nofile: nofile,
+				Nproc:  nproc,
+			},
+		}, processIO)
+		if err != nil {
+			errChan <- err
+		} else {
+			processChan <- process
+		}
+	}()
+
+	var process garden.Process
+	select {
+	case err := <-errChan:
+		if err != nil {
+			step.logger.Error("failed-creating-process", err, lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
+			return err
+		}
+	case process = <-processChan:
+	case <-cancel:
+		step.logger.Info("cancelled-before-process-creation-completed")
+		return ErrCancelled
 	}
 
 	logger := step.logger.WithData(lager.Data{"process": process.ID()})
-	logger.Debug("successful-process-create")
+	logger.Debug("successful-process-create", lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
 
 	go func() {
 		exitStatus, err := process.Wait()
