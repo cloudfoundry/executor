@@ -568,7 +568,8 @@ var _ = Describe("RunAction", func() {
 			})
 
 			AfterEach(func() {
-				// close(hangChan)
+				close(hangChan)
+				Eventually(performErr).Should(BeClosed())
 			})
 
 			It("finishes performing with failure", func() {
