@@ -315,7 +315,7 @@ var _ = Describe("Initializer", func() {
 
 			Context("when the cert bundle has extra leading and trailing spaces", func() {
 				BeforeEach(func() {
-					config.PathToCACertsForDownloads = "fixtures/ca-certs-with-spaces"
+					config.PathToCACertsForDownloads = "fixtures/ca-certs-with-spaces.crt"
 				})
 
 				It("does not error", func() {
