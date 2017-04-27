@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Checker", func() {
@@ -231,6 +232,54 @@ var _ = Describe("Checker", func() {
 				Expect(gardenClient.DestroyCallCount()).To(Equal(retryCount))
 				By("Returns the error")
 				Expect(err).To(Equal(destroyErr))
+			})
+		})
+	})
+
+	Describe("Cancel", func() {
+		var oldContainer *gardenfakes.FakeContainer
+
+		BeforeEach(func() {
+			oldContainer = &gardenfakes.FakeContainer{}
+			oldContainer.HandleReturns("old-guid")
+			gardenClient.ContainersReturns([]garden.Container{oldContainer}, nil)
+		})
+
+		It("destroys any containers with the healthcheck tag", func() {
+			gardenChecker.Cancel(logger)
+
+			By("Fetching any pre-existing healthcheck containers")
+			Expect(gardenClient.ContainersCallCount()).To(Equal(1))
+			properties := gardenClient.ContainersArgsForCall(0)
+			Expect(properties).To(Equal(garden.Properties{
+				gardenhealth.HealthcheckTag: gardenhealth.HealthcheckTagValue,
+			}))
+
+			By("Deleting all pre-existing-containers")
+			Expect(gardenClient.DestroyCallCount()).To(Equal(1))
+			guid := gardenClient.DestroyArgsForCall(0)
+			Expect(guid).To(Equal("old-guid"))
+		})
+
+		Context("when listing the containers fails", func() {
+			BeforeEach(func() {
+				gardenClient.ContainersReturns(nil, errors.New("boom!"))
+			})
+
+			It("logs the error", func() {
+				gardenChecker.Cancel(logger)
+				Expect(logger).To(gbytes.Say("failed-to-list-containers"))
+			})
+		})
+
+		Context("when destroying the container fails", func() {
+			BeforeEach(func() {
+				gardenClient.DestroyReturns(errors.New("boom!"))
+			})
+
+			It("logs the error", func() {
+				gardenChecker.Cancel(logger)
+				Expect(logger).To(gbytes.Say("failed-to-destroy-containers"))
 			})
 		})
 	})

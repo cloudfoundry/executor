@@ -34,6 +34,7 @@ func (e HealthcheckFailedError) Error() string {
 
 type Checker interface {
 	Healthcheck(lager.Logger) error
+	Cancel(lager.Logger)
 }
 
 type checker struct {
@@ -69,6 +70,22 @@ func NewChecker(
 	}
 }
 
+func (c *checker) Cancel(logger lager.Logger) {
+	logger = logger.Session("cancel")
+
+	containers, err := c.list(logger)
+	if err != nil {
+		logger.Error("failed-to-list-containers", err)
+		return
+	}
+
+	err = c.destroyContainers(logger, containers)
+	if err != nil {
+		logger.Error("failed-to-destroy-containers", err)
+		return
+	}
+}
+
 func (c *checker) list(logger lager.Logger) ([]garden.Container, error) {
 	logger = logger.Session("list")
 	logger.Debug("starting")
@@ -91,8 +108,8 @@ func (c *checker) list(logger lager.Logger) ([]garden.Container, error) {
 	return containers, err
 }
 
-func (c *checker) initialDestroy(logger lager.Logger, containers []garden.Container) error {
-	logger = logger.Session("initial-destroy")
+func (c *checker) destroyContainers(logger lager.Logger, containers []garden.Container) error {
+	logger = logger.Session("destroy-containers")
 	logger.Debug("starting", lager.Data{"numContainers": len(containers)})
 	defer logger.Debug("finished")
 
@@ -232,14 +249,23 @@ func (c *checker) wait(logger lager.Logger, proc garden.Process) (int, error) {
 // retries, an error will be returned, indicating the healthcheck failed.
 func (c *checker) Healthcheck(logger lager.Logger) (healthcheckResult error) {
 	logger = logger.Session("healthcheck")
-	logger.Debug("starting")
+	logger.Info("starting")
+	defer logger.Info("complete")
+
+	defer func() {
+		if healthcheckResult != nil {
+			logger.Error("failed-health-check", healthcheckResult)
+		} else {
+			logger.Info("passed-health-check")
+		}
+	}()
 
 	containers, err := c.list(logger)
 	if err != nil {
 		return err
 	}
 
-	err = c.initialDestroy(logger, containers)
+	err = c.destroyContainers(logger, containers)
 	if err != nil {
 		return err
 	}

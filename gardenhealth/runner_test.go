@@ -13,13 +13,12 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	fakeexecutor "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
+	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Runner", func() {
@@ -132,6 +131,11 @@ var _ = Describe("Runner", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
 					Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
 				})
+
+				It("cancels the existing health check", func() {
+					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
+					Eventually(checker.CancelCallCount).Should(Equal(1))
+				})
 			})
 		})
 
@@ -153,15 +157,12 @@ var _ = Describe("Runner", func() {
 
 				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(2))
-				Eventually(logger).Should(gbytes.Say("check-complete"))
 
 				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(3))
-				Eventually(logger).Should(gbytes.Say("check-complete"))
 
 				fakeClock.WaitForNWatchersAndIncrement(checkInterval, 2)
 				Eventually(checker.HealthcheckCallCount).Should(Equal(4))
-				Eventually(logger).Should(gbytes.Say("check-complete"))
 			})
 
 			It("emits a metric for healthy cell", func() {
@@ -251,6 +252,10 @@ var _ = Describe("Runner", func() {
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
 				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+			})
+
+			It("cancels the existing health check", func() {
+				Eventually(checker.CancelCallCount).Should(Equal(1))
 			})
 		})
 

@@ -17,6 +17,11 @@ type FakeChecker struct {
 	healthcheckReturns struct {
 		result1 error
 	}
+	CancelStub        func(lager.Logger)
+	cancelMutex       sync.RWMutex
+	cancelArgsForCall []struct {
+		arg1 lager.Logger
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
@@ -54,11 +59,37 @@ func (fake *FakeChecker) HealthcheckReturns(result1 error) {
 	}{result1}
 }
 
+func (fake *FakeChecker) Cancel(arg1 lager.Logger) {
+	fake.cancelMutex.Lock()
+	fake.cancelArgsForCall = append(fake.cancelArgsForCall, struct {
+		arg1 lager.Logger
+	}{arg1})
+	fake.recordInvocation("Cancel", []interface{}{arg1})
+	fake.cancelMutex.Unlock()
+	if fake.CancelStub != nil {
+		fake.CancelStub(arg1)
+	}
+}
+
+func (fake *FakeChecker) CancelCallCount() int {
+	fake.cancelMutex.RLock()
+	defer fake.cancelMutex.RUnlock()
+	return len(fake.cancelArgsForCall)
+}
+
+func (fake *FakeChecker) CancelArgsForCall(i int) lager.Logger {
+	fake.cancelMutex.RLock()
+	defer fake.cancelMutex.RUnlock()
+	return fake.cancelArgsForCall[i].arg1
+}
+
 func (fake *FakeChecker) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.healthcheckMutex.RLock()
 	defer fake.healthcheckMutex.RUnlock()
+	fake.cancelMutex.RLock()
+	defer fake.cancelMutex.RUnlock()
 	return fake.invocations
 }
 
