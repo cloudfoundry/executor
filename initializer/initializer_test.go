@@ -419,7 +419,7 @@ var _ = Describe("Initializer", func() {
 		It("does not restrict the cipher suites", func() {
 			tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
 			Expect(err).To(Succeed())
-			Expect(tlsConfig.CipherSuites).To(Equal([]uint16{}))
+			Expect(tlsConfig.CipherSuites).To(BeNil())
 		})
 
 		Context("when mutual is using PathToCACertsForDownloads", func() {

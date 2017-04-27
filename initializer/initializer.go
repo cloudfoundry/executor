@@ -525,7 +525,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
 		// Make the cipher suites less restrictive as we cannot control what cipher
 		// suites asset servers support
-		tlsConfig.CipherSuites = []uint16{}
+		tlsConfig.CipherSuites = nil
 	} else {
 		tlsConfig = &tls.Config{
 			RootCAs:            caCertPool,
