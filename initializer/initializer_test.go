@@ -20,9 +20,9 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
+	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
@@ -414,6 +414,12 @@ var _ = Describe("Initializer", func() {
 			Expect(fakeCertPoolRetriever.SystemCertsCallCount()).To(Equal(1))
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 			Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+		})
+
+		It("does not restrict the cipher suites", func() {
+			tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+			Expect(err).To(Succeed())
+			Expect(tlsConfig.CipherSuites).To(Equal([]uint16{}))
 		})
 
 		Context("when mutual is using PathToCACertsForDownloads", func() {

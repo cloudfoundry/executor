@@ -34,10 +34,10 @@ import (
 	"code.cloudfoundry.org/garden"
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
+	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
-	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 	"github.com/cloudfoundry/systemcerts"
 	"github.com/google/shlex"
 	"github.com/tedsuo/ifrit"
@@ -197,13 +197,15 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	}
 
 	certsRetriever := systemcertsRetriever{}
-	tlsConfig, err := TLSConfigFromConfig(logger, certsRetriever, config)
+	assetTLSConfig, err := TLSConfigFromConfig(logger, certsRetriever, config)
 	if err != nil {
 		return nil, grouper.Members{}, err
 	}
 
+	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), assetTLSConfig)
+	uploader := uploader.New(logger, 10*time.Minute, assetTLSConfig)
+
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
-	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), tlsConfig)
 	cachedDownloader := cacheddownloader.New(
 		workDir,
 		downloader,
@@ -217,8 +219,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	}
 
 	downloadRateLimiter := make(chan struct{}, uint(config.MaxConcurrentDownloads))
-
-	uploader := uploader.New(logger, 10*time.Minute, tlsConfig)
 
 	transformer := initializeTransformer(
 		cachedDownloader,
@@ -523,6 +523,9 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 			return nil, err
 		}
 		tlsConfig.InsecureSkipVerify = config.SkipCertVerify
+		// Make the cipher suites less restrictive as we cannot control what cipher
+		// suites asset servers support
+		tlsConfig.CipherSuites = []uint16{}
 	} else {
 		tlsConfig = &tls.Config{
 			RootCAs:            caCertPool,
