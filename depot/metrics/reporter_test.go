@@ -13,8 +13,8 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
-	"code.cloudfoundry.org/lager/lagertest"
 	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
+	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -93,6 +93,7 @@ var _ = Describe("Reporter", func() {
 
 	It("reports the current capacity on the given interval", func() {
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
 
 		m.RLock()
 		Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(1024))
@@ -116,11 +117,12 @@ var _ = Describe("Reporter", func() {
 			{Guid: "container-2"},
 		}, nil)
 
-		fakeClock.Increment(reportInterval)
+		fakeClock.WaitForWatcherAndIncrement(reportInterval)
 
 		m.RUnlock()
 
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(6))
 
 		m.RLock()
 		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
