@@ -10,9 +10,9 @@ import (
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
-	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -277,9 +277,11 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 
 	for i := range nodes {
 		nodeInfo := nodes[i].Info()
-		containerGuids = append(containerGuids, nodeInfo.Guid)
-		memoryLimitMap[nodeInfo.Guid] = nodeInfo.MemoryLimit
-		diskLimitMap[nodeInfo.Guid] = nodeInfo.DiskLimit
+		if nodeInfo.State == executor.StateRunning || nodeInfo.State == executor.StateCreated {
+			containerGuids = append(containerGuids, nodeInfo.Guid)
+			memoryLimitMap[nodeInfo.Guid] = nodeInfo.MemoryLimit
+			diskLimitMap[nodeInfo.Guid] = nodeInfo.DiskLimit
+		}
 	}
 
 	logger.Debug("getting-metrics-in-garden")

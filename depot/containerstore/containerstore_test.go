@@ -22,10 +22,10 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
+	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
 
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	"code.cloudfoundry.org/garden/gardenfakes"
@@ -1684,13 +1684,53 @@ var _ = Describe("Container Store", func() {
 		})
 	})
 
+	reserveContainer := func(guid string) {
+		resource := executor.Resource{
+			MemoryMB:   10,
+			DiskMB:     10,
+			RootFSPath: "/foo/bar",
+		}
+		tags := executor.Tags{}
+		_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: guid, Tags: tags, Resource: resource})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	initializeContainer := func(guid string) {
+		runInfo := executor.RunInfo{
+			CPUWeight:          2,
+			StartTimeoutMs:     50000,
+			Privileged:         true,
+			CachedDependencies: []executor.CachedDependency{},
+			LogConfig: executor.LogConfig{
+				Guid:       "log-guid",
+				Index:      1,
+				SourceName: "test-source",
+			},
+			MetricsConfig: executor.MetricsConfig{
+				Guid:  "metric-guid",
+				Index: 1,
+			},
+			Env: []executor.EnvironmentVariable{},
+			TrustedSystemCertificatesPath: "",
+			Network: &executor.Network{
+				Properties: map[string]string{},
+			},
+		}
+
+		req := &executor.RunRequest{
+			Guid:    guid,
+			RunInfo: runInfo,
+			Tags:    executor.Tags{},
+		}
+
+		err := containerStore.Initialize(logger, req)
+		Expect(err).ToNot(HaveOccurred())
+	}
+
 	Describe("Metrics", func() {
-		var containerGuid1, containerGuid2, containerGuid3, containerGuid4 string
 		var (
-			req1    *executor.RunRequest
-			req2    *executor.RunRequest
-			runInfo executor.RunInfo
-			err     error
+			containerGuid1, containerGuid2, containerGuid3, containerGuid4 string
+			containerGuid5, containerGuid6                                 string
 		)
 
 		BeforeEach(func() {
@@ -1698,74 +1738,30 @@ var _ = Describe("Container Store", func() {
 			containerGuid2 = "container-guid-2"
 			containerGuid3 = "container-guid-3"
 			containerGuid4 = "container-guid-4"
+			containerGuid5 = "container-guid-5"
+			containerGuid6 = "container-guid-6"
 
-			// Reserve
-			resource := executor.Resource{
-				MemoryMB:   2048,
-				DiskMB:     1024,
-				RootFSPath: "/foo/bar",
-			}
+			reserveContainer(containerGuid1)
+			reserveContainer(containerGuid2)
+			reserveContainer(containerGuid3)
+			reserveContainer(containerGuid4)
+			reserveContainer(containerGuid5)
+			reserveContainer(containerGuid6)
 
-			tags := executor.Tags{}
+			initializeContainer(containerGuid1)
+			initializeContainer(containerGuid2)
+			initializeContainer(containerGuid3)
+			initializeContainer(containerGuid4)
 
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1, Tags: tags, Resource: resource})
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2, Tags: tags, Resource: resource})
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3, Tags: executor.Tags{}})
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid4, Tags: executor.Tags{}})
-			Expect(err).NotTo(HaveOccurred())
-
-			runInfo = executor.RunInfo{
-				CPUWeight:          2,
-				StartTimeoutMs:     50000,
-				Privileged:         true,
-				CachedDependencies: []executor.CachedDependency{},
-				LogConfig: executor.LogConfig{
-					Guid:       "log-guid",
-					Index:      1,
-					SourceName: "test-source",
-				},
-				MetricsConfig: executor.MetricsConfig{
-					Guid:  "metric-guid",
-					Index: 1,
-				},
-				Env: []executor.EnvironmentVariable{},
-				TrustedSystemCertificatesPath: "",
-				Network: &executor.Network{
-					Properties: map[string]string{},
-				},
-			}
-
-			// Initialize
-			req1 = &executor.RunRequest{
-				Guid:    containerGuid1,
-				RunInfo: runInfo,
-				Tags:    executor.Tags{},
-			}
-
-			req2 = &executor.RunRequest{
-				Guid:    containerGuid2,
-				RunInfo: runInfo,
-				Tags:    executor.Tags{},
-			}
-			err = containerStore.Initialize(logger, req1)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = containerStore.Initialize(logger, req2)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Create
 			gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: "6.6.6.6"}, nil)
 			gardenClient.CreateReturns(gardenContainer, nil)
-			_, err = containerStore.Create(logger, containerGuid1)
+			_, err := containerStore.Create(logger, containerGuid1)
 			Expect(err).NotTo(HaveOccurred())
-
 			_, err = containerStore.Create(logger, containerGuid2)
+			Expect(err).ToNot(HaveOccurred())
+			_, err = containerStore.Create(logger, containerGuid3)
+			Expect(err).ToNot(HaveOccurred())
+			_, err = containerStore.Create(logger, containerGuid4)
 			Expect(err).ToNot(HaveOccurred())
 
 			bulkMetrics := map[string]garden.ContainerMetricsEntry{
@@ -1814,7 +1810,7 @@ var _ = Describe("Container Store", func() {
 			gardenClient.BulkMetricsReturns(bulkMetrics, nil)
 		})
 
-		It("returns metrics for all known containers", func() {
+		It("returns metrics for all known containers in the running and created state", func() {
 			metrics, err := containerStore.Metrics(logger)
 			Expect(err).NotTo(HaveOccurred())
 			containerSpec1 := gardenClient.CreateArgsForCall(0)
