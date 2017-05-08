@@ -172,14 +172,6 @@ func (c *client) GetBulkMetrics(logger lager.Logger) (map[string]executor.Metric
 	logger = logger.Session("get-all-metrics")
 
 	c.metricsWorkPool.Submit(func() {
-		containers := c.containerStore.List(logger)
-		containerGuids := make([]string, 0, len(containers))
-		for _, container := range containers {
-			if container.MetricsConfig.Guid != "" {
-				containerGuids = append(containerGuids, container.Guid)
-			}
-		}
-
 		cmetrics, err := c.containerStore.Metrics(logger)
 		if err != nil {
 			logger.Error("failed-to-get-metrics", err)
@@ -188,7 +180,7 @@ func (c *client) GetBulkMetrics(logger lager.Logger) (map[string]executor.Metric
 		}
 
 		metrics := make(map[string]executor.Metrics)
-		for _, container := range containers {
+		for _, container := range c.containerStore.List(logger) {
 			if container.MetricsConfig.Guid != "" {
 				if cmetric, found := cmetrics[container.Guid]; found {
 					metrics[container.Guid] = executor.Metrics{
