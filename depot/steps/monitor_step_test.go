@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/steps/fakes"
@@ -25,10 +26,12 @@ var _ = Describe("MonitorStep", func() {
 
 		checkSteps chan *fakes.FakeStep
 
-		checkFunc        func() steps.Step
+		checkFunc        func(logstreamer log_streamer.LogStreamer) steps.Step
 		hasBecomeHealthy <-chan struct{}
 		clock            *fakeclock.FakeClock
 		fakeStreamer     *fake_log_streamer.FakeLogStreamer
+
+		monitorErr string
 
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
@@ -56,7 +59,10 @@ var _ = Describe("MonitorStep", func() {
 
 		fakeStreamer = newFakeStreamer()
 
-		checkFunc = func() steps.Step {
+		checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
+			if monitorErr != "" {
+				logstreamer.Stdout().Write([]byte(monitorErr))
+			}
 			return <-checkSteps
 		}
 
@@ -109,7 +115,7 @@ var _ = Describe("MonitorStep", func() {
 				<-doneChan
 				return nil
 			}
-			checkFunc = func() steps.Step {
+			checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
 				return fakeStep
 			}
 
@@ -237,6 +243,7 @@ var _ = Describe("MonitorStep", func() {
 
 					BeforeEach(func() {
 						checkResults <- disaster
+						monitorErr = "healthcheck failed"
 					})
 
 					Context("and the healthy interval passes", func() {
@@ -262,6 +269,12 @@ var _ = Describe("MonitorStep", func() {
 							)
 						})
 
+						It("emits the healthcheck process response for the failure", func() {
+							Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
+								gbytes.Say(fmt.Sprintf("%s\n", monitorErr)),
+							)
+						})
+
 						It("completes with failure", func() {
 							Eventually(performErr).Should(Receive(Equal(disaster)))
 						})
@@ -273,6 +286,7 @@ var _ = Describe("MonitorStep", func() {
 		Context("when the check is failing immediately", func() {
 			BeforeEach(func() {
 				checkResults <- errors.New("not up yet!")
+				monitorErr = "healthcheck failed"
 			})
 
 			Context("and the start timeout is exceeded", func() {
@@ -294,6 +308,14 @@ var _ = Describe("MonitorStep", func() {
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.monitor-step.timed-out-before-healthy",
 					}))
+				})
+
+				It("emits the last healthcheck process response to the log stream", func() {
+					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
+					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
+						gbytes.Say(fmt.Sprintf("%s\n", monitorErr)),
+					)
 				})
 
 				It("emits a log message explaining the timeout", func() {

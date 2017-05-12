@@ -1,7 +1,9 @@
 package steps
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -17,7 +19,7 @@ func invalidInterval(field string, interval time.Duration) error {
 const timeoutMessage = "Timed out after %s: health check never passed.\n"
 
 type monitorStep struct {
-	checkFunc         func() Step
+	checkFunc         func(logstreamer log_streamer.LogStreamer) Step
 	hasStartedRunning chan<- struct{}
 
 	logger      lager.Logger
@@ -33,7 +35,7 @@ type monitorStep struct {
 }
 
 func NewMonitor(
-	checkFunc func() Step,
+	checkFunc func(logstreamer log_streamer.LogStreamer) Step,
 	hasStartedRunning chan<- struct{},
 	logger lager.Logger,
 	clock clock.Clock,
@@ -86,9 +88,12 @@ func (step *monitorStep) Perform() error {
 	for {
 		select {
 		case now := <-timer.C():
+			var outBuffer bytes.Buffer
+			bufferStreamer := log_streamer.NewBufferStreamer(&outBuffer, ioutil.Discard)
+
 			stepResult := make(chan error)
 
-			check := step.checkFunc()
+			check := step.checkFunc(bufferStreamer)
 
 			step.workPool.Submit(func() {
 				stepResult <- check.Perform()
@@ -101,6 +106,7 @@ func (step *monitorStep) Perform() error {
 				if healthy && !nowHealthy {
 					step.logger.Info("transitioned-to-unhealthy")
 
+					fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
 					fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
 
 					return stepErr
@@ -117,6 +123,7 @@ func (step *monitorStep) Perform() error {
 
 				if startBy != nil && now.After(*startBy) {
 					if !healthy {
+						fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
 						fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
 
 						step.logger.Info("timed-out-before-healthy", lager.Data{

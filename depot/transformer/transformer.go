@@ -283,9 +283,9 @@ func (t *transformer) StepsRunner(
 
 	if container.Monitor != nil {
 		monitor = steps.NewMonitor(
-			func() steps.Step {
+			func(monitorStreamer log_streamer.LogStreamer) steps.Step {
 				return t.StepFor(
-					logStreamer,
+					monitorStreamer,
 					container.Monitor,
 					gardenContainer,
 					container.ExternalIP,
