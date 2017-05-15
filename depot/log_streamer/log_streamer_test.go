@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

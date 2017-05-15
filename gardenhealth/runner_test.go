@@ -13,7 +13,7 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	fakeexecutor "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 
