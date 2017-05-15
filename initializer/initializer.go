@@ -34,7 +34,7 @@ import (
 	"code.cloudfoundry.org/garden"
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
-	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"

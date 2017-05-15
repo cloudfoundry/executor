@@ -13,7 +13,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/loggregator_v2/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )

@@ -9,8 +9,8 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/go-loggregator/loggregator_v2"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
