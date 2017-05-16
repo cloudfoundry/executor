@@ -38,7 +38,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
-	"github.com/cloudfoundry/systemcerts"
+	"code.cloudfoundry.org/systemcerts"
 	"github.com/google/shlex"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
