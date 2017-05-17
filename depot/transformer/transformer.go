@@ -225,6 +225,29 @@ func (t *transformer) StepFor(
 	panic(fmt.Sprintf("unknown action: %T", action))
 }
 
+func overrideSuppressLogOutput(monitorAction *models.Action) {
+	if monitorAction.RunAction != nil {
+		monitorAction.RunAction.SuppressLogOutput = false
+	} else if monitorAction.TryAction != nil {
+		overrideSuppressLogOutput(monitorAction.TryAction.Action)
+	} else if monitorAction.ParallelAction != nil {
+		for _, action := range monitorAction.ParallelAction.Actions {
+			overrideSuppressLogOutput(action)
+		}
+	} else if monitorAction.SerialAction != nil {
+		for _, action := range monitorAction.SerialAction.Actions {
+			overrideSuppressLogOutput(action)
+		}
+	} else if monitorAction.CodependentAction != nil {
+		for _, action := range monitorAction.CodependentAction.Actions {
+			overrideSuppressLogOutput(action)
+		}
+	} else if monitorAction.EmitProgressAction != nil {
+		overrideSuppressLogOutput(monitorAction.EmitProgressAction.Action)
+	} else if monitorAction.TimeoutAction != nil {
+		overrideSuppressLogOutput(monitorAction.TimeoutAction.Action)
+	}
+}
 func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
@@ -282,6 +305,7 @@ func (t *transformer) StepsRunner(
 	hasStartedRunning := make(chan struct{}, 1)
 
 	if container.Monitor != nil {
+		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
 			func(monitorStreamer log_streamer.LogStreamer) steps.Step {
 				return t.StepFor(

@@ -22,9 +22,9 @@ type monitorStep struct {
 	checkFunc         func(logstreamer log_streamer.LogStreamer) Step
 	hasStartedRunning chan<- struct{}
 
-	logger      lager.Logger
-	clock       clock.Clock
-	logStreamer log_streamer.LogStreamer
+	logger                           lager.Logger
+	clock                            clock.Clock
+	logStreamer, healthCheckStreamer log_streamer.LogStreamer
 
 	startTimeout      time.Duration
 	healthyInterval   time.Duration
@@ -48,14 +48,15 @@ func NewMonitor(
 	logger = logger.Session("monitor-step")
 
 	return &monitorStep{
-		checkFunc:         checkFunc,
-		hasStartedRunning: hasStartedRunning,
-		logger:            logger,
-		clock:             clock,
-		logStreamer:       logStreamer,
-		startTimeout:      startTimeout,
-		healthyInterval:   healthyInterval,
-		unhealthyInterval: unhealthyInterval,
+		checkFunc:           checkFunc,
+		hasStartedRunning:   hasStartedRunning,
+		logger:              logger,
+		clock:               clock,
+		logStreamer:         logStreamer,
+		startTimeout:        startTimeout,
+		healthCheckStreamer: logStreamer.WithSource("HEALTH"),
+		healthyInterval:     healthyInterval,
+		unhealthyInterval:   unhealthyInterval,
 
 		canceller: newCanceller(),
 		workPool:  workPool,
@@ -106,7 +107,7 @@ func (step *monitorStep) Perform() error {
 				if healthy && !nowHealthy {
 					step.logger.Info("transitioned-to-unhealthy")
 
-					fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
+					fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", outBuffer.String())
 					fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
 
 					return stepErr
@@ -123,7 +124,7 @@ func (step *monitorStep) Perform() error {
 
 				if startBy != nil && now.After(*startBy) {
 					if !healthy {
-						fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
+						fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", outBuffer.String())
 						fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
 
 						step.logger.Info("timed-out-before-healthy", lager.Data{

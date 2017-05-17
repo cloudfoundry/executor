@@ -76,6 +76,8 @@ var _ = Describe("MonitorStep", func() {
 		workPool, err := workpool.NewWorkPool(numOfConcurrentMonitorSteps)
 		Expect(err).NotTo(HaveOccurred())
 
+		fakeStreamer.WithSourceReturns(fakeStreamer)
+
 		step = steps.NewMonitor(
 			checkFunc,
 			hasBecomeHealthyChannel,
