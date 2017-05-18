@@ -52,9 +52,11 @@ var _ = Describe("Reporter", func() {
 		}, nil)
 
 		executorClient.ListContainersReturns([]executor.Container{
-			{Guid: "container-1"},
-			{Guid: "container-2"},
-			{Guid: "container-3"},
+			{Guid: "container-1", State: executor.StateInitializing},
+			{Guid: "container-2", State: executor.StateReserved},
+			{Guid: "container-3", State: executor.StateCreated},
+			{Guid: "container-4", State: executor.StateRunning},
+			{Guid: "container-5"},
 		}, nil)
 
 		m = sync.RWMutex{}
@@ -93,7 +95,7 @@ var _ = Describe("Reporter", func() {
 
 	It("reports the current capacity on the given interval", func() {
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
-		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
+		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(4))
 
 		m.RLock()
 		Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(1024))
@@ -104,7 +106,8 @@ var _ = Describe("Reporter", func() {
 		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(256))
 		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(512))
 
-		Eventually(metricMap["ContainerCount"]).Should(Equal(3))
+		Eventually(metricMap["ContainerCount"]).Should(Equal(5))
+		Eventually(metricMap["StartingContainerCount"]).Should(Equal(3))
 
 		executorClient.RemainingResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   129,
@@ -122,13 +125,14 @@ var _ = Describe("Reporter", func() {
 		m.RUnlock()
 
 		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
-		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(6))
+		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(8))
 
 		m.RLock()
 		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
 		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(257))
 		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(513))
 		Eventually(metricMap["ContainerCount"]).Should(Equal(2))
+		Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
 
 		m.RUnlock()
 	})
@@ -172,10 +176,11 @@ var _ = Describe("Reporter", func() {
 
 		It("reports garden.containers as -1", func() {
 			logger.Info("checking this stuff")
-			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(3))
+			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(4))
 
 			m.RLock()
 			Eventually(metricMap["ContainerCount"]).Should(Equal(-1))
+			Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
 			m.RUnlock()
 		})
 	})

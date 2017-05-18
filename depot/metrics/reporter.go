@@ -19,7 +19,8 @@ const (
 	remainingDisk       = "CapacityRemainingDisk"
 	remainingContainers = "CapacityRemainingContainers"
 
-	containerCount = "ContainerCount"
+	containerCount         = "ContainerCount"
+	startingContainerCount = "StartingContainerCount"
 )
 
 type ExecutorSource interface {
@@ -65,13 +66,18 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				totalCapacity.MemoryMB = -1
 			}
 
-			var nContainers int
+			var nContainers, startingCount int
 			containers, err := reporter.ExecutorSource.ListContainers(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-to-list-containers", err)
 				nContainers = -1
 			} else {
 				nContainers = len(containers)
+				for _, c := range containers {
+					if containerIsStarting(c) {
+						startingCount++
+					}
+				}
 			}
 
 			err = reporter.MetronClient.SendMebiBytes(totalMemory, totalCapacity.MemoryMB)
@@ -105,7 +111,18 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				logger.Error("failed-to-send-container-count-metric", err)
 			}
 
+			err = reporter.MetronClient.SendMetric(startingContainerCount, startingCount)
+			if err != nil {
+				logger.Error("failed-to-send-starting-container-count-metric", err)
+			}
+
 			timer.Reset(reporter.Interval)
 		}
 	}
+}
+
+func containerIsStarting(container executor.Container) bool {
+	return container.State == executor.StateReserved ||
+		container.State == executor.StateInitializing ||
+		container.State == executor.StateCreated
 }
