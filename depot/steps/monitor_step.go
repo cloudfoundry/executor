@@ -17,6 +17,8 @@ func invalidInterval(field string, interval time.Duration) error {
 }
 
 const timeoutMessage = "Timed out after %s: health check never passed.\n"
+const timeoutCrashReason = "Instance never healthy after %s: %s"
+const healthcheckNowUnhealthy = "Instance became unhealthy: %s"
 
 type monitorStep struct {
 	checkFunc         func(logstreamer log_streamer.LogStreamer) Step
@@ -110,7 +112,7 @@ func (step *monitorStep) Perform() error {
 					fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", outBuffer.String())
 					fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
 
-					return stepErr
+					return NewEmittableError(stepErr, healthcheckNowUnhealthy, outBuffer.String())
 				} else if !healthy && nowHealthy {
 					step.logger.Info("transitioned-to-healthy")
 					healthy = true
@@ -131,7 +133,7 @@ func (step *monitorStep) Perform() error {
 							"step-error": stepErr.Error(),
 						})
 
-						return stepErr
+						return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, outBuffer.String())
 					}
 
 					startBy = nil

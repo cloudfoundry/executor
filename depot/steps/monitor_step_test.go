@@ -278,7 +278,11 @@ var _ = Describe("MonitorStep", func() {
 						})
 
 						It("completes with failure", func() {
-							Eventually(performErr).Should(Receive(Equal(disaster)))
+							var expectedError interface{}
+							Eventually(performErr).Should(Receive(&expectedError))
+							err, ok := expectedError.(*steps.EmittableError)
+							Expect(ok).To(BeTrue())
+							Expect(err.WrappedError()).To(Equal(disaster))
 						})
 					})
 				})
@@ -286,8 +290,10 @@ var _ = Describe("MonitorStep", func() {
 		})
 
 		Context("when the check is failing immediately", func() {
+			var expectedErr error
 			BeforeEach(func() {
-				checkResults <- errors.New("not up yet!")
+				expectedErr = errors.New("not up yet!")
+				checkResults <- expectedErr
 				monitorErr = "healthcheck failed"
 			})
 
@@ -301,7 +307,11 @@ var _ = Describe("MonitorStep", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					Consistently(performErr).ShouldNot(Receive())
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
-					Eventually(performErr).Should(Receive(MatchError("not up yet!")))
+					var expectedError interface{}
+					Eventually(performErr).Should(Receive(&expectedError))
+					err, ok := expectedError.(*steps.EmittableError)
+					Expect(ok).To(BeTrue())
+					Expect(err.WrappedError()).To(Equal(expectedErr))
 				})
 
 				It("logs the step", func() {
