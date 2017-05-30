@@ -461,6 +461,12 @@ var _ = Describe("CredManager", func() {
 					Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
 				})
 
+				It("has all required usages in the KU & EKU fields", func() {
+					Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageClientAuth))
+					Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth))
+					Expect(cert.KeyUsage).To(Equal(x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement))
+				})
+
 				It("signed by the rep intermediate CA", func() {
 					CaCertPool := x509.NewCertPool()
 					CaCertPool.AddCert(CaCert)
