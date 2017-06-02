@@ -20,7 +20,14 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
+)
+
+const (
+	CredCreationSucceededCount    = "CredCreationSucceededCount"
+	CredCreationSucceededDuration = "CredCreationSucceededDuration"
+	CredCreationFailedCount       = "CredCreationFailedCount"
 )
 
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
@@ -48,6 +55,8 @@ func (c *noopManager) Runner(lager.Logger, executor.Container) ifrit.Runner {
 }
 
 type credManager struct {
+	logger             lager.Logger
+	metronClient       loggregator_v2.Client
 	credDir            string
 	validityPeriod     time.Duration
 	entropyReader      io.Reader
@@ -55,11 +64,11 @@ type credManager struct {
 	CaCert             *x509.Certificate
 	privateKey         *rsa.PrivateKey
 	containerMountPath string
-	logger             lager.Logger
 }
 
 func NewCredManager(
 	logger lager.Logger,
+	metronClient loggregator_v2.Client,
 	credDir string,
 	validityPeriod time.Duration,
 	entropyReader io.Reader,
@@ -70,6 +79,7 @@ func NewCredManager(
 ) CredManager {
 	return &credManager{
 		logger:             logger,
+		metronClient:       metronClient,
 		credDir:            credDir,
 		validityPeriod:     validityPeriod,
 		entropyReader:      entropyReader,
@@ -95,11 +105,17 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		logger.Info("starting")
 		defer logger.Info("finished")
 
+		start := c.clock.Now()
 		err := c.generateCreds(logger, container)
+		duration := c.clock.Since(start)
 		if err != nil {
 			logger.Error("failed-to-generate-credentials", err)
+			c.metronClient.IncrementCounter(CredCreationFailedCount)
 			return err
 		}
+
+		c.metronClient.IncrementCounter(CredCreationSucceededCount)
+		c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
 
 		rotationDuration := calculateCredentialRotationPeriod(c.validityPeriod)
 		regenCertTimer := c.clock.NewTimer(rotationDuration)
@@ -110,11 +126,17 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 			case <-regenCertTimer.C():
 				logger = logger.Session("regenerating-cert-and-key")
 				logger.Debug("started")
+				start := c.clock.Now()
 				err = c.generateCreds(logger, container)
+				duration := c.clock.Since(start)
 				if err != nil {
 					logger.Error("failed-to-generate-credentials", err)
+					c.metronClient.IncrementCounter(CredCreationFailedCount)
 					return err
 				}
+				c.metronClient.IncrementCounter(CredCreationSucceededCount)
+				c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
+
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
 				logger.Debug("completed")

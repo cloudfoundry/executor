@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
+	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
@@ -38,6 +39,7 @@ var _ = Describe("CredManager", func() {
 		containerMountPath string
 		logger             lager.Logger
 		clock              *fakeclock.FakeClock
+		fakeMetronClient   *mfakes.FakeClient
 	)
 
 	BeforeEach(func() {
@@ -50,6 +52,7 @@ var _ = Describe("CredManager", func() {
 
 		validityPeriod = time.Minute
 		containerMountPath = "containerpath"
+		fakeMetronClient = &mfakes.FakeClient{}
 
 		// we have seen private key generation take a long time in CI, the
 		// suspicion is that `getrandom` is getting slower with the increased
@@ -67,7 +70,17 @@ var _ = Describe("CredManager", func() {
 	})
 
 	JustBeforeEach(func() {
-		credManager = containerstore.NewCredManager(logger, tmpdir, validityPeriod, reader, clock, CaCert, privateKey, containerMountPath)
+		credManager = containerstore.NewCredManager(
+			logger,
+			fakeMetronClient,
+			tmpdir,
+			validityPeriod,
+			reader,
+			clock,
+			CaCert,
+			privateKey,
+			containerMountPath,
+		)
 	})
 
 	AfterEach(func() {
@@ -202,6 +215,19 @@ var _ = Describe("CredManager", func() {
 				Expect(certFile).To(BeARegularFile())
 			})
 
+			It("emits metrics on successful creation", func() {
+				Eventually(containerProcess.Ready()).Should(BeClosed())
+
+				Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+				metric := fakeMetronClient.IncrementCounterArgsForCall(0)
+				Expect(metric).To(Equal("CredCreationSucceededCount"))
+
+				Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(1))
+				metric, value := fakeMetronClient.SendDurationArgsForCall(0)
+				Expect(metric).To(Equal("CredCreationSucceededDuration"))
+				Expect(value).To(BeNumerically(">=", 0))
+			})
+
 			Context("when the certificate is about to expire", func() {
 				var (
 					keyBefore    []byte
@@ -308,6 +334,17 @@ var _ = Describe("CredManager", func() {
 					Context("when 5 seconds prior to expiry", func() {
 						testCredentialRotation(5 * time.Second)
 
+						It("emits metrics on successful creation", func() {
+							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+							metric := fakeMetronClient.IncrementCounterArgsForCall(1)
+							Expect(metric).To(Equal("CredCreationSucceededCount"))
+
+							Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
+							metric, value := fakeMetronClient.SendDurationArgsForCall(1)
+							Expect(metric).To(Equal("CredCreationSucceededDuration"))
+							Expect(value).To(BeNumerically(">=", 0))
+						})
+
 						It("rotates the cert atomically", func() {
 							before := string(certBefore)
 							var after string
@@ -406,6 +443,19 @@ var _ = Describe("CredManager", func() {
 						Eventually(containerProcess.Wait()).Should(Receive(&err))
 						Expect(err).To(HaveOccurred())
 					})
+
+					It("emits metrics around failed credential creation", func() {
+						Eventually(filepath.Join(certPath, "instance.key")).Should(BeARegularFile())
+						Expect(os.RemoveAll(tmpdir)).To(Succeed())
+						clock.WaitForWatcherAndIncrement(1 * time.Hour)
+						var err error
+						Eventually(containerProcess.Wait()).Should(Receive(&err))
+						Expect(err).To(HaveOccurred())
+
+						Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+						metric := fakeMetronClient.IncrementCounterArgsForCall(1)
+						Expect(metric).To(Equal("CredCreationFailedCount"))
+					})
 				})
 			})
 
@@ -430,6 +480,16 @@ var _ = Describe("CredManager", func() {
 					var err error
 					Eventually(containerProcess.Wait()).Should(Receive(&err))
 					Expect(err).To(MatchError("EOF"))
+				})
+
+				It("emits metrics around failed credential creation", func() {
+					var err error
+					Eventually(containerProcess.Wait()).Should(Receive(&err))
+					Expect(err).To(MatchError("EOF"))
+
+					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
+					Expect(metric).To(Equal("CredCreationFailedCount"))
 				})
 			})
 

@@ -254,7 +254,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
-	credManager, err := CredManagerFromConfig(logger, config, clock)
+	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
 	if err != nil {
 		return nil, grouper.Members{}, err
 	}
@@ -537,7 +537,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	return tlsConfig, nil
 }
 
-func CredManagerFromConfig(logger lager.Logger, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
+func CredManagerFromConfig(logger lager.Logger, metronClient loggregator_v2.Client, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
 		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)
@@ -572,6 +572,7 @@ func CredManagerFromConfig(logger lager.Logger, config ExecutorConfig, clock clo
 
 		return containerstore.NewCredManager(
 			logger,
+			metronClient,
 			config.InstanceIdentityCredDir,
 			time.Duration(config.InstanceIdentityValidityPeriod),
 			rand.Reader,

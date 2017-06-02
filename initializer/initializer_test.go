@@ -471,7 +471,7 @@ var _ = Describe("Initializer", func() {
 			container = executor.Container{
 				Guid: "1234",
 			}
-			credManager, err = initializer.CredManagerFromConfig(logger, config, fakeClock)
+			credManager, err = initializer.CredManagerFromConfig(logger, fakeMetronClient, config, fakeClock)
 		})
 
 		Describe("when instance identity creds directory is not set", func() {
