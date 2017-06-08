@@ -3,6 +3,7 @@ package steps_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -337,6 +338,37 @@ var _ = Describe("MonitorStep", func() {
 						fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
 					))
 				})
+
+				Context("when monitor step is composed of multiple checks", func() {
+					BeforeEach(func() {
+						bufferChan := make(chan io.Writer, 2)
+						fakeStep1.PerformStub = func() error {
+							writer := <-bufferChan
+							writer.Write([]byte("another thing"))
+							return expectedErr
+						}
+						fakeStep2.PerformStub = func() error {
+							writer := <-bufferChan
+							writer.Write([]byte("something"))
+							return expectedErr
+						}
+
+						checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
+							racingSteps := steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
+							bufferChan <- logstreamer.Stdout()
+							bufferChan <- logstreamer.Stdout()
+							return racingSteps
+						}
+					})
+
+					// Generates a data race as a failure mode
+					It("correctly serializes output and does not race", func() {
+						expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+						expectCheckAfterInterval(fakeStep2, unhealthyInterval)
+						Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
+					})
+				})
+
 			})
 
 			Context("and the unhealthy interval passes", func() {
