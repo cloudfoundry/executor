@@ -89,6 +89,7 @@ type ExecutorConfig struct {
 	CreateWorkPoolSize                 int                   `json:"create_work_pool_size,omitempty"`
 	DeleteWorkPoolSize                 int                   `json:"delete_work_pool_size,omitempty"`
 	DiskMB                             string                `json:"disk_mb,omitempty"`
+	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
@@ -147,6 +148,7 @@ var DefaultConfiguration = ExecutorConfig{
 	ContainerInodeLimit:                200000,
 	ContainerMaxCpuShares:              0,
 	CachePath:                          "/tmp/cache",
+	EnableDeclarativeHealthcheck:       false,
 	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
 	SkipCertVerify:                     false,
 	HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
@@ -271,6 +273,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		transformer,
 		config.TrustedSystemCertificatesPath,
 		metronClient,
+		config.EnableDeclarativeHealthcheck,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
