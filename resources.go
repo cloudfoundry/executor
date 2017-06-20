@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -151,7 +150,7 @@ type CachedDependency struct {
 	CacheKey          string `json:"cache_key"`
 	LogSource         string `json:"log_source"`
 	ChecksumValue     string `json:"checksum_value"`
-	ChecksumAlgorithm string `json:"checksum_value"`
+	ChecksumAlgorithm string `json:"checksum_algorithm"`
 }
 
 type CertificateProperties struct {
@@ -170,6 +169,7 @@ type RunInfo struct {
 	Setup                         *models.Action              `json:"setup"`
 	Action                        *models.Action              `json:"run"`
 	Monitor                       *models.Action              `json:"monitor"`
+	CheckDefinition               *models.CheckDefinition     `json:"check_definition"`
 	EgressRules                   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
 	Env                           []EnvironmentVariable       `json:"env,omitempty"`
 	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
@@ -196,18 +196,10 @@ type VolumeMount struct {
 }
 
 type Network struct {
-	Properties map[string]string `json:"properties",omitempty"`
+	Properties map[string]string `json:"properties,omitempty"`
 }
 
 type InnerContainer Container
-
-type mContainer struct {
-	SetupRaw   *json.RawMessage `json:"setup"`
-	ActionRaw  json.RawMessage  `json:"run"`
-	MonitorRaw *json.RawMessage `json:"monitor"`
-
-	*InnerContainer
-}
 
 type EnvironmentVariable struct {
 	Name  string `json:"name"`

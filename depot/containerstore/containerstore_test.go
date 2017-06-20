@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -34,7 +35,8 @@ import (
 
 var _ = Describe("Container Store", func() {
 	var (
-		containerStore containerstore.ContainerStore
+		containerConfig containerstore.ContainerConfig
+		containerStore  containerstore.ContainerStore
 
 		iNodeLimit    uint64
 		maxCPUShares  uint64
@@ -111,7 +113,7 @@ var _ = Describe("Container Store", func() {
 
 		fakeMetronClient = new(mfakes.FakeClient)
 
-		containerConfig := containerstore.ContainerConfig{
+		containerConfig = containerstore.ContainerConfig{
 			OwnerName:              ownerName,
 			INodeLimit:             iNodeLimit,
 			MaxCPUShares:           maxCPUShares,
@@ -131,6 +133,7 @@ var _ = Describe("Container Store", func() {
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
+			false,
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
@@ -542,6 +545,57 @@ var _ = Describe("Container Store", func() {
 				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
 				_, container := credManager.CreateCredDirArgsForCall(0)
 				Expect(container.Guid).To(Equal(containerGuid))
+			})
+
+			Context("when declarative healthchecks are enabled", func() {
+				BeforeEach(func() {
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						fakeMetronClient,
+						true,
+					)
+				})
+
+				JustBeforeEach(func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Context("and there is a check definition", func() {
+					BeforeEach(func() {
+						runReq.CheckDefinition = &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             8080,
+										RequestTimeoutMs: 100,
+										Path:             "/",
+									},
+								},
+							},
+						}
+					})
+
+					It("bind mounts the healthcheck", func() {
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
+							SrcPath: "/var/vcap/packages/healthcheck",
+							DstPath: "/tmp/healthcheck",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						}))
+					})
+				})
 			})
 
 			Context("when credential mounts are configured", func() {
@@ -1133,6 +1187,327 @@ var _ = Describe("Container Store", func() {
 							return nil
 						}
 						megatron.StepsRunnerReturns(testRunner, nil)
+					})
+
+					Context("when declarative healthchecks are disabled", func() {
+						var (
+							expectedMonitorAction *models.Action
+						)
+
+						BeforeEach(func() {
+							runReq.CheckDefinition = &models.CheckDefinition{
+								Checks: []*models.Check{
+									&models.Check{
+										HttpCheck: &models.HTTPCheck{
+											Port:             5432,
+											RequestTimeoutMs: 100,
+											Path:             "/some/path",
+										},
+									},
+								},
+							}
+							expectedMonitorAction = &models.Action{
+								RunAction: &models.RunAction{
+									Path: "/tmp/lifecycle/healthcheck",
+								},
+							}
+							runReq.Monitor = expectedMonitorAction
+						})
+
+						It("ignores the check definition and use the MonitorAction", func() {
+							err := containerStore.Run(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+							Eventually(readyChan).Should(Receive())
+							_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+							Expect(container.Monitor).To(Equal(expectedMonitorAction))
+						})
+
+						Context("and there is a check definition but no monitor action", func() {
+							BeforeEach(func() {
+								runReq.Monitor = nil
+							})
+
+							It("does not have a MonitorAction", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+								_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+								Expect(container.Monitor).To(BeZero())
+							})
+						})
+					})
+
+					Context("when declarative healthchecks are enabeld", func() {
+						BeforeEach(func() {
+							containerStore = containerstore.New(
+								containerConfig,
+								&totalCapacity,
+								gardenClient,
+								dependencyManager,
+								volumeManager,
+								credManager,
+								clock,
+								eventEmitter,
+								megatron,
+								"/var/vcap/data/cf-system-trusted-certs",
+								fakeMetronClient,
+								true,
+							)
+						})
+
+						Context("and no check definitions exist", func() {
+							var (
+								expectedMonitorAction *models.Action
+							)
+
+							BeforeEach(func() {
+								expectedMonitorAction = &models.Action{
+									RunAction: &models.RunAction{
+										Path: "/tmp/lifecycle/healthcheck",
+									},
+								}
+								runReq.Monitor = expectedMonitorAction
+							})
+
+							It("uses the monitor action", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+								_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+								Expect(container.Monitor).To(Equal(expectedMonitorAction))
+							})
+						})
+
+						Context("and an http check definition exists", func() {
+							BeforeEach(func() {
+								runReq.CheckDefinition = &models.CheckDefinition{
+									Checks: []*models.Check{
+										&models.Check{
+											HttpCheck: &models.HTTPCheck{
+												Port:             5432,
+												RequestTimeoutMs: 100,
+												Path:             "/some/path",
+											},
+										},
+									},
+								}
+							})
+
+							Context("and optional fields are missing", func() {
+								BeforeEach(func() {
+									runReq.CheckDefinition = &models.CheckDefinition{
+										Checks: []*models.Check{
+											&models.Check{
+												HttpCheck: &models.HTTPCheck{
+													Port: 5432,
+												},
+											},
+										},
+									}
+								})
+
+								It("uses sane defaults", func() {
+									err := containerStore.Run(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+
+									Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+									Eventually(readyChan).Should(Receive())
+									_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+									Expect(container.Monitor).NotTo(BeZero())
+									timeoutAction := container.Monitor.GetTimeoutAction()
+									Expect(timeoutAction).NotTo(BeNil())
+									parallelAction := timeoutAction.GetAction().GetParallelAction()
+									Expect(parallelAction).NotTo(BeNil())
+									runAction := parallelAction.GetActions()[0].GetRunAction()
+									Expect(runAction).NotTo(BeNil())
+									Expect(runAction.Args).To(Equal([]string{
+										"-port=5432",
+										"-timeout=1000ms",
+										"-uri=/",
+									}))
+								})
+							})
+
+							It("uses the check definition instead of the monitor action", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+								_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+								Expect(container.Monitor).NotTo(BeZero())
+								timeoutAction := container.Monitor.GetTimeoutAction()
+								Expect(timeoutAction).NotTo(BeNil())
+								Expect(timeoutAction.TimeoutMs).To(BeEquivalentTo(60000))
+								parallelAction := timeoutAction.GetAction().GetParallelAction()
+								Expect(parallelAction).NotTo(BeNil())
+								runActions := parallelAction.GetActions()
+								Expect(runActions).To(HaveLen(1))
+								runAction := runActions[0].GetRunAction()
+								Expect(runAction).NotTo(BeNil())
+								Expect(runAction.User).To(Equal("vcap"))
+								Expect(runAction.LogSource).To(Equal("HEALTH"))
+								Expect(runAction.ResourceLimits).Should(Equal(&models.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								}))
+								Expect(runAction.Path).To(Equal("/tmp/healthcheck/healthcheck"))
+								Expect(runAction.Args).To(Equal([]string{
+									"-port=5432",
+									"-timeout=100ms",
+									"-uri=/some/path",
+								}))
+							})
+						})
+
+						Context("and a tcp check definition exists", func() {
+							BeforeEach(func() {
+								runReq.CheckDefinition = &models.CheckDefinition{
+									Checks: []*models.Check{
+										&models.Check{
+											TcpCheck: &models.TCPCheck{
+												Port:             5432,
+												ConnectTimeoutMs: 100,
+											},
+										},
+									},
+								}
+							})
+
+							Context("and optional fields are missing", func() {
+								BeforeEach(func() {
+									runReq.CheckDefinition = &models.CheckDefinition{
+										Checks: []*models.Check{
+											&models.Check{
+												TcpCheck: &models.TCPCheck{
+													Port: 5432,
+												},
+											},
+										},
+									}
+								})
+
+								It("uses sane defaults", func() {
+									err := containerStore.Run(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+
+									Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+									Eventually(readyChan).Should(Receive())
+									_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+									Expect(container.Monitor).NotTo(BeZero())
+									timeoutAction := container.Monitor.GetTimeoutAction()
+									Expect(timeoutAction).NotTo(BeNil())
+									parallelAction := timeoutAction.GetAction().GetParallelAction()
+									Expect(parallelAction).NotTo(BeNil())
+									runAction := parallelAction.GetActions()[0].GetRunAction()
+									Expect(runAction).NotTo(BeNil())
+									Expect(runAction.Args).To(Equal([]string{
+										"-port=5432",
+										"-timeout=1000ms",
+									}))
+								})
+							})
+
+							It("uses the check definition instead of the monitor action", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+								_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+								Expect(container.Monitor).NotTo(BeZero())
+								timeoutAction := container.Monitor.GetTimeoutAction()
+								Expect(timeoutAction).NotTo(BeNil())
+								Expect(timeoutAction.TimeoutMs).To(BeEquivalentTo(60000))
+								parallelAction := timeoutAction.GetAction().GetParallelAction()
+								Expect(parallelAction).NotTo(BeNil())
+								runActions := parallelAction.GetActions()
+								Expect(runActions).To(HaveLen(1))
+								runAction := runActions[0].GetRunAction()
+								Expect(runAction).NotTo(BeNil())
+								Expect(runAction.User).To(Equal("vcap"))
+								Expect(runAction.LogSource).To(Equal("HEALTH"))
+								Expect(runAction.ResourceLimits).Should(Equal(&models.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								}))
+								Expect(runAction.Path).To(Equal("/tmp/healthcheck/healthcheck"))
+								Expect(runAction.Args).To(Equal([]string{
+									"-port=5432",
+									"-timeout=100ms",
+								}))
+							})
+						})
+
+						Context("and multiple check definitions exists", func() {
+							BeforeEach(func() {
+								runReq.CheckDefinition = &models.CheckDefinition{
+									Checks: []*models.Check{
+										&models.Check{
+											TcpCheck: &models.TCPCheck{
+												Port:             2222,
+												ConnectTimeoutMs: 100,
+											},
+										},
+										&models.Check{
+											HttpCheck: &models.HTTPCheck{
+												Port:             8080,
+												RequestTimeoutMs: 100,
+											},
+										},
+									},
+								}
+							})
+
+							It("uses the check definition instead of the monitor action", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+								_, container, _, _ := megatron.StepsRunnerArgsForCall(0)
+								Expect(container.Monitor).NotTo(BeZero())
+								timeoutAction := container.Monitor.GetTimeoutAction()
+								Expect(timeoutAction).NotTo(BeNil())
+								Expect(timeoutAction.TimeoutMs).To(BeEquivalentTo(60000))
+								parallelAction := timeoutAction.Action.GetParallelAction()
+								Expect(parallelAction).NotTo(BeNil())
+								Expect(parallelAction.GetActions()).To(HaveLen(2))
+
+								// tcp run action
+								runAction := parallelAction.GetActions()[0].GetRunAction()
+								Expect(runAction).NotTo(BeNil())
+								Expect(runAction.User).To(Equal("vcap"))
+								Expect(runAction.LogSource).To(Equal("HEALTH"))
+								Expect(runAction.ResourceLimits).Should(Equal(&models.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								}))
+								Expect(runAction.Path).To(Equal("/tmp/healthcheck/healthcheck"))
+								Expect(runAction.Args).To(Equal([]string{
+									"-port=2222",
+									"-timeout=100ms",
+								}))
+
+								// http run action
+								runAction = parallelAction.GetActions()[1].GetRunAction()
+								Expect(runAction).NotTo(BeNil())
+								Expect(runAction.User).To(Equal("vcap"))
+								Expect(runAction.LogSource).To(Equal("HEALTH"))
+								Expect(runAction.ResourceLimits).Should(Equal(&models.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								}))
+								Expect(runAction.Path).To(Equal("/tmp/healthcheck/healthcheck"))
+								Expect(runAction.Args).To(Equal([]string{
+									"-port=8080",
+									"-timeout=100ms",
+									"-uri=/",
+								}))
+							})
+						})
 					})
 
 					It("performs the step", func() {
