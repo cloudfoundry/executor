@@ -71,7 +71,8 @@ type containerStore struct {
 	clock             clock.Clock
 	metronClient      loggregator_v2.Client
 
-	useDeclarativeHealthCheck bool
+	useDeclarativeHealthCheck  bool
+	declarativeHealthcheckPath string
 
 	trustedSystemCertificatesPath string
 }
@@ -89,6 +90,7 @@ func New(
 	trustedSystemCertificatesPath string,
 	metronClient loggregator_v2.Client,
 	useDeclarativeHealthCheck bool,
+	declarativeHealthcheckPath string,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -103,6 +105,7 @@ func New(
 		metronClient:                  metronClient,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
+		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 	}
 }
 
@@ -120,6 +123,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	err := cs.containers.Add(
 		newStoreNode(&cs.containerConfig,
 			cs.useDeclarativeHealthCheck,
+			cs.declarativeHealthcheckPath,
 			container,
 			cs.gardenClient,
 			cs.dependencyManager,

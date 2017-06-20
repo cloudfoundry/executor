@@ -134,6 +134,7 @@ var _ = Describe("Container Store", func() {
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
 			false,
+			"",
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
@@ -562,6 +563,7 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
 						true,
+						"/var/vcap/packages/healthcheck_windows",
 					)
 				})
 
@@ -589,7 +591,7 @@ var _ = Describe("Container Store", func() {
 						Expect(gardenClient.CreateCallCount()).To(Equal(1))
 						containerSpec := gardenClient.CreateArgsForCall(0)
 						Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
-							SrcPath: "/var/vcap/packages/healthcheck",
+							SrcPath: "/var/vcap/packages/healthcheck_windows",
 							DstPath: "/tmp/healthcheck",
 							Mode:    garden.BindMountModeRO,
 							Origin:  garden.BindMountOriginHost,
@@ -1256,6 +1258,7 @@ var _ = Describe("Container Store", func() {
 								"/var/vcap/data/cf-system-trusted-certs",
 								fakeMetronClient,
 								true,
+								"/var/vcap/packages/healthcheck",
 							)
 						})
 

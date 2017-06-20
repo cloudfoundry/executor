@@ -90,6 +90,7 @@ type ExecutorConfig struct {
 	DeleteWorkPoolSize                 int                   `json:"delete_work_pool_size,omitempty"`
 	DiskMB                             string                `json:"disk_mb,omitempty"`
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
+	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
@@ -274,6 +275,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.TrustedSystemCertificatesPath,
 		metronClient,
 		config.EnableDeclarativeHealthcheck,
+		config.DeclarativeHealthcheckPath,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{

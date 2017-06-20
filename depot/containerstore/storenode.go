@@ -51,22 +51,24 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock                    *sync.Mutex
-	gardenClient              garden.Client
-	dependencyManager         DependencyManager
-	volumeManager             volman.Manager
-	credManager               CredManager
-	eventEmitter              event.Hub
-	transformer               transformer.Transformer
-	process                   ifrit.Process
-	credManagerProcess        ifrit.Process
-	config                    *ContainerConfig
-	useDeclarativeHealthCheck bool
+	opLock                     *sync.Mutex
+	gardenClient               garden.Client
+	dependencyManager          DependencyManager
+	volumeManager              volman.Manager
+	credManager                CredManager
+	eventEmitter               event.Hub
+	transformer                transformer.Transformer
+	process                    ifrit.Process
+	credManagerProcess         ifrit.Process
+	config                     *ContainerConfig
+	useDeclarativeHealthCheck  bool
+	declarativeHealthcheckPath string
 }
 
 func newStoreNode(
 	config *ContainerConfig,
 	useDeclarativeHealthCheck bool,
+	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -92,6 +94,7 @@ func newStoreNode(
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
+		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 	}
 }
 
@@ -241,7 +244,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	if n.useDeclarativeHealthCheck && info.CheckDefinition != nil {
 		logger.Info("using-declarative-healthcheck", lager.Data{"use-declarative-healthcheck": n.useDeclarativeHealthCheck, "check-definition-exists": info.CheckDefinition != nil})
-		checkBindMounts := transformCheckDefinition(logger, info)
+		checkBindMounts := n.transformCheckDefinition(logger, info)
 		mounts = append(mounts, checkBindMounts...)
 	} else {
 		logger.Info("using-monitor-action", lager.Data{"use-declarative-healthcheck": n.useDeclarativeHealthCheck, "check-definition-exists": info.CheckDefinition != nil})
@@ -591,7 +594,7 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
 }
 
-func transformCheckDefinition(logger lager.Logger, container *executor.Container) []garden.BindMount {
+func (n *storeNode) transformCheckDefinition(logger lager.Logger, container *executor.Container) []garden.BindMount {
 	var checkActions []models.ActionInterface
 	var bindMounts []garden.BindMount
 
@@ -651,7 +654,7 @@ func transformCheckDefinition(logger lager.Logger, container *executor.Container
 
 	bindMounts = append(bindMounts, garden.BindMount{
 		Origin:  garden.BindMountOriginHost,
-		SrcPath: "/var/vcap/packages/healthcheck",
+		SrcPath: n.declarativeHealthcheckPath,
 		DstPath: "/tmp/healthcheck",
 	})
 
