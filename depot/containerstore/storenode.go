@@ -605,9 +605,9 @@ func transformCheckDefinition(logger lager.Logger, container *executor.Container
 			if timeout == 0 {
 				timeout = DefaultDeclarativeCheckTimeout
 			}
-			endpoint := check.HttpCheck.Endpoint
-			if endpoint == "" {
-				endpoint = "/"
+			path := check.HttpCheck.Path
+			if path == "" {
+				path = "/"
 			}
 			checkActions = append(checkActions, &models.RunAction{
 				User:           "vcap",
@@ -620,7 +620,7 @@ func transformCheckDefinition(logger lager.Logger, container *executor.Container
 					"--timeout",
 					fmt.Sprintf("%d", timeout),
 					"--uri",
-					endpoint,
+					path,
 				},
 			})
 		} else if check.TcpCheck != nil {

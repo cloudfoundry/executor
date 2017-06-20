@@ -578,7 +578,7 @@ var _ = Describe("Container Store", func() {
 									HttpCheck: &models.HTTPCheck{
 										Port:             8080,
 										RequestTimeoutMs: 100,
-										Endpoint:         "/",
+										Path:             "/",
 									},
 								},
 							},
@@ -1201,7 +1201,7 @@ var _ = Describe("Container Store", func() {
 										HttpCheck: &models.HTTPCheck{
 											Port:             5432,
 											RequestTimeoutMs: 100,
-											Endpoint:         "/some/path",
+											Path:             "/some/path",
 										},
 									},
 								},
@@ -1292,7 +1292,7 @@ var _ = Describe("Container Store", func() {
 											HttpCheck: &models.HTTPCheck{
 												Port:             5432,
 												RequestTimeoutMs: 100,
-												Endpoint:         "/some/path",
+												Path:             "/some/path",
 											},
 										},
 									},
