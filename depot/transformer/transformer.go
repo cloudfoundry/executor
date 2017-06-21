@@ -20,6 +20,11 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
+const (
+	healthCheckNofiles             uint64 = 1024
+	DefaultDeclarativeCheckTimeout        = int(1 * time.Second / time.Millisecond)
+)
+
 var ErrNoCheck = errors.New("no check configured")
 
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
@@ -39,6 +44,8 @@ type transformer struct {
 	tempDir              string
 	exportNetworkEnvVars bool
 	clock                clock.Clock
+
+	useDeclarativeHealthCheck bool
 
 	postSetupHook []string
 	postSetupUser string
@@ -63,6 +70,7 @@ func NewTransformer(
 	clock clock.Clock,
 	postSetupHook []string,
 	postSetupUser string,
+	useDeclarativeHealthCheck bool,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -79,6 +87,7 @@ func NewTransformer(
 		clock:                       clock,
 		postSetupHook:               postSetupHook,
 		postSetupUser:               postSetupUser,
+		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 	}
 }
 
@@ -304,7 +313,9 @@ func (t *transformer) StepsRunner(
 
 	hasStartedRunning := make(chan struct{}, 1)
 
-	if container.Monitor != nil {
+	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
+		monitor = t.transformCheckDefinition(logger, &container, gardenContainer, hasStartedRunning, logStreamer)
+	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
 			func(monitorStreamer log_streamer.LogStreamer) steps.Step {
@@ -351,4 +362,96 @@ func (t *transformer) StepsRunner(
 	}
 
 	return newStepRunner(step, hasStartedRunning), nil
+}
+
+func (t *transformer) transformCheckDefinition(
+	logger lager.Logger,
+	container *executor.Container,
+	gardenContainer garden.Container,
+	hasStartedRunning chan<- struct{},
+	logstreamer log_streamer.LogStreamer,
+) steps.Step {
+	var readinessChecks []models.ActionInterface
+	var livenessChecks []models.ActionInterface
+
+	nofiles := healthCheckNofiles
+
+	logger.Info("transform-check-definitions-starting")
+	defer func() {
+		logger.Info("transform-check-definitions-finished")
+	}()
+
+	createCheck := func(path string, port, timeout int, http, readiness bool, interval time.Duration) models.ActionInterface {
+		args := []string{
+			fmt.Sprintf("-port=%d", port),
+			fmt.Sprintf("-timeout=%dms", timeout),
+		}
+
+		if http {
+			args = append(args, fmt.Sprintf("-uri=%s", path))
+		}
+
+		if readiness {
+			args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
+		} else {
+			args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
+		}
+
+		runAction := &models.RunAction{
+			User:           "vcap",
+			LogSource:      "HEALTH",
+			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+			Path:           "/etc/cf-assets/healthcheck/healthcheck",
+			Args:           args,
+		}
+
+		return runAction
+	}
+
+	for _, check := range container.CheckDefinition.Checks {
+		if err := check.Validate(); err != nil {
+			logger.Error("invalid-check", err, lager.Data{"check": check})
+		} else if check.HttpCheck != nil {
+			timeout := int(check.HttpCheck.RequestTimeoutMs)
+			if timeout == 0 {
+				timeout = DefaultDeclarativeCheckTimeout
+			}
+			path := check.HttpCheck.Path
+			if path == "" {
+				path = "/"
+			}
+			readinessChecks = append(readinessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval))
+			livenessChecks = append(livenessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval))
+		} else if check.TcpCheck != nil {
+			timeout := int(check.TcpCheck.ConnectTimeoutMs)
+			if timeout == 0 {
+				timeout = DefaultDeclarativeCheckTimeout
+			}
+
+			readinessChecks = append(readinessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval))
+			livenessChecks = append(livenessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval))
+		}
+	}
+
+	readinessCheckFunc := func(logstreamer log_streamer.LogStreamer) steps.Step {
+		logger := logger.Session("readiness-check")
+		action := models.WrapAction(models.Parallel(readinessChecks...))
+		return t.StepFor(logstreamer, action, gardenContainer, container.ExternalIP, container.InternalIP, container.Ports, logger)
+	}
+	livenessCheckFunc := func(logstreamer log_streamer.LogStreamer) steps.Step {
+		logger := logger.Session("liveness-check")
+		action := models.WrapAction(models.Codependent(livenessChecks...))
+		return t.StepFor(logstreamer, action, gardenContainer, container.ExternalIP, container.InternalIP, container.Ports, logger)
+	}
+
+	return steps.NewLongRunningMonitor(
+		readinessCheckFunc,
+		livenessCheckFunc,
+		hasStartedRunning,
+		logger,
+		t.clock,
+		logstreamer,
+		time.Duration(container.StartTimeoutMs)*time.Millisecond,
+		t.healthCheckWorkPool,
+	)
 }

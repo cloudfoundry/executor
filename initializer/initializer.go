@@ -236,6 +236,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		clock,
 		postSetupHook,
 		config.PostSetupUser,
+		config.EnableDeclarativeHealthcheck,
 	)
 
 	hub := event.NewHub()
@@ -274,7 +275,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		transformer,
 		config.TrustedSystemCertificatesPath,
 		metronClient,
-		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
 	)
 
@@ -463,6 +463,7 @@ func initializeTransformer(
 	clock clock.Clock,
 	postSetupHook []string,
 	postSetupUser string,
+	useDeclarativeHealthCheck bool,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -482,6 +483,7 @@ func initializeTransformer(
 		clock,
 		postSetupHook,
 		postSetupUser,
+		useDeclarativeHealthCheck,
 	)
 }
 
