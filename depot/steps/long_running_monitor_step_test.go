@@ -20,7 +20,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = FDescribe("LongRunningMonitorStep", func() {
+var _ = Describe("LongRunningMonitorStep", func() {
 	var (
 		readinessCheckFunc, livenessCheckFunc func(log_streamer.LogStreamer) steps.Step
 		readinessCheck, livenessCheck         *fakes.FakeStep
@@ -45,10 +45,10 @@ var _ = FDescribe("LongRunningMonitorStep", func() {
 		healthyInterval = 1 * time.Second
 		unhealthyInterval = 500 * time.Millisecond
 
-		readinessCheckFunc = func(log_streamer.LogStreamer) steps.Step { return readinessCheck }
-		livenessCheckFunc = func(log_streamer.LogStreamer) steps.Step { return livenessCheck }
 		readinessCheck = new(fakes.FakeStep)
 		livenessCheck = new(fakes.FakeStep)
+		readinessCheckFunc = func(log_streamer.LogStreamer) steps.Step { return readinessCheck }
+		livenessCheckFunc = func(log_streamer.LogStreamer) steps.Step { return livenessCheck }
 
 		clock = fakeclock.NewFakeClock(time.Now())
 
@@ -74,8 +74,6 @@ var _ = FDescribe("LongRunningMonitorStep", func() {
 			clock,
 			fakeStreamer,
 			startTimeout,
-			healthyInterval,
-			unhealthyInterval,
 			workPool,
 		)
 	})
@@ -241,19 +239,23 @@ var _ = FDescribe("LongRunningMonitorStep", func() {
 
 		Context("and the start timeout is exceeded", func() {
 			JustBeforeEach(func() {
-				clock.WaitForWatcherAndIncrement(time.Second)
+				clock.WaitForWatcherAndIncrement(startTimeout)
 			})
 
 			It("cancels the running step", func() {
 				Eventually(readinessCheck.CancelCallCount).Should(Equal(1))
 			})
 
-			Context("when the step exits", func() {
+			Context("when the running step exits", func() {
 				BeforeEach(func() {
 					readinessCheckFunc = func(streamer log_streamer.LogStreamer) steps.Step {
 						streamer.Stdout().Write([]byte("healthcheck failed"))
 						return readinessCheck
 					}
+				})
+
+				JustBeforeEach(func() {
+					Eventually(readinessCheck.CancelCallCount).Should(Equal(1))
 					readinessResults <- errors.New("interrupted")
 				})
 
@@ -283,34 +285,35 @@ var _ = FDescribe("LongRunningMonitorStep", func() {
 					))
 				})
 
-				Context("when monitor step is composed of multiple checks", func() {
-					BeforeEach(func() {
-						bufferChan := make(chan io.Writer, 2)
+			})
 
-						fakeStep1 := new(fakes.FakeStep)
-						fakeStep2 := new(fakes.FakeStep)
-						fakeStep1.PerformStub = func() error {
-							writer := <-bufferChan
-							writer.Write([]byte("another thing"))
-							return errors.New("boooom!")
-						}
-						fakeStep2.PerformStub = func() error {
-							writer := <-bufferChan
-							writer.Write([]byte("something"))
-							return nil
-						}
+			Context("when monitor step is composed of multiple checks", func() {
+				BeforeEach(func() {
+					bufferChan := make(chan io.Writer, 2)
 
-						readinessCheckFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
-							bufferChan <- logstreamer.Stdout()
-							bufferChan <- logstreamer.Stdout()
-							return steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
-						}
-					})
+					fakeStep1 := new(fakes.FakeStep)
+					fakeStep2 := new(fakes.FakeStep)
+					fakeStep1.PerformStub = func() error {
+						writer := <-bufferChan
+						writer.Write([]byte("another thing"))
+						return errors.New("boooom!")
+					}
+					fakeStep2.PerformStub = func() error {
+						writer := <-bufferChan
+						writer.Write([]byte("something"))
+						return nil
+					}
 
-					// Generates a data race as a failure mode
-					It("correctly serializes output and does not race", func() {
-						Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
-					})
+					readinessCheckFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
+						bufferChan <- logstreamer.Stdout()
+						bufferChan <- logstreamer.Stdout()
+						return steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
+					}
+				})
+
+				// Generates a data race as a failure mode
+				It("correctly serializes output and does not race", func() {
+					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
 				})
 			})
 		})

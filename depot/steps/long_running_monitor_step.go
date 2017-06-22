@@ -36,8 +36,6 @@ func NewLongRunningMonitor(
 	clock clock.Clock,
 	logStreamer log_streamer.LogStreamer,
 	startTimeout time.Duration,
-	healthyInterval time.Duration,
-	unhealthyInterval time.Duration,
 	workPool *workpool.WorkPool,
 ) Step {
 	logger = logger.Session("monitor-step")

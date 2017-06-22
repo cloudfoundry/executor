@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -26,13 +27,16 @@ import (
 var _ = Describe("Transformer", func() {
 	Describe("StepsRunner", func() {
 		var (
-			logger           lager.Logger
-			optimusPrime     transformer.Transformer
-			container        executor.Container
-			logStreamer      log_streamer.LogStreamer
-			gardenContainer  *gardenfakes.FakeContainer
-			clock            *fakeclock.FakeClock
-			fakeMetronClient *mfakes.FakeClient
+			logger                      lager.Logger
+			optimusPrime                transformer.Transformer
+			container                   executor.Container
+			logStreamer                 log_streamer.LogStreamer
+			gardenContainer             *gardenfakes.FakeContainer
+			clock                       *fakeclock.FakeClock
+			fakeMetronClient            *mfakes.FakeClient
+			healthyMonitoringInterval   time.Duration
+			unhealthyMonitoringInterval time.Duration
+			healthCheckWorkPool         *workpool.WorkPool
 		)
 
 		BeforeEach(func() {
@@ -42,10 +46,11 @@ var _ = Describe("Transformer", func() {
 			fakeMetronClient = &mfakes.FakeClient{}
 			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
 
-			healthyMonitoringInterval := 1 * time.Millisecond
-			unhealthyMonitoringInterval := 1 * time.Millisecond
+			healthyMonitoringInterval = 1 * time.Millisecond
+			unhealthyMonitoringInterval = 1 * time.Millisecond
 
-			healthCheckWoorkPool, err := workpool.NewWorkPool(1)
+			var err error
+			healthCheckWorkPool, err = workpool.NewWorkPool(10)
 			Expect(err).NotTo(HaveOccurred())
 
 			clock = fakeclock.NewFakeClock(time.Now())
@@ -56,10 +61,11 @@ var _ = Describe("Transformer", func() {
 				false,
 				healthyMonitoringInterval,
 				unhealthyMonitoringInterval,
-				healthCheckWoorkPool,
+				healthCheckWorkPool,
 				clock,
 				[]string{"/post-setup/path", "-x", "argument"},
 				"jim",
+				false,
 			)
 
 			container = executor.Container{
@@ -162,6 +168,523 @@ var _ = Describe("Transformer", func() {
 			process.Signal(os.Interrupt)
 			clock.Increment(1 * time.Second)
 			Eventually(process.Wait()).Should(Receive(nil))
+		})
+
+		Describe("declarative healthchecks", func() {
+			var (
+				process          ifrit.Process
+				readinessProcess *gardenfakes.FakeProcess
+				readinessCh      chan int
+				livenessProcess  *gardenfakes.FakeProcess
+				livenessCh       chan int
+				actionProcess    *gardenfakes.FakeProcess
+				actionCh         chan int
+				monitorProcess   *gardenfakes.FakeProcess
+				monitorCh        chan int
+			)
+
+			makeProcess := func(waitCh chan int) *gardenfakes.FakeProcess {
+				process := &gardenfakes.FakeProcess{}
+				process.WaitStub = func() (int, error) {
+					return <-waitCh, nil
+				}
+				return process
+			}
+
+			BeforeEach(func() {
+				readinessCh = make(chan int)
+				readinessProcess = makeProcess(readinessCh)
+
+				livenessCh = make(chan int)
+				livenessProcess = makeProcess(livenessCh)
+
+				actionCh = make(chan int)
+				actionProcess = makeProcess(actionCh)
+
+				monitorCh = make(chan int)
+				monitorProcess = makeProcess(monitorCh)
+
+				healthcheckCallCount := int64(0)
+				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+					defer GinkgoRecover()
+
+					switch spec.Path {
+					case "/action/path":
+						return actionProcess, nil
+					case "/etc/cf-assets/healthcheck/healthcheck":
+						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+						switch oldCount {
+						case 1:
+							return readinessProcess, nil
+						case 2:
+							return livenessProcess, nil
+						}
+					case "/monitor/path":
+						return monitorProcess, nil
+					}
+
+					err = errors.New("")
+					Fail("unexpected executable path: " + spec.Path)
+					return
+				}
+				container = executor.Container{
+					RunInfo: executor.RunInfo{
+						Action: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/action/path",
+							},
+						},
+						Monitor: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/monitor/path",
+							},
+						},
+						CheckDefinition: &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             5432,
+										RequestTimeoutMs: 100,
+										Path:             "/some/path",
+									},
+								},
+							},
+						},
+					},
+				}
+			})
+
+			JustBeforeEach(func() {
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				Expect(err).NotTo(HaveOccurred())
+
+				process = ifrit.Background(runner)
+			})
+
+			AfterEach(func() {
+				close(readinessCh)
+				close(livenessCh)
+				close(actionCh)
+				close(monitorCh)
+				ginkgomon.Interrupt(process)
+			})
+
+			Context("when they are enabled", func() {
+				BeforeEach(func() {
+					optimusPrime = transformer.NewTransformer(
+						nil, nil, nil, nil, nil, nil,
+						os.TempDir(),
+						false,
+						healthyMonitoringInterval,
+						unhealthyMonitoringInterval,
+						healthCheckWorkPool,
+						clock,
+						[]string{"/post-setup/path", "-x", "argument"},
+						"jim",
+						true,
+					)
+
+					container.StartTimeoutMs = 1000
+				})
+
+				AfterEach(func() {
+					process.Signal(os.Kill)
+				})
+
+				Context("and no check definitions exist", func() {
+					BeforeEach(func() {
+						container.CheckDefinition = nil
+					})
+
+					JustBeforeEach(func() {
+						clock.WaitForWatcherAndIncrement(unhealthyMonitoringInterval)
+					})
+
+					It("uses the monitor action", func() {
+						Eventually(gardenContainer.RunCallCount, 5*time.Second).Should(Equal(2))
+						paths := []string{}
+						args := [][]string{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							paths = append(paths, spec.Path)
+							args = append(args, spec.Args)
+						}
+
+						Expect(paths).To(ContainElement("/monitor/path"))
+					})
+				})
+
+				Context("and an http check definition exists", func() {
+					BeforeEach(func() {
+						container.CheckDefinition = &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             5432,
+										RequestTimeoutMs: 100,
+										Path:             "/some/path",
+									},
+								},
+							},
+						}
+					})
+
+					Context("and optional fields are missing", func() {
+						BeforeEach(func() {
+							container.CheckDefinition = &models.CheckDefinition{
+								Checks: []*models.Check{
+									&models.Check{
+										HttpCheck: &models.HTTPCheck{
+											Port: 5432,
+										},
+									},
+								},
+							}
+						})
+
+						It("uses sane defaults", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+							paths := []string{}
+							args := [][]string{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								paths = append(paths, spec.Path)
+								args = append(args, spec.Args)
+							}
+
+							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(args).To(ContainElement([]string{
+								"-port=5432",
+								"-timeout=1000ms",
+								"-uri=/",
+								"-readiness=1000000ns", // 100ms
+							}))
+						})
+					})
+
+					It("uses the check definition", func() {
+						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+						paths := []string{}
+						args := [][]string{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							paths = append(paths, spec.Path)
+							args = append(args, spec.Args)
+						}
+
+						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(args).To(ContainElement([]string{
+							"-port=5432",
+							"-timeout=100ms",
+							"-uri=/some/path",
+							"-readiness=1000000ns", // 1ms
+						}))
+					})
+
+					Context("when the readiness check passes", func() {
+						JustBeforeEach(func() {
+							readinessCh <- 0
+						})
+
+						It("starts the liveness check", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+							paths := []string{}
+							args := [][]string{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								paths = append(paths, spec.Path)
+								args = append(args, spec.Args)
+							}
+
+							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(args).To(ContainElement([]string{
+								"-port=5432",
+								"-timeout=100ms",
+								"-uri=/some/path",
+								"-liveness=1000000ns", // 1ms
+							}))
+						})
+
+						Context("when the liveness check exits", func() {
+							JustBeforeEach(func() {
+								livenessCh <- 0
+							})
+
+							It("returns an error", func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+								Eventually(actionProcess.SignalCallCount).ShouldNot(BeZero())
+								actionCh <- 0
+								Eventually(process.Wait()).Should(Receive(HaveOccurred()))
+							})
+						})
+					})
+				})
+
+				Context("and a tcp check definition exists", func() {
+					BeforeEach(func() {
+						container.CheckDefinition = &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									TcpCheck: &models.TCPCheck{
+										Port:             5432,
+										ConnectTimeoutMs: 100,
+									},
+								},
+							},
+						}
+					})
+
+					Context("and optional fields are missing", func() {
+						BeforeEach(func() {
+							container.CheckDefinition = &models.CheckDefinition{
+								Checks: []*models.Check{
+									&models.Check{
+										TcpCheck: &models.TCPCheck{
+											Port: 5432,
+										},
+									},
+								},
+							}
+						})
+
+						It("uses sane defaults", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+							paths := []string{}
+							args := [][]string{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								paths = append(paths, spec.Path)
+								args = append(args, spec.Args)
+							}
+
+							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(args).To(ContainElement([]string{
+								"-port=5432",
+								"-timeout=1000ms",
+								"-readiness=1000000ns", // 100ms
+							}))
+						})
+					})
+
+					It("uses the check definition", func() {
+						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+						paths := []string{}
+						args := [][]string{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							paths = append(paths, spec.Path)
+							args = append(args, spec.Args)
+						}
+
+						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(args).To(ContainElement([]string{
+							"-port=5432",
+							"-timeout=100ms",
+							"-readiness=1000000ns", // 1ms
+						}))
+					})
+				})
+
+				Context("and multiple check definitions exists", func() {
+					var (
+						otherReadinessProcess *gardenfakes.FakeProcess
+						otherReadinessCh      chan int
+						otherLivenessProcess  *gardenfakes.FakeProcess
+						otherLivenessCh       chan int
+					)
+
+					BeforeEach(func() {
+						otherReadinessCh = make(chan int)
+						otherReadinessProcess = makeProcess(otherReadinessCh)
+
+						otherLivenessCh = make(chan int)
+						otherLivenessProcess = makeProcess(otherLivenessCh)
+
+						healthcheckCallCount := int64(0)
+						gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+							defer GinkgoRecover()
+
+							switch spec.Path {
+							case "/action/path":
+								return actionProcess, nil
+							case "/etc/cf-assets/healthcheck/healthcheck":
+								oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+								switch oldCount {
+								case 1:
+									return readinessProcess, nil
+								case 2:
+									return otherReadinessProcess, nil
+								case 3:
+									return livenessProcess, nil
+								case 4:
+									return otherLivenessProcess, nil
+								}
+								return livenessProcess, nil
+							case "/monitor/path":
+								return monitorProcess, nil
+							}
+
+							err = errors.New("")
+							Fail("unexpected executable path: " + spec.Path)
+							return
+						}
+
+						container.CheckDefinition = &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									TcpCheck: &models.TCPCheck{
+										Port:             2222,
+										ConnectTimeoutMs: 100,
+									},
+								},
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             8080,
+										RequestTimeoutMs: 100,
+									},
+								},
+							},
+						}
+					})
+
+					AfterEach(func() {
+						close(otherReadinessCh)
+						close(otherLivenessCh)
+					})
+
+					It("uses the check definition instead of the monitor action", func() {
+						Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+						paths := []string{}
+						args := [][]string{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							paths = append(paths, spec.Path)
+							args = append(args, spec.Args)
+						}
+
+						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(args).To(ContainElement([]string{
+							"-port=2222",
+							"-timeout=100ms",
+							"-readiness=1000000ns", // 1ms
+						}))
+						Expect(args).To(ContainElement([]string{
+							"-port=8080",
+							"-timeout=100ms",
+							"-uri=/",
+							"-readiness=1000000ns", // 1ms
+						}))
+					})
+
+					Context("when one of the readiness checks finish", func() {
+						JustBeforeEach(func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+							readinessCh <- 0
+						})
+
+						It("waits for both healthchecks to pass", func() {
+							Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+						})
+
+						Context("and the other readiness check finish", func() {
+							JustBeforeEach(func() {
+								otherReadinessCh <- 0
+							})
+
+							It("starts the liveness checks", func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+								paths := []string{}
+								args := [][]string{}
+								for i := 0; i < gardenContainer.RunCallCount(); i++ {
+									spec, _ := gardenContainer.RunArgsForCall(i)
+									paths = append(paths, spec.Path)
+									args = append(args, spec.Args)
+								}
+
+								Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+								Expect(args).To(ContainElement([]string{
+									"-port=2222",
+									"-timeout=100ms",
+									"-liveness=1000000ns", // 1ms
+								}))
+								Expect(args).To(ContainElement([]string{
+									"-port=8080",
+									"-timeout=100ms",
+									"-uri=/",
+									"-liveness=1000000ns", // 1ms
+								}))
+							})
+
+							Context("when either liveness check exit", func() {
+								JustBeforeEach(func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+									livenessCh <- 0
+								})
+
+								It("signals the process and exit", func() {
+									Eventually(otherLivenessProcess.SignalCallCount).ShouldNot(BeZero())
+									otherLivenessCh <- 0
+
+									Eventually(actionProcess.SignalCallCount).ShouldNot(BeZero())
+									actionCh <- 0
+
+									Eventually(process.Wait()).Should(Receive(HaveOccurred()))
+								})
+							})
+						})
+					})
+				})
+			})
+
+			Context("when they are disabled", func() {
+				BeforeEach(func() {
+					optimusPrime = transformer.NewTransformer(
+						nil, nil, nil, nil, nil, nil,
+						os.TempDir(),
+						false,
+						healthyMonitoringInterval,
+						unhealthyMonitoringInterval,
+						healthCheckWorkPool,
+						clock,
+						[]string{"/post-setup/path", "-x", "argument"},
+						"jim",
+						false,
+					)
+				})
+
+				It("ignores the check definition and use the MonitorAction", func() {
+					clock.WaitForWatcherAndIncrement(unhealthyMonitoringInterval)
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					paths := []string{}
+					args := [][]string{}
+					for i := 0; i < gardenContainer.RunCallCount(); i++ {
+						spec, _ := gardenContainer.RunArgsForCall(i)
+						paths = append(paths, spec.Path)
+						args = append(args, spec.Args)
+					}
+
+					Expect(paths).To(ContainElement("/monitor/path"))
+				})
+
+				Context("and there is no monitor action", func() {
+					BeforeEach(func() {
+						container.Monitor = nil
+					})
+
+					It("does not run any healthchecks", func() {
+						Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+						Consistently(gardenContainer.RunCallCount).Should(Equal(1))
+
+						paths := []string{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							paths = append(paths, spec.Path)
+						}
+
+						Expect(paths).To(ContainElement("/action/path"))
+					})
+				})
+			})
 		})
 
 		Context("when there is no setup", func() {

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
@@ -27,16 +26,14 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
-const DefaultDeclarativeCheckTimeout = uint64(1 * time.Second / time.Millisecond)
 
 // To be deprecated
 const (
-	GardenContainerCreationDuration                    = "GardenContainerCreationDuration"
-	GardenContainerCreationSucceededDuration           = "GardenContainerCreationSucceededDuration"
-	GardenContainerCreationFailedDuration              = "GardenContainerCreationFailedDuration"
-	GardenContainerDestructionSucceededDuration        = "GardenContainerDestructionSucceededDuration"
-	GardenContainerDestructionFailedDuration           = "GardenContainerDestructionFailedDuration"
-	healthCheckNofiles                          uint64 = 1024
+	GardenContainerCreationDuration             = "GardenContainerCreationDuration"
+	GardenContainerCreationSucceededDuration    = "GardenContainerCreationSucceededDuration"
+	GardenContainerCreationFailedDuration       = "GardenContainerCreationFailedDuration"
+	GardenContainerDestructionSucceededDuration = "GardenContainerDestructionSucceededDuration"
+	GardenContainerDestructionFailedDuration    = "GardenContainerDestructionFailedDuration"
 )
 
 type storeNode struct {
@@ -61,13 +58,11 @@ type storeNode struct {
 	process                    ifrit.Process
 	credManagerProcess         ifrit.Process
 	config                     *ContainerConfig
-	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
 }
 
 func newStoreNode(
 	config *ContainerConfig,
-	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClient garden.Client,
@@ -93,7 +88,6 @@ func newStoreNode(
 		modifiedIndex:               0,
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
-		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 	}
 }
@@ -242,13 +236,12 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	if n.useDeclarativeHealthCheck && info.CheckDefinition != nil {
-		logger.Info("using-declarative-healthcheck", lager.Data{"use-declarative-healthcheck": n.useDeclarativeHealthCheck, "check-definition-exists": info.CheckDefinition != nil})
-		checkBindMounts := n.transformCheckDefinition(logger, info)
-		mounts = append(mounts, checkBindMounts...)
-	} else {
-		logger.Info("using-monitor-action", lager.Data{"use-declarative-healthcheck": n.useDeclarativeHealthCheck, "check-definition-exists": info.CheckDefinition != nil})
-	}
+	logger.Info("adding-healthcheck-bindmounts")
+	mounts = append(mounts, garden.BindMount{
+		Origin:  garden.BindMountOriginHost,
+		SrcPath: n.declarativeHealthcheckPath,
+		DstPath: "/etc/cf-assets/healthcheck",
+	})
 
 	netInRules := make([]garden.NetIn, len(info.Ports))
 	for i, portMapping := range info.Ports {
@@ -592,71 +585,4 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	logger.Debug("container-info-complete")
 
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
-}
-
-func (n *storeNode) transformCheckDefinition(logger lager.Logger, container *executor.Container) []garden.BindMount {
-	var checkActions []models.ActionInterface
-	var bindMounts []garden.BindMount
-
-	nofiles := healthCheckNofiles
-
-	logger = logger.Session("transform-check-definitions")
-	logger.Info("starting")
-	defer func() {
-		logger.Info("finished", lager.Data{"monitor": container.Monitor})
-	}()
-
-	for _, check := range container.CheckDefinition.Checks {
-		if err := check.Validate(); err != nil {
-			logger.Error("invalid-check", err, lager.Data{"check": check})
-		} else if check.HttpCheck != nil {
-			timeout := check.HttpCheck.RequestTimeoutMs
-			if timeout == 0 {
-				timeout = DefaultDeclarativeCheckTimeout
-			}
-			path := check.HttpCheck.Path
-			if path == "" {
-				path = "/"
-			}
-			checkActions = append(checkActions, &models.RunAction{
-				User:           "vcap",
-				LogSource:      "HEALTH",
-				ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-				Path:           "/tmp/healthcheck/healthcheck",
-				Args: []string{
-					fmt.Sprintf("-port=%d", check.HttpCheck.Port),
-					fmt.Sprintf("-timeout=%dms", timeout),
-					fmt.Sprintf("-uri=%s", path),
-				},
-			})
-		} else if check.TcpCheck != nil {
-			timeout := check.TcpCheck.ConnectTimeoutMs
-			if timeout == 0 {
-				timeout = DefaultDeclarativeCheckTimeout
-			}
-
-			checkActions = append(checkActions, &models.RunAction{
-				User:           "vcap",
-				LogSource:      "HEALTH",
-				ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-				Path:           "/tmp/healthcheck/healthcheck",
-				Args: []string{
-					fmt.Sprintf("-port=%d", check.TcpCheck.Port),
-					fmt.Sprintf("-timeout=%dms", timeout),
-				},
-			})
-		}
-	}
-
-	container.Monitor = &models.Action{
-		TimeoutAction: models.Timeout(models.Parallel(checkActions...), 60*time.Second),
-	}
-
-	bindMounts = append(bindMounts, garden.BindMount{
-		Origin:  garden.BindMountOriginHost,
-		SrcPath: n.declarativeHealthcheckPath,
-		DstPath: "/tmp/healthcheck",
-	})
-
-	return bindMounts
 }
