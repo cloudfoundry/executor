@@ -398,7 +398,7 @@ func (t *transformer) transformCheckDefinition(
 		}
 
 		runAction := &models.RunAction{
-			User:           "vcap",
+			User:           "root",
 			LogSource:      "HEALTH",
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 			Path:           "/etc/cf-assets/healthcheck/healthcheck",
