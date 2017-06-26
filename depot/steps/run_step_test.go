@@ -291,7 +291,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("should return an emittable error with the exit code", func() {
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exit status 19")))
 				})
 			})
 
@@ -301,7 +301,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("should return an emittable error with the exit code", func() {
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exit status 19")))
 				})
 			})
 		})
@@ -351,7 +351,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exit status 19 (out of memory)")))
 			})
 		})
 
@@ -368,7 +368,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exit status 19 (out of memory)")))
 			})
 		})
 
@@ -427,6 +427,23 @@ var _ = Describe("RunAction", func() {
 
 				It("emits the exit status code", func() {
 					Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
+				})
+
+				Context("when the process exits with an out of memory error", func() {
+					BeforeEach(func() {
+						gardenClient.Connection.InfoReturns(
+							garden.ContainerInfo{
+								Events: []string{"happy land", "out of memory", "another event"},
+							},
+							nil,
+						)
+
+						spawnedProcess.WaitReturns(19, nil)
+					})
+
+					It("appends an OOM annotation to the log stream", func() {
+						Expect(stdoutBuffer).To(gbytes.Say(`Exit status 19 \(out of memory\)`))
+					})
 				})
 			})
 
