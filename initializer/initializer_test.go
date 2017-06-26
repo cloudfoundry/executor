@@ -20,7 +20,7 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
@@ -39,7 +39,7 @@ var _ = Describe("Initializer", func() {
 		done             chan struct{}
 		config           initializer.ExecutorConfig
 		logger           lager.Logger
-		fakeMetronClient *mfakes.FakeClient
+		fakeMetronClient *mfakes.FakeIngressClient
 		metricMap        map[string]time.Duration
 		m                sync.RWMutex
 	)
@@ -93,7 +93,7 @@ var _ = Describe("Initializer", func() {
 			VolmanDriverPaths:                  "/tmpvolman1:/tmp/volman2",
 		}
 
-		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeIngressClient)
 
 		m = sync.RWMutex{}
 	})

@@ -13,7 +13,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
@@ -39,7 +39,7 @@ const (
 type storeNode struct {
 	modifiedIndex               uint
 	hostTrustedCertificatesPath string
-	metronClient                loggregator_v2.Client
+	metronClient                loggregator_v2.IngressClient
 
 	// infoLock protects modifying info and swapping gardenContainer pointers
 	infoLock           *sync.Mutex
@@ -72,7 +72,7 @@ func newStoreNode(
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
-	metronClient loggregator_v2.Client,
+	metronClient loggregator_v2.IngressClient,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -536,7 +536,7 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 }
 
-func sendMetricDuration(logger lager.Logger, metric string, value time.Duration, metronClient loggregator_v2.Client) {
+func sendMetricDuration(logger lager.Logger, metric string, value time.Duration, metronClient loggregator_v2.IngressClient) {
 	err := metronClient.SendDuration(metric, value)
 	if err != nil {
 		switch metric {
@@ -556,7 +556,7 @@ func sendMetricDuration(logger lager.Logger, metric string, value time.Duration,
 	}
 }
 
-func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggregator_v2.Client) (garden.Container, error) {
+func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggregator_v2.IngressClient) (garden.Container, error) {
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
 	container, err := client.Create(spec)

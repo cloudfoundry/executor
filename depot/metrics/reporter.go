@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -34,7 +34,7 @@ type Reporter struct {
 	ExecutorSource ExecutorSource
 	Clock          clock.Clock
 	Logger         lager.Logger
-	MetronClient   loggregator_v2.Client
+	MetronClient   loggregator_v2.IngressClient
 }
 
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {

@@ -8,7 +8,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -38,7 +38,7 @@ var _ = Describe("StatsReporter", func() {
 		fakeClock          *fakeclock.FakeClock
 		fakeExecutorClient *efakes.FakeClient
 		fakeMetricSender   *msfake.FakeMetricSender
-		fakeMetronClient   *mfakes.FakeClient
+		fakeMetronClient   *mfakes.FakeIngressClient
 
 		metricsResults chan map[string]executor.Metrics
 		process        ifrit.Process
@@ -133,7 +133,7 @@ var _ = Describe("StatsReporter", func() {
 		interval = 10 * time.Second
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeExecutorClient = new(efakes.FakeClient)
-		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeIngressClient)
 
 		fakeMetricSender = msfake.NewFakeMetricSender()
 

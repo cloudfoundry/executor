@@ -4,7 +4,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 
 	"github.com/cloudfoundry/sonde-go/events"
 )
@@ -16,10 +16,10 @@ type streamDestination struct {
 	messageType  events.LogMessage_MessageType
 	buffer       []byte
 	processLock  sync.Mutex
-	metronClient loggregator_v2.Client
+	metronClient loggregator_v2.IngressClient
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, metronClient loggregator_v2.Client) *streamDestination {
+func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, metronClient loggregator_v2.IngressClient) *streamDestination {
 	return &streamDestination{
 		guid:         guid,
 		sourceName:   sourceName,

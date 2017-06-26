@@ -20,7 +20,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -56,7 +56,7 @@ func (c *noopManager) Runner(lager.Logger, executor.Container) ifrit.Runner {
 
 type credManager struct {
 	logger             lager.Logger
-	metronClient       loggregator_v2.Client
+	metronClient       loggregator_v2.IngressClient
 	credDir            string
 	validityPeriod     time.Duration
 	entropyReader      io.Reader
@@ -68,7 +68,7 @@ type credManager struct {
 
 func NewCredManager(
 	logger lager.Logger,
-	metronClient loggregator_v2.Client,
+	metronClient loggregator_v2.IngressClient,
 	credDir string,
 	validityPeriod time.Duration,
 	entropyReader io.Reader,

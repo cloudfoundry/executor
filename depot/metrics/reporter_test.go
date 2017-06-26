@@ -13,7 +13,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
@@ -23,7 +23,7 @@ var _ = Describe("Reporter", func() {
 		reportInterval   time.Duration
 		executorClient   *fakes.FakeClient
 		fakeClock        *fakeclock.FakeClock
-		fakeMetronClient *mfakes.FakeClient
+		fakeMetronClient *mfakes.FakeIngressClient
 
 		reporter  ifrit.Process
 		logger    *lagertest.TestLogger
@@ -37,7 +37,7 @@ var _ = Describe("Reporter", func() {
 		executorClient = new(fakes.FakeClient)
 
 		fakeClock = fakeclock.NewFakeClock(time.Now())
-		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeIngressClient)
 
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,

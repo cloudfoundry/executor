@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
@@ -39,7 +39,7 @@ var _ = Describe("CredManager", func() {
 		containerMountPath string
 		logger             lager.Logger
 		clock              *fakeclock.FakeClock
-		fakeMetronClient   *mfakes.FakeClient
+		fakeMetronClient   *mfakes.FakeIngressClient
 	)
 
 	BeforeEach(func() {
@@ -52,7 +52,7 @@ var _ = Describe("CredManager", func() {
 
 		validityPeriod = time.Minute
 		containerMountPath = "containerpath"
-		fakeMetronClient = &mfakes.FakeClient{}
+		fakeMetronClient = &mfakes.FakeIngressClient{}
 
 		// we have seen private key generation take a long time in CI, the
 		// suspicion is that `getrandom` is getting slower with the increased

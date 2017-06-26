@@ -14,7 +14,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/gardenfakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/workpool"
@@ -33,7 +33,7 @@ var _ = Describe("Transformer", func() {
 			logStreamer                 log_streamer.LogStreamer
 			gardenContainer             *gardenfakes.FakeContainer
 			clock                       *fakeclock.FakeClock
-			fakeMetronClient            *mfakes.FakeClient
+			fakeMetronClient            *mfakes.FakeIngressClient
 			healthyMonitoringInterval   time.Duration
 			unhealthyMonitoringInterval time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
@@ -43,7 +43,7 @@ var _ = Describe("Transformer", func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			fakeMetronClient = &mfakes.FakeClient{}
+			fakeMetronClient = &mfakes.FakeIngressClient{}
 			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
 
 			healthyMonitoringInterval = 1 * time.Second

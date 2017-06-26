@@ -8,7 +8,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -20,7 +20,7 @@ type StatsReporter struct {
 	executorClient executor.Client
 
 	cpuInfos     map[string]cpuInfo
-	metronClient loggregator_v2.Client
+	metronClient loggregator_v2.IngressClient
 }
 
 type cpuInfo struct {
@@ -28,7 +28,7 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client, metronClient loggregator_v2.Client) *StatsReporter {
+func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, executorClient executor.Client, metronClient loggregator_v2.IngressClient) *StatsReporter {
 	return &StatsReporter{
 		logger: logger,
 

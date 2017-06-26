@@ -13,7 +13,7 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	fakeexecutor "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 
@@ -29,7 +29,7 @@ var _ = Describe("Runner", func() {
 		checker                         *fakegardenhealth.FakeChecker
 		executorClient                  *fakeexecutor.FakeClient
 		fakeClock                       *fakeclock.FakeClock
-		fakeMetronClient                *mfakes.FakeClient
+		fakeMetronClient                *mfakes.FakeIngressClient
 		checkInterval, emissionInterval time.Duration
 		timeoutDuration                 time.Duration
 		metricMap                       map[string]float64
@@ -47,7 +47,7 @@ var _ = Describe("Runner", func() {
 		timeoutDuration = 1 * time.Minute
 		emissionInterval = 30 * time.Second
 
-		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeIngressClient)
 
 		m = sync.RWMutex{}
 	})

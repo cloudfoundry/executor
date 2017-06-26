@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator"
+	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -31,7 +31,7 @@ type Runner struct {
 	logger           lager.Logger
 	checker          Checker
 	executorClient   executor.Client
-	metronClient     loggregator_v2.Client
+	metronClient     loggregator_v2.IngressClient
 	clock            clock.Clock
 }
 
@@ -47,7 +47,7 @@ func NewRunner(
 	logger lager.Logger,
 	checker Checker,
 	executorClient executor.Client,
-	metronClient loggregator_v2.Client,
+	metronClient loggregator_v2.IngressClient,
 	clock clock.Clock,
 ) *Runner {
 	return &Runner{

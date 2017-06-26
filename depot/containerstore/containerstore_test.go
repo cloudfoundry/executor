@@ -22,7 +22,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
-	mfakes "code.cloudfoundry.org/go-loggregator/fakes"
+	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
@@ -56,7 +56,7 @@ var _ = Describe("Container Store", func() {
 
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
-		fakeMetronClient *mfakes.FakeClient
+		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
 	var pollForComplete = func(guid string) func() bool {
@@ -110,7 +110,7 @@ var _ = Describe("Container Store", func() {
 
 		megatron = &faketransformer.FakeTransformer{}
 
-		fakeMetronClient = new(mfakes.FakeClient)
+		fakeMetronClient = new(mfakes.FakeIngressClient)
 
 		containerConfig = containerstore.ContainerConfig{
 			OwnerName:              ownerName,
