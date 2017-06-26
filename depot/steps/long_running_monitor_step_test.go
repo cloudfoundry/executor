@@ -129,6 +129,26 @@ var _ = Describe("LongRunningMonitorStep", func() {
 			})
 		})
 
+		Context("when there is no start timeout", func() {
+			BeforeEach(func() {
+				hasBecomeHealthyChannel := make(chan struct{}, 1000)
+				hasBecomeHealthy = hasBecomeHealthyChannel
+
+				startTimeout = 0
+			})
+
+			Context("when the readiness check passes", func() {
+				JustBeforeEach(func() {
+					clock.Increment(time.Second)
+					readinessResults <- nil
+				})
+
+				It("emits a healthy event", func() {
+					Eventually(hasBecomeHealthy).Should(Receive())
+				})
+			})
+		})
+
 		Context("when the readiness check passes", func() {
 			BeforeEach(func() {
 				readinessResults <- nil
