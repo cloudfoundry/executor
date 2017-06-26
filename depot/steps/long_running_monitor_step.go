@@ -9,7 +9,6 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/workpool"
 )
 
 type longRunningMonitorStep struct {
@@ -23,7 +22,6 @@ type longRunningMonitorStep struct {
 	logStreamer, healthCheckStreamer log_streamer.LogStreamer
 
 	startTimeout time.Duration
-	workPool     *workpool.WorkPool
 
 	*canceller
 }
@@ -36,7 +34,6 @@ func NewLongRunningMonitor(
 	clock clock.Clock,
 	logStreamer log_streamer.LogStreamer,
 	startTimeout time.Duration,
-	workPool *workpool.WorkPool,
 ) Step {
 	logger = logger.Session("monitor-step")
 
@@ -51,7 +48,6 @@ func NewLongRunningMonitor(
 		healthCheckStreamer: logStreamer.WithSource("HEALTH"),
 
 		canceller: newCanceller(),
-		workPool:  workPool,
 	}
 }
 
@@ -64,9 +60,9 @@ func (step *longRunningMonitorStep) Perform() error {
 	bufferStreamer := log_streamer.NewBufferStreamer(&outBuffer, ioutil.Discard)
 	readinessCheck := step.readinessCheck(bufferStreamer)
 
-	step.workPool.Submit(func() {
+	go func() {
 		errCh <- readinessCheck.Perform()
-	})
+	}()
 
 	timer := step.clock.NewTimer(step.startTimeout)
 
@@ -92,9 +88,9 @@ func (step *longRunningMonitorStep) Perform() error {
 	step.hasStartedRunning <- struct{}{}
 
 	livenessCheck := step.livenessCheck(bufferStreamer)
-	step.workPool.Submit(func() {
+	go func() {
 		errCh <- livenessCheck.Perform()
-	})
+	}()
 
 	select {
 	case err := <-errCh:

@@ -452,6 +452,5 @@ func (t *transformer) transformCheckDefinition(
 		t.clock,
 		logstreamer,
 		time.Duration(container.StartTimeoutMs)*time.Millisecond,
-		t.healthCheckWorkPool,
 	)
 }

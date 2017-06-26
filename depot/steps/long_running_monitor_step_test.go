@@ -13,7 +13,6 @@ import (
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/steps/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
-	"code.cloudfoundry.org/workpool"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -38,8 +37,6 @@ var _ = Describe("LongRunningMonitorStep", func() {
 		logger *lagertest.TestLogger
 	)
 
-	const numOfConcurrentMonitorSteps = 3
-
 	BeforeEach(func() {
 		startTimeout = 1 * time.Second
 		healthyInterval = 1 * time.Second
@@ -61,9 +58,6 @@ var _ = Describe("LongRunningMonitorStep", func() {
 		hasBecomeHealthyChannel := make(chan struct{}, 1000)
 		hasBecomeHealthy = hasBecomeHealthyChannel
 
-		workPool, err := workpool.NewWorkPool(numOfConcurrentMonitorSteps)
-		Expect(err).NotTo(HaveOccurred())
-
 		fakeStreamer.WithSourceReturns(fakeStreamer)
 
 		step = steps.NewLongRunningMonitor(
@@ -74,54 +68,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 			clock,
 			fakeStreamer,
 			startTimeout,
-			workPool,
 		)
-	})
-
-	Describe("Throttling", func() {
-		var (
-			throttleChan chan struct{}
-			doneChan     chan struct{}
-		)
-
-		BeforeEach(func() {
-			throttleChan = make(chan struct{}, numOfConcurrentMonitorSteps)
-			doneChan = make(chan struct{}, 1)
-
-			readinessCheck.PerformStub = func() error {
-				throttleChan <- struct{}{}
-				<-doneChan
-				return nil
-			}
-		})
-
-		AfterEach(func() {
-			step.Cancel()
-		})
-
-		It("throttles concurrent health check", func() {
-			for i := 0; i < 5; i++ {
-				go step.Perform()
-			}
-
-			Eventually(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numOfConcurrentMonitorSteps))
-
-			Consistently(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numOfConcurrentMonitorSteps))
-
-			Eventually(readinessCheck.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps))
-
-			doneChan <- struct{}{}
-
-			Eventually(readinessCheck.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps + 1))
-
-			close(doneChan)
-
-			Eventually(readinessCheck.PerformCallCount).Should(Equal(5))
-		})
 	})
 
 	Describe("Perform", func() {
