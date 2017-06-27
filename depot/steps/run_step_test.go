@@ -428,6 +428,23 @@ var _ = Describe("RunAction", func() {
 				It("emits the exit status code", func() {
 					Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
 				})
+
+				Context("when out of memory", func() {
+					BeforeEach(func() {
+						gardenClient.Connection.InfoReturns(
+							garden.ContainerInfo{
+								Events: []string{"happy land", "Out of memory", "another event"},
+							},
+							nil,
+						)
+
+						spawnedProcess.WaitReturns(34, nil)
+					})
+
+					It("emits the exit status code", func() {
+						Expect(stdoutBuffer).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
+					})
+				})
 			})
 
 			Context("when logs are suppressed", func() {
