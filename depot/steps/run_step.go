@@ -164,22 +164,8 @@ func (step *runStep) Perform() error {
 				"cancelled":  cancelled,
 			})
 
-			exitErrorMessage := fmt.Sprintf("Exit status %d", exitStatus)
-			if exitStatus != 0 {
-				info, err := step.container.Info()
-				if err != nil {
-					logger.Error("failed-to-get-info", err)
-				} else {
-					for _, ev := range info.Events {
-						if ev == "out of memory" || ev == "Out of memory" {
-							exitErrorMessage = fmt.Sprintf("Exit status %d (out of memory)", exitStatus)
-						}
-					}
-				}
-			}
-
 			if !step.model.SuppressLogOutput {
-				step.streamer.Stdout().Write([]byte(exitErrorMessage))
+				step.streamer.Stdout().Write([]byte(fmt.Sprintf("Exit status %d", exitStatus)))
 				step.streamer.Flush()
 			}
 
@@ -188,8 +174,19 @@ func (step *runStep) Perform() error {
 			}
 
 			if exitStatus != 0 {
-				logger.Error("run-step-failed-with-nonzero-status-code", errors.New(exitErrorMessage), lager.Data{"status-code": exitStatus})
-				return NewEmittableError(nil, exitErrorMessage)
+				info, err := step.container.Info()
+				if err != nil {
+					logger.Error("failed-to-get-info", err)
+				} else {
+					for _, ev := range info.Events {
+						if ev == "out of memory" || ev == "Out of memory" {
+							return NewEmittableError(nil, "Exited with status %d (out of memory)", exitStatus)
+						}
+					}
+				}
+
+				logger.Error("run-step-failed-with-nonzero-status-code", err, lager.Data{"status-code": exitStatus})
+				return NewEmittableError(nil, "Exited with status %d", exitStatus)
 			}
 
 			return nil
