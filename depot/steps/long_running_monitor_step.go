@@ -17,9 +17,10 @@ type longRunningMonitorStep struct {
 	readinessCheck func(log_streamer.LogStreamer) Step
 	livenessCheck  func(log_streamer.LogStreamer) Step
 
-	logger                           lager.Logger
-	clock                            clock.Clock
-	logStreamer, healthCheckStreamer log_streamer.LogStreamer
+	logger              lager.Logger
+	clock               clock.Clock
+	logStreamer         log_streamer.LogStreamer
+	healthCheckStreamer log_streamer.LogStreamer
 
 	startTimeout time.Duration
 
@@ -33,6 +34,7 @@ func NewLongRunningMonitor(
 	logger lager.Logger,
 	clock clock.Clock,
 	logStreamer log_streamer.LogStreamer,
+	healthcheckStreamer log_streamer.LogStreamer,
 	startTimeout time.Duration,
 ) Step {
 	logger = logger.Session("monitor-step")
@@ -44,10 +46,9 @@ func NewLongRunningMonitor(
 		logger:              logger,
 		clock:               clock,
 		logStreamer:         logStreamer,
+		healthCheckStreamer: healthcheckStreamer,
 		startTimeout:        startTimeout,
-		healthCheckStreamer: logStreamer.WithSource("HEALTH"),
-
-		canceller: newCanceller(),
+		canceller:           newCanceller(),
 	}
 }
 

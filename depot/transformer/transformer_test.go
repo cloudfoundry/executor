@@ -488,6 +488,78 @@ var _ = Describe("Transformer", func() {
 					})
 				})
 
+				Context("logs", func() {
+					BeforeEach(func() {
+						container.CheckDefinition = &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             5432,
+										RequestTimeoutMs: 2000,
+										Path:             "/some/path",
+									},
+								},
+							},
+						}
+						var readinessProcessIO garden.ProcessIO
+
+						gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (garden.Process, error) {
+							defer GinkgoRecover()
+
+							switch spec.Path {
+							case "/action/path":
+								return actionProcess, nil
+							case "/etc/cf-assets/healthcheck/healthcheck":
+								readinessProcessIO = io
+								return readinessProcess, nil
+							case "/monitor/path":
+								return monitorProcess, nil
+							}
+							err := errors.New("")
+							Fail("unexpected executable path: " + spec.Path)
+							return nil, err
+						}
+
+						readinessProcess.WaitStub = func() (int, error) {
+							readinessProcessIO.Stdout.Write([]byte("failed-bad"))
+							time.Sleep(50 * time.Millisecond)
+							clock.WaitForWatcherAndIncrement(3 * time.Second)
+							return 0, nil
+						}
+
+					})
+
+					It("should default to HEALTH for log source", func() {
+						Eventually(fakeMetronClient.SendAppLogCallCount, 5).Should(BeNumerically(">=", 1))
+
+						_, message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+						Expect(message).To(Equal("Starting health monitoring of container"))
+						Expect(sourceName).To(Equal("test"))
+
+						Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
+						_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(0)
+						Expect(sourceName).To(Equal("HEALTH"))
+					})
+
+					Context("when log source defined", func() {
+						BeforeEach(func() {
+							container.CheckDefinition.LogSource = "healthcheck"
+						})
+
+						It("logs healthcheck errors with log source from check defintion", func() {
+							Eventually(fakeMetronClient.SendAppLogCallCount, 5).Should(BeNumerically(">=", 1))
+
+							_, message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+							Expect(message).To(Equal("Starting health monitoring of container"))
+							Expect(sourceName).To(Equal("test"))
+
+							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
+							_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(0)
+							Expect(sourceName).To(Equal("healthcheck"))
+						})
+					})
+				})
+
 				Context("and multiple check definitions exists", func() {
 					var (
 						otherReadinessProcess *gardenfakes.FakeProcess
@@ -836,13 +908,13 @@ var _ = Describe("Transformer", func() {
 					Eventually(monitorProcess.WaitCallCount).Should(Equal(2))
 				})
 
-				It("logs healthcheck error with HEALTH source", func() {
+				It("logs healthcheck error with the same source", func() {
 					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
-					Expect(sourceName).To(Equal("HEALTH"))
+					Expect(sourceName).To(Equal("test"))
 					Expect(message).To(Equal("healthcheck failed"))
 					_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
-					Expect(sourceName).To(Equal("HEALTH"))
+					Expect(sourceName).To(Equal("test"))
 					Expect(message).To(Equal("Exit status 1"))
 				})
 

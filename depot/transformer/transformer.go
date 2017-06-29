@@ -23,6 +23,7 @@ import (
 const (
 	healthCheckNofiles             uint64 = 1024
 	DefaultDeclarativeCheckTimeout        = int(1 * time.Second / time.Millisecond)
+	HealthLogSource                       = "HEALTH"
 )
 
 var ErrNoCheck = errors.New("no check configured")
@@ -376,6 +377,11 @@ func (t *transformer) transformCheckDefinition(
 
 	nofiles := healthCheckNofiles
 
+	sourceName := HealthLogSource
+	if container.CheckDefinition.LogSource != "" {
+		sourceName = container.CheckDefinition.LogSource
+	}
+
 	logger.Info("transform-check-definitions-starting")
 	defer func() {
 		logger.Info("transform-check-definitions-finished")
@@ -399,7 +405,7 @@ func (t *transformer) transformCheckDefinition(
 
 		runAction := &models.RunAction{
 			User:           "root",
-			LogSource:      "HEALTH",
+			LogSource:      sourceName,
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 			Path:           "/etc/cf-assets/healthcheck/healthcheck",
 			Args:           args,
@@ -451,6 +457,7 @@ func (t *transformer) transformCheckDefinition(
 		logger,
 		t.clock,
 		logstreamer,
+		logstreamer.WithSource(sourceName),
 		time.Duration(container.StartTimeoutMs)*time.Millisecond,
 	)
 }

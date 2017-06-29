@@ -26,6 +26,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 		hasBecomeHealthy                      <-chan struct{}
 		clock                                 *fakeclock.FakeClock
 		fakeStreamer                          *fake_log_streamer.FakeLogStreamer
+		fakeHealthCheckStreamer               *fake_log_streamer.FakeLogStreamer
 
 		// monitorErr string
 
@@ -49,6 +50,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 		clock = fakeclock.NewFakeClock(time.Now())
 
+		fakeHealthCheckStreamer = newFakeStreamer()
 		fakeStreamer = newFakeStreamer()
 
 		logger = lagertest.NewTestLogger("test")
@@ -67,6 +69,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 			logger,
 			clock,
 			fakeStreamer,
+			fakeHealthCheckStreamer,
 			startTimeout,
 		)
 	})
@@ -203,7 +206,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 				})
 
 				It("emits the healthcheck process response for the failure", func() {
-					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
+					Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(
 						gbytes.Say(fmt.Sprintf("healthcheck failed\n")),
 					)
 				})
@@ -255,7 +258,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 				})
 
 				It("emits the last healthcheck process response to the log stream", func() {
-					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
+					Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(
 						gbytes.Say("healthcheck failed\n"),
 					)
 				})
@@ -294,7 +297,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 				// Generates a data race as a failure mode
 				It("correctly serializes output and does not race", func() {
-					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
+					Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
 				})
 			})
 		})
