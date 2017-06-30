@@ -1,0 +1,52 @@
+package steps_test
+
+import (
+	"bytes"
+	"errors"
+
+	"code.cloudfoundry.org/executor/depot/steps"
+	"code.cloudfoundry.org/executor/depot/steps/fakes"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("OutputWrapperStep", func() {
+	var (
+		subStep *fakes.FakeStep
+		step    steps.Step
+		buffer  *bytes.Buffer
+	)
+
+	BeforeEach(func() {
+		subStep = &fakes.FakeStep{}
+		buffer = bytes.NewBuffer(nil)
+		step = steps.NewOutputWrapper(subStep, buffer)
+	})
+
+	Context("Perform", func() {
+		It("calls perform on the substep", func() {
+			step.Perform()
+			Expect(subStep.PerformCallCount()).To(Equal(1))
+		})
+
+		Context("when the substep fails", func() {
+			BeforeEach(func() {
+				subStep.PerformReturns(errors.New("BOOOM!"))
+				buffer.WriteString("error reason")
+			})
+
+			It("wraps the buffer content in an emittable error", func() {
+				err := step.Perform()
+				Expect(err).To(MatchError("error reason"))
+			})
+		})
+	})
+
+	Context("Cancel", func() {
+		It("calls cancel on the substep", func() {
+			step.Cancel()
+			Expect(subStep.CancelCallCount()).To(Equal(1))
+		})
+	})
+})

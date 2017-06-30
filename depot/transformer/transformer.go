@@ -1,8 +1,10 @@
 package transformer
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -104,6 +106,7 @@ func (t *transformer) StepFor(
 	a := action.GetValue()
 	switch actionModel := a.(type) {
 	case *models.RunAction:
+		suppressExitStatusCode := false
 		return steps.NewRun(
 			container,
 			*actionModel,
@@ -114,6 +117,7 @@ func (t *transformer) StepFor(
 			ports,
 			t.exportNetworkEnvVars,
 			t.clock,
+			suppressExitStatusCode,
 		)
 
 	case *models.DownloadAction:
@@ -283,6 +287,7 @@ func (t *transformer) StepsRunner(
 			Args: t.postSetupHook[1:],
 			User: t.postSetupUser,
 		}
+		suppressExitStatusCode := false
 		postSetup = steps.NewRun(
 			gardenContainer,
 			actionModel,
@@ -293,6 +298,7 @@ func (t *transformer) StepsRunner(
 			container.Ports,
 			t.exportNetworkEnvVars,
 			t.clock,
+			suppressExitStatusCode,
 		)
 	}
 
@@ -372,8 +378,8 @@ func (t *transformer) transformCheckDefinition(
 	hasStartedRunning chan<- struct{},
 	logstreamer log_streamer.LogStreamer,
 ) steps.Step {
-	var readinessChecks []models.ActionInterface
-	var livenessChecks []models.ActionInterface
+	var readinessChecks []steps.Step
+	var livenessChecks []steps.Step
 
 	nofiles := healthCheckNofiles
 
@@ -387,7 +393,7 @@ func (t *transformer) transformCheckDefinition(
 		logger.Info("transform-check-definitions-finished")
 	}()
 
-	createCheck := func(path string, port, timeout int, http, readiness bool, interval time.Duration) models.ActionInterface {
+	createCheck := func(path string, port, timeout int, http, readiness bool, interval time.Duration, logger lager.Logger) steps.Step {
 		args := []string{
 			fmt.Sprintf("-port=%d", port),
 			fmt.Sprintf("-timeout=%dms", timeout),
@@ -403,7 +409,7 @@ func (t *transformer) transformCheckDefinition(
 			args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
 		}
 
-		runAction := &models.RunAction{
+		runAction := models.RunAction{
 			User:           "root",
 			LogSource:      sourceName,
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
@@ -411,8 +417,14 @@ func (t *transformer) transformCheckDefinition(
 			Args:           args,
 		}
 
-		return runAction
+		buffer := bytes.NewBuffer(nil)
+		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true)
+		return steps.NewOutputWrapper(runStep, buffer)
 	}
+
+	readinessLogger := logger.Session("readiness-check")
+	livenessLogger := logger.Session("liveness-check")
 
 	for _, check := range container.CheckDefinition.Checks {
 		if err := check.Validate(); err != nil {
@@ -426,33 +438,25 @@ func (t *transformer) transformCheckDefinition(
 			if path == "" {
 				path = "/"
 			}
-			readinessChecks = append(readinessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval))
-			livenessChecks = append(livenessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval))
+			readinessChecks = append(readinessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval, readinessLogger))
+			livenessChecks = append(livenessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval, livenessLogger))
 		} else if check.TcpCheck != nil {
 			timeout := int(check.TcpCheck.ConnectTimeoutMs)
 			if timeout == 0 {
 				timeout = DefaultDeclarativeCheckTimeout
 			}
 
-			readinessChecks = append(readinessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval))
-			livenessChecks = append(livenessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval))
+			readinessChecks = append(readinessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval, readinessLogger))
+			livenessChecks = append(livenessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval, livenessLogger))
 		}
 	}
 
-	readinessCheckFunc := func(logstreamer log_streamer.LogStreamer) steps.Step {
-		logger := logger.Session("readiness-check")
-		action := models.WrapAction(models.Parallel(readinessChecks...))
-		return t.StepFor(logstreamer, action, gardenContainer, container.ExternalIP, container.InternalIP, container.Ports, logger)
-	}
-	livenessCheckFunc := func(logstreamer log_streamer.LogStreamer) steps.Step {
-		logger := logger.Session("liveness-check")
-		action := models.WrapAction(models.Codependent(livenessChecks...))
-		return t.StepFor(logstreamer, action, gardenContainer, container.ExternalIP, container.InternalIP, container.Ports, logger)
-	}
+	readinessCheck := steps.NewParallel(readinessChecks)
+	livenessCheck := steps.NewCodependent(livenessChecks, false)
 
 	return steps.NewLongRunningMonitor(
-		readinessCheckFunc,
-		livenessCheckFunc,
+		readinessCheck,
+		livenessCheck,
 		hasStartedRunning,
 		logger,
 		t.clock,

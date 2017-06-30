@@ -35,6 +35,7 @@ var _ = Describe("RunAction", func() {
 		portMappings                        []executor.PortMapping
 		exportNetworkEnvVars                bool
 		fakeClock                           *fakeclock.FakeClock
+		suppressExitStatusCode              bool
 
 		spawnedProcess *gardenfakes.FakeProcess
 		runError       error
@@ -43,6 +44,7 @@ var _ = Describe("RunAction", func() {
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
 		processesLimit = 1024
+		suppressExitStatusCode = false
 
 		runAction = models.RunAction{
 			Path: "sudo",
@@ -97,6 +99,7 @@ var _ = Describe("RunAction", func() {
 			portMappings,
 			exportNetworkEnvVars,
 			fakeClock,
+			suppressExitStatusCode,
 		)
 	})
 
@@ -429,6 +432,16 @@ var _ = Describe("RunAction", func() {
 					Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
 				})
 
+				Context("when exit code suppressed for healthcheck", func() {
+					BeforeEach(func() {
+						suppressExitStatusCode = true
+					})
+
+					It("does not emits the exit status code", func() {
+						Expect(stdoutBuffer).NotTo(gbytes.Say("Exit status 34"))
+					})
+				})
+
 				Context("when out of memory", func() {
 					BeforeEach(func() {
 						gardenClient.Connection.InfoReturns(
@@ -443,6 +456,17 @@ var _ = Describe("RunAction", func() {
 
 					It("emits the exit status code", func() {
 						Expect(stdoutBuffer).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
+					})
+
+					Context("when exit code suppressed for healthcheck", func() {
+						BeforeEach(func() {
+							suppressExitStatusCode = true
+						})
+
+						It("does not emits the exit status code", func() {
+							Expect(stdoutBuffer).ToNot(gbytes.Say("Exit status 34"))
+							Expect(stdoutBuffer).To(gbytes.Say(`(out of memory)`))
+						})
 					})
 				})
 			})

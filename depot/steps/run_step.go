@@ -21,15 +21,16 @@ const ExitTimeout = 1 * time.Second
 var ErrExitTimeout = errors.New("process did not exit")
 
 type runStep struct {
-	container            garden.Container
-	model                models.RunAction
-	streamer             log_streamer.LogStreamer
-	logger               lager.Logger
-	externalIP           string
-	internalIP           string
-	portMappings         []executor.PortMapping
-	exportNetworkEnvVars bool
-	clock                clock.Clock
+	container              garden.Container
+	model                  models.RunAction
+	streamer               log_streamer.LogStreamer
+	logger                 lager.Logger
+	externalIP             string
+	internalIP             string
+	portMappings           []executor.PortMapping
+	exportNetworkEnvVars   bool
+	clock                  clock.Clock
+	suppressExitStatusCode bool
 
 	*canceller
 }
@@ -44,6 +45,7 @@ func NewRun(
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
+	suppressExitStatusCode bool,
 ) *runStep {
 	logger = logger.Session("run-step")
 	return &runStep{
@@ -56,6 +58,7 @@ func NewRun(
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		clock:                clock,
+		suppressExitStatusCode: suppressExitStatusCode,
 
 		canceller: newCanceller(),
 	}
@@ -164,8 +167,13 @@ func (step *runStep) Perform() error {
 				"cancelled":  cancelled,
 			})
 
-			exitErrorMessage := fmt.Sprintf("Exit status %d", exitStatus)
-			emittableExitErrorMessage := fmt.Sprintf("Exited with status %d", exitStatus)
+			var exitErrorMessage, emittableExitErrorMessage string
+
+			if !step.suppressExitStatusCode {
+				exitErrorMessage = fmt.Sprintf("Exit status %d", exitStatus)
+				emittableExitErrorMessage = fmt.Sprintf("Exited with status %d", exitStatus)
+			}
+
 			if exitStatus != 0 {
 				info, err := step.container.Info()
 				if err != nil {
@@ -173,8 +181,8 @@ func (step *runStep) Perform() error {
 				} else {
 					for _, ev := range info.Events {
 						if ev == "out of memory" || ev == "Out of memory" {
-							exitErrorMessage = fmt.Sprintf("Exit status %d (out of memory)", exitStatus)
-							emittableExitErrorMessage = fmt.Sprintf("Exited with status %d (out of memory)", exitStatus)
+							exitErrorMessage = fmt.Sprintf("%s (out of memory)", exitErrorMessage)
+							emittableExitErrorMessage = fmt.Sprintf("%s (out of memory)", emittableExitErrorMessage)
 						}
 					}
 				}

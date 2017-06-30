@@ -1,6 +1,11 @@
 package steps
 
-import "github.com/hashicorp/go-multierror"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/hashicorp/go-multierror"
+)
 
 type parallelStep struct {
 	substeps []Step
@@ -21,7 +26,8 @@ func (step *parallelStep) Perform() error {
 		}(step)
 	}
 
-	var aggregate *multierror.Error
+	aggregate := &multierror.Error{}
+	aggregate.ErrorFormat = step.errorFormat
 
 	for _ = range step.substeps {
 		err := <-errs
@@ -37,4 +43,16 @@ func (step *parallelStep) Cancel() {
 	for _, step := range step.substeps {
 		step.Cancel()
 	}
+}
+
+func (step *parallelStep) errorFormat(errs []error) string {
+	var err string
+	for _, e := range errs {
+		if err == "" {
+			err = e.Error()
+		} else {
+			err = fmt.Sprintf("%s; %s", strings.Trim(err, "; "), e)
+		}
+	}
+	return err
 }

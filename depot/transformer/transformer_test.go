@@ -181,6 +181,8 @@ var _ = Describe("Transformer", func() {
 				actionCh         chan int
 				monitorProcess   *gardenfakes.FakeProcess
 				monitorCh        chan int
+				readinessIO      chan garden.ProcessIO
+				livenessIO       chan garden.ProcessIO
 			)
 
 			makeProcess := func(waitCh chan int) *gardenfakes.FakeProcess {
@@ -192,13 +194,16 @@ var _ = Describe("Transformer", func() {
 			}
 
 			BeforeEach(func() {
+				readinessIO = make(chan garden.ProcessIO, 1)
+				livenessIO = make(chan garden.ProcessIO, 1)
+
 				readinessCh = make(chan int)
 				readinessProcess = makeProcess(readinessCh)
 
-				livenessCh = make(chan int)
+				livenessCh = make(chan int, 1)
 				livenessProcess = makeProcess(livenessCh)
 
-				actionCh = make(chan int)
+				actionCh = make(chan int, 1)
 				actionProcess = makeProcess(actionCh)
 
 				monitorCh = make(chan int)
@@ -215,8 +220,10 @@ var _ = Describe("Transformer", func() {
 						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 						switch oldCount {
 						case 1:
+							readinessIO <- io
 							return readinessProcess, nil
 						case 2:
+							livenessIO <- io
 							return livenessProcess, nil
 						}
 					case "/monitor/path":
@@ -263,7 +270,7 @@ var _ = Describe("Transformer", func() {
 
 			AfterEach(func() {
 				close(readinessCh)
-				close(livenessCh)
+				livenessCh <- 1 // the healthcheck in liveness mode can only exit by failing
 				close(actionCh)
 				close(monitorCh)
 				ginkgomon.Interrupt(process)
@@ -384,6 +391,50 @@ var _ = Describe("Transformer", func() {
 						Expect(users).To(ContainElement("root"))
 					})
 
+					Context("when the readiness check times out", func() {
+						JustBeforeEach(func() {
+							By("waiting the action and readiness check processes to start")
+							var io garden.ProcessIO
+							Eventually(readinessIO).Should(Receive(&io))
+							_, err := io.Stdout.Write([]byte("readiness check failed"))
+							Expect(err).NotTo(HaveOccurred())
+
+							By("timing out the readiness check")
+							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+							clock.WaitForWatcherAndIncrement(1 * time.Second)
+
+							Eventually(readinessProcess.SignalCallCount).Should(Equal(1))
+							readinessCh <- 1
+							Eventually(actionProcess.SignalCallCount).Should(Equal(1))
+							actionCh <- 2
+						})
+
+						It("suppress the readiness check log", func() {
+							Eventually(process.Wait()).Should(Receive(HaveOccurred()))
+							Consistently(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
+							_, msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+							_, msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+							Expect([]string{msg0, msg1}).To(ConsistOf("Starting health monitoring of container", "Exit status 2"))
+						})
+
+						It("logs the readines check output on stderr", func() {
+							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
+							logLines := map[string]string{}
+							_, msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+							logLines[source] = msg
+							_, msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
+							logLines[source] = msg
+							Expect(logLines).To(Equal(map[string]string{
+								"HEALTH": "readiness check failed",
+								"test":   "Timed out after 1s: health check never passed.",
+							}))
+						})
+
+						It("returns the readiness check output in the error", func() {
+							Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance never healthy after 1s: readiness check failed"))))
+						})
+					})
+
 					Context("when the readiness check passes", func() {
 						JustBeforeEach(func() {
 							readinessCh <- 0
@@ -410,14 +461,32 @@ var _ = Describe("Transformer", func() {
 
 						Context("when the liveness check exits", func() {
 							JustBeforeEach(func() {
-								livenessCh <- 0
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+
+								By("waiting the action and liveness check processes to start")
+								var io garden.ProcessIO
+								Eventually(livenessIO).Should(Receive(&io))
+								_, err := io.Stdout.Write([]byte("liveness check failed"))
+								Expect(err).NotTo(HaveOccurred())
+
+								By("exiting the liveness check")
+								livenessCh <- 1
+								Eventually(actionProcess.SignalCallCount).Should(Equal(1))
+								actionCh <- 2
 							})
 
-							It("returns an error", func() {
-								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-								Eventually(actionProcess.SignalCallCount).ShouldNot(BeZero())
-								actionCh <- 0
-								Eventually(process.Wait()).Should(Receive(HaveOccurred()))
+							It("logs the liveness check output on stderr", func() {
+								Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
+								logLines := map[string]string{}
+								_, msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+								logLines[source] = msg
+								Expect(logLines).To(Equal(map[string]string{
+									"HEALTH": "liveness check failed",
+								}))
+							})
+
+							It("returns the liveness check output in the error", func() {
+								Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance became unhealthy: liveness check failed"))))
 							})
 						})
 					})
@@ -693,12 +762,12 @@ var _ = Describe("Transformer", func() {
 							Context("when either liveness check exit", func() {
 								JustBeforeEach(func() {
 									Eventually(gardenContainer.RunCallCount).Should(Equal(5))
-									livenessCh <- 0
+									livenessCh <- 1
 								})
 
 								It("signals the process and exit", func() {
 									Eventually(otherLivenessProcess.SignalCallCount).ShouldNot(BeZero())
-									otherLivenessCh <- 0
+									otherLivenessCh <- 1
 
 									Eventually(actionProcess.SignalCallCount).ShouldNot(BeZero())
 									actionCh <- 0
