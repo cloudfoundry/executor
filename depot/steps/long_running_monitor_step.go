@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -75,15 +76,15 @@ func (step *longRunningMonitorStep) Perform() error {
 	select {
 	case err := <-errCh:
 		if err != nil {
-			return NewEmittableError(err, healthcheckNowUnhealthy, outBuffer.String())
+			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, outBuffer.String())
 		}
 	case <-timerChan:
 		readinessCheck.Cancel()
 		err := <-errCh
-		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", outBuffer.String())
+		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", strings.Trim(outBuffer.String(), "; "))
 		fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
 		step.logger.Info("timed-out-before-healthy")
-		return NewEmittableError(err, healthcheckNowUnhealthy, outBuffer.String())
+		return NewEmittableError(err, timeoutCrashReason, step.startTimeout, outBuffer.String())
 	case <-step.cancelled:
 		readinessCheck.Cancel()
 		return <-errCh

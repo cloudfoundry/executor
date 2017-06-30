@@ -403,6 +403,7 @@ func (t *transformer) transformCheckDefinition(
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 			Path:           "/etc/cf-assets/healthcheck/healthcheck",
 			Args:           args,
+			SuppressHealthcheckExitCode: true,
 		}
 
 		return runAction

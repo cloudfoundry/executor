@@ -157,6 +157,35 @@ var _ = Describe("CodependentStep", func() {
 				})
 			})
 		})
+
+		FContext("when multiple substeps fail", func() {
+			disaster1 := errors.New("oh no")
+			disaster2 := errors.New("oh my")
+
+			BeforeEach(func() {
+				subStep1 = &fakes.FakeStep{
+					PerformStub: func() error {
+						return disaster1
+					},
+				}
+
+				subStep2 = &fakes.FakeStep{
+					PerformStub: func() error {
+						return disaster2
+					},
+				}
+			})
+
+			It("joins the error messages with a semicolon", func() {
+				err := step.Perform()
+				Expect(err).To(HaveOccurred())
+				errMsg := err.Error()
+				Expect(errMsg).NotTo(HavePrefix(";"))
+				Expect(errMsg).To(ContainSubstring("oh no"))
+				Expect(errMsg).To(ContainSubstring("oh my"))
+				Expect(errMsg).To(MatchRegexp(`\w+; \w+`))
+			})
+		})
 	})
 
 	Describe("Cancel", func() {
