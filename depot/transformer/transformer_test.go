@@ -170,6 +170,14 @@ var _ = Describe("Transformer", func() {
 			Eventually(process.Wait()).Should(Receive(nil))
 		})
 
+		makeProcess := func(waitCh chan int) *gardenfakes.FakeProcess {
+			process := &gardenfakes.FakeProcess{}
+			process.WaitStub = func() (int, error) {
+				return <-waitCh, nil
+			}
+			return process
+		}
+
 		Describe("declarative healthchecks", func() {
 			var (
 				process          ifrit.Process
@@ -184,14 +192,6 @@ var _ = Describe("Transformer", func() {
 				readinessIO      chan garden.ProcessIO
 				livenessIO       chan garden.ProcessIO
 			)
-
-			makeProcess := func(waitCh chan int) *gardenfakes.FakeProcess {
-				process := &gardenfakes.FakeProcess{}
-				process.WaitStub = func() (int, error) {
-					return <-waitCh, nil
-				}
-				return process
-			}
 
 			BeforeEach(func() {
 				readinessIO = make(chan garden.ProcessIO, 1)
@@ -570,43 +570,28 @@ var _ = Describe("Transformer", func() {
 								},
 							},
 						}
-						var readinessProcessIO garden.ProcessIO
-
-						gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (garden.Process, error) {
-							defer GinkgoRecover()
-
-							switch spec.Path {
-							case "/action/path":
-								return actionProcess, nil
-							case "/etc/cf-assets/healthcheck/healthcheck":
-								readinessProcessIO = io
-								return readinessProcess, nil
-							case "/monitor/path":
-								return monitorProcess, nil
-							}
-							err := errors.New("")
-							Fail("unexpected executable path: " + spec.Path)
-							return nil, err
-						}
-
-						readinessProcess.WaitStub = func() (int, error) {
-							readinessProcessIO.Stdout.Write([]byte("failed-bad"))
-							time.Sleep(50 * time.Millisecond)
-							clock.WaitForWatcherAndIncrement(3 * time.Second)
-							return 0, nil
-						}
-
 					})
 
-					It("should default to HEALTH for log source", func() {
+					JustBeforeEach(func() {
 						Eventually(fakeMetronClient.SendAppLogCallCount, 5).Should(BeNumerically(">=", 1))
 
 						_, message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
 						Expect(message).To(Equal("Starting health monitoring of container"))
 						Expect(sourceName).To(Equal("test"))
 
+						var io garden.ProcessIO
+						Eventually(readinessIO).Should(Receive(&io))
+						io.Stdout.Write([]byte("failed"))
+
+						clock.WaitForWatcherAndIncrement(time.Second)
+
+						Eventually(readinessProcess.SignalCallCount).Should(Equal(1))
+						readinessCh <- 1
+					})
+
+					It("should default to HEALTH for log source", func() {
 						Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
-						_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(0)
+						_, _, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 						Expect(sourceName).To(Equal("HEALTH"))
 					})
 
@@ -616,14 +601,8 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("logs healthcheck errors with log source from check defintion", func() {
-							Eventually(fakeMetronClient.SendAppLogCallCount, 5).Should(BeNumerically(">=", 1))
-
-							_, message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
-							Expect(message).To(Equal("Starting health monitoring of container"))
-							Expect(sourceName).To(Equal("test"))
-
 							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
-							_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(0)
+							_, _, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 							Expect(sourceName).To(Equal("healthcheck"))
 						})
 					})
@@ -908,10 +887,29 @@ var _ = Describe("Transformer", func() {
 			})
 
 			Context("SuppressLogOutput", func() {
+				var (
+					monitorCh, actionCh chan int
+				)
+
 				BeforeEach(func() {
+					monitorCh = make(chan int, 1)
+					actionCh = make(chan int, 1)
+
 					gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
-						return &gardenfakes.FakeProcess{}, nil
+						switch processSpec.Path {
+						case "/monitor/path":
+							return makeProcess(monitorCh), nil
+						case "/action/path":
+							return makeProcess(actionCh), nil
+						default:
+							return &gardenfakes.FakeProcess{}, nil
+						}
 					}
+				})
+
+				AfterEach(func() {
+					close(monitorCh)
+					close(actionCh)
 				})
 
 				JustBeforeEach(func() {
@@ -925,6 +923,7 @@ var _ = Describe("Transformer", func() {
 					Expect(processSpec.Path).To(Equal("/monitor/path"))
 					Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 					Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+					monitorCh <- 0
 					Eventually(process.Ready()).Should(BeClosed())
 				})
 			})
