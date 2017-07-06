@@ -196,6 +196,9 @@ var _ = Describe("Transformer", func() {
 			BeforeEach(func() {
 				readinessIO = make(chan garden.ProcessIO, 1)
 				livenessIO = make(chan garden.ProcessIO, 1)
+				// make the race detector happy
+				readinessIOCh := readinessIO
+				livenessIOCh := livenessIO
 
 				readinessCh = make(chan int)
 				readinessProcess = makeProcess(readinessCh)
@@ -220,10 +223,10 @@ var _ = Describe("Transformer", func() {
 						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 						switch oldCount {
 						case 1:
-							readinessIO <- io
+							readinessIOCh <- io
 							return readinessProcess, nil
 						case 2:
-							livenessIO <- io
+							livenessIOCh <- io
 							return livenessProcess, nil
 						}
 					case "/monitor/path":
