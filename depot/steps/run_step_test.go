@@ -458,6 +458,25 @@ var _ = Describe("RunAction", func() {
 						Expect(stdoutBuffer).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
 					})
 
+					Context("when there are multiple out of memory events", func() {
+						BeforeEach(func() {
+							gardenClient.Connection.InfoReturns(
+								garden.ContainerInfo{
+									Events: []string{"Out of memory", "Out of memory", "another event"},
+								},
+								nil,
+							)
+
+							spawnedProcess.WaitReturns(34, nil)
+						})
+
+						It("emits only one out of memory error", func() {
+							Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
+							Expect(stdoutBuffer).To(gbytes.Say(`(out of memory)`))
+							Expect(stdoutBuffer).ToNot(gbytes.Say(`(out of memory)`))
+						})
+					})
+
 					Context("when exit code suppressed for healthcheck", func() {
 						BeforeEach(func() {
 							suppressExitStatusCode = true
