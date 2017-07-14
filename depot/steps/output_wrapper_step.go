@@ -21,14 +21,19 @@ func NewOutputWrapper(substep Step, reader io.Reader) *outputWrapperStep {
 }
 
 func (step *outputWrapperStep) Perform() error {
-	err := step.substep.Perform()
-	if err != nil {
+	substepErr := step.substep.Perform()
+	if substepErr != nil {
 		bytes, err := ioutil.ReadAll(step.reader)
 		if err != nil {
 			return err
 		}
 
-		return NewEmittableError(nil, string(bytes))
+		readerErr := string(bytes)
+		if readerErr != "" {
+			return NewEmittableError(nil, readerErr)
+		} else {
+			return substepErr
+		}
 	}
 
 	return nil

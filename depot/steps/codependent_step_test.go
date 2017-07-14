@@ -97,6 +97,23 @@ var _ = Describe("CodependentStep", func() {
 				Expect(subStep1.CancelCallCount()).To(Equal(1))
 				Expect(subStep2.CancelCallCount()).To(Equal(1))
 			})
+
+			Context("when step is cancelled", func() {
+				BeforeEach(func() {
+					subStep2 = &fakes.FakeStep{
+						PerformStub: func() error {
+							return steps.ErrCancelled
+						},
+					}
+				})
+
+				It("does not add cancelled error to message", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					errMsg := err.Error()
+					Expect(errMsg).To(Equal("oh no!"))
+				})
+			})
 		})
 
 		Context("when one of the substeps exits without failure", func() {

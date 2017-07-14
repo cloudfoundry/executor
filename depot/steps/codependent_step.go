@@ -3,7 +3,6 @@ package steps
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/go-multierror"
 )
@@ -42,7 +41,7 @@ func (step *codependentStep) Perform() error {
 			err = CodependentStepExitedError
 		}
 
-		if err != nil {
+		if err != nil && err != ErrCancelled {
 			aggregate = multierror.Append(aggregate, err)
 
 			if !cancelled {
@@ -67,7 +66,7 @@ func (step *codependentStep) errorFormat(errs []error) string {
 		if err == "" {
 			err = e.Error()
 		} else {
-			err = fmt.Sprintf("%s; %s", strings.Trim(err, "; "), e)
+			err = fmt.Sprintf("%s; %s", err, e)
 		}
 	}
 	return err

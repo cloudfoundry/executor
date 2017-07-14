@@ -93,6 +93,25 @@ var _ = Describe("ParallelStep", func() {
 			Expect(errMsg).To(ContainSubstring("oh my"))
 			Expect(errMsg).To(MatchRegexp(`\w+; \w+`))
 		})
+
+		Context("when step is cancelled", func() {
+			BeforeEach(func() {
+				subStep1 = &fakes.FakeStep{
+					PerformStub: func() error {
+						return steps.ErrCancelled
+					},
+				}
+			})
+
+			It("does not add cancelled error to message", func() {
+				err := step.Perform()
+				Expect(err).To(HaveOccurred())
+				errMsg := err.Error()
+				Expect(errMsg).NotTo(HavePrefix(";"))
+				Expect(errMsg).To(ContainSubstring("oh my"))
+				Expect(errMsg).NotTo(ContainSubstring(steps.ErrCancelled.Error()))
+			})
+		})
 	})
 
 	Context("when one of the substeps fails", func() {

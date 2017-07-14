@@ -41,6 +41,28 @@ var _ = Describe("OutputWrapperStep", func() {
 				Expect(err).To(MatchError("error reason"))
 			})
 		})
+
+		Context("when the substep is cancelled", func() {
+			BeforeEach(func() {
+				subStep.PerformReturns(steps.ErrCancelled)
+			})
+
+			It("returns the ErrCancelled error", func() {
+				err := step.Perform()
+				Expect(err).To(Equal(steps.ErrCancelled))
+			})
+
+			Context("and the buffer has data", func() {
+				BeforeEach(func() {
+					buffer.WriteString("error reason")
+				})
+
+				It("wraps the buffer content in an emittable error", func() {
+					err := step.Perform()
+					Expect(err).To(MatchError("error reason"))
+				})
+			})
+		})
 	})
 
 	Context("Cancel", func() {
