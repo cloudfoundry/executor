@@ -179,14 +179,11 @@ func (step *runStep) Perform() error {
 				if err != nil {
 					logger.Error("failed-to-get-info", err)
 				} else {
-					oomReported := false
 					for _, ev := range info.Events {
 						if ev == "out of memory" || ev == "Out of memory" {
-							if !oomReported {
-								exitErrorMessage = fmt.Sprintf("%s (out of memory)", exitErrorMessage)
-								emittableExitErrorMessage = fmt.Sprintf("%s (out of memory)", emittableExitErrorMessage)
-								oomReported = true
-							}
+							exitErrorMessage = fmt.Sprintf("%s (out of memory)", exitErrorMessage)
+							emittableExitErrorMessage = fmt.Sprintf("%s (out of memory)", emittableExitErrorMessage)
+							break
 						}
 					}
 				}
