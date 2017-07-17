@@ -37,13 +37,15 @@ var _ = Describe("Transformer", func() {
 			healthyMonitoringInterval   time.Duration
 			unhealthyMonitoringInterval time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
+			suppressExitStatusCode      bool
 		)
 
 		BeforeEach(func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
+			fakeMetronClient = &mfakes.FakeIngressClient{}
+			suppressExitStatusCode = false
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			fakeMetronClient = &mfakes.FakeIngressClient{}
 			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
 
 			healthyMonitoringInterval = 1 * time.Second
@@ -95,7 +97,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -123,7 +125,7 @@ var _ = Describe("Transformer", func() {
 				}
 			}
 
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 
 			process := ifrit.Background(runner)
@@ -265,7 +267,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -764,6 +766,7 @@ var _ = Describe("Transformer", func() {
 
 			Context("when they are disabled", func() {
 				BeforeEach(func() {
+					suppressExitStatusCode = true
 					optimusPrime = transformer.NewTransformer(
 						nil, nil, nil, nil, nil, nil,
 						os.TempDir(),
@@ -821,7 +824,7 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -851,7 +854,7 @@ var _ = Describe("Transformer", func() {
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -870,7 +873,7 @@ var _ = Describe("Transformer", func() {
 			)
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 				process = ifrit.Background(runner)
 			})
@@ -880,6 +883,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			BeforeEach(func() {
+				suppressExitStatusCode = true
 				container.Setup = nil
 				container.Monitor = &models.Action{
 					ParallelAction: models.Parallel(&models.RunAction{
@@ -980,13 +984,10 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("logs healthcheck error with the same source", func() {
-					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
+					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
 					Expect(message).To(Equal("healthcheck failed"))
-					_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
-					Expect(sourceName).To(Equal("test"))
-					Expect(message).To(Equal("Exit status 1"))
 				})
 
 				It("logs the container lifecycle", func() {

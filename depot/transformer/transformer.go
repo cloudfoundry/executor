@@ -33,8 +33,8 @@ var ErrNoCheck = errors.New("no check configured")
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, lager.Logger) steps.Step
-	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, lager.Logger) steps.Step
+	StepsRunner(lager.Logger, executor.Container, garden.Container, bool, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
 type transformer struct {
@@ -101,12 +101,12 @@ func (t *transformer) StepFor(
 	externalIP string,
 	internalIP string,
 	ports []executor.PortMapping,
+	suppressExitStatusCode bool,
 	logger lager.Logger,
 ) steps.Step {
 	a := action.GetValue()
 	switch actionModel := a.(type) {
 	case *models.RunAction:
-		suppressExitStatusCode := false
 		return steps.NewRun(
 			container,
 			*actionModel,
@@ -151,6 +151,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			),
 			actionModel.StartMessage,
@@ -169,6 +170,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			),
 			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
@@ -184,6 +186,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			),
 			logger,
@@ -199,6 +202,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			)
 		}
@@ -214,6 +218,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			)
 		}
@@ -230,6 +235,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
 				logger,
 			)
 		}
@@ -266,6 +272,7 @@ func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
 	gardenContainer garden.Container,
+	suppressExitStatusCode bool,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
 	var setup, action, postSetup, monitor steps.Step
@@ -277,6 +284,7 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
+			suppressExitStatusCode,
 			logger.Session("setup"),
 		)
 	}
@@ -315,6 +323,7 @@ func (t *transformer) StepsRunner(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
+		suppressExitStatusCode,
 		logger.Session("action"),
 	)
 
@@ -333,6 +342,7 @@ func (t *transformer) StepsRunner(
 					container.ExternalIP,
 					container.InternalIP,
 					container.Ports,
+					suppressExitStatusCode,
 					logger.Session("monitor-run"),
 				)
 			},

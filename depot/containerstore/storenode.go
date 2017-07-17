@@ -329,7 +329,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, false, logStreamer)
 	if err != nil {
 		return err
 	}
