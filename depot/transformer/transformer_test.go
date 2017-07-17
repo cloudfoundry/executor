@@ -97,7 +97,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -125,7 +125,7 @@ var _ = Describe("Transformer", func() {
 				}
 			}
 
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 			Expect(err).NotTo(HaveOccurred())
 
 			process := ifrit.Background(runner)
@@ -267,7 +267,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -824,7 +824,7 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -854,7 +854,7 @@ var _ = Describe("Transformer", func() {
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -873,7 +873,7 @@ var _ = Describe("Transformer", func() {
 			)
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, suppressExitStatusCode, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
 				Expect(err).NotTo(HaveOccurred())
 				process = ifrit.Background(runner)
 			})

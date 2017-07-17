@@ -34,7 +34,7 @@ var ErrNoCheck = errors.New("no check configured")
 
 type Transformer interface {
 	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, lager.Logger) steps.Step
-	StepsRunner(lager.Logger, executor.Container, garden.Container, bool, log_streamer.LogStreamer) (ifrit.Runner, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
 type transformer struct {
@@ -272,7 +272,6 @@ func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
 	gardenContainer garden.Container,
-	suppressExitStatusCode bool,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
 	var setup, action, postSetup, monitor steps.Step
@@ -284,7 +283,7 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
-			suppressExitStatusCode,
+			false,
 			logger.Session("setup"),
 		)
 	}
@@ -323,7 +322,7 @@ func (t *transformer) StepsRunner(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
-		suppressExitStatusCode,
+		false,
 		logger.Session("action"),
 	)
 
@@ -342,7 +341,7 @@ func (t *transformer) StepsRunner(
 					container.ExternalIP,
 					container.InternalIP,
 					container.Ports,
-					suppressExitStatusCode,
+					true,
 					logger.Session("monitor-run"),
 				)
 			},
