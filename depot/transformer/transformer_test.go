@@ -37,13 +37,15 @@ var _ = Describe("Transformer", func() {
 			healthyMonitoringInterval   time.Duration
 			unhealthyMonitoringInterval time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
+			suppressExitStatusCode      bool
 		)
 
 		BeforeEach(func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
+			fakeMetronClient = &mfakes.FakeIngressClient{}
+			suppressExitStatusCode = false
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			fakeMetronClient = &mfakes.FakeIngressClient{}
 			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
 
 			healthyMonitoringInterval = 1 * time.Second
@@ -764,6 +766,7 @@ var _ = Describe("Transformer", func() {
 
 			Context("when they are disabled", func() {
 				BeforeEach(func() {
+					suppressExitStatusCode = true
 					optimusPrime = transformer.NewTransformer(
 						nil, nil, nil, nil, nil, nil,
 						os.TempDir(),
@@ -880,12 +883,19 @@ var _ = Describe("Transformer", func() {
 			})
 
 			BeforeEach(func() {
+				suppressExitStatusCode = true
 				container.Setup = nil
 				container.Monitor = &models.Action{
-					ParallelAction: models.Parallel(&models.RunAction{
-						Path:              "/monitor/path",
-						SuppressLogOutput: true,
-					}),
+					ParallelAction: models.Parallel(
+						&models.RunAction{
+							Path:              "/monitor/path",
+							SuppressLogOutput: true,
+						},
+						&models.RunAction{
+							Path:              "/monitor/path",
+							SuppressLogOutput: true,
+						},
+					),
 				}
 			})
 
@@ -895,7 +905,7 @@ var _ = Describe("Transformer", func() {
 				)
 
 				BeforeEach(func() {
-					monitorCh = make(chan int, 1)
+					monitorCh = make(chan int, 2)
 					actionCh = make(chan int, 1)
 
 					gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
@@ -918,7 +928,7 @@ var _ = Describe("Transformer", func() {
 				JustBeforeEach(func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
 					clock.Increment(1 * time.Second)
-					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				})
 
 				It("is ignored", func() {
@@ -926,6 +936,7 @@ var _ = Describe("Transformer", func() {
 					Expect(processSpec.Path).To(Equal("/monitor/path"))
 					Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 					Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+					monitorCh <- 0
 					monitorCh <- 0
 					Eventually(process.Ready()).Should(BeClosed())
 				})
@@ -945,20 +956,26 @@ var _ = Describe("Transformer", func() {
 						return <-exitStatusCh, nil
 					}
 
-					var monitorProcessIO garden.ProcessIO
+					monitorProcessChan := make(chan *garden.ProcessIO, 4)
 
 					monitorProcess.WaitStub = func() (int, error) {
-						if monitorProcess.WaitCallCount() == 2 {
-							monitorProcessIO.Stdout.Write([]byte("healthcheck failed\n"))
+						procIO := <-monitorProcessChan
+
+						if monitorProcess.WaitCallCount() == 3 {
+							procIO.Stdout.Write([]byte("healthcheck failed"))
+							return 1, nil
+						} else if monitorProcess.WaitCallCount() == 4 {
+							procIO.Stdout.Write([]byte("healthcheck failed"))
 							return 1, nil
 						} else {
+
 							return 0, nil
 						}
 					}
 
 					gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 						if processSpec.Path == "/monitor/path" {
-							monitorProcessIO = processIO
+							monitorProcessChan <- &processIO
 							return monitorProcess, nil
 						} else if processSpec.Path == "/action/path" {
 							return actionProcess, nil
@@ -973,20 +990,17 @@ var _ = Describe("Transformer", func() {
 
 				JustBeforeEach(func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
-					clock.WaitForWatcherAndIncrement(1 * time.Second)
-					Eventually(monitorProcess.WaitCallCount).Should(Equal(1))
-					clock.WaitForWatcherAndIncrement(1 * time.Second)
+					clock.Increment(1 * time.Second)
 					Eventually(monitorProcess.WaitCallCount).Should(Equal(2))
+					clock.Increment(1 * time.Second)
+					Eventually(monitorProcess.WaitCallCount).Should(Equal(4))
 				})
 
-				It("logs healthcheck error with the same source", func() {
-					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
+				It("logs healthcheck error with the same source in a readable way", func() {
+					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
-					Expect(message).To(Equal("healthcheck failed"))
-					_, message, sourceName, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
-					Expect(sourceName).To(Equal("test"))
-					Expect(message).To(Equal("Exit status 1"))
+					Expect(message).To(ContainSubstring("healthcheck failed; healthcheck failed"))
 				})
 
 				It("logs the container lifecycle", func() {

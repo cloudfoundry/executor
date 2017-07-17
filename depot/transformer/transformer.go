@@ -33,7 +33,7 @@ var ErrNoCheck = errors.New("no check configured")
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, lager.Logger) steps.Step
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
 	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
@@ -101,12 +101,13 @@ func (t *transformer) StepFor(
 	externalIP string,
 	internalIP string,
 	ports []executor.PortMapping,
+	suppressExitStatusCode bool,
+	monitorOutputWrapper bool,
 	logger lager.Logger,
 ) steps.Step {
 	a := action.GetValue()
 	switch actionModel := a.(type) {
 	case *models.RunAction:
-		suppressExitStatusCode := false
 		return steps.NewRun(
 			container,
 			*actionModel,
@@ -151,6 +152,8 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
+				monitorOutputWrapper,
 				logger,
 			),
 			actionModel.StartMessage,
@@ -169,6 +172,8 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
+				monitorOutputWrapper,
 				logger,
 			),
 			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
@@ -184,6 +189,8 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
+				monitorOutputWrapper,
 				logger,
 			),
 			logger,
@@ -192,30 +199,74 @@ func (t *transformer) StepFor(
 	case *models.ParallelAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = t.StepFor(
-				logStreamer.WithSource(actionModel.LogSource),
-				action,
-				container,
-				externalIP,
-				internalIP,
-				ports,
-				logger,
-			)
+			var subStep steps.Step
+			if monitorOutputWrapper {
+				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
+				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+				subStep = steps.NewOutputWrapper(t.StepFor(
+					bufferedLogStreamer,
+					action,
+					container,
+					externalIP,
+					internalIP,
+					ports,
+					suppressExitStatusCode,
+					monitorOutputWrapper,
+					logger,
+				),
+					buffer,
+				)
+			} else {
+				subStep = t.StepFor(
+					logStreamer.WithSource(actionModel.LogSource),
+					action,
+					container,
+					externalIP,
+					internalIP,
+					ports,
+					suppressExitStatusCode,
+					monitorOutputWrapper,
+					logger,
+				)
+			}
+			subSteps[i] = subStep
 		}
 		return steps.NewParallel(subSteps)
 
 	case *models.CodependentAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = t.StepFor(
-				logStreamer.WithSource(actionModel.LogSource),
-				action,
-				container,
-				externalIP,
-				internalIP,
-				ports,
-				logger,
-			)
+			var subStep steps.Step
+			if monitorOutputWrapper {
+				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
+				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+				subStep = steps.NewOutputWrapper(t.StepFor(
+					bufferedLogStreamer,
+					action,
+					container,
+					externalIP,
+					internalIP,
+					ports,
+					suppressExitStatusCode,
+					monitorOutputWrapper,
+					logger,
+				),
+					buffer,
+				)
+			} else {
+				subStep = t.StepFor(
+					logStreamer.WithSource(actionModel.LogSource),
+					action,
+					container,
+					externalIP,
+					internalIP,
+					ports,
+					suppressExitStatusCode,
+					monitorOutputWrapper,
+					logger,
+				)
+			}
+			subSteps[i] = subStep
 		}
 		errorOnExit := true
 		return steps.NewCodependent(subSteps, errorOnExit)
@@ -230,6 +281,8 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				suppressExitStatusCode,
+				monitorOutputWrapper,
 				logger,
 			)
 		}
@@ -277,6 +330,8 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
+			false,
+			false,
 			logger.Session("setup"),
 		)
 	}
@@ -315,6 +370,8 @@ func (t *transformer) StepsRunner(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
+		false,
+		false,
 		logger.Session("action"),
 	)
 
@@ -325,14 +382,16 @@ func (t *transformer) StepsRunner(
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
-			func(monitorStreamer log_streamer.LogStreamer) steps.Step {
+			func() steps.Step {
 				return t.StepFor(
-					monitorStreamer,
+					logStreamer,
 					container.Monitor,
 					gardenContainer,
 					container.ExternalIP,
 					container.InternalIP,
 					container.Ports,
+					true,
+					true,
 					logger.Session("monitor-run"),
 				)
 			},

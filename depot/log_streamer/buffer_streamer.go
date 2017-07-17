@@ -1,9 +1,6 @@
 package log_streamer
 
-import (
-	"io"
-	"sync"
-)
+import "io"
 
 type bufferStreamer struct {
 	stdout     io.Writer
@@ -13,8 +10,8 @@ type bufferStreamer struct {
 
 func NewBufferStreamer(stdout, stderr io.Writer) LogStreamer {
 	return &bufferStreamer{
-		stdout:     newConcurrentWriter(stdout),
-		stderr:     newConcurrentWriter(stderr),
+		stdout:     stdout,
+		stderr:     stderr,
 		sourceName: DefaultLogSource,
 	}
 }
@@ -37,22 +34,4 @@ func (bs *bufferStreamer) WithSource(sourceName string) LogStreamer {
 
 func (bs *bufferStreamer) SourceName() string {
 	return bs.sourceName
-}
-
-type concurrentWriter struct {
-	inner io.Writer
-	lock  sync.Mutex
-}
-
-func newConcurrentWriter(w io.Writer) io.Writer {
-	return &concurrentWriter{
-		inner: w,
-		lock:  sync.Mutex{},
-	}
-}
-
-func (w *concurrentWriter) Write(data []byte) (int, error) {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	return w.inner.Write(data)
 }

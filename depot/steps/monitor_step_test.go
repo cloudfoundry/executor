@@ -3,12 +3,10 @@ package steps_test
 import (
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
-	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/steps/fakes"
@@ -27,7 +25,7 @@ var _ = Describe("MonitorStep", func() {
 
 		checkSteps chan *fakes.FakeStep
 
-		checkFunc        func(logstreamer log_streamer.LogStreamer) steps.Step
+		checkFunc        func() steps.Step
 		hasBecomeHealthy <-chan struct{}
 		clock            *fakeclock.FakeClock
 		fakeStreamer     *fake_log_streamer.FakeLogStreamer
@@ -60,10 +58,7 @@ var _ = Describe("MonitorStep", func() {
 
 		fakeStreamer = newFakeStreamer()
 
-		checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
-			if monitorErr != "" {
-				logstreamer.Stdout().Write([]byte(monitorErr))
-			}
+		checkFunc = func() steps.Step {
 			return <-checkSteps
 		}
 
@@ -118,7 +113,7 @@ var _ = Describe("MonitorStep", func() {
 				<-doneChan
 				return nil
 			}
-			checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
+			checkFunc = func() steps.Step {
 				return fakeStep
 			}
 
@@ -274,7 +269,7 @@ var _ = Describe("MonitorStep", func() {
 
 						It("emits the healthcheck process response for the failure", func() {
 							Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
-								gbytes.Say(fmt.Sprintf("%s\n", monitorErr)),
+								gbytes.Say(disaster.Error()),
 							)
 						})
 
@@ -295,7 +290,6 @@ var _ = Describe("MonitorStep", func() {
 			BeforeEach(func() {
 				expectedErr = errors.New("not up yet!")
 				checkResults <- expectedErr
-				monitorErr = "healthcheck failed"
 			})
 
 			Context("and the start timeout is exceeded", func() {
@@ -327,7 +321,7 @@ var _ = Describe("MonitorStep", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
-						gbytes.Say(fmt.Sprintf("%s\n", monitorErr)),
+						gbytes.Say(expectedErr.Error()),
 					)
 				})
 
@@ -339,35 +333,32 @@ var _ = Describe("MonitorStep", func() {
 					))
 				})
 
-				Context("when monitor step is composed of multiple checks", func() {
-					BeforeEach(func() {
-						bufferChan := make(chan io.Writer, 2)
-						fakeStep1.PerformStub = func() error {
-							writer := <-bufferChan
-							writer.Write([]byte("another thing"))
-							return expectedErr
-						}
-						fakeStep2.PerformStub = func() error {
-							writer := <-bufferChan
-							writer.Write([]byte("something"))
-							return expectedErr
-						}
+				// Context("when monitor step is composed of multiple checks", func() {
+				// 	BeforeEach(func() {
+				// 		fakeStep1.PerformStub = func() error {
+				// 			writer := <-bufferChan
+				// 			writer.Write([]byte("another thing"))
+				// 			return expectedErr
+				// 		}
+				// 		fakeStep2.PerformStub = func() error {
+				// 			writer := <-bufferChan
+				// 			writer.Write([]byte("something"))
+				// 			return expectedErr
+				// 		}
 
-						checkFunc = func(logstreamer log_streamer.LogStreamer) steps.Step {
-							racingSteps := steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
-							bufferChan <- logstreamer.Stdout()
-							bufferChan <- logstreamer.Stdout()
-							return racingSteps
-						}
-					})
+				// 		checkFunc = func() steps.Step {
+				// 			racingSteps := steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
+				// 			return racingSteps
+				// 		}
+				// 	})
 
-					// Generates a data race as a failure mode
-					It("correctly serializes output and does not race", func() {
-						expectCheckAfterInterval(fakeStep1, unhealthyInterval)
-						expectCheckAfterInterval(fakeStep2, unhealthyInterval)
-						Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
-					})
-				})
+				// 	// Generates a data race as a failure mode
+				// 	It("correctly serializes output and does not race", func() {
+				// 		expectCheckAfterInterval(fakeStep1, unhealthyInterval)
+				// 		expectCheckAfterInterval(fakeStep2, unhealthyInterval)
+				// 		Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
+				// 	})
+				// })
 
 			})
 
