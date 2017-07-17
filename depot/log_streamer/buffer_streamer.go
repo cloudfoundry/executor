@@ -6,14 +6,16 @@ import (
 )
 
 type bufferStreamer struct {
-	stdout io.Writer
-	stderr io.Writer
+	stdout     io.Writer
+	stderr     io.Writer
+	sourceName string
 }
 
 func NewBufferStreamer(stdout, stderr io.Writer) LogStreamer {
 	return &bufferStreamer{
-		stdout: newConcurrentWriter(stdout),
-		stderr: newConcurrentWriter(stderr),
+		stdout:     newConcurrentWriter(stdout),
+		stderr:     newConcurrentWriter(stderr),
+		sourceName: DefaultLogSource,
 	}
 }
 
@@ -29,7 +31,12 @@ func (bs *bufferStreamer) Flush() {
 }
 
 func (bs *bufferStreamer) WithSource(sourceName string) LogStreamer {
+	bs.sourceName = sourceName
 	return bs
+}
+
+func (bs *bufferStreamer) SourceName() string {
+	return bs.sourceName
 }
 
 type concurrentWriter struct {

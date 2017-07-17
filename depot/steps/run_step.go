@@ -171,7 +171,7 @@ func (step *runStep) Perform() error {
 
 			if !step.suppressExitStatusCode {
 				exitErrorMessage = fmt.Sprintf("Exit status %d", exitStatus)
-				emittableExitErrorMessage = fmt.Sprintf("Exited with status %d", exitStatus)
+				emittableExitErrorMessage = fmt.Sprintf("%s: Exited with status %d", step.streamer.SourceName(), exitStatus)
 			}
 
 			if exitStatus != 0 {

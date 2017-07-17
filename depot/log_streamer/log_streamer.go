@@ -15,6 +15,7 @@ const (
 	DefaultLogSource = "LOG"
 )
 
+//go:generate counterfeiter -o fake_log_streamer/fake_log_streamer.go . LogStreamer
 type LogStreamer interface {
 	Stdout() io.Writer
 	Stderr() io.Writer
@@ -22,6 +23,7 @@ type LogStreamer interface {
 	Flush()
 
 	WithSource(sourceName string) LogStreamer
+	SourceName() string
 }
 
 type logStreamer struct {
@@ -81,4 +83,8 @@ func (e *logStreamer) WithSource(sourceName string) LogStreamer {
 		stdout: e.stdout.withSource(sourceName),
 		stderr: e.stderr.withSource(sourceName),
 	}
+}
+
+func (e *logStreamer) SourceName() string {
+	return e.stdout.sourceName
 }

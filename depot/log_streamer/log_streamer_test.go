@@ -85,6 +85,11 @@ var _ = Describe("LogStreamer", func() {
 			})
 		})
 
+		Describe("SourceName", func() {
+			It("should return the log streamer's configured source name", func() {
+				Expect(streamer.SourceName()).To(Equal(sourceName))
+			})
+		})
 		Context("when given a message with all sorts of fun newline characters", func() {
 			BeforeEach(func() {
 				fmt.Fprintf(streamer.Stdout(), "A\nB\rC\n\rD\r\nE\n\n\nF\r\r\rG\n\r\r\n\n\n\r")

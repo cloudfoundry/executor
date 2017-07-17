@@ -39,4 +39,19 @@ var _ = Describe("BufferStreamer", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(output).To(Equal([]byte("stdout")))
 	})
+
+	Describe("SourceName", func() {
+		Context("when WithSource has not been called", func() {
+			It("returns empty string", func() {
+				Expect(streamer.SourceName()).To(Equal(log_streamer.DefaultLogSource))
+			})
+		})
+
+		Context("when WithSource has previously been called", func() {
+			It("returns the source name passed to WithSource", func() {
+				streamer = streamer.WithSource("test-log-source")
+				Expect(streamer.SourceName()).To(Equal("test-log-source"))
+			})
+		})
+	})
 })

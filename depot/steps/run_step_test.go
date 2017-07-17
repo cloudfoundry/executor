@@ -2,6 +2,7 @@ package steps_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -39,12 +40,14 @@ var _ = Describe("RunAction", func() {
 
 		spawnedProcess *gardenfakes.FakeProcess
 		runError       error
+		testLogSource  string
 	)
 
 	BeforeEach(func() {
 		fileDescriptorLimit = 17
 		processesLimit = 1024
 		suppressExitStatusCode = false
+		testLogSource = "testlogsource"
 
 		runAction = models.RunAction{
 			Path: "sudo",
@@ -63,6 +66,7 @@ var _ = Describe("RunAction", func() {
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 		fakeStreamer.StdoutReturns(noOpWriter{})
+		fakeStreamer.SourceNameReturns(testLogSource)
 		gardenClient = fakes.NewGardenClient()
 
 		logger = lagertest.NewTestLogger("test")
@@ -294,7 +298,8 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("should return an emittable error with the exit code", func() {
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
 				})
 			})
 
@@ -304,7 +309,8 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("should return an emittable error with the exit code", func() {
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19")))
+					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
+					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
 				})
 			})
 		})
@@ -354,7 +360,8 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
 			})
 		})
 
@@ -371,7 +378,8 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns an emittable error", func() {
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, "Exited with status 19 (out of memory)")))
+				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
+				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
 			})
 		})
 
