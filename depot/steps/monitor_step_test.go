@@ -313,6 +313,7 @@ var _ = Describe("MonitorStep", func() {
 					err, ok := expectedError.(*steps.EmittableError)
 					Expect(ok).To(BeTrue())
 					Expect(err.WrappedError()).To(Equal(expectedErr))
+					Expect(err.Error()).To(ContainSubstring(monitorErr))
 				})
 
 				It("logs the step", func() {

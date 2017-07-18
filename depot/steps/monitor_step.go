@@ -132,7 +132,8 @@ func (step *monitorStep) Perform() error {
 							"step-error": stepErr.Error(),
 						})
 
-						return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, outBuffer.String())
+						// return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, outBuffer.String())
+						return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, stepErr.Error())
 					}
 
 					startBy = nil

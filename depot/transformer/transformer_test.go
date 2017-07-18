@@ -955,6 +955,9 @@ var _ = Describe("Transformer", func() {
 						if monitorProcess.WaitCallCount() == 2 {
 							monitorProcessIO.Stdout.Write([]byte("healthcheck failed\n"))
 							return 1, nil
+						} else if monitorProcess.WaitCallCount() == 3 {
+							monitorProcessIO.Stdout.Write([]byte("healthcheck failed\n"))
+							return 1, nil
 						} else {
 							return 0, nil
 						}
@@ -987,7 +990,7 @@ var _ = Describe("Transformer", func() {
 					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
-					Expect(message).To(Equal("healthcheck failed"))
+					Expect(message).To(ContainSubstring("healthcheck failed"))
 				})
 
 				It("logs the container lifecycle", func() {
