@@ -1,9 +1,7 @@
 package steps
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -21,7 +19,7 @@ const timeoutCrashReason = "Instance never healthy after %s: %s"
 const healthcheckNowUnhealthy = "Instance became unhealthy: %s"
 
 type monitorStep struct {
-	checkFunc         func(logstreamer log_streamer.LogStreamer) Step
+	checkFunc         func() Step
 	hasStartedRunning chan<- struct{}
 
 	logger      lager.Logger
@@ -37,7 +35,7 @@ type monitorStep struct {
 }
 
 func NewMonitor(
-	checkFunc func(logstreamer log_streamer.LogStreamer) Step,
+	checkFunc func() Step,
 	hasStartedRunning chan<- struct{},
 	logger lager.Logger,
 	clock clock.Clock,
@@ -90,12 +88,9 @@ func (step *monitorStep) Perform() error {
 	for {
 		select {
 		case now := <-timer.C():
-			var outBuffer bytes.Buffer
-			bufferStreamer := log_streamer.NewBufferStreamer(&outBuffer, ioutil.Discard)
-
 			stepResult := make(chan error)
 
-			check := step.checkFunc(bufferStreamer)
+			check := step.checkFunc()
 
 			step.workPool.Submit(func() {
 				stepResult <- check.Perform()
@@ -108,10 +103,10 @@ func (step *monitorStep) Perform() error {
 				if healthy && !nowHealthy {
 					step.logger.Info("transitioned-to-unhealthy")
 
-					fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
+					fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", stepErr.Error())
 					fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
 
-					return NewEmittableError(stepErr, healthcheckNowUnhealthy, outBuffer.String())
+					return NewEmittableError(stepErr, healthcheckNowUnhealthy, stepErr.Error())
 				} else if !healthy && nowHealthy {
 					step.logger.Info("transitioned-to-healthy")
 					healthy = true
@@ -125,14 +120,13 @@ func (step *monitorStep) Perform() error {
 
 				if startBy != nil && now.After(*startBy) {
 					if !healthy {
-						fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", outBuffer.String())
+						fmt.Fprintf(step.logStreamer.Stderr(), "%s\n", stepErr.Error())
 						fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
 
 						step.logger.Info("timed-out-before-healthy", lager.Data{
 							"step-error": stepErr.Error(),
 						})
 
-						// return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, outBuffer.String())
 						return NewEmittableError(stepErr, timeoutCrashReason, step.startTimeout, stepErr.Error())
 					}
 
