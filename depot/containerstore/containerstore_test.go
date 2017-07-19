@@ -3,6 +3,7 @@ package containerstore_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -1320,6 +1321,7 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Stop", func() {
 		var finishRun chan struct{}
+		var runReq *executor.RunRequest
 		BeforeEach(func() {
 			finishRun = make(chan struct{})
 			var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -1327,6 +1329,14 @@ var _ = Describe("Container Store", func() {
 				finishRun <- struct{}{}
 				return nil
 			}
+			runInfo := executor.RunInfo{
+				LogConfig: executor.LogConfig{
+					Guid:       containerGuid,
+					Index:      1,
+					SourceName: "test-source",
+				},
+			}
+			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
 			megatron.StepsRunnerReturns(testRunner, nil)
 		})
@@ -1335,7 +1345,7 @@ var _ = Describe("Container Store", func() {
 			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid})
+			err = containerStore.Initialize(logger, runReq)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = containerStore.Create(logger, containerGuid)
@@ -1357,6 +1367,17 @@ var _ = Describe("Container Store", func() {
 				container, err := containerStore.Get(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.RunResult.Stopped).To(BeTrue())
+			})
+
+			It("logs that the container is stopping", func() {
+				err := containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
+				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(appId).To(Equal(containerGuid))
+				Expect(sourceType).To(Equal("test-source"))
+				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(sourceInstance).To(Equal("1"))
 			})
 		})
 
@@ -1544,7 +1565,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("logs the container is detrroyed", func() {
+				It("logs the container is destroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(4))

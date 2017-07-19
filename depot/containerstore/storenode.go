@@ -410,8 +410,10 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	n.infoLock.Lock()
 	n.info.RunResult.Stopped = true
 	n.infoLock.Unlock()
-
 	if n.process != nil {
+		logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
+		fmt.Fprintf(logStreamer.Stdout(), fmt.Sprintf("Stopping instance %s\n", n.Info().Guid))
+
 		n.process.Signal(os.Interrupt)
 		logger.Debug("signaled-process")
 	} else {
