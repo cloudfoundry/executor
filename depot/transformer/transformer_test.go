@@ -973,9 +973,9 @@ var _ = Describe("Transformer", func() {
 
 				JustBeforeEach(func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
-					clock.Increment(1 * time.Second)
+					clock.WaitForWatcherAndIncrement(1 * time.Second)
 					Eventually(monitorProcess.WaitCallCount).Should(Equal(1))
-					clock.Increment(1 * time.Second)
+					clock.WaitForWatcherAndIncrement(1 * time.Second)
 					Eventually(monitorProcess.WaitCallCount).Should(Equal(2))
 				})
 
