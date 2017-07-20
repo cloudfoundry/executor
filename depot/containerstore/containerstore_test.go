@@ -1324,9 +1324,10 @@ var _ = Describe("Container Store", func() {
 		var runReq *executor.RunRequest
 		BeforeEach(func() {
 			finishRun = make(chan struct{})
+			ifritFinishRun := finishRun
 			var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 				<-signals
-				finishRun <- struct{}{}
+				ifritFinishRun <- struct{}{}
 				return nil
 			}
 			runInfo := executor.RunInfo{
