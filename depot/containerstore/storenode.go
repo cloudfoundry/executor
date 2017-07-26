@@ -407,12 +407,20 @@ func (n *storeNode) Stop(logger lager.Logger) error {
 }
 
 func (n *storeNode) stop(logger lager.Logger) error {
+	alreadyStopped := false
+
 	n.infoLock.Lock()
-	n.info.RunResult.Stopped = true
+	if n.info.RunResult.Stopped != true {
+		n.info.RunResult.Stopped = true
+		alreadyStopped = true
+	}
 	n.infoLock.Unlock()
 	if n.process != nil {
-		logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
-		fmt.Fprintf(logStreamer.Stdout(), fmt.Sprintf("Stopping instance %s\n", n.Info().Guid))
+		if !alreadyStopped {
+			logger.Info("POTATO>>>>>>>>>>>>>")
+			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
+			fmt.Fprintf(logStreamer.Stdout(), fmt.Sprintf("Stopping instance %s\n", n.Info().Guid))
+		}
 
 		n.process.Signal(os.Interrupt)
 		logger.Debug("signaled-process")
