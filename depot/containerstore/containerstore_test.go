@@ -1634,10 +1634,11 @@ var _ = Describe("Container Store", func() {
 			BeforeEach(func() {
 				credManagerRunnerSignaled = make(chan struct{})
 				finishRun = make(chan struct{})
+				finishRunIfrit := finishRun
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					<-finishRun
+					<-finishRunIfrit
 					return nil
 				}
 
@@ -1692,10 +1693,11 @@ var _ = Describe("Container Store", func() {
 			BeforeEach(func() {
 				credManagerRunnerSignaled = make(chan struct{})
 				finishRun = make(chan struct{})
+				finishRunIfrit := finishRun
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					<-finishRun
+					<-finishRunIfrit
 					return nil
 				}
 
