@@ -1624,6 +1624,64 @@ var _ = Describe("Container Store", func() {
 			})
 		})
 
+		Context("when there is a stopped process associated with the container", func() {
+			var (
+				finishRun                 chan struct{}
+				credManagerRunnerSignaled chan struct{}
+				destroyed                 chan struct{}
+			)
+
+			BeforeEach(func() {
+				credManagerRunnerSignaled = make(chan struct{})
+				finishRun = make(chan struct{})
+				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					close(ready)
+					<-signals
+					<-finishRun
+					return nil
+				}
+
+				signaled := credManagerRunnerSignaled
+				megatron.StepsRunnerReturns(testRunner, nil)
+				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					close(ready)
+					<-signals
+					close(signaled)
+					return nil
+				}))
+			})
+
+			JustBeforeEach(func() {
+				err := containerStore.Run(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(pollForRunning(containerGuid)).Should(BeTrue())
+				err = containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				destroyed = make(chan struct{})
+				go func(ch chan struct{}) {
+					containerStore.Destroy(logger, containerGuid)
+					close(ch)
+				}(destroyed)
+			})
+
+			It("cancels the process", func() {
+				Consistently(destroyed).ShouldNot(Receive())
+				close(finishRun)
+				Eventually(destroyed).Should(BeClosed())
+			})
+
+			It("logs that the container is stopping once", func() {
+				err := containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
+				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(appId).To(Equal(containerGuid))
+				Expect(sourceType).To(Equal("test-source"))
+				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(sourceInstance).To(Equal("1"))
+			})
+		})
+
 		Context("when there is a running process associated with the container", func() {
 			var (
 				finishRun                 chan struct{}
@@ -1671,6 +1729,17 @@ var _ = Describe("Container Store", func() {
 			It("signals the cred manager runner", func() {
 				close(finishRun)
 				Eventually(credManagerRunnerSignaled).Should(BeClosed())
+			})
+
+			It("logs that the container is stopping", func() {
+				err := containerStore.Stop(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
+				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(appId).To(Equal(containerGuid))
+				Expect(sourceType).To(Equal("test-source"))
+				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(sourceInstance).To(Equal("1"))
 			})
 		})
 	})
