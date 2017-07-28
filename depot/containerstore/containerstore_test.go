@@ -1734,9 +1734,9 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("logs that the container is stopping", func() {
-				err := containerStore.Stop(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
+				close(finishRun)
+				Eventually(destroyed).Should(BeClosed())
+				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(5))
 				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
 				Expect(appId).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
