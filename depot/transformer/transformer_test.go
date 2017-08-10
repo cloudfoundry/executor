@@ -981,12 +981,11 @@ var _ = Describe("Transformer", func() {
 						return 0, nil
 					}
 
-					monitorProcessRun := 0
+					monitorProcessRun := uint32(0)
 
 					gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 						if processSpec.Path == "/monitor/path" {
-							monitorProcessRun++
-							if monitorProcessRun%2 == 0 {
+							if atomic.AddUint32(&monitorProcessRun, 1)%2 == 0 {
 								monitorProcessChan1 <- &processIO
 								return monitorProcess1, nil
 							}
@@ -1019,7 +1018,7 @@ var _ = Describe("Transformer", func() {
 					Eventually(monitorProcess2.WaitCallCount).Should(Equal(2))
 				})
 
-				It("logs healthcheck error with the same source in a readable way", func() {
+				FIt("logs healthcheck error with the same source in a readable way", func() {
 					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
