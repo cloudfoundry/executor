@@ -944,39 +944,54 @@ var _ = Describe("Transformer", func() {
 
 			Context("logs", func() {
 				var (
-					exitStatusCh   chan int
-					monitorProcess *gardenfakes.FakeProcess
+					exitStatusCh    chan int
+					monitorProcess1 *gardenfakes.FakeProcess
+					monitorProcess2 *gardenfakes.FakeProcess
 				)
 
 				BeforeEach(func() {
-					monitorProcess = &gardenfakes.FakeProcess{}
+					monitorProcess1 = &gardenfakes.FakeProcess{}
+					monitorProcess2 = &gardenfakes.FakeProcess{}
 					actionProcess := &gardenfakes.FakeProcess{}
 					exitStatusCh = make(chan int)
 					actionProcess.WaitStub = func() (int, error) {
 						return <-exitStatusCh, nil
 					}
 
-					monitorProcessChan := make(chan *garden.ProcessIO, 4)
+					monitorProcessChan1 := make(chan *garden.ProcessIO, 4)
+					monitorProcessChan2 := make(chan *garden.ProcessIO, 4)
 
-					monitorProcess.WaitStub = func() (int, error) {
-						procIO := <-monitorProcessChan
+					monitorProcess1.WaitStub = func() (int, error) {
+						procIO := <-monitorProcessChan1
 
-						if monitorProcess.WaitCallCount() == 3 {
+						if monitorProcess1.WaitCallCount() == 2 {
 							procIO.Stdout.Write([]byte("healthcheck failed"))
 							return 1, nil
-						} else if monitorProcess.WaitCallCount() == 4 {
-							procIO.Stdout.Write([]byte("healthcheck failed"))
-							return 1, nil
-						} else {
-
-							return 0, nil
 						}
+						return 0, nil
 					}
+
+					monitorProcess2.WaitStub = func() (int, error) {
+						procIO := <-monitorProcessChan2
+
+						if monitorProcess2.WaitCallCount() == 2 {
+							procIO.Stdout.Write([]byte("healthcheck failed"))
+							return 1, nil
+						}
+						return 0, nil
+					}
+
+					monitorProcessRun := 0
 
 					gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 						if processSpec.Path == "/monitor/path" {
-							monitorProcessChan <- &processIO
-							return monitorProcess, nil
+							monitorProcessRun++
+							if monitorProcessRun%2 == 0 {
+								monitorProcessChan1 <- &processIO
+								return monitorProcess1, nil
+							}
+							monitorProcessChan2 <- &processIO
+							return monitorProcess2, nil
 						} else if processSpec.Path == "/action/path" {
 							return actionProcess, nil
 						}
@@ -990,10 +1005,18 @@ var _ = Describe("Transformer", func() {
 
 				JustBeforeEach(func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
-					clock.Increment(1 * time.Second)
-					Eventually(monitorProcess.WaitCallCount).Should(Equal(2))
-					clock.Increment(1 * time.Second)
-					Eventually(monitorProcess.WaitCallCount).Should(Equal(4))
+
+					By("starting the readiness check")
+					clock.WaitForWatcherAndIncrement(1 * time.Second)
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					Eventually(monitorProcess1.WaitCallCount).Should(Equal(1))
+					Eventually(monitorProcess2.WaitCallCount).Should(Equal(1))
+
+					By("starting the liveness check")
+					clock.WaitForWatcherAndIncrement(1 * time.Second)
+					Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+					Eventually(monitorProcess1.WaitCallCount).Should(Equal(2))
+					Eventually(monitorProcess2.WaitCallCount).Should(Equal(2))
 				})
 
 				It("logs healthcheck error with the same source in a readable way", func() {
