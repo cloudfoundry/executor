@@ -1018,7 +1018,7 @@ var _ = Describe("Transformer", func() {
 					Eventually(monitorProcess2.WaitCallCount).Should(Equal(2))
 				})
 
-				FIt("logs healthcheck error with the same source in a readable way", func() {
+				It("logs healthcheck error with the same source in a readable way", func() {
 					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
