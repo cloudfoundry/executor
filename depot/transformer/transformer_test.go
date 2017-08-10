@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -193,9 +194,14 @@ var _ = Describe("Transformer", func() {
 				monitorCh        chan int
 				readinessIO      chan garden.ProcessIO
 				livenessIO       chan garden.ProcessIO
+				processLock      sync.Mutex
 			)
 
 			BeforeEach(func() {
+				// get rid of race condition caused by read inside the RunStub
+				processLock.Lock()
+				defer processLock.Unlock()
+
 				readinessIO = make(chan garden.ProcessIO, 1)
 				livenessIO = make(chan garden.ProcessIO, 1)
 				// make the race detector happy
@@ -217,6 +223,10 @@ var _ = Describe("Transformer", func() {
 				healthcheckCallCount := int64(0)
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 					defer GinkgoRecover()
+					// get rid of race condition caused by write inside the BeforeEach
+
+					processLock.Lock()
+					defer processLock.Unlock()
 
 					switch spec.Path {
 					case "/action/path":
@@ -622,6 +632,10 @@ var _ = Describe("Transformer", func() {
 					)
 
 					BeforeEach(func() {
+						// get rid of race condition caused by read inside the RunStub
+						processLock.Lock()
+						defer processLock.Unlock()
+
 						otherReadinessCh = make(chan int)
 						otherReadinessProcess = makeProcess(otherReadinessCh)
 
@@ -631,6 +645,9 @@ var _ = Describe("Transformer", func() {
 						healthcheckCallCount := int64(0)
 						gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 							defer GinkgoRecover()
+							// get rid of race condition caused by write inside the BeforeEach
+							processLock.Lock()
+							defer processLock.Unlock()
 
 							switch spec.Path {
 							case "/action/path":
