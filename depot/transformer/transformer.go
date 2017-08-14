@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	healthCheckNofiles             uint64 = 1024
-	DefaultDeclarativeCheckTimeout        = int(1 * time.Second / time.Millisecond)
-	HealthLogSource                       = "HEALTH"
+	healthCheckNofiles                          uint64 = 1024
+	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond)
+	HealthLogSource                                    = "HEALTH"
 )
 
 var ErrNoCheck = errors.New("no check configured")
@@ -464,6 +464,7 @@ func (t *transformer) transformCheckDefinition(
 
 		if readiness {
 			args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
+			args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
 		} else {
 			args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
 		}
@@ -491,7 +492,7 @@ func (t *transformer) transformCheckDefinition(
 		} else if check.HttpCheck != nil {
 			timeout := int(check.HttpCheck.RequestTimeoutMs)
 			if timeout == 0 {
-				timeout = DefaultDeclarativeCheckTimeout
+				timeout = DefaultDeclarativeHealthcheckRequestTimeout
 			}
 			path := check.HttpCheck.Path
 			if path == "" {
@@ -502,7 +503,7 @@ func (t *transformer) transformCheckDefinition(
 		} else if check.TcpCheck != nil {
 			timeout := int(check.TcpCheck.ConnectTimeoutMs)
 			if timeout == 0 {
-				timeout = DefaultDeclarativeCheckTimeout
+				timeout = DefaultDeclarativeHealthcheckRequestTimeout
 			}
 
 			readinessChecks = append(readinessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval, readinessLogger))

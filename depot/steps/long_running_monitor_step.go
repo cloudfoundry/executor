@@ -59,27 +59,15 @@ func (step *longRunningMonitorStep) Perform() error {
 		errCh <- step.readinessCheck.Perform()
 	}()
 
-	var timerChan <-chan time.Time
-	if step.startTimeout > 0 {
-		timer := step.clock.NewTimer(step.startTimeout)
-		timerChan = timer.C()
-	} else {
-		// do nothing, receiving from a nil channel should block forever
-	}
-
 	select {
 	case err := <-errCh:
 		if err != nil {
-			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, err.Error())
+			errorString := err.Error()
+			step.logger.Info("timed-out-before-healthy")
+			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", errorString)
+			fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
+			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, errorString)
 		}
-	case <-timerChan:
-		step.readinessCheck.Cancel()
-		err := <-errCh
-		errorString := err.Error()
-		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", errorString)
-		fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
-		step.logger.Info("timed-out-before-healthy")
-		return NewEmittableError(err, timeoutCrashReason, step.startTimeout, errorString)
 	case <-step.cancelled:
 		step.readinessCheck.Cancel()
 		return <-errCh

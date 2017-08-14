@@ -125,6 +125,24 @@ var _ = Describe("LongRunningMonitorStep", func() {
 				Expect(ok).To(BeTrue())
 				Expect(err.WrappedError()).To(MatchError(ContainSubstring("booom!")))
 			})
+
+			It("logs the step", func() {
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+					"test.monitor-step.timed-out-before-healthy",
+				}))
+			})
+
+			It("emits the last healthcheck process response to the log stream", func() {
+				Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(
+					gbytes.Say("booom!\n"),
+				)
+			})
+
+			It("emits a log message explaining the timeout", func() {
+				Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
+					fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
+				))
+			})
 		})
 
 		Context("when there is no start timeout", func() {
@@ -209,50 +227,6 @@ var _ = Describe("LongRunningMonitorStep", func() {
 					Expect(ok).To(BeTrue())
 					Expect(err.WrappedError()).To(Equal(disaster))
 				})
-			})
-		})
-
-		Context("and the start timeout is exceeded", func() {
-			JustBeforeEach(func() {
-				clock.WaitForWatcherAndIncrement(startTimeout)
-			})
-
-			It("cancels the running step", func() {
-				Eventually(readinessCheck.CancelCallCount).Should(Equal(1))
-			})
-
-			Context("when the running step exits", func() {
-				JustBeforeEach(func() {
-					Eventually(readinessCheck.CancelCallCount).Should(Equal(1))
-					readinessResults <- errors.New("interrupted")
-				})
-
-				It("completes with failure", func() {
-					var expectedError interface{}
-					Eventually(performErr).Should(Receive(&expectedError))
-					err, ok := expectedError.(*steps.EmittableError)
-					Expect(ok).To(BeTrue())
-					Expect(err.WrappedError()).To(MatchError(ContainSubstring("interrupted")))
-				})
-
-				It("logs the step", func() {
-					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-						"test.monitor-step.timed-out-before-healthy",
-					}))
-				})
-
-				It("emits the last healthcheck process response to the log stream", func() {
-					Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(
-						gbytes.Say("interrupted\n"),
-					)
-				})
-
-				It("emits a log message explaining the timeout", func() {
-					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
-						fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
-					))
-				})
-
 			})
 		})
 	})

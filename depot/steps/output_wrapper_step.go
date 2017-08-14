@@ -3,6 +3,7 @@ package steps
 import (
 	"io"
 	"io/ioutil"
+	"strings"
 )
 
 type outputWrapperStep struct {
@@ -30,7 +31,7 @@ func (step *outputWrapperStep) Perform() error {
 
 		readerErr := string(bytes)
 		if readerErr != "" {
-			return NewEmittableError(nil, readerErr)
+			return NewEmittableError(nil, strings.TrimSpace(readerErr))
 		} else {
 			return substepErr
 		}

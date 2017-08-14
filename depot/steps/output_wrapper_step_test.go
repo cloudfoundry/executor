@@ -31,14 +31,33 @@ var _ = Describe("OutputWrapperStep", func() {
 		})
 
 		Context("when the substep fails", func() {
+			var (
+				errStr string
+			)
+
 			BeforeEach(func() {
 				subStep.PerformReturns(errors.New("BOOOM!"))
-				buffer.WriteString("error reason")
+				errStr = "error reason"
+			})
+
+			JustBeforeEach(func() {
+				buffer.WriteString(errStr)
 			})
 
 			It("wraps the buffer content in an emittable error", func() {
 				err := step.Perform()
 				Expect(err).To(MatchError("error reason"))
+			})
+
+			Context("when the output has whitespaces", func() {
+				BeforeEach(func() {
+					errStr = "\r\nerror reason\r\n"
+				})
+
+				It("trims the extra whitespace", func() {
+					err := step.Perform()
+					Expect(err).To(MatchError("error reason"))
+				})
 			})
 		})
 

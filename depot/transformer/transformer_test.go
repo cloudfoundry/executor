@@ -351,6 +351,32 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
+					Context("and the starttimeout is set to 0", func() {
+						BeforeEach(func() {
+							container.StartTimeoutMs = 0
+						})
+
+						It("runs the healthcheck with readiness timeout set to 0", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+							paths := []string{}
+							args := [][]string{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								paths = append(paths, spec.Path)
+								args = append(args, spec.Args)
+							}
+
+							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(args).To(ContainElement([]string{
+								"-port=5432",
+								"-timeout=100ms",
+								"-uri=/some/path",
+								"-readiness-interval=1ms",
+								"-readiness-timeout=0s",
+							}))
+						})
+					})
+
 					Context("and optional fields are missing", func() {
 						BeforeEach(func() {
 							container.CheckDefinition = &models.CheckDefinition{
@@ -379,7 +405,8 @@ var _ = Describe("Transformer", func() {
 								"-port=5432",
 								"-timeout=1000ms",
 								"-uri=/",
-								"-readiness-interval=1ms", // 100ms
+								"-readiness-interval=1ms",
+								"-readiness-timeout=1s",
 							}))
 						})
 					})
@@ -402,13 +429,14 @@ var _ = Describe("Transformer", func() {
 							"-timeout=100ms",
 							"-uri=/some/path",
 							"-readiness-interval=1ms", // 1ms
+							"-readiness-timeout=1s",
 						}))
 						Expect(users).To(ContainElement("root"))
 					})
 
 					Context("when the readiness check times out", func() {
 						JustBeforeEach(func() {
-							By("waiting the action and readiness check processes to start")
+							By("waiting for the action and readiness check processes to start")
 							var io garden.ProcessIO
 							Eventually(readinessIO).Should(Receive(&io))
 							_, err := io.Stdout.Write([]byte("readiness check failed"))
@@ -416,9 +444,8 @@ var _ = Describe("Transformer", func() {
 
 							By("timing out the readiness check")
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-							clock.WaitForWatcherAndIncrement(1 * time.Second)
 
-							Eventually(readinessProcess.SignalCallCount).Should(Equal(1))
+							Consistently(readinessProcess.SignalCallCount).Should(Equal(0))
 							readinessCh <- 1
 							Eventually(actionProcess.SignalCallCount).Should(Equal(1))
 							actionCh <- 2
@@ -432,7 +459,7 @@ var _ = Describe("Transformer", func() {
 							Expect([]string{msg0, msg1}).To(ConsistOf("Starting health monitoring of container", "Exit status 2"))
 						})
 
-						It("logs the readines check output on stderr", func() {
+						It("logs the readiness check output on stderr", func() {
 							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
 							logLines := map[string]string{}
 							_, msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
@@ -548,7 +575,8 @@ var _ = Describe("Transformer", func() {
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=1000ms",
-								"-readiness-interval=1ms", // 100ms
+								"-readiness-interval=1ms",
+								"-readiness-timeout=1s",
 							}))
 						})
 					})
@@ -567,7 +595,8 @@ var _ = Describe("Transformer", func() {
 						Expect(args).To(ContainElement([]string{
 							"-port=5432",
 							"-timeout=100ms",
-							"-readiness-interval=1ms", // 1ms
+							"-readiness-interval=1ms",
+							"-readiness-timeout=1s",
 						}))
 					})
 				})
@@ -598,9 +627,6 @@ var _ = Describe("Transformer", func() {
 						Eventually(readinessIO).Should(Receive(&io))
 						io.Stdout.Write([]byte("failed"))
 
-						clock.WaitForWatcherAndIncrement(time.Second)
-
-						Eventually(readinessProcess.SignalCallCount).Should(Equal(1))
 						readinessCh <- 1
 					})
 
@@ -711,13 +737,15 @@ var _ = Describe("Transformer", func() {
 						Expect(args).To(ContainElement([]string{
 							"-port=2222",
 							"-timeout=100ms",
-							"-readiness-interval=1ms", // 1ms
+							"-readiness-interval=1ms",
+							"-readiness-timeout=1s",
 						}))
 						Expect(args).To(ContainElement([]string{
 							"-port=8080",
 							"-timeout=100ms",
 							"-uri=/",
-							"-readiness-interval=1ms", // 1ms
+							"-readiness-interval=1ms",
+							"-readiness-timeout=1s",
 						}))
 					})
 
