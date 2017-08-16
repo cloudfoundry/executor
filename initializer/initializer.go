@@ -91,6 +91,8 @@ type ExecutorConfig struct {
 	DiskMB                             string                `json:"disk_mb,omitempty"`
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
+	EnableEnvoy                        bool                  `json:"enable_envoy",omitempty`
+	EnvoyPath                          string                `json:"envoy_path,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
@@ -237,6 +239,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		postSetupHook,
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
+		config.EnableEnvoy,
 	)
 
 	hub := event.NewHub()
@@ -276,6 +279,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.TrustedSystemCertificatesPath,
 		metronClient,
 		config.DeclarativeHealthcheckPath,
+		config.EnvoyPath,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
@@ -464,6 +468,7 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
+	useEnvoy bool,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -484,6 +489,7 @@ func initializeTransformer(
 		postSetupHook,
 		postSetupUser,
 		useDeclarativeHealthCheck,
+		useEnvoy,
 	)
 }
 

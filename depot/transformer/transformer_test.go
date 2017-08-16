@@ -69,6 +69,7 @@ var _ = Describe("Transformer", func() {
 				[]string{"/post-setup/path", "-x", "argument"},
 				"jim",
 				false,
+				false,
 			)
 
 			container = executor.Container{
@@ -180,6 +181,119 @@ var _ = Describe("Transformer", func() {
 			}
 			return process
 		}
+
+		Describe("envoy", func() {
+			var (
+				container   executor.Container
+				processLock sync.Mutex
+				process     ifrit.Process
+				actionCh    chan int
+				envoyCh     chan int
+			)
+
+			BeforeEach(func() {
+				optimusPrime = transformer.NewTransformer(
+					nil, nil, nil, nil, nil, nil,
+					os.TempDir(),
+					false,
+					healthyMonitoringInterval,
+					unhealthyMonitoringInterval,
+					healthCheckWorkPool,
+					clock,
+					[]string{"/post-setup/path", "-x", "argument"},
+					"jim",
+					false,
+					true,
+				)
+
+				processLock.Lock()
+				defer processLock.Unlock()
+
+				actionCh = make(chan int, 1)
+				actionProcess := makeProcess(actionCh)
+
+				envoyCh = make(chan int)
+				envoyProcess := makeProcess(envoyCh)
+
+				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+					defer GinkgoRecover()
+					// get rid of race condition caused by write inside the BeforeEach
+
+					processLock.Lock()
+					defer processLock.Unlock()
+
+					switch spec.Path {
+					case "/action/path":
+						return actionProcess, nil
+					case "/etc/cf-assets/envoy/envoy":
+						return envoyProcess, nil
+					}
+
+					err = errors.New("")
+					Fail("unexpected executable path: " + spec.Path)
+					return
+				}
+
+				container = executor.Container{
+					RunInfo: executor.RunInfo{
+						Action: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/action/path",
+							},
+						},
+						Monitor: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/monitor/path",
+							},
+						},
+						CheckDefinition: &models.CheckDefinition{
+							Checks: []*models.Check{
+								&models.Check{
+									HttpCheck: &models.HTTPCheck{
+										Port:             5432,
+										RequestTimeoutMs: 100,
+										Path:             "/some/path",
+									},
+								},
+							},
+						},
+					},
+				}
+			})
+
+			JustBeforeEach(func() {
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				Expect(err).NotTo(HaveOccurred())
+
+				process = ifrit.Background(runner)
+			})
+
+			AfterEach(func() {
+				close(actionCh)
+				close(envoyCh)
+				ginkgomon.Interrupt(process)
+			})
+
+			It("runs the envoy", func() {
+				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				paths := []string{}
+				args := [][]string{}
+				for i := 0; i < gardenContainer.RunCallCount(); i++ {
+					spec, _ := gardenContainer.RunArgsForCall(i)
+					paths = append(paths, spec.Path)
+					args = append(args, spec.Args)
+				}
+
+				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/envoy"))
+				// Expect(args).To(ContainElement([]string{
+				// 	"-port=5432",
+				// 	"-timeout=100ms",
+				// 	"-uri=/some/path",
+				// 	"-readiness-interval=1ms",
+				// 	"-readiness-timeout=0s",
+				// }))
+			})
+		})
 
 		Describe("declarative healthchecks", func() {
 			var (
@@ -304,6 +418,7 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
 						true,
+						false,
 					)
 
 					container.StartTimeoutMs = 1000
@@ -822,6 +937,7 @@ var _ = Describe("Transformer", func() {
 						clock,
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
+						false,
 						false,
 					)
 				})

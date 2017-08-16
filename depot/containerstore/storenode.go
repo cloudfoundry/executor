@@ -59,11 +59,13 @@ type storeNode struct {
 	credManagerProcess         ifrit.Process
 	config                     *ContainerConfig
 	declarativeHealthcheckPath string
+	envoyPath                  string
 }
 
 func newStoreNode(
 	config *ContainerConfig,
 	declarativeHealthcheckPath string,
+	envoyPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -89,6 +91,7 @@ func newStoreNode(
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
+		envoyPath:                   envoyPath,
 	}
 }
 
@@ -241,6 +244,12 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		Origin:  garden.BindMountOriginHost,
 		SrcPath: n.declarativeHealthcheckPath,
 		DstPath: "/etc/cf-assets/healthcheck",
+	})
+
+	mounts = append(mounts, garden.BindMount{
+		Origin:  garden.BindMountOriginHost,
+		SrcPath: n.envoyPath,
+		DstPath: "/etc/cf-assets/envoy",
 	})
 
 	netInRules := make([]garden.NetIn, len(info.Ports))

@@ -24,6 +24,7 @@ import (
 
 const (
 	healthCheckNofiles                          uint64 = 1024
+	envoyNofiles                                uint64 = 1024
 	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond)
 	HealthLogSource                                    = "HEALTH"
 )
@@ -49,6 +50,7 @@ type transformer struct {
 	clock                clock.Clock
 
 	useDeclarativeHealthCheck bool
+	useEnvoy                  bool
 
 	postSetupHook []string
 	postSetupUser string
@@ -74,6 +76,7 @@ func NewTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
+	useEnvoy bool,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -91,6 +94,7 @@ func NewTransformer(
 		postSetupHook:               postSetupHook,
 		postSetupUser:               postSetupUser,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
+		useEnvoy:                    useEnvoy,
 	}
 }
 
@@ -321,7 +325,9 @@ func (t *transformer) StepsRunner(
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor steps.Step
+	var setup, action, postSetup, monitor, envoyStep, longLivedAction steps.Step
+	var substeps []steps.Step
+
 	if container.Setup != nil {
 		setup = t.StepFor(
 			logStreamer,
@@ -375,10 +381,12 @@ func (t *transformer) StepsRunner(
 		logger.Session("action"),
 	)
 
+	substeps = append(substeps, action)
 	hasStartedRunning := make(chan struct{}, 1)
 
 	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
 		monitor = t.transformCheckDefinition(logger, &container, gardenContainer, hasStartedRunning, logStreamer)
+		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
@@ -404,30 +412,42 @@ func (t *transformer) StepsRunner(
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
 		)
+		substeps = append(substeps, monitor)
 	}
 
-	var longLivedAction steps.Step
-	if monitor != nil {
-		longLivedAction = steps.NewCodependent([]steps.Step{action, monitor}, false)
+	if t.useEnvoy {
+		envoyStep = t.tranformEnvoyStep(
+			gardenContainer,
+			container,
+			logger,
+			logStreamer,
+		)
+		substeps = append(substeps, envoyStep)
+	}
+
+	if len(substeps) > 1 {
+		longLivedAction = steps.NewCodependent(substeps, false)
 	} else {
 		longLivedAction = action
+	}
 
+	if monitor == nil {
 		// this container isn't monitored, so we mark it running right away
 		hasStartedRunning <- struct{}{}
 	}
 
-	var step steps.Step
+	var cumulativeStep steps.Step
 	if setup == nil {
-		step = longLivedAction
+		cumulativeStep = longLivedAction
 	} else {
 		if postSetup == nil {
-			step = steps.NewSerial([]steps.Step{setup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]steps.Step{setup, longLivedAction})
 		} else {
-			step = steps.NewSerial([]steps.Step{setup, postSetup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]steps.Step{setup, postSetup, longLivedAction})
 		}
 	}
 
-	return newStepRunner(step, hasStartedRunning), nil
+	return newStepRunner(cumulativeStep, hasStartedRunning), nil
 }
 
 func (t *transformer) transformCheckDefinition(
@@ -523,5 +543,37 @@ func (t *transformer) transformCheckDefinition(
 		logstreamer,
 		logstreamer.WithSource(sourceName),
 		time.Duration(container.StartTimeoutMs)*time.Millisecond,
+	)
+}
+
+func (t *transformer) tranformEnvoyStep(
+	container garden.Container,
+	execContainer executor.Container,
+	logger lager.Logger,
+	streamer log_streamer.LogStreamer,
+) steps.Step {
+
+	args := []string{}
+	nofiles := envoyNofiles
+
+	runAction := models.RunAction{
+		User:           "root",
+		LogSource:      "PROXY",
+		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		Path:           "/etc/cf-assets/envoy/envoy",
+		Args:           args,
+	}
+
+	return steps.NewRun(
+		container,
+		runAction,
+		streamer.WithSource("PROXY"),
+		logger,
+		execContainer.ExternalIP,
+		execContainer.InternalIP,
+		execContainer.Ports,
+		t.exportNetworkEnvVars, //exportNetworkEnvVars bool,
+		t.clock,
+		true, //suppressExitStatusCode bool,
 	)
 }
