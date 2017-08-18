@@ -257,6 +257,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	driverConfig.CsiPaths = []string{"/var/vcap/data/csiplugins"}
+	driverConfig.CsiMountRootDir = "/var/vcap/data/csimountroot"
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
