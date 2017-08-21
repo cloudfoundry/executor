@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
@@ -34,7 +35,6 @@ import (
 	"code.cloudfoundry.org/garden"
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/systemcerts"
 	"code.cloudfoundry.org/volman/vollocal"
@@ -179,7 +179,7 @@ var DefaultConfiguration = ExecutorConfig{
 	CsiMountRootDir:                    "/var/vcap/data/csimountroot",
 }
 
-func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggregator_v2.IngressClient, clock clock.Clock) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient, clock clock.Clock) (executor.Client, grouper.Members, error) {
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
@@ -362,7 +362,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 // Until we get a successful response from garden,
 // periodically emit metrics saying how long we've been trying
 // while retrying the connection indefinitely.
-func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, metronClient loggregator_v2.IngressClient, clock clock.Clock) error {
+func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, metronClient loggingclient.IngressClient, clock clock.Clock) error {
 	pingStart := clock.Now()
 	logger = logger.Session("wait-for-garden", lager.Data{"initialTime:": pingStart})
 	pingRequest := clock.NewTimer(0)
@@ -560,7 +560,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	return tlsConfig, nil
 }
 
-func CredManagerFromConfig(logger lager.Logger, metronClient loggregator_v2.IngressClient, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
+func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
 		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)

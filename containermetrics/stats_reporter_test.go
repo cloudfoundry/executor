@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
-	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"

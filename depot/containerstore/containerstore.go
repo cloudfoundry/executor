@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
@@ -69,7 +69,7 @@ type containerStore struct {
 	containers        *nodeMap
 	eventEmitter      event.Hub
 	clock             clock.Clock
-	metronClient      loggregator_v2.IngressClient
+	metronClient      loggingclient.IngressClient
 
 	declarativeHealthcheckPath string
 
@@ -91,7 +91,7 @@ func New(
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	trustedSystemCertificatesPath string,
-	metronClient loggregator_v2.IngressClient,
+	metronClient loggingclient.IngressClient,
 	declarativeHealthcheckPath string,
 	useContainerProxy bool,
 	containerProxyPath string,

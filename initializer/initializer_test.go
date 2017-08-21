@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
@@ -20,7 +21,6 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
-	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
