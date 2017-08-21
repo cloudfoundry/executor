@@ -127,6 +127,8 @@ type ExecutorConfig struct {
 	TrustedSystemCertificatesPath      string                `json:"trusted_system_certificates_path"`
 	UnhealthyMonitoringInterval        durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	VolmanDriverPaths                  string                `json:"volman_driver_paths"`
+	CsiPaths                           []string              `json:"csi_paths"`
+	CsiMountRootDir                    string                `json:"csi_mount_root_dir"`
 }
 
 const (
@@ -170,6 +172,8 @@ var DefaultConfiguration = ExecutorConfig{
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
+	CsiPaths:                           []string{"/var/vcap/data/csiplugins"},
+	CsiMountRootDir:                    "/var/vcap/data/csimountroot",
 }
 
 func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggregator_v2.IngressClient, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -256,8 +260,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
-	driverConfig.CsiPaths = []string{"/var/vcap/data/csiplugins"}
-	driverConfig.CsiMountRootDir = "/var/vcap/data/csimountroot"
+	driverConfig.CsiPaths = config.CsiPaths
+	driverConfig.CsiMountRootDir = config.CsiMountRootDir
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
