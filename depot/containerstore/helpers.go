@@ -6,16 +6,16 @@ import (
 	"strings"
 
 	"code.cloudfoundry.org/bbs/models"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
 	"code.cloudfoundry.org/lager"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
 
-func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggregator_v2.IngressClient) log_streamer.LogStreamer {
+func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient) log_streamer.LogStreamer {
 	return log_streamer.New(
 		conf.Guid,
 		conf.SourceName,

@@ -4,7 +4,7 @@ import (
 	"io"
 	"strconv"
 
-	loggregator_v2 "code.cloudfoundry.org/go-loggregator/compatibility"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 
 	"github.com/cloudfoundry/sonde-go/events"
 )
@@ -31,7 +31,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index int, metronClient loggregator_v2.IngressClient) LogStreamer {
+func New(guid string, sourceName string, index int, metronClient loggingclient.IngressClient) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}

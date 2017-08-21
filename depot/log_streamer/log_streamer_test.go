@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
-	mfakes "code.cloudfoundry.org/go-loggregator/testhelpers/fakes/v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
