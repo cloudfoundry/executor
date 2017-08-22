@@ -138,7 +138,7 @@ var _ = Describe("CredManager", func() {
 
 			It("returns an error", func() {
 				_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "somefailure"})
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
