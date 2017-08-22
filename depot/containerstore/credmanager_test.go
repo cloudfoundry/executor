@@ -12,7 +12,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -134,16 +133,12 @@ var _ = Describe("CredManager", func() {
 
 		Context("when making directory fails", func() {
 			BeforeEach(func() {
-				if runtime.GOOS == "windows" {
-					Skip("Chmod does not work on windows")
-				}
-
-				os.Chmod(tmpdir, 0400)
+				tmpdir = filepath.Join(tmpdir, "creds")
 			})
 
 			It("returns an error", func() {
 				_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "somefailure"})
-				Expect(err).To(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
