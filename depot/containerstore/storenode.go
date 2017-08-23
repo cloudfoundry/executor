@@ -62,6 +62,7 @@ type storeNode struct {
 	declarativeHealthcheckPath string
 	useContainerProxy          bool
 	containerProxyPath         string
+	containerProxyConfigPath   string
 }
 
 func newStoreNode(
@@ -69,6 +70,7 @@ func newStoreNode(
 	declarativeHealthcheckPath string,
 	useContainerProxy bool,
 	containerProxyPath string,
+	containerProxyConfigPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -96,6 +98,7 @@ func newStoreNode(
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 		useContainerProxy:           useContainerProxy,
 		containerProxyPath:          containerProxyPath,
+		containerProxyConfigPath:    containerProxyConfigPath,
 	}
 }
 
@@ -260,9 +263,23 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			DstPath: "/etc/cf-assets/envoy",
 		})
 
+		proxyConfigDir := filepath.Join(n.containerProxyConfigPath, info.Guid)
+		err := os.MkdirAll(proxyConfigDir, 0755)
+		if err != nil {
+			return nil, err
+		}
+
+		logger.Info("adding-container-proxy-config-bindmounts")
+		mounts = append(mounts, garden.BindMount{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: proxyConfigDir,
+			DstPath: "/etc/cf-assets/envoy_config",
+		})
+
+		info.ProxyPortMapping = proxyPortMapping
+
 		proxyConfig := GenerateProxyConfig(logger, proxyPortMapping)
-		proxyConfigFilename := filepath.Join(n.containerProxyPath, fmt.Sprintf("%s-envoy.json", info.Guid))
-		println(proxyConfigFilename)
+		proxyConfigFilename := filepath.Join(proxyConfigDir, "envoy.json")
 		WriteProxyConfig(proxyConfig, proxyConfigFilename)
 	}
 
@@ -517,6 +534,11 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 		}
 	}
 
+	defer func() {
+		proxyConfigDir := filepath.Join(n.containerProxyConfigPath, n.info.Guid)
+		os.RemoveAll(proxyConfigDir)
+	}()
+
 	logger.Info("destroyed-container-in-garden", lager.Data{
 		"destroy-took": destroyDuration.String(),
 	})
@@ -615,10 +637,10 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
 }
 
-func populateContainerProxyPorts(container *executor.Container) []ProxyPortMapping {
+func populateContainerProxyPorts(container *executor.Container) []executor.ProxyPortMapping {
 	const StartProxyPort = 61001
 	const EndProxyPort = 65534
-	proxyPortMapping := []ProxyPortMapping{}
+	proxyPortMapping := []executor.ProxyPortMapping{}
 
 	existingPorts := make(map[uint16]interface{})
 	containerPorts := make([]uint16, len(container.RunInfo.Ports))
@@ -638,7 +660,7 @@ func populateContainerProxyPorts(container *executor.Container) []ProxyPortMappi
 		}
 
 		container.RunInfo.Ports = append(container.RunInfo.Ports, executor.PortMapping{ContainerPort: port})
-		proxyPortMapping = append(proxyPortMapping, ProxyPortMapping{
+		proxyPortMapping = append(proxyPortMapping, executor.ProxyPortMapping{
 			AppPort:   containerPorts[portCount],
 			ProxyPort: port,
 		})

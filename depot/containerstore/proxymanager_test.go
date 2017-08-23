@@ -3,6 +3,7 @@ package containerstore_test
 import (
 	"encoding/json"
 
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -13,7 +14,7 @@ import (
 var _ = Describe("ProxyManager", func() {
 
 	var (
-		portMapping []containerstore.ProxyPortMapping
+		portMapping []executor.ProxyPortMapping
 		logger      lager.Logger
 	)
 
@@ -32,7 +33,7 @@ var _ = Describe("ProxyManager", func() {
 												"address": "tcp://0.0.0.0:8443",
 												"filters": [{
 														"type": "read",
-														"name": "0-proxy",
+														"name": "tcp_proxy",
 														"config": {
 																"stat_prefix": "ingress_tcp",
 																"route_config": {
@@ -64,8 +65,8 @@ var _ = Describe("ProxyManager", func() {
 				}`
 
 			BeforeEach(func() {
-				portMapping = []containerstore.ProxyPortMapping{
-					containerstore.ProxyPortMapping{
+				portMapping = []executor.ProxyPortMapping{
+					executor.ProxyPortMapping{
 						AppPort:   8080,
 						ProxyPort: 8443,
 					},
@@ -88,7 +89,7 @@ var _ = Describe("ProxyManager", func() {
 											"address": "tcp://0.0.0.0:8443",
 											"filters": [{
 													"type": "read",
-													"name": "0-proxy",
+													"name": "tcp_proxy",
 													"config": {
 															"stat_prefix": "ingress_tcp",
 															"route_config": {
@@ -103,7 +104,7 @@ var _ = Describe("ProxyManager", func() {
 											"address": "tcp://0.0.0.0:9000",
 											"filters": [{
 													"type": "read",
-													"name": "1-proxy",
+													"name": "tcp_proxy",
 													"config": {
 															"stat_prefix": "ingress_tcp",
 															"route_config": {
@@ -144,12 +145,12 @@ var _ = Describe("ProxyManager", func() {
 			}`
 
 			BeforeEach(func() {
-				portMapping = []containerstore.ProxyPortMapping{
-					containerstore.ProxyPortMapping{
+				portMapping = []executor.ProxyPortMapping{
+					executor.ProxyPortMapping{
 						AppPort:   8080,
 						ProxyPort: 8443,
 					},
-					containerstore.ProxyPortMapping{
+					executor.ProxyPortMapping{
 						AppPort:   2222,
 						ProxyPort: 9000,
 					},

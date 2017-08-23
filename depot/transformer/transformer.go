@@ -34,7 +34,7 @@ var ErrNoCheck = errors.New("no check configured")
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, []executor.ProxyPortMapping, bool, bool, lager.Logger) steps.Step
 	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
@@ -105,6 +105,7 @@ func (t *transformer) StepFor(
 	externalIP string,
 	internalIP string,
 	ports []executor.PortMapping,
+	proxyPorts []executor.ProxyPortMapping,
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
@@ -120,6 +121,7 @@ func (t *transformer) StepFor(
 			externalIP,
 			internalIP,
 			ports,
+			proxyPorts,
 			t.exportNetworkEnvVars,
 			t.clock,
 			suppressExitStatusCode,
@@ -156,6 +158,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -176,6 +179,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -193,6 +197,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -214,6 +219,7 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
+					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -228,6 +234,7 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
+					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -251,6 +258,7 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
+					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -265,6 +273,7 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
+					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -285,6 +294,7 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
+				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -336,6 +346,7 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
+			container.ProxyPortMapping,
 			false,
 			false,
 			logger.Session("setup"),
@@ -357,6 +368,7 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
+			container.ProxyPortMapping,
 			t.exportNetworkEnvVars,
 			t.clock,
 			suppressExitStatusCode,
@@ -376,6 +388,7 @@ func (t *transformer) StepsRunner(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
+		container.ProxyPortMapping,
 		false,
 		false,
 		logger.Session("action"),
@@ -398,6 +411,7 @@ func (t *transformer) StepsRunner(
 					container.ExternalIP,
 					container.InternalIP,
 					container.Ports,
+					container.ProxyPortMapping,
 					true,
 					true,
 					logger.Session("monitor-run"),
@@ -422,8 +436,7 @@ func (t *transformer) StepsRunner(
 			logger,
 			logStreamer,
 		)
-		println(containerProxyStep)
-		// substeps = append(substeps, containerProxyStep)
+		substeps = append(substeps, containerProxyStep)
 	}
 
 	if len(substeps) > 1 {
@@ -500,7 +513,7 @@ func (t *transformer) transformCheckDefinition(
 
 		buffer := bytes.NewBuffer(nil)
 		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true)
+		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, container.ProxyPortMapping, t.exportNetworkEnvVars, t.clock, true)
 		return steps.NewOutputWrapper(runStep, buffer)
 	}
 
@@ -554,7 +567,12 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
-	args := []string{}
+	args := []string{
+		"-c",
+		"/etc/cf-assets/envoy_config/envoy.json",
+		"--log-level",
+		"critical",
+	}
 	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
@@ -573,8 +591,9 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,
-		t.exportNetworkEnvVars, //exportNetworkEnvVars bool,
+		execContainer.ProxyPortMapping,
+		t.exportNetworkEnvVars,
 		t.clock,
-		true, //suppressExitStatusCode bool,
+		true,
 	)
 }

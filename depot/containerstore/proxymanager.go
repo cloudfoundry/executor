@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -59,11 +60,6 @@ type ProxyConfig struct {
 	ClusterManager ClusterManager `json:"cluster_manager"`
 }
 
-type ProxyPortMapping struct {
-	AppPort   uint16
-	ProxyPort uint16
-}
-
 const (
 	TimeOut    = 250
 	Static     = "static"
@@ -71,16 +67,17 @@ const (
 
 	Read       = "read"
 	IngressTCP = "ingress_tcp"
+	TcpProxy   = "tcp_proxy"
 
-	AdminAccessLog = "/tmp/admin_access.log"
+	AdminAccessLog = "/dev/null"
 )
 
-func GenerateProxyConfig(logger lager.Logger, portMapping []ProxyPortMapping) ProxyConfig {
+func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMapping) ProxyConfig {
 	listeners := []Listener{}
 	clusters := []Cluster{}
 	for index, portMap := range portMapping {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-		listenerName := fmt.Sprintf("%d-proxy", index)
+		listenerName := TcpProxy
 		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ProxyPort)
 		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
 		clusters = append(clusters, Cluster{
@@ -125,5 +122,6 @@ func WriteProxyConfig(proxyConfig ProxyConfig, path string) error {
 	if err != nil {
 		return err
 	}
+
 	return ioutil.WriteFile(path, data, 0666)
 }

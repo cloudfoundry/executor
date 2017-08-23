@@ -73,8 +73,9 @@ type containerStore struct {
 
 	declarativeHealthcheckPath string
 
-	containerProxyPath string
-	useContainerProxy  bool
+	containerProxyPath       string
+	containerProxyConfigPath string
+	useContainerProxy        bool
 
 	trustedSystemCertificatesPath string
 }
@@ -94,6 +95,7 @@ func New(
 	declarativeHealthcheckPath string,
 	useContainerProxy bool,
 	containerProxyPath string,
+	containerProxyConfigPath string,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -110,6 +112,7 @@ func New(
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 		useContainerProxy:             useContainerProxy,
 		containerProxyPath:            containerProxyPath,
+		containerProxyConfigPath:      containerProxyConfigPath,
 	}
 }
 
@@ -129,6 +132,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.declarativeHealthcheckPath,
 			cs.useContainerProxy,
 			cs.containerProxyPath,
+			cs.containerProxyConfigPath,
 			container,
 			cs.gardenClient,
 			cs.dependencyManager,

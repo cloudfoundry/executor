@@ -93,6 +93,7 @@ type ExecutorConfig struct {
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
+	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
@@ -281,6 +282,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.DeclarativeHealthcheckPath,
 		config.EnableContainerProxy,
 		config.ContainerProxyPath,
+		config.ContainerProxyConfigPath,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{

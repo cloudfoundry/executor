@@ -1,6 +1,7 @@
 package steps_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,6 +35,7 @@ var _ = Describe("RunAction", func() {
 		fileDescriptorLimit, processesLimit uint64
 		externalIP, internalIP              string
 		portMappings                        []executor.PortMapping
+		proxyPortMappings                   []executor.ProxyPortMapping
 		exportNetworkEnvVars                bool
 		fakeClock                           *fakeclock.FakeClock
 		suppressExitStatusCode              bool
@@ -81,6 +83,7 @@ var _ = Describe("RunAction", func() {
 		externalIP = "external-ip"
 		internalIP = "internal-ip"
 		portMappings = nil
+		proxyPortMappings = []executor.ProxyPortMapping{}
 		exportNetworkEnvVars = false
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
@@ -101,6 +104,7 @@ var _ = Describe("RunAction", func() {
 			externalIP,
 			internalIP,
 			portMappings,
+			proxyPortMappings,
 			exportNetworkEnvVars,
 			fakeClock,
 			suppressExitStatusCode,
@@ -241,6 +245,51 @@ var _ = Describe("RunAction", func() {
 							}
 						}
 						Expect(cfPortsValue).To(MatchJSON("[{\"internal\":2,\"external\":1},{\"internal\":4,\"external\":3}]"))
+					})
+
+					Context("when the container has proxy port mappings configured", func() {
+						BeforeEach(func() {
+							proxyPortMappings = []executor.ProxyPortMapping{
+								executor.ProxyPortMapping{AppPort: 2, ProxyPort: 5},
+								executor.ProxyPortMapping{AppPort: 4, ProxyPort: 7},
+							}
+							portMappings = append(portMappings,
+								executor.PortMapping{HostPort: 6, ContainerPort: 5},
+								executor.PortMapping{HostPort: 8, ContainerPort: 7},
+							)
+						})
+
+						It("includes the tls_proxy_ports in CF_INSTANCE_PORTS", func() {
+							_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+							var cfPortsValue string
+							for _, env := range spec.Env {
+								if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
+									cfPortsValue = strings.Split(env, "=")[1]
+									break
+								}
+							}
+
+							expectedPortsValue := `[{
+							"internal":2,
+							"external":1,
+							"internal_tls_proxy":5,
+							"external_tls_proxy":6
+						},
+						{
+							"internal":4,
+							"external":3,
+							"internal_tls_proxy":7,
+							"external_tls_proxy":8
+					  }]`
+
+							var aval []interface{}
+							var eval []interface{}
+
+							json.Unmarshal([]byte(cfPortsValue), &aval)
+							json.Unmarshal([]byte(expectedPortsValue), &eval)
+							Expect(eval).To(ContainElement(aval[0]))
+							Expect(eval).To(ContainElement(aval[1]))
+						})
 					})
 				})
 

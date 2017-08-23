@@ -29,18 +29,24 @@ const (
 	HealthcheckTagValue = "executor-healthcheck"
 )
 
+type ProxyPortMapping struct {
+	AppPort   uint16 `json:"app_port"`
+	ProxyPort uint16 `json:"proxy_port"`
+}
+
 type Container struct {
 	Guid string `json:"guid"`
 	Resource
 	RunInfo
-	Tags        Tags
-	State       State              `json:"state"`
-	AllocatedAt int64              `json:"allocated_at"`
-	ExternalIP  string             `json:"external_ip"`
-	InternalIP  string             `json:"internal_ip"`
-	RunResult   ContainerRunResult `json:"run_result"`
-	MemoryLimit uint64             `json:"memory_limit"`
-	DiskLimit   uint64             `json:"disk_limit"`
+	Tags             Tags
+	State            State              `json:"state"`
+	AllocatedAt      int64              `json:"allocated_at"`
+	ExternalIP       string             `json:"external_ip"`
+	InternalIP       string             `json:"internal_ip"`
+	RunResult        ContainerRunResult `json:"run_result"`
+	MemoryLimit      uint64             `json:"memory_limit"`
+	DiskLimit        uint64             `json:"disk_limit"`
+	ProxyPortMapping []ProxyPortMapping
 }
 
 func NewContainerFromResource(guid string, resource *Resource, tags Tags) Container {
