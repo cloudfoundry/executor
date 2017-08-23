@@ -257,6 +257,11 @@ var _ = Describe("Transformer", func() {
 								},
 							},
 						},
+						Ports: []executor.PortMapping{
+							executor.PortMapping{
+								ContainerPort: 8080,
+							},
+						},
 					},
 				}
 			})

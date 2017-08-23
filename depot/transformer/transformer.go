@@ -50,7 +50,7 @@ type transformer struct {
 	clock                clock.Clock
 
 	useDeclarativeHealthCheck bool
-	useEnvoy                  bool
+	useContainerProxy         bool
 
 	postSetupHook []string
 	postSetupUser string
@@ -76,7 +76,7 @@ func NewTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
-	useEnvoy bool,
+	useContainerProxy bool,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -94,7 +94,7 @@ func NewTransformer(
 		postSetupHook:               postSetupHook,
 		postSetupUser:               postSetupUser,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
-		useEnvoy:                    useEnvoy,
+		useContainerProxy:           useContainerProxy,
 	}
 }
 
@@ -325,7 +325,7 @@ func (t *transformer) StepsRunner(
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor, envoyStep, longLivedAction steps.Step
+	var setup, action, postSetup, monitor, containerProxyStep, longLivedAction steps.Step
 	var substeps []steps.Step
 
 	if container.Setup != nil {
@@ -415,14 +415,15 @@ func (t *transformer) StepsRunner(
 		substeps = append(substeps, monitor)
 	}
 
-	if t.useEnvoy {
-		envoyStep = t.tranformEnvoyStep(
+	if t.useContainerProxy {
+		containerProxyStep = t.transformContainerProxyStep(
 			gardenContainer,
 			container,
 			logger,
 			logStreamer,
 		)
-		substeps = append(substeps, envoyStep)
+		println(containerProxyStep)
+		// substeps = append(substeps, containerProxyStep)
 	}
 
 	if len(substeps) > 1 {
@@ -546,7 +547,7 @@ func (t *transformer) transformCheckDefinition(
 	)
 }
 
-func (t *transformer) tranformEnvoyStep(
+func (t *transformer) transformContainerProxyStep(
 	container garden.Container,
 	execContainer executor.Container,
 	logger lager.Logger,
