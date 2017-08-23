@@ -137,6 +137,7 @@ var _ = Describe("Container Store", func() {
 			"/var/vcap/packages/healthcheck",
 			false,
 			"/var/vcap/packages/envoy",
+			"/var/vcap/data/rep/proxy_config",
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
@@ -946,14 +947,16 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
-			FContext("when containerProxy is enabled", func() {
+			Context("when containerProxy is enabled", func() {
 				var (
-					envoy_source_dir string
-					err              error
+					envoySourceDir string
+					envoyConfigDir string
+					err            error
 				)
 
 				BeforeEach(func() {
-					envoy_source_dir, err = ioutil.TempDir("", "envoy_dir")
+					envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
 					Expect(err).NotTo(HaveOccurred())
 
 					containerStore = containerstore.New(
@@ -970,7 +973,8 @@ var _ = Describe("Container Store", func() {
 						fakeMetronClient,
 						"/var/vcap/packages/healthcheck",
 						true,
-						envoy_source_dir,
+						envoySourceDir,
+						envoyConfigDir,
 					)
 
 					portMapping := []executor.PortMapping{
@@ -1003,6 +1007,14 @@ var _ = Describe("Container Store", func() {
 						}
 						return gardenContainer, nil
 					}
+				})
+
+				AfterEach(func() {
+					err := os.RemoveAll(envoySourceDir)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = os.RemoveAll(envoyConfigDir)
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("each port gets an equivalent extra proxy port", func() {
@@ -1053,8 +1065,15 @@ var _ = Describe("Container Store", func() {
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					containerSpec := gardenClient.CreateArgsForCall(0)
 					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
-						SrcPath: envoy_source_dir,
+						SrcPath: envoySourceDir,
 						DstPath: "/etc/cf-assets/envoy",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
+
+					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+						DstPath: "/etc/cf-assets/envoy_config",
 						Mode:    garden.BindMountModeRO,
 						Origin:  garden.BindMountOriginHost,
 					}))
@@ -1064,7 +1083,7 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, ok := os.Stat(filepath.Join(envoy_source_dir, fmt.Sprintf("%s-envoy.json", containerGuid)))
+					_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid, "envoy.json"))
 					Expect(os.IsNotExist(ok)).To(BeFalse())
 
 				})
@@ -1873,6 +1892,42 @@ var _ = Describe("Container Store", func() {
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
 				Expect(sourceInstance).To(Equal("1"))
+			})
+		})
+
+		Context("when container proxy is enabled", func() {
+			var envoySourceDir, envoyConfigDir string
+			BeforeEach(func() {
+				var err error
+				envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+				envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
+				Expect(err).NotTo(HaveOccurred())
+
+				containerStore = containerstore.New(
+					containerConfig,
+					&totalCapacity,
+					gardenClient,
+					dependencyManager,
+					volumeManager,
+					credManager,
+					clock,
+					eventEmitter,
+					megatron,
+					"/var/vcap/data/cf-system-trusted-certs",
+					fakeMetronClient,
+					"/var/vcap/packages/healthcheck",
+					true,
+					envoySourceDir,
+					envoyConfigDir,
+				)
+			})
+
+			It("removes the envoy config dir associated to the container", func() {
+				err := containerStore.Destroy(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid))
+				Expect(os.IsNotExist(ok)).To(BeTrue())
 			})
 		})
 	})

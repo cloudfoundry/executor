@@ -290,13 +290,12 @@ var _ = Describe("Transformer", func() {
 				}
 
 				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/envoy"))
-				// Expect(args).To(ContainElement([]string{
-				// 	"-port=5432",
-				// 	"-timeout=100ms",
-				// 	"-uri=/some/path",
-				// 	"-readiness-interval=1ms",
-				// 	"-readiness-timeout=0s",
-				// }))
+				Expect(args).To(ContainElement([]string{
+					"-c",
+					"/etc/cf-assets/envoy_config/envoy.json",
+					"--log-level",
+					"critical",
+				}))
 			})
 		})
 
