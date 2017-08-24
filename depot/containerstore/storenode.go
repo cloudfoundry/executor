@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -59,11 +60,15 @@ type storeNode struct {
 	credManagerProcess         ifrit.Process
 	config                     *ContainerConfig
 	declarativeHealthcheckPath string
+	useContainerProxy          bool
+	containerProxyPath         string
 }
 
 func newStoreNode(
 	config *ContainerConfig,
 	declarativeHealthcheckPath string,
+	useContainerProxy bool,
+	containerProxyPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -89,6 +94,8 @@ func newStoreNode(
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
+		useContainerProxy:           useContainerProxy,
+		containerProxyPath:          containerProxyPath,
 	}
 }
 
@@ -242,6 +249,22 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		SrcPath: n.declarativeHealthcheckPath,
 		DstPath: "/etc/cf-assets/healthcheck",
 	})
+
+	if n.useContainerProxy {
+		proxyPortMapping := populateContainerProxyPorts(info)
+
+		logger.Info("adding-container-proxy-bindmounts")
+		mounts = append(mounts, garden.BindMount{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: n.containerProxyPath,
+			DstPath: "/etc/cf-assets/envoy",
+		})
+
+		proxyConfig := GenerateProxyConfig(logger, proxyPortMapping)
+		proxyConfigFilename := filepath.Join(n.containerProxyPath, fmt.Sprintf("%s-envoy.json", info.Guid))
+		println(proxyConfigFilename)
+		WriteProxyConfig(proxyConfig, proxyConfigFilename)
+	}
 
 	netInRules := make([]garden.NetIn, len(info.Ports))
 	for i, portMapping := range info.Ports {
@@ -590,4 +613,38 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	logger.Debug("container-info-complete")
 
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
+}
+
+func populateContainerProxyPorts(container *executor.Container) []ProxyPortMapping {
+	const StartProxyPort = 61001
+	const EndProxyPort = 65534
+	proxyPortMapping := []ProxyPortMapping{}
+
+	existingPorts := make(map[uint16]interface{})
+	containerPorts := make([]uint16, len(container.RunInfo.Ports))
+	for i, portMap := range container.RunInfo.Ports {
+		existingPorts[portMap.ContainerPort] = struct{}{}
+		containerPorts[i] = portMap.ContainerPort
+	}
+
+	portCount := 0
+	for port := uint16(StartProxyPort); port < EndProxyPort; port++ {
+		if portCount == len(existingPorts) {
+			break
+		}
+
+		if existingPorts[port] != nil {
+			continue
+		}
+
+		container.RunInfo.Ports = append(container.RunInfo.Ports, executor.PortMapping{ContainerPort: port})
+		proxyPortMapping = append(proxyPortMapping, ProxyPortMapping{
+			AppPort:   containerPorts[portCount],
+			ProxyPort: port,
+		})
+
+		portCount++
+	}
+
+	return proxyPortMapping
 }

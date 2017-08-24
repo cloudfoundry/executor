@@ -73,6 +73,9 @@ type containerStore struct {
 
 	declarativeHealthcheckPath string
 
+	containerProxyPath string
+	useContainerProxy  bool
+
 	trustedSystemCertificatesPath string
 }
 
@@ -89,6 +92,8 @@ func New(
 	trustedSystemCertificatesPath string,
 	metronClient loggregator_v2.IngressClient,
 	declarativeHealthcheckPath string,
+	useContainerProxy bool,
+	containerProxyPath string,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -103,6 +108,8 @@ func New(
 		metronClient:                  metronClient,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
+		useContainerProxy:             useContainerProxy,
+		containerProxyPath:            containerProxyPath,
 	}
 }
 
@@ -120,6 +127,8 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	err := cs.containers.Add(
 		newStoreNode(&cs.containerConfig,
 			cs.declarativeHealthcheckPath,
+			cs.useContainerProxy,
+			cs.containerProxyPath,
 			container,
 			cs.gardenClient,
 			cs.dependencyManager,
