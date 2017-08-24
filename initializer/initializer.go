@@ -348,6 +348,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 			)},
 			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
 			{"container-reaper", containerStore.NewContainerReaper(logger)},
+			{"proxy-manager", containerstore.NewProxyManager(logger, config.ContainerProxyConfigPath)},
 		},
 		nil
 }

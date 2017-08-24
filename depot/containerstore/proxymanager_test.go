@@ -46,7 +46,7 @@ var _ = Describe("ProxyManager", func() {
 								}
 						],
 						"admin": {
-								"access_log_path": "/tmp/admin_access.log",
+								"access_log_path": "/dev/null",
 								"address": "tcp://127.0.0.1:9901"
 						},
 						"cluster_manager": {
@@ -117,7 +117,7 @@ var _ = Describe("ProxyManager", func() {
 							}
 					],
 					"admin": {
-							"access_log_path": "/tmp/admin_access.log",
+							"access_log_path": "/dev/null",
 							"address": "tcp://127.0.0.1:9901"
 					},
 					"cluster_manager": {
