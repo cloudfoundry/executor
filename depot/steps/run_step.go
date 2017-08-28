@@ -275,8 +275,8 @@ func (step *runStep) networkingEnvVars() []string {
 		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
 
 		type cfPortMapping struct {
-			Internal         uint16 `json:"internal"`
 			External         uint16 `json:"external"`
+			Internal         uint16 `json:"internal"`
 			ExternalTLSProxy uint16 `json:"external_tls_proxy,omitempty"`
 			InternalTLSProxy uint16 `json:"internal_tls_proxy,omitempty"`
 		}
