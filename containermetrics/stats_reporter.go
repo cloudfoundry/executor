@@ -50,15 +50,14 @@ func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct
 	cpuInfos := make(map[string]*cpuInfo)
 	for {
 		select {
-		case <-signals:
+		case signal := <-signals:
+			logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return nil
 
 		case now := <-ticker.C():
 			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos, now)
 		}
 	}
-
-	return nil
 }
 
 func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {

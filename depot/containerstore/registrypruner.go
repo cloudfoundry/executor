@@ -36,9 +36,9 @@ func (r *registryPruner) Run(signals <-chan os.Signal, ready chan<- struct{}) er
 
 			now := r.clock.Now()
 			r.containers.CompleteExpired(logger, now)
-		case <-signals:
+		case signal := <-signals:
+			logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return nil
 		}
 	}
-	return nil
 }

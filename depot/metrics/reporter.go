@@ -47,6 +47,7 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 	for {
 		select {
 		case <-signals:
+			logger.Info("signalled")
 			return nil
 
 		case <-timer.C():

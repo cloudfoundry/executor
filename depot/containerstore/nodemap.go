@@ -99,20 +99,24 @@ func (n *nodeMap) List() []*storeNode {
 
 func (n *nodeMap) CompleteExpired(logger lager.Logger, now time.Time) {
 	n.lock.Lock()
+	logger.Debug("lock-acquired")
 	defer n.lock.Unlock()
+	defer logger.Debug("lock-released")
 
 	for i := range n.nodes {
 		node := n.nodes[i]
 		expired := node.Expire(logger, now)
 		if expired {
-			logger.Info("expired-container", lager.Data{"guid": node.Info().Guid})
+			logger.Info("container-expired", lager.Data{"guid": node.Info().Guid})
 		}
 	}
 }
 
 func (n *nodeMap) CompleteMissing(logger lager.Logger, existingHandles map[string]struct{}) {
 	n.lock.Lock()
+	logger.Debug("lock-acquired")
 	defer n.lock.Unlock()
+	defer logger.Debug("lock-released")
 
 	for i := range n.nodes {
 		node := n.nodes[i]

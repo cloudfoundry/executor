@@ -454,7 +454,7 @@ var _ = Describe("CredManager", func() {
 				})
 			})
 
-			Context("when signaled", func() {
+			Context("when signalled", func() {
 				JustBeforeEach(func() {
 					Eventually(containerProcess.Ready()).Should(BeClosed())
 					Eventually(certMount[0].SrcPath).Should(BeADirectory())

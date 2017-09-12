@@ -334,7 +334,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				Logger:         logger,
 				MetronClient:   metronClient,
 			}},
-			{"hub-closer", closeHub(hub)},
+			{"hub-closer", closeHub(logger, hub)},
 			{"container-metrics-reporter", containermetrics.NewStatsReporter(
 				logger,
 				time.Duration(config.ContainerMetricsReportInterval),
@@ -503,11 +503,13 @@ func initializeTransformer(
 	)
 }
 
-func closeHub(hub event.Hub) ifrit.Runner {
+func closeHub(logger lager.Logger, hub event.Hub) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
-		<-signals
+		signal := <-signals
 		hub.Close()
+		hubLogger := logger.Session("close-hub")
+		hubLogger.Info("signalled", lager.Data{"signal": signal.String()})
 		return nil
 	})
 }

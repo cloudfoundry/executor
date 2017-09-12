@@ -81,12 +81,14 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	go r.healthcheckCycle(logger, healthcheckComplete)
 
 	select {
-	case <-signals:
+	case signal := <-signals:
+		logger.Info("signalled", lager.Data{"signal": signal.String()})
 		return nil
 
 	case <-healthcheckTimeout.C():
 		r.setUnhealthy(logger)
 		r.checker.Cancel(logger)
+		logger.Info("timed-out")
 		return HealthcheckTimeoutError{}
 
 	case err := <-healthcheckComplete:
@@ -108,8 +110,8 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	for {
 		select {
-		case <-signals:
-			logger.Info("complete")
+		case signal := <-signals:
+			logger.Info("signalled-complete", lager.Data{"signal": signal.String()})
 			return nil
 
 		case <-startHealthcheck.C():

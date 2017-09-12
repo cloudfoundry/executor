@@ -35,27 +35,29 @@ func (r *containerReaper) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 	for {
 		select {
 		case <-timer.C():
-			err := r.reapExtraGardenContainers(logger)
+			err := r.reapExtraGardenContainers(logger.Session("reap-extra-garden-containers"))
 			if err != nil {
 				logger.Error("failed-to-reap-extra-containers", err)
 			}
 
-			err = r.reapMissingGardenContainers(logger)
+			err = r.reapMissingGardenContainers(logger.Session("reap-missing-garden-containers"))
 			if err != nil {
 				logger.Error("failed-to-reap-missing-containers", err)
 			}
 
-		case <-signals:
+		case signal := <-signals:
+			logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return nil
 		}
 
 		timer.Reset(r.config.ReapInterval)
 	}
-
-	return nil
 }
 
 func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
+	logger.Info("starting")
+	defer logger.Info("finished")
+
 	handles, err := r.fetchGardenContainerHandles(logger)
 	if err != nil {
 		return err
@@ -75,7 +77,7 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 
 func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error {
 	logger.Info("starting")
-	defer logger.Info("complete")
+	defer logger.Info("finished")
 
 	handles, err := r.fetchGardenContainerHandles(logger)
 	if err != nil {

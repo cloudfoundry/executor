@@ -97,8 +97,8 @@ func (p *proxyManager) Run(signals <-chan os.Signal, ready chan<- struct{}) erro
 	close(ready)
 	for {
 		select {
-		case <-signals:
-			p.logger.Info("signaled")
+		case signal := <-signals:
+			p.logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return p.removeEnvoyConfigs()
 		}
 	}

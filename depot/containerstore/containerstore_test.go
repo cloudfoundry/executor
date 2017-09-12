@@ -1775,13 +1775,13 @@ var _ = Describe("Container Store", func() {
 
 		Context("when there is a stopped process associated with the container", func() {
 			var (
-				finishRun                 chan struct{}
-				credManagerRunnerSignaled chan struct{}
-				destroyed                 chan struct{}
+				finishRun                  chan struct{}
+				credManagerRunnerSignalled chan struct{}
+				destroyed                  chan struct{}
 			)
 
 			BeforeEach(func() {
-				credManagerRunnerSignaled = make(chan struct{})
+				credManagerRunnerSignalled = make(chan struct{})
 				finishRun = make(chan struct{})
 				finishRunIfrit := finishRun
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -1791,12 +1791,12 @@ var _ = Describe("Container Store", func() {
 					return nil
 				}
 
-				signaled := credManagerRunnerSignaled
+				signalled := credManagerRunnerSignalled
 				megatron.StepsRunnerReturns(testRunner, nil)
 				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					close(signaled)
+					close(signalled)
 					return nil
 				}))
 			})
@@ -1835,13 +1835,13 @@ var _ = Describe("Container Store", func() {
 
 		Context("when there is a running process associated with the container", func() {
 			var (
-				finishRun                 chan struct{}
-				credManagerRunnerSignaled chan struct{}
-				destroyed                 chan struct{}
+				finishRun                  chan struct{}
+				credManagerRunnerSignalled chan struct{}
+				destroyed                  chan struct{}
 			)
 
 			BeforeEach(func() {
-				credManagerRunnerSignaled = make(chan struct{})
+				credManagerRunnerSignalled = make(chan struct{})
 				finishRun = make(chan struct{})
 				finishRunIfrit := finishRun
 				var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -1851,12 +1851,12 @@ var _ = Describe("Container Store", func() {
 					return nil
 				}
 
-				signaled := credManagerRunnerSignaled
+				signalled := credManagerRunnerSignalled
 				megatron.StepsRunnerReturns(testRunner, nil)
 				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
-					close(signaled)
+					close(signalled)
 					return nil
 				}))
 			})
@@ -1880,7 +1880,7 @@ var _ = Describe("Container Store", func() {
 
 			It("signals the cred manager runner", func() {
 				close(finishRun)
-				Eventually(credManagerRunnerSignaled).Should(BeClosed())
+				Eventually(credManagerRunnerSignalled).Should(BeClosed())
 			})
 
 			It("logs that the container is stopping", func() {
@@ -2394,6 +2394,8 @@ var _ = Describe("Container Store", func() {
 			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
 			Eventually(gardenClient.ContainersCallCount).Should(Equal(4))
+
+			Eventually(logger).Should(gbytes.Say("reaped-missing-container"))
 		})
 
 		Context("when listing containers in garden fails", func() {

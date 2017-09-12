@@ -259,7 +259,7 @@ var _ = Describe("Runner", func() {
 			})
 		})
 
-		Context("When the runner is signaled", func() {
+		Context("When the runner is signalled", func() {
 			Context("during the initial health check", func() {
 				var blockHealthcheck chan struct{}
 

@@ -140,8 +140,8 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
 				logger.Debug("completed")
-			case <-signals:
-				logger.Info("signaled")
+			case signal := <-signals:
+				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				return c.removeCreds(logger, container)
 			}
 		}
