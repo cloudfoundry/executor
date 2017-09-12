@@ -282,7 +282,7 @@ func (t *transformer) StepFor(
 			subSteps[i] = subStep
 		}
 		errorOnExit := true
-		return steps.NewCodependent(subSteps, errorOnExit)
+		return steps.NewCodependent(subSteps, errorOnExit, false)
 
 	case *models.SerialAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
@@ -429,6 +429,12 @@ func (t *transformer) StepsRunner(
 		substeps = append(substeps, monitor)
 	}
 
+	if len(substeps) > 1 {
+		longLivedAction = steps.NewCodependent(substeps, false, false)
+	} else {
+		longLivedAction = action
+	}
+
 	if t.useContainerProxy {
 		containerProxyStep = t.transformContainerProxyStep(
 			gardenContainer,
@@ -436,13 +442,7 @@ func (t *transformer) StepsRunner(
 			logger,
 			logStreamer,
 		)
-		substeps = append(substeps, containerProxyStep)
-	}
-
-	if len(substeps) > 1 {
-		longLivedAction = steps.NewCodependent(substeps, false)
-	} else {
-		longLivedAction = action
+		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
 	}
 
 	if monitor == nil {
@@ -546,7 +546,7 @@ func (t *transformer) transformCheckDefinition(
 	}
 
 	readinessCheck := steps.NewParallel(readinessChecks)
-	livenessCheck := steps.NewCodependent(livenessChecks, false)
+	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
 
 	return steps.NewLongRunningMonitor(
 		readinessCheck,

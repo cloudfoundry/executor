@@ -21,9 +21,11 @@ var _ = Describe("CodependentStep", func() {
 	var cancelled chan bool
 
 	var errorOnExit bool
+	var cancelOthersOnExit bool
 
 	BeforeEach(func() {
 		errorOnExit = false
+		cancelOthersOnExit = false
 
 		thingHappened = make(chan bool, 2)
 		cancelled = make(chan bool, 2)
@@ -58,7 +60,7 @@ var _ = Describe("CodependentStep", func() {
 
 	Describe("Perform", func() {
 		JustBeforeEach(func() {
-			step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit)
+			step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit, cancelOthersOnExit)
 		})
 
 		It("performs its substeps in parallel", func() {
@@ -156,6 +158,17 @@ var _ = Describe("CodependentStep", func() {
 				Eventually(errCh).Should(Receive())
 			})
 
+			Context("when cancelOthersOnExit is set to true", func() {
+				BeforeEach(func() {
+					cancelOthersOnExit = true
+				})
+
+				It("should cancel other step", func() {
+					Eventually(subStep2.CancelCallCount).Should(Equal(1))
+					Eventually(errCh).Should(Receive())
+				})
+			})
+
 			Context("when errorOnExit is set to true", func() {
 				BeforeEach(func() {
 					errorOnExit = true
@@ -211,7 +224,7 @@ var _ = Describe("CodependentStep", func() {
 			step2 := &fakes.FakeStep{}
 			step3 := &fakes.FakeStep{}
 
-			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3}, errorOnExit)
+			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3}, errorOnExit, cancelOthersOnExit)
 
 			sequence.Cancel()
 

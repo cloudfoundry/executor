@@ -10,14 +10,16 @@ import (
 var CodependentStepExitedError = errors.New("Codependent step exited")
 
 type codependentStep struct {
-	substeps    []Step
-	errorOnExit bool
+	substeps           []Step
+	errorOnExit        bool
+	cancelOthersOnExit bool
 }
 
-func NewCodependent(substeps []Step, errorOnExit bool) *codependentStep {
+func NewCodependent(substeps []Step, errorOnExit bool, cancelOthersOnExit bool) *codependentStep {
 	return &codependentStep{
-		substeps:    substeps,
-		errorOnExit: errorOnExit,
+		substeps:           substeps,
+		errorOnExit:        errorOnExit,
+		cancelOthersOnExit: cancelOthersOnExit,
 	}
 }
 
@@ -39,6 +41,13 @@ func (step *codependentStep) Perform() error {
 		err := <-errs
 		if step.errorOnExit && err == nil {
 			err = CodependentStepExitedError
+		}
+
+		if step.cancelOthersOnExit && err == nil {
+			if !cancelled {
+				cancelled = true
+				step.Cancel()
+			}
 		}
 
 		if err != nil && err != ErrCancelled {
