@@ -247,8 +247,6 @@ func (step *runStep) Perform() error {
 			return ErrExitTimeout
 		}
 	}
-
-	panic("unreachable")
 }
 
 func convertEnvironmentVariables(environmentVariables []*models.EnvironmentVariable) []string {
