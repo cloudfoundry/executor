@@ -104,8 +104,7 @@ var _ = Describe("concurrent buffer", func() {
 
 			Eventually(func() []byte {
 				output := make([]byte, 5)
-				_, err := concurrentBuffer.Read(output)
-				Expect(err).NotTo(HaveOccurred())
+				_, _ = concurrentBuffer.Read(output)
 				return output
 			}).Should(Equal([]byte("green")))
 		})
