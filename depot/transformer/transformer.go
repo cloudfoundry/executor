@@ -569,9 +569,7 @@ func (t *transformer) transformContainerProxyStep(
 
 	args := []string{
 		"-c",
-		"/etc/cf-assets/envoy_config/envoy.json",
-		"--log-level",
-		"critical",
+		"/etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical",
 	}
 	nofiles := envoyNofiles
 
@@ -579,7 +577,7 @@ func (t *transformer) transformContainerProxyStep(
 		User:           "root",
 		LogSource:      "PROXY",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-		Path:           "/etc/cf-assets/envoy/envoy",
+		Path:           "sh",
 		Args:           args,
 	}
 
@@ -587,7 +585,7 @@ func (t *transformer) transformContainerProxyStep(
 		container,
 		runAction,
 		streamer.WithSource("PROXY"),
-		logger,
+		logger.Session("proxy"),
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,

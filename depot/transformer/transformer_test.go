@@ -225,7 +225,11 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "/etc/cf-assets/envoy/envoy":
+					case "sh":
+						Expect(spec.Args).To(Equal([]string{
+							"-c",
+							"/etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical",
+						}))
 						return envoyProcess, nil
 					}
 
@@ -289,12 +293,10 @@ var _ = Describe("Transformer", func() {
 					args = append(args, spec.Args)
 				}
 
-				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/envoy"))
+				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"/etc/cf-assets/envoy_config/envoy.json",
-					"--log-level",
-					"critical",
+					"/etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical",
 				}))
 			})
 		})
