@@ -35,7 +35,6 @@ var _ = Describe("RunAction", func() {
 		fileDescriptorLimit, processesLimit uint64
 		externalIP, internalIP              string
 		portMappings                        []executor.PortMapping
-		proxyPortMappings                   []executor.ProxyPortMapping
 		exportNetworkEnvVars                bool
 		fakeClock                           *fakeclock.FakeClock
 		suppressExitStatusCode              bool
@@ -83,7 +82,6 @@ var _ = Describe("RunAction", func() {
 		externalIP = "external-ip"
 		internalIP = "internal-ip"
 		portMappings = nil
-		proxyPortMappings = []executor.ProxyPortMapping{}
 		exportNetworkEnvVars = false
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
@@ -104,7 +102,6 @@ var _ = Describe("RunAction", func() {
 			externalIP,
 			internalIP,
 			portMappings,
-			proxyPortMappings,
 			exportNetworkEnvVars,
 			fakeClock,
 			suppressExitStatusCode,
@@ -249,14 +246,10 @@ var _ = Describe("RunAction", func() {
 
 					Context("when the container has proxy port mappings configured", func() {
 						BeforeEach(func() {
-							proxyPortMappings = []executor.ProxyPortMapping{
-								executor.ProxyPortMapping{AppPort: 2, ProxyPort: 5},
-								executor.ProxyPortMapping{AppPort: 4, ProxyPort: 7},
+							portMappings = []executor.PortMapping{
+								{HostPort: 1, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
+								{HostPort: 3, ContainerPort: 4, ContainerTLSProxyPort: 7, HostTLSProxyPort: 8},
 							}
-							portMappings = append(portMappings,
-								executor.PortMapping{HostPort: 6, ContainerPort: 5},
-								executor.PortMapping{HostPort: 8, ContainerPort: 7},
-							)
 						})
 
 						It("includes the tls_proxy_ports in CF_INSTANCE_PORTS", func() {

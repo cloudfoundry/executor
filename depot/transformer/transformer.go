@@ -34,7 +34,7 @@ var ErrNoCheck = errors.New("no check configured")
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, []executor.ProxyPortMapping, bool, bool, lager.Logger) steps.Step
+	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
 	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
 }
 
@@ -105,7 +105,6 @@ func (t *transformer) StepFor(
 	externalIP string,
 	internalIP string,
 	ports []executor.PortMapping,
-	proxyPorts []executor.ProxyPortMapping,
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
@@ -121,7 +120,6 @@ func (t *transformer) StepFor(
 			externalIP,
 			internalIP,
 			ports,
-			proxyPorts,
 			t.exportNetworkEnvVars,
 			t.clock,
 			suppressExitStatusCode,
@@ -158,7 +156,6 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
-				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -179,7 +176,6 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
-				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -197,7 +193,6 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
-				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -219,7 +214,6 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
-					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -234,7 +228,6 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
-					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -258,7 +251,6 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
-					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -273,7 +265,6 @@ func (t *transformer) StepFor(
 					externalIP,
 					internalIP,
 					ports,
-					proxyPorts,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -294,7 +285,6 @@ func (t *transformer) StepFor(
 				externalIP,
 				internalIP,
 				ports,
-				proxyPorts,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -346,7 +336,6 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
-			container.ProxyPortMapping,
 			false,
 			false,
 			logger.Session("setup"),
@@ -368,7 +357,6 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
-			container.ProxyPortMapping,
 			t.exportNetworkEnvVars,
 			t.clock,
 			suppressExitStatusCode,
@@ -388,7 +376,6 @@ func (t *transformer) StepsRunner(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
-		container.ProxyPortMapping,
 		false,
 		false,
 		logger.Session("action"),
@@ -411,7 +398,6 @@ func (t *transformer) StepsRunner(
 					container.ExternalIP,
 					container.InternalIP,
 					container.Ports,
-					container.ProxyPortMapping,
 					true,
 					true,
 					logger.Session("monitor-run"),
@@ -513,7 +499,7 @@ func (t *transformer) transformCheckDefinition(
 
 		buffer := bytes.NewBuffer(nil)
 		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, container.ProxyPortMapping, t.exportNetworkEnvVars, t.clock, true)
+		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true)
 		return steps.NewOutputWrapper(runStep, buffer)
 	}
 
@@ -589,7 +575,6 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,
-		execContainer.ProxyPortMapping,
 		t.exportNetworkEnvVars,
 		t.clock,
 		true,

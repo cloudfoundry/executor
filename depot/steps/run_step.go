@@ -28,7 +28,6 @@ type runStep struct {
 	externalIP             string
 	internalIP             string
 	portMappings           []executor.PortMapping
-	proxyPortMappings      []executor.ProxyPortMapping
 	exportNetworkEnvVars   bool
 	clock                  clock.Clock
 	suppressExitStatusCode bool
@@ -44,7 +43,6 @@ func NewRun(
 	externalIP string,
 	internalIP string,
 	portMappings []executor.PortMapping,
-	proxyPortMappings []executor.ProxyPortMapping,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
 	suppressExitStatusCode bool,
@@ -58,7 +56,6 @@ func NewRun(
 		externalIP:           externalIP,
 		internalIP:           internalIP,
 		portMappings:         portMappings,
-		proxyPortMappings:    proxyPortMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		clock:                clock,
 		suppressExitStatusCode: suppressExitStatusCode,
@@ -282,38 +279,15 @@ func (step *runStep) networkingEnvVars() []string {
 		}
 
 		cfPortMappings := []cfPortMapping{}
-		if len(step.proxyPortMappings) > 0 {
-			proxyPortMapInternal := make(map[uint16]uint16)
-			for _, portMap := range step.proxyPortMappings {
-				proxyPortMapInternal[portMap.AppPort] = portMap.ProxyPort
-			}
 
-			portMapInternal := make(map[uint16]uint16)
-			for _, portMap := range step.portMappings {
-				portMapInternal[portMap.ContainerPort] = portMap.HostPort
-			}
-
-			for containerPort, hostPort := range portMapInternal {
-				if proxyPortMapInternal[containerPort] == 0 {
-					continue
-				}
-
-				proxyPort := proxyPortMapInternal[containerPort]
-				cfPortMappings = append(cfPortMappings,
-					cfPortMapping{
-						Internal:         containerPort,
-						External:         hostPort,
-						InternalTLSProxy: proxyPort,
-						ExternalTLSProxy: portMapInternal[proxyPort],
-					})
-			}
-		} else {
-			for _, portMapping := range step.portMappings {
-				cfPortMappings = append(cfPortMappings, cfPortMapping{
-					Internal: portMapping.ContainerPort,
-					External: portMapping.HostPort,
+		for _, portMap := range step.portMappings {
+			cfPortMappings = append(cfPortMappings,
+				cfPortMapping{
+					Internal:         portMap.ContainerPort,
+					External:         portMap.HostPort,
+					InternalTLSProxy: portMap.ContainerTLSProxyPort,
+					ExternalTLSProxy: portMap.HostTLSProxyPort,
 				})
-			}
 		}
 
 		mappingsValue, err := json.Marshal(cfPortMappings)

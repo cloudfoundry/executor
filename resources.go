@@ -38,15 +38,14 @@ type Container struct {
 	Guid string `json:"guid"`
 	Resource
 	RunInfo
-	Tags             Tags
-	State            State              `json:"state"`
-	AllocatedAt      int64              `json:"allocated_at"`
-	ExternalIP       string             `json:"external_ip"`
-	InternalIP       string             `json:"internal_ip"`
-	RunResult        ContainerRunResult `json:"run_result"`
-	MemoryLimit      uint64             `json:"memory_limit"`
-	DiskLimit        uint64             `json:"disk_limit"`
-	ProxyPortMapping []ProxyPortMapping
+	Tags        Tags
+	State       State              `json:"state"`
+	AllocatedAt int64              `json:"allocated_at"`
+	ExternalIP  string             `json:"external_ip"`
+	InternalIP  string             `json:"internal_ip"`
+	RunResult   ContainerRunResult `json:"run_result"`
+	MemoryLimit uint64             `json:"memory_limit"`
+	DiskLimit   uint64             `json:"disk_limit"`
 }
 
 func NewContainerFromResource(guid string, resource *Resource, tags Tags) Container {
@@ -237,8 +236,10 @@ type LogConfig struct {
 }
 
 type PortMapping struct {
-	ContainerPort uint16 `json:"container_port"`
-	HostPort      uint16 `json:"host_port,omitempty"`
+	ContainerPort         uint16 `json:"container_port"`
+	HostPort              uint16 `json:"host_port,omitempty"`
+	ContainerTLSProxyPort uint16 `json:"container_Tls_proxy_port,omitempty"`
+	HostTLSProxyPort      uint16 `json:"host_tls_proxy_port,omitempty"`
 }
 
 type ContainerRunResult struct {

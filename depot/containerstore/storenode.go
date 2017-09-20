@@ -27,6 +27,8 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
+const StartProxyPort = 61001
+const EndProxyPort = 65534
 
 // To be deprecated
 const (
@@ -253,8 +255,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		DstPath: "/etc/cf-assets/healthcheck",
 	})
 
+	var proxyPortMapping []executor.ProxyPortMapping
 	if n.useContainerProxy {
-		proxyPortMapping := populateContainerProxyPorts(info)
+		proxyPortMapping = populateContainerProxyPorts(info)
 
 		logger.Info("adding-container-proxy-bindmounts")
 		mounts = append(mounts, garden.BindMount{
@@ -275,8 +278,6 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			SrcPath: proxyConfigDir,
 			DstPath: "/etc/cf-assets/envoy_config",
 		})
-
-		info.ProxyPortMapping = proxyPortMapping
 
 		proxyConfig := GenerateProxyConfig(logger, proxyPortMapping)
 		proxyConfigFilename := filepath.Join(proxyConfigDir, "envoy.json")
@@ -332,10 +333,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	info.Ports = make([]executor.PortMapping, len(containerInfo.MappedPorts))
-	for i, portMapping := range containerInfo.MappedPorts {
-		info.Ports[i] = executor.PortMapping{HostPort: uint16(portMapping.HostPort), ContainerPort: uint16(portMapping.ContainerPort)}
-	}
+	info.Ports = portMappingFromContainerInfo(containerInfo, proxyPortMapping)
 
 	externalIP, containerIP, err := fetchIPs(logger, gardenContainer)
 	if err != nil {
@@ -354,6 +352,41 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	info.DiskLimit = containerSpec.Limits.Disk.ByteHard
 
 	return gardenContainer, nil
+}
+
+func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor.ProxyPortMapping) []executor.PortMapping {
+	proxyPorts := make(map[uint16]struct{})
+	appPortToProxyPortMappings := make(map[uint16]uint16)
+	for _, mapping := range mappings {
+		appPortToProxyPortMappings[mapping.AppPort] = mapping.ProxyPort
+		proxyPorts[mapping.ProxyPort] = struct{}{}
+	}
+	portMappings := make(map[uint16]uint16)
+	for _, portMapping := range info.MappedPorts {
+		portMappings[uint16(portMapping.ContainerPort)] = uint16(portMapping.HostPort)
+	}
+
+	ports := make([]executor.PortMapping, len(portMappings)-len(proxyPorts))
+
+	for i, mapping := range info.MappedPorts {
+		appPort := uint16(mapping.ContainerPort)
+		hostPort := uint16(mapping.HostPort)
+		// skip if this is a proxy port
+		if _, ok := proxyPorts[appPort]; ok {
+			continue
+		}
+
+		proxyContainerPort := appPortToProxyPortMappings[appPort]
+		proxyHostPort := portMappings[proxyContainerPort]
+		ports[i] = executor.PortMapping{
+			HostPort:              hostPort,
+			ContainerPort:         appPort,
+			ContainerTLSProxyPort: proxyContainerPort,
+			HostTLSProxyPort:      proxyHostPort,
+		}
+	}
+
+	return ports
 }
 
 func (n *storeNode) Run(logger lager.Logger) error {
@@ -638,8 +671,6 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 }
 
 func populateContainerProxyPorts(container *executor.Container) []executor.ProxyPortMapping {
-	const StartProxyPort = 61001
-	const EndProxyPort = 65534
 	proxyPortMapping := []executor.ProxyPortMapping{}
 
 	existingPorts := make(map[uint16]interface{})
