@@ -535,6 +535,10 @@ var _ = Describe("CredManager", func() {
 					Expect(cert.Subject.CommonName).To(Equal(container.Guid))
 				})
 
+				It("DNS SAN should be set to the container guid", func() {
+					Expect(cert.DNSNames).To(ContainElement(container.Guid))
+				})
+
 				It("expires in after the configured validity period", func() {
 					Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
 				})

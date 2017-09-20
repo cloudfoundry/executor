@@ -296,6 +296,7 @@ func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.
 			OrganizationalUnit: organizationalUnits,
 		},
 		IPAddresses: []net.IP{net.ParseIP(ipaddress)},
+		DNSNames:    []string{guid},
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement,
