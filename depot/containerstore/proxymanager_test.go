@@ -42,7 +42,11 @@ var _ = Describe("ProxyManager", func() {
 																		}]
 																}
 														}
-												}]
+												}],
+												"ssl_context": {
+													"cert_chain_file": "/etc/cf-instance-credentials/instance.crt",
+													"private_key_file": "/etc/cf-instance-credentials/instance.key"
+												}
 								}
 						],
 						"admin": {
@@ -75,7 +79,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("creates the appropriate proxy file", func() {
+			FIt("creates the appropriate proxy file", func() {
 				config := containerstore.GenerateProxyConfig(logger, portMapping)
 				Expect(config).To(Equal(expectedConfig))
 			})
