@@ -42,7 +42,11 @@ var _ = Describe("ProxyManager", func() {
 																		}]
 																}
 														}
-												}]
+												}],
+												"ssl_context": {
+													"cert_chain_file": "/etc/cf-instance-credentials/instance.crt",
+													"private_key_file": "/etc/cf-instance-credentials/instance.key"
+												}
 								}
 						],
 						"admin": {
@@ -98,7 +102,11 @@ var _ = Describe("ProxyManager", func() {
 																	}]
 															}
 													}
-											}]
+											}],
+											"ssl_context": {
+													"cert_chain_file": "/etc/cf-instance-credentials/instance.crt",
+													"private_key_file": "/etc/cf-instance-credentials/instance.key"
+											}
 							},
 							{
 											"address": "tcp://0.0.0.0:9000",
@@ -113,7 +121,11 @@ var _ = Describe("ProxyManager", func() {
 																	}]
 															}
 													}
-											}]
+											}],
+											"ssl_context": {
+													"cert_chain_file": "/etc/cf-instance-credentials/instance.crt",
+													"private_key_file": "/etc/cf-instance-credentials/instance.key"
+											}
 							}
 					],
 					"admin": {

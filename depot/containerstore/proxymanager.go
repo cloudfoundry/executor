@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
@@ -29,9 +30,15 @@ type Filter struct {
 	Config Config `json:"config"`
 }
 
+type SSLContext struct {
+	CertChainFile  string `json:"cert_chain_file"`
+	PrivateKeyFile string `json:"private_key_file"`
+}
+
 type Listener struct {
-	Address string   `json:"address"`
-	Filters []Filter `json:"filters"`
+	Address    string     `json:"address"`
+	Filters    []Filter   `json:"filters"`
+	SSLContext SSLContext `json:"ssl_context"`
 }
 
 type Admin struct {
@@ -116,6 +123,7 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 		listenerName := TcpProxy
 		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ProxyPort)
+		containerMountPath := "/etc/cf-instance-credentials"
 		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
 		clusters = append(clusters, Cluster{
 			Name:                clusterName,
@@ -137,6 +145,10 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 					},
 				},
 			},
+			},
+			SSLContext: SSLContext{
+				CertChainFile:  path.Join(containerMountPath, "instance.crt"),
+				PrivateKeyFile: path.Join(containerMountPath, "instance.key"),
 			},
 		})
 	}
