@@ -33,8 +33,8 @@ type Filter struct {
 type SSLContext struct {
 	CertChainFile  string `json:"cert_chain_file"`
 	PrivateKeyFile string `json:"private_key_file"`
-	CACertFile     string `json:"ca_cert_file"`
 }
+
 type Listener struct {
 	Address    string     `json:"address"`
 	Filters    []Filter   `json:"filters"`
