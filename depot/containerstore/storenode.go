@@ -175,6 +175,8 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			Origin:  garden.BindMountOriginHost,
 		}
 		mounts.GardenBindMounts = append(mounts.GardenBindMounts, mount)
+
+		info.Env = append(info.Env, executor.EnvironmentVariable{Name: "CF_SYSTEM_CERT_PATH", Value: info.TrustedSystemCertificatesPath})
 	}
 
 	volumeMounts, err := n.mountVolumes(logger, info)

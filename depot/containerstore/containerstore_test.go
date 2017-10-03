@@ -702,6 +702,14 @@ var _ = Describe("Container Store", func() {
 						gardenContainerSpec := gardenClient.CreateArgsForCall(0)
 						Expect(gardenContainerSpec.BindMounts).To(ContainElement(mounts[0]))
 					})
+
+					It("creates a CF_SYSTEM_CERT_PATH env var", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.Env).To(ContainElement("CF_SYSTEM_CERT_PATH=" + runReq.RunInfo.TrustedSystemCertificatesPath))
+					})
 				})
 
 				Context("and the desired LRP does not have a certificates path", func() {
@@ -717,6 +725,13 @@ var _ = Describe("Container Store", func() {
 							Mode:    garden.BindMountModeRO,
 							Origin:  garden.BindMountOriginHost,
 						}))
+					})
+
+					It("does not create the CF_SYSTEM_CERT_PATH env var", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.Env).NotTo(ContainElement(ContainSubstring("CF_SYSTEM_CERT_PATH")))
 					})
 				})
 			})
