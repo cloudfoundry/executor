@@ -228,7 +228,7 @@ var _ = Describe("Transformer", func() {
 					case "sh":
 						Expect(spec.Args).To(Equal([]string{
 							"-c",
-							"/etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
 						}))
 						return envoyProcess, nil
 					}
@@ -296,7 +296,7 @@ var _ = Describe("Transformer", func() {
 				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"/etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical",
+					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
 				}))
 			})
 		})
