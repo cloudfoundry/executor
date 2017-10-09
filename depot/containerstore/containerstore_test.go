@@ -375,6 +375,7 @@ var _ = Describe("Container Store", func() {
 							"some-other-key": "some-other-value",
 						},
 					},
+					EnableContainerProxy: true,
 				}
 
 				runReq = &executor.RunRequest{
@@ -1100,7 +1101,56 @@ var _ = Describe("Container Store", func() {
 
 					_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid, "envoy.json"))
 					Expect(os.IsNotExist(ok)).To(BeFalse())
+				})
 
+				Context("and container proxy is disabled on the RunInfo", func() {
+					BeforeEach(func() {
+						runReq.EnableContainerProxy = false
+					})
+
+					It("does not map any extra ports", func() {
+						container, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(len(container.Ports)).To(Equal(2))
+						Expect(container.Ports[0].ContainerPort).To(BeEquivalentTo(8080))
+						Expect(container.Ports[1].ContainerPort).To(BeEquivalentTo(9090))
+						Expect(container.Ports[0].ContainerTLSProxyPort).To(BeEquivalentTo(0))
+						Expect(container.Ports[1].ContainerTLSProxyPort).To(BeEquivalentTo(0))
+						Expect(container.Ports[0].HostPort).To(BeEquivalentTo(16000))
+						Expect(container.Ports[1].HostPort).To(BeEquivalentTo(16004))
+						Expect(container.Ports[0].HostTLSProxyPort).To(BeEquivalentTo(0))
+						Expect(container.Ports[1].HostTLSProxyPort).To(BeEquivalentTo(0))
+					})
+
+					It("does not write proxyConfig to a container specific dir", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid, "envoy.json"))
+						Expect(os.IsNotExist(ok)).To(BeTrue())
+					})
+
+					It("does not bind mount envoy", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
+							SrcPath: envoySourceDir,
+							DstPath: "/etc/cf-assets/envoy",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						}))
+
+						Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
+							SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+							DstPath: "/etc/cf-assets/envoy_config",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						}))
+					})
 				})
 			})
 		})

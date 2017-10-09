@@ -182,7 +182,7 @@ var _ = Describe("Transformer", func() {
 			return process
 		}
 
-		Describe("envoy", func() {
+		Describe("container proxy", func() {
 			var (
 				container   executor.Container
 				processLock sync.Mutex
@@ -266,6 +266,7 @@ var _ = Describe("Transformer", func() {
 								ContainerPort: 8080,
 							},
 						},
+						EnableContainerProxy: true,
 					},
 				}
 			})
@@ -283,7 +284,7 @@ var _ = Describe("Transformer", func() {
 				ginkgomon.Interrupt(process)
 			})
 
-			It("runs the envoy", func() {
+			It("runs the container proxy", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 				paths := []string{}
 				args := [][]string{}
@@ -298,6 +299,25 @@ var _ = Describe("Transformer", func() {
 					"-c",
 					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
 				}))
+			})
+
+			Context("when the container proxy is disabled on the container", func() {
+				BeforeEach(func() {
+					container.EnableContainerProxy = false
+				})
+
+				It("does not run the container proxy", func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+					paths := []string{}
+					args := [][]string{}
+					for i := 0; i < gardenContainer.RunCallCount(); i++ {
+						spec, _ := gardenContainer.RunArgsForCall(i)
+						paths = append(paths, spec.Path)
+						args = append(args, spec.Args)
+					}
+
+					Expect(paths).NotTo(ContainElement("sh"))
+				})
 			})
 		})
 

@@ -258,7 +258,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	})
 
 	var proxyPortMapping []executor.ProxyPortMapping
-	if n.useContainerProxy {
+	if n.useContainerProxy && info.EnableContainerProxy {
 		proxyPortMapping = populateContainerProxyPorts(info)
 
 		logger.Info("adding-container-proxy-bindmounts")

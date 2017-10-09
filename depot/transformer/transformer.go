@@ -421,7 +421,7 @@ func (t *transformer) StepsRunner(
 		longLivedAction = action
 	}
 
-	if t.useContainerProxy {
+	if t.useContainerProxy && container.EnableContainerProxy {
 		containerProxyStep = t.transformContainerProxyStep(
 			gardenContainer,
 			container,
