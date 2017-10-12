@@ -19,11 +19,18 @@ const (
 	remainingDisk       = "CapacityRemainingDisk"
 	remainingContainers = "CapacityRemainingContainers"
 
+	allocatedMemory = "CapacityAllocatedMemory"
+	allocatedDisk   = "CapacityAllocatedDisk"
+
+	containerUsageMemory = "ContainerUsageMemory"
+	containerUsageDisk   = "ContainerUsageDisk"
+
 	containerCount         = "ContainerCount"
 	startingContainerCount = "StartingContainerCount"
 )
 
 type ExecutorSource interface {
+	GetBulkMetrics(logger lager.Logger) (map[string]executor.Metrics, error)
 	RemainingResources(lager.Logger) (executor.ExecutorResources, error)
 	TotalResources(lager.Logger) (executor.ExecutorResources, error)
 	ListContainers(lager.Logger) ([]executor.Container, error)
@@ -51,12 +58,16 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			return nil
 
 		case <-timer.C():
+			var allocatedMemoryMB, allocatedDiskMB, containerUsageDiskMB, containerUsageMemoryMB int
+
 			remainingCapacity, err := reporter.ExecutorSource.RemainingResources(logger)
 			if err != nil {
 				reporter.Logger.Error("failed-remaining-resources", err)
 				remainingCapacity.Containers = -1
 				remainingCapacity.DiskMB = -1
 				remainingCapacity.MemoryMB = -1
+				allocatedDiskMB = -1
+				allocatedMemoryMB = -1
 			}
 
 			totalCapacity, err := reporter.ExecutorSource.TotalResources(logger)
@@ -65,6 +76,22 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				totalCapacity.Containers = -1
 				totalCapacity.DiskMB = -1
 				totalCapacity.MemoryMB = -1
+				allocatedDiskMB = -1
+				allocatedMemoryMB = -1
+			}
+
+			if allocatedDiskMB == 0 && allocatedMemoryMB == 0 {
+				allocatedDiskMB = totalCapacity.DiskMB - remainingCapacity.DiskMB
+				allocatedMemoryMB = totalCapacity.MemoryMB - remainingCapacity.MemoryMB
+			}
+
+			bulkMetrics, err := reporter.ExecutorSource.GetBulkMetrics(logger)
+			if err != nil {
+				reporter.Logger.Error("failed-bulk-metrics", err)
+				containerUsageDiskMB = -1
+				containerUsageMemoryMB = -1
+			} else {
+				containerUsageMemoryMB, containerUsageDiskMB = calculateUsageMetrics(bulkMetrics)
 			}
 
 			var nContainers, startingCount int
@@ -107,6 +134,24 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				logger.Error("failed-to-send-remaining-containers-metric", err)
 			}
 
+			err = reporter.MetronClient.SendMebiBytes(allocatedMemory, allocatedMemoryMB)
+			if err != nil {
+				logger.Error("failed-to-send-allocated-memory-metric", err)
+			}
+			err = reporter.MetronClient.SendMebiBytes(allocatedDisk, allocatedDiskMB)
+			if err != nil {
+				logger.Error("failed-to-send-allocated-disk-metric", err)
+			}
+
+			err = reporter.MetronClient.SendMebiBytes(containerUsageMemory, containerUsageMemoryMB)
+			if err != nil {
+				logger.Error("failed-to-send-container-memory-metric", err)
+			}
+			err = reporter.MetronClient.SendMebiBytes(containerUsageDisk, containerUsageDiskMB)
+			if err != nil {
+				logger.Error("failed-to-send-container-disk-metric", err)
+			}
+
 			err = reporter.MetronClient.SendMetric(containerCount, nContainers)
 			if err != nil {
 				logger.Error("failed-to-send-container-count-metric", err)
@@ -126,4 +171,17 @@ func containerIsStarting(container executor.Container) bool {
 	return container.State == executor.StateReserved ||
 		container.State == executor.StateInitializing ||
 		container.State == executor.StateCreated
+}
+
+func bytesToMebibytes(bytes int) int {
+	return bytes / 1024 / 1024
+}
+
+func calculateUsageMetrics(metrics map[string]executor.Metrics) (int, int) {
+	var memUsageMB, diskUsageMB int
+	for _, m := range metrics {
+		memUsageMB += bytesToMebibytes(int(m.MemoryUsageInBytes))
+		diskUsageMB += bytesToMebibytes(int(m.DiskUsageInBytes))
+	}
+	return memUsageMB, diskUsageMB
 }

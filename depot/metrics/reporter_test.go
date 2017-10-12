@@ -39,6 +39,23 @@ var _ = Describe("Reporter", func() {
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeMetronClient = new(mfakes.FakeIngressClient)
 
+		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
+			"container-1": executor.Metrics{
+				executor.MetricsConfig{},
+				executor.ContainerMetrics{
+					MemoryUsageInBytes: 256 * 1024 * 1024,
+					DiskUsageInBytes:   800 * 1024 * 1024,
+				},
+			},
+			"container-2": executor.Metrics{
+				executor.MetricsConfig{},
+				executor.ContainerMetrics{
+					MemoryUsageInBytes: 300 * 1024 * 1024,
+					DiskUsageInBytes:   512 * 1024 * 1024,
+				},
+			},
+		}, nil)
+
 		executorClient.TotalResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   1024,
 			DiskMB:     2048,
@@ -94,20 +111,48 @@ var _ = Describe("Reporter", func() {
 	})
 
 	It("reports the current capacity on the given interval", func() {
-		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(4))
 
 		m.RLock()
-		Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(1024))
-		Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(4096))
-		Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(2048))
+		remainingMemory := metricMap["CapacityRemainingMemory"]
+		totalMemory := metricMap["CapacityTotalMemory"]
+		remainingDisk := metricMap["CapacityRemainingDisk"]
+		totalDisk := metricMap["CapacityTotalDisk"]
 
-		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(128))
-		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(256))
+		Eventually(totalMemory).Should(Equal(1024))
+		Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(4096))
+		Eventually(totalDisk).Should(Equal(2048))
+
+		Eventually(remainingMemory).Should(Equal(128))
+		Eventually(remainingDisk).Should(Equal(256))
 		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(512))
+
+		Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(totalMemory - remainingMemory))
+		Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(totalDisk - remainingDisk))
+
+		Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(556))
+		Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(1312))
 
 		Eventually(metricMap["ContainerCount"]).Should(Equal(5))
 		Eventually(metricMap["StartingContainerCount"]).Should(Equal(3))
+
+		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
+			"container-1": executor.Metrics{
+				executor.MetricsConfig{},
+				executor.ContainerMetrics{
+					MemoryUsageInBytes: 300 * 1024 * 1024,
+					DiskUsageInBytes:   400 * 1024 * 1024,
+				},
+			},
+			"container-2": executor.Metrics{
+				executor.MetricsConfig{},
+				executor.ContainerMetrics{
+					MemoryUsageInBytes: 200 * 1024 * 1024,
+					DiskUsageInBytes:   300 * 1024 * 1024,
+				},
+			},
+		}, nil)
 
 		executorClient.RemainingResourcesReturns(executor.ExecutorResources{
 			MemoryMB:   129,
@@ -124,13 +169,23 @@ var _ = Describe("Reporter", func() {
 
 		m.RUnlock()
 
-		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+		Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(16))
 		Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(8))
 
 		m.RLock()
+
+		remainingMemory = metricMap["CapacityRemainingMemory"]
+		remainingDisk = metricMap["CapacityRemainingDisk"]
+
 		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
 		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(257))
 		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(513))
+		Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(totalMemory - remainingMemory))
+		Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(totalDisk - remainingDisk))
+
+		Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(500))
+		Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(700))
+
 		Eventually(metricMap["ContainerCount"]).Should(Equal(2))
 		Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
 
@@ -143,12 +198,21 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing remaining resources", func() {
-			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
 			Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(-1))
+			m.RUnlock()
+		})
+
+		It("sends missing allocated resources", func() {
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+
+			m.RLock()
+			Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})
@@ -159,12 +223,21 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("sends missing total resources", func() {
-			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(4))
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
 			Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(-1))
 			Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(-1))
+			m.RUnlock()
+		})
+
+		It("sends missing allocated resources", func() {
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+
+			m.RLock()
+			Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})
@@ -175,12 +248,26 @@ var _ = Describe("Reporter", func() {
 		})
 
 		It("reports garden.containers as -1", func() {
-			logger.Info("checking this stuff")
 			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(4))
 
 			m.RLock()
 			Eventually(metricMap["ContainerCount"]).Should(Equal(-1))
 			Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
+			m.RUnlock()
+		})
+	})
+
+	Context("when getting the bulk metrics fails", func() {
+		BeforeEach(func() {
+			executorClient.GetBulkMetricsReturns(nil, errors.New("oh no!"))
+		})
+
+		It("reports container usage as -1", func() {
+			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
+
+			m.RLock()
+			Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(-1))
+			Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})
