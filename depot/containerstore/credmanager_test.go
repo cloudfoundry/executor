@@ -151,7 +151,7 @@ var _ = Describe("CredManager", func() {
 			certPath  string
 		)
 
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			container = executor.Container{
 				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
 				InternalIP: "127.0.0.1",
@@ -159,6 +159,9 @@ var _ = Describe("CredManager", func() {
 					OrganizationalUnit: []string{"app:iamthelizardking"}},
 				},
 			}
+		})
+
+		JustBeforeEach(func() {
 			certMount, _, err = credManager.CreateCredDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certMount[0].SrcPath).To(BeADirectory())
@@ -561,6 +564,48 @@ var _ = Describe("CredManager", func() {
 
 				It("has the app guid in the subject's organizational units", func() {
 					Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
+				})
+
+				Context("when the container doesn't have an internal ip", func() {
+					Context("when the container has an external IP", func() {
+						BeforeEach(func() {
+							container = executor.Container{
+								Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+								InternalIP: "",
+								ExternalIP: "54.23.123.234",
+								RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+									OrganizationalUnit: []string{"app:iamthelizardking"}},
+								},
+							}
+						})
+
+						It("has the external ip", func() {
+							ip := net.ParseIP(container.ExternalIP)
+							Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+						})
+
+						It("does not have the empty internal ip", func() {
+							ip := net.ParseIP(container.InternalIP)
+							Expect(cert.IPAddresses).NotTo(ContainElement(ip.To4()))
+						})
+					})
+					Context("when the container doesn't have an external ip", func() {
+						BeforeEach(func() {
+							container = executor.Container{
+								Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+								InternalIP: "",
+								ExternalIP: "",
+								RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+									OrganizationalUnit: []string{"app:iamthelizardking"}},
+								},
+							}
+						})
+
+						It("has no SubjectAltName", func() {
+							Expect(cert.IPAddresses).To(BeEmpty())
+						})
+
+					})
 				})
 			})
 		})

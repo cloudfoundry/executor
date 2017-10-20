@@ -190,7 +190,11 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	logger.Debug("generated-private-key")
 
 	now := c.clock.Now()
-	template := createCertificateTemplate(container.InternalIP,
+	ipForCert := container.InternalIP
+	if len(ipForCert) == 0 {
+		ipForCert = container.ExternalIP
+	}
+	template := createCertificateTemplate(ipForCert,
 		container.Guid,
 		now,
 		now.Add(c.validityPeriod),
@@ -289,13 +293,19 @@ func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 }
 
 func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.Time, organizationalUnits []string) *x509.Certificate {
+	var ipaddr []net.IP
+	if len(ipaddress) == 0 {
+		ipaddr = []net.IP{}
+	} else {
+		ipaddr = []net.IP{net.ParseIP(ipaddress)}
+	}
 	return &x509.Certificate{
 		SerialNumber: big.NewInt(0),
 		Subject: pkix.Name{
 			CommonName:         guid,
 			OrganizationalUnit: organizationalUnits,
 		},
-		IPAddresses: []net.IP{net.ParseIP(ipaddress)},
+		IPAddresses: ipaddr,
 		DNSNames:    []string{guid},
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
