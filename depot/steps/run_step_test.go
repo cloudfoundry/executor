@@ -135,7 +135,7 @@ var _ = Describe("RunAction", func() {
 				Expect(spec.Args).To(Equal([]string{"reboot"}))
 				Expect(spec.Dir).To(Equal("/some-dir"))
 				Expect(*spec.Limits.Nofile).To(BeNumerically("==", fileDescriptorLimit))
-				Expect(*spec.Limits.Nproc).To(BeNumerically("==", processesLimit))
+				Expect(spec.Limits.Nproc).To(BeNil())
 				Expect(spec.Env).To(ContainElement("A=1"))
 				Expect(spec.Env).To(ContainElement("B=2"))
 				Expect(spec.User).To(Equal("notroot"))

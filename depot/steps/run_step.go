@@ -88,10 +88,8 @@ func (step *runStep) Perform() error {
 	step.logger.Debug("creating-process")
 
 	var nofile *uint64
-	var nproc *uint64
 	if step.model.ResourceLimits != nil {
 		nofile = step.model.ResourceLimits.Nofile
-		nproc = step.model.ResourceLimits.Nproc
 	}
 
 	var processIO garden.ProcessIO
@@ -119,7 +117,6 @@ func (step *runStep) Perform() error {
 
 			Limits: garden.ResourceLimits{
 				Nofile: nofile,
-				Nproc:  nproc,
 			},
 		}, processIO)
 		if err != nil {
