@@ -368,11 +368,9 @@ func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor
 		portMappings[uint16(portMapping.ContainerPort)] = uint16(portMapping.HostPort)
 	}
 
-	ports := make([]executor.PortMapping, len(portMappings)-len(proxyPorts))
+	ports := []executor.PortMapping{}
 
-	for i, mapping := range info.MappedPorts {
-		appPort := uint16(mapping.ContainerPort)
-		hostPort := uint16(mapping.HostPort)
+	for appPort, hostPort := range portMappings {
 		// skip if this is a proxy port
 		if _, ok := proxyPorts[appPort]; ok {
 			continue
@@ -380,12 +378,12 @@ func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor
 
 		proxyContainerPort := appPortToProxyPortMappings[appPort]
 		proxyHostPort := portMappings[proxyContainerPort]
-		ports[i] = executor.PortMapping{
+		ports = append(ports, executor.PortMapping{
 			HostPort:              hostPort,
 			ContainerPort:         appPort,
 			ContainerTLSProxyPort: proxyContainerPort,
 			HostTLSProxyPort:      proxyHostPort,
-		}
+		})
 	}
 
 	return ports

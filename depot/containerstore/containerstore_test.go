@@ -873,14 +873,40 @@ var _ = Describe("Container Store", func() {
 						}))
 					})
 
+					Context("when the app has duplicate port exposed", func() {
+						BeforeEach(func() {
+							runReq.Ports = append(runReq.Ports, executor.PortMapping{ContainerPort: 8080})
+						})
+
+						It("de duplicate the exposed ports", func() {
+							container, err := containerStore.Create(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+								ContainerPort: 8080,
+								HostPort:      16000,
+							}, executor.PortMapping{
+								ContainerPort: 9090,
+								HostPort:      32000,
+							}))
+
+							fetchedContainer, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(fetchedContainer).To(Equal(container))
+						})
+					})
+
 					It("saves the actual port mappings on the container", func() {
 						container, err := containerStore.Create(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						Expect(container.Ports[0].ContainerPort).To(BeEquivalentTo(8080))
-						Expect(container.Ports[0].HostPort).To(BeEquivalentTo(16000))
-						Expect(container.Ports[1].ContainerPort).To(BeEquivalentTo(9090))
-						Expect(container.Ports[1].HostPort).To(BeEquivalentTo(32000))
+						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+							ContainerPort: 8080,
+							HostPort:      16000,
+						}, executor.PortMapping{
+							ContainerPort: 9090,
+							HostPort:      32000,
+						}))
 
 						fetchedContainer, err := containerStore.Get(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
@@ -1037,15 +1063,17 @@ var _ = Describe("Container Store", func() {
 					container, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(len(container.Ports)).To(Equal(2))
-					Expect(container.Ports[0].ContainerPort).To(BeEquivalentTo(8080))
-					Expect(container.Ports[1].ContainerPort).To(BeEquivalentTo(9090))
-					Expect(container.Ports[0].ContainerTLSProxyPort).To(BeEquivalentTo(61001))
-					Expect(container.Ports[1].ContainerTLSProxyPort).To(BeEquivalentTo(61002))
-					Expect(container.Ports[0].HostPort).To(BeEquivalentTo(16000))
-					Expect(container.Ports[1].HostPort).To(BeEquivalentTo(16004))
-					Expect(container.Ports[0].HostTLSProxyPort).To(BeEquivalentTo(16001))
-					Expect(container.Ports[1].HostTLSProxyPort).To(BeEquivalentTo(16002))
+					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+						ContainerPort:         8080,
+						HostPort:              16000,
+						ContainerTLSProxyPort: 61001,
+						HostTLSProxyPort:      16001,
+					}, executor.PortMapping{
+						ContainerPort:         9090,
+						HostPort:              32000,
+						ContainerTLSProxyPort: 61002,
+						HostTLSProxyPort:      16002,
+					}))
 				})
 
 				Context("when the requested ports are in the 6100n range", func() {
@@ -1062,15 +1090,17 @@ var _ = Describe("Container Store", func() {
 						container, err := containerStore.Create(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						Expect(len(container.Ports)).To(Equal(2))
-						Expect(container.Ports[0].ContainerPort).To(BeEquivalentTo(61001))
-						Expect(container.Ports[1].ContainerPort).To(BeEquivalentTo(9090))
-						Expect(container.Ports[0].ContainerTLSProxyPort).To(BeEquivalentTo(61002))
-						Expect(container.Ports[1].ContainerTLSProxyPort).To(BeEquivalentTo(61003))
-						Expect(container.Ports[0].HostPort).To(BeEquivalentTo(16001))
-						Expect(container.Ports[1].HostPort).To(BeEquivalentTo(16004))
-						Expect(container.Ports[0].HostTLSProxyPort).To(BeEquivalentTo(16002))
-						Expect(container.Ports[1].HostTLSProxyPort).To(BeEquivalentTo(16003))
+						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+							ContainerPort:         61001,
+							HostPort:              16001,
+							ContainerTLSProxyPort: 61002,
+							HostTLSProxyPort:      16002,
+						}, executor.PortMapping{
+							ContainerPort:         9090,
+							HostPort:              16004,
+							ContainerTLSProxyPort: 61003,
+							HostTLSProxyPort:      16003,
+						}))
 					})
 				})
 
@@ -1112,15 +1142,13 @@ var _ = Describe("Container Store", func() {
 						container, err := containerStore.Create(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
-						Expect(len(container.Ports)).To(Equal(2))
-						Expect(container.Ports[0].ContainerPort).To(BeEquivalentTo(8080))
-						Expect(container.Ports[1].ContainerPort).To(BeEquivalentTo(9090))
-						Expect(container.Ports[0].ContainerTLSProxyPort).To(BeEquivalentTo(0))
-						Expect(container.Ports[1].ContainerTLSProxyPort).To(BeEquivalentTo(0))
-						Expect(container.Ports[0].HostPort).To(BeEquivalentTo(16000))
-						Expect(container.Ports[1].HostPort).To(BeEquivalentTo(16004))
-						Expect(container.Ports[0].HostTLSProxyPort).To(BeEquivalentTo(0))
-						Expect(container.Ports[1].HostTLSProxyPort).To(BeEquivalentTo(0))
+						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+							ContainerPort: 8080,
+							HostPort:      16000,
+						}, executor.PortMapping{
+							ContainerPort: 9090,
+							HostPort:      16004,
+						}))
 					})
 
 					It("does not write proxyConfig to a container specific dir", func() {
