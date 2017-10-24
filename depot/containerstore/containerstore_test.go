@@ -1070,7 +1070,7 @@ var _ = Describe("Container Store", func() {
 						HostTLSProxyPort:      16001,
 					}, executor.PortMapping{
 						ContainerPort:         9090,
-						HostPort:              32000,
+						HostPort:              16004,
 						ContainerTLSProxyPort: 61002,
 						HostTLSProxyPort:      16002,
 					}))
