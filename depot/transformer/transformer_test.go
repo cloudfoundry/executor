@@ -69,6 +69,7 @@ var _ = Describe("Transformer", func() {
 				[]string{"/post-setup/path", "-x", "argument"},
 				"jim",
 				false,
+				"",
 				false,
 			)
 
@@ -203,6 +204,7 @@ var _ = Describe("Transformer", func() {
 					[]string{"/post-setup/path", "-x", "argument"},
 					"jim",
 					false,
+					"",
 					true,
 				)
 
@@ -444,6 +446,7 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
 						true,
+						"user1",
 						false,
 					)
 
@@ -501,10 +504,12 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
+							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
+								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -515,6 +520,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=0s",
 							}))
+							Expect(users).To(ContainElement("user1"))
 						})
 					})
 
@@ -535,10 +541,12 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
+							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
+								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -549,6 +557,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
+							Expect(users).To(ContainElement("user1"))
 						})
 					})
 
@@ -572,7 +581,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms", // 1ms
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement("root"))
+						Expect(users).To(ContainElement("user1"))
 					})
 
 					Context("when the readiness check times out", func() {
@@ -627,10 +636,12 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 							paths := []string{}
 							args := [][]string{}
+							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
+								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -640,6 +651,7 @@ var _ = Describe("Transformer", func() {
 								"-uri=/some/path",
 								"-liveness-interval=1s", // 1ms
 							}))
+							Expect(users).To(ContainElement("user1"))
 						})
 
 						Context("when the liveness check exits", func() {
@@ -706,10 +718,12 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
+							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
+								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -719,6 +733,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
+							Expect(users).To(ContainElement("user1"))
 						})
 					})
 
@@ -726,10 +741,12 @@ var _ = Describe("Transformer", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						paths := []string{}
 						args := [][]string{}
+						users := []string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
+							users = append(users, spec.User)
 						}
 
 						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -739,6 +756,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
+						Expect(users).To(ContainElement("user1"))
 					})
 				})
 
@@ -868,10 +886,12 @@ var _ = Describe("Transformer", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 						paths := []string{}
 						args := [][]string{}
+						users := []string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
+							users = append(users, spec.User)
 						}
 
 						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -888,6 +908,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
+						Expect(users).To(ContainElement("user1"))
 					})
 
 					Context("when one of the readiness checks finish", func() {
@@ -909,10 +930,12 @@ var _ = Describe("Transformer", func() {
 								Eventually(gardenContainer.RunCallCount).Should(Equal(5))
 								paths := []string{}
 								args := [][]string{}
+								users := []string{}
 								for i := 0; i < gardenContainer.RunCallCount(); i++ {
 									spec, _ := gardenContainer.RunArgsForCall(i)
 									paths = append(paths, spec.Path)
 									args = append(args, spec.Args)
+									users = append(users, spec.User)
 								}
 
 								Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
@@ -927,6 +950,7 @@ var _ = Describe("Transformer", func() {
 									"-uri=/",
 									"-liveness-interval=1s", // 1ms
 								}))
+								Expect(users).To(ContainElement("user1"))
 							})
 
 							Context("when either liveness check exit", func() {
@@ -964,6 +988,7 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
 						false,
+						"",
 						false,
 					)
 				})

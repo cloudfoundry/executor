@@ -91,6 +91,7 @@ type ExecutorConfig struct {
 	DiskMB                             string                `json:"disk_mb,omitempty"`
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
+	DeclarativeHealthcheckUser         string                `json:"declarative_healthcheck_user,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
@@ -244,6 +245,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		postSetupHook,
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
+		config.DeclarativeHealthcheckUser,
 		config.EnableContainerProxy,
 	)
 
@@ -478,6 +480,7 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
+	declarativeHealthcheckUser string,
 	enableContainerProxy bool,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
@@ -499,6 +502,7 @@ func initializeTransformer(
 		postSetupHook,
 		postSetupUser,
 		useDeclarativeHealthCheck,
+		declarativeHealthcheckUser,
 		enableContainerProxy,
 	)
 }
