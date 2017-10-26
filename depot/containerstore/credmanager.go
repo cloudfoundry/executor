@@ -64,6 +64,7 @@ type credManager struct {
 	CaCert             *x509.Certificate
 	privateKey         *rsa.PrivateKey
 	containerMountPath string
+	proxyConfigPath    string
 }
 
 func NewCredManager(
@@ -76,6 +77,7 @@ func NewCredManager(
 	CaCert *x509.Certificate,
 	privateKey *rsa.PrivateKey,
 	containerMountPath string,
+	proxyConfigPath string,
 ) CredManager {
 	return &credManager{
 		logger:             logger,
@@ -87,6 +89,7 @@ func NewCredManager(
 		CaCert:             CaCert,
 		privateKey:         privateKey,
 		containerMountPath: containerMountPath,
+		proxyConfigPath:    proxyConfigPath,
 	}
 }
 
@@ -114,6 +117,15 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 			return err
 		}
 
+		proxyPorts := populateContainerProxyPorts(&container)
+
+		configPath := filepath.Join(c.proxyConfigPath, container.Guid, "listeners.json")
+		err = WriteListenerConfig(GenerateListenerConfig(logger, proxyPorts), configPath)
+
+		if err != nil {
+			panic("couldn't write the listener proxy config at start")
+		}
+
 		c.metronClient.IncrementCounter(CredCreationSucceededCount)
 		c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
 
@@ -137,7 +149,14 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				c.metronClient.IncrementCounter(CredCreationSucceededCount)
 				c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
 
+				err = WriteListenerConfig(GenerateListenerConfig(logger, proxyPorts), configPath)
+
+				if err != nil {
+					panic("couldn't write the listener proxy config")
+				}
+
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
+
 				regenCertTimer.Reset(rotationDuration)
 				logger.Debug("completed")
 			case signal := <-signals:

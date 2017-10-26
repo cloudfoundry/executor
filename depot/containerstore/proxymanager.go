@@ -9,6 +9,7 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
+	uuid "github.com/nu7hatch/gouuid"
 )
 
 type Route struct {
@@ -36,6 +37,7 @@ type SSLContext struct {
 }
 
 type Listener struct {
+	Name       string     `json:"name"`
 	Address    string     `json:"address"`
 	Filters    []Filter   `json:"filters"`
 	SSLContext SSLContext `json:"ssl_context"`
@@ -62,10 +64,20 @@ type ClusterManager struct {
 	Clusters []Cluster `json:"clusters"`
 }
 
+type LdsConfig struct {
+	Cluster        string `json:"cluster"`
+	RefreshDelayMs int    `json:"refresh_delay_ms"`
+}
+
 type ProxyConfig struct {
 	Listeners      []Listener     `json:"listeners"`
 	Admin          Admin          `json:"admin"`
 	ClusterManager ClusterManager `json:"cluster_manager"`
+	Lds            LdsConfig      `json:"lds"`
+}
+
+type ListenerConfig struct {
+	Listeners []Listener `json:"listeners"`
 }
 
 const (
@@ -117,29 +129,67 @@ func (p *proxyManager) removeEnvoyConfigs() error {
 }
 
 func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMapping) ProxyConfig {
-	listeners := []Listener{}
 	clusters := []Cluster{}
 	for index, portMap := range portMapping {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
+		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
+		ldsClusterAddress := fmt.Sprintf("tcp://127.0.0.1:9933")
+		clusters = append(clusters,
+			Cluster{
+				Name:                clusterName,
+				ConnectionTimeoutMs: TimeOut,
+				Type:                Static,
+				LbType:              RoundRobin,
+				Hosts:               []Host{Host{URL: clusterAddress}},
+			},
+			Cluster{
+				Name:                "lds-cluster",
+				ConnectionTimeoutMs: TimeOut,
+				Type:                Static,
+				LbType:              RoundRobin,
+				Hosts:               []Host{Host{ldsClusterAddress}},
+			},
+		)
+	}
+
+	config := ProxyConfig{
+		Admin: Admin{
+			AccessLogPath: AdminAccessLog,
+			Address:       "tcp://127.0.0.1:9901",
+		},
+		Listeners: []Listener{},
+		ClusterManager: ClusterManager{
+			Clusters: clusters,
+		},
+		Lds: LdsConfig{
+			Cluster:        "lds-cluster",
+			RefreshDelayMs: 1000,
+		},
+	}
+	return config
+}
+
+func GenerateListenerConfig(logger lager.Logger, portMapping []executor.ProxyPortMapping) ListenerConfig {
+	listeners := []Listener{}
+	for index, portMap := range portMapping {
 		listenerName := TcpProxy
+		clusterName := fmt.Sprintf("%d-service-cluster", index)
 		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ProxyPort)
 		containerMountPath := "/etc/cf-instance-credentials"
-		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
-		clusters = append(clusters, Cluster{
-			Name:                clusterName,
-			ConnectionTimeoutMs: TimeOut,
-			Type:                Static,
-			LbType:              RoundRobin,
-			Hosts:               []Host{Host{URL: clusterAddress}},
-		})
+
+		newUUID, err := uuid.NewV4()
+		if err != nil {
+			panic("couldn't create uuid")
+		}
 
 		listeners = append(listeners, Listener{
+			Name:    fmt.Sprintf("listener-%d", index),
 			Address: listenerAddress,
 			Filters: []Filter{Filter{
 				Type: Read,
 				Name: listenerName,
 				Config: Config{
-					StatPrefix: IngressTCP,
+					StatPrefix: IngressTCP + "-" + newUUID.String(),
 					RouteConfig: RouteConfig{
 						Routes: []Route{Route{Cluster: clusterName}},
 					},
@@ -153,21 +203,23 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 		})
 	}
 
-	config := ProxyConfig{
-		Admin: Admin{
-			AccessLogPath: AdminAccessLog,
-			Address:       "tcp://127.0.0.1:9901",
-		},
+	config := ListenerConfig{
 		Listeners: listeners,
-		ClusterManager: ClusterManager{
-			Clusters: clusters,
-		},
 	}
 	return config
 }
 
 func WriteProxyConfig(proxyConfig ProxyConfig, path string) error {
 	data, err := json.Marshal(proxyConfig)
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(path, data, 0666)
+}
+
+func WriteListenerConfig(listenerConfig ListenerConfig, path string) error {
+	data, err := json.Marshal(listenerConfig)
 	if err != nil {
 		return err
 	}

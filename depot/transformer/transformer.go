@@ -553,7 +553,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
-	args := []string{
+	proxyArgs := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
 		// otherwise we ended up in the following situtation for short running tasks:
@@ -565,6 +565,7 @@ func (t *transformer) transformContainerProxyStep(
 		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
 		"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
 	}
+
 	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
@@ -572,19 +573,43 @@ func (t *transformer) transformContainerProxyStep(
 		LogSource:      "PROXY",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 		Path:           "sh",
-		Args:           args,
+		Args:           proxyArgs,
 	}
 
-	return steps.NewRun(
-		container,
-		runAction,
-		streamer.WithSource("PROXY"),
-		logger.Session("proxy"),
-		execContainer.ExternalIP,
-		execContainer.InternalIP,
-		execContainer.Ports,
-		t.exportNetworkEnvVars,
-		t.clock,
+	listenAction := models.RunAction{
+		User:           "root",
+		LogSource:      "PROXY",
+		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		Path:           "/etc/cf-assets/lds",
+	}
+
+	return steps.NewCodependent(
+		[]steps.Step{steps.NewRun(
+			container,
+			runAction,
+			streamer.WithSource("PROXY"),
+			logger.Session("proxy"),
+			execContainer.ExternalIP,
+			execContainer.InternalIP,
+			execContainer.Ports,
+			t.exportNetworkEnvVars,
+			t.clock,
+			true,
+		),
+			steps.NewRun(
+				container,
+				listenAction,
+				streamer.WithSource("PROXY"),
+				logger.Session("proxy"),
+				execContainer.ExternalIP,
+				execContainer.InternalIP,
+				execContainer.Ports,
+				t.exportNetworkEnvVars,
+				t.clock,
+				true,
+			),
+		},
+		true,
 		true,
 	)
 }

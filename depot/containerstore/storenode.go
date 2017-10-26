@@ -65,6 +65,7 @@ type storeNode struct {
 	useContainerProxy          bool
 	containerProxyPath         string
 	containerProxyConfigPath   string
+	ldsBinaryPath              string
 }
 
 func newStoreNode(
@@ -82,6 +83,7 @@ func newStoreNode(
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
+	ldsBinaryPath string,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -101,6 +103,7 @@ func newStoreNode(
 		useContainerProxy:           useContainerProxy,
 		containerProxyPath:          containerProxyPath,
 		containerProxyConfigPath:    containerProxyConfigPath,
+		ldsBinaryPath:               ldsBinaryPath,
 	}
 }
 
@@ -262,6 +265,11 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		proxyPortMapping = populateContainerProxyPorts(info)
 
 		logger.Info("adding-container-proxy-bindmounts")
+		mounts = append(mounts, garden.BindMount{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: n.containerProxyPath,
+			DstPath: "/etc/cf-assets/envoy",
+		})
 		mounts = append(mounts, garden.BindMount{
 			Origin:  garden.BindMountOriginHost,
 			SrcPath: n.containerProxyPath,
