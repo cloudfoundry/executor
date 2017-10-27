@@ -146,7 +146,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
-			cs.LDSListenerBinaryPath,
+			cs.ldsBinaryPath,
 		))
 
 	if err != nil {

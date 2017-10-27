@@ -272,8 +272,8 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		})
 		mounts = append(mounts, garden.BindMount{
 			Origin:  garden.BindMountOriginHost,
-			SrcPath: n.containerProxyPath,
-			DstPath: "/etc/cf-assets/envoy",
+			SrcPath: n.ldsBinaryPath,
+			DstPath: "/etc/cf-assets/lds",
 		})
 
 		proxyConfigDir := filepath.Join(n.containerProxyConfigPath, info.Guid)

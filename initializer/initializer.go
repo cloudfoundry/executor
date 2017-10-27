@@ -113,7 +113,7 @@ type ExecutorConfig struct {
 	InstanceIdentityCredDir            string                `json:"instance_identity_cred_dir,omitempty"`
 	InstanceIdentityPrivateKeyPath     string                `json:"instance_identity_private_key_path,omitempty"`
 	InstanceIdentityValidityPeriod     durationjson.Duration `json:"instance_identity_validity_period,omitempty"`
-	LDSListenerBinaryPath              string                `json:"lds_listener_binary_path,omitempty`
+	LDSListenerBinaryPath              string                `json:"lds_listener_binary_path,omitempty"`
 	MaxCacheSizeInBytes                uint64                `json:"max_cache_size_in_bytes,omitempty"`
 	MaxConcurrentDownloads             int                   `json:"max_concurrent_downloads,omitempty"`
 	MemoryMB                           string                `json:"memory_mb,omitempty"`

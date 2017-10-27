@@ -563,7 +563,7 @@ func (t *transformer) transformContainerProxyStep(
 		// - the wrapper shell script gets signalled and exit
 		// - garden's `process.Wait` won't return until both Stdout & Stderr are
 		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
-		"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+		"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical --service-cluster some-cluster --service-node some-node & pid=$!; wait $pid",
 	}
 
 	nofiles := envoyNofiles
@@ -580,7 +580,7 @@ func (t *transformer) transformContainerProxyStep(
 		User:           "root",
 		LogSource:      "PROXY",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-		Path:           "/etc/cf-assets/lds",
+		Path:           "/etc/cf-assets/lds/lds",
 	}
 
 	return steps.NewCodependent(

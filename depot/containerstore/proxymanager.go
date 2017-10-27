@@ -133,7 +133,6 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 	for index, portMap := range portMapping {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
-		ldsClusterAddress := fmt.Sprintf("tcp://127.0.0.1:9933")
 		clusters = append(clusters,
 			Cluster{
 				Name:                clusterName,
@@ -142,15 +141,16 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 				LbType:              RoundRobin,
 				Hosts:               []Host{Host{URL: clusterAddress}},
 			},
-			Cluster{
-				Name:                "lds-cluster",
-				ConnectionTimeoutMs: TimeOut,
-				Type:                Static,
-				LbType:              RoundRobin,
-				Hosts:               []Host{Host{ldsClusterAddress}},
-			},
 		)
 	}
+
+	clusters = append(clusters, Cluster{
+		Name:                "lds-cluster",
+		ConnectionTimeoutMs: TimeOut,
+		Type:                Static,
+		LbType:              RoundRobin,
+		Hosts:               []Host{Host{"tcp://127.0.0.1:9933"}},
+	})
 
 	config := ProxyConfig{
 		Admin: Admin{
