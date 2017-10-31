@@ -49,8 +49,9 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	useDeclarativeHealthCheck bool
-	useContainerProxy         bool
+	useDeclarativeHealthCheck  bool
+	declarativeHealthcheckUser string
+	useContainerProxy          bool
 
 	postSetupHook []string
 	postSetupUser string
@@ -76,6 +77,7 @@ func NewTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
+	declarativeHealthcheckUser string,
 	useContainerProxy bool,
 ) *transformer {
 	return &transformer{
@@ -94,6 +96,7 @@ func NewTransformer(
 		postSetupHook:               postSetupHook,
 		postSetupUser:               postSetupUser,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
+		declarativeHealthcheckUser:  declarativeHealthcheckUser,
 		useContainerProxy:           useContainerProxy,
 	}
 }
@@ -490,7 +493,7 @@ func (t *transformer) transformCheckDefinition(
 		}
 
 		runAction := models.RunAction{
-			User:           "root",
+			User:           t.declarativeHealthcheckUser,
 			LogSource:      sourceName,
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 			Path:           "/etc/cf-assets/healthcheck/healthcheck",
