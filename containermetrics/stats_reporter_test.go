@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
@@ -20,16 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type listContainerResults struct {
-	containers []executor.Container
-	err        error
-}
-
-type metricsResults struct {
-	metrics executor.ContainerMetrics
-	err     error
-}
-
 var _ = Describe("StatsReporter", func() {
 	var (
 		logger *lagertest.TestLogger
@@ -40,13 +31,17 @@ var _ = Describe("StatsReporter", func() {
 		fakeMetricSender   *msfake.FakeMetricSender
 		fakeMetronClient   *mfakes.FakeIngressClient
 
-		metricsResults chan map[string]executor.Metrics
-		process        ifrit.Process
+		metricsResultsChan chan map[string]executor.Metrics
+		listContainersChan chan []executor.Container
+		process            ifrit.Process
+
+		enableContainerProxy       bool
+		additionalMemoryAllocation int
 	)
 
 	sendResults := func() {
-		metricsResults <- map[string]executor.Metrics{
-			"guid-without-index": executor.Metrics{
+		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 123,
@@ -56,7 +51,7 @@ var _ = Describe("StatsReporter", func() {
 					DiskLimitInBytes:   1024,
 				},
 			},
-			"guid-with-index": executor.Metrics{
+			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 321,
@@ -66,10 +61,20 @@ var _ = Describe("StatsReporter", func() {
 					DiskLimitInBytes:   2048,
 				},
 			},
+			"container-guid-without-preloaded-rootfs": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: 345,
+					DiskUsageInBytes:   456,
+					TimeSpentInCPU:     100 * time.Second,
+					MemoryLimitInBytes: 678,
+					DiskLimitInBytes:   2048,
+				},
+			},
 		}
 
-		metricsResults <- map[string]executor.Metrics{
-			"guid-without-index": executor.Metrics{
+		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 1230,
@@ -79,7 +84,7 @@ var _ = Describe("StatsReporter", func() {
 					DiskLimitInBytes:   4096,
 				},
 			},
-			"guid-with-index": executor.Metrics{
+			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 3210,
@@ -88,10 +93,20 @@ var _ = Describe("StatsReporter", func() {
 					MemoryLimitInBytes: 9870,
 					DiskLimitInBytes:   512,
 				}},
+			"container-guid-without-preloaded-rootfs": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: 3450,
+					DiskUsageInBytes:   4560,
+					TimeSpentInCPU:     110 * time.Second,
+					MemoryLimitInBytes: 6780,
+					DiskLimitInBytes:   2048,
+				},
+			},
 		}
 
-		metricsResults <- map[string]executor.Metrics{
-			"guid-without-index": executor.Metrics{
+		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 12300,
@@ -101,7 +116,7 @@ var _ = Describe("StatsReporter", func() {
 					DiskLimitInBytes:   234,
 				},
 			},
-			"guid-with-index": executor.Metrics{
+			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 32100,
@@ -111,6 +126,28 @@ var _ = Describe("StatsReporter", func() {
 					DiskLimitInBytes:   43200,
 				},
 			},
+			"container-guid-without-preloaded-rootfs": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: 34500,
+					DiskUsageInBytes:   45600,
+					TimeSpentInCPU:     112 * time.Second,
+					MemoryLimitInBytes: 6780,
+					DiskLimitInBytes:   2048,
+				},
+			},
+		}
+	}
+
+	sendContainers := func() {
+		listContainersChan <- []executor.Container{
+			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
+		}
+		listContainersChan <- []executor.Container{
+			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
+		}
+		listContainersChan <- []executor.Container{
+			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
 		}
 	}
 
@@ -137,21 +174,36 @@ var _ = Describe("StatsReporter", func() {
 
 		fakeMetricSender = msfake.NewFakeMetricSender()
 
-		metricsResults = make(chan map[string]executor.Metrics, 10)
+		metricsResultsChan = make(chan map[string]executor.Metrics, 10)
+		listContainersChan = make(chan []executor.Container, 10)
 
 		fakeExecutorClient.GetBulkMetricsStub = func(lager.Logger) (map[string]executor.Metrics, error) {
-			result, ok := <-metricsResults
+			result, ok := <-metricsResultsChan
 			if !ok || result == nil {
 				return nil, errors.New("closed")
 			}
 			return result, nil
 		}
 
-		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, fakeExecutorClient, fakeMetronClient))
+		fakeExecutorClient.ListContainersStub = func(lager.Logger) ([]executor.Container, error) {
+			result, ok := <-listContainersChan
+			if !ok || result == nil {
+				return nil, errors.New("closed")
+			}
+			return result, nil
+		}
+
+		enableContainerProxy = false
+		additionalMemoryAllocation = 5
+	})
+
+	JustBeforeEach(func() {
+		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, additionalMemoryAllocation, fakeExecutorClient, fakeMetronClient))
 	})
 
 	AfterEach(func() {
-		close(metricsResults)
+		close(metricsResultsChan)
+		close(listContainersChan)
 		ginkgomon.Interrupt(process)
 	})
 
@@ -164,7 +216,8 @@ var _ = Describe("StatsReporter", func() {
 	}
 
 	Context("when the interval elapses", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
+			sendContainers()
 			sendResults()
 
 			fakeClock.WaitForWatcherAndIncrement(interval)
@@ -193,7 +246,102 @@ var _ = Describe("StatsReporter", func() {
 					},
 				},
 					0.0),
+				createEventContainerMetric(executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes: uint64(345),
+						DiskUsageInBytes:   456,
+						MemoryLimitInBytes: 678,
+						DiskLimitInBytes:   2048,
+					},
+				},
+					0.0),
 			}))
+		})
+
+		Context("when enableContainerProxy is set", func() {
+			BeforeEach(func() {
+				enableContainerProxy = true
+
+				listContainersChan <- []executor.Container{
+					{Guid: "container-guid-without-index",
+						Resource: executor.Resource{
+							RootFSPath: models.PreloadedRootFSScheme,
+						},
+						MemoryLimit: uint64(200 + additionalMemoryAllocation),
+						RunInfo: executor.RunInfo{
+							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
+						},
+					},
+					{Guid: "container-guid-with-index",
+						Resource: executor.Resource{
+							RootFSPath: models.PreloadedRootFSScheme,
+						},
+						MemoryLimit: uint64(400 + additionalMemoryAllocation),
+						RunInfo: executor.RunInfo{
+							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
+						},
+					},
+					{Guid: "container-guid-without-preloaded-rootfs",
+						MemoryLimit: uint64(200),
+						Resource: executor.Resource{
+							RootFSPath: "unsupported-arbitrary://still-goes-through",
+						},
+						RunInfo: executor.RunInfo{
+							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+						},
+					},
+				}
+
+			})
+
+			It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
+				expectedMemoryUsageWithoutIndex := float64(123) * float64(200) / float64(200+additionalMemoryAllocation)
+				expectedMemoryUsageWithIndex := float64(321) * float64(400) / float64(400+additionalMemoryAllocation)
+
+				Eventually(sentMetrics).Should(ContainElement(
+					createEventContainerMetric(executor.Metrics{
+						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
+						ContainerMetrics: executor.ContainerMetrics{
+							MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
+							DiskUsageInBytes:   456,
+							MemoryLimitInBytes: 789,
+							DiskLimitInBytes:   1024,
+						},
+					},
+						0.0),
+				))
+				Eventually(sentMetrics).Should(ContainElement(
+					createEventContainerMetric(executor.Metrics{
+						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
+						ContainerMetrics: executor.ContainerMetrics{
+							MemoryUsageInBytes: uint64(expectedMemoryUsageWithIndex),
+							DiskUsageInBytes:   654,
+							MemoryLimitInBytes: 987,
+							DiskLimitInBytes:   2048,
+						},
+					},
+						0.0),
+				))
+			})
+
+			Context("when there is a container without preloaded rootfs", func() {
+				It("should emit memory usage that is not rescaled", func() {
+					Eventually(sentMetrics).Should(ContainElement(
+						createEventContainerMetric(executor.Metrics{
+							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+							ContainerMetrics: executor.ContainerMetrics{
+								MemoryUsageInBytes: uint64(345),
+								DiskUsageInBytes:   456,
+								MemoryLimitInBytes: 678,
+								DiskLimitInBytes:   2048,
+							},
+						},
+							0.0),
+					))
+				})
+			})
+
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
@@ -203,7 +351,7 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		Context("and the interval elapses again", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
 				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 			})
@@ -233,7 +381,7 @@ var _ = Describe("StatsReporter", func() {
 			})
 
 			Context("and the interval elapses again", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					fakeClock.WaitForWatcherAndIncrement(interval)
 					Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
 				})
@@ -267,8 +415,8 @@ var _ = Describe("StatsReporter", func() {
 	})
 
 	Context("when get all metrics fails", func() {
-		BeforeEach(func() {
-			metricsResults <- nil
+		JustBeforeEach(func() {
+			metricsResultsChan <- nil
 
 			fakeClock.Increment(interval)
 			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
@@ -279,7 +427,8 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		Context("and the interval elapses again, and it works that time", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
+				sendContainers()
 				sendResults()
 				fakeClock.Increment(interval)
 				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
@@ -343,8 +492,12 @@ var _ = Describe("StatsReporter", func() {
 			))
 		}
 
-		It("only remembers the previous metrics", func() {
-			metricsResults <- map[string]executor.Metrics{
+		// Pending test: This test was passing, but the functionality was not actually working.
+		// When we discovered that the test setup does not mimic reality, we filed
+		// a bug [#152337746], and made the test fail, hence it's pending until we get to that bug.
+		PIt("only remembers the previous metrics", func() {
+			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
+			metricsResultsChan <- map[string]executor.Metrics{
 				"container-guid-0": metrics("metrics-guid-0", 0, 128, 256, 512, 1024, 10*time.Second),
 				"container-guid-1": metrics("metrics-guid-1", 1, 256, 512, 1024, 2048, 10*time.Second),
 			}
@@ -354,8 +507,11 @@ var _ = Describe("StatsReporter", func() {
 			waitForMetrics("metrics-guid-0", 0, 0, 128, 256, 512, 1024)
 			waitForMetrics("metrics-guid-1", 1, 0, 256, 512, 1024, 2048)
 
+			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(2))
+
 			By("losing a container")
-			metricsResults <- map[string]executor.Metrics{
+			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
+			metricsResultsChan <- map[string]executor.Metrics{
 				"container-guid-0": metrics("metrics-guid-0", 0, 256, 512, 1024, 2048, 30*time.Second),
 			}
 
@@ -364,8 +520,11 @@ var _ = Describe("StatsReporter", func() {
 			waitForMetrics("metrics-guid-0", 0, 200, 256, 512, 1024, 2048)
 			waitForMetrics("metrics-guid-1", 1, 0, 256, 512, 1024, 2048)
 
+			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(4))
+
 			By("finding the container again")
-			metricsResults <- map[string]executor.Metrics{
+			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
+			metricsResultsChan <- map[string]executor.Metrics{
 				"container-guid-0": metrics("metrics-guid-0", 0, 256, 512, 2, 3, 40*time.Second),
 				"container-guid-1": metrics("metrics-guid-1", 1, 512, 1024, 3, 2, 10*time.Second),
 			}
@@ -374,6 +533,7 @@ var _ = Describe("StatsReporter", func() {
 
 			waitForMetrics("metrics-guid-0", 0, 100, 256, 512, 2, 3)
 			waitForMetrics("metrics-guid-1", 1, 0, 512, 1024, 3, 2)
+			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(6))
 		})
 	})
 })

@@ -92,6 +92,7 @@ type ExecutorConfig struct {
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
+	AdditionalMemoryAllocationMB       int                   `json:"additional_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
@@ -339,6 +340,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				logger,
 				time.Duration(config.ContainerMetricsReportInterval),
 				clock,
+				config.EnableContainerProxy,
+				config.AdditionalMemoryAllocationMB,
 				depotClient,
 				metronClient,
 			)},
