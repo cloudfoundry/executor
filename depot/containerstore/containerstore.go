@@ -76,6 +76,7 @@ type containerStore struct {
 	containerProxyPath       string
 	containerProxyConfigPath string
 	useContainerProxy        bool
+	proxyManager             ProxyManager
 
 	trustedSystemCertificatesPath string
 }
@@ -96,6 +97,7 @@ func New(
 	useContainerProxy bool,
 	containerProxyPath string,
 	containerProxyConfigPath string,
+	proxyManager ProxyManager,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -113,6 +115,7 @@ func New(
 		useContainerProxy:             useContainerProxy,
 		containerProxyPath:            containerProxyPath,
 		containerProxyConfigPath:      containerProxyConfigPath,
+		proxyManager:                  proxyManager,
 	}
 }
 
@@ -142,6 +145,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
+			cs.proxyManager,
 		))
 
 	if err != nil {

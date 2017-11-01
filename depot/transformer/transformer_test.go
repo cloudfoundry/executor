@@ -71,6 +71,7 @@ var _ = Describe("Transformer", func() {
 				false,
 				"",
 				false,
+				1*time.Second,
 			)
 
 			container = executor.Container{
@@ -206,6 +207,7 @@ var _ = Describe("Transformer", func() {
 					false,
 					"",
 					true,
+					1*time.Second,
 				)
 
 				processLock.Lock()
@@ -230,7 +232,7 @@ var _ = Describe("Transformer", func() {
 					case "sh":
 						Expect(spec.Args).To(Equal([]string{
 							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s 1 --log-level critical& pid=$!; wait $pid",
 						}))
 						return envoyProcess, nil
 					}
@@ -299,7 +301,7 @@ var _ = Describe("Transformer", func() {
 				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s 1 --log-level critical& pid=$!; wait $pid",
 				}))
 			})
 
@@ -448,6 +450,7 @@ var _ = Describe("Transformer", func() {
 						true,
 						"user1",
 						false,
+						1*time.Second,
 					)
 
 					container.StartTimeoutMs = 1000
@@ -990,6 +993,7 @@ var _ = Describe("Transformer", func() {
 						false,
 						"",
 						false,
+						1*time.Second,
 					)
 				})
 

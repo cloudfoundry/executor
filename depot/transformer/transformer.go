@@ -49,9 +49,10 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckUser string
+	useDeclarativeHealthCheck  bool
 	useContainerProxy          bool
+	drainWait                  time.Duration
 
 	postSetupHook []string
 	postSetupUser string
@@ -79,6 +80,7 @@ func NewTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	useContainerProxy bool,
+	drainWait time.Duration,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -98,6 +100,7 @@ func NewTransformer(
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckUser:  declarativeHealthcheckUser,
 		useContainerProxy:           useContainerProxy,
+		drainWait:                   drainWait,
 	}
 }
 
@@ -556,6 +559,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -566,7 +570,7 @@ func (t *transformer) transformContainerProxyStep(
 		// - the wrapper shell script gets signalled and exit
 		// - garden's `process.Wait` won't return until both Stdout & Stderr are
 		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
-		"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+		envoyCMD,
 	}
 	nofiles := envoyNofiles
 

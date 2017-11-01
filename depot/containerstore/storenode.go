@@ -65,6 +65,8 @@ type storeNode struct {
 	useContainerProxy          bool
 	containerProxyPath         string
 	containerProxyConfigPath   string
+	proxyManager               ProxyManager
+	proxyManagerProcess        ifrit.Process
 }
 
 func newStoreNode(
@@ -82,6 +84,7 @@ func newStoreNode(
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
+	proxyManager ProxyManager,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -101,6 +104,7 @@ func newStoreNode(
 		useContainerProxy:           useContainerProxy,
 		containerProxyPath:          containerProxyPath,
 		containerProxyConfigPath:    containerProxyConfigPath,
+		proxyManager:                proxyManager,
 	}
 }
 
@@ -280,10 +284,6 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			SrcPath: proxyConfigDir,
 			DstPath: "/etc/cf-assets/envoy_config",
 		})
-
-		proxyConfig := GenerateProxyConfig(logger, proxyPortMapping)
-		proxyConfigFilename := filepath.Join(proxyConfigDir, "envoy.json")
-		WriteProxyConfig(proxyConfig, proxyConfigFilename)
 	}
 
 	netInRules := make([]garden.NetIn, len(info.Ports))
@@ -407,9 +407,11 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return err
 	}
 
-	credManagerRunner := n.credManager.Runner(logger, n.info)
+	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
+	proxyManagerRunner := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
 
 	n.credManagerProcess = ifrit.Background(credManagerRunner)
+	n.proxyManagerProcess = ifrit.Background(proxyManagerRunner)
 	// we cannot use a group here because it messes up with the error messages returned from the runners, e.g.
 	//   cred-manager-runner exited with error: BOOOM
 	//   container-runner exited with nil
@@ -422,6 +424,11 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	// wait for cred manager to start
 	select {
 	case <-n.credManagerProcess.Ready():
+		<-n.proxyManagerProcess.Ready()
+		n.process = ifrit.Background(runner)
+		go n.run(logger)
+	case <-n.proxyManagerProcess.Ready():
+		<-n.credManagerProcess.Ready()
 		n.process = ifrit.Background(runner)
 		go n.run(logger)
 	case err := <-n.credManagerProcess.Wait():
@@ -432,6 +439,18 @@ func (n *storeNode) Run(logger lager.Logger) error {
 			logger.Info("cred-manager-exited-without-error")
 			n.complete(logger, false, "")
 		}
+		n.proxyManagerProcess.Signal(os.Interrupt)
+		n.proxyManagerProcess.Wait()
+	case err := <-n.proxyManagerProcess.Wait():
+		if err != nil {
+			logger.Error("proxy-manager-exited", err)
+			n.complete(logger, true, "proxy-manager-runner exited: "+err.Error())
+		} else {
+			logger.Info("proxy-manager-exited-without-error")
+			n.complete(logger, false, "")
+		}
+		n.credManagerProcess.Signal(os.Interrupt)
+		n.credManagerProcess.Wait()
 	}
 	return nil
 }
@@ -454,14 +473,26 @@ func (n *storeNode) run(logger lager.Logger) {
 		if err != nil {
 			errorStr = "cred-manager-runner exited: " + err.Error()
 		}
+		n.proxyManagerProcess.Signal(os.Interrupt)
 		n.process.Signal(os.Interrupt)
 		n.process.Wait()
+		n.proxyManagerProcess.Wait()
+	case err := <-n.proxyManagerProcess.Wait():
+		if err != nil {
+			errorStr = "cred-manager-runner exited: " + err.Error()
+		}
+		n.credManagerProcess.Signal(os.Interrupt)
+		n.process.Signal(os.Interrupt)
+		n.process.Wait()
+		n.credManagerProcess.Wait()
 	case err := <-n.process.Wait():
 		if err != nil {
 			errorStr = err.Error()
 		}
 		n.credManagerProcess.Signal(os.Interrupt)
+		n.proxyManagerProcess.Signal(os.Interrupt)
 		n.credManagerProcess.Wait()
+		n.proxyManagerProcess.Wait()
 	}
 
 	if errorStr != "" {

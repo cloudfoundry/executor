@@ -96,7 +96,7 @@ var _ = Describe("CredManager", func() {
 				},
 			}
 
-			runner := containerstore.NewNoopCredManager().Runner(logger, container)
+			runner, _ := containerstore.NewNoopCredManager().Runner(logger, container)
 			process := ifrit.Background(runner)
 			Eventually(process.Ready()).Should(BeClosed())
 			Consistently(process.Wait()).ShouldNot(Receive())
@@ -145,10 +145,11 @@ var _ = Describe("CredManager", func() {
 
 	Context("WithCreds", func() {
 		var (
-			container executor.Container
-			certMount []garden.BindMount
-			err       error
-			certPath  string
+			container        executor.Container
+			certMount        []garden.BindMount
+			err              error
+			certPath         string
+			rotatingCredChan <-chan struct{}
 		)
 
 		BeforeEach(func() {
@@ -175,7 +176,8 @@ var _ = Describe("CredManager", func() {
 			)
 
 			JustBeforeEach(func() {
-				runner := credManager.Runner(logger, container)
+				var runner ifrit.Runner
+				runner, rotatingCredChan = credManager.Runner(logger, container)
 				containerProcess = ifrit.Background(runner)
 			})
 
@@ -278,6 +280,8 @@ var _ = Describe("CredManager", func() {
 						Expect(err).NotTo(HaveOccurred())
 						cert := certs[0]
 						Expect(cert.SerialNumber).ToNot(Equal(serialNumber))
+
+						Eventually(rotatingCredChan).Should(Receive())
 					})
 				}
 
@@ -317,6 +321,8 @@ var _ = Describe("CredManager", func() {
 							Expect(err).NotTo(HaveOccurred())
 							return certAfter
 						}).Should(Equal(certBefore))
+
+						Consistently(rotatingCredChan).ShouldNot(Receive())
 					})
 				}
 
@@ -399,6 +405,8 @@ var _ = Describe("CredManager", func() {
 									key, _ := readKeyAndCert()
 									return key
 								}).ShouldNot(Equal(keyBefore))
+
+								Eventually(rotatingCredChan).Should(Receive())
 							})
 
 							testCredentialRotation(5 * time.Second)
@@ -411,6 +419,7 @@ var _ = Describe("CredManager", func() {
 									key, _ := readKeyAndCert()
 									return key
 								}).ShouldNot(Equal(keyBefore))
+								Eventually(rotatingCredChan).Should(Receive())
 							})
 
 							testNoCredentialRotation(15 * time.Second)
@@ -466,6 +475,10 @@ var _ = Describe("CredManager", func() {
 
 				It("removes container credentials from the filesystem", func() {
 					Eventually(certMount[0].SrcPath).ShouldNot(BeADirectory())
+				})
+
+				It("closes the rotating cred channel", func() {
+					Eventually(rotatingCredChan).Should(BeClosed())
 				})
 			})
 

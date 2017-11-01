@@ -6,6 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
+	"time"
+
+	uuid "github.com/nu7hatch/gouuid"
+	"github.com/tedsuo/ifrit"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
@@ -62,10 +68,20 @@ type ClusterManager struct {
 	Clusters []Cluster `json:"clusters"`
 }
 
+type LDS struct {
+	Cluster        string `json:"cluster"`
+	RefreshDelayMS string `json:"refresh_delay_ms"`
+}
+
 type ProxyConfig struct {
 	Listeners      []Listener     `json:"listeners"`
 	Admin          Admin          `json:"admin"`
 	ClusterManager ClusterManager `json:"cluster_manager"`
+	LDS            LDS            `json:"lds"`
+}
+
+type ListenerConfig struct {
+	Listeners []Listener `json:"listeners"`
 }
 
 const (
@@ -80,51 +96,88 @@ const (
 	AdminAccessLog = "/dev/null"
 )
 
+//go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
 type ProxyManager interface {
-	Run(signals <-chan os.Signal, ready chan<- struct{}) error
+	Runner(lager.Logger, executor.Container, <-chan struct{}) ifrit.Runner
 }
 
 type proxyManager struct {
 	logger                   lager.Logger
 	containerProxyConfigPath string
+	refreshDelayMS           time.Duration
 }
 
 func NewProxyManager(
 	logger lager.Logger,
 	containerProxyConfigPath string,
+	refreshDelayMS time.Duration,
 ) ProxyManager {
 	return &proxyManager{
 		logger: logger.Session("proxy-manager"),
 		containerProxyConfigPath: containerProxyConfigPath,
+		refreshDelayMS:           refreshDelayMS,
 	}
 }
 
-func (p *proxyManager) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	p.logger.Info("started")
-	close(ready)
-	for {
-		select {
-		case signal := <-signals:
-			p.logger.Info("signalled", lager.Data{"signal": signal.String()})
-			return p.removeEnvoyConfigs()
+func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.json")
+		listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.json")
+
+		proxyConfig := generateProxyConfig(logger, container, p.refreshDelayMS)
+
+		err := writeProxyConfig(proxyConfig, proxyConfigPath)
+		if err != nil {
+			logger.Error("failed-writing-initial-proxy-listener-config", err)
+			return err
 		}
-	}
+
+		listenerConfig, err := generateListenerConfig(logger, container)
+		if err != nil {
+			logger.Error("failed-generating-initial-proxy-listener-config", err)
+			return err
+		}
+
+		err = writeListenerConfig(listenerConfig, listenerConfigPath)
+		if err != nil {
+			logger.Error("failed-writing-initial-proxy-listener-config", err)
+			return err
+		}
+
+		close(ready)
+		for {
+			select {
+			case <-credRotatedChan:
+				logger = logger.Session("updating-proxy-listener-config")
+				logger.Debug("started")
+
+				listenerConfig, err := generateListenerConfig(logger, container)
+				if err != nil {
+					logger.Error("failed-generating-proxy-listener-config", err)
+					return err
+				}
+
+				err = writeListenerConfig(listenerConfig, listenerConfigPath)
+				if err != nil {
+					logger.Error("failed-writing-proxy-listener-config", err)
+					return err
+				}
+				logger.Debug("completed")
+			case signal := <-signals:
+				logger.Info("signaled", lager.Data{"signal": signal.String()})
+				configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
+				p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
+				return os.RemoveAll(configPath)
+			}
+		}
+	})
 }
 
-func (p *proxyManager) removeEnvoyConfigs() error {
-	p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": p.containerProxyConfigPath})
-	return os.RemoveAll(p.containerProxyConfigPath)
-}
-
-func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMapping) ProxyConfig {
-	listeners := []Listener{}
+func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration) ProxyConfig {
 	clusters := []Cluster{}
-	for index, portMap := range portMapping {
+	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-		listenerName := TcpProxy
-		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ProxyPort)
-		containerMountPath := "/etc/cf-instance-credentials"
-		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.AppPort)
+		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.ContainerPort)
 		clusters = append(clusters, Cluster{
 			Name:                clusterName,
 			ConnectionTimeoutMs: TimeOut,
@@ -132,6 +185,65 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 			LbType:              RoundRobin,
 			Hosts:               []Host{Host{URL: clusterAddress}},
 		})
+	}
+
+	clusters = append(clusters, Cluster{
+		Name:                "lds-cluster",
+		ConnectionTimeoutMs: TimeOut,
+		Type:                Static,
+		LbType:              RoundRobin,
+		Hosts:               []Host{Host{URL: "tcp://127.0.0.1:9933"}},
+	})
+
+	config := ProxyConfig{
+		Admin: Admin{
+			AccessLogPath: AdminAccessLog,
+			Address:       "tcp://127.0.0.1:9901",
+		},
+		Listeners: []Listener{},
+		ClusterManager: ClusterManager{
+			Clusters: clusters,
+		},
+		LDS: LDS{
+			Cluster:        "lds-cluster",
+			RefreshDelayMS: strconv.Itoa(int(refreshDelayMS.Seconds() * 1000)),
+		},
+	}
+	return config
+}
+
+func writeProxyConfig(proxyConfig ProxyConfig, path string) error {
+	data, err := json.Marshal(proxyConfig)
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(path, data, 0666)
+}
+
+func writeListenerConfig(listenerConfig ListenerConfig, path string) error {
+	data, err := json.Marshal(listenerConfig)
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(path, data, 0666)
+}
+
+func generateListenerConfig(logger lager.Logger, container executor.Container) (ListenerConfig, error) {
+	listeners := []Listener{}
+
+	for index, portMap := range container.Ports {
+		listenerName := TcpProxy
+		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ContainerTLSProxyPort)
+		containerMountPath := "/etc/cf-instance-credentials"
+		clusterName := fmt.Sprintf("%d-service-cluster", index)
+
+		newUUID, err := uuid.NewV4()
+		if err != nil {
+			logger.Error("failed-to-create-uuid-for-stat-prefix", err)
+			return ListenerConfig{}, err
+		}
 
 		listeners = append(listeners, Listener{
 			Address: listenerAddress,
@@ -139,7 +251,7 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 				Type: Read,
 				Name: listenerName,
 				Config: Config{
-					StatPrefix: IngressTCP,
+					StatPrefix: IngressTCP + "-" + newUUID.String(),
 					RouteConfig: RouteConfig{
 						Routes: []Route{Route{Cluster: clusterName}},
 					},
@@ -153,24 +265,9 @@ func GenerateProxyConfig(logger lager.Logger, portMapping []executor.ProxyPortMa
 		})
 	}
 
-	config := ProxyConfig{
-		Admin: Admin{
-			AccessLogPath: AdminAccessLog,
-			Address:       "tcp://127.0.0.1:9901",
-		},
+	config := ListenerConfig{
 		Listeners: listeners,
-		ClusterManager: ClusterManager{
-			Clusters: clusters,
-		},
-	}
-	return config
-}
-
-func WriteProxyConfig(proxyConfig ProxyConfig, path string) error {
-	data, err := json.Marshal(proxyConfig)
-	if err != nil {
-		return err
 	}
 
-	return ioutil.WriteFile(path, data, 0666)
+	return config, nil
 }
