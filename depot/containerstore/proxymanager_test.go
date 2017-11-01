@@ -312,7 +312,6 @@ var _ = Describe("ProxyManager", func() {
 
 				err = json.Unmarshal(data, &initialListenerConfig)
 				Expect(err).NotTo(HaveOccurred())
-
 			})
 
 			It("does not write the listener config to the config path", func() {

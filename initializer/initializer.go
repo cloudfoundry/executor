@@ -252,6 +252,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckUser,
 		config.EnableContainerProxy,
+		time.Duration(config.EnvoyDrainTimeout),
 	)
 
 	hub := event.NewHub()
@@ -280,6 +281,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		return nil, grouper.Members{}, err
 	}
 
+	proxyManager := containerstore.NewProxyManager(
+		logger, config.ContainerProxyConfigPath,
+		time.Duration(config.EnvoyConfigRefreshDelay),
+	)
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
@@ -296,6 +301,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.EnableContainerProxy,
 		config.ContainerProxyPath,
 		config.ContainerProxyConfigPath,
+		proxyManager,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
@@ -363,7 +369,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 			)},
 			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
 			{"container-reaper", containerStore.NewContainerReaper(logger)},
-			{"proxy-manager", containerstore.NewProxyManager(logger, config.ContainerProxyConfigPath)},
 		},
 		nil
 }
@@ -489,6 +494,7 @@ func initializeTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	enableContainerProxy bool,
+	drainTimeout time.Duration,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -511,6 +517,7 @@ func initializeTransformer(
 		useDeclarativeHealthCheck,
 		declarativeHealthcheckUser,
 		enableContainerProxy,
+		drainTimeout,
 	)
 }
 

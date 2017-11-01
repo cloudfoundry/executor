@@ -121,6 +121,10 @@ func NewProxyManager(
 
 func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		logger = logger.Session("proxy-manager")
+		logger.Info("starting")
+		defer logger.Info("finished")
+
 		proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.json")
 		listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.json")
 
@@ -145,6 +149,8 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 		}
 
 		close(ready)
+		logger.Info("started")
+
 		for {
 			select {
 			case <-credRotatedChan:

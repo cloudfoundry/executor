@@ -18,6 +18,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 )
 
 const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
@@ -59,14 +60,12 @@ type storeNode struct {
 	eventEmitter               event.Hub
 	transformer                transformer.Transformer
 	process                    ifrit.Process
-	credManagerProcess         ifrit.Process
 	config                     *ContainerConfig
 	declarativeHealthcheckPath string
 	useContainerProxy          bool
 	containerProxyPath         string
 	containerProxyConfigPath   string
 	proxyManager               ProxyManager
-	proxyManagerProcess        ifrit.Process
 }
 
 func newStoreNode(
@@ -409,56 +408,54 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
 	proxyManagerRunner := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
-
-	n.credManagerProcess = ifrit.Background(credManagerRunner)
-	n.proxyManagerProcess = ifrit.Background(proxyManagerRunner)
-	// we cannot use a group here because it messes up with the error messages returned from the runners, e.g.
-	//   cred-manager-runner exited with error: BOOOM
-	//   container-runner exited with nil
-	// instead of just
-	//   BOOM
-	// nomrally this is informative and good but looks like cc
-	// FailureReasonSanitizer depends on some errors messages having a specific
-	// structure
-
-	// wait for cred manager to start
-	select {
-	case <-n.credManagerProcess.Ready():
-		<-n.proxyManagerProcess.Ready()
-		n.process = ifrit.Background(runner)
-		go n.run(logger)
-	case <-n.proxyManagerProcess.Ready():
-		<-n.credManagerProcess.Ready()
-		n.process = ifrit.Background(runner)
-		go n.run(logger)
-	case err := <-n.credManagerProcess.Wait():
-		if err != nil {
-			logger.Error("cred-manager-exited", err)
-			n.complete(logger, true, "cred-manager-runner exited: "+err.Error())
-		} else {
-			logger.Info("cred-manager-exited-without-error")
-			n.complete(logger, false, "")
-		}
-		n.proxyManagerProcess.Signal(os.Interrupt)
-		n.proxyManagerProcess.Wait()
-	case err := <-n.proxyManagerProcess.Wait():
-		if err != nil {
-			logger.Error("proxy-manager-exited", err)
-			n.complete(logger, true, "proxy-manager-runner exited: "+err.Error())
-		} else {
-			logger.Info("proxy-manager-exited-without-error")
-			n.complete(logger, false, "")
-		}
-		n.credManagerProcess.Signal(os.Interrupt)
-		n.credManagerProcess.Wait()
+	members := grouper.Members{
+		{"cred-manager-runner", credManagerRunner},
+		{"proxy-config-manager-runner", proxyManagerRunner},
+		{"runner", runner},
 	}
+	group := grouper.NewOrdered(os.Interrupt, members)
+	n.process = ifrit.Background(group)
+	go n.run(logger)
 	return nil
+}
+
+func (n *storeNode) completeWithError(logger lager.Logger, err error) {
+	exitTrace, ok := err.(grouper.ErrorTrace)
+	if ok {
+		for _, event := range exitTrace {
+			err := event.Err
+			if err != nil {
+				if event.Member.Name != "runner" {
+					err = errors.New(event.Member.Name + " exited: " + err.Error())
+				}
+				n.completeWithError(logger, err)
+				return
+			}
+		}
+	}
+
+	var errorStr string
+	if err != nil {
+		errorStr = err.Error()
+	}
+
+	if errorStr != "" {
+		n.complete(logger, true, errorStr)
+		return
+	}
+	n.complete(logger, false, "")
 }
 
 func (n *storeNode) run(logger lager.Logger) {
 	// wait for container runner to start
 	logger.Debug("execute-process")
-	<-n.process.Ready()
+	select {
+	case err := <-n.process.Wait():
+		n.completeWithError(logger, err)
+		return
+	case <-n.process.Ready():
+		// fallthrough, healthcheck passed
+	}
 	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
@@ -467,39 +464,8 @@ func (n *storeNode) run(logger lager.Logger) {
 	n.infoLock.Unlock()
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
-	var errorStr string
-	select {
-	case err := <-n.credManagerProcess.Wait():
-		if err != nil {
-			errorStr = "cred-manager-runner exited: " + err.Error()
-		}
-		n.proxyManagerProcess.Signal(os.Interrupt)
-		n.process.Signal(os.Interrupt)
-		n.process.Wait()
-		n.proxyManagerProcess.Wait()
-	case err := <-n.proxyManagerProcess.Wait():
-		if err != nil {
-			errorStr = "cred-manager-runner exited: " + err.Error()
-		}
-		n.credManagerProcess.Signal(os.Interrupt)
-		n.process.Signal(os.Interrupt)
-		n.process.Wait()
-		n.credManagerProcess.Wait()
-	case err := <-n.process.Wait():
-		if err != nil {
-			errorStr = err.Error()
-		}
-		n.credManagerProcess.Signal(os.Interrupt)
-		n.proxyManagerProcess.Signal(os.Interrupt)
-		n.credManagerProcess.Wait()
-		n.proxyManagerProcess.Wait()
-	}
-
-	if errorStr != "" {
-		n.complete(logger, true, errorStr)
-	} else {
-		n.complete(logger, false, "")
-	}
+	err := <-n.process.Wait()
+	n.completeWithError(logger, err)
 }
 
 func (n *storeNode) Stop(logger lager.Logger) error {

@@ -34,7 +34,7 @@ import (
 	"code.cloudfoundry.org/garden/server"
 )
 
-var _ = FDescribe("Container Store", func() {
+var _ = Describe("Container Store", func() {
 	var (
 		containerConfig containerstore.ContainerConfig
 		containerStore  containerstore.ContainerStore
@@ -62,19 +62,11 @@ var _ = FDescribe("Container Store", func() {
 		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
-	var pollForComplete = func(guid string) func() bool {
-		return func() bool {
+	var containerState = func(guid string) func() executor.State {
+		return func() executor.State {
 			container, err := containerStore.Get(logger, guid)
 			Expect(err).NotTo(HaveOccurred())
-			return container.State == executor.StateCompleted
-		}
-	}
-
-	var pollForRunning = func(guid string) func() bool {
-		return func() bool {
-			container, err := containerStore.Get(logger, guid)
-			Expect(err).NotTo(HaveOccurred())
-			return container.State == executor.StateRunning
+			return container.State
 		}
 	}
 
@@ -104,6 +96,12 @@ var _ = FDescribe("Container Store", func() {
 			<-signals
 			return nil
 		}), nil)
+
+		proxyManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+			close(ready)
+			<-signals
+			return nil
+		}))
 
 		iNodeLimit = 64
 		maxCPUShares = 100
@@ -1133,16 +1131,14 @@ var _ = FDescribe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid, "envoy.json"))
-					Expect(os.IsNotExist(ok)).To(BeFalse())
+					Expect(filepath.Join(envoyConfigDir, containerGuid, "envoy.json")).To(BeAnExistingFile())
 				})
 
 				It("writes listenerConfig to a container specific dir", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, ok := os.Stat(filepath.Join(envoyConfigDir, containerGuid, "envoy.json"))
-					Expect(os.IsNotExist(ok)).To(BeFalse())
+					Expect(filepath.Join(envoyConfigDir, containerGuid, "listeners.json")).To(BeAnExistingFile())
 				})
 
 				Context("and container proxy is disabled on the RunInfo", func() {
@@ -1264,7 +1260,7 @@ var _ = FDescribe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			FContext("while the cred manager & proxy manager are still setting up", func() {
+			Context("while the cred manager & proxy manager are still setting up", func() {
 				var (
 					cmFinishSetup         chan struct{}
 					pmFinishSetup         chan struct{}
@@ -1317,33 +1313,25 @@ var _ = FDescribe("Container Store", func() {
 						go containerStore.Run(logger, containerGuid)
 						Consistently(containerRunnerCalled).ShouldNot(BeClosed())
 					})
-				})
 
-				Context("when proxy manager is finished setting up", func() {
-					BeforeEach(func() {
-						pmFinishSetup <- struct{}{}
-					})
-					It("does not start the container while cred manager is setting up", func() {
-						go containerStore.Run(logger, containerGuid)
-						Consistently(containerRunnerCalled).ShouldNot(BeClosed())
+					Context("when proxy manager is finished setting up", func() {
+						BeforeEach(func() {
+							pmFinishSetup <- struct{}{}
+						})
+
+						It("starts the container", func() {
+							go containerStore.Run(logger, containerGuid)
+							Eventually(containerRunnerCalled).Should(BeClosed())
+						})
 					})
 				})
 			})
 
-			FContext("when the runner fails the initial credential generation", func() {
-				var pmSignaled chan struct{}
+			Context("when the runner fails the initial credential generation", func() {
 				BeforeEach(func() {
-					pmSignaled = make(chan struct{}, 1)
-					signaled := pmSignaled
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						return errors.New("BOOOM")
 					}), nil)
-
-					proxyManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						<-signals
-						signaled <- struct{}{}
-						return nil
-					}))
 				})
 
 				It("destroys the container and returns an error", func() {
@@ -1359,7 +1347,7 @@ var _ = FDescribe("Container Store", func() {
 					Expect(container.RunResult.Failed).To(BeTrue())
 					// make sure the error message is at the end so that
 					// FailureReasonSanitizer can properly map the error messages
-					Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
+					Expect(container.RunResult.FailureReason).To(MatchRegexp("cred-manager-runner exited: BOOOM$"))
 				})
 
 				It("tranistions immediately to Completed state", func() {
@@ -1381,16 +1369,9 @@ var _ = FDescribe("Container Store", func() {
 						return events
 					}).Should(ConsistOf("container_reserved", "container_complete"))
 				})
-
-				It("signals the proxy manager to shut down", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(pmSignaled).Should(Receive())
-				})
 			})
 
-			FContext("when the runner fails the initial proxy config generation", func() {
+			Context("when the runner fails the initial proxy config generation", func() {
 				var cmSignaled chan struct{}
 				BeforeEach(func() {
 					cmSignaled = make(chan struct{}, 1)
@@ -1400,6 +1381,7 @@ var _ = FDescribe("Container Store", func() {
 					}))
 
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						close(ready)
 						<-signals
 						signaled <- struct{}{}
 						return nil
@@ -1419,18 +1401,14 @@ var _ = FDescribe("Container Store", func() {
 					Expect(container.RunResult.Failed).To(BeTrue())
 					// make sure the error message is at the end so that
 					// FailureReasonSanitizer can properly map the error messages
-					Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
+					Expect(container.RunResult.FailureReason).To(MatchRegexp("proxy-config-manager-runner exited: BOOOM$"))
 				})
 
 				It("tranistions immediately to Completed state", func() {
 					err := containerStore.Run(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
-					Eventually(func() executor.State {
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						return container.State
-					}).Should(Equal(executor.StateCompleted))
+					Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
 
 					Eventually(func() []string {
 						var events []string
@@ -1450,7 +1428,7 @@ var _ = FDescribe("Container Store", func() {
 				})
 			})
 
-			FContext("when instance credential is ready", func() {
+			Context("when instance credential is ready", func() {
 				var (
 					containerRunnerCalled    chan struct{}
 					credManagerRunnerCalled  chan struct{}
@@ -1490,10 +1468,10 @@ var _ = FDescribe("Container Store", func() {
 					containerStore.Destroy(logger, containerGuid)
 				})
 
-				FContext("when the runner fails subsequent credential generation", func() {
+				Context("when the runner fails subsequent credential generation", func() {
 					var pmSignaled chan struct{}
 					BeforeEach(func() {
-						pmSignaled = make(chan struct{})
+						pmSignaled = make(chan struct{}, 1)
 						signaled := pmSignaled
 						credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 							close(ready)
@@ -1537,7 +1515,7 @@ var _ = FDescribe("Container Store", func() {
 					})
 				})
 
-				FContext("when the runner fails subsequent proxy listener config generation", func() {
+				Context("when the runner fails subsequent proxy listener config generation", func() {
 					var cmSignaled chan struct{}
 					BeforeEach(func() {
 						cmSignaled = make(chan struct{}, 1)
@@ -1584,7 +1562,7 @@ var _ = FDescribe("Container Store", func() {
 					})
 				})
 
-				FContext("when the action runs indefinitely", func() {
+				Context("when the action runs indefinitely", func() {
 					var readyChan chan struct{}
 					BeforeEach(func() {
 						readyChan = make(chan struct{})
@@ -1653,7 +1631,7 @@ var _ = FDescribe("Container Store", func() {
 
 							close(completeChan)
 
-							Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
 
 							container, err := containerStore.Get(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
@@ -1664,9 +1642,9 @@ var _ = FDescribe("Container Store", func() {
 							err := containerStore.Run(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
-							Eventually(pollForRunning(containerGuid)).Should(BeTrue())
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
 							close(completeChan)
-							Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
 
 							Expect(eventEmitter.EmitCallCount()).To(Equal(3))
 
@@ -1688,7 +1666,7 @@ var _ = FDescribe("Container Store", func() {
 
 							close(completeChan)
 
-							Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
 
 							container, err := containerStore.Get(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
@@ -1710,7 +1688,7 @@ var _ = FDescribe("Container Store", func() {
 							err := containerStore.Run(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
-							Eventually(pollForComplete(containerGuid)).Should(BeTrue())
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
 
 							container, err := containerStore.Get(logger, containerGuid)
 							Expect(err).NotTo(HaveOccurred())
@@ -1757,14 +1735,13 @@ var _ = FDescribe("Container Store", func() {
 	})
 
 	Describe("Stop", func() {
-		var finishRun chan struct{}
-		var runReq *executor.RunRequest
+		var (
+			runReq *executor.RunRequest
+		)
+
 		BeforeEach(func() {
-			finishRun = make(chan struct{})
-			ifritFinishRun := finishRun
 			var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 				<-signals
-				ifritFinishRun <- struct{}{}
 				return nil
 			}
 			runInfo := executor.RunInfo{
@@ -1799,8 +1776,6 @@ var _ = FDescribe("Container Store", func() {
 			It("sets stopped to true on the run result", func() {
 				err := containerStore.Stop(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(finishRun).Should(Receive())
 
 				container, err := containerStore.Get(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -2092,7 +2067,7 @@ var _ = FDescribe("Container Store", func() {
 			JustBeforeEach(func() {
 				err := containerStore.Run(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(pollForRunning(containerGuid)).Should(BeTrue())
+				Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
 				err = containerStore.Stop(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				destroyed = make(chan struct{})
@@ -2152,7 +2127,7 @@ var _ = FDescribe("Container Store", func() {
 			JustBeforeEach(func() {
 				err := containerStore.Run(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(pollForRunning(containerGuid)).Should(BeTrue())
+				Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
 				destroyed = make(chan struct{})
 				go func(ch chan struct{}) {
 					containerStore.Destroy(logger, containerGuid)

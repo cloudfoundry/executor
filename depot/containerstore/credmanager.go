@@ -122,6 +122,8 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		regenCertTimer := c.clock.NewTimer(rotationDuration)
 
 		close(ready)
+		logger.Info("started")
+
 		for {
 			select {
 			case <-regenCertTimer.C():
