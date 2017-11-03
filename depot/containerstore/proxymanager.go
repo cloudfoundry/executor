@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	uuid "github.com/nu7hatch/gouuid"
@@ -70,7 +69,7 @@ type ClusterManager struct {
 
 type LDS struct {
 	Cluster        string `json:"cluster"`
-	RefreshDelayMS string `json:"refresh_delay_ms"`
+	RefreshDelayMS int    `json:"refresh_delay_ms"`
 }
 
 type ProxyConfig struct {
@@ -212,7 +211,7 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 		},
 		LDS: LDS{
 			Cluster:        "lds-cluster",
-			RefreshDelayMS: strconv.Itoa(int(refreshDelayMS.Seconds() * 1000)),
+			RefreshDelayMS: int(refreshDelayMS.Seconds() * 1000),
 		},
 	}
 	return config

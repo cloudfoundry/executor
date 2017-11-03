@@ -128,7 +128,7 @@ var _ = Describe("ProxyManager", func() {
 
 			Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
 				Cluster:        "lds-cluster",
-				RefreshDelayMS: "1000",
+				RefreshDelayMS: 1000,
 			}))
 		})
 
@@ -269,7 +269,7 @@ var _ = Describe("ProxyManager", func() {
 
 				Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
 					Cluster:        "lds-cluster",
-					RefreshDelayMS: "1000",
+					RefreshDelayMS: 1000,
 				}))
 			})
 
