@@ -239,7 +239,7 @@ type LogConfig struct {
 type PortMapping struct {
 	ContainerPort         uint16 `json:"container_port"`
 	HostPort              uint16 `json:"host_port,omitempty"`
-	ContainerTLSProxyPort uint16 `json:"container_Tls_proxy_port,omitempty"`
+	ContainerTLSProxyPort uint16 `json:"container_tls_proxy_port,omitempty"`
 	HostTLSProxyPort      uint16 `json:"host_tls_proxy_port,omitempty"`
 }
 
