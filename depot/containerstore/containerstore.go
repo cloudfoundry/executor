@@ -76,6 +76,7 @@ type containerStore struct {
 	containerProxyPath       string
 	containerProxyConfigPath string
 	useContainerProxy        bool
+	ldsSourcePath            string
 	proxyManager             ProxyManager
 
 	trustedSystemCertificatesPath string

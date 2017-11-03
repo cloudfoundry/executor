@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/constants"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/uploader"
@@ -52,7 +53,6 @@ type transformer struct {
 	declarativeHealthcheckUser string
 	useDeclarativeHealthCheck  bool
 	useContainerProxy          bool
-	drainWait                  time.Duration
 
 	postSetupHook []string
 	postSetupUser string
@@ -80,7 +80,6 @@ func NewTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	useContainerProxy bool,
-	drainWait time.Duration,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -100,7 +99,6 @@ func NewTransformer(
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckUser:  declarativeHealthcheckUser,
 		useContainerProxy:           useContainerProxy,
-		drainWait:                   drainWait,
 	}
 }
 
@@ -331,7 +329,7 @@ func (t *transformer) StepsRunner(
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor, containerProxyStep, longLivedAction steps.Step
+	var setup, action, postSetup, monitor, longLivedAction steps.Step
 	var substeps []steps.Step
 
 	if container.Setup != nil {
@@ -428,13 +426,26 @@ func (t *transformer) StepsRunner(
 	}
 
 	if t.useContainerProxy && container.EnableContainerProxy {
-		containerProxyStep = t.transformContainerProxyStep(
+		containerProxyStep := t.transformContainerProxyStep(
 			gardenContainer,
 			container,
 			logger,
 			logStreamer,
 		)
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
+
+		ldsStep, err := t.transformLdsStep(
+			gardenContainer,
+			container,
+			logger,
+			logStreamer,
+		)
+		if err != nil {
+			logger.Error("failed-to-created-lds-run-step", err)
+			return nil, err
+		}
+
+		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, ldsStep}, false, true)
 	}
 
 	if monitor == nil {
@@ -559,7 +570,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
+	envoyCMD := "trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid"
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -594,4 +605,59 @@ func (t *transformer) transformContainerProxyStep(
 		t.clock,
 		true,
 	)
+}
+
+func (t *transformer) transformLdsStep(
+	container garden.Container,
+	execContainer executor.Container,
+	logger lager.Logger,
+	streamer log_streamer.LogStreamer,
+) (steps.Step, error) {
+
+	port, err := getAvailablePort(execContainer.RunInfo.Ports)
+	if err != nil {
+		return nil, err
+	}
+	portFlag := fmt.Sprintf("-port=%d", port)
+	args := []string{
+		portFlag,
+		"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+	}
+	nofiles := envoyNofiles
+
+	runAction := models.RunAction{
+		User:           "root",
+		LogSource:      "LDS",
+		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		Path:           "/etc/cf-assets/envoy/bin/lds",
+		Args:           args,
+	}
+
+	return steps.NewRun(
+		container,
+		runAction,
+		streamer.WithSource("LDS"),
+		logger.Session("lds"),
+		execContainer.ExternalIP,
+		execContainer.InternalIP,
+		execContainer.Ports,
+		t.exportNetworkEnvVars,
+		t.clock,
+		true,
+	), nil
+}
+
+func getAvailablePort(allocatedPorts []executor.PortMapping) (uint16, error) {
+	existingPorts := make(map[uint16]interface{})
+	for _, portMap := range allocatedPorts {
+		existingPorts[portMap.ContainerPort] = struct{}{}
+	}
+
+	for port := uint16(constants.StartProxyPort); port < constants.EndProxyPort; port++ {
+		if existingPorts[port] != nil {
+			continue
+		}
+		return port, nil
+	}
+	return 0, errors.New("no-available-port")
 }

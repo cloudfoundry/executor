@@ -12,6 +12,7 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/constants"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
@@ -71,7 +72,6 @@ var _ = Describe("Transformer", func() {
 				false,
 				"",
 				false,
-				1*time.Second,
 			)
 
 			container = executor.Container{
@@ -191,6 +191,7 @@ var _ = Describe("Transformer", func() {
 				process     ifrit.Process
 				actionCh    chan int
 				envoyCh     chan int
+				ldsCh       chan int
 			)
 
 			BeforeEach(func() {
@@ -207,7 +208,6 @@ var _ = Describe("Transformer", func() {
 					false,
 					"",
 					true,
-					1*time.Second,
 				)
 
 				processLock.Lock()
@@ -219,6 +219,9 @@ var _ = Describe("Transformer", func() {
 				envoyCh = make(chan int)
 				envoyProcess := makeProcess(envoyCh)
 
+				ldsCh = make(chan int)
+				ldsProcess := makeProcess(ldsCh)
+
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
@@ -229,10 +232,12 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
+					case "/etc/cf-assets/envoy/bin/lds":
+						return ldsProcess, nil
 					case "sh":
 						Expect(spec.Args).To(Equal([]string{
 							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s 1 --log-level critical& pid=$!; wait $pid",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid",
 						}))
 						return envoyProcess, nil
 					}
@@ -269,6 +274,9 @@ var _ = Describe("Transformer", func() {
 							executor.PortMapping{
 								ContainerPort: 8080,
 							},
+							executor.PortMapping{
+								ContainerPort: 61001,
+							},
 						},
 						EnableContainerProxy: true,
 					},
@@ -285,11 +293,12 @@ var _ = Describe("Transformer", func() {
 			AfterEach(func() {
 				close(actionCh)
 				close(envoyCh)
+				close(ldsCh)
 				ginkgomon.Interrupt(process)
 			})
 
 			It("runs the container proxy", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				paths := []string{}
 				args := [][]string{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -301,8 +310,46 @@ var _ = Describe("Transformer", func() {
 				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-wait-s 1 --log-level critical& pid=$!; wait $pid",
+					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid",
 				}))
+			})
+
+			It("runs the listener discovery service (lds)", func() {
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				paths := []string{}
+				args := [][]string{}
+				for i := 0; i < gardenContainer.RunCallCount(); i++ {
+					spec, _ := gardenContainer.RunArgsForCall(i)
+					paths = append(paths, spec.Path)
+					args = append(args, spec.Args)
+				}
+
+				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/bin/lds"))
+				Expect(args).To(ContainElement([]string{
+					"-port=61002",
+					"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+				}))
+			})
+
+			Context("when there are no available ports for lds", func() {
+				var err error
+				JustBeforeEach(func() {
+					portMapping := []executor.PortMapping{}
+					for port := uint16(constants.StartProxyPort); port < constants.EndProxyPort; port++ {
+						portMapping = append(portMapping, executor.PortMapping{
+							ContainerPort: port,
+						})
+					}
+
+					container.RunInfo.Ports = portMapping
+
+					_, err = optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				})
+
+				It("it fails", func() {
+					Expect(err).To(HaveOccurred())
+				})
+
 			})
 
 			Context("when the container proxy is disabled on the container", func() {
@@ -450,7 +497,6 @@ var _ = Describe("Transformer", func() {
 						true,
 						"user1",
 						false,
-						1*time.Second,
 					)
 
 					container.StartTimeoutMs = 1000
@@ -993,7 +1039,6 @@ var _ = Describe("Transformer", func() {
 						false,
 						"",
 						false,
-						1*time.Second,
 					)
 				})
 

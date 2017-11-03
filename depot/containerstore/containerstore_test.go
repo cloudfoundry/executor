@@ -995,10 +995,12 @@ var _ = Describe("Container Store", func() {
 					envoySourceDir string
 					envoyConfigDir string
 					err            error
+					ldsSourceDir   string
 				)
 
 				BeforeEach(func() {
 					envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+					Expect(err).NotTo(HaveOccurred())
 					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
 					Expect(err).NotTo(HaveOccurred())
 
@@ -1127,20 +1129,6 @@ var _ = Describe("Container Store", func() {
 					}))
 				})
 
-				It("writes proxyConfig to a container specific dir", func() {
-					_, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(filepath.Join(envoyConfigDir, containerGuid, "envoy.json")).To(BeAnExistingFile())
-				})
-
-				It("writes listenerConfig to a container specific dir", func() {
-					_, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(filepath.Join(envoyConfigDir, containerGuid, "listeners.json")).To(BeAnExistingFile())
-				})
-
 				Context("and container proxy is disabled on the RunInfo", func() {
 					BeforeEach(func() {
 						runReq.EnableContainerProxy = false
@@ -1183,6 +1171,20 @@ var _ = Describe("Container Store", func() {
 						Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
 							SrcPath: filepath.Join(envoyConfigDir, containerGuid),
 							DstPath: "/etc/cf-assets/envoy_config",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						}))
+					})
+
+					It("does not bind mount the lds", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
+							SrcPath: ldsSourceDir,
+							DstPath: "/etc/cf-assets/lds",
 							Mode:    garden.BindMountModeRO,
 							Origin:  garden.BindMountOriginHost,
 						}))
@@ -2156,6 +2158,53 @@ var _ = Describe("Container Store", func() {
 				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
 				Expect(sourceInstance).To(Equal("1"))
 			})
+
+			Context("when the container proxy config process is running in the container", func() {
+				var (
+					proxyRunnerSignalled chan struct{}
+				)
+
+				BeforeEach(func() {
+					proxyRunnerSignalled = make(chan struct{})
+					var err error
+					envoySourceDir, err := ioutil.TempDir("", "envoy_dir")
+					Expect(err).NotTo(HaveOccurred())
+					envoyConfigDir, err := ioutil.TempDir("", "envoy_config_dir")
+					Expect(err).NotTo(HaveOccurred())
+
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						fakeMetronClient,
+						"/var/vcap/packages/healthcheck",
+						true,
+						envoySourceDir,
+						envoyConfigDir,
+						proxyManager,
+					)
+
+					signalled := proxyRunnerSignalled
+					proxyManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						close(ready)
+						<-signals
+						close(signalled)
+						return nil
+					}))
+				})
+
+				It("signals the proxy config runner", func() {
+					close(finishRun)
+					Eventually(proxyRunnerSignalled).Should(BeClosed())
+				})
+			})
 		})
 
 		Context("when container proxy is enabled", func() {
@@ -2163,6 +2212,7 @@ var _ = Describe("Container Store", func() {
 			BeforeEach(func() {
 				var err error
 				envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+				Expect(err).NotTo(HaveOccurred())
 				envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
 				Expect(err).NotTo(HaveOccurred())
 

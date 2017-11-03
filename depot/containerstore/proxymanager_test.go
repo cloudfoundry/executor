@@ -298,7 +298,7 @@ var _ = Describe("ProxyManager", func() {
 					err = json.Unmarshal(data, &listenerConfig)
 					Expect(err).NotTo(HaveOccurred())
 					return listenerConfig.Listeners
-				}).ShouldNot(Equal(initialListenerConfig.Listeners))
+				}).ShouldNot(ConsistOf(initialListenerConfig.Listeners))
 			})
 		})
 

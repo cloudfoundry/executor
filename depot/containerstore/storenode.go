@@ -11,6 +11,7 @@ import (
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/constants"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
@@ -28,8 +29,6 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
-const StartProxyPort = 61001
-const EndProxyPort = 65534
 
 // To be deprecated
 const (
@@ -678,7 +677,7 @@ func populateContainerProxyPorts(container *executor.Container) []executor.Proxy
 	}
 
 	portCount := 0
-	for port := uint16(StartProxyPort); port < EndProxyPort; port++ {
+	for port := uint16(constants.StartProxyPort); port < constants.EndProxyPort; port++ {
 		if portCount == len(existingPorts) {
 			break
 		}
