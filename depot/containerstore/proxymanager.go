@@ -2,6 +2,7 @@ package containerstore
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,15 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
+)
+
+const (
+	StartProxyPort = 61001
+	EndProxyPort   = 65534
+)
+
+var (
+	ErrNoPortsAvailable = errors.New("no-ports-available")
 )
 
 type Route struct {
@@ -127,9 +137,13 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 		proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.json")
 		listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.json")
 
-		proxyConfig := generateProxyConfig(logger, container, p.refreshDelayMS)
+		proxyConfig, err := generateProxyConfig(logger, container, p.refreshDelayMS)
+		if err != nil {
+			logger.Error("failed-generating-proxy-config", err)
+			return err
+		}
 
-		err := writeProxyConfig(proxyConfig, proxyConfigPath)
+		err = writeProxyConfig(proxyConfig, proxyConfigPath)
 		if err != nil {
 			logger.Error("failed-writing-initial-proxy-listener-config", err)
 			return err
@@ -178,7 +192,7 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 	})
 }
 
-func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration) ProxyConfig {
+func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration) (ProxyConfig, error) {
 	clusters := []Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
@@ -192,12 +206,16 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 		})
 	}
 
+	port, err := getAvailablePort(container.Ports)
+	if err != nil {
+		return ProxyConfig{}, err
+	}
 	clusters = append(clusters, Cluster{
 		Name:                "lds-cluster",
 		ConnectionTimeoutMs: TimeOut,
 		Type:                Static,
 		LbType:              RoundRobin,
-		Hosts:               []Host{Host{URL: "tcp://127.0.0.1:9933"}},
+		Hosts:               []Host{Host{URL: fmt.Sprintf("tcp://127.0.0.1:%d", port)}},
 	})
 
 	config := ProxyConfig{
@@ -214,7 +232,7 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 			RefreshDelayMS: int(refreshDelayMS.Seconds() * 1000),
 		},
 	}
-	return config
+	return config, nil
 }
 
 func writeProxyConfig(proxyConfig ProxyConfig, path string) error {
@@ -275,4 +293,20 @@ func generateListenerConfig(logger lager.Logger, container executor.Container) (
 	}
 
 	return config, nil
+}
+
+func getAvailablePort(allocatedPorts []executor.PortMapping) (uint16, error) {
+	existingPorts := make(map[uint16]interface{})
+	for _, portMap := range allocatedPorts {
+		existingPorts[portMap.ContainerPort] = struct{}{}
+		existingPorts[portMap.ContainerTLSProxyPort] = struct{}{}
+	}
+
+	for port := uint16(StartProxyPort); port < EndProxyPort; port++ {
+		if existingPorts[port] != nil {
+			continue
+		}
+		return port, nil
+	}
+	return 0, ErrNoPortsAvailable
 }

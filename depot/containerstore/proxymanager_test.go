@@ -90,7 +90,7 @@ var _ = Describe("ProxyManager", func() {
 			Eventually(containerProcess.Wait()).Should(Receive())
 		})
 
-		It("creates the appropriate proxy config at start", func() {
+		FIt("creates the appropriate proxy config at start", func() {
 			Eventually(containerProcess.Ready()).Should(BeClosed())
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -123,7 +123,7 @@ var _ = Describe("ProxyManager", func() {
 			Expect(cluster.Type).To(Equal("static"))
 			Expect(cluster.LbType).To(Equal("round_robin"))
 			Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-				{URL: "tcp://127.0.0.1:9933"},
+				{URL: "tcp://127.0.0.1:61002"},
 			}))
 
 			Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
@@ -222,7 +222,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(filter1.Config.StatPrefix).ToNot(Equal(filter2.Config.StatPrefix))
 			})
 
-			It("creates the appropriate proxy file", func() {
+			FIt("creates the appropriate proxy file", func() {
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -264,7 +264,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(cluster.Type).To(Equal("static"))
 				Expect(cluster.LbType).To(Equal("round_robin"))
 				Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-					{URL: "tcp://127.0.0.1:9933"},
+					{URL: "tcp://127.0.0.1:61003"},
 				}))
 
 				Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
@@ -273,6 +273,25 @@ var _ = Describe("ProxyManager", func() {
 				}))
 			})
 
+			Context("when there no ports left", func() {
+				BeforeEach(func() {
+					ports := []executor.PortMapping{}
+					for port := uint16(containerstore.StartProxyPort); port < containerstore.EndProxyPort; port += 2 {
+						ports = append(ports, executor.PortMapping{
+							ContainerPort:         port,
+							ContainerTLSProxyPort: port + 1,
+						})
+					}
+
+					container.Ports = ports
+				})
+
+				FIt("returns an error", func() {
+					var err error
+					Eventually(containerProcess.Wait()).Should(Receive(&err))
+					Expect(err).To(Equal(containerstore.ErrNoPortsAvailable))
+				})
+			})
 		})
 
 		Context("when creds are being rotated", func() {
