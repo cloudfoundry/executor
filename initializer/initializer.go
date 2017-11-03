@@ -135,6 +135,7 @@ type ExecutorConfig struct {
 	CsiPaths                           []string              `json:"csi_paths"`
 	CsiMountRootDir                    string                `json:"csi_mount_root_dir"`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
+	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout"`
 }
 
 const (
@@ -179,6 +180,7 @@ var DefaultConfiguration = ExecutorConfig{
 	GardenHealthcheckProcessEnv:        []string{},
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 	EnvoyConfigRefreshDelay:            durationjson.Duration(time.Second),
+	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
 	CsiPaths:                           []string{"/var/vcap/data/csiplugins"},
 	CsiMountRootDir:                    "/var/vcap/data/csimountroot",
 }
@@ -250,6 +252,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckUser,
 		config.EnableContainerProxy,
+		time.Duration(config.EnvoyDrainTimeout),
 	)
 
 	hub := event.NewHub()
@@ -491,6 +494,7 @@ func initializeTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	enableContainerProxy bool,
+	drainWait time.Duration,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -513,6 +517,7 @@ func initializeTransformer(
 		useDeclarativeHealthCheck,
 		declarativeHealthcheckUser,
 		enableContainerProxy,
+		drainWait,
 	)
 }
 

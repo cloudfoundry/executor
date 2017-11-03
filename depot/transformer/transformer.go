@@ -53,6 +53,7 @@ type transformer struct {
 	declarativeHealthcheckUser string
 	useDeclarativeHealthCheck  bool
 	useContainerProxy          bool
+	drainWait                  time.Duration
 
 	postSetupHook []string
 	postSetupUser string
@@ -80,6 +81,7 @@ func NewTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	useContainerProxy bool,
+	drainWait time.Duration,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -99,6 +101,7 @@ func NewTransformer(
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckUser:  declarativeHealthcheckUser,
 		useContainerProxy:           useContainerProxy,
+		drainWait:                   drainWait,
 	}
 }
 
@@ -570,7 +573,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
-	envoyCMD := "trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid"
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits

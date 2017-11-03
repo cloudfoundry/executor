@@ -72,6 +72,7 @@ var _ = Describe("Transformer", func() {
 				false,
 				"",
 				false,
+				time.Second,
 			)
 
 			container = executor.Container{
@@ -208,6 +209,7 @@ var _ = Describe("Transformer", func() {
 					false,
 					"",
 					true,
+					time.Second,
 				)
 
 				processLock.Lock()
@@ -222,7 +224,7 @@ var _ = Describe("Transformer", func() {
 				ldsCh = make(chan int)
 				ldsProcess := makeProcess(ldsCh)
 
-				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (garden.Process, error) {
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
 
@@ -235,16 +237,12 @@ var _ = Describe("Transformer", func() {
 					case "/etc/cf-assets/envoy/bin/lds":
 						return ldsProcess, nil
 					case "sh":
-						Expect(spec.Args).To(Equal([]string{
-							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid",
-						}))
 						return envoyProcess, nil
 					}
 
-					err = errors.New("")
+					err := errors.New("")
 					Fail("unexpected executable path: " + spec.Path)
-					return
+					return nil, err
 				}
 
 				container = executor.Container{
@@ -310,7 +308,7 @@ var _ = Describe("Transformer", func() {
 				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --log-level critical& pid=$!; wait $pid",
+					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 				}))
 			})
 
@@ -497,6 +495,7 @@ var _ = Describe("Transformer", func() {
 						true,
 						"user1",
 						false,
+						time.Second,
 					)
 
 					container.StartTimeoutMs = 1000
@@ -1039,6 +1038,7 @@ var _ = Describe("Transformer", func() {
 						false,
 						"",
 						false,
+						time.Second,
 					)
 				})
 
