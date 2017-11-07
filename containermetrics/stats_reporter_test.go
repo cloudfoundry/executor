@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
@@ -21,6 +20,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func megsToBytes(mem int) uint64 {
+	return uint64(mem * 1024 * 1024)
+}
+
 var _ = Describe("StatsReporter", func() {
 	var (
 		logger *lagertest.TestLogger
@@ -35,8 +38,8 @@ var _ = Describe("StatsReporter", func() {
 		listContainersChan chan []executor.Container
 		process            ifrit.Process
 
-		enableContainerProxy       bool
-		additionalMemoryAllocation int
+		enableContainerProxy    bool
+		proxyMemoryAllocationMB int
 	)
 
 	sendResults := func() {
@@ -44,31 +47,31 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 123,
-					DiskUsageInBytes:   456,
+					MemoryUsageInBytes: megsToBytes(123),
+					DiskUsageInBytes:   megsToBytes(456),
 					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: 789,
-					DiskLimitInBytes:   1024,
+					MemoryLimitInBytes: megsToBytes(789),
+					DiskLimitInBytes:   megsToBytes(1024),
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 321,
-					DiskUsageInBytes:   654,
+					MemoryUsageInBytes: megsToBytes(321),
+					DiskUsageInBytes:   megsToBytes(654),
 					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: 987,
-					DiskLimitInBytes:   2048,
+					MemoryLimitInBytes: megsToBytes(987),
+					DiskLimitInBytes:   megsToBytes(2048),
 				},
 			},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 345,
-					DiskUsageInBytes:   456,
+					MemoryUsageInBytes: megsToBytes(345),
+					DiskUsageInBytes:   megsToBytes(456),
 					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: 678,
-					DiskLimitInBytes:   2048,
+					MemoryLimitInBytes: megsToBytes(678),
+					DiskLimitInBytes:   megsToBytes(2048),
 				},
 			},
 		}
@@ -77,29 +80,29 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 1230,
+					MemoryUsageInBytes: megsToBytes(1230),
 					DiskUsageInBytes:   4560,
 					TimeSpentInCPU:     105 * time.Second,
-					MemoryLimitInBytes: 7890,
+					MemoryLimitInBytes: megsToBytes(7890),
 					DiskLimitInBytes:   4096,
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 3210,
+					MemoryUsageInBytes: megsToBytes(3210),
 					DiskUsageInBytes:   6540,
 					TimeSpentInCPU:     110 * time.Second,
-					MemoryLimitInBytes: 9870,
+					MemoryLimitInBytes: megsToBytes(9870),
 					DiskLimitInBytes:   512,
 				}},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 3450,
+					MemoryUsageInBytes: megsToBytes(3450),
 					DiskUsageInBytes:   4560,
 					TimeSpentInCPU:     110 * time.Second,
-					MemoryLimitInBytes: 6780,
+					MemoryLimitInBytes: megsToBytes(6780),
 					DiskLimitInBytes:   2048,
 				},
 			},
@@ -109,30 +112,30 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 12300,
+					MemoryUsageInBytes: megsToBytes(12300),
 					DiskUsageInBytes:   45600,
 					TimeSpentInCPU:     107 * time.Second,
-					MemoryLimitInBytes: 7890,
+					MemoryLimitInBytes: megsToBytes(7890),
 					DiskLimitInBytes:   234,
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 32100,
+					MemoryUsageInBytes: megsToBytes(32100),
 					DiskUsageInBytes:   65400,
 					TimeSpentInCPU:     112 * time.Second,
-					MemoryLimitInBytes: 98700,
+					MemoryLimitInBytes: megsToBytes(98700),
 					DiskLimitInBytes:   43200,
 				},
 			},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: 34500,
+					MemoryUsageInBytes: megsToBytes(34500),
 					DiskUsageInBytes:   45600,
 					TimeSpentInCPU:     112 * time.Second,
-					MemoryLimitInBytes: 6780,
+					MemoryLimitInBytes: megsToBytes(6780),
 					DiskLimitInBytes:   2048,
 				},
 			},
@@ -178,6 +181,7 @@ var _ = Describe("StatsReporter", func() {
 		listContainersChan = make(chan []executor.Container, 10)
 
 		fakeExecutorClient.GetBulkMetricsStub = func(lager.Logger) (map[string]executor.Metrics, error) {
+
 			result, ok := <-metricsResultsChan
 			if !ok || result == nil {
 				return nil, errors.New("closed")
@@ -194,11 +198,11 @@ var _ = Describe("StatsReporter", func() {
 		}
 
 		enableContainerProxy = false
-		additionalMemoryAllocation = 5
+		proxyMemoryAllocationMB = 5
 	})
 
 	JustBeforeEach(func() {
-		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, additionalMemoryAllocation, fakeExecutorClient, fakeMetronClient))
+		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, proxyMemoryAllocationMB, fakeExecutorClient, fakeMetronClient))
 	})
 
 	AfterEach(func() {
@@ -229,30 +233,30 @@ var _ = Describe("StatsReporter", func() {
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: 123,
-						DiskUsageInBytes:   456,
-						MemoryLimitInBytes: 789,
-						DiskLimitInBytes:   1024,
+						MemoryUsageInBytes: megsToBytes(123),
+						DiskUsageInBytes:   megsToBytes(456),
+						MemoryLimitInBytes: megsToBytes(789),
+						DiskLimitInBytes:   megsToBytes(1024),
 					},
 				},
 					0.0),
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: 321,
-						DiskUsageInBytes:   654,
-						MemoryLimitInBytes: 987,
-						DiskLimitInBytes:   2048,
+						MemoryUsageInBytes: megsToBytes(321),
+						DiskUsageInBytes:   megsToBytes(654),
+						MemoryLimitInBytes: megsToBytes(987),
+						DiskLimitInBytes:   megsToBytes(2048),
 					},
 				},
 					0.0),
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: uint64(345),
-						DiskUsageInBytes:   456,
-						MemoryLimitInBytes: 678,
-						DiskLimitInBytes:   2048,
+						MemoryUsageInBytes: megsToBytes(345),
+						DiskUsageInBytes:   megsToBytes(456),
+						MemoryLimitInBytes: megsToBytes(678),
+						DiskLimitInBytes:   megsToBytes(2048),
 					},
 				},
 					0.0),
@@ -264,31 +268,28 @@ var _ = Describe("StatsReporter", func() {
 				enableContainerProxy = true
 
 				listContainersChan <- []executor.Container{
-					{Guid: "container-guid-without-index",
-						Resource: executor.Resource{
-							RootFSPath: models.PreloadedRootFSScheme,
-						},
-						MemoryLimit: uint64(200 + additionalMemoryAllocation),
+					{
+						Guid:        "container-guid-without-index",
+						MemoryLimit: megsToBytes(200 + proxyMemoryAllocationMB),
 						RunInfo: executor.RunInfo{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
+							EnableContainerProxy: true,
+							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						},
 					},
-					{Guid: "container-guid-with-index",
-						Resource: executor.Resource{
-							RootFSPath: models.PreloadedRootFSScheme,
-						},
-						MemoryLimit: uint64(400 + additionalMemoryAllocation),
+					{
+						Guid:        "container-guid-with-index",
+						MemoryLimit: megsToBytes(400 + proxyMemoryAllocationMB),
 						RunInfo: executor.RunInfo{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
+							EnableContainerProxy: true,
+							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						},
 					},
-					{Guid: "container-guid-without-preloaded-rootfs",
-						MemoryLimit: uint64(200),
-						Resource: executor.Resource{
-							RootFSPath: "unsupported-arbitrary://still-goes-through",
-						},
+					{
+						Guid:        "container-guid-without-preloaded-rootfs",
+						MemoryLimit: megsToBytes(200),
 						RunInfo: executor.RunInfo{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+							EnableContainerProxy: false,
+							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 						},
 					},
 				}
@@ -296,29 +297,18 @@ var _ = Describe("StatsReporter", func() {
 			})
 
 			It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
-				expectedMemoryUsageWithoutIndex := float64(123) * float64(200) / float64(200+additionalMemoryAllocation)
-				expectedMemoryUsageWithIndex := float64(321) * float64(400) / float64(400+additionalMemoryAllocation)
+				appMemory := megsToBytes(123)
+
+				expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
 
 				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						ContainerMetrics: executor.ContainerMetrics{
 							MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
-							DiskUsageInBytes:   456,
-							MemoryLimitInBytes: 789,
-							DiskLimitInBytes:   1024,
-						},
-					},
-						0.0),
-				))
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: uint64(expectedMemoryUsageWithIndex),
-							DiskUsageInBytes:   654,
-							MemoryLimitInBytes: 987,
-							DiskLimitInBytes:   2048,
+							DiskUsageInBytes:   megsToBytes(456),
+							MemoryLimitInBytes: megsToBytes(784),
+							DiskLimitInBytes:   megsToBytes(1024),
 						},
 					},
 						0.0),
@@ -331,10 +321,10 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: uint64(345),
-								DiskUsageInBytes:   456,
-								MemoryLimitInBytes: 678,
-								DiskLimitInBytes:   2048,
+								MemoryUsageInBytes: megsToBytes(345),
+								DiskUsageInBytes:   megsToBytes(456),
+								MemoryLimitInBytes: megsToBytes(678),
+								DiskLimitInBytes:   megsToBytes(2048),
 							},
 						},
 							0.0),
@@ -361,9 +351,9 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: 1230,
+							MemoryUsageInBytes: megsToBytes(1230),
 							DiskUsageInBytes:   4560,
-							MemoryLimitInBytes: 7890,
+							MemoryLimitInBytes: megsToBytes(7890),
 							DiskLimitInBytes:   4096,
 						},
 					}, 50.0)))
@@ -371,9 +361,9 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: 3210,
+							MemoryUsageInBytes: megsToBytes(3210),
 							DiskUsageInBytes:   6540,
-							MemoryLimitInBytes: 9870,
+							MemoryLimitInBytes: megsToBytes(9870),
 							DiskLimitInBytes:   512,
 						},
 					},
@@ -391,9 +381,9 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: 12300,
+								MemoryUsageInBytes: megsToBytes(12300),
 								DiskUsageInBytes:   45600,
-								MemoryLimitInBytes: 7890,
+								MemoryLimitInBytes: megsToBytes(7890),
 								DiskLimitInBytes:   234,
 							}},
 							20.0),
@@ -402,9 +392,9 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: 32100,
+								MemoryUsageInBytes: megsToBytes(32100),
 								DiskUsageInBytes:   65400,
-								MemoryLimitInBytes: 98700,
+								MemoryLimitInBytes: megsToBytes(98700),
 								DiskLimitInBytes:   43200,
 							},
 						},
@@ -439,10 +429,10 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index", Index: 0},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: 123,
-							DiskUsageInBytes:   456,
-							MemoryLimitInBytes: 789,
-							DiskLimitInBytes:   1024,
+							MemoryUsageInBytes: megsToBytes(123),
+							DiskUsageInBytes:   megsToBytes(456),
+							MemoryLimitInBytes: megsToBytes(789),
+							DiskLimitInBytes:   megsToBytes(1024),
 						}},
 						0.0),
 				))
@@ -450,10 +440,10 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: 321,
-							DiskUsageInBytes:   654,
-							MemoryLimitInBytes: 987,
-							DiskLimitInBytes:   2048,
+							MemoryUsageInBytes: megsToBytes(321),
+							DiskUsageInBytes:   megsToBytes(654),
+							MemoryLimitInBytes: megsToBytes(987),
+							DiskLimitInBytes:   megsToBytes(2048),
 						}},
 						0.0),
 				))
