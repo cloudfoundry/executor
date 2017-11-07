@@ -400,16 +400,24 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
+	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
+	proxyConfigRunner, err := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
+	if err != nil {
+		n.completeWithError(logger, err)
+		return err
+	}
+
+	cfg := transformer.Config{
+		LDSPort: proxyConfigRunner.Port(),
+	}
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {
 		return err
 	}
 
-	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
-	proxyManagerRunner := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
 	members := grouper.Members{
 		{"cred-manager-runner", credManagerRunner},
-		{"proxy-config-manager-runner", proxyManagerRunner},
+		{"proxy-config-runner", proxyConfigRunner},
 		{"runner", runner},
 	}
 	group := grouper.NewOrdered(os.Interrupt, members)

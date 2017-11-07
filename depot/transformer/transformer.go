@@ -13,7 +13,6 @@ import (
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/executor/constants"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/uploader"
@@ -36,7 +35,11 @@ var ErrNoCheck = errors.New("no check configured")
 
 type Transformer interface {
 	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
-	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
+}
+
+type Config struct {
+	LDSPort uint16
 }
 
 type transformer struct {
@@ -331,6 +334,7 @@ func (t *transformer) StepsRunner(
 	container executor.Container,
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
+	config Config,
 ) (ifrit.Runner, error) {
 	var setup, action, postSetup, monitor, longLivedAction steps.Step
 	var substeps []steps.Step
@@ -437,16 +441,13 @@ func (t *transformer) StepsRunner(
 		)
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
 
-		ldsStep, err := t.transformLdsStep(
+		ldsStep := t.transformLdsStep(
 			gardenContainer,
 			container,
 			logger,
 			logStreamer,
+			config.LDSPort,
 		)
-		if err != nil {
-			logger.Error("failed-to-created-lds-run-step", err)
-			return nil, err
-		}
 
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, ldsStep}, false, true)
 	}
@@ -573,7 +574,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/bin/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level info& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -615,13 +616,9 @@ func (t *transformer) transformLdsStep(
 	execContainer executor.Container,
 	logger lager.Logger,
 	streamer log_streamer.LogStreamer,
-) (steps.Step, error) {
-
-	port, err := getAvailablePort(execContainer.RunInfo.Ports)
-	if err != nil {
-		return nil, err
-	}
-	portFlag := fmt.Sprintf("-port=%d", port)
+	ldsPort uint16,
+) steps.Step {
+	portFlag := fmt.Sprintf("-port=%d", ldsPort)
 	args := []string{
 		portFlag,
 		"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
@@ -647,20 +644,5 @@ func (t *transformer) transformLdsStep(
 		t.exportNetworkEnvVars,
 		t.clock,
 		true,
-	), nil
-}
-
-func getAvailablePort(allocatedPorts []executor.PortMapping) (uint16, error) {
-	existingPorts := make(map[uint16]interface{})
-	for _, portMap := range allocatedPorts {
-		existingPorts[portMap.ContainerPort] = struct{}{}
-	}
-
-	for port := uint16(constants.StartProxyPort); port < constants.EndProxyPort; port++ {
-		if existingPorts[port] != nil {
-			continue
-		}
-		return port, nil
-	}
-	return 0, errors.New("no-available-port")
+	)
 }

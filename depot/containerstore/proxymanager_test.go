@@ -79,18 +79,15 @@ var _ = Describe("ProxyManager", func() {
 		var (
 			containerProcess ifrit.Process
 		)
-
-		JustBeforeEach(func() {
-			runner := proxyManager.Runner(logger, container, rotatingCredChan)
-			containerProcess = ifrit.Background(runner)
-		})
-
 		AfterEach(func() {
 			containerProcess.Signal(os.Interrupt)
 			Eventually(containerProcess.Wait()).Should(Receive())
 		})
 
-		FIt("creates the appropriate proxy config at start", func() {
+		It("creates the appropriate proxy config at start", func() {
+			runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+			Expect(proxyRunnerErr).NotTo(HaveOccurred())
+			containerProcess = ifrit.Background(runner)
 			Eventually(containerProcess.Ready()).Should(BeClosed())
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -133,6 +130,9 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		It("writes the initial listener config at start", func() {
+			runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+			Expect(proxyRunnerErr).NotTo(HaveOccurred())
+			containerProcess = ifrit.Background(runner)
 			Eventually(containerProcess.Ready()).Should(BeClosed())
 			Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
@@ -148,6 +148,7 @@ var _ = Describe("ProxyManager", func() {
 
 			listener := listenerConfig.Listeners[0]
 
+			Expect(listener.Name).To(Equal("listener-8080"))
 			Expect(listener.Address).To(Equal("tcp://0.0.0.0:61001"))
 			Expect(listener.SSLContext.CertChainFile).To(Equal("/etc/cf-instance-credentials/instance.crt"))
 			Expect(listener.SSLContext.PrivateKeyFile).To(Equal("/etc/cf-instance-credentials/instance.key"))
@@ -158,6 +159,13 @@ var _ = Describe("ProxyManager", func() {
 			Expect(filter.Config.RouteConfig.Routes).To(HaveLen(1))
 			route := filter.Config.RouteConfig.Routes[0]
 			Expect(route.Cluster).To(Equal("0-service-cluster"))
+		})
+
+		It("exposes proxyConfigPort", func() {
+			runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+			Expect(proxyRunnerErr).NotTo(HaveOccurred())
+			containerProcess = ifrit.Background(runner)
+			Expect(runner.Port()).To(Equal(uint16(61002)))
 		})
 
 		Context("with multiple port mappings", func() {
@@ -175,6 +183,9 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("creates the appropriate listener config with a unique stat prefix", func() {
+				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(proxyRunnerErr).NotTo(HaveOccurred())
+				containerProcess = ifrit.Background(runner)
 				Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
 				data, err := ioutil.ReadFile(listenerConfigFile)
@@ -188,6 +199,8 @@ var _ = Describe("ProxyManager", func() {
 
 				listener1 := listenerConfig.Listeners[0]
 				listener2 := listenerConfig.Listeners[1]
+				Expect(listener1.Name).To(Equal("listener-8080"))
+				Expect(listener2.Name).To(Equal("listener-2222"))
 				Expect(listener1.Address).To(Equal("tcp://0.0.0.0:61001"))
 				Expect(listener2.Address).To(Equal("tcp://0.0.0.0:61002"))
 
@@ -222,7 +235,10 @@ var _ = Describe("ProxyManager", func() {
 				Expect(filter1.Config.StatPrefix).ToNot(Equal(filter2.Config.StatPrefix))
 			})
 
-			FIt("creates the appropriate proxy file", func() {
+			It("creates the appropriate proxy file", func() {
+				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(proxyRunnerErr).NotTo(HaveOccurred())
+				containerProcess = ifrit.Background(runner)
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -286,10 +302,9 @@ var _ = Describe("ProxyManager", func() {
 					container.Ports = ports
 				})
 
-				FIt("returns an error", func() {
-					var err error
-					Eventually(containerProcess.Wait()).Should(Receive(&err))
-					Expect(err).To(Equal(containerstore.ErrNoPortsAvailable))
+				It("returns an error", func() {
+					_, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+					Expect(proxyRunnerErr).To(Equal(containerstore.ErrNoPortsAvailable))
 				})
 			})
 		})
@@ -298,6 +313,10 @@ var _ = Describe("ProxyManager", func() {
 			var initialListenerConfig containerstore.ListenerConfig
 
 			JustBeforeEach(func() {
+				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(proxyRunnerErr).NotTo(HaveOccurred())
+				containerProcess = ifrit.Background(runner)
+
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 
 				data, err := ioutil.ReadFile(listenerConfigFile)
@@ -324,6 +343,10 @@ var _ = Describe("ProxyManager", func() {
 		Context("when creds are not rotated", func() {
 			var initialListenerConfig containerstore.ListenerConfig
 			JustBeforeEach(func() {
+				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(proxyRunnerErr).NotTo(HaveOccurred())
+				containerProcess = ifrit.Background(runner)
+
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 
 				data, err := ioutil.ReadFile(listenerConfigFile)
@@ -358,6 +381,9 @@ var _ = Describe("ProxyManager", func() {
 
 		Context("when signaled", func() {
 			JustBeforeEach(func() {
+				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(proxyRunnerErr).NotTo(HaveOccurred())
+				containerProcess = ifrit.Background(runner)
 				rotatingCredChan <- struct{}{}
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 				containerProcess.Signal(os.Interrupt)

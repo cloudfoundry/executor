@@ -34,13 +34,14 @@ type FakeTransformer struct {
 	stepForReturnsOnCall map[int]struct {
 		result1 steps.Step
 	}
-	StepsRunnerStub        func(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
+	StepsRunnerStub        func(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, transformer.Config) (ifrit.Runner, error)
 	stepsRunnerMutex       sync.RWMutex
 	stepsRunnerArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 executor.Container
 		arg3 garden.Container
 		arg4 log_streamer.LogStreamer
+		arg5 transformer.Config
 	}
 	stepsRunnerReturns struct {
 		result1 ifrit.Runner
@@ -115,7 +116,7 @@ func (fake *FakeTransformer) StepForReturnsOnCall(i int, result1 steps.Step) {
 	}{result1}
 }
 
-func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Container, arg3 garden.Container, arg4 log_streamer.LogStreamer) (ifrit.Runner, error) {
+func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Container, arg3 garden.Container, arg4 log_streamer.LogStreamer, arg5 transformer.Config) (ifrit.Runner, error) {
 	fake.stepsRunnerMutex.Lock()
 	ret, specificReturn := fake.stepsRunnerReturnsOnCall[len(fake.stepsRunnerArgsForCall)]
 	fake.stepsRunnerArgsForCall = append(fake.stepsRunnerArgsForCall, struct {
@@ -123,11 +124,12 @@ func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Contai
 		arg2 executor.Container
 		arg3 garden.Container
 		arg4 log_streamer.LogStreamer
-	}{arg1, arg2, arg3, arg4})
-	fake.recordInvocation("StepsRunner", []interface{}{arg1, arg2, arg3, arg4})
+		arg5 transformer.Config
+	}{arg1, arg2, arg3, arg4, arg5})
+	fake.recordInvocation("StepsRunner", []interface{}{arg1, arg2, arg3, arg4, arg5})
 	fake.stepsRunnerMutex.Unlock()
 	if fake.StepsRunnerStub != nil {
-		return fake.StepsRunnerStub(arg1, arg2, arg3, arg4)
+		return fake.StepsRunnerStub(arg1, arg2, arg3, arg4, arg5)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -141,10 +143,10 @@ func (fake *FakeTransformer) StepsRunnerCallCount() int {
 	return len(fake.stepsRunnerArgsForCall)
 }
 
-func (fake *FakeTransformer) StepsRunnerArgsForCall(i int) (lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) {
+func (fake *FakeTransformer) StepsRunnerArgsForCall(i int) (lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, transformer.Config) {
 	fake.stepsRunnerMutex.RLock()
 	defer fake.stepsRunnerMutex.RUnlock()
-	return fake.stepsRunnerArgsForCall[i].arg1, fake.stepsRunnerArgsForCall[i].arg2, fake.stepsRunnerArgsForCall[i].arg3, fake.stepsRunnerArgsForCall[i].arg4
+	return fake.stepsRunnerArgsForCall[i].arg1, fake.stepsRunnerArgsForCall[i].arg2, fake.stepsRunnerArgsForCall[i].arg3, fake.stepsRunnerArgsForCall[i].arg4, fake.stepsRunnerArgsForCall[i].arg5
 }
 
 func (fake *FakeTransformer) StepsRunnerReturns(result1 ifrit.Runner, result2 error) {
