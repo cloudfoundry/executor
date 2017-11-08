@@ -127,13 +127,13 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		for {
 			select {
 			case <-regenCertTimer.C():
-				logger = logger.Session("regenerating-cert-and-key")
-				logger.Debug("started")
+				regenLogger := logger.Session("regenerating-cert-and-key")
+				regenLogger.Debug("started")
 				start := c.clock.Now()
-				err = c.generateCreds(logger, container)
+				err = c.generateCreds(regenLogger, container)
 				duration := c.clock.Since(start)
 				if err != nil {
-					logger.Error("failed-to-generate-credentials", err)
+					regenLogger.Error("failed-to-generate-credentials", err)
 					c.metronClient.IncrementCounter(CredCreationFailedCount)
 					return err
 				}
@@ -143,7 +143,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
 				rotatingCred <- struct{}{}
-				logger.Debug("completed")
+				regenLogger.Debug("completed")
 			case signal := <-signals:
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				close(rotatingCred)
