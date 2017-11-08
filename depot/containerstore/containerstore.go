@@ -73,9 +73,8 @@ type containerStore struct {
 
 	declarativeHealthcheckPath string
 
-	containerProxyPath       string
-	containerProxyConfigPath string
-	useContainerProxy        bool
+	ldsSourcePath string
+	proxyManager  ProxyManager
 
 	trustedSystemCertificatesPath string
 }
@@ -93,9 +92,7 @@ func New(
 	trustedSystemCertificatesPath string,
 	metronClient loggingclient.IngressClient,
 	declarativeHealthcheckPath string,
-	useContainerProxy bool,
-	containerProxyPath string,
-	containerProxyConfigPath string,
+	proxyManager ProxyManager,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -110,9 +107,7 @@ func New(
 		metronClient:                  metronClient,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
-		useContainerProxy:             useContainerProxy,
-		containerProxyPath:            containerProxyPath,
-		containerProxyConfigPath:      containerProxyConfigPath,
+		proxyManager:                  proxyManager,
 	}
 }
 
@@ -130,9 +125,6 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 	err := cs.containers.Add(
 		newStoreNode(&cs.containerConfig,
 			cs.declarativeHealthcheckPath,
-			cs.useContainerProxy,
-			cs.containerProxyPath,
-			cs.containerProxyConfigPath,
 			container,
 			cs.gardenClient,
 			cs.dependencyManager,
@@ -142,6 +134,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
+			cs.proxyManager,
 		))
 
 	if err != nil {

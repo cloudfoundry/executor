@@ -35,7 +35,11 @@ var ErrNoCheck = errors.New("no check configured")
 
 type Transformer interface {
 	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
-	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer) (ifrit.Runner, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
+}
+
+type Config struct {
+	LDSPort uint16
 }
 
 type transformer struct {
@@ -49,9 +53,10 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckUser string
+	useDeclarativeHealthCheck  bool
 	useContainerProxy          bool
+	drainWait                  time.Duration
 
 	postSetupHook []string
 	postSetupUser string
@@ -79,6 +84,7 @@ func NewTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	useContainerProxy bool,
+	drainWait time.Duration,
 ) *transformer {
 	return &transformer{
 		cachedDownloader:            cachedDownloader,
@@ -98,6 +104,7 @@ func NewTransformer(
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckUser:  declarativeHealthcheckUser,
 		useContainerProxy:           useContainerProxy,
+		drainWait:                   drainWait,
 	}
 }
 
@@ -327,8 +334,9 @@ func (t *transformer) StepsRunner(
 	container executor.Container,
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
+	config Config,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor, containerProxyStep, longLivedAction steps.Step
+	var setup, action, postSetup, monitor, longLivedAction steps.Step
 	var substeps []steps.Step
 
 	if container.Setup != nil {
@@ -425,13 +433,23 @@ func (t *transformer) StepsRunner(
 	}
 
 	if t.useContainerProxy && container.EnableContainerProxy {
-		containerProxyStep = t.transformContainerProxyStep(
+		containerProxyStep := t.transformContainerProxyStep(
 			gardenContainer,
 			container,
 			logger,
 			logStreamer,
 		)
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
+
+		ldsStep := t.transformLdsStep(
+			gardenContainer,
+			container,
+			logger,
+			logStreamer,
+			config.LDSPort,
+		)
+
+		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, ldsStep}, false, true)
 	}
 
 	if monitor == nil {
@@ -556,6 +574,7 @@ func (t *transformer) transformContainerProxyStep(
 	streamer log_streamer.LogStreamer,
 ) steps.Step {
 
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -566,7 +585,7 @@ func (t *transformer) transformContainerProxyStep(
 		// - the wrapper shell script gets signalled and exit
 		// - garden's `process.Wait` won't return until both Stdout & Stderr are
 		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
-		"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+		envoyCMD,
 	}
 	nofiles := envoyNofiles
 
@@ -583,6 +602,42 @@ func (t *transformer) transformContainerProxyStep(
 		runAction,
 		streamer.WithSource("PROXY"),
 		logger.Session("proxy"),
+		execContainer.ExternalIP,
+		execContainer.InternalIP,
+		execContainer.Ports,
+		t.exportNetworkEnvVars,
+		t.clock,
+		true,
+	)
+}
+
+func (t *transformer) transformLdsStep(
+	container garden.Container,
+	execContainer executor.Container,
+	logger lager.Logger,
+	streamer log_streamer.LogStreamer,
+	ldsPort uint16,
+) steps.Step {
+	portFlag := fmt.Sprintf("-port=%d", ldsPort)
+	args := []string{
+		portFlag,
+		"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+	}
+	nofiles := envoyNofiles
+
+	runAction := models.RunAction{
+		User:           "root",
+		LogSource:      "LDS",
+		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		Path:           "/etc/cf-assets/envoy/lds",
+		Args:           args,
+	}
+
+	return steps.NewRun(
+		container,
+		runAction,
+		streamer.WithSource("LDS"),
+		logger.Session("lds"),
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,

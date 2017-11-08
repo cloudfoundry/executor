@@ -93,6 +93,8 @@ type ExecutorConfig struct {
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
 	DeclarativeHealthcheckUser         string                `json:"declarative_healthcheck_user,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
+	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
+	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout"`
 	AdditionalMemoryAllocationMB       int                   `json:"additional_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
@@ -177,6 +179,8 @@ var DefaultConfiguration = ExecutorConfig{
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
+	EnvoyConfigRefreshDelay:            durationjson.Duration(time.Second),
+	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
 	CsiPaths:                           []string{"/var/vcap/data/csiplugins"},
 	CsiMountRootDir:                    "/var/vcap/data/csimountroot",
 }
@@ -248,6 +252,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckUser,
 		config.EnableContainerProxy,
+		time.Duration(config.EnvoyDrainTimeout),
 	)
 
 	hub := event.NewHub()
@@ -276,6 +281,18 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		return nil, grouper.Members{}, err
 	}
 
+	var proxyManager containerstore.ProxyManager
+	if config.EnableContainerProxy {
+		proxyManager = containerstore.NewProxyManager(
+			logger,
+			config.ContainerProxyPath,
+			config.ContainerProxyConfigPath,
+			time.Duration(config.EnvoyConfigRefreshDelay),
+		)
+	} else {
+		proxyManager = containerstore.NewNoopProxyManager()
+	}
+
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
@@ -289,9 +306,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.TrustedSystemCertificatesPath,
 		metronClient,
 		config.DeclarativeHealthcheckPath,
-		config.EnableContainerProxy,
-		config.ContainerProxyPath,
-		config.ContainerProxyConfigPath,
+		proxyManager,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
@@ -359,7 +374,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 			)},
 			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
 			{"container-reaper", containerStore.NewContainerReaper(logger)},
-			{"proxy-manager", containerstore.NewProxyManager(logger, config.ContainerProxyConfigPath)},
 		},
 		nil
 }
@@ -485,6 +499,7 @@ func initializeTransformer(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
 	enableContainerProxy bool,
+	drainWait time.Duration,
 ) transformer.Transformer {
 	extractor := extractor.NewDetectable()
 	compressor := compressor.NewTgz()
@@ -507,6 +522,7 @@ func initializeTransformer(
 		useDeclarativeHealthCheck,
 		declarativeHealthcheckUser,
 		enableContainerProxy,
+		drainWait,
 	)
 }
 

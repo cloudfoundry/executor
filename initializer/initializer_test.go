@@ -135,6 +135,12 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.Start()
 	})
 
+	Context("default configuration", func() {
+		It("defaults EnvoyDrainTimeout to same timeout as the routers", func() {
+			Expect(initializer.DefaultConfiguration.EnvoyDrainTimeout).To(Equal(durationjson.Duration(15 * time.Minute)))
+		})
+	})
+
 	Context("when garden doesn't respond", func() {
 		var waitChan chan struct{}
 

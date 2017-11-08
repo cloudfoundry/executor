@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 )
 
 const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
@@ -27,8 +27,6 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
-const StartProxyPort = 61001
-const EndProxyPort = 65534
 
 // To be deprecated
 const (
@@ -59,20 +57,15 @@ type storeNode struct {
 	eventEmitter               event.Hub
 	transformer                transformer.Transformer
 	process                    ifrit.Process
-	credManagerProcess         ifrit.Process
 	config                     *ContainerConfig
 	declarativeHealthcheckPath string
 	useContainerProxy          bool
-	containerProxyPath         string
-	containerProxyConfigPath   string
+	proxyManager               ProxyManager
 }
 
 func newStoreNode(
 	config *ContainerConfig,
 	declarativeHealthcheckPath string,
-	useContainerProxy bool,
-	containerProxyPath string,
-	containerProxyConfigPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -82,6 +75,7 @@ func newStoreNode(
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
+	proxyManager ProxyManager,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -98,9 +92,7 @@ func newStoreNode(
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
-		useContainerProxy:           useContainerProxy,
-		containerProxyPath:          containerProxyPath,
-		containerProxyConfigPath:    containerProxyConfigPath,
+		proxyManager:                proxyManager,
 	}
 }
 
@@ -257,34 +249,18 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		DstPath: "/etc/cf-assets/healthcheck",
 	})
 
-	var proxyPortMapping []executor.ProxyPortMapping
-	if n.useContainerProxy && info.EnableContainerProxy {
-		proxyPortMapping = populateContainerProxyPorts(info)
-
-		logger.Info("adding-container-proxy-bindmounts")
-		mounts = append(mounts, garden.BindMount{
-			Origin:  garden.BindMountOriginHost,
-			SrcPath: n.containerProxyPath,
-			DstPath: "/etc/cf-assets/envoy",
+	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
+	for _, port := range extraPorts {
+		info.Ports = append(info.Ports, executor.PortMapping{
+			ContainerPort: port,
 		})
-
-		proxyConfigDir := filepath.Join(n.containerProxyConfigPath, info.Guid)
-		err := os.MkdirAll(proxyConfigDir, 0755)
-		if err != nil {
-			return nil, err
-		}
-
-		logger.Info("adding-container-proxy-config-bindmounts")
-		mounts = append(mounts, garden.BindMount{
-			Origin:  garden.BindMountOriginHost,
-			SrcPath: proxyConfigDir,
-			DstPath: "/etc/cf-assets/envoy_config",
-		})
-
-		proxyConfig := GenerateProxyConfig(logger, proxyPortMapping)
-		proxyConfigFilename := filepath.Join(proxyConfigDir, "envoy.json")
-		WriteProxyConfig(proxyConfig, proxyConfigFilename)
 	}
+
+	proxyMounts, err := n.proxyManager.BindMounts(logger, *info)
+	if err != nil {
+		return nil, err
+	}
+	mounts = append(mounts, proxyMounts...)
 
 	netInRules := make([]garden.NetIn, len(info.Ports))
 	for i, portMapping := range info.Ports {
@@ -402,44 +378,69 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer)
+	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
+	proxyConfigRunner, err := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
+	if err != nil {
+		n.completeWithError(logger, err)
+		return err
+	}
+
+	cfg := transformer.Config{
+		LDSPort: proxyConfigRunner.Port(),
+	}
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {
 		return err
 	}
 
-	credManagerRunner := n.credManager.Runner(logger, n.info)
+	members := grouper.Members{
+		{"cred-manager-runner", credManagerRunner},
+		{"proxy-config-runner", proxyConfigRunner},
+		{"runner", runner},
+	}
+	group := grouper.NewOrdered(os.Interrupt, members)
+	n.process = ifrit.Background(group)
+	go n.run(logger)
+	return nil
+}
 
-	n.credManagerProcess = ifrit.Background(credManagerRunner)
-	// we cannot use a group here because it messes up with the error messages returned from the runners, e.g.
-	//   cred-manager-runner exited with error: BOOOM
-	//   container-runner exited with nil
-	// instead of just
-	//   BOOM
-	// nomrally this is informative and good but looks like cc
-	// FailureReasonSanitizer depends on some errors messages having a specific
-	// structure
-
-	// wait for cred manager to start
-	select {
-	case <-n.credManagerProcess.Ready():
-		n.process = ifrit.Background(runner)
-		go n.run(logger)
-	case err := <-n.credManagerProcess.Wait():
-		if err != nil {
-			logger.Error("cred-manager-exited", err)
-			n.complete(logger, true, "cred-manager-runner exited: "+err.Error())
-		} else {
-			logger.Info("cred-manager-exited-without-error")
-			n.complete(logger, false, "")
+func (n *storeNode) completeWithError(logger lager.Logger, err error) {
+	exitTrace, ok := err.(grouper.ErrorTrace)
+	if ok {
+		for _, event := range exitTrace {
+			err := event.Err
+			if err != nil {
+				if event.Member.Name != "runner" {
+					err = errors.New(event.Member.Name + " exited: " + err.Error())
+				}
+				n.completeWithError(logger, err)
+				return
+			}
 		}
 	}
-	return nil
+
+	var errorStr string
+	if err != nil {
+		errorStr = err.Error()
+	}
+
+	if errorStr != "" {
+		n.complete(logger, true, errorStr)
+		return
+	}
+	n.complete(logger, false, "")
 }
 
 func (n *storeNode) run(logger lager.Logger) {
 	// wait for container runner to start
 	logger.Debug("execute-process")
-	<-n.process.Ready()
+	select {
+	case err := <-n.process.Wait():
+		n.completeWithError(logger, err)
+		return
+	case <-n.process.Ready():
+		// fallthrough, healthcheck passed
+	}
 	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
@@ -448,27 +449,8 @@ func (n *storeNode) run(logger lager.Logger) {
 	n.infoLock.Unlock()
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
 
-	var errorStr string
-	select {
-	case err := <-n.credManagerProcess.Wait():
-		if err != nil {
-			errorStr = "cred-manager-runner exited: " + err.Error()
-		}
-		n.process.Signal(os.Interrupt)
-		n.process.Wait()
-	case err := <-n.process.Wait():
-		if err != nil {
-			errorStr = err.Error()
-		}
-		n.credManagerProcess.Signal(os.Interrupt)
-		n.credManagerProcess.Wait()
-	}
-
-	if errorStr != "" {
-		n.complete(logger, true, errorStr)
-	} else {
-		n.complete(logger, false, "")
-	}
+	err := <-n.process.Wait()
+	n.completeWithError(logger, err)
 }
 
 func (n *storeNode) Stop(logger lager.Logger) error {
@@ -567,11 +549,6 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 		}
 	}
 
-	defer func() {
-		proxyConfigDir := filepath.Join(n.containerProxyConfigPath, n.info.Guid)
-		os.RemoveAll(proxyConfigDir)
-	}()
-
 	logger.Info("destroyed-container-in-garden", lager.Data{
 		"destroy-took": destroyDuration.String(),
 	})
@@ -668,36 +645,4 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	logger.Debug("container-info-complete")
 
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
-}
-
-func populateContainerProxyPorts(container *executor.Container) []executor.ProxyPortMapping {
-	proxyPortMapping := []executor.ProxyPortMapping{}
-
-	existingPorts := make(map[uint16]interface{})
-	containerPorts := make([]uint16, len(container.RunInfo.Ports))
-	for i, portMap := range container.RunInfo.Ports {
-		existingPorts[portMap.ContainerPort] = struct{}{}
-		containerPorts[i] = portMap.ContainerPort
-	}
-
-	portCount := 0
-	for port := uint16(StartProxyPort); port < EndProxyPort; port++ {
-		if portCount == len(existingPorts) {
-			break
-		}
-
-		if existingPorts[port] != nil {
-			continue
-		}
-
-		container.RunInfo.Ports = append(container.RunInfo.Ports, executor.PortMapping{ContainerPort: port})
-		proxyPortMapping = append(proxyPortMapping, executor.ProxyPortMapping{
-			AppPort:   containerPorts[portCount],
-			ProxyPort: port,
-		})
-
-		portCount++
-	}
-
-	return proxyPortMapping
 }

@@ -33,7 +33,7 @@ const (
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
-	Runner(lager.Logger, executor.Container) ifrit.Runner
+	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan struct{})
 }
 
 type noopManager struct{}
@@ -46,12 +46,12 @@ func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Cont
 	return nil, nil, nil
 }
 
-func (c *noopManager) Runner(lager.Logger, executor.Container) ifrit.Runner {
+func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan struct{}) {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		<-signals
 		return nil
-	})
+	}), nil
 }
 
 type credManager struct {
@@ -99,8 +99,9 @@ func calculateCredentialRotationPeriod(validityPeriod time.Duration) time.Durati
 	}
 }
 
-func (c *credManager) Runner(logger lager.Logger, container executor.Container) ifrit.Runner {
-	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+func (c *credManager) Runner(logger lager.Logger, container executor.Container) (ifrit.Runner, <-chan struct{}) {
+	rotatingCred := make(chan struct{}, 1)
+	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
 		defer logger.Info("finished")
@@ -121,6 +122,8 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		regenCertTimer := c.clock.NewTimer(rotationDuration)
 
 		close(ready)
+		logger.Info("started")
+
 		for {
 			select {
 			case <-regenCertTimer.C():
@@ -139,13 +142,17 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
+				rotatingCred <- struct{}{}
 				logger.Debug("completed")
 			case signal := <-signals:
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
+				close(rotatingCred)
 				return c.removeCreds(logger, container)
 			}
 		}
 	})
+
+	return runner, rotatingCred
 }
 
 func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {

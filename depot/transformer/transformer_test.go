@@ -2,6 +2,7 @@ package transformer_test
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -39,6 +40,8 @@ var _ = Describe("Transformer", func() {
 			unhealthyMonitoringInterval time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
 			suppressExitStatusCode      bool
+			ldsPort                     uint16
+			cfg                         transformer.Config
 		)
 
 		BeforeEach(func() {
@@ -58,6 +61,11 @@ var _ = Describe("Transformer", func() {
 
 			clock = fakeclock.NewFakeClock(time.Now())
 
+			ldsPort = 65535
+			cfg = transformer.Config{
+				LDSPort: ldsPort,
+			}
+
 			optimusPrime = transformer.NewTransformer(
 				nil, nil, nil, nil, nil, nil,
 				os.TempDir(),
@@ -71,6 +79,7 @@ var _ = Describe("Transformer", func() {
 				false,
 				"",
 				false,
+				time.Second,
 			)
 
 			container = executor.Container{
@@ -100,7 +109,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -128,7 +137,7 @@ var _ = Describe("Transformer", func() {
 				}
 			}
 
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			process := ifrit.Background(runner)
@@ -190,6 +199,7 @@ var _ = Describe("Transformer", func() {
 				process     ifrit.Process
 				actionCh    chan int
 				envoyCh     chan int
+				ldsCh       chan int
 			)
 
 			BeforeEach(func() {
@@ -206,6 +216,7 @@ var _ = Describe("Transformer", func() {
 					false,
 					"",
 					true,
+					time.Second,
 				)
 
 				processLock.Lock()
@@ -217,6 +228,9 @@ var _ = Describe("Transformer", func() {
 				envoyCh = make(chan int)
 				envoyProcess := makeProcess(envoyCh)
 
+				ldsCh = make(chan int)
+				ldsProcess := makeProcess(ldsCh)
+
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
@@ -227,17 +241,15 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
+					case "/etc/cf-assets/envoy/lds":
+						return ldsProcess, nil
 					case "sh":
-						Expect(spec.Args).To(Equal([]string{
-							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
-						}))
 						return envoyProcess, nil
 					}
 
 					err = errors.New("")
 					Fail("unexpected executable path: " + spec.Path)
-					return
+					return nil, err
 				}
 
 				container = executor.Container{
@@ -267,6 +279,9 @@ var _ = Describe("Transformer", func() {
 							executor.PortMapping{
 								ContainerPort: 8080,
 							},
+							executor.PortMapping{
+								ContainerPort: 61001,
+							},
 						},
 						EnableContainerProxy: true,
 					},
@@ -274,7 +289,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -283,11 +298,12 @@ var _ = Describe("Transformer", func() {
 			AfterEach(func() {
 				close(actionCh)
 				close(envoyCh)
+				close(ldsCh)
 				ginkgomon.Interrupt(process)
 			})
 
 			It("runs the container proxy", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				paths := []string{}
 				args := [][]string{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -299,7 +315,24 @@ var _ = Describe("Transformer", func() {
 				Expect(paths).To(ContainElement("sh"))
 				Expect(args).To(ContainElement([]string{
 					"-c",
-					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --log-level critical& pid=$!; wait $pid",
+					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+				}))
+			})
+
+			It("runs the listener discovery service (lds)", func() {
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				paths := []string{}
+				args := [][]string{}
+				for i := 0; i < gardenContainer.RunCallCount(); i++ {
+					spec, _ := gardenContainer.RunArgsForCall(i)
+					paths = append(paths, spec.Path)
+					args = append(args, spec.Args)
+				}
+
+				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/lds"))
+				Expect(args).To(ContainElement([]string{
+					fmt.Sprintf("-port=%d", ldsPort),
+					"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
 				}))
 			})
 
@@ -419,7 +452,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -448,6 +481,7 @@ var _ = Describe("Transformer", func() {
 						true,
 						"user1",
 						false,
+						time.Second,
 					)
 
 					container.StartTimeoutMs = 1000
@@ -990,6 +1024,7 @@ var _ = Describe("Transformer", func() {
 						false,
 						"",
 						false,
+						time.Second,
 					)
 				})
 
@@ -1036,7 +1071,7 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -1066,7 +1101,7 @@ var _ = Describe("Transformer", func() {
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -1085,7 +1120,7 @@ var _ = Describe("Transformer", func() {
 			)
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer)
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 				process = ifrit.Background(runner)
 			})
