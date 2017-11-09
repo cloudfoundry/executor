@@ -129,18 +129,18 @@ var _ = Describe("ProxyManager", func() {
 		It("returns the appropriate bind mounts for container proxy", func() {
 			mounts, err := proxyManager.BindMounts(logger, container)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mounts).To(ConsistOf(
-				garden.BindMount{
+			Expect(mounts).To(ConsistOf([]garden.BindMount{
+				{
 					Origin:  garden.BindMountOriginHost,
 					SrcPath: proxyDir,
 					DstPath: "/etc/cf-assets/envoy",
 				},
-				garden.BindMount{
+				{
 					Origin:  garden.BindMountOriginHost,
-					SrcPath: fmt.Sprintf("%s/%s", proxyConfigDir, container.Guid),
+					SrcPath: filepath.Join(proxyConfigDir, container.Guid),
 					DstPath: "/etc/cf-assets/envoy_config",
 				},
-			))
+			}))
 		})
 
 		It("makes the proxy config directory on the host", func() {

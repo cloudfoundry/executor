@@ -1011,7 +1011,7 @@ var _ = Describe("Container Store", func() {
 						},
 						{
 							Origin:  garden.BindMountOriginHost,
-							SrcPath: fmt.Sprintf("%s/%s", envoyConfigDir, containerGuid),
+							SrcPath: filepath.Join(envoyConfigDir, containerGuid),
 							DstPath: "/etc/cf-assets/envoy_config",
 						},
 					}
