@@ -2,17 +2,17 @@ package containermetrics
 
 import (
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cloudfoundry/sonde-go/events"
 
-	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
 )
+
+var megabytesToBytes int = 1024 * 1024
 
 type StatsReporter struct {
 	logger lager.Logger
@@ -21,9 +21,9 @@ type StatsReporter struct {
 	clock          clock.Clock
 	executorClient executor.Client
 
-	metronClient               loggingclient.IngressClient
-	enableContainerProxy       bool
-	additionalMemoryAllocation float64
+	metronClient          loggingclient.IngressClient
+	enableContainerProxy  bool
+	proxyMemoryAllocation float64
 }
 
 type cpuInfo struct {
@@ -31,16 +31,16 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, enableContainerProxy bool, additionalMemory int, executorClient executor.Client, metronClient loggingclient.IngressClient) *StatsReporter {
+func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, enableContainerProxy bool, additionalMemoryMB int, executorClient executor.Client, metronClient loggingclient.IngressClient) *StatsReporter {
 	return &StatsReporter{
 		logger: logger,
 
-		interval:                   interval,
-		clock:                      clock,
-		executorClient:             executorClient,
-		metronClient:               metronClient,
-		enableContainerProxy:       enableContainerProxy,
-		additionalMemoryAllocation: float64(additionalMemory),
+		interval:              interval,
+		clock:                 clock,
+		executorClient:        executorClient,
+		metronClient:          metronClient,
+		enableContainerProxy:  enableContainerProxy,
+		proxyMemoryAllocation: float64(additionalMemoryMB * megabytesToBytes),
 	}
 }
 
@@ -101,9 +101,9 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 		previousCpuInfo := previousCpuInfos[guid]
 
-		if reporter.enableContainerProxy &&
-			(strings.Contains(container.RootFSPath, models.PreloadedRootFSScheme) || strings.Contains(container.RootFSPath, models.PreloadedOCIRootFSScheme)) {
+		if container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
+			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}
 
 		cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCpuInfo, now)
@@ -175,5 +175,5 @@ func computeCPUPercent(timeSpentA, timeSpentB time.Duration, sampleTimeA, sample
 
 func (reporter *StatsReporter) scaleMemory(container executor.Container) float64 {
 	memFloat := float64(container.MemoryLimit)
-	return (memFloat - reporter.additionalMemoryAllocation) / memFloat
+	return (memFloat - reporter.proxyMemoryAllocation) / memFloat
 }

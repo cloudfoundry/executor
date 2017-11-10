@@ -95,7 +95,7 @@ type ExecutorConfig struct {
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
 	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout"`
-	AdditionalMemoryAllocationMB       int                   `json:"additional_memory_allocation_mb",omitempty`
+	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
 	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
@@ -358,7 +358,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 				time.Duration(config.ContainerMetricsReportInterval),
 				clock,
 				config.EnableContainerProxy,
-				config.AdditionalMemoryAllocationMB,
+				config.ProxyMemoryAllocationMB,
 				depotClient,
 				metronClient,
 			)},
