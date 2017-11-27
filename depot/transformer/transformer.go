@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -30,6 +32,7 @@ const (
 )
 
 var ErrNoCheck = errors.New("no check configured")
+var HealthCheckDstPath string = filepath.Join(string(os.PathSeparator), "etc", "cf-assets", "healthcheck")
 
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
@@ -53,10 +56,12 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	declarativeHealthcheckUser string
-	useDeclarativeHealthCheck  bool
-	useContainerProxy          bool
-	drainWait                  time.Duration
+	declarativeHealthcheckUser    string
+	declarativeHealthcheckSrcPath string
+	declarativeHealthcheckRootFS  string
+	useDeclarativeHealthCheck     bool
+	useContainerProxy             bool
+	drainWait                     time.Duration
 
 	postSetupHook []string
 	postSetupUser string
@@ -83,28 +88,32 @@ func NewTransformer(
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckUser string,
+	declarativeHealthcheckSrcPath string,
+	declarativeHealthcheckRootFS string,
 	useContainerProxy bool,
 	drainWait time.Duration,
 ) *transformer {
 	return &transformer{
-		cachedDownloader:            cachedDownloader,
-		uploader:                    uploader,
-		extractor:                   extractor,
-		compressor:                  compressor,
-		downloadLimiter:             downloadLimiter,
-		uploadLimiter:               uploadLimiter,
-		tempDir:                     tempDir,
-		exportNetworkEnvVars:        exportNetworkEnvVars,
-		healthyMonitoringInterval:   healthyMonitoringInterval,
-		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
-		healthCheckWorkPool:         healthCheckWorkPool,
-		clock:                       clock,
-		postSetupHook:               postSetupHook,
-		postSetupUser:               postSetupUser,
-		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
-		declarativeHealthcheckUser:  declarativeHealthcheckUser,
-		useContainerProxy:           useContainerProxy,
-		drainWait:                   drainWait,
+		cachedDownloader:              cachedDownloader,
+		uploader:                      uploader,
+		extractor:                     extractor,
+		compressor:                    compressor,
+		downloadLimiter:               downloadLimiter,
+		uploadLimiter:                 uploadLimiter,
+		tempDir:                       tempDir,
+		exportNetworkEnvVars:          exportNetworkEnvVars,
+		healthyMonitoringInterval:     healthyMonitoringInterval,
+		unhealthyMonitoringInterval:   unhealthyMonitoringInterval,
+		healthCheckWorkPool:           healthCheckWorkPool,
+		clock:                         clock,
+		postSetupHook:                 postSetupHook,
+		postSetupUser:                 postSetupUser,
+		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
+		declarativeHealthcheckUser:    declarativeHealthcheckUser,
+		declarativeHealthcheckSrcPath: declarativeHealthcheckSrcPath,
+		declarativeHealthcheckRootFS:  declarativeHealthcheckRootFS,
+		useContainerProxy:             useContainerProxy,
+		drainWait:                     drainWait,
 	}
 }
 
@@ -514,13 +523,24 @@ func (t *transformer) transformCheckDefinition(
 			User:           t.declarativeHealthcheckUser,
 			LogSource:      sourceName,
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-			Path:           "/etc/cf-assets/healthcheck/healthcheck",
+			Path:           filepath.Join(HealthCheckDstPath, "healthcheck"),
 			Args:           args,
 		}
 
 		buffer := bytes.NewBuffer(nil)
 		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-		runStep := steps.NewRun(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true)
+		sidecar := steps.Sidecar{
+			Image: garden.ImageRef{URI: t.declarativeHealthcheckRootFS},
+			BindMounts: []garden.BindMount{
+				{
+					Origin:  garden.BindMountOriginHost,
+					SrcPath: t.declarativeHealthcheckSrcPath,
+					DstPath: HealthCheckDstPath,
+				},
+			},
+			OverrideContainerLimits: &garden.ProcessLimits{},
+		}
+		runStep := steps.NewRunWithSidecar(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true, sidecar)
 		return steps.NewOutputWrapper(runStep, buffer)
 	}
 

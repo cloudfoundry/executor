@@ -137,7 +137,6 @@ var _ = Describe("Container Store", func() {
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
-			"/var/vcap/packages/healthcheck",
 			proxyManager,
 		)
 
@@ -554,20 +553,6 @@ var _ = Describe("Container Store", func() {
 				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
 				_, container := credManager.CreateCredDirArgsForCall(0)
 				Expect(container.Guid).To(Equal(containerGuid))
-			})
-
-			It("bind mounts the healthcheck", func() {
-				_, err := containerStore.Create(logger, containerGuid)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(gardenClient.CreateCallCount()).To(Equal(1))
-				containerSpec := gardenClient.CreateArgsForCall(0)
-				Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
-					SrcPath: "/var/vcap/packages/healthcheck",
-					DstPath: "/etc/cf-assets/healthcheck",
-					Mode:    garden.BindMountModeRO,
-					Origin:  garden.BindMountOriginHost,
-				}))
 			})
 
 			Context("when credential mounts are configured", func() {
@@ -1042,7 +1027,6 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
-						"/var/vcap/packages/healthcheck",
 						proxyManager,
 					)
 
@@ -2164,7 +2148,6 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
-						"/var/vcap/packages/healthcheck",
 						proxyManager,
 					)
 

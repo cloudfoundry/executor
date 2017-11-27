@@ -71,8 +71,6 @@ type containerStore struct {
 	clock             clock.Clock
 	metronClient      loggingclient.IngressClient
 
-	declarativeHealthcheckPath string
-
 	ldsSourcePath string
 	proxyManager  ProxyManager
 
@@ -91,7 +89,6 @@ func New(
 	transformer transformer.Transformer,
 	trustedSystemCertificatesPath string,
 	metronClient loggingclient.IngressClient,
-	declarativeHealthcheckPath string,
 	proxyManager ProxyManager,
 ) ContainerStore {
 	return &containerStore{
@@ -106,7 +103,6 @@ func New(
 		clock:                         clock,
 		metronClient:                  metronClient,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
-		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 		proxyManager:                  proxyManager,
 	}
 }
@@ -124,7 +120,6 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 
 	err := cs.containers.Add(
 		newStoreNode(&cs.containerConfig,
-			cs.declarativeHealthcheckPath,
 			container,
 			cs.gardenClient,
 			cs.dependencyManager,

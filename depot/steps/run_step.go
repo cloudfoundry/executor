@@ -31,8 +31,14 @@ type runStep struct {
 	exportNetworkEnvVars   bool
 	clock                  clock.Clock
 	suppressExitStatusCode bool
-
+	sidecar                Sidecar
 	*canceller
+}
+
+type Sidecar struct {
+	Image                   garden.ImageRef
+	BindMounts              []garden.BindMount
+	OverrideContainerLimits *garden.ProcessLimits
 }
 
 func NewRun(
@@ -61,6 +67,36 @@ func NewRun(
 		suppressExitStatusCode: suppressExitStatusCode,
 
 		canceller: newCanceller(),
+	}
+}
+
+func NewRunWithSidecar(
+	container garden.Container,
+	model models.RunAction,
+	streamer log_streamer.LogStreamer,
+	logger lager.Logger,
+	externalIP string,
+	internalIP string,
+	portMappings []executor.PortMapping,
+	exportNetworkEnvVars bool,
+	clock clock.Clock,
+	suppressExitStatusCode bool,
+	sidecar Sidecar,
+) *runStep {
+	logger = logger.Session("run-step")
+	return &runStep{
+		container:            container,
+		model:                model,
+		streamer:             streamer,
+		logger:               logger,
+		externalIP:           externalIP,
+		internalIP:           internalIP,
+		portMappings:         portMappings,
+		exportNetworkEnvVars: exportNetworkEnvVars,
+		clock:                clock,
+		suppressExitStatusCode: suppressExitStatusCode,
+		sidecar:                sidecar,
+		canceller:              newCanceller(),
 	}
 }
 
@@ -118,6 +154,10 @@ func (step *runStep) Perform() error {
 			Limits: garden.ResourceLimits{
 				Nofile: nofile,
 			},
+
+			Image:                   step.sidecar.Image,
+			BindMounts:              step.sidecar.BindMounts,
+			OverrideContainerLimits: step.sidecar.OverrideContainerLimits,
 		}, processIO)
 		if err != nil {
 			errChan <- err

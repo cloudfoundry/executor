@@ -42,6 +42,7 @@ var _ = Describe("RunAction", func() {
 		spawnedProcess *gardenfakes.FakeProcess
 		runError       error
 		testLogSource  string
+		sidecar        steps.Sidecar
 	)
 
 	BeforeEach(func() {
@@ -49,6 +50,7 @@ var _ = Describe("RunAction", func() {
 		processesLimit = 1024
 		suppressExitStatusCode = false
 		testLogSource = "testlogsource"
+		sidecar = steps.Sidecar{}
 
 		runAction = models.RunAction{
 			Path: "sudo",
@@ -94,7 +96,7 @@ var _ = Describe("RunAction", func() {
 		container, err := gardenClient.Create(garden.ContainerSpec{})
 		Expect(err).NotTo(HaveOccurred())
 
-		step = steps.NewRun(
+		step = steps.NewRunWithSidecar(
 			container,
 			runAction,
 			fakeStreamer,
@@ -105,6 +107,7 @@ var _ = Describe("RunAction", func() {
 			exportNetworkEnvVars,
 			fakeClock,
 			suppressExitStatusCode,
+			sidecar,
 		)
 	})
 
@@ -148,11 +151,56 @@ var _ = Describe("RunAction", func() {
 					"test.run-step.successful-process-create",
 					"test.run-step.process-exit",
 				}))
-
 			})
 
 			It("logs the duration for process creation", func() {
 				Eventually(logger).Should(gbytes.Say("test.run-step.successful-process-create.+\"duration\":%d", time.Minute))
+			})
+
+			Context("when a sidecar container is specified", func() {
+				var (
+					imageRef   garden.ImageRef
+					bindMounts []garden.BindMount
+				)
+				BeforeEach(func() {
+					imageRef = garden.ImageRef{URI: "sandwich"}
+					bindMounts = []garden.BindMount{
+						{
+							SrcPath: "/etc/something",
+							DstPath: "/container/something",
+						},
+					}
+					sidecar = steps.Sidecar{
+						Image:      imageRef,
+						BindMounts: bindMounts,
+					}
+				})
+
+				It("runs the process using that image", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.Image).To(Equal(imageRef))
+				})
+
+				It("runs the process with the BindMounts", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.BindMounts).To(Equal(bindMounts))
+				})
+
+				It("runs the process in the same resource namespaces", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.OverrideContainerLimits).To(BeNil())
+				})
+
+				Context("when requesting a new resource namespace", func() {
+					BeforeEach(func() {
+						sidecar.OverrideContainerLimits = &garden.ProcessLimits{}
+					})
+
+					It("runs the process in a new resource namespace", func() {
+						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+						Expect(spec.OverrideContainerLimits).NotTo(BeNil())
+					})
+				})
 			})
 		})
 

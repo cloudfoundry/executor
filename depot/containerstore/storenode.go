@@ -49,23 +49,21 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock                     *sync.Mutex
-	gardenClient               garden.Client
-	dependencyManager          DependencyManager
-	volumeManager              volman.Manager
-	credManager                CredManager
-	eventEmitter               event.Hub
-	transformer                transformer.Transformer
-	process                    ifrit.Process
-	config                     *ContainerConfig
-	declarativeHealthcheckPath string
-	useContainerProxy          bool
-	proxyManager               ProxyManager
+	opLock            *sync.Mutex
+	gardenClient      garden.Client
+	dependencyManager DependencyManager
+	volumeManager     volman.Manager
+	credManager       CredManager
+	eventEmitter      event.Hub
+	transformer       transformer.Transformer
+	process           ifrit.Process
+	config            *ContainerConfig
+	useContainerProxy bool
+	proxyManager      ProxyManager
 }
 
 func newStoreNode(
 	config *ContainerConfig,
-	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -91,7 +89,6 @@ func newStoreNode(
 		modifiedIndex:               0,
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
-		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 		proxyManager:                proxyManager,
 	}
 }
@@ -241,13 +238,6 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	if err != nil {
 		return nil, err
 	}
-
-	logger.Info("adding-healthcheck-bindmounts")
-	mounts = append(mounts, garden.BindMount{
-		Origin:  garden.BindMountOriginHost,
-		SrcPath: n.declarativeHealthcheckPath,
-		DstPath: "/etc/cf-assets/healthcheck",
-	})
 
 	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
 	for _, port := range extraPorts {

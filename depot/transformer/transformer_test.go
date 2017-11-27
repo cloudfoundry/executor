@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,8 @@ var _ = Describe("Transformer", func() {
 				[]string{"/post-setup/path", "-x", "argument"},
 				"jim",
 				false,
+				"",
+				"",
 				"",
 				false,
 				time.Second,
@@ -214,6 +217,8 @@ var _ = Describe("Transformer", func() {
 					[]string{"/post-setup/path", "-x", "argument"},
 					"jim",
 					false,
+					"",
+					"",
 					"",
 					true,
 					time.Second,
@@ -358,18 +363,21 @@ var _ = Describe("Transformer", func() {
 
 		Describe("declarative healthchecks", func() {
 			var (
-				process          ifrit.Process
-				readinessProcess *gardenfakes.FakeProcess
-				readinessCh      chan int
-				livenessProcess  *gardenfakes.FakeProcess
-				livenessCh       chan int
-				actionProcess    *gardenfakes.FakeProcess
-				actionCh         chan int
-				monitorProcess   *gardenfakes.FakeProcess
-				monitorCh        chan int
-				readinessIO      chan garden.ProcessIO
-				livenessIO       chan garden.ProcessIO
-				processLock      sync.Mutex
+				process                       ifrit.Process
+				readinessProcess              *gardenfakes.FakeProcess
+				readinessCh                   chan int
+				livenessProcess               *gardenfakes.FakeProcess
+				livenessCh                    chan int
+				actionProcess                 *gardenfakes.FakeProcess
+				actionCh                      chan int
+				monitorProcess                *gardenfakes.FakeProcess
+				monitorCh                     chan int
+				readinessIO                   chan garden.ProcessIO
+				livenessIO                    chan garden.ProcessIO
+				processLock                   sync.Mutex
+				declarativeHealthcheckUser    string = "user1"
+				declarativeHealthcheckSrcPath string = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
+				declarativeHealthcheckRootFS  string = filepath.Join(string(os.PathSeparator), "dir", "rootfs")
 			)
 
 			BeforeEach(func() {
@@ -406,7 +414,7 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "/etc/cf-assets/healthcheck/healthcheck":
+					case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
 						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 						switch oldCount {
 						case 1:
@@ -479,7 +487,9 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
 						true,
-						"user1",
+						declarativeHealthcheckUser,
+						declarativeHealthcheckSrcPath,
+						declarativeHealthcheckRootFS,
 						false,
 						time.Second,
 					)
@@ -527,6 +537,29 @@ var _ = Describe("Transformer", func() {
 								},
 							},
 						}
+
+						container.RootFSPath = "blah"
+					})
+
+					It("runs the in a sidecar", func() {
+						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+						images := []garden.ImageRef{}
+						bindMounts := []garden.BindMount{}
+						newResourceNamespaces := []*garden.ProcessLimits{}
+						for i := 0; i < gardenContainer.RunCallCount(); i++ {
+							spec, _ := gardenContainer.RunArgsForCall(i)
+							images = append(images, spec.Image)
+							bindMounts = append(bindMounts, spec.BindMounts...)
+							newResourceNamespaces = append(newResourceNamespaces, spec.OverrideContainerLimits)
+						}
+
+						Expect(images).To(ContainElement(garden.ImageRef{URI: declarativeHealthcheckRootFS}))
+						Expect(bindMounts).To(ContainElement(garden.BindMount{
+							Origin:  garden.BindMountOriginHost,
+							SrcPath: declarativeHealthcheckSrcPath,
+							DstPath: transformer.HealthCheckDstPath,
+						}))
+						Expect(newResourceNamespaces).To(ContainElement(&garden.ProcessLimits{}))
 					})
 
 					Context("and the starttimeout is set to 0", func() {
@@ -554,7 +587,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=0s",
 							}))
-							Expect(users).To(ContainElement("user1"))
+							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -591,7 +624,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
-							Expect(users).To(ContainElement("user1"))
+							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -615,7 +648,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms", // 1ms
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement("user1"))
+						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 
 					Context("when the readiness check times out", func() {
@@ -683,9 +716,9 @@ var _ = Describe("Transformer", func() {
 								"-port=5432",
 								"-timeout=100ms",
 								"-uri=/some/path",
-								"-liveness-interval=1s", // 1ms
+								"-liveness-interval=1s",
 							}))
-							Expect(users).To(ContainElement("user1"))
+							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 
 						Context("when the liveness check exits", func() {
@@ -767,7 +800,7 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
-							Expect(users).To(ContainElement("user1"))
+							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -790,7 +823,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement("user1"))
+						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 				})
 
@@ -942,7 +975,7 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement("user1"))
+						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 
 					Context("when one of the readiness checks finish", func() {
@@ -976,15 +1009,15 @@ var _ = Describe("Transformer", func() {
 								Expect(args).To(ContainElement([]string{
 									"-port=2222",
 									"-timeout=100ms",
-									"-liveness-interval=1s", // 1ms
+									"-liveness-interval=1s",
 								}))
 								Expect(args).To(ContainElement([]string{
 									"-port=8080",
 									"-timeout=100ms",
 									"-uri=/",
-									"-liveness-interval=1s", // 1ms
+									"-liveness-interval=1s",
 								}))
-								Expect(users).To(ContainElement("user1"))
+								Expect(users).To(ContainElement(declarativeHealthcheckUser))
 							})
 
 							Context("when either liveness check exit", func() {
@@ -1022,6 +1055,8 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 						"jim",
 						false,
+						"",
+						"",
 						"",
 						false,
 						time.Second,
