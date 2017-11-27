@@ -89,15 +89,44 @@ var _ = Describe("ProxyManager", func() {
 			}
 		})
 
-		It("returns a ProxyRunner that does nothing", func() {
-			runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
-			Expect(proxyRunnerErr).NotTo(HaveOccurred())
+		Context("Runner", func() {
+			var (
+				runner ifrit.Runner
+			)
 
-			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-			containerProcess = ifrit.Background(runner)
-			Eventually(containerProcess.Ready()).Should(BeClosed())
-			Consistently(containerProcess.Wait()).ShouldNot(Receive())
-			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+			BeforeEach(func() {
+				rotatingCredChan = make(chan struct{})
+			})
+
+			JustBeforeEach(func() {
+				var err error
+				runner, err = proxyManager.Runner(logger, container, rotatingCredChan)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+				containerProcess = ifrit.Background(runner)
+			})
+
+			It("returns a ProxyRunner that does nothing", func() {
+				Eventually(containerProcess.Ready()).Should(BeClosed())
+				Consistently(containerProcess.Wait()).ShouldNot(Receive())
+				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+			})
+
+			It("continues to read from the rotatingCredChannel", func() {
+				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
+				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
+			})
+
+			Context("when signaled", func() {
+				JustBeforeEach(func() {
+					containerProcess.Signal(os.Interrupt)
+				})
+
+				It("exits", func() {
+					Eventually(containerProcess.Wait()).Should(Receive())
+				})
+			})
 		})
 
 		It("returns an empty bind mount", func() {

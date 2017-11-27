@@ -27,11 +27,18 @@ var (
 	ErrNoPortsAvailable = errors.New("no ports available")
 )
 
-var dummyRunner = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-	close(ready)
-	<-signals
-	return nil
-})
+var dummyRunner = func(credRotatedChan <-chan struct{}) ifrit.Runner {
+	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		close(ready)
+		for {
+			select {
+			case <-credRotatedChan:
+			case <-signals:
+				return nil
+			}
+		}
+	})
+}
 
 type Route struct {
 	Cluster string `json:"cluster"`
@@ -148,9 +155,9 @@ func (p *noopProxyManager) ProxyPorts(lager.Logger, *executor.Container) ([]exec
 	return nil, nil
 }
 
-func (p *noopProxyManager) Runner(lager.Logger, executor.Container, <-chan struct{}) (ProxyRunner, error) {
+func (p *noopProxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) (ProxyRunner, error) {
 	return &proxyRunner{
-		Runner: dummyRunner,
+		Runner: dummyRunner(credRotatedChan),
 	}, nil
 }
 
@@ -240,7 +247,9 @@ func (p *proxyManager) ProxyPorts(logger lager.Logger, container *executor.Conta
 
 func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) (ProxyRunner, error) {
 	if !container.EnableContainerProxy {
-		return &proxyRunner{Runner: dummyRunner}, nil
+		return &proxyRunner{
+			Runner: dummyRunner(credRotatedChan),
+		}, nil
 	}
 
 	port, err := getAvailablePort(container.Ports)
