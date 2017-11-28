@@ -361,7 +361,6 @@ var _ = Describe("Transformer", func() {
 				readinessIO                   chan garden.ProcessIO
 				livenessIO                    chan garden.ProcessIO
 				processLock                   sync.Mutex
-				declarativeHealthcheckUser    string = "user1"
 				declarativeHealthcheckSrcPath string = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
 				declarativeHealthcheckRootFS  string = filepath.Join(string(os.PathSeparator), "dir", "rootfs")
 			)
@@ -463,7 +462,6 @@ var _ = Describe("Transformer", func() {
 			Context("when they are enabled", func() {
 				BeforeEach(func() {
 					options = append(options, transformer.WithDeclarativeHealthchecks(
-						declarativeHealthcheckUser,
 						declarativeHealthcheckSrcPath,
 						declarativeHealthcheckRootFS,
 					))
@@ -543,12 +541,10 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
-							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
-								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -559,7 +555,6 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=0s",
 							}))
-							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -580,12 +575,10 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
-							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
-								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -596,7 +589,6 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
-							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -604,12 +596,10 @@ var _ = Describe("Transformer", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						paths := []string{}
 						args := [][]string{}
-						users := []string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
-							users = append(users, spec.User)
 						}
 
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -620,7 +610,6 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms", // 1ms
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 
 					Context("when the readiness check times out", func() {
@@ -675,12 +664,10 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 							paths := []string{}
 							args := [][]string{}
-							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
-								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -690,7 +677,6 @@ var _ = Describe("Transformer", func() {
 								"-uri=/some/path",
 								"-liveness-interval=1s",
 							}))
-							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 
 						Context("when the liveness check exits", func() {
@@ -757,12 +743,10 @@ var _ = Describe("Transformer", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
-							users := []string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
-								users = append(users, spec.User)
 							}
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -772,7 +756,6 @@ var _ = Describe("Transformer", func() {
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
 							}))
-							Expect(users).To(ContainElement(declarativeHealthcheckUser))
 						})
 					})
 
@@ -780,12 +763,10 @@ var _ = Describe("Transformer", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						paths := []string{}
 						args := [][]string{}
-						users := []string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
-							users = append(users, spec.User)
 						}
 
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -795,7 +776,6 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 				})
 
@@ -925,12 +905,10 @@ var _ = Describe("Transformer", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 						paths := []string{}
 						args := [][]string{}
-						users := []string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
-							users = append(users, spec.User)
 						}
 
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -947,7 +925,6 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
-						Expect(users).To(ContainElement(declarativeHealthcheckUser))
 					})
 
 					Context("when one of the readiness checks finish", func() {
@@ -969,12 +946,10 @@ var _ = Describe("Transformer", func() {
 								Eventually(gardenContainer.RunCallCount).Should(Equal(5))
 								paths := []string{}
 								args := [][]string{}
-								users := []string{}
 								for i := 0; i < gardenContainer.RunCallCount(); i++ {
 									spec, _ := gardenContainer.RunArgsForCall(i)
 									paths = append(paths, spec.Path)
 									args = append(args, spec.Args)
-									users = append(users, spec.User)
 								}
 
 								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
@@ -989,7 +964,6 @@ var _ = Describe("Transformer", func() {
 									"-uri=/",
 									"-liveness-interval=1s",
 								}))
-								Expect(users).To(ContainElement(declarativeHealthcheckUser))
 							})
 
 							Context("when either liveness check exit", func() {

@@ -54,7 +54,6 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	declarativeHealthcheckUser    string
 	declarativeHealthcheckSrcPath string
 	declarativeHealthcheckRootFS  string
 	useDeclarativeHealthCheck     bool
@@ -72,13 +71,11 @@ type transformer struct {
 type Option func(*transformer)
 
 func WithDeclarativeHealthchecks(
-	declarativeHealthcheckUser string,
 	declarativeHealthcheckSrcPath string,
 	declarativeHealthcheckRootFS string,
 ) Option {
 	return func(t *transformer) {
 		t.useDeclarativeHealthCheck = true
-		t.declarativeHealthcheckUser = declarativeHealthcheckUser
 		t.declarativeHealthcheckSrcPath = declarativeHealthcheckSrcPath
 		t.declarativeHealthcheckRootFS = declarativeHealthcheckRootFS
 	}
@@ -540,7 +537,6 @@ func (t *transformer) transformCheckDefinition(
 		}
 
 		runAction := models.RunAction{
-			User:           t.declarativeHealthcheckUser,
 			LogSource:      sourceName,
 			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 			Path:           filepath.Join(HealthCheckDstPath, "healthcheck"),

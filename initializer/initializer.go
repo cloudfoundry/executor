@@ -90,7 +90,6 @@ type ExecutorConfig struct {
 	DiskMB                             string                `json:"disk_mb,omitempty"`
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
-	DeclarativeHealthcheckUser         string                `json:"declarative_healthcheck_user,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
 	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout"`
@@ -249,7 +248,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		postSetupHook,
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
-		config.DeclarativeHealthcheckUser,
 		config.DeclarativeHealthcheckPath,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
@@ -497,7 +495,6 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
-	declarativeHealthcheckUser string,
 	declarativeHealthcheckSrcPath string,
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
@@ -512,7 +509,6 @@ func initializeTransformer(
 
 	if useDeclarativeHealthCheck {
 		options = append(options, transformer.WithDeclarativeHealthchecks(
-			declarativeHealthcheckUser,
 			declarativeHealthcheckSrcPath,
 			declarativeHealthcheckRootFS,
 		))
