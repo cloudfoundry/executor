@@ -53,21 +53,19 @@ func NewRun(
 	clock clock.Clock,
 	suppressExitStatusCode bool,
 ) *runStep {
-	logger = logger.Session("run-step")
-	return &runStep{
-		container:            container,
-		model:                model,
-		streamer:             streamer,
-		logger:               logger,
-		externalIP:           externalIP,
-		internalIP:           internalIP,
-		portMappings:         portMappings,
-		exportNetworkEnvVars: exportNetworkEnvVars,
-		clock:                clock,
-		suppressExitStatusCode: suppressExitStatusCode,
-
-		canceller: newCanceller(),
-	}
+	return NewRunWithSidecar(
+		container,
+		model,
+		streamer,
+		logger,
+		externalIP,
+		internalIP,
+		portMappings,
+		exportNetworkEnvVars,
+		clock,
+		suppressExitStatusCode,
+		Sidecar{},
+	)
 }
 
 func NewRunWithSidecar(

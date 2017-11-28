@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
-	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
@@ -504,30 +503,39 @@ func initializeTransformer(
 	enableContainerProxy bool,
 	drainWait time.Duration,
 ) transformer.Transformer {
-	extractor := extractor.NewDetectable()
+	var options []transformer.Option
 	compressor := compressor.NewTgz()
 
+	if exportNetworkEnvVars {
+		options = append(options, transformer.WithExportedNetworkEnvVars())
+	}
+
+	if useDeclarativeHealthCheck {
+		options = append(options, transformer.WithDeclarativeHealthchecks(
+			declarativeHealthcheckUser,
+			declarativeHealthcheckSrcPath,
+			declarativeHealthcheckRootFS,
+		))
+	}
+
+	if enableContainerProxy {
+		options = append(options, transformer.WithContainerProxy(drainWait))
+	}
+
+	options = append(options, transformer.WithPostSetupHook(postSetupUser, postSetupHook))
+
 	return transformer.NewTransformer(
+		clock,
 		cache,
 		uploader,
-		extractor,
 		compressor,
 		downloadRateLimiter,
 		make(chan struct{}, maxConcurrentUploads),
 		workDir,
-		exportNetworkEnvVars,
 		healthyMonitoringInterval,
 		unhealthyMonitoringInterval,
 		healthCheckWorkPool,
-		clock,
-		postSetupHook,
-		postSetupUser,
-		useDeclarativeHealthCheck,
-		declarativeHealthcheckUser,
-		declarativeHealthcheckSrcPath,
-		declarativeHealthcheckRootFS,
-		enableContainerProxy,
-		drainWait,
+		options...,
 	)
 }
 

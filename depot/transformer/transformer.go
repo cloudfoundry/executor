@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
-	"code.cloudfoundry.org/archiver/extractor"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/clock"
@@ -48,7 +47,6 @@ type Config struct {
 type transformer struct {
 	cachedDownloader     cacheddownloader.CachedDownloader
 	uploader             uploader.Uploader
-	extractor            extractor.Extractor
 	compressor           compressor.Compressor
 	downloadLimiter      chan struct{}
 	uploadLimiter        chan struct{}
@@ -60,61 +58,83 @@ type transformer struct {
 	declarativeHealthcheckSrcPath string
 	declarativeHealthcheckRootFS  string
 	useDeclarativeHealthCheck     bool
-	useContainerProxy             bool
-	drainWait                     time.Duration
+	healthyMonitoringInterval     time.Duration
+	unhealthyMonitoringInterval   time.Duration
+	healthCheckWorkPool           *workpool.WorkPool
+
+	useContainerProxy bool
+	drainWait         time.Duration
 
 	postSetupHook []string
 	postSetupUser string
+}
 
-	healthyMonitoringInterval   time.Duration
-	unhealthyMonitoringInterval time.Duration
-	healthCheckWorkPool         *workpool.WorkPool
+type Option func(*transformer)
+
+func WithDeclarativeHealthchecks(
+	declarativeHealthcheckUser string,
+	declarativeHealthcheckSrcPath string,
+	declarativeHealthcheckRootFS string,
+) Option {
+	return func(t *transformer) {
+		t.useDeclarativeHealthCheck = true
+		t.declarativeHealthcheckUser = declarativeHealthcheckUser
+		t.declarativeHealthcheckSrcPath = declarativeHealthcheckSrcPath
+		t.declarativeHealthcheckRootFS = declarativeHealthcheckRootFS
+	}
+}
+
+func WithContainerProxy(drainWait time.Duration) Option {
+	return func(t *transformer) {
+		t.useContainerProxy = true
+		t.drainWait = drainWait
+	}
+}
+
+func WithPostSetupHook(user string, hook []string) Option {
+	return func(t *transformer) {
+		t.postSetupUser = user
+		t.postSetupHook = hook
+	}
+}
+
+func WithExportedNetworkEnvVars() Option {
+	return func(t *transformer) {
+		t.exportNetworkEnvVars = true
+	}
 }
 
 func NewTransformer(
+	clock clock.Clock,
 	cachedDownloader cacheddownloader.CachedDownloader,
 	uploader uploader.Uploader,
-	extractor extractor.Extractor,
 	compressor compressor.Compressor,
 	downloadLimiter chan struct{},
 	uploadLimiter chan struct{},
 	tempDir string,
-	exportNetworkEnvVars bool,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	healthCheckWorkPool *workpool.WorkPool,
-	clock clock.Clock,
-	postSetupHook []string,
-	postSetupUser string,
-	useDeclarativeHealthCheck bool,
-	declarativeHealthcheckUser string,
-	declarativeHealthcheckSrcPath string,
-	declarativeHealthcheckRootFS string,
-	useContainerProxy bool,
-	drainWait time.Duration,
+	opts ...Option,
 ) *transformer {
-	return &transformer{
-		cachedDownloader:              cachedDownloader,
-		uploader:                      uploader,
-		extractor:                     extractor,
-		compressor:                    compressor,
-		downloadLimiter:               downloadLimiter,
-		uploadLimiter:                 uploadLimiter,
-		tempDir:                       tempDir,
-		exportNetworkEnvVars:          exportNetworkEnvVars,
-		healthyMonitoringInterval:     healthyMonitoringInterval,
-		unhealthyMonitoringInterval:   unhealthyMonitoringInterval,
-		healthCheckWorkPool:           healthCheckWorkPool,
-		clock:                         clock,
-		postSetupHook:                 postSetupHook,
-		postSetupUser:                 postSetupUser,
-		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
-		declarativeHealthcheckUser:    declarativeHealthcheckUser,
-		declarativeHealthcheckSrcPath: declarativeHealthcheckSrcPath,
-		declarativeHealthcheckRootFS:  declarativeHealthcheckRootFS,
-		useContainerProxy:             useContainerProxy,
-		drainWait:                     drainWait,
+	t := &transformer{
+		cachedDownloader:            cachedDownloader,
+		uploader:                    uploader,
+		compressor:                  compressor,
+		downloadLimiter:             downloadLimiter,
+		uploadLimiter:               uploadLimiter,
+		tempDir:                     tempDir,
+		healthyMonitoringInterval:   healthyMonitoringInterval,
+		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
+		healthCheckWorkPool:         healthCheckWorkPool,
+		clock:                       clock,
 	}
+
+	for _, o := range opts {
+		o(t)
+	}
+
+	return t
 }
 
 func (t *transformer) StepFor(

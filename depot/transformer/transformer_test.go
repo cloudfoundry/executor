@@ -43,6 +43,7 @@ var _ = Describe("Transformer", func() {
 			suppressExitStatusCode      bool
 			ldsPort                     uint16
 			cfg                         transformer.Config
+			options                     []transformer.Option
 		)
 
 		BeforeEach(func() {
@@ -67,23 +68,12 @@ var _ = Describe("Transformer", func() {
 				LDSPort: ldsPort,
 			}
 
-			optimusPrime = transformer.NewTransformer(
-				nil, nil, nil, nil, nil, nil,
-				os.TempDir(),
-				false,
-				healthyMonitoringInterval,
-				unhealthyMonitoringInterval,
-				healthCheckWorkPool,
-				clock,
-				[]string{"/post-setup/path", "-x", "argument"},
-				"jim",
-				false,
-				"",
-				"",
-				"",
-				false,
-				time.Second,
-			)
+			options = []transformer.Option{
+				transformer.WithPostSetupHook(
+					"jim",
+					[]string{"/post-setup/path", "-x", "argument"},
+				),
+			}
 
 			container = executor.Container{
 				RunInfo: executor.RunInfo{
@@ -104,6 +94,18 @@ var _ = Describe("Transformer", func() {
 					},
 				},
 			}
+		})
+
+		JustBeforeEach(func() {
+			optimusPrime = transformer.NewTransformer(
+				clock,
+				nil, nil, nil, nil, nil,
+				os.TempDir(),
+				healthyMonitoringInterval,
+				unhealthyMonitoringInterval,
+				healthCheckWorkPool,
+				options...,
+			)
 		})
 
 		Context("when there is no run action", func() {
@@ -206,23 +208,7 @@ var _ = Describe("Transformer", func() {
 			)
 
 			BeforeEach(func() {
-				optimusPrime = transformer.NewTransformer(
-					nil, nil, nil, nil, nil, nil,
-					os.TempDir(),
-					false,
-					healthyMonitoringInterval,
-					unhealthyMonitoringInterval,
-					healthCheckWorkPool,
-					clock,
-					[]string{"/post-setup/path", "-x", "argument"},
-					"jim",
-					false,
-					"",
-					"",
-					"",
-					true,
-					time.Second,
-				)
+				options = append(options, transformer.WithContainerProxy(time.Second))
 
 				processLock.Lock()
 				defer processLock.Unlock()
@@ -476,23 +462,11 @@ var _ = Describe("Transformer", func() {
 
 			Context("when they are enabled", func() {
 				BeforeEach(func() {
-					optimusPrime = transformer.NewTransformer(
-						nil, nil, nil, nil, nil, nil,
-						os.TempDir(),
-						false,
-						healthyMonitoringInterval,
-						unhealthyMonitoringInterval,
-						healthCheckWorkPool,
-						clock,
-						[]string{"/post-setup/path", "-x", "argument"},
-						"jim",
-						true,
+					options = append(options, transformer.WithDeclarativeHealthchecks(
 						declarativeHealthcheckUser,
 						declarativeHealthcheckSrcPath,
 						declarativeHealthcheckRootFS,
-						false,
-						time.Second,
-					)
+					))
 
 					container.StartTimeoutMs = 1000
 				})
@@ -537,8 +511,6 @@ var _ = Describe("Transformer", func() {
 								},
 							},
 						}
-
-						container.RootFSPath = "blah"
 					})
 
 					It("runs the in a sidecar", func() {
@@ -579,7 +551,7 @@ var _ = Describe("Transformer", func() {
 								users = append(users, spec.User)
 							}
 
-							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=100ms",
@@ -616,7 +588,7 @@ var _ = Describe("Transformer", func() {
 								users = append(users, spec.User)
 							}
 
-							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=1000ms",
@@ -640,7 +612,7 @@ var _ = Describe("Transformer", func() {
 							users = append(users, spec.User)
 						}
 
-						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=5432",
 							"-timeout=100ms",
@@ -711,7 +683,7 @@ var _ = Describe("Transformer", func() {
 								users = append(users, spec.User)
 							}
 
-							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=100ms",
@@ -793,7 +765,7 @@ var _ = Describe("Transformer", func() {
 								users = append(users, spec.User)
 							}
 
-							Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=1000ms",
@@ -816,7 +788,7 @@ var _ = Describe("Transformer", func() {
 							users = append(users, spec.User)
 						}
 
-						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=5432",
 							"-timeout=100ms",
@@ -904,7 +876,7 @@ var _ = Describe("Transformer", func() {
 							switch spec.Path {
 							case "/action/path":
 								return actionProcess, nil
-							case "/etc/cf-assets/healthcheck/healthcheck":
+							case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
 								oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 								switch oldCount {
 								case 1:
@@ -961,7 +933,7 @@ var _ = Describe("Transformer", func() {
 							users = append(users, spec.User)
 						}
 
-						Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=2222",
 							"-timeout=100ms",
@@ -1005,7 +977,7 @@ var _ = Describe("Transformer", func() {
 									users = append(users, spec.User)
 								}
 
-								Expect(paths).To(ContainElement("/etc/cf-assets/healthcheck/healthcheck"))
+								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 								Expect(args).To(ContainElement([]string{
 									"-port=2222",
 									"-timeout=100ms",
@@ -1044,23 +1016,6 @@ var _ = Describe("Transformer", func() {
 			Context("when they are disabled", func() {
 				BeforeEach(func() {
 					suppressExitStatusCode = true
-					optimusPrime = transformer.NewTransformer(
-						nil, nil, nil, nil, nil, nil,
-						os.TempDir(),
-						false,
-						healthyMonitoringInterval,
-						unhealthyMonitoringInterval,
-						healthCheckWorkPool,
-						clock,
-						[]string{"/post-setup/path", "-x", "argument"},
-						"jim",
-						false,
-						"",
-						"",
-						"",
-						false,
-						time.Second,
-					)
 				})
 
 				It("ignores the check definition and use the MonitorAction", func() {
