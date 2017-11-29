@@ -137,6 +137,8 @@ var _ = Describe("Container Store", func() {
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
+			false,
+			"/var/vcap/packages/healthcheck",
 			proxyManager,
 		)
 
@@ -553,6 +555,55 @@ var _ = Describe("Container Store", func() {
 				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
 				_, container := credManager.CreateCredDirArgsForCall(0)
 				Expect(container.Guid).To(Equal(containerGuid))
+			})
+
+			It("does not bind mount the healthcheck", func() {
+				_, err := containerStore.Create(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(gardenClient.CreateCallCount()).To(Equal(1))
+				containerSpec := gardenClient.CreateArgsForCall(0)
+				Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
+					SrcPath: "/var/vcap/packages/healthcheck",
+					DstPath: "/etc/cf-assets/healthcheck",
+					Mode:    garden.BindMountModeRO,
+					Origin:  garden.BindMountOriginHost,
+				}))
+			})
+
+			Context("when declarative healthchecks are enabled", func() {
+				BeforeEach(func() {
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						fakeMetronClient,
+						true,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+					)
+				})
+
+				It("bind mounts the healthcheck", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: "/var/vcap/packages/healthcheck",
+						DstPath: "/etc/cf-assets/healthcheck",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
+				})
 			})
 
 			Context("when credential mounts are configured", func() {
@@ -1027,6 +1078,8 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						false,
+						"/var/vcap/packages/healthcheck",
 						proxyManager,
 					)
 
@@ -1150,7 +1203,9 @@ var _ = Describe("Container Store", func() {
 
 		Context("when it is in the created state", func() {
 			var (
-				runReq *executor.RunRequest
+				runReq         *executor.RunRequest
+				envoySourceDir string
+				envoyConfigDir string
 			)
 
 			BeforeEach(func() {
@@ -1166,6 +1221,26 @@ var _ = Describe("Container Store", func() {
 						Action: runAction,
 					},
 				}
+
+				var err error
+				envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+				Expect(err).NotTo(HaveOccurred())
+				envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
+				Expect(err).NotTo(HaveOccurred())
+
+				proxyBindMounts := []garden.BindMount{
+					{
+						Origin:  garden.BindMountOriginHost,
+						SrcPath: envoySourceDir,
+						DstPath: "/etc/cf-assets/envoy",
+					},
+					{
+						Origin:  garden.BindMountOriginHost,
+						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+						DstPath: "/etc/cf-assets/envoy_config",
+					},
+				}
+				proxyManager.BindMountsReturns(proxyBindMounts, nil)
 			})
 
 			JustBeforeEach(func() {
@@ -1186,6 +1261,7 @@ var _ = Describe("Container Store", func() {
 					containerRunnerCalled chan struct{}
 					rotatingCredChan      chan struct{}
 					ldsPort               uint16
+					credManagerBindMount  []garden.BindMount
 				)
 
 				BeforeEach(func() {
@@ -1194,6 +1270,19 @@ var _ = Describe("Container Store", func() {
 					rotatingCredChan = make(chan struct{})
 					containerRunnerCalled = make(chan struct{})
 					ldsPort = 65535
+
+					credManagerBindMount = []garden.BindMount{
+						{
+							SrcPath: "hpath1",
+							DstPath: "cpath1",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						},
+					}
+					envVariables := []executor.EnvironmentVariable{
+						{Name: "CF_INSTANCE_CERT", Value: "some-cert"},
+					}
+					credManager.CreateCredDirReturns(credManagerBindMount, envVariables, nil)
 
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						<-cmFinishSetup
@@ -1234,6 +1323,20 @@ var _ = Describe("Container Store", func() {
 					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
 					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
 					Expect(cfg.LDSPort).To(Equal(ldsPort))
+					Expect(cfg.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: envoySourceDir,
+						DstPath: "/etc/cf-assets/envoy",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
+
+					Expect(cfg.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+						DstPath: "/etc/cf-assets/envoy_config",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
+					Expect(cfg.BindMounts).To(ContainElement(credManagerBindMount[0]))
 				})
 
 				Context("when cred manager is finished setting up", func() {
@@ -2148,6 +2251,8 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						false,
+						"/var/vcap/packages/healthcheck",
 						proxyManager,
 					)
 

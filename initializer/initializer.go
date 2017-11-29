@@ -248,7 +248,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		postSetupHook,
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
-		config.DeclarativeHealthcheckPath,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
@@ -304,6 +303,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		transformer,
 		config.TrustedSystemCertificatesPath,
 		metronClient,
+		config.EnableDeclarativeHealthcheck,
+		config.DeclarativeHealthcheckPath,
 		proxyManager,
 	)
 
@@ -495,7 +496,6 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
-	declarativeHealthcheckSrcPath string,
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
 	drainWait time.Duration,
@@ -507,11 +507,10 @@ func initializeTransformer(
 		options = append(options, transformer.WithExportedNetworkEnvVars())
 	}
 
+	options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
+
 	if useDeclarativeHealthCheck {
-		options = append(options, transformer.WithDeclarativeHealthchecks(
-			declarativeHealthcheckSrcPath,
-			declarativeHealthcheckRootFS,
-		))
+		options = append(options, transformer.WithDeclarativeHealthchecks())
 	}
 
 	if enableContainerProxy {

@@ -49,21 +49,26 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock            *sync.Mutex
-	gardenClient      garden.Client
-	dependencyManager DependencyManager
-	volumeManager     volman.Manager
-	credManager       CredManager
-	eventEmitter      event.Hub
-	transformer       transformer.Transformer
-	process           ifrit.Process
-	config            *ContainerConfig
-	useContainerProxy bool
-	proxyManager      ProxyManager
+	opLock                     *sync.Mutex
+	gardenClient               garden.Client
+	dependencyManager          DependencyManager
+	volumeManager              volman.Manager
+	credManager                CredManager
+	eventEmitter               event.Hub
+	transformer                transformer.Transformer
+	process                    ifrit.Process
+	config                     *ContainerConfig
+	useDeclarativeHealthCheck  bool
+	declarativeHealthcheckPath string
+	useContainerProxy          bool
+	proxyManager               ProxyManager
+	bindMounts                 []garden.BindMount
 }
 
 func newStoreNode(
 	config *ContainerConfig,
+	useDeclarativeHealthCheck bool,
+	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClient garden.Client,
 	dependencyManager DependencyManager,
@@ -89,6 +94,8 @@ func newStoreNode(
 		modifiedIndex:               0,
 		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
 		metronClient:                metronClient,
+		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
+		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 		proxyManager:                proxyManager,
 	}
 }
@@ -156,6 +163,8 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return err
 	}
 
+	n.bindMounts = mounts.GardenBindMounts
+
 	if n.hostTrustedCertificatesPath != "" && info.TrustedSystemCertificatesPath != "" {
 		mount := garden.BindMount{
 			SrcPath: n.hostTrustedCertificatesPath,
@@ -163,7 +172,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			Mode:    garden.BindMountModeRO,
 			Origin:  garden.BindMountOriginHost,
 		}
-		mounts.GardenBindMounts = append(mounts.GardenBindMounts, mount)
+		n.bindMounts = append(n.bindMounts, mount)
 
 		info.Env = append(info.Env, executor.EnvironmentVariable{Name: "CF_SYSTEM_CERT_PATH", Value: info.TrustedSystemCertificatesPath})
 	}
@@ -174,18 +183,33 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		n.complete(logger, true, VolmanMountFailed)
 		return err
 	}
-	mounts.GardenBindMounts = append(mounts.GardenBindMounts, volumeMounts...)
+	n.bindMounts = append(n.bindMounts, volumeMounts...)
+
+	proxyMounts, err := n.proxyManager.BindMounts(logger, n.info)
+	if err != nil {
+		return err
+	}
+	n.bindMounts = append(n.bindMounts, proxyMounts...)
 
 	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
 	if err != nil {
 		n.complete(logger, true, CredDirFailed)
 		return err
 	}
-	mounts.GardenBindMounts = append(mounts.GardenBindMounts, credMounts...)
+	n.bindMounts = append(n.bindMounts, credMounts...)
 	info.Env = append(info.Env, envs...)
 
+	if n.useDeclarativeHealthCheck {
+		logger.Info("adding-healthcheck-bindmounts")
+		n.bindMounts = append(n.bindMounts, garden.BindMount{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: n.declarativeHealthcheckPath,
+			DstPath: "/etc/cf-assets/healthcheck",
+		})
+	}
+
 	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
-	gardenContainer, err := n.createGardenContainer(logger, &info, mounts.GardenBindMounts)
+	gardenContainer, err := n.createGardenContainer(logger, &info)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
@@ -233,7 +257,7 @@ func (n *storeNode) gardenProperties(container *executor.Container) garden.Prope
 	return properties
 }
 
-func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container, mounts []garden.BindMount) (garden.Container, error) {
+func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container) (garden.Container, error) {
 	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
 	if err != nil {
 		return nil, err
@@ -245,12 +269,6 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			ContainerPort: port,
 		})
 	}
-
-	proxyMounts, err := n.proxyManager.BindMounts(logger, *info)
-	if err != nil {
-		return nil, err
-	}
-	mounts = append(mounts, proxyMounts...)
 
 	netInRules := make([]garden.NetIn, len(info.Ports))
 	for i, portMapping := range info.Ports {
@@ -269,7 +287,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 			Password: info.ImagePassword,
 		},
 		Env:        convertEnvVars(info.Env),
-		BindMounts: mounts,
+		BindMounts: n.bindMounts,
 		Limits: garden.Limits{
 			Memory: garden.MemoryLimits{
 				LimitInBytes: uint64(info.MemoryMB * 1024 * 1024),
@@ -376,7 +394,8 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	}
 
 	cfg := transformer.Config{
-		LDSPort: proxyConfigRunner.Port(),
+		LDSPort:    proxyConfigRunner.Port(),
+		BindMounts: n.bindMounts,
 	}
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {

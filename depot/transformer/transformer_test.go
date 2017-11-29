@@ -21,6 +21,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/workpool"
+	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
@@ -40,7 +41,6 @@ var _ = Describe("Transformer", func() {
 			healthyMonitoringInterval   time.Duration
 			unhealthyMonitoringInterval time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
-			suppressExitStatusCode      bool
 			ldsPort                     uint16
 			cfg                         transformer.Config
 			options                     []transformer.Option
@@ -49,7 +49,6 @@ var _ = Describe("Transformer", func() {
 		BeforeEach(func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
 			fakeMetronClient = &mfakes.FakeIngressClient{}
-			suppressExitStatusCode = false
 
 			logger = lagertest.NewTestLogger("test-container-store")
 			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
@@ -66,6 +65,14 @@ var _ = Describe("Transformer", func() {
 			ldsPort = 65535
 			cfg = transformer.Config{
 				LDSPort: ldsPort,
+				BindMounts: []garden.BindMount{
+					{
+						SrcPath: "/some/source",
+						DstPath: "/some/destintation",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					},
+				},
 			}
 
 			options = []transformer.Option{
@@ -73,6 +80,7 @@ var _ = Describe("Transformer", func() {
 					"jim",
 					[]string{"/post-setup/path", "-x", "argument"},
 				),
+				transformer.WithSidecarRootfs("preloaded:cflinuxfs2"),
 			}
 
 			container = executor.Container{
@@ -295,36 +303,64 @@ var _ = Describe("Transformer", func() {
 
 			It("runs the container proxy", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-				paths := []string{}
-				args := [][]string{}
+				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
 					spec, _ := gardenContainer.RunArgsForCall(i)
-					paths = append(paths, spec.Path)
-					args = append(args, spec.Args)
+					specs = append(specs, spec)
 				}
 
-				Expect(paths).To(ContainElement("sh"))
-				Expect(args).To(ContainElement([]string{
-					"-c",
-					"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+				Expect(specs).To(ContainElement(garden.ProcessSpec{
+					Path: "sh",
+					Args: []string{
+						"-c",
+						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+					},
+					Env: []string{},
+					Limits: garden.ResourceLimits{
+						Nofile: proto.Uint64(1024),
+					},
+					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+					BindMounts: []garden.BindMount{
+						{
+							SrcPath: "/some/source",
+							DstPath: "/some/destintation",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						},
+					},
 				}))
+
 			})
 
 			It("runs the listener discovery service (lds)", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-				paths := []string{}
-				args := [][]string{}
+				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
 					spec, _ := gardenContainer.RunArgsForCall(i)
-					paths = append(paths, spec.Path)
-					args = append(args, spec.Args)
+					specs = append(specs, spec)
 				}
 
-				Expect(paths).To(ContainElement("/etc/cf-assets/envoy/lds"))
-				Expect(args).To(ContainElement([]string{
-					fmt.Sprintf("-port=%d", ldsPort),
-					"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+				Expect(specs).To(ContainElement(garden.ProcessSpec{
+					Path: "/etc/cf-assets/envoy/lds",
+					Args: []string{
+						fmt.Sprintf("-port=%d", ldsPort),
+						"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+					},
+					Env: []string{},
+					Limits: garden.ResourceLimits{
+						Nofile: proto.Uint64(1024),
+					},
+					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+					BindMounts: []garden.BindMount{
+						{
+							SrcPath: "/some/source",
+							DstPath: "/some/destintation",
+							Mode:    garden.BindMountModeRO,
+							Origin:  garden.BindMountOriginHost,
+						},
+					},
 				}))
+
 			})
 
 			Context("when the container proxy is disabled on the container", func() {
@@ -461,10 +497,9 @@ var _ = Describe("Transformer", func() {
 
 			Context("when they are enabled", func() {
 				BeforeEach(func() {
-					options = append(options, transformer.WithDeclarativeHealthchecks(
-						declarativeHealthcheckSrcPath,
-						declarativeHealthcheckRootFS,
-					))
+					options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
+
+					options = append(options, transformer.WithDeclarativeHealthchecks())
 
 					container.StartTimeoutMs = 1000
 				})
@@ -498,6 +533,11 @@ var _ = Describe("Transformer", func() {
 
 				Context("and an http check definition exists", func() {
 					BeforeEach(func() {
+						cfg.BindMounts = append(cfg.BindMounts, garden.BindMount{
+							Origin:  garden.BindMountOriginHost,
+							SrcPath: declarativeHealthcheckSrcPath,
+							DstPath: transformer.HealthCheckDstPath,
+						})
 						container.CheckDefinition = &models.CheckDefinition{
 							Checks: []*models.Check{
 								&models.Check{
@@ -511,7 +551,7 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
-					It("runs the in a sidecar", func() {
+					It("runs the healthcheck in a sidecar", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						images := []garden.ImageRef{}
 						bindMounts := []garden.BindMount{}
@@ -988,10 +1028,6 @@ var _ = Describe("Transformer", func() {
 			})
 
 			Context("when they are disabled", func() {
-				BeforeEach(func() {
-					suppressExitStatusCode = true
-				})
-
 				It("ignores the check definition and use the MonitorAction", func() {
 					clock.WaitForWatcherAndIncrement(unhealthyMonitoringInterval)
 					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
@@ -1094,7 +1130,6 @@ var _ = Describe("Transformer", func() {
 			})
 
 			BeforeEach(func() {
-				suppressExitStatusCode = true
 				container.Setup = nil
 				container.Monitor = &models.Action{
 					ParallelAction: models.Parallel(

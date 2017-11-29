@@ -41,7 +41,8 @@ type Transformer interface {
 }
 
 type Config struct {
-	LDSPort uint16
+	LDSPort    uint16
+	BindMounts []garden.BindMount
 }
 
 type transformer struct {
@@ -54,12 +55,11 @@ type transformer struct {
 	exportNetworkEnvVars bool
 	clock                clock.Clock
 
-	declarativeHealthcheckSrcPath string
-	declarativeHealthcheckRootFS  string
-	useDeclarativeHealthCheck     bool
-	healthyMonitoringInterval     time.Duration
-	unhealthyMonitoringInterval   time.Duration
-	healthCheckWorkPool           *workpool.WorkPool
+	sidecarRootFS               string
+	useDeclarativeHealthCheck   bool
+	healthyMonitoringInterval   time.Duration
+	unhealthyMonitoringInterval time.Duration
+	healthCheckWorkPool         *workpool.WorkPool
 
 	useContainerProxy bool
 	drainWait         time.Duration
@@ -70,14 +70,17 @@ type transformer struct {
 
 type Option func(*transformer)
 
-func WithDeclarativeHealthchecks(
-	declarativeHealthcheckSrcPath string,
-	declarativeHealthcheckRootFS string,
+func WithSidecarRootfs(
+	sidecarRootFS string,
 ) Option {
 	return func(t *transformer) {
+		t.sidecarRootFS = sidecarRootFS
+	}
+}
+
+func WithDeclarativeHealthchecks() Option {
+	return func(t *transformer) {
 		t.useDeclarativeHealthCheck = true
-		t.declarativeHealthcheckSrcPath = declarativeHealthcheckSrcPath
-		t.declarativeHealthcheckRootFS = declarativeHealthcheckRootFS
 	}
 }
 
@@ -422,7 +425,13 @@ func (t *transformer) StepsRunner(
 	hasStartedRunning := make(chan struct{}, 1)
 
 	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
-		monitor = t.transformCheckDefinition(logger, &container, gardenContainer, hasStartedRunning, logStreamer)
+		monitor = t.transformCheckDefinition(logger,
+			&container,
+			gardenContainer,
+			hasStartedRunning,
+			logStreamer,
+			config.BindMounts,
+		)
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
@@ -464,6 +473,7 @@ func (t *transformer) StepsRunner(
 			container,
 			logger,
 			logStreamer,
+			config.BindMounts,
 		)
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
 
@@ -473,6 +483,7 @@ func (t *transformer) StepsRunner(
 			logger,
 			logStreamer,
 			config.LDSPort,
+			config.BindMounts,
 		)
 
 		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, ldsStep}, false, true)
@@ -503,6 +514,7 @@ func (t *transformer) transformCheckDefinition(
 	gardenContainer garden.Container,
 	hasStartedRunning chan<- struct{},
 	logstreamer log_streamer.LogStreamer,
+	bindMounts []garden.BindMount,
 ) steps.Step {
 	var readinessChecks []steps.Step
 	var livenessChecks []steps.Step
@@ -546,14 +558,8 @@ func (t *transformer) transformCheckDefinition(
 		buffer := bytes.NewBuffer(nil)
 		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
 		sidecar := steps.Sidecar{
-			Image: garden.ImageRef{URI: t.declarativeHealthcheckRootFS},
-			BindMounts: []garden.BindMount{
-				{
-					Origin:  garden.BindMountOriginHost,
-					SrcPath: t.declarativeHealthcheckSrcPath,
-					DstPath: HealthCheckDstPath,
-				},
-			},
+			Image:                   garden.ImageRef{URI: t.sidecarRootFS},
+			BindMounts:              bindMounts,
 			OverrideContainerLimits: &garden.ProcessLimits{},
 		}
 		runStep := steps.NewRunWithSidecar(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true, sidecar)
@@ -608,6 +614,7 @@ func (t *transformer) transformContainerProxyStep(
 	execContainer executor.Container,
 	logger lager.Logger,
 	streamer log_streamer.LogStreamer,
+	bindMounts []garden.BindMount,
 ) steps.Step {
 
 	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
@@ -626,14 +633,18 @@ func (t *transformer) transformContainerProxyStep(
 	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
-		User:           "root",
 		LogSource:      "PROXY",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 		Path:           "sh",
 		Args:           args,
 	}
 
-	return steps.NewRun(
+	sidecar := steps.Sidecar{
+		Image:      garden.ImageRef{URI: t.sidecarRootFS},
+		BindMounts: bindMounts,
+	}
+
+	return steps.NewRunWithSidecar(
 		container,
 		runAction,
 		streamer.WithSource("PROXY"),
@@ -644,6 +655,7 @@ func (t *transformer) transformContainerProxyStep(
 		t.exportNetworkEnvVars,
 		t.clock,
 		true,
+		sidecar,
 	)
 }
 
@@ -653,6 +665,7 @@ func (t *transformer) transformLdsStep(
 	logger lager.Logger,
 	streamer log_streamer.LogStreamer,
 	ldsPort uint16,
+	bindMounts []garden.BindMount,
 ) steps.Step {
 	portFlag := fmt.Sprintf("-port=%d", ldsPort)
 	args := []string{
@@ -662,14 +675,18 @@ func (t *transformer) transformLdsStep(
 	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
-		User:           "root",
 		LogSource:      "LDS",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
 		Path:           "/etc/cf-assets/envoy/lds",
 		Args:           args,
 	}
 
-	return steps.NewRun(
+	sidecar := steps.Sidecar{
+		Image:      garden.ImageRef{URI: t.sidecarRootFS},
+		BindMounts: bindMounts,
+	}
+
+	return steps.NewRunWithSidecar(
 		container,
 		runAction,
 		streamer.WithSource("LDS"),
@@ -680,5 +697,6 @@ func (t *transformer) transformLdsStep(
 		t.exportNetworkEnvVars,
 		t.clock,
 		true,
+		sidecar,
 	)
 }
