@@ -562,7 +562,19 @@ func (t *transformer) transformCheckDefinition(
 			BindMounts:              bindMounts,
 			OverrideContainerLimits: &garden.ProcessLimits{},
 		}
-		runStep := steps.NewRunWithSidecar(gardenContainer, runAction, bufferedLogStreamer, logger, container.ExternalIP, container.InternalIP, container.Ports, t.exportNetworkEnvVars, t.clock, true, sidecar)
+		runStep := steps.NewRunWithSidecar(gardenContainer,
+			runAction,
+			bufferedLogStreamer,
+			logger,
+			container.ExternalIP,
+			container.InternalIP,
+			container.Ports,
+			t.exportNetworkEnvVars,
+			t.clock,
+			true,
+			sidecar,
+			container.Privileged,
+		)
 		return steps.NewOutputWrapper(runStep, buffer)
 	}
 
@@ -656,6 +668,7 @@ func (t *transformer) transformContainerProxyStep(
 		t.clock,
 		true,
 		sidecar,
+		execContainer.Privileged,
 	)
 }
 
@@ -698,5 +711,6 @@ func (t *transformer) transformLdsStep(
 		t.clock,
 		true,
 		sidecar,
+		execContainer.Privileged,
 	)
 }

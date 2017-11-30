@@ -301,7 +301,7 @@ var _ = Describe("Transformer", func() {
 				ginkgomon.Interrupt(process)
 			})
 
-			It("runs the container proxy", func() {
+			It("runs the container proxy in a sidecar container", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -329,10 +329,36 @@ var _ = Describe("Transformer", func() {
 						},
 					},
 				}))
-
 			})
 
-			It("runs the listener discovery service (lds)", func() {
+			Context("when the container is privileged", func() {
+				BeforeEach(func() {
+					container.Privileged = true
+				})
+
+				It("runs the container proxy in the main container", func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					specs := []garden.ProcessSpec{}
+					for i := 0; i < gardenContainer.RunCallCount(); i++ {
+						spec, _ := gardenContainer.RunArgsForCall(i)
+						specs = append(specs, spec)
+					}
+
+					Expect(specs).To(ContainElement(garden.ProcessSpec{
+						Path: "sh",
+						Args: []string{
+							"-c",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+						},
+						Env: []string{},
+						Limits: garden.ResourceLimits{
+							Nofile: proto.Uint64(1024),
+						},
+					}))
+				})
+			})
+
+			It("runs the listener discovery service (lds) in a sidecar", func() {
 				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -360,7 +386,33 @@ var _ = Describe("Transformer", func() {
 						},
 					},
 				}))
+			})
 
+			Context("when the container is privileged", func() {
+				BeforeEach(func() {
+					container.Privileged = true
+				})
+
+				It("runs the listener discovery service (lds) in the same container", func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					specs := []garden.ProcessSpec{}
+					for i := 0; i < gardenContainer.RunCallCount(); i++ {
+						spec, _ := gardenContainer.RunArgsForCall(i)
+						specs = append(specs, spec)
+					}
+
+					Expect(specs).To(ContainElement(garden.ProcessSpec{
+						Path: "/etc/cf-assets/envoy/lds",
+						Args: []string{
+							fmt.Sprintf("-port=%d", ldsPort),
+							"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
+						},
+						Env: []string{},
+						Limits: garden.ResourceLimits{
+							Nofile: proto.Uint64(1024),
+						},
+					}))
+				})
 			})
 
 			Context("when the container proxy is disabled on the container", func() {
@@ -398,7 +450,6 @@ var _ = Describe("Transformer", func() {
 				livenessIO                    chan garden.ProcessIO
 				processLock                   sync.Mutex
 				declarativeHealthcheckSrcPath string = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
-				declarativeHealthcheckRootFS  string = filepath.Join(string(os.PathSeparator), "dir", "rootfs")
 			)
 
 			BeforeEach(func() {
@@ -455,6 +506,7 @@ var _ = Describe("Transformer", func() {
 				}
 				container = executor.Container{
 					RunInfo: executor.RunInfo{
+						StartTimeoutMs: 1000,
 						Action: &models.Action{
 							RunAction: &models.RunAction{
 								Path: "/action/path",
@@ -497,8 +549,6 @@ var _ = Describe("Transformer", func() {
 
 			Context("when they are enabled", func() {
 				BeforeEach(func() {
-					options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
-
 					options = append(options, transformer.WithDeclarativeHealthchecks())
 
 					container.StartTimeoutMs = 1000
@@ -551,25 +601,73 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
-					It("runs the healthcheck in a sidecar", func() {
+					It("runs the container proxy in a sidecar container", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-						images := []garden.ImageRef{}
-						bindMounts := []garden.BindMount{}
-						newResourceNamespaces := []*garden.ProcessLimits{}
+						specs := []garden.ProcessSpec{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
-							images = append(images, spec.Image)
-							bindMounts = append(bindMounts, spec.BindMounts...)
-							newResourceNamespaces = append(newResourceNamespaces, spec.OverrideContainerLimits)
+							specs = append(specs, spec)
 						}
 
-						Expect(images).To(ContainElement(garden.ImageRef{URI: declarativeHealthcheckRootFS}))
-						Expect(bindMounts).To(ContainElement(garden.BindMount{
-							Origin:  garden.BindMountOriginHost,
-							SrcPath: declarativeHealthcheckSrcPath,
-							DstPath: transformer.HealthCheckDstPath,
+						Expect(specs).To(ContainElement(garden.ProcessSpec{
+							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+							Args: []string{
+								"-port=5432",
+								"-timeout=100ms",
+								"-uri=/some/path",
+								fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
+								fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+							},
+							Env: []string{},
+							Limits: garden.ResourceLimits{
+								Nofile: proto.Uint64(1024),
+							},
+							OverrideContainerLimits: &garden.ProcessLimits{},
+							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							BindMounts: []garden.BindMount{
+								{
+									SrcPath: "/some/source",
+									DstPath: "/some/destintation",
+									Mode:    garden.BindMountModeRO,
+									Origin:  garden.BindMountOriginHost,
+								},
+								{
+									Origin:  garden.BindMountOriginHost,
+									SrcPath: declarativeHealthcheckSrcPath,
+									DstPath: transformer.HealthCheckDstPath,
+								},
+							},
 						}))
-						Expect(newResourceNamespaces).To(ContainElement(&garden.ProcessLimits{}))
+					})
+
+					Context("when the container is privileged", func() {
+						BeforeEach(func() {
+							container.Privileged = true
+						})
+
+						It("runs the container proxy in a the same container", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+							specs := []garden.ProcessSpec{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								specs = append(specs, spec)
+							}
+
+							Expect(specs).To(ContainElement(garden.ProcessSpec{
+								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+								Args: []string{
+									"-port=5432",
+									"-timeout=100ms",
+									"-uri=/some/path",
+									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+								},
+								Env: []string{},
+								Limits: garden.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								},
+							}))
+						})
 					})
 
 					Context("and the starttimeout is set to 0", func() {
