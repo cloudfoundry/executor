@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	totalMemory     = "CapacityTotalMemory"
-	totalDisk       = "CapacityTotalDisk"
-	totalContainers = "CapacityTotalContainers"
+	totalMemoryMetric     = "CapacityTotalMemory"
+	totalDiskMetric       = "CapacityTotalDisk"
+	totalContainersMetric = "CapacityTotalContainers"
 
-	remainingMemory     = "CapacityRemainingMemory"
-	remainingDisk       = "CapacityRemainingDisk"
-	remainingContainers = "CapacityRemainingContainers"
+	remainingMemoryMetric     = "CapacityRemainingMemory"
+	remainingDiskMetric       = "CapacityRemainingDisk"
+	remainingContainersMetric = "CapacityRemainingContainers"
 
-	allocatedMemory = "CapacityAllocatedMemory"
-	allocatedDisk   = "CapacityAllocatedDisk"
+	allocatedMemoryMetric = "CapacityAllocatedMemory"
+	allocatedDiskMetric   = "CapacityAllocatedDisk"
 
-	containerUsageMemory = "ContainerUsageMemory"
-	containerUsageDisk   = "ContainerUsageDisk"
+	containerUsageMemoryMetric = "ContainerUsageMemory"
+	containerUsageDiskMetric   = "ContainerUsageDisk"
 
 	containerCount         = "ContainerCount"
 	startingContainerCount = "StartingContainerCount"
@@ -108,46 +108,46 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				}
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(totalMemory, totalCapacity.MemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(totalMemoryMetric, totalCapacity.MemoryMB)
 			if err != nil {
 				logger.Error("failed-to-send-total-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(totalDisk, totalCapacity.DiskMB)
+			err = reporter.MetronClient.SendMebiBytes(totalDiskMetric, totalCapacity.DiskMB)
 			if err != nil {
 				logger.Error("failed-to-send-total-disk-metric", err)
 			}
-			err = reporter.MetronClient.SendMetric(totalContainers, totalCapacity.Containers)
+			err = reporter.MetronClient.SendMetric(totalContainersMetric, totalCapacity.Containers)
 			if err != nil {
 				logger.Error("failed-to-send-total-container-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(remainingMemory, remainingCapacity.MemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(remainingMemoryMetric, remainingCapacity.MemoryMB)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(remainingDisk, remainingCapacity.DiskMB)
+			err = reporter.MetronClient.SendMebiBytes(remainingDiskMetric, remainingCapacity.DiskMB)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-disk-metric", err)
 			}
-			err = reporter.MetronClient.SendMetric(remainingContainers, remainingCapacity.Containers)
+			err = reporter.MetronClient.SendMetric(remainingContainersMetric, remainingCapacity.Containers)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-containers-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(allocatedMemory, allocatedMemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(allocatedMemoryMetric, allocatedMemoryMB)
 			if err != nil {
 				logger.Error("failed-to-send-allocated-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(allocatedDisk, allocatedDiskMB)
+			err = reporter.MetronClient.SendMebiBytes(allocatedDiskMetric, allocatedDiskMB)
 			if err != nil {
 				logger.Error("failed-to-send-allocated-disk-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(containerUsageMemory, containerUsageMemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(containerUsageMemoryMetric, containerUsageMemoryMB)
 			if err != nil {
 				logger.Error("failed-to-send-container-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(containerUsageDisk, containerUsageDiskMB)
+			err = reporter.MetronClient.SendMebiBytes(containerUsageDiskMetric, containerUsageDiskMB)
 			if err != nil {
 				logger.Error("failed-to-send-container-disk-metric", err)
 			}

@@ -10,7 +10,7 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
-const UnhealthyCell = "UnhealthyCell"
+const UnhealthyCellMetric = "UnhealthyCell"
 
 type HealthcheckTimeoutError struct{}
 
@@ -157,9 +157,9 @@ func (r *Runner) setUnhealthy(logger lager.Logger) {
 func (r *Runner) emitUnhealthyCellMetric(logger lager.Logger) {
 	var err error
 	if r.executorClient.Healthy(logger) {
-		err = r.metronClient.SendMetric(UnhealthyCell, 0)
+		err = r.metronClient.SendMetric(UnhealthyCellMetric, 0)
 	} else {
-		err = r.metronClient.SendMetric(UnhealthyCell, 1)
+		err = r.metronClient.SendMetric(UnhealthyCellMetric, 1)
 	}
 
 	if err != nil {
