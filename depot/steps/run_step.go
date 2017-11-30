@@ -65,6 +65,7 @@ func NewRun(
 		clock,
 		suppressExitStatusCode,
 		Sidecar{},
+		false,
 	)
 }
 
@@ -80,8 +81,12 @@ func NewRunWithSidecar(
 	clock clock.Clock,
 	suppressExitStatusCode bool,
 	sidecar Sidecar,
+	privileged bool,
 ) *runStep {
 	logger = logger.Session("run-step")
+	if privileged {
+		sidecar = Sidecar{} // run in the main container
+	}
 	return &runStep{
 		container:            container,
 		model:                model,

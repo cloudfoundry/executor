@@ -43,6 +43,7 @@ var _ = Describe("RunAction", func() {
 		runError       error
 		testLogSource  string
 		sidecar        steps.Sidecar
+		privileged     bool
 	)
 
 	BeforeEach(func() {
@@ -108,6 +109,7 @@ var _ = Describe("RunAction", func() {
 			fakeClock,
 			suppressExitStatusCode,
 			sidecar,
+			privileged,
 		)
 	})
 
@@ -163,6 +165,7 @@ var _ = Describe("RunAction", func() {
 					bindMounts []garden.BindMount
 				)
 				BeforeEach(func() {
+					privileged = false
 					imageRef = garden.ImageRef{URI: "sandwich"}
 					bindMounts = []garden.BindMount{
 						{
@@ -200,6 +203,22 @@ var _ = Describe("RunAction", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 						Expect(spec.OverrideContainerLimits).NotTo(BeNil())
 					})
+				})
+			})
+
+			Context("when the container is privileged", func() {
+				BeforeEach(func() {
+					privileged = true
+				})
+
+				It("does not specify image", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.Image).To(BeZero())
+				})
+
+				It("does not specify bind mounts", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.BindMounts).To(BeZero())
 				})
 			})
 		})
