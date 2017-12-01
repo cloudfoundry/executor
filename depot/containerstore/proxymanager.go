@@ -21,10 +21,22 @@ import (
 const (
 	StartProxyPort = 61001
 	EndProxyPort   = 65534
+
+	TimeOut    = 250
+	Static     = "static"
+	RoundRobin = "round_robin"
+
+	Read       = "read"
+	IngressTCP = "ingress_tcp"
+	TcpProxy   = "tcp_proxy"
+
+	AdminAccessLog = "/dev/null"
 )
 
 var (
 	ErrNoPortsAvailable = errors.New("no ports available")
+
+	SupportedCipherSuites = "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"
 )
 
 var dummyRunner = func(credRotatedChan <-chan struct{}) ifrit.Runner {
@@ -62,6 +74,7 @@ type Filter struct {
 type SSLContext struct {
 	CertChainFile  string `json:"cert_chain_file"`
 	PrivateKeyFile string `json:"private_key_file"`
+	CipherSuites   string `json:"cipher_suites"`
 }
 
 type Listener struct {
@@ -107,18 +120,6 @@ type ProxyConfig struct {
 type ListenerConfig struct {
 	Listeners []Listener `json:"listeners"`
 }
-
-const (
-	TimeOut    = 250
-	Static     = "static"
-	RoundRobin = "round_robin"
-
-	Read       = "read"
-	IngressTCP = "ingress_tcp"
-	TcpProxy   = "tcp_proxy"
-
-	AdminAccessLog = "/dev/null"
-)
 
 //go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
 type ProxyManager interface {
@@ -415,6 +416,7 @@ func generateListenerConfig(logger lager.Logger, container executor.Container) (
 			SSLContext: SSLContext{
 				CertChainFile:  path.Join(containerMountPath, "instance.crt"),
 				PrivateKeyFile: path.Join(containerMountPath, "instance.key"),
+				CipherSuites:   SupportedCipherSuites,
 			},
 		})
 	}

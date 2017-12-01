@@ -364,6 +364,7 @@ var _ = Describe("ProxyManager", func() {
 			Expect(listener.Address).To(Equal("tcp://0.0.0.0:61001"))
 			Expect(listener.SSLContext.CertChainFile).To(Equal("/etc/cf-instance-credentials/instance.crt"))
 			Expect(listener.SSLContext.PrivateKeyFile).To(Equal("/etc/cf-instance-credentials/instance.key"))
+			Expect(listener.SSLContext.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 			Expect(listener.Filters).To(HaveLen(1))
 			filter := listener.Filters[0]
 			Expect(filter.Name).To(Equal("tcp_proxy"))
@@ -501,7 +502,7 @@ var _ = Describe("ProxyManager", func() {
 				}))
 			})
 
-			Context("when there no ports left", func() {
+			Context("when no ports are left", func() {
 				BeforeEach(func() {
 					ports := []executor.PortMapping{}
 					for port := uint16(containerstore.StartProxyPort); port < containerstore.EndProxyPort; port += 2 {
