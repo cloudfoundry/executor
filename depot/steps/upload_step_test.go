@@ -379,7 +379,7 @@ var _ = Describe("UploadStep", func() {
 				It("should emits an error with the artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrEstablishStream, "artifact"))))
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s.", steps.ErrEstablishStream, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
@@ -422,7 +422,7 @@ var _ = Describe("UploadStep", func() {
 				It("should emits an error with the artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrReadTar, "artifact"))))
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s.", steps.ErrReadTar, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
