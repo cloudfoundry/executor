@@ -232,13 +232,12 @@ var _ = Describe("DownloadAction", func() {
 					})
 
 					It("returns an error", func() {
-						Expect(stepErr.Error()).To(ContainSubstring("Copying into the container failed"))
+						Expect(stepErr.Error()).To(ContainSubstring("Copying into the container failed: oh no!"))
 					})
 
 					It("streams an error", func() {
 						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
 						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
-						Expect(stderr.Contents()).To(ContainSubstring("oh no!"))
 					})
 
 					It("logs the step", func() {
@@ -250,7 +249,22 @@ var _ = Describe("DownloadAction", func() {
 							"test.download-step.stream-in-starting",
 							"test.download-step.stream-in-failed",
 						}))
+					})
 
+					Context("when the artifact has a name", func() {
+						BeforeEach(func() {
+							downloadAction.Artifact = "artifact"
+						})
+
+						It("returns an error", func() {
+							Expect(stepErr.Error()).To(ContainSubstring("Copying artifact into the container failed: oh no!"))
+						})
+
+						It("streams an error", func() {
+							stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+							Expect(stderr.Contents()).To(ContainSubstring("Copying artifact into the container failed"))
+							Expect(stderr.Contents()).To(ContainSubstring("oh no!"))
+						})
 					})
 				})
 
@@ -264,7 +278,6 @@ var _ = Describe("DownloadAction", func() {
 					})
 
 					It("truncates the error", func() {
-
 						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
 						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
 						Expect(stderr.Contents()).To(ContainSubstring("(error truncated)"))
@@ -283,6 +296,11 @@ var _ = Describe("DownloadAction", func() {
 				Expect(stepErr.Error()).To(ContainSubstring("Downloading failed"))
 			})
 
+			It("does not stream an error", func() {
+				stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+				Expect(stderr.Contents()).NotTo(ContainSubstring("Downloading.*failed"))
+			})
+
 			It("logs the step", func() {
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.download-step.acquiring-limiter",
@@ -291,6 +309,21 @@ var _ = Describe("DownloadAction", func() {
 					"test.download-step.fetch-failed",
 				}))
 
+			})
+
+			Context("when the artifact has a name", func() {
+				BeforeEach(func() {
+					downloadAction.Artifact = "artifact"
+				})
+
+				It("returns an error", func() {
+					Expect(stepErr.Error()).To(ContainSubstring("Downloading artifact failed"))
+				})
+
+				It("streams an error", func() {
+					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
+					Expect(stderr.Contents()).To(ContainSubstring("Downloading artifact failed"))
+				})
 			})
 		})
 	})

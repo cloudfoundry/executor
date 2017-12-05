@@ -64,6 +64,7 @@ const (
 	ErrReadTar         = "Failed to find first item in tar stream"
 	ErrCreateTmpFile   = "Failed to create temp file"
 	ErrCopyStreamToTmp = "Failed to copy stream contents into temp file"
+	ErrParsingURL      = "Failed to parse URL"
 )
 
 func (step *uploadStep) Perform() (err error) {
@@ -77,41 +78,56 @@ func (step *uploadStep) Perform() (err error) {
 
 	url, err := url.ParseRequestURI(step.model.To)
 	if err != nil {
-		step.logger.Info("failed-to-parse-url")
+		step.logger.Error("failed-to-parse-url", err)
+		step.emitError(step.artifactErrString(ErrParsingURL))
 		// Do not emit error in case it leaks sensitive data in URL
 		return err
 	}
 
 	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
 	if err != nil {
-		return NewEmittableError(err, ErrCreateTmpDir)
+		step.logger.Error("failed-to-create-tmp-dir", err)
+		errString := step.artifactErrString(ErrCreateTmpDir)
+		step.emitError(fmt.Sprintf("%s", errString))
+		return NewEmittableError(err, errString)
 	}
 
 	defer os.RemoveAll(tempDir)
 
 	outStream, err := step.container.StreamOut(garden.StreamOutSpec{Path: step.model.From, User: step.model.User})
 	if err != nil {
-		step.logger.Info("failed-to-stream-out")
-		return NewEmittableError(err, ErrEstablishStream)
+		step.logger.Error("failed-to-stream-out", err)
+		errString := step.artifactErrString(ErrEstablishStream)
+		step.emitError(errString)
+		return NewEmittableError(err, errString)
 	}
 	defer outStream.Close()
 
 	tarStream := tar.NewReader(outStream)
 	_, err = tarStream.Next()
+
 	if err != nil {
-		step.logger.Info("failed-to-read-stream")
-		return NewEmittableError(err, ErrReadTar)
+		step.logger.Error("failed-to-read-stream", err)
+		errString := step.artifactErrString(ErrReadTar)
+		step.emitError(fmt.Sprintf("%s", errString))
+		return NewEmittableError(err, errString)
 	}
 
 	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
 	if err != nil {
-		return NewEmittableError(err, ErrCreateTmpFile)
+		step.logger.Error("failed-to-create-tmp-dir", err)
+		errString := step.artifactErrString(ErrCreateTmpFile)
+		step.emitError(fmt.Sprintf("%s", errString))
+		return NewEmittableError(err, errString)
 	}
 	defer tempFile.Close()
 
 	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
-		return NewEmittableError(err, ErrCopyStreamToTmp)
+		step.logger.Error("failed-to-copy-stream", err)
+		errString := step.artifactErrString(ErrCopyStreamToTmp)
+		step.emitError(fmt.Sprintf("%s", errString))
+		return NewEmittableError(err, errString)
 	}
 	finalFileLocation := tempFile.Name()
 
@@ -124,10 +140,10 @@ func (step *uploadStep) Perform() (err error) {
 			return ErrCancelled
 
 		default:
-			step.logger.Info("failed-to-upload")
+			step.logger.Error("failed-to-upload", err)
 
 			// Do not emit error in case it leaks sensitive data in URL
-			step.emit("Failed to upload %s\n", step.model.Artifact)
+			step.emitError("Failed to upload")
 
 			return err
 		}
@@ -142,5 +158,18 @@ func (step *uploadStep) Perform() (err error) {
 func (step *uploadStep) emit(format string, a ...interface{}) {
 	if step.model.Artifact != "" {
 		fmt.Fprintf(step.streamer.Stdout(), format, a...)
+	}
+}
+
+func (step *uploadStep) artifactErrString(errString string) string {
+	if step.model.Artifact != "" {
+		return fmt.Sprintf("%s for %s.", errString, step.model.Artifact)
+	}
+	return errString
+}
+
+func (step *uploadStep) emitError(format string, a ...interface{}) {
+	if step.model.Artifact != "" {
+		fmt.Fprintf(step.streamer.Stderr(), format, a...)
 	}
 }

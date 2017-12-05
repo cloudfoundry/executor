@@ -3,6 +3,7 @@ package steps_test
 import (
 	"archive/tar"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -210,6 +211,33 @@ var _ = Describe("UploadStep", func() {
 				})
 			})
 
+			Context("when creating a TmpDir fails", func() {
+				var stderr *gbytes.Buffer
+				BeforeEach(func() {
+					tempDir = "doesnotexist"
+					stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
+				})
+
+				It("logs the step", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(logger.TestSink.LogMessages()).To(ContainElement("test.upload-step.failed-to-create-tmp-dir"))
+				})
+
+				Context("when there is a named artifact", func() {
+					BeforeEach(func() {
+						uploadAction.Artifact = "artifact"
+					})
+
+					It("should emit an error with the name", func() {
+						err := step.Perform()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("Failed to create temp dir for artifact"))
+						Expect(stderr).To(gbytes.Say("Failed to create temp dir for artifact"))
+					})
+				})
+			})
+
 			Describe("streaming logs for uploads", func() {
 				BeforeEach(func() {
 					fakeUploader := new(fake_uploader.FakeUploader)
@@ -271,14 +299,15 @@ var _ = Describe("UploadStep", func() {
 						"test.upload-step.upload-starting",
 						"test.upload-step.failed-to-upload",
 					}))
-
 				})
 			})
 		})
 
 		Context("when there is an error parsing the upload url", func() {
+			var stderr *gbytes.Buffer
 			BeforeEach(func() {
 				uploadAction.To = "foo/bar"
+				stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
 			})
 
 			It("returns the appropriate error", func() {
@@ -293,7 +322,29 @@ var _ = Describe("UploadStep", func() {
 					"test.upload-step.upload-starting",
 					"test.upload-step.failed-to-parse-url",
 				}))
+			})
 
+			It("should not emit an error", func() {
+				err := step.Perform()
+				Expect(err).To(HaveOccurred())
+				Expect(stderr).NotTo(gbytes.Say("Failed to parse URL"))
+			})
+
+			Context("when there is a named artifact", func() {
+				BeforeEach(func() {
+					uploadAction.Artifact = "artifact"
+				})
+
+				It("should emit an error with the name", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(stderr).To(gbytes.Say("Failed to parse URL for artifact"))
+				})
+
+				It("returns the appropriate error", func() {
+					err := step.Perform()
+					Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
+				})
 			})
 		})
 
@@ -316,7 +367,26 @@ var _ = Describe("UploadStep", func() {
 					"test.upload-step.upload-starting",
 					"test.upload-step.failed-to-stream-out",
 				}))
+			})
 
+			Context("when the artifact is named", func() {
+				var stderr *gbytes.Buffer
+				BeforeEach(func() {
+					uploadAction.Artifact = "artifact"
+					stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
+				})
+
+				It("should emits an error with the artifact name", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrEstablishStream, "artifact"))))
+				})
+
+				It("should log error with artifact name", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(stderr).To(gbytes.Say("Failed to establish stream from container"))
+				})
 			})
 		})
 
@@ -340,6 +410,26 @@ var _ = Describe("UploadStep", func() {
 					"test.upload-step.failed-to-read-stream",
 				}))
 
+			})
+
+			Context("when the artifact is named", func() {
+				var stderr *gbytes.Buffer
+				BeforeEach(func() {
+					uploadAction.Artifact = "artifact"
+					stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
+				})
+
+				It("should emits an error with the artifact name", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrReadTar, "artifact"))))
+				})
+
+				It("should log error with artifact name", func() {
+					err := step.Perform()
+					Expect(err).To(HaveOccurred())
+					Expect(stderr).To(gbytes.Say("Failed to find first item in tar stream for artifact"))
+				})
 			})
 		})
 	})

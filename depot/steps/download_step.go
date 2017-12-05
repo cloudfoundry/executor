@@ -81,13 +81,27 @@ func (step *downloadStep) perform() error {
 
 	downloadedFile, downloadedSize, err := step.fetch()
 	if err != nil {
-		return NewEmittableError(err, "Downloading failed")
+		var errString string
+		if step.model.Artifact != "" {
+			errString = fmt.Sprintf("Downloading %s failed.", step.model.Artifact)
+		} else {
+			errString = "Downloading failed."
+		}
+
+		step.emitError(errString)
+		return NewEmittableError(err, errString)
 	}
 
 	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
-		step.emitError("Copying into the container failed: %v", err)
-		return NewEmittableError(err, "Copying into the container failed")
+		var errString string
+		if step.model.Artifact != "" {
+			errString = fmt.Sprintf("Copying %s into the container failed: %v.", step.model.Artifact, err)
+		} else {
+			errString = fmt.Sprintf("Copying into the container failed: %v.", err)
+		}
+		step.emitError(errString)
+		return NewEmittableError(err, errString)
 	}
 
 	if downloadedSize != 0 {
