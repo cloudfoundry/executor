@@ -120,7 +120,7 @@ var _ = Describe("RunAction", func() {
 			stepErr = step.Perform()
 		})
 
-		Context("when the script succeeds", func() {
+		Context("when the Garden process succeeds", func() {
 			BeforeEach(func() {
 				gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
 					fakeClock.Increment(time.Minute)
@@ -133,7 +133,7 @@ var _ = Describe("RunAction", func() {
 				Expect(stepErr).NotTo(HaveOccurred())
 			})
 
-			It("executes the command in the passed-in container", func() {
+			It("executed the command in the passed-in container", func() {
 				ranHandle, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Expect(ranHandle).To(Equal(handle))
 				Expect(spec.Path).To(Equal("sudo"))
@@ -223,7 +223,7 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when the script fails", func() {
+		Context("when the the Garden process errors", func() {
 			var waitErr error
 
 			BeforeEach(func() {
@@ -396,7 +396,7 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when the script has a non-zero exit code", func() {
+		Context("when the Garden process has a non-zero exit code", func() {
 			BeforeEach(func() {
 				spawnedProcess.WaitReturns(19, nil)
 			})
@@ -424,7 +424,7 @@ var _ = Describe("RunAction", func() {
 			})
 		})
 
-		Context("when Garden errors", func() {
+		Context("when Garden errors creating the process", func() {
 			disaster := errors.New("I, like, tried but failed")
 
 			BeforeEach(func() {
