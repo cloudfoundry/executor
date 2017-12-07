@@ -233,7 +233,7 @@ var _ = Describe("UploadStep", func() {
 						err := step.Perform()
 						Expect(err).To(HaveOccurred())
 						Expect(err.Error()).To(ContainSubstring("Failed to create temp dir for artifact"))
-						Expect(stderr).To(gbytes.Say("Failed to create temp dir for artifact"))
+						Expect(stderr).To(gbytes.Say("Failed to create temp dir for artifact\n"))
 					})
 				})
 			})
@@ -279,6 +279,10 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			Context("when there is an error uploading", func() {
+				var stderr *gbytes.Buffer
+				BeforeEach(func() {
+					stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
+				})
 				errUploadFailed := errors.New("Upload failed!")
 
 				BeforeEach(func() {
@@ -299,6 +303,19 @@ var _ = Describe("UploadStep", func() {
 						"test.upload-step.upload-starting",
 						"test.upload-step.failed-to-upload",
 					}))
+				})
+
+				Context("when an artifact is specified", func() {
+					BeforeEach(func() {
+						uploadAction.Artifact = "artifact"
+					})
+
+					It("should emit an error with the name", func() {
+						err := step.Perform()
+						Expect(err).To(HaveOccurred())
+						Expect(stderr).To(gbytes.Say("Failed to upload payload for artifact\n"))
+						Expect(stderr).NotTo(gbytes.Say(errUploadFailed.Error()))
+					})
 				})
 			})
 		})
@@ -338,7 +355,7 @@ var _ = Describe("UploadStep", func() {
 				It("should emit an error with the name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(stderr).To(gbytes.Say("Failed to parse URL for artifact"))
+					Expect(stderr).To(gbytes.Say("Failed to parse URL for artifact\n"))
 				})
 
 				It("returns the appropriate error", func() {
@@ -379,13 +396,13 @@ var _ = Describe("UploadStep", func() {
 				It("should emits an error with the artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s.", steps.ErrEstablishStream, "artifact"))))
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrEstablishStream, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(stderr).To(gbytes.Say("Failed to establish stream from container"))
+					Expect(stderr).To(gbytes.Say("Failed to establish stream from container for artifact\n"))
 				})
 			})
 		})
@@ -422,13 +439,13 @@ var _ = Describe("UploadStep", func() {
 				It("should emits an error with the artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s.", steps.ErrReadTar, "artifact"))))
+					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrReadTar, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
 					err := step.Perform()
 					Expect(err).To(HaveOccurred())
-					Expect(stderr).To(gbytes.Say("Failed to find first item in tar stream for artifact"))
+					Expect(stderr).To(gbytes.Say("Failed to find first item in tar stream for artifact\n"))
 				})
 			})
 		})

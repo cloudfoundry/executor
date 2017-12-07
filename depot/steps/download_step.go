@@ -83,12 +83,12 @@ func (step *downloadStep) perform() error {
 	if err != nil {
 		var errString string
 		if step.model.Artifact != "" {
-			errString = fmt.Sprintf("Downloading %s failed.", step.model.Artifact)
+			errString = fmt.Sprintf("Downloading %s failed", step.model.Artifact)
 		} else {
-			errString = "Downloading failed."
+			errString = "Downloading failed"
 		}
 
-		step.emitError(errString)
+		step.emitError(fmt.Sprintf("%s\n", errString))
 		return NewEmittableError(err, errString)
 	}
 
@@ -96,11 +96,11 @@ func (step *downloadStep) perform() error {
 	if err != nil {
 		var errString string
 		if step.model.Artifact != "" {
-			errString = fmt.Sprintf("Copying %s into the container failed: %v.", step.model.Artifact, err)
+			errString = fmt.Sprintf("Copying %s into the container failed: %v", step.model.Artifact, err)
 		} else {
-			errString = fmt.Sprintf("Copying into the container failed: %v.", err)
+			errString = fmt.Sprintf("Copying into the container failed: %v", err)
 		}
-		step.emitError(errString)
+		step.emitError(fmt.Sprintf("%s\n", errString))
 		return NewEmittableError(err, errString)
 	}
 

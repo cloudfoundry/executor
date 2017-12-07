@@ -237,7 +237,7 @@ var _ = Describe("DownloadAction", func() {
 
 					It("streams an error", func() {
 						stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
-						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed"))
+						Expect(stderr.Contents()).To(ContainSubstring("Copying into the container failed: oh no!\n"))
 					})
 
 					It("logs the step", func() {
@@ -262,8 +262,7 @@ var _ = Describe("DownloadAction", func() {
 
 						It("streams an error", func() {
 							stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
-							Expect(stderr.Contents()).To(ContainSubstring("Copying artifact into the container failed"))
-							Expect(stderr.Contents()).To(ContainSubstring("oh no!"))
+							Expect(stderr.Contents()).To(ContainSubstring("Copying artifact into the container failed: oh no!\n"))
 						})
 					})
 				})
@@ -322,7 +321,7 @@ var _ = Describe("DownloadAction", func() {
 
 				It("streams an error", func() {
 					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
-					Expect(stderr.Contents()).To(ContainSubstring("Downloading artifact failed"))
+					Expect(stderr.Contents()).To(ContainSubstring("Downloading artifact failed\n"))
 				})
 			})
 		})

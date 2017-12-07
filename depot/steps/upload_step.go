@@ -88,7 +88,7 @@ func (step *uploadStep) Perform() (err error) {
 	if err != nil {
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpDir)
-		step.emitError(fmt.Sprintf("%s", errString))
+		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
 
@@ -109,7 +109,7 @@ func (step *uploadStep) Perform() (err error) {
 	if err != nil {
 		step.logger.Error("failed-to-read-stream", err)
 		errString := step.artifactErrString(ErrReadTar)
-		step.emitError(fmt.Sprintf("%s", errString))
+		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
 
@@ -117,7 +117,7 @@ func (step *uploadStep) Perform() (err error) {
 	if err != nil {
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpFile)
-		step.emitError(fmt.Sprintf("%s", errString))
+		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
 	defer tempFile.Close()
@@ -126,7 +126,7 @@ func (step *uploadStep) Perform() (err error) {
 	if err != nil {
 		step.logger.Error("failed-to-copy-stream", err)
 		errString := step.artifactErrString(ErrCopyStreamToTmp)
-		step.emitError(fmt.Sprintf("%s", errString))
+		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
 	finalFileLocation := tempFile.Name()
@@ -143,7 +143,7 @@ func (step *uploadStep) Perform() (err error) {
 			step.logger.Error("failed-to-upload", err)
 
 			// Do not emit error in case it leaks sensitive data in URL
-			step.emitError("Failed to upload")
+			step.emitError(step.artifactErrString("Failed to upload payload"))
 
 			return err
 		}
@@ -163,13 +163,13 @@ func (step *uploadStep) emit(format string, a ...interface{}) {
 
 func (step *uploadStep) artifactErrString(errString string) string {
 	if step.model.Artifact != "" {
-		return fmt.Sprintf("%s for %s.", errString, step.model.Artifact)
+		return fmt.Sprintf("%s for %s", errString, step.model.Artifact)
 	}
 	return errString
 }
 
-func (step *uploadStep) emitError(format string, a ...interface{}) {
+func (step *uploadStep) emitError(errString string) {
 	if step.model.Artifact != "" {
-		fmt.Fprintf(step.streamer.Stderr(), format, a...)
+		fmt.Fprintln(step.streamer.Stderr(), errString)
 	}
 }
