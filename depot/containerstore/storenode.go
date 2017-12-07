@@ -28,6 +28,8 @@ const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
 
+const maxErrorMsgLength = 1024
+
 // To be deprecated
 const (
 	GardenContainerCreationDuration             = "GardenContainerCreationDuration"
@@ -212,8 +214,8 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	gardenContainer, err := n.createGardenContainer(logger, &info)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
-		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container\n")
-		n.complete(logger, true, ContainerInitializationFailedMessage)
+		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container: %s\n", err.Error())
+		n.complete(logger, true, truncatedErrorMessage("%s: %s", ContainerInitializationFailedMessage, err.Error()))
 		return err
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
@@ -654,4 +656,15 @@ func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, st
 	logger.Debug("container-info-complete")
 
 	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
+}
+
+func truncatedErrorMessage(msg string, a ...interface{}) string {
+	msgBytes := []byte(fmt.Sprintf(msg, a...))
+
+	if len(msgBytes) > maxErrorMsgLength {
+		truncationLength := maxErrorMsgLength - len([]byte(" (error truncated)"))
+		msgBytes = append(msgBytes[:truncationLength], []byte(" (error truncated)")...)
+	}
+
+	return string(msgBytes)
 }

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -343,6 +344,7 @@ var _ = Describe("Container Store", func() {
 			var (
 				externalIP, internalIP string
 				runReq                 *executor.RunRequest
+				logGuid                string
 			)
 
 			BeforeEach(func() {
@@ -353,6 +355,7 @@ var _ = Describe("Container Store", func() {
 					{Name: "beep", Value: "booop"},
 				}
 
+				logGuid = "log-guid-foo"
 				runInfo := executor.RunInfo{
 					Privileged:     true,
 					CPUWeight:      50,
@@ -361,7 +364,7 @@ var _ = Describe("Container Store", func() {
 						{Name: "artifact", From: "https://example.com", To: "/etc/foo", CacheKey: "abc", LogSource: "source"},
 					},
 					LogConfig: executor.LogConfig{
-						Guid:       "log-guid",
+						Guid:       logGuid,
 						Index:      1,
 						SourceName: "test-source",
 					},
@@ -986,13 +989,47 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring("boom!"))
+				})
+
+				Context("when the failure message is too long", func() {
+					var errString string = strings.Repeat("meow", 1024)
+
+					BeforeEach(func() {
+						gardenClient.CreateReturns(nil, errors.New(errString))
+					})
+
+					It("returns a truncated error", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).To(Equal(errors.New(errString)))
+
+						container, err := containerStore.Get(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(container.State).To(Equal(executor.StateCompleted))
+						Expect(container.RunResult.Failed).To(BeTrue())
+						Expect([]byte(container.RunResult.FailureReason)).To(HaveLen(1024))
+						Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
+						Expect(container.RunResult.FailureReason).To(ContainSubstring("(error truncated)"))
+					})
 				})
 
 				It("emits a metric after failing to create the container", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationFailedDuration))
+				})
+
+				It("logs that the reason the container failed to create", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+
+					Expect(fakeMetronClient.SendAppErrorLogCallCount()).To(Equal(1))
+					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+					Expect(msg).To(Equal(fmt.Sprintf("Failed to create container: boom!")))
+					Expect(appId).To(Equal(logGuid))
+					Expect(sourceType).To(Equal("test-source"))
+					Expect(sourceInstance).To(Equal("1"))
 				})
 			})
 
@@ -1022,7 +1059,8 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(Equal(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring("could not obtain info"))
 				})
 			})
 
