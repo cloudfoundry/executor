@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
@@ -81,7 +82,7 @@ var _ = Describe("Reporter", func() {
 
 	JustBeforeEach(func() {
 		metricMap = make(map[string]int)
-		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+		fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 			m.Lock()
 			metricMap[name] = value
 			m.Unlock()

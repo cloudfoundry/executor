@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/executor/gardenhealth"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -64,7 +65,7 @@ var _ = Describe("Runner", func() {
 
 	JustBeforeEach(func() {
 		metricMap = make(map[string]float64)
-		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+		fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 			m.Lock()
 			metricMap[name] = float64(value)
 			m.Unlock()
