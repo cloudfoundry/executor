@@ -26,6 +26,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
@@ -143,7 +144,7 @@ var _ = Describe("Container Store", func() {
 			proxyManager,
 		)
 
-		fakeMetronClient.SendDurationStub = func(name string, value time.Duration) error {
+		fakeMetronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
 			metricMapLock.Lock()
 			defer metricMapLock.Unlock()
 			metricMap[name] = struct{}{}

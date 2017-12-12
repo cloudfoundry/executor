@@ -223,7 +223,7 @@ var _ = Describe("CredManager", func() {
 				Expect(metric).To(Equal("CredCreationSucceededCount"))
 
 				Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(1))
-				metric, value := fakeMetronClient.SendDurationArgsForCall(0)
+				metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
 				Expect(metric).To(Equal("CredCreationSucceededDuration"))
 				Expect(value).To(BeNumerically(">=", 0))
 			})
@@ -344,7 +344,7 @@ var _ = Describe("CredManager", func() {
 							Expect(metric).To(Equal("CredCreationSucceededCount"))
 
 							Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
-							metric, value := fakeMetronClient.SendDurationArgsForCall(1)
+							metric, value, _ := fakeMetronClient.SendDurationArgsForCall(1)
 							Expect(metric).To(Equal("CredCreationSucceededDuration"))
 							Expect(value).To(BeNumerically(">=", 0))
 						})

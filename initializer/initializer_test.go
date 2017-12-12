@@ -21,6 +21,7 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
@@ -124,7 +125,7 @@ var _ = Describe("Initializer", func() {
 		}()
 
 		metricMap = make(map[string]time.Duration)
-		fakeMetronClient.SendDurationStub = func(name string, time time.Duration) error {
+		fakeMetronClient.SendDurationStub = func(name string, time time.Duration, opts ...loggregator.EmitGaugeOption) error {
 			m.Lock()
 			metricMap[name] = time
 			m.Unlock()
