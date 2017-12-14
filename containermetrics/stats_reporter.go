@@ -31,7 +31,14 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger, interval time.Duration, clock clock.Clock, enableContainerProxy bool, additionalMemoryMB int, executorClient executor.Client, metronClient loggingclient.IngressClient) *StatsReporter {
+func NewStatsReporter(logger lager.Logger,
+	interval time.Duration,
+	clock clock.Clock,
+	enableContainerProxy bool,
+	additionalMemoryMB int,
+	executorClient executor.Client,
+	metronClient loggingclient.IngressClient,
+) *StatsReporter {
 	return &StatsReporter{
 		logger: logger,
 
@@ -101,7 +108,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 		previousCpuInfo := previousCpuInfos[guid]
 
-		if container.EnableContainerProxy {
+		if reporter.enableContainerProxy && container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
 			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}

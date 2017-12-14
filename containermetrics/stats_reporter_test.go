@@ -263,9 +263,8 @@ var _ = Describe("StatsReporter", func() {
 			}))
 		})
 
-		Context("when enableContainerProxy is set", func() {
+		Context("when containers EnableContainerProxy is true", func() {
 			BeforeEach(func() {
-				enableContainerProxy = true
 
 				listContainersChan <- []executor.Container{
 					{
@@ -293,13 +292,12 @@ var _ = Describe("StatsReporter", func() {
 						},
 					},
 				}
-
 			})
 
-			It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
+			It("does not change the memory usage reported by garden", func() {
 				appMemory := megsToBytes(123)
 
-				expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
+				expectedMemoryUsageWithoutIndex := float64(appMemory)
 
 				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
@@ -307,7 +305,7 @@ var _ = Describe("StatsReporter", func() {
 						ContainerMetrics: executor.ContainerMetrics{
 							MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
 							DiskUsageInBytes:   megsToBytes(456),
-							MemoryLimitInBytes: megsToBytes(784),
+							MemoryLimitInBytes: megsToBytes(789),
 							DiskLimitInBytes:   megsToBytes(1024),
 						},
 					},
@@ -315,23 +313,47 @@ var _ = Describe("StatsReporter", func() {
 				))
 			})
 
-			Context("when there is a container without preloaded rootfs", func() {
-				It("should emit memory usage that is not rescaled", func() {
+			Context("when enableContainerProxy is set", func() {
+				BeforeEach(func() {
+					enableContainerProxy = true
+				})
+
+				It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
+					appMemory := megsToBytes(123)
+
+					expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
+
 					Eventually(sentMetrics).Should(ContainElement(
 						createEventContainerMetric(executor.Metrics{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: megsToBytes(345),
+								MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
 								DiskUsageInBytes:   megsToBytes(456),
-								MemoryLimitInBytes: megsToBytes(678),
-								DiskLimitInBytes:   megsToBytes(2048),
+								MemoryLimitInBytes: megsToBytes(784),
+								DiskLimitInBytes:   megsToBytes(1024),
 							},
 						},
 							0.0),
 					))
 				})
-			})
 
+				Context("when there is a container without preloaded rootfs", func() {
+					It("should emit memory usage that is not rescaled", func() {
+						Eventually(sentMetrics).Should(ContainElement(
+							createEventContainerMetric(executor.Metrics{
+								MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+								ContainerMetrics: executor.ContainerMetrics{
+									MemoryUsageInBytes: megsToBytes(345),
+									DiskUsageInBytes:   megsToBytes(456),
+									MemoryLimitInBytes: megsToBytes(678),
+									DiskLimitInBytes:   megsToBytes(2048),
+								},
+							},
+								0.0),
+						))
+					})
+				})
+			})
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
