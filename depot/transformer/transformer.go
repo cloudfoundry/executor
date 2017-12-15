@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -629,26 +630,19 @@ func (t *transformer) transformContainerProxyStep(
 	bindMounts []garden.BindMount,
 ) steps.Step {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
-	args := []string{
-		"-c",
-		// make sure the entire process group is killed if the shell exits
-		// otherwise we ended up in the following situtation for short running tasks:
-		// - assuming envoy proxy is still initializing
-		// - short running task exits
-		// - codependent step tries to signal the envoy proxy process
-		// - the wrapper shell script gets signalled and exit
-		// - garden's `process.Wait` won't return until both Stdout & Stderr are
-		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
-		envoyCMD,
-	}
 	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
 		LogSource:      "PROXY",
 		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-		Path:           "sh",
-		Args:           args,
+		Path:           "/etc/cf-assets/envoy/envoy",
+		Args: []string{
+			"-c", "/etc/cf-assets/envoy_config/envoy.json",
+			"--service-cluster", "proxy-cluster",
+			"--service-node", "proxy-node",
+			"--drain-time-s", strconv.Itoa(int(t.drainWait.Seconds())),
+			"--log-level", "critical",
+		},
 	}
 
 	sidecar := steps.Sidecar{
@@ -656,11 +650,13 @@ func (t *transformer) transformContainerProxyStep(
 		BindMounts: bindMounts,
 	}
 
+	proxyLogger := logger.Session("proxy")
+
 	return steps.NewRunWithSidecar(
 		container,
 		runAction,
 		streamer.WithSource("PROXY"),
-		logger.Session("proxy"),
+		proxyLogger,
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,
@@ -670,6 +666,21 @@ func (t *transformer) transformContainerProxyStep(
 		sidecar,
 		execContainer.Privileged,
 	)
+
+	// return steps.NewBackground(steps.NewRunWithSidecar(
+	// 	container,
+	// 	runAction,
+	// 	streamer.WithSource("PROXY"),
+	// 	proxyLogger,
+	// 	execContainer.ExternalIP,
+	// 	execContainer.InternalIP,
+	// 	execContainer.Ports,
+	// 	t.exportNetworkEnvVars,
+	// 	t.clock,
+	// 	true,
+	// 	sidecar,
+	// 	execContainer.Privileged,
+	// ), proxyLogger)
 }
 
 func (t *transformer) transformLdsStep(
