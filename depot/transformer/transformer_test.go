@@ -207,12 +207,13 @@ var _ = Describe("Transformer", func() {
 
 		Describe("container proxy", func() {
 			var (
-				container   executor.Container
-				processLock sync.Mutex
-				process     ifrit.Process
-				actionCh    chan int
-				envoyCh     chan int
-				ldsCh       chan int
+				container    executor.Container
+				processLock  sync.Mutex
+				process      ifrit.Process
+				envoyProcess *gardenfakes.FakeProcess
+				actionCh     chan int
+				envoyCh      chan int
+				ldsCh        chan int
 			)
 
 			BeforeEach(func() {
@@ -225,7 +226,7 @@ var _ = Describe("Transformer", func() {
 				actionProcess := makeProcess(actionCh)
 
 				envoyCh = make(chan int)
-				envoyProcess := makeProcess(envoyCh)
+				envoyProcess = makeProcess(envoyCh)
 
 				ldsCh = make(chan int)
 				ldsProcess := makeProcess(ldsCh)
@@ -329,6 +330,17 @@ var _ = Describe("Transformer", func() {
 						},
 					},
 				}))
+			})
+
+			Context("when the process is signalled", func() {
+				JustBeforeEach(func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					process.Signal(os.Interrupt)
+				})
+
+				It("does not signal the proxy process", func() {
+					Consistently(envoyProcess.SignalCallCount).Should(BeZero())
+				})
 			})
 
 			Context("when the container is privileged", func() {

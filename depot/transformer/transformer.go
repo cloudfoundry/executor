@@ -656,11 +656,13 @@ func (t *transformer) transformContainerProxyStep(
 		BindMounts: bindMounts,
 	}
 
-	return steps.NewRunWithSidecar(
+	proxyLogger := logger.Session("proxy")
+
+	return steps.NewBackground(steps.NewRunWithSidecar(
 		container,
 		runAction,
 		streamer.WithSource("PROXY"),
-		logger.Session("proxy"),
+		proxyLogger,
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,
@@ -669,7 +671,7 @@ func (t *transformer) transformContainerProxyStep(
 		true,
 		sidecar,
 		execContainer.Privileged,
-	)
+	), proxyLogger)
 }
 
 func (t *transformer) transformLdsStep(
