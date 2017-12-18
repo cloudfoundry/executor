@@ -555,7 +555,9 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 			logger.Info("failed-to-destroy-container-in-garden", lager.Data{
 				"destroy-took": destroyDuration.String(),
 			})
-			sendMetricDuration(logger, GardenContainerDestructionFailedDuration, destroyDuration, n.metronClient)
+			if err := n.metronClient.SendDuration(GardenContainerDestructionFailedDuration, destroyDuration); err != nil {
+				logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerDestructionFailedDuration})
+			}
 			return err
 		}
 	}
@@ -563,7 +565,9 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 	logger.Info("destroyed-container-in-garden", lager.Data{
 		"destroy-took": destroyDuration.String(),
 	})
-	sendMetricDuration(logger, GardenContainerDestructionSucceededDuration, destroyDuration, n.metronClient)
+	if err := n.metronClient.SendDuration(GardenContainerDestructionSucceededDuration, destroyDuration); err != nil {
+		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerDestructionSucceededDuration})
+	}
 	return nil
 }
 
@@ -607,26 +611,6 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 }
 
-func sendMetricDuration(logger lager.Logger, metric string, value time.Duration, metronClient loggingclient.IngressClient) {
-	err := metronClient.SendDuration(metric, value)
-	if err != nil {
-		switch metric {
-		case GardenContainerCreationDuration:
-			logger.Error("failed-to-send-garden-container-creation-duration-metric", err)
-		case GardenContainerCreationSucceededDuration:
-			logger.Error("failed-to-send-garden-container-creation-succeeded-duration-metric", err)
-		case GardenContainerCreationFailedDuration:
-			logger.Error("failed-to-send-garden-container-creation-failed-duration-metric", err)
-		case GardenContainerDestructionSucceededDuration:
-			logger.Error("failed-to-send-garden-container-destruction-succeeded-duration-metric", err)
-		case GardenContainerDestructionFailedDuration:
-			logger.Error("failed-to-send-garden-container-destruction-failed-duration-metric", err)
-		default:
-			logger.Error("failed-to-send-metric", err)
-		}
-	}
-}
-
 func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggingclient.IngressClient) (garden.Container, error) {
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
@@ -637,12 +621,18 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Info("failed-to-create-container-in-garden", lager.Data{
 			"create-took": createDuration.String(),
 		})
-		sendMetricDuration(logger, GardenContainerCreationFailedDuration, createDuration, metronClient)
+		if err := metronClient.SendDuration(GardenContainerCreationFailedDuration, createDuration); err != nil {
+			logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationFailedDuration})
+		}
 		return nil, err
 	}
 	logger.Info("created-container-in-garden", lager.Data{"create-took": createDuration.String()})
-	sendMetricDuration(logger, GardenContainerCreationDuration, createDuration, metronClient)
-	sendMetricDuration(logger, GardenContainerCreationSucceededDuration, createDuration, metronClient)
+	if err := metronClient.SendDuration(GardenContainerCreationDuration, createDuration); err != nil {
+		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationDuration})
+	}
+	if err := metronClient.SendDuration(GardenContainerCreationSucceededDuration, createDuration); err != nil {
+		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationSucceededDuration})
+	}
 	return container, nil
 }
 
