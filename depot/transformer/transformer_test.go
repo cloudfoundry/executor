@@ -40,6 +40,7 @@ var _ = Describe("Transformer", func() {
 			fakeMetronClient            *mfakes.FakeIngressClient
 			healthyMonitoringInterval   time.Duration
 			unhealthyMonitoringInterval time.Duration
+			gracefulShutdownInterval    time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
 			ldsPort                     uint16
 			cfg                         transformer.Config
@@ -55,6 +56,7 @@ var _ = Describe("Transformer", func() {
 
 			healthyMonitoringInterval = 1 * time.Second
 			unhealthyMonitoringInterval = 1 * time.Millisecond
+			gracefulShutdownInterval = 10 * time.Second
 
 			var err error
 			healthCheckWorkPool, err = workpool.NewWorkPool(10)
@@ -111,6 +113,7 @@ var _ = Describe("Transformer", func() {
 				os.TempDir(),
 				healthyMonitoringInterval,
 				unhealthyMonitoringInterval,
+				gracefulShutdownInterval,
 				healthCheckWorkPool,
 				options...,
 			)

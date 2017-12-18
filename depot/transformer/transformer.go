@@ -59,6 +59,7 @@ type transformer struct {
 	useDeclarativeHealthCheck   bool
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
+	gracefulShutdownInterval    time.Duration
 	healthCheckWorkPool         *workpool.WorkPool
 
 	useContainerProxy bool
@@ -114,6 +115,7 @@ func NewTransformer(
 	tempDir string,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
+	gracefulShutdownInterval time.Duration,
 	healthCheckWorkPool *workpool.WorkPool,
 	opts ...Option,
 ) *transformer {
@@ -126,6 +128,7 @@ func NewTransformer(
 		tempDir:                     tempDir,
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
+		gracefulShutdownInterval:    gracefulShutdownInterval,
 		healthCheckWorkPool:         healthCheckWorkPool,
 		clock:                       clock,
 	}
@@ -161,6 +164,7 @@ func (t *transformer) StepFor(
 			ports,
 			t.exportNetworkEnvVars,
 			t.clock,
+			t.gracefulShutdownInterval,
 			suppressExitStatusCode,
 		)
 
@@ -399,6 +403,7 @@ func (t *transformer) StepsRunner(
 			container.Ports,
 			t.exportNetworkEnvVars,
 			t.clock,
+			t.gracefulShutdownInterval,
 			suppressExitStatusCode,
 		)
 	}
@@ -571,6 +576,7 @@ func (t *transformer) transformCheckDefinition(
 			container.Ports,
 			t.exportNetworkEnvVars,
 			t.clock,
+			t.gracefulShutdownInterval,
 			true,
 			sidecar,
 			container.Privileged,
@@ -668,6 +674,7 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.Ports,
 		t.exportNetworkEnvVars,
 		t.clock,
+		t.gracefulShutdownInterval,
 		true,
 		sidecar,
 		execContainer.Privileged,
@@ -711,6 +718,7 @@ func (t *transformer) transformLdsStep(
 		execContainer.Ports,
 		t.exportNetworkEnvVars,
 		t.clock,
+		t.gracefulShutdownInterval,
 		true,
 		sidecar,
 		execContainer.Privileged,

@@ -108,6 +108,7 @@ type ExecutorConfig struct {
 	GardenHealthcheckProcessUser       string                `json:"garden_healthcheck_process_user"`
 	GardenHealthcheckTimeout           durationjson.Duration `json:"garden_healthcheck_timeout,omitempty"`
 	GardenNetwork                      string                `json:"garden_network,omitempty"`
+	GracefulShutdownInterval           durationjson.Duration `json:"graceful_shutdown_interval,omitempty"`
 	HealthCheckContainerOwnerName      string                `json:"healthcheck_container_owner_name,omitempty"`
 	HealthCheckWorkPoolSize            int                   `json:"healthcheck_work_pool_size,omitempty"`
 	HealthyMonitoringInterval          durationjson.Duration `json:"healthy_monitoring_interval,omitempty"`
@@ -137,12 +138,13 @@ type ExecutorConfig struct {
 }
 
 const (
-	defaultMaxConcurrentDownloads  = 5
-	defaultCreateWorkPoolSize      = 32
-	defaultDeleteWorkPoolSize      = 32
-	defaultReadWorkPoolSize        = 64
-	defaultMetricsWorkPoolSize     = 8
-	defaultHealthCheckWorkPoolSize = 64
+	defaultMaxConcurrentDownloads   = 5
+	defaultCreateWorkPoolSize       = 32
+	defaultDeleteWorkPoolSize       = 32
+	defaultReadWorkPoolSize         = 64
+	defaultMetricsWorkPoolSize      = 8
+	defaultHealthCheckWorkPoolSize  = 64
+	defaultGracefulShutdownInterval = 10 * time.Second
 )
 
 var DefaultConfiguration = ExecutorConfig{
@@ -176,6 +178,7 @@ var DefaultConfiguration = ExecutorConfig{
 	GardenHealthcheckCommandRetryPause: durationjson.Duration(time.Second),
 	GardenHealthcheckProcessArgs:       []string{},
 	GardenHealthcheckProcessEnv:        []string{},
+	GracefulShutdownInterval:           durationjson.Duration(defaultGracefulShutdownInterval),
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 	EnvoyConfigRefreshDelay:            durationjson.Duration(time.Second),
 	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
@@ -243,6 +246,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.ExportNetworkEnvVars,
 		time.Duration(config.HealthyMonitoringInterval),
 		time.Duration(config.UnhealthyMonitoringInterval),
+		time.Duration(config.GracefulShutdownInterval),
 		healthCheckWorkPool,
 		clock,
 		postSetupHook,
@@ -491,6 +495,7 @@ func initializeTransformer(
 	exportNetworkEnvVars bool,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
+	gracefulShutdownInterval time.Duration,
 	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
 	postSetupHook []string,
@@ -529,6 +534,7 @@ func initializeTransformer(
 		workDir,
 		healthyMonitoringInterval,
 		unhealthyMonitoringInterval,
+		gracefulShutdownInterval,
 		healthCheckWorkPool,
 		options...,
 	)

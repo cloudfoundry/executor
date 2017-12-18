@@ -80,6 +80,7 @@ var _ = Describe("Initializer", func() {
 			GardenHealthcheckProcessEnv:        []string{},
 			GardenHealthcheckTimeout:           durationjson.Duration(10 * time.Minute),
 			GardenNetwork:                      "unix",
+			GracefulShutdownInterval:           durationjson.Duration(1 * time.Second),
 			HealthCheckContainerOwnerName:      "executor-health-check",
 			HealthCheckWorkPoolSize:            64,
 			HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
@@ -139,6 +140,13 @@ var _ = Describe("Initializer", func() {
 		It("defaults EnvoyDrainTimeout to same timeout as the routers", func() {
 			Expect(initializer.DefaultConfiguration.EnvoyDrainTimeout).To(Equal(durationjson.Duration(15 * time.Minute)))
 		})
+
+		It("sets a non-zero default for the GracefulShutdownInterval", func() {
+			Expect(initializer.DefaultConfiguration.GracefulShutdownInterval).To(Equal(durationjson.Duration(10 * time.Second)))
+		})
+	})
+
+	Context("graceful shutdown interval", func() {
 	})
 
 	Context("when garden doesn't respond", func() {

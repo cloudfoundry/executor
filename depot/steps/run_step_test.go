@@ -39,11 +39,12 @@ var _ = Describe("RunAction", func() {
 		fakeClock                           *fakeclock.FakeClock
 		suppressExitStatusCode              bool
 
-		spawnedProcess *gardenfakes.FakeProcess
-		runError       error
-		testLogSource  string
-		sidecar        steps.Sidecar
-		privileged     bool
+		spawnedProcess           *gardenfakes.FakeProcess
+		runError                 error
+		testLogSource            string
+		sidecar                  steps.Sidecar
+		privileged               bool
+		gracefulShutdownInterval time.Duration = 5 * time.Second
 	)
 
 	BeforeEach(func() {
@@ -107,6 +108,7 @@ var _ = Describe("RunAction", func() {
 			portMappings,
 			exportNetworkEnvVars,
 			fakeClock,
+			gracefulShutdownInterval,
 			suppressExitStatusCode,
 			sidecar,
 			privileged,
@@ -683,11 +685,11 @@ var _ = Describe("RunAction", func() {
 				})
 			})
 
-			Context("when the process does not exit after 10s", func() {
+			Context("when the process does not exit after the graceful shutdown interval expires", func() {
 				It("sends a kill signal to the process", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
-					fakeClock.WaitForWatcherAndIncrement(steps.TerminateTimeout + 1*time.Second)
+					fakeClock.WaitForWatcherAndIncrement(gracefulShutdownInterval + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
 					Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
@@ -695,6 +697,10 @@ var _ = Describe("RunAction", func() {
 					waitExited <- (128 + 9)
 
 					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
+
+					Expect(logger.TestSink.LogMessages()).To(ContainElement(
+						ContainSubstring("graceful-shutdown-timeout-exceeded"),
+					))
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {

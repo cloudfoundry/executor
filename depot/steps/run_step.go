@@ -21,17 +21,18 @@ const ExitTimeout = 1 * time.Second
 var ErrExitTimeout = errors.New("process did not exit")
 
 type runStep struct {
-	container              garden.Container
-	model                  models.RunAction
-	streamer               log_streamer.LogStreamer
-	logger                 lager.Logger
-	externalIP             string
-	internalIP             string
-	portMappings           []executor.PortMapping
-	exportNetworkEnvVars   bool
-	clock                  clock.Clock
-	suppressExitStatusCode bool
-	sidecar                Sidecar
+	container                garden.Container
+	model                    models.RunAction
+	streamer                 log_streamer.LogStreamer
+	logger                   lager.Logger
+	externalIP               string
+	internalIP               string
+	portMappings             []executor.PortMapping
+	exportNetworkEnvVars     bool
+	clock                    clock.Clock
+	gracefulShutdownInterval time.Duration
+	suppressExitStatusCode   bool
+	sidecar                  Sidecar
 	*canceller
 }
 
@@ -51,6 +52,7 @@ func NewRun(
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
+	gracefulShutdownInterval time.Duration,
 	suppressExitStatusCode bool,
 ) *runStep {
 	return NewRunWithSidecar(
@@ -63,6 +65,7 @@ func NewRun(
 		portMappings,
 		exportNetworkEnvVars,
 		clock,
+		gracefulShutdownInterval,
 		suppressExitStatusCode,
 		Sidecar{},
 		false,
@@ -79,6 +82,7 @@ func NewRunWithSidecar(
 	portMappings []executor.PortMapping,
 	exportNetworkEnvVars bool,
 	clock clock.Clock,
+	gracefulShutdownInterval time.Duration,
 	suppressExitStatusCode bool,
 	sidecar Sidecar,
 	privileged bool,
@@ -97,9 +101,10 @@ func NewRunWithSidecar(
 		portMappings:         portMappings,
 		exportNetworkEnvVars: exportNetworkEnvVars,
 		clock:                clock,
-		suppressExitStatusCode: suppressExitStatusCode,
-		sidecar:                sidecar,
-		canceller:              newCanceller(),
+		gracefulShutdownInterval: gracefulShutdownInterval,
+		suppressExitStatusCode:   suppressExitStatusCode,
+		sidecar:                  sidecar,
+		canceller:                newCanceller(),
 	}
 }
 
@@ -259,19 +264,21 @@ func (step *runStep) Perform() error {
 			logger.Debug("signalling-terminate-success")
 			cancel = nil
 
-			killTimer := step.clock.NewTimer(TerminateTimeout)
+			killTimer := step.clock.NewTimer(step.gracefulShutdownInterval)
 			defer killTimer.Stop()
 
 			killSwitch = killTimer.C()
 
 		case <-killSwitch:
-			logger.Debug("signalling-kill")
+			killLogger := logger.Session("graceful-shutdown-timeout-exceeded")
+
+			killLogger.Info("signalling-kill")
 			err := process.Signal(garden.SignalKill)
 			if err != nil {
-				logger.Error("signalling-kill-failed", err)
+				killLogger.Error("signalling-kill-failed", err)
 			}
 
-			logger.Debug("signalling-kill-success")
+			killLogger.Info("signalling-kill-success")
 			killSwitch = nil
 
 			exitTimer := step.clock.NewTimer(ExitTimeout)
