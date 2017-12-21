@@ -314,6 +314,7 @@ var _ = Describe("Transformer", func() {
 				}
 
 				Expect(specs).To(ContainElement(garden.ProcessSpec{
+					ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
 					Path: "sh",
 					Args: []string{
 						"-c",
@@ -360,6 +361,7 @@ var _ = Describe("Transformer", func() {
 					}
 
 					Expect(specs).To(ContainElement(garden.ProcessSpec{
+						ID:   "",
 						Path: "sh",
 						Args: []string{
 							"-c",
@@ -382,6 +384,7 @@ var _ = Describe("Transformer", func() {
 				}
 
 				Expect(specs).To(ContainElement(garden.ProcessSpec{
+					ID:   fmt.Sprintf("%s-lds", gardenContainer.Handle()),
 					Path: "/etc/cf-assets/envoy/lds",
 					Args: []string{
 						fmt.Sprintf("-port=%d", ldsPort),
@@ -417,6 +420,7 @@ var _ = Describe("Transformer", func() {
 					}
 
 					Expect(specs).To(ContainElement(garden.ProcessSpec{
+						ID:   "",
 						Path: "/etc/cf-assets/envoy/lds",
 						Args: []string{
 							fmt.Sprintf("-port=%d", ldsPort),
@@ -616,7 +620,7 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
-					It("runs the healthcheck in a sidecar container", func() {
+					It("runs the readiness healthcheck in a sidecar container", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						specs := []garden.ProcessSpec{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -625,6 +629,7 @@ var _ = Describe("Transformer", func() {
 						}
 
 						Expect(specs).To(ContainElement(garden.ProcessSpec{
+							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 							Args: []string{
 								"-port=5432",
@@ -669,6 +674,7 @@ var _ = Describe("Transformer", func() {
 							}
 
 							Expect(specs).To(ContainElement(garden.ProcessSpec{
+								ID:   "",
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
 									"-port=5432",
@@ -815,14 +821,17 @@ var _ = Describe("Transformer", func() {
 
 						It("starts the liveness check", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+							ids := []string{}
 							paths := []string{}
 							args := [][]string{}
 							for i := 0; i < gardenContainer.RunCallCount(); i++ {
 								spec, _ := gardenContainer.RunArgsForCall(i)
+								ids = append(ids, spec.ID)
 								paths = append(paths, spec.Path)
 								args = append(args, spec.Args)
 							}
 
+							Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-0")))
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
@@ -912,16 +921,19 @@ var _ = Describe("Transformer", func() {
 						})
 					})
 
-					It("uses the check definition", func() {
+					It("uses the readiness check definition", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+						ids := []string{}
 						paths := []string{}
 						args := [][]string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
+							ids = append(ids, spec.ID)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
 						}
 
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=5432",
@@ -929,6 +941,34 @@ var _ = Describe("Transformer", func() {
 							"-readiness-interval=1ms",
 							"-readiness-timeout=1s",
 						}))
+					})
+
+					Context("when the readiness check passes", func() {
+						JustBeforeEach(func() {
+							readinessCh <- 0
+						})
+
+						It("uses the liveness check definition", func() {
+							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+							ids := []string{}
+							paths := []string{}
+							args := [][]string{}
+							for i := 0; i < gardenContainer.RunCallCount(); i++ {
+								spec, _ := gardenContainer.RunArgsForCall(i)
+								ids = append(ids, spec.ID)
+								paths = append(paths, spec.Path)
+								args = append(args, spec.Args)
+							}
+
+							Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-0")))
+							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+							Expect(args).To(ContainElement([]string{
+								"-port=5432",
+								"-timeout=100ms",
+								"-liveness-interval=1s",
+							}))
+
+						})
 					})
 				})
 
@@ -1056,13 +1096,18 @@ var _ = Describe("Transformer", func() {
 
 					It("uses the check definition instead of the monitor action", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+						ids := []string{}
 						paths := []string{}
 						args := [][]string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
+							ids = append(ids, spec.ID)
 							paths = append(paths, spec.Path)
 							args = append(args, spec.Args)
 						}
+
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-1")))
 
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
@@ -1097,13 +1142,18 @@ var _ = Describe("Transformer", func() {
 
 							It("starts the liveness checks", func() {
 								Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+								ids := []string{}
 								paths := []string{}
 								args := [][]string{}
 								for i := 0; i < gardenContainer.RunCallCount(); i++ {
 									spec, _ := gardenContainer.RunArgsForCall(i)
+									ids = append(ids, spec.ID)
 									paths = append(paths, spec.Path)
 									args = append(args, spec.Args)
 								}
+
+								Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-0")))
+								Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-1")))
 
 								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 								Expect(args).To(ContainElement([]string{

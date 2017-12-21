@@ -536,7 +536,7 @@ func (t *transformer) transformCheckDefinition(
 		logger.Info("transform-check-definitions-finished")
 	}()
 
-	createCheck := func(path string, port, timeout int, http, readiness bool, interval time.Duration, logger lager.Logger) steps.Step {
+	createCheck := func(path, sidecarName string, port, timeout int, http, readiness bool, interval time.Duration, logger lager.Logger) steps.Step {
 		args := []string{
 			fmt.Sprintf("-port=%d", port),
 			fmt.Sprintf("-timeout=%dms", timeout),
@@ -563,6 +563,7 @@ func (t *transformer) transformCheckDefinition(
 		buffer := bytes.NewBuffer(nil)
 		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
 		sidecar := steps.Sidecar{
+			Name:                    sidecarName,
 			Image:                   garden.ImageRef{URI: t.sidecarRootFS},
 			BindMounts:              bindMounts,
 			OverrideContainerLimits: &garden.ProcessLimits{},
@@ -587,7 +588,11 @@ func (t *transformer) transformCheckDefinition(
 	readinessLogger := logger.Session("readiness-check")
 	livenessLogger := logger.Session("liveness-check")
 
-	for _, check := range container.CheckDefinition.Checks {
+	for index, check := range container.CheckDefinition.Checks {
+
+		readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), index)
+		livenessSidecarName := fmt.Sprintf("%s-liveness-healthcheck-%d", gardenContainer.Handle(), index)
+
 		if err := check.Validate(); err != nil {
 			logger.Error("invalid-check", err, lager.Data{"check": check})
 		} else if check.HttpCheck != nil {
@@ -599,16 +604,18 @@ func (t *transformer) transformCheckDefinition(
 			if path == "" {
 				path = "/"
 			}
-			readinessChecks = append(readinessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval, readinessLogger))
-			livenessChecks = append(livenessChecks, createCheck(path, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval, livenessLogger))
+
+			readinessChecks = append(readinessChecks, createCheck(path, readinessSidecarName, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval, readinessLogger))
+			livenessChecks = append(livenessChecks, createCheck(path, livenessSidecarName, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval, livenessLogger))
+
 		} else if check.TcpCheck != nil {
 			timeout := int(check.TcpCheck.ConnectTimeoutMs)
 			if timeout == 0 {
 				timeout = DefaultDeclarativeHealthcheckRequestTimeout
 			}
 
-			readinessChecks = append(readinessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval, readinessLogger))
-			livenessChecks = append(livenessChecks, createCheck("", int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval, livenessLogger))
+			readinessChecks = append(readinessChecks, createCheck("", readinessSidecarName, int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval, readinessLogger))
+			livenessChecks = append(livenessChecks, createCheck("", livenessSidecarName, int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval, livenessLogger))
 		}
 	}
 
@@ -660,6 +667,7 @@ func (t *transformer) transformContainerProxyStep(
 	sidecar := steps.Sidecar{
 		Image:      garden.ImageRef{URI: t.sidecarRootFS},
 		BindMounts: bindMounts,
+		Name:       fmt.Sprintf("%s-envoy", container.Handle()),
 	}
 
 	proxyLogger := logger.Session("proxy")
@@ -706,6 +714,7 @@ func (t *transformer) transformLdsStep(
 	sidecar := steps.Sidecar{
 		Image:      garden.ImageRef{URI: t.sidecarRootFS},
 		BindMounts: bindMounts,
+		Name:       fmt.Sprintf("%s-lds", container.Handle()),
 	}
 
 	return steps.NewRunWithSidecar(

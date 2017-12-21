@@ -38,6 +38,7 @@ type runStep struct {
 
 type Sidecar struct {
 	Image                   garden.ImageRef
+	Name                    string
 	BindMounts              []garden.BindMount
 	OverrideContainerLimits *garden.ProcessLimits
 }
@@ -153,6 +154,7 @@ func (step *runStep) Perform() error {
 	runStartTime := step.clock.Now()
 	go func() {
 		process, err := step.container.Run(garden.ProcessSpec{
+			ID:   step.sidecar.Name,
 			Path: step.model.Path,
 			Args: step.model.Args,
 			Dir:  step.model.Dir,

@@ -138,6 +138,7 @@ var _ = Describe("RunAction", func() {
 			It("executed the command in the passed-in container", func() {
 				ranHandle, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Expect(ranHandle).To(Equal(handle))
+				Expect(spec.ID).To(BeEmpty())
 				Expect(spec.Path).To(Equal("sudo"))
 				Expect(spec.Args).To(Equal([]string{"reboot"}))
 				Expect(spec.Dir).To(Equal("/some-dir"))
@@ -178,7 +179,13 @@ var _ = Describe("RunAction", func() {
 					sidecar = steps.Sidecar{
 						Image:      imageRef,
 						BindMounts: bindMounts,
+						Name:       "sandwich",
 					}
+				})
+
+				It("sets the side car's container handle to its name", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.ID).To(Equal(sidecar.Name))
 				})
 
 				It("runs the process using that image", func() {
