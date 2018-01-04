@@ -1179,6 +1179,18 @@ var _ = Describe("Container Store", func() {
 					}))
 				})
 
+				It("passes the proxy ports in the config", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						return nil
+					}), nil)
+					Expect(containerStore.Run(logger, containerGuid)).NotTo(HaveOccurred())
+					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
+					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
+					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002)))
+				})
+
 				It("bind mounts envoy", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())

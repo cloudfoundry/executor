@@ -221,7 +221,7 @@ var _ = Describe("MonitorStep", func() {
 
 				It("logs the step", func() {
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-						"test.monitor-step.transitioned-to-healthy",
+						"test.health-check-step.transitioned-to-healthy",
 					}))
 				})
 
@@ -256,8 +256,8 @@ var _ = Describe("MonitorStep", func() {
 
 						It("logs the step", func() {
 							Eventually(func() []string { return logger.TestSink.LogMessages() }).Should(ConsistOf([]string{
-								"test.monitor-step.transitioned-to-healthy",
-								"test.monitor-step.transitioned-to-unhealthy",
+								"test.health-check-step.transitioned-to-healthy",
+								"test.health-check-step.transitioned-to-unhealthy",
 							}))
 						})
 
@@ -306,14 +306,14 @@ var _ = Describe("MonitorStep", func() {
 					Eventually(performErr).Should(Receive(&expectedError))
 					err, ok := expectedError.(*steps.EmittableError)
 					Expect(ok).To(BeTrue())
-					Expect(err.WrappedError()).To(Equal(expectedErr))
+					Expect(err.WrappedError()).To(MatchError("not up yet!"))
 				})
 
 				It("logs the step", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-						"test.monitor-step.timed-out-before-healthy",
+						"test.health-check-step.timed-out-before-healthy",
 					}))
 				})
 
@@ -332,34 +332,6 @@ var _ = Describe("MonitorStep", func() {
 						fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
 					))
 				})
-
-				// Context("when monitor step is composed of multiple checks", func() {
-				// 	BeforeEach(func() {
-				// 		fakeStep1.PerformStub = func() error {
-				// 			writer := <-bufferChan
-				// 			writer.Write([]byte("another thing"))
-				// 			return expectedErr
-				// 		}
-				// 		fakeStep2.PerformStub = func() error {
-				// 			writer := <-bufferChan
-				// 			writer.Write([]byte("something"))
-				// 			return expectedErr
-				// 		}
-
-				// 		checkFunc = func() steps.Step {
-				// 			racingSteps := steps.NewParallel([]steps.Step{fakeStep1, fakeStep2})
-				// 			return racingSteps
-				// 		}
-				// 	})
-
-				// 	// Generates a data race as a failure mode
-				// 	It("correctly serializes output and does not race", func() {
-				// 		expectCheckAfterInterval(fakeStep1, unhealthyInterval)
-				// 		expectCheckAfterInterval(fakeStep2, unhealthyInterval)
-				// 		Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say("something"))
-				// 	})
-				// })
-
 			})
 
 			Context("and the unhealthy interval passes", func() {

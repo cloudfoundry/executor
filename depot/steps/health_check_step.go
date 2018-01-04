@@ -9,7 +9,13 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
-type longRunningMonitorStep struct {
+const (
+	timeoutMessage          = "Timed out after %s: health check never passed.\n"
+	timeoutCrashReason      = "Instance never healthy after %s: %s"
+	healthcheckNowUnhealthy = "Instance became unhealthy: %s"
+)
+
+type healthCheckStep struct {
 	hasStartedRunning chan<- struct{}
 
 	readinessCheck Step
@@ -25,7 +31,7 @@ type longRunningMonitorStep struct {
 	*canceller
 }
 
-func NewLongRunningMonitor(
+func NewHealthCheckStep(
 	readinessCheck Step,
 	livenessCheck Step,
 	hasStartedRunning chan<- struct{},
@@ -35,9 +41,9 @@ func NewLongRunningMonitor(
 	healthcheckStreamer log_streamer.LogStreamer,
 	startTimeout time.Duration,
 ) Step {
-	logger = logger.Session("monitor-step")
+	logger = logger.Session("health-check-step")
 
-	return &longRunningMonitorStep{
+	return &healthCheckStep{
 		readinessCheck:      readinessCheck,
 		livenessCheck:       livenessCheck,
 		hasStartedRunning:   hasStartedRunning,
@@ -50,7 +56,7 @@ func NewLongRunningMonitor(
 	}
 }
 
-func (step *longRunningMonitorStep) Perform() error {
+func (step *healthCheckStep) Perform() error {
 	fmt.Fprint(step.logStreamer.Stdout(), "Starting health monitoring of container\n")
 
 	errCh := make(chan error)
@@ -62,15 +68,17 @@ func (step *longRunningMonitorStep) Perform() error {
 	select {
 	case err := <-errCh:
 		if err != nil {
-			errorString := err.Error()
-			step.logger.Info("timed-out-before-healthy")
-			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", errorString)
+			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
 			fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
-			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, errorString)
+			step.logger.Info("timed-out-before-healthy", lager.Data{
+				"step-error": err.Error(),
+			})
+			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, err.Error())
 		}
 	case <-step.cancelled:
 		step.readinessCheck.Cancel()
-		return <-errCh
+		<-errCh
+		return ErrCancelled
 	}
 
 	step.logger.Info("transitioned-to-healthy")
@@ -84,12 +92,12 @@ func (step *longRunningMonitorStep) Perform() error {
 	select {
 	case err := <-errCh:
 		step.logger.Info("transitioned-to-unhealthy")
+		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
 		fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
-		errorString := err.Error()
-		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", errorString)
-		return NewEmittableError(err, healthcheckNowUnhealthy, errorString)
+		return NewEmittableError(err, healthcheckNowUnhealthy, err.Error())
 	case <-step.cancelled:
 		step.livenessCheck.Cancel()
-		return <-errCh
+		<-errCh
+		return ErrCancelled
 	}
 }

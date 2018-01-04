@@ -8,6 +8,7 @@ import (
 
 type outputWrapperStep struct {
 	substep Step
+	prefix  string
 	reader  io.Reader
 }
 
@@ -15,9 +16,14 @@ type outputWrapperStep struct {
 // Reader as an emittable error. This is used to wrap the output of the
 // healthcheck as the error instead of using the exit status or the process
 func NewOutputWrapper(substep Step, reader io.Reader) *outputWrapperStep {
+	return NewOutputWrapperWithPrefix(substep, reader, "")
+}
+
+func NewOutputWrapperWithPrefix(substep Step, reader io.Reader, prefix string) *outputWrapperStep {
 	return &outputWrapperStep{
 		substep: substep,
 		reader:  reader,
+		prefix:  prefix,
 	}
 }
 
@@ -31,10 +37,14 @@ func (step *outputWrapperStep) Perform() error {
 
 		readerErr := string(bytes)
 		if readerErr != "" {
-			return NewEmittableError(nil, strings.TrimSpace(readerErr))
-		} else {
-			return substepErr
+			msg := strings.TrimSpace(readerErr)
+			if step.prefix != "" {
+				msg = step.prefix + ": " + msg
+			}
+			return NewEmittableError(nil, msg)
 		}
+
+		return substepErr
 	}
 
 	return nil

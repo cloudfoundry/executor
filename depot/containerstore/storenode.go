@@ -395,9 +395,14 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return err
 	}
 
+	proxyTLSPorts := make([]uint16, len(n.info.Ports))
+	for i, p := range n.info.Ports {
+		proxyTLSPorts[i] = p.ContainerTLSProxyPort
+	}
 	cfg := transformer.Config{
-		LDSPort:    proxyConfigRunner.Port(),
-		BindMounts: n.bindMounts,
+		LDSPort:       proxyConfigRunner.Port(),
+		BindMounts:    n.bindMounts,
+		ProxyTLSPorts: proxyTLSPorts,
 	}
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {

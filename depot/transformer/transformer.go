@@ -41,8 +41,9 @@ type Transformer interface {
 }
 
 type Config struct {
-	LDSPort    uint16
-	BindMounts []garden.BindMount
+	LDSPort       uint16
+	ProxyTLSPorts []uint16
+	BindMounts    []garden.BindMount
 }
 
 type transformer struct {
@@ -429,6 +430,33 @@ func (t *transformer) StepsRunner(
 	substeps = append(substeps, action)
 	hasStartedRunning := make(chan struct{}, 1)
 
+	var proxyReadinessChecks []steps.Step
+
+	if t.useContainerProxy && t.useDeclarativeHealthCheck {
+		envoyReadinessLogger := logger.Session("envoy-readiness-check")
+
+		for idx, p := range config.ProxyTLSPorts {
+			// add envoy readiness checks
+			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
+
+			step := t.createCheck(
+				&container,
+				gardenContainer,
+				config.BindMounts,
+				"",
+				readinessSidecarName,
+				int(p),
+				DefaultDeclarativeHealthcheckRequestTimeout,
+				false,
+				true,
+				t.unhealthyMonitoringInterval,
+				envoyReadinessLogger,
+				"instance proxy failed to start",
+			)
+			proxyReadinessChecks = append(proxyReadinessChecks, step)
+		}
+	}
+
 	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
 		monitor = t.transformCheckDefinition(logger,
 			&container,
@@ -436,6 +464,7 @@ func (t *transformer) StepsRunner(
 			hasStartedRunning,
 			logStreamer,
 			config.BindMounts,
+			proxyReadinessChecks,
 		)
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
@@ -462,6 +491,7 @@ func (t *transformer) StepsRunner(
 			t.healthyMonitoringInterval,
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
+			proxyReadinessChecks...,
 		)
 		substeps = append(substeps, monitor)
 	}
@@ -513,6 +543,79 @@ func (t *transformer) StepsRunner(
 	return newStepRunner(cumulativeStep, hasStartedRunning), nil
 }
 
+func (t *transformer) createCheck(
+	container *executor.Container,
+	gardenContainer garden.Container,
+	bindMounts []garden.BindMount,
+	path,
+	sidecarName string,
+	port,
+	timeout int,
+	http,
+	readiness bool,
+	interval time.Duration,
+	logger lager.Logger,
+	prefix string,
+) steps.Step {
+
+	nofiles := healthCheckNofiles
+
+	sourceName := HealthLogSource
+	if container.CheckDefinition != nil && container.CheckDefinition.LogSource != "" {
+		sourceName = container.CheckDefinition.LogSource
+	}
+
+	args := []string{
+		fmt.Sprintf("-port=%d", port),
+		fmt.Sprintf("-timeout=%dms", timeout),
+	}
+
+	if http {
+		args = append(args, fmt.Sprintf("-uri=%s", path))
+	}
+
+	if readiness {
+		args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
+		args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
+	} else {
+		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
+	}
+
+	runAction := models.RunAction{
+		LogSource:      sourceName,
+		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		Path:           filepath.Join(HealthCheckDstPath, "healthcheck"),
+		Args:           args,
+	}
+
+	buffer := bytes.NewBuffer(nil)
+	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+	sidecar := steps.Sidecar{
+		Name:                    sidecarName,
+		Image:                   garden.ImageRef{URI: t.sidecarRootFS},
+		BindMounts:              bindMounts,
+		OverrideContainerLimits: &garden.ProcessLimits{},
+	}
+	runStep := steps.NewRunWithSidecar(gardenContainer,
+		runAction,
+		bufferedLogStreamer,
+		logger,
+		container.ExternalIP,
+		container.InternalIP,
+		container.Ports,
+		t.exportNetworkEnvVars,
+		t.clock,
+		t.gracefulShutdownInterval,
+		true,
+		sidecar,
+		container.Privileged,
+	)
+	if prefix != "" {
+		return steps.NewOutputWrapperWithPrefix(runStep, buffer, prefix)
+	}
+	return steps.NewOutputWrapper(runStep, buffer)
+}
+
 func (t *transformer) transformCheckDefinition(
 	logger lager.Logger,
 	container *executor.Container,
@@ -520,11 +623,10 @@ func (t *transformer) transformCheckDefinition(
 	hasStartedRunning chan<- struct{},
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
+	proxyReadinessChecks []steps.Step,
 ) steps.Step {
 	var readinessChecks []steps.Step
 	var livenessChecks []steps.Step
-
-	nofiles := healthCheckNofiles
 
 	sourceName := HealthLogSource
 	if container.CheckDefinition.LogSource != "" {
@@ -535,55 +637,6 @@ func (t *transformer) transformCheckDefinition(
 	defer func() {
 		logger.Info("transform-check-definitions-finished")
 	}()
-
-	createCheck := func(path, sidecarName string, port, timeout int, http, readiness bool, interval time.Duration, logger lager.Logger) steps.Step {
-		args := []string{
-			fmt.Sprintf("-port=%d", port),
-			fmt.Sprintf("-timeout=%dms", timeout),
-		}
-
-		if http {
-			args = append(args, fmt.Sprintf("-uri=%s", path))
-		}
-
-		if readiness {
-			args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
-			args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
-		} else {
-			args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
-		}
-
-		runAction := models.RunAction{
-			LogSource:      sourceName,
-			ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-			Path:           filepath.Join(HealthCheckDstPath, "healthcheck"),
-			Args:           args,
-		}
-
-		buffer := bytes.NewBuffer(nil)
-		bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-		sidecar := steps.Sidecar{
-			Name:                    sidecarName,
-			Image:                   garden.ImageRef{URI: t.sidecarRootFS},
-			BindMounts:              bindMounts,
-			OverrideContainerLimits: &garden.ProcessLimits{},
-		}
-		runStep := steps.NewRunWithSidecar(gardenContainer,
-			runAction,
-			bufferedLogStreamer,
-			logger,
-			container.ExternalIP,
-			container.InternalIP,
-			container.Ports,
-			t.exportNetworkEnvVars,
-			t.clock,
-			t.gracefulShutdownInterval,
-			true,
-			sidecar,
-			container.Privileged,
-		)
-		return steps.NewOutputWrapper(runStep, buffer)
-	}
 
 	readinessLogger := logger.Session("readiness-check")
 	livenessLogger := logger.Session("liveness-check")
@@ -605,8 +658,34 @@ func (t *transformer) transformCheckDefinition(
 				path = "/"
 			}
 
-			readinessChecks = append(readinessChecks, createCheck(path, readinessSidecarName, int(check.HttpCheck.Port), timeout, true, true, t.unhealthyMonitoringInterval, readinessLogger))
-			livenessChecks = append(livenessChecks, createCheck(path, livenessSidecarName, int(check.HttpCheck.Port), timeout, true, false, t.healthyMonitoringInterval, livenessLogger))
+			readinessChecks = append(readinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				path,
+				readinessSidecarName,
+				int(check.HttpCheck.Port),
+				timeout,
+				true,
+				true,
+				t.unhealthyMonitoringInterval,
+				readinessLogger,
+				"",
+			))
+			livenessChecks = append(livenessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				path,
+				livenessSidecarName,
+				int(check.HttpCheck.Port),
+				timeout,
+				true,
+				false,
+				t.healthyMonitoringInterval,
+				livenessLogger,
+				"",
+			))
 
 		} else if check.TcpCheck != nil {
 			timeout := int(check.TcpCheck.ConnectTimeoutMs)
@@ -614,15 +693,41 @@ func (t *transformer) transformCheckDefinition(
 				timeout = DefaultDeclarativeHealthcheckRequestTimeout
 			}
 
-			readinessChecks = append(readinessChecks, createCheck("", readinessSidecarName, int(check.TcpCheck.Port), timeout, false, true, t.unhealthyMonitoringInterval, readinessLogger))
-			livenessChecks = append(livenessChecks, createCheck("", livenessSidecarName, int(check.TcpCheck.Port), timeout, false, false, t.healthyMonitoringInterval, livenessLogger))
+			readinessChecks = append(readinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				"",
+				readinessSidecarName,
+				int(check.TcpCheck.Port),
+				timeout,
+				false,
+				true,
+				t.unhealthyMonitoringInterval,
+				readinessLogger,
+				"",
+			))
+			livenessChecks = append(livenessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				"",
+				livenessSidecarName,
+				int(check.TcpCheck.Port),
+				timeout,
+				false,
+				false,
+				t.healthyMonitoringInterval,
+				livenessLogger,
+				"",
+			))
 		}
 	}
 
-	readinessCheck := steps.NewParallel(readinessChecks)
+	readinessCheck := steps.NewParallel(append(proxyReadinessChecks, readinessChecks...))
 	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
 
-	return steps.NewLongRunningMonitor(
+	return steps.NewHealthCheckStep(
 		readinessCheck,
 		livenessCheck,
 		hasStartedRunning,

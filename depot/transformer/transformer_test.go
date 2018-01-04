@@ -468,10 +468,12 @@ var _ = Describe("Transformer", func() {
 				readinessIO                   chan garden.ProcessIO
 				livenessIO                    chan garden.ProcessIO
 				processLock                   sync.Mutex
+				specs                         chan garden.ProcessSpec
 				declarativeHealthcheckSrcPath string = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
 			)
 
 			BeforeEach(func() {
+				specs = make(chan garden.ProcessSpec, 10)
 				// get rid of race condition caused by read inside the RunStub
 				processLock.Lock()
 				defer processLock.Unlock()
@@ -496,6 +498,8 @@ var _ = Describe("Transformer", func() {
 
 				healthcheckCallCount := int64(0)
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+					specs <- spec
+
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
 
@@ -598,6 +602,50 @@ var _ = Describe("Transformer", func() {
 
 						Expect(paths).To(ContainElement("/monitor/path"))
 					})
+
+					Context("and container proxy is enabled", func() {
+						BeforeEach(func() {
+							options = append(options, transformer.WithContainerProxy(time.Second))
+							cfg.BindMounts = append(cfg.BindMounts, garden.BindMount{
+								Origin:  garden.BindMountOriginHost,
+								SrcPath: declarativeHealthcheckSrcPath,
+								DstPath: transformer.HealthCheckDstPath,
+							})
+							cfg.ProxyTLSPorts = []uint16{61001}
+						})
+
+						It("runs healthchecks for the envoy proxy ports", func() {
+							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+								Args: []string{
+									"-port=61001",
+									"-timeout=1000ms",
+									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+								},
+								Env: []string{},
+								Limits: garden.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								},
+								OverrideContainerLimits: &garden.ProcessLimits{},
+								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								BindMounts: []garden.BindMount{
+									{
+										SrcPath: "/some/source",
+										DstPath: "/some/destintation",
+										Mode:    garden.BindMountModeRO,
+										Origin:  garden.BindMountOriginHost,
+									},
+									{
+										Origin:  garden.BindMountOriginHost,
+										SrcPath: declarativeHealthcheckSrcPath,
+										DstPath: transformer.HealthCheckDstPath,
+									},
+								},
+							})))
+						})
+					})
 				})
 
 				Context("and an http check definition exists", func() {
@@ -620,15 +668,47 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
-					It("runs the readiness healthcheck in a sidecar container", func() {
-						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-						specs := []garden.ProcessSpec{}
-						for i := 0; i < gardenContainer.RunCallCount(); i++ {
-							spec, _ := gardenContainer.RunArgsForCall(i)
-							specs = append(specs, spec)
-						}
+					Context("and container proxy is enabled", func() {
+						BeforeEach(func() {
+							options = append(options, transformer.WithContainerProxy(time.Second))
+							cfg.ProxyTLSPorts = []uint16{61001}
+						})
 
-						Expect(specs).To(ContainElement(garden.ProcessSpec{
+						It("runs healthchecks for the envoy proxy ports", func() {
+							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+								Args: []string{
+									"-port=61001",
+									"-timeout=1000ms",
+									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+								},
+								Env: []string{},
+								Limits: garden.ResourceLimits{
+									Nofile: proto.Uint64(1024),
+								},
+								OverrideContainerLimits: &garden.ProcessLimits{},
+								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								BindMounts: []garden.BindMount{
+									{
+										SrcPath: "/some/source",
+										DstPath: "/some/destintation",
+										Mode:    garden.BindMountModeRO,
+										Origin:  garden.BindMountOriginHost,
+									},
+									{
+										Origin:  garden.BindMountOriginHost,
+										SrcPath: declarativeHealthcheckSrcPath,
+										DstPath: transformer.HealthCheckDstPath,
+									},
+								},
+							})))
+						})
+					})
+
+					It("runs the readiness healthcheck in a sidecar container", func() {
+						Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
 							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 							Args: []string{
@@ -657,7 +737,7 @@ var _ = Describe("Transformer", func() {
 									DstPath: transformer.HealthCheckDstPath,
 								},
 							},
-						}))
+						})))
 					})
 
 					Context("when the container is privileged", func() {
@@ -666,14 +746,7 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("runs the healthcheck in the same container", func() {
-							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-							specs := []garden.ProcessSpec{}
-							for i := 0; i < gardenContainer.RunCallCount(); i++ {
-								spec, _ := gardenContainer.RunArgsForCall(i)
-								specs = append(specs, spec)
-							}
-
-							Expect(specs).To(ContainElement(garden.ProcessSpec{
+							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
 								ID:   "",
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
@@ -687,7 +760,7 @@ var _ = Describe("Transformer", func() {
 								Limits: garden.ResourceLimits{
 									Nofile: proto.Uint64(1024),
 								},
-							}))
+							})))
 						})
 					})
 
@@ -1203,6 +1276,50 @@ var _ = Describe("Transformer", func() {
 					}
 
 					Expect(paths).To(ContainElement("/monitor/path"))
+				})
+
+				Context("and container proxy is enabled", func() {
+					BeforeEach(func() {
+						options = append(options, transformer.WithContainerProxy(time.Second))
+						cfg.BindMounts = append(cfg.BindMounts, garden.BindMount{
+							Origin:  garden.BindMountOriginHost,
+							SrcPath: declarativeHealthcheckSrcPath,
+							DstPath: transformer.HealthCheckDstPath,
+						})
+						cfg.ProxyTLSPorts = []uint16{61001}
+					})
+
+					It("does not run healthchecks for the envoy proxy ports", func() {
+						Consistently(specs).ShouldNot(Receive(Equal(garden.ProcessSpec{
+							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+							Args: []string{
+								"-port=61001",
+								"-timeout=1000ms",
+								fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
+								fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+							},
+							Env: []string{},
+							Limits: garden.ResourceLimits{
+								Nofile: proto.Uint64(1024),
+							},
+							OverrideContainerLimits: &garden.ProcessLimits{},
+							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							BindMounts: []garden.BindMount{
+								{
+									SrcPath: "/some/source",
+									DstPath: "/some/destintation",
+									Mode:    garden.BindMountModeRO,
+									Origin:  garden.BindMountOriginHost,
+								},
+								{
+									Origin:  garden.BindMountOriginHost,
+									SrcPath: declarativeHealthcheckSrcPath,
+									DstPath: transformer.HealthCheckDstPath,
+								},
+							},
+						})))
+					})
 				})
 
 				Context("and there is no monitor action", func() {

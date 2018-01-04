@@ -17,7 +17,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = Describe("LongRunningMonitorStep", func() {
+var _ = Describe("NewHealthCheckStep", func() {
 	var (
 		readinessCheck, livenessCheck *fakes.FakeStep
 		hasBecomeHealthy              <-chan struct{}
@@ -27,9 +27,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 		// monitorErr string
 
-		startTimeout      time.Duration
-		healthyInterval   time.Duration
-		unhealthyInterval time.Duration
+		startTimeout time.Duration
 
 		step   steps.Step
 		logger *lagertest.TestLogger
@@ -37,8 +35,6 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 	BeforeEach(func() {
 		startTimeout = 1 * time.Second
-		healthyInterval = 1 * time.Second
-		unhealthyInterval = 500 * time.Millisecond
 
 		readinessCheck = new(fakes.FakeStep)
 		livenessCheck = new(fakes.FakeStep)
@@ -57,7 +53,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 		fakeStreamer.WithSourceReturns(fakeStreamer)
 
-		step = steps.NewLongRunningMonitor(
+		step = steps.NewHealthCheckStep(
 			readinessCheck,
 			livenessCheck,
 			hasBecomeHealthyChannel,
@@ -128,7 +124,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 			It("logs the step", func() {
 				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.monitor-step.timed-out-before-healthy",
+					"test.health-check-step.timed-out-before-healthy",
 				}))
 			})
 
@@ -182,7 +178,7 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 			It("logs the step", func() {
 				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.monitor-step.transitioned-to-healthy",
+					"test.health-check-step.transitioned-to-healthy",
 				}))
 			})
 
@@ -203,8 +199,8 @@ var _ = Describe("LongRunningMonitorStep", func() {
 
 				It("logs the step", func() {
 					Eventually(func() []string { return logger.TestSink.LogMessages() }).Should(ConsistOf([]string{
-						"test.monitor-step.transitioned-to-healthy",
-						"test.monitor-step.transitioned-to-unhealthy",
+						"test.health-check-step.transitioned-to-healthy",
+						"test.health-check-step.transitioned-to-unhealthy",
 					}))
 				})
 
