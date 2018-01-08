@@ -2811,11 +2811,14 @@ var _ = Describe("Container Store", func() {
 				}
 			}
 
-			It("does not allow containers to created at the same time", func() {
+			It("does not allow containers to be created at the same time", func() {
 				clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
 				// Reap extra garden containers first
 				syncCh <- struct{}{}
+
+				// Wait for container handles to be retrieved
+				Eventually(gardenClient.ContainersCallCount).Should(Equal(2))
 
 				newContainerGuid := "new-container-guid"
 				_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: newContainerGuid})
