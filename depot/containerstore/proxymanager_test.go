@@ -314,7 +314,7 @@ var _ = Describe("ProxyManager", func() {
 			Expect(proxyConfig.Listeners).To(BeEmpty())
 			admin := proxyConfig.Admin
 			Expect(admin.AccessLogPath).To(Equal("/dev/null"))
-			Expect(admin.Address).To(Equal("tcp://127.0.0.1:9901"))
+			Expect(admin.Address).To(Equal("tcp://127.0.0.1:61003"))
 
 			Expect(proxyConfig.ClusterManager.Clusters).To(HaveLen(2))
 			cluster := proxyConfig.ClusterManager.Clusters[0]
@@ -466,7 +466,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(proxyConfig.Listeners).To(BeEmpty())
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
-				Expect(admin.Address).To(Equal("tcp://127.0.0.1:9901"))
+				Expect(admin.Address).To(Equal("tcp://127.0.0.1:61004"))
 
 				Expect(proxyConfig.ClusterManager.Clusters).To(HaveLen(3))
 				cluster := proxyConfig.ClusterManager.Clusters[0]

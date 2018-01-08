@@ -257,6 +257,12 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 	if err != nil {
 		return nil, err
 	}
+
+	adminPort, err := getAvailablePort(container.Ports, port)
+	if err != nil {
+		return nil, err
+	}
+
 	proxyRunner := &proxyRunner{
 		Runner: ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 			logger = logger.Session("proxy-manager")
@@ -266,7 +272,7 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 			proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.json")
 			listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.json")
 
-			proxyConfig, err := generateProxyConfig(logger, container, p.refreshDelayMS, port)
+			proxyConfig, err := generateProxyConfig(logger, container, p.refreshDelayMS, port, adminPort)
 			if err != nil {
 				logger.Error("failed-generating-proxy-config", err)
 				return err
@@ -327,7 +333,7 @@ func (p *proxyRunner) Port() uint16 {
 	return p.ldsPort
 }
 
-func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration, port uint16) (ProxyConfig, error) {
+func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration, port, adminPort uint16) (ProxyConfig, error) {
 	clusters := []Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
@@ -352,7 +358,7 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 	config := ProxyConfig{
 		Admin: Admin{
 			AccessLogPath: AdminAccessLog,
-			Address:       "tcp://127.0.0.1:9901",
+			Address:       fmt.Sprintf("tcp://127.0.0.1:%d", adminPort),
 		},
 		Listeners: []Listener{},
 		ClusterManager: ClusterManager{
@@ -428,11 +434,15 @@ func generateListenerConfig(logger lager.Logger, container executor.Container) (
 	return config, nil
 }
 
-func getAvailablePort(allocatedPorts []executor.PortMapping) (uint16, error) {
+func getAvailablePort(allocatedPorts []executor.PortMapping, extraKnownPorts ...uint16) (uint16, error) {
 	existingPorts := make(map[uint16]interface{})
 	for _, portMap := range allocatedPorts {
 		existingPorts[portMap.ContainerPort] = struct{}{}
 		existingPorts[portMap.ContainerTLSProxyPort] = struct{}{}
+	}
+
+	for _, extraKnownPort := range extraKnownPorts {
+		existingPorts[extraKnownPort] = struct{}{}
 	}
 
 	for port := uint16(StartProxyPort); port < EndProxyPort; port++ {
