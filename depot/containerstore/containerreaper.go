@@ -2,6 +2,7 @@ package containerstore
 
 import (
 	"os"
+	"sync"
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/garden"
@@ -14,15 +15,19 @@ type containerReaper struct {
 	clock        clock.Clock
 	containers   *nodeMap
 	gardenClient garden.Client
+
+	reapingLock *sync.RWMutex
 }
 
-func newContainerReaper(logger lager.Logger, config *ContainerConfig, clock clock.Clock, containers *nodeMap, gardenClient garden.Client) *containerReaper {
+func newContainerReaper(logger lager.Logger, config *ContainerConfig, clock clock.Clock, containers *nodeMap, gardenClient garden.Client, reapingLock *sync.RWMutex) *containerReaper {
 	return &containerReaper{
 		logger:       logger,
 		config:       config,
 		clock:        clock,
 		containers:   containers,
 		gardenClient: gardenClient,
+
+		reapingLock: reapingLock,
 	}
 }
 
@@ -78,6 +83,9 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error {
 	logger.Info("starting")
 	defer logger.Info("finished")
+
+	r.reapingLock.Lock()
+	defer r.reapingLock.Unlock()
 
 	handles, err := r.fetchGardenContainerHandles(logger)
 	if err != nil {

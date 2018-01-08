@@ -3,6 +3,7 @@ package containerstore
 import (
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -78,6 +79,8 @@ type containerStore struct {
 	proxyManager  ProxyManager
 
 	trustedSystemCertificatesPath string
+
+	reapingLock *sync.RWMutex
 }
 
 func New(
@@ -111,6 +114,8 @@ func New(
 		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 		proxyManager:                  proxyManager,
+
+		reapingLock: &sync.RWMutex{},
 	}
 }
 
@@ -173,6 +178,9 @@ func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Con
 	logger = logger.Session("containerstore-create", lager.Data{"guid": guid})
 	logger.Info("starting")
 	defer logger.Info("complete")
+
+	cs.reapingLock.RLock()
+	defer cs.reapingLock.RUnlock()
 
 	node, err := cs.containers.Get(guid)
 	if err != nil {
@@ -349,5 +357,5 @@ func (cs *containerStore) NewRegistryPruner(logger lager.Logger) ifrit.Runner {
 }
 
 func (cs *containerStore) NewContainerReaper(logger lager.Logger) ifrit.Runner {
-	return newContainerReaper(logger, &cs.containerConfig, cs.clock, cs.containers, cs.gardenClient)
+	return newContainerReaper(logger, &cs.containerConfig, cs.clock, cs.containers, cs.gardenClient, cs.reapingLock)
 }
