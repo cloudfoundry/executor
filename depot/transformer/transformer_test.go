@@ -473,16 +473,17 @@ var _ = Describe("Transformer", func() {
 			)
 
 			BeforeEach(func() {
-				specs = make(chan garden.ProcessSpec, 10)
 				// get rid of race condition caused by read inside the RunStub
 				processLock.Lock()
 				defer processLock.Unlock()
 
 				readinessIO = make(chan garden.ProcessIO, 1)
 				livenessIO = make(chan garden.ProcessIO, 1)
+				specs = make(chan garden.ProcessSpec, 10)
 				// make the race detector happy
 				readinessIOCh := readinessIO
 				livenessIOCh := livenessIO
+				specsCh := specs
 
 				readinessCh = make(chan int)
 				readinessProcess = makeProcess(readinessCh)
@@ -498,7 +499,7 @@ var _ = Describe("Transformer", func() {
 
 				healthcheckCallCount := int64(0)
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
-					specs <- spec
+					specsCh <- spec
 
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
