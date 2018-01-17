@@ -259,11 +259,26 @@ func (n *storeNode) gardenProperties(container *executor.Container) garden.Prope
 	return properties
 }
 
+func dedupPorts(ports []executor.PortMapping) []executor.PortMapping {
+	seen := make(map[uint16]bool, len(ports))
+	deduped := make([]executor.PortMapping, 0, len(ports))
+	for _, port := range ports {
+		if seen[port.ContainerPort] {
+			continue
+		}
+		seen[port.ContainerPort] = true
+		deduped = append(deduped, port)
+	}
+	return deduped
+}
+
 func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container) (garden.Container, error) {
 	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
 	if err != nil {
 		return nil, err
 	}
+
+	// info.Ports = dedupPorts(info.Ports)
 
 	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
 	for _, port := range extraPorts {
@@ -365,10 +380,6 @@ func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor
 			continue
 		}
 
-		if _, ok := portMappings[appPort]; !ok {
-			continue
-		}
-
 		proxyContainerPort := appPortToProxyPortMappings[appPort]
 		proxyHostPort := portMappings[proxyContainerPort]
 		ports = append(ports, executor.PortMapping{
@@ -377,8 +388,6 @@ func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor
 			ContainerTLSProxyPort: proxyContainerPort,
 			HostTLSProxyPort:      proxyHostPort,
 		})
-
-		delete(portMappings, appPort)
 	}
 
 	return ports
