@@ -322,6 +322,7 @@ var _ = Describe("Container Store", func() {
 		var (
 			resource      executor.Resource
 			allocationReq *executor.AllocationRequest
+			runInfo       executor.RunInfo
 		)
 
 		BeforeEach(func() {
@@ -357,7 +358,7 @@ var _ = Describe("Container Store", func() {
 				}
 
 				logGuid = "log-guid-foo"
-				runInfo := executor.RunInfo{
+				runInfo = executor.RunInfo{
 					Privileged:     true,
 					CPUWeight:      50,
 					StartTimeoutMs: 99000,
@@ -953,8 +954,39 @@ var _ = Describe("Container Store", func() {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(fetchedContainer).To(Equal(container))
 					})
-				})
 
+					It("preserves port orders", func() {
+						Consistently(func() uint16 {
+							containerGUID := "new-container-guid"
+							allocationReq = &executor.AllocationRequest{
+								Guid: containerGUID,
+								Tags: executor.Tags{
+									"Foo": "Bar",
+								},
+							}
+
+							_, err := containerStore.Reserve(logger, allocationReq)
+							Expect(err).NotTo(HaveOccurred())
+
+							defer containerStore.Destroy(logger, containerGUID)
+
+							runReq = &executor.RunRequest{
+								Guid:    containerGUID,
+								RunInfo: runInfo,
+							}
+							runReq.Ports = []executor.PortMapping{
+								{ContainerPort: 8080},
+								{ContainerPort: 9090},
+							}
+							err = containerStore.Initialize(logger, runReq)
+							Expect(err).NotTo(HaveOccurred())
+
+							container, err := containerStore.Create(logger, containerGUID)
+							Expect(err).NotTo(HaveOccurred())
+							return container.Ports[0].ContainerPort
+						}).Should(Equal(uint16(8080)))
+					})
+				})
 			})
 
 			Context("when a total disk scope is request", func() {
