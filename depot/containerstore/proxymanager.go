@@ -216,8 +216,8 @@ func (p *proxyManager) ProxyPorts(logger lager.Logger, container *executor.Conta
 	proxyPortMapping := []executor.ProxyPortMapping{}
 
 	existingPorts := make(map[uint16]interface{})
-	containerPorts := make([]uint16, len(container.RunInfo.Ports))
-	for i, portMap := range container.RunInfo.Ports {
+	containerPorts := make([]uint16, len(container.Ports))
+	for i, portMap := range container.Ports {
 		existingPorts[portMap.ContainerPort] = struct{}{}
 		containerPorts[i] = portMap.ContainerPort
 	}
