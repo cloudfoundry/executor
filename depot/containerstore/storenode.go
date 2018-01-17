@@ -278,7 +278,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	// info.Ports = dedupPorts(info.Ports)
+	info.Ports = dedupPorts(info.Ports)
 
 	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
 	for _, port := range extraPorts {
