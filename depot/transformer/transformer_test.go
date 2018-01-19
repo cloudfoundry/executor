@@ -148,9 +148,8 @@ var _ = Describe("Transformer", func() {
 			monitorProcess.WaitStub = func() (int, error) {
 				if monitorProcess.WaitCallCount() == 1 {
 					return 1, errors.New("boom")
-				} else {
-					return 0, nil
 				}
+				return 0, nil
 			}
 
 			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
@@ -216,7 +215,6 @@ var _ = Describe("Transformer", func() {
 				envoyProcess *gardenfakes.FakeProcess
 				actionCh     chan int
 				envoyCh      chan int
-				ldsCh        chan int
 			)
 
 			BeforeEach(func() {
@@ -231,9 +229,6 @@ var _ = Describe("Transformer", func() {
 				envoyCh = make(chan int)
 				envoyProcess = makeProcess(envoyCh)
 
-				ldsCh = make(chan int)
-				ldsProcess := makeProcess(ldsCh)
-
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
@@ -244,8 +239,6 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "/etc/cf-assets/envoy/lds":
-						return ldsProcess, nil
 					case "sh":
 						return envoyProcess, nil
 					}
@@ -301,12 +294,11 @@ var _ = Describe("Transformer", func() {
 			AfterEach(func() {
 				close(actionCh)
 				close(envoyCh)
-				close(ldsCh)
 				ginkgomon.Interrupt(process)
 			})
 
 			It("runs the container proxy in a sidecar container", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
 					spec, _ := gardenContainer.RunArgsForCall(i)
@@ -318,7 +310,7 @@ var _ = Describe("Transformer", func() {
 					Path: "sh",
 					Args: []string{
 						"-c",
-						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 					},
 					Env: []string{},
 					Limits: garden.ResourceLimits{
@@ -338,7 +330,7 @@ var _ = Describe("Transformer", func() {
 
 			Context("when the process is signalled", func() {
 				JustBeforeEach(func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					process.Signal(os.Interrupt)
 				})
 
@@ -353,7 +345,7 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("runs the container proxy in the main container", func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					specs := []garden.ProcessSpec{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)
@@ -365,7 +357,7 @@ var _ = Describe("Transformer", func() {
 						Path: "sh",
 						Args: []string{
 							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.json --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 						},
 						Env: []string{},
 						Limits: garden.ResourceLimits{
@@ -376,14 +368,14 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("runs the listener discovery service (lds) in a sidecar", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
 					spec, _ := gardenContainer.RunArgsForCall(i)
 					specs = append(specs, spec)
 				}
 
-				Expect(specs).To(ContainElement(garden.ProcessSpec{
+				Expect(specs).NotTo(ContainElement(garden.ProcessSpec{
 					ID:   fmt.Sprintf("%s-lds", gardenContainer.Handle()),
 					Path: "/etc/cf-assets/envoy/lds",
 					Args: []string{
@@ -412,14 +404,14 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("runs the listener discovery service (lds) in the same container", func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					specs := []garden.ProcessSpec{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)
 						specs = append(specs, spec)
 					}
 
-					Expect(specs).To(ContainElement(garden.ProcessSpec{
+					Expect(specs).NotTo(ContainElement(garden.ProcessSpec{
 						ID:   "",
 						Path: "/etc/cf-assets/envoy/lds",
 						Args: []string{
@@ -442,11 +434,9 @@ var _ = Describe("Transformer", func() {
 				It("does not run the container proxy", func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
 					paths := []string{}
-					args := [][]string{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)
 						paths = append(paths, spec.Path)
-						args = append(args, spec.Args)
 					}
 
 					Expect(paths).NotTo(ContainElement("sh"))
@@ -594,11 +584,9 @@ var _ = Describe("Transformer", func() {
 					It("uses the monitor action", func() {
 						Eventually(gardenContainer.RunCallCount, 5*time.Second).Should(Equal(2))
 						paths := []string{}
-						args := [][]string{}
 						for i := 0; i < gardenContainer.RunCallCount(); i++ {
 							spec, _ := gardenContainer.RunArgsForCall(i)
 							paths = append(paths, spec.Path)
-							args = append(args, spec.Args)
 						}
 
 						Expect(paths).To(ContainElement("/monitor/path"))
@@ -1269,11 +1257,9 @@ var _ = Describe("Transformer", func() {
 					clock.WaitForWatcherAndIncrement(unhealthyMonitoringInterval)
 					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					paths := []string{}
-					args := [][]string{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)
 						paths = append(paths, spec.Path)
-						args = append(args, spec.Args)
 					}
 
 					Expect(paths).To(ContainElement("/monitor/path"))

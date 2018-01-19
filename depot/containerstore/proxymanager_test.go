@@ -1,7 +1,6 @@
 package containerstore_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,12 +9,14 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var _ = Describe("ProxyManager", func() {
@@ -55,8 +56,8 @@ var _ = Describe("ProxyManager", func() {
 
 		configPath = filepath.Join(proxyConfigDir, container.Guid)
 
-		listenerConfigFile = filepath.Join(configPath, "listeners.json")
-		proxyConfigFile = filepath.Join(configPath, "envoy.json")
+		listenerConfigFile = filepath.Join(configPath, "listeners.yaml")
+		proxyConfigFile = filepath.Join(configPath, "envoy.yaml")
 
 		logger = lagertest.NewTestLogger("proxymanager")
 
@@ -306,38 +307,27 @@ var _ = Describe("ProxyManager", func() {
 			data, err := ioutil.ReadFile(proxyConfigFile)
 			Expect(err).NotTo(HaveOccurred())
 
-			var proxyConfig containerstore.ProxyConfig
+			var proxyConfig envoy.ProxyConfig
 
-			err = json.Unmarshal(data, &proxyConfig)
+			err = yaml.Unmarshal(data, &proxyConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(proxyConfig.Listeners).To(BeEmpty())
 			admin := proxyConfig.Admin
 			Expect(admin.AccessLogPath).To(Equal("/dev/null"))
-			Expect(admin.Address).To(Equal("tcp://127.0.0.1:61003"))
+			Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61003}}))
 
-			Expect(proxyConfig.ClusterManager.Clusters).To(HaveLen(2))
-			cluster := proxyConfig.ClusterManager.Clusters[0]
+			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
+			cluster := proxyConfig.StaticResources.Clusters[0]
 			Expect(cluster.Name).To(Equal("0-service-cluster"))
-			Expect(cluster.ConnectionTimeoutMs).To(Equal(250))
-			Expect(cluster.Type).To(Equal("static"))
-			Expect(cluster.LbType).To(Equal("round_robin"))
-			Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-				{URL: "tcp://127.0.0.1:8080"},
+			Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
+			Expect(cluster.Type).To(Equal("STATIC"))
+			Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+			Expect(cluster.Hosts).To(Equal([]envoy.Address{
+				{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 8080}},
 			}))
 
-			cluster = proxyConfig.ClusterManager.Clusters[1]
-			Expect(cluster.Name).To(Equal("lds-cluster"))
-			Expect(cluster.ConnectionTimeoutMs).To(Equal(250))
-			Expect(cluster.Type).To(Equal("static"))
-			Expect(cluster.LbType).To(Equal("round_robin"))
-			Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-				{URL: "tcp://127.0.0.1:61002"},
-			}))
-
-			Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
-				Cluster:        "lds-cluster",
-				RefreshDelayMS: 1000,
+			Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{
+				Path: "/etc/cf-assets/envoy_config/listeners.yaml",
 			}))
 		})
 
@@ -351,27 +341,32 @@ var _ = Describe("ProxyManager", func() {
 			data, err := ioutil.ReadFile(listenerConfigFile)
 			Expect(err).NotTo(HaveOccurred())
 
-			var listenerConfig containerstore.ListenerConfig
+			var listenerConfig envoy.ListenerConfig
 
-			err = json.Unmarshal(data, &listenerConfig)
+			err = yaml.Unmarshal(data, &listenerConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(listenerConfig.Listeners).To(HaveLen(1))
+			Expect(listenerConfig.Resources).To(HaveLen(1))
 
-			listener := listenerConfig.Listeners[0]
+			listener := listenerConfig.Resources[0]
 
+			Expect(listener.Type).To(Equal("type.googleapis.com/envoy.api.v2.Listener"))
 			Expect(listener.Name).To(Equal("listener-8080"))
-			Expect(listener.Address).To(Equal("tcp://0.0.0.0:61001"))
-			Expect(listener.SSLContext.CertChainFile).To(Equal("/etc/cf-instance-credentials/instance.crt"))
-			Expect(listener.SSLContext.PrivateKeyFile).To(Equal("/etc/cf-instance-credentials/instance.key"))
-			Expect(listener.SSLContext.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
-			Expect(listener.Filters).To(HaveLen(1))
-			filter := listener.Filters[0]
-			Expect(filter.Name).To(Equal("tcp_proxy"))
-			Expect(filter.Type).To(Equal(containerstore.Read))
-			Expect(filter.Config.RouteConfig.Routes).To(HaveLen(1))
-			route := filter.Config.RouteConfig.Routes[0]
-			Expect(route.Cluster).To(Equal("0-service-cluster"))
+			Expect(listener.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: 61001}}))
+			Expect(listener.FilterChains).To(HaveLen(1))
+			chain := listener.FilterChains[0]
+			certs := chain.TLSContext.CommonTLSContext.TLSCertificates
+			Expect(certs).To(ConsistOf(envoy.TLSCertificate{
+				CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
+				PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
+			}))
+			Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
+
+			Expect(chain.Filters).To(HaveLen(1))
+			filter := chain.Filters[0]
+			Expect(filter.Name).To(Equal("envoy.tcp_proxy"))
+			Expect(filter.Config.Cluster).To(Equal("0-service-cluster"))
+			Expect(filter.Config.StatPrefix).NotTo(BeEmpty())
 		})
 
 		It("exposes proxyConfigPort", func() {
@@ -399,56 +394,64 @@ var _ = Describe("ProxyManager", func() {
 				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
 				Expect(proxyRunnerErr).NotTo(HaveOccurred())
 				containerProcess = ifrit.Background(runner)
+				Eventually(containerProcess.Ready()).Should(BeClosed())
 				Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
 				data, err := ioutil.ReadFile(listenerConfigFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				var listenerConfig containerstore.ListenerConfig
+				var listenerConfig envoy.ListenerConfig
 
-				err = json.Unmarshal(data, &listenerConfig)
+				err = yaml.Unmarshal(data, &listenerConfig)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(listenerConfig.Listeners).To(HaveLen(2))
 
-				listener1 := listenerConfig.Listeners[0]
-				listener2 := listenerConfig.Listeners[1]
-				Expect(listener1.Name).To(Equal("listener-8080"))
-				Expect(listener2.Name).To(Equal("listener-2222"))
-				Expect(listener1.Address).To(Equal("tcp://0.0.0.0:61001"))
-				Expect(listener2.Address).To(Equal("tcp://0.0.0.0:61002"))
+				Expect(listenerConfig.Resources).To(HaveLen(2))
 
-				Expect(listener1.SSLContext).To(Equal(listener2.SSLContext))
+				listener := listenerConfig.Resources[0]
 
-				Expect(listener1.Filters).To(HaveLen(1))
-				filter1 := listener1.Filters[0]
-
-				Expect(listener2.Filters).To(HaveLen(1))
-				filter2 := listener2.Filters[0]
-
-				Expect(filter1.Name).To(Equal(filter2.Name))
-				Expect(filter1.Type).To(Equal(filter2.Type))
-
-				Expect(filter1.Config.RouteConfig).To(Equal(containerstore.RouteConfig{
-					Routes: []containerstore.Route{
-						{
-							Cluster: "0-service-cluster",
-						},
-					},
+				Expect(listener.Type).To(Equal("type.googleapis.com/envoy.api.v2.Listener"))
+				Expect(listener.Name).To(Equal("listener-8080"))
+				Expect(listener.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: 61001}}))
+				Expect(listener.FilterChains).To(HaveLen(1))
+				chain := listener.FilterChains[0]
+				certs := chain.TLSContext.CommonTLSContext.TLSCertificates
+				Expect(certs).To(ConsistOf(envoy.TLSCertificate{
+					CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
+					PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
 				}))
+				Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 
-				Expect(filter2.Config.RouteConfig).To(Equal(containerstore.RouteConfig{
-					Routes: []containerstore.Route{
-						{
-							Cluster: "1-service-cluster",
-						},
-					},
+				Expect(chain.Filters).To(HaveLen(1))
+				filter := chain.Filters[0]
+				Expect(filter.Name).To(Equal("envoy.tcp_proxy"))
+				Expect(filter.Config.Cluster).To(Equal("0-service-cluster"))
+				Expect(filter.Config.StatPrefix).NotTo(BeEmpty())
+
+				listener1StatPrefix := filter.Config.StatPrefix
+
+				listener = listenerConfig.Resources[1]
+
+				Expect(listener.Type).To(Equal("type.googleapis.com/envoy.api.v2.Listener"))
+				Expect(listener.Name).To(Equal("listener-2222"))
+				Expect(listener.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: 61002}}))
+				Expect(listener.FilterChains).To(HaveLen(1))
+				chain = listener.FilterChains[0]
+				certs = chain.TLSContext.CommonTLSContext.TLSCertificates
+				Expect(certs).To(ConsistOf(envoy.TLSCertificate{
+					CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
+					PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
 				}))
+				Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 
-				Expect(filter1.Config.StatPrefix).ToNot(BeEmpty())
-				Expect(filter1.Config.StatPrefix).ToNot(Equal(filter2.Config.StatPrefix))
+				Expect(chain.Filters).To(HaveLen(1))
+				filter = chain.Filters[0]
+				Expect(filter.Name).To(Equal("envoy.tcp_proxy"))
+				Expect(filter.Config.Cluster).To(Equal("1-service-cluster"))
+				Expect(filter.Config.StatPrefix).NotTo(BeEmpty())
+				Expect(filter.Config.StatPrefix).NotTo(Equal(listener1StatPrefix))
 			})
 
-			It("creates the appropriate proxy file", func() {
+			It("creates the appropriate proxy config file", func() {
 				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
 				Expect(proxyRunnerErr).NotTo(HaveOccurred())
 				containerProcess = ifrit.Background(runner)
@@ -458,47 +461,36 @@ var _ = Describe("ProxyManager", func() {
 				data, err := ioutil.ReadFile(proxyConfigFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				var proxyConfig containerstore.ProxyConfig
+				var proxyConfig envoy.ProxyConfig
 
-				err = json.Unmarshal(data, &proxyConfig)
+				err = yaml.Unmarshal(data, &proxyConfig)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(proxyConfig.Listeners).To(BeEmpty())
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
-				Expect(admin.Address).To(Equal("tcp://127.0.0.1:61004"))
+				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61004}}))
 
-				Expect(proxyConfig.ClusterManager.Clusters).To(HaveLen(3))
-				cluster := proxyConfig.ClusterManager.Clusters[0]
+				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
+				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
-				Expect(cluster.ConnectionTimeoutMs).To(Equal(250))
-				Expect(cluster.Type).To(Equal("static"))
-				Expect(cluster.LbType).To(Equal("round_robin"))
-				Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-					{URL: "tcp://127.0.0.1:8080"},
+				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
+				Expect(cluster.Type).To(Equal("STATIC"))
+				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(cluster.Hosts).To(Equal([]envoy.Address{
+					{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 8080}},
 				}))
 
-				cluster = proxyConfig.ClusterManager.Clusters[1]
+				cluster = proxyConfig.StaticResources.Clusters[1]
 				Expect(cluster.Name).To(Equal("1-service-cluster"))
-				Expect(cluster.ConnectionTimeoutMs).To(Equal(250))
-				Expect(cluster.Type).To(Equal("static"))
-				Expect(cluster.LbType).To(Equal("round_robin"))
-				Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-					{URL: "tcp://127.0.0.1:2222"},
+				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
+				Expect(cluster.Type).To(Equal("STATIC"))
+				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(cluster.Hosts).To(Equal([]envoy.Address{
+					{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 2222}},
 				}))
 
-				cluster = proxyConfig.ClusterManager.Clusters[2]
-				Expect(cluster.Name).To(Equal("lds-cluster"))
-				Expect(cluster.ConnectionTimeoutMs).To(Equal(250))
-				Expect(cluster.Type).To(Equal("static"))
-				Expect(cluster.LbType).To(Equal("round_robin"))
-				Expect(cluster.Hosts).To(Equal([]containerstore.Host{
-					{URL: "tcp://127.0.0.1:61003"},
-				}))
-
-				Expect(proxyConfig.LDS).To(Equal(containerstore.LDS{
-					Cluster:        "lds-cluster",
-					RefreshDelayMS: 1000,
+				Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{
+					Path: "/etc/cf-assets/envoy_config/listeners.yaml",
 				}))
 			})
 
@@ -523,7 +515,7 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		Context("when creds are being rotated", func() {
-			var initialListenerConfig containerstore.ListenerConfig
+			var initialListenerConfig envoy.ListenerConfig
 
 			JustBeforeEach(func() {
 				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
@@ -535,26 +527,26 @@ var _ = Describe("ProxyManager", func() {
 				data, err := ioutil.ReadFile(listenerConfigFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = json.Unmarshal(data, &initialListenerConfig)
+				err = yaml.Unmarshal(data, &initialListenerConfig)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("changes the listener config stat prefix", func() {
 				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
 
-				Eventually(func() []containerstore.Listener {
+				Eventually(func() []envoy.Resource {
 					data, err := ioutil.ReadFile(listenerConfigFile)
 					Expect(err).NotTo(HaveOccurred())
-					var listenerConfig containerstore.ListenerConfig
-					err = json.Unmarshal(data, &listenerConfig)
+					var listenerConfig envoy.ListenerConfig
+					err = yaml.Unmarshal(data, &listenerConfig)
 					Expect(err).NotTo(HaveOccurred())
-					return listenerConfig.Listeners
-				}).ShouldNot(ConsistOf(initialListenerConfig.Listeners))
+					return listenerConfig.Resources
+				}).ShouldNot(Equal(initialListenerConfig.Resources))
 			})
 		})
 
 		Context("when creds are not rotated", func() {
-			var initialListenerConfig containerstore.ListenerConfig
+			var initialListenerConfig envoy.ListenerConfig
 			JustBeforeEach(func() {
 				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
 				Expect(proxyRunnerErr).NotTo(HaveOccurred())
@@ -565,7 +557,7 @@ var _ = Describe("ProxyManager", func() {
 				data, err := ioutil.ReadFile(listenerConfigFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = json.Unmarshal(data, &initialListenerConfig)
+				err = yaml.Unmarshal(data, &initialListenerConfig)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -573,22 +565,11 @@ var _ = Describe("ProxyManager", func() {
 				data, err := ioutil.ReadFile(listenerConfigFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				var listenerConfig containerstore.ListenerConfig
+				var listenerConfig envoy.ListenerConfig
 
-				err = json.Unmarshal(data, &listenerConfig)
+				err = yaml.Unmarshal(data, &listenerConfig)
 				Expect(err).NotTo(HaveOccurred())
-				listener := listenerConfig.Listeners[0]
-				initialListener := initialListenerConfig.Listeners[0]
-				Expect(listener.Address).To(Equal(initialListener.Address))
-				Expect(listener.SSLContext).To(Equal(initialListener.SSLContext))
-
-				filter := listener.Filters[0]
-				initialFilter := initialListener.Filters[0]
-				Expect(filter.Type).To(Equal(initialFilter.Type))
-				Expect(filter.Name).To(Equal(initialFilter.Name))
-				Expect(filter.Config.RouteConfig).To(Equal(initialFilter.Config.RouteConfig))
-
-				Expect(filter.Config.StatPrefix).To(Equal(initialFilter.Config.StatPrefix))
+				Expect(listenerConfig).To(Equal(initialListenerConfig))
 			})
 		})
 

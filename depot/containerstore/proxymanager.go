@@ -1,7 +1,6 @@
 package containerstore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -12,8 +11,10 @@ import (
 
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
+	yaml "gopkg.in/yaml.v2"
 
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
@@ -22,13 +23,12 @@ const (
 	StartProxyPort = 61001
 	EndProxyPort   = 65534
 
-	TimeOut    = 250
-	Static     = "static"
-	RoundRobin = "round_robin"
+	TimeOut    = "0.25s"
+	Static     = "STATIC"
+	RoundRobin = "ROUND_ROBIN"
 
-	Read       = "read"
-	IngressTCP = "ingress_tcp"
-	TcpProxy   = "tcp_proxy"
+	IngressListener = "ingress_listener"
+	TcpProxy        = "envoy.tcp_proxy"
 
 	AdminAccessLog = "/dev/null"
 )
@@ -50,75 +50,6 @@ var dummyRunner = func(credRotatedChan <-chan struct{}) ifrit.Runner {
 			}
 		}
 	})
-}
-
-type Route struct {
-	Cluster string `json:"cluster"`
-}
-
-type RouteConfig struct {
-	Routes []Route `json:"routes"`
-}
-
-type Config struct {
-	StatPrefix  string      `json:"stat_prefix"`
-	RouteConfig RouteConfig `json:"route_config"`
-}
-
-type Filter struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Config Config `json:"config"`
-}
-
-type SSLContext struct {
-	CertChainFile  string `json:"cert_chain_file"`
-	PrivateKeyFile string `json:"private_key_file"`
-	CipherSuites   string `json:"cipher_suites"`
-}
-
-type Listener struct {
-	Name       string     `json:"name"`
-	Address    string     `json:"address"`
-	Filters    []Filter   `json:"filters"`
-	SSLContext SSLContext `json:"ssl_context"`
-}
-
-type Admin struct {
-	AccessLogPath string `json:"access_log_path"`
-	Address       string `json:"address"`
-}
-
-type Host struct {
-	URL string `json:"url"`
-}
-
-type Cluster struct {
-	Name                string `json:"name"`
-	ConnectionTimeoutMs int    `json:"connect_timeout_ms"`
-	Type                string `json:"type"`
-	LbType              string `json:"lb_type"`
-	Hosts               []Host `json:"hosts"`
-}
-
-type ClusterManager struct {
-	Clusters []Cluster `json:"clusters"`
-}
-
-type LDS struct {
-	Cluster        string `json:"cluster"`
-	RefreshDelayMS int    `json:"refresh_delay_ms"`
-}
-
-type ProxyConfig struct {
-	Listeners      []Listener     `json:"listeners"`
-	Admin          Admin          `json:"admin"`
-	ClusterManager ClusterManager `json:"cluster_manager"`
-	LDS            LDS            `json:"lds"`
-}
-
-type ListenerConfig struct {
-	Listeners []Listener `json:"listeners"`
 }
 
 //go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
@@ -269,8 +200,8 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 			logger.Info("starting")
 			defer logger.Info("finished")
 
-			proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.json")
-			listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.json")
+			proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
+			listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.yaml")
 
 			proxyConfig, err := generateProxyConfig(logger, container, p.refreshDelayMS, port, adminPort)
 			if err != nil {
@@ -333,47 +264,43 @@ func (p *proxyRunner) Port() uint16 {
 	return p.ldsPort
 }
 
-func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration, port, adminPort uint16) (ProxyConfig, error) {
-	clusters := []Cluster{}
+func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration, port, adminPort uint16) (envoy.ProxyConfig, error) {
+	clusters := []envoy.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-		clusterAddress := fmt.Sprintf("tcp://127.0.0.1:%d", portMap.ContainerPort)
-		clusters = append(clusters, Cluster{
-			Name:                clusterName,
-			ConnectionTimeoutMs: TimeOut,
-			Type:                Static,
-			LbType:              RoundRobin,
-			Hosts:               []Host{Host{URL: clusterAddress}},
+		clusters = append(clusters, envoy.Cluster{
+			Name:              clusterName,
+			ConnectionTimeout: TimeOut,
+			Type:              Static,
+			LbPolicy:          RoundRobin,
+			Hosts:             []envoy.Address{envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: portMap.ContainerPort}}},
 		})
 	}
 
-	clusters = append(clusters, Cluster{
-		Name:                "lds-cluster",
-		ConnectionTimeoutMs: TimeOut,
-		Type:                Static,
-		LbType:              RoundRobin,
-		Hosts:               []Host{Host{URL: fmt.Sprintf("tcp://127.0.0.1:%d", port)}},
-	})
-
-	config := ProxyConfig{
-		Admin: Admin{
+	config := envoy.ProxyConfig{
+		Admin: envoy.Admin{
 			AccessLogPath: AdminAccessLog,
-			Address:       fmt.Sprintf("tcp://127.0.0.1:%d", adminPort),
+			Address: envoy.Address{
+				SocketAddress: envoy.SocketAddress{
+					Address:   "127.0.0.1",
+					PortValue: adminPort,
+				},
+			},
 		},
-		Listeners: []Listener{},
-		ClusterManager: ClusterManager{
+		StaticResources: envoy.StaticResources{
 			Clusters: clusters,
 		},
-		LDS: LDS{
-			Cluster:        "lds-cluster",
-			RefreshDelayMS: int(refreshDelayMS.Seconds() * 1000),
+		DynamicResources: envoy.DynamicResources{
+			LDSConfig: envoy.LDSConfig{
+				Path: "/etc/cf-assets/envoy_config/listeners.yaml",
+			},
 		},
 	}
 	return config, nil
 }
 
-func writeProxyConfig(proxyConfig ProxyConfig, path string) error {
-	data, err := json.Marshal(proxyConfig)
+func writeProxyConfig(proxyConfig envoy.ProxyConfig, path string) error {
+	data, err := yaml.Marshal(proxyConfig)
 	if err != nil {
 		return err
 	}
@@ -381,54 +308,70 @@ func writeProxyConfig(proxyConfig ProxyConfig, path string) error {
 	return ioutil.WriteFile(path, data, 0666)
 }
 
-func writeListenerConfig(listenerConfig ListenerConfig, path string) error {
-	data, err := json.Marshal(listenerConfig)
+func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error {
+	tmpPath := path + ".tmp"
+
+	data, err := yaml.Marshal(listenerConfig)
 	if err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(path, data, 0666)
+	err = ioutil.WriteFile(tmpPath, data, 0666)
+	if err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
-func generateListenerConfig(logger lager.Logger, container executor.Container) (ListenerConfig, error) {
-	listeners := []Listener{}
+func generateListenerConfig(logger lager.Logger, container executor.Container) (envoy.ListenerConfig, error) {
+	resources := []envoy.Resource{}
 
 	for index, portMap := range container.Ports {
 		listenerName := TcpProxy
-		listenerAddress := fmt.Sprintf("tcp://0.0.0.0:%d", portMap.ContainerTLSProxyPort)
 		containerMountPath := "/etc/cf-instance-credentials"
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
 		newUUID, err := uuid.NewV4()
 		if err != nil {
 			logger.Error("failed-to-create-uuid-for-stat-prefix", err)
-			return ListenerConfig{}, err
+			return envoy.ListenerConfig{}, err
 		}
 
-		listeners = append(listeners, Listener{
+		resources = append(resources, envoy.Resource{
+			Type:    "type.googleapis.com/envoy.api.v2.Listener",
 			Name:    fmt.Sprintf("listener-%d", portMap.ContainerPort),
-			Address: listenerAddress,
-			Filters: []Filter{Filter{
-				Type: Read,
-				Name: listenerName,
-				Config: Config{
-					StatPrefix: IngressTCP + "-" + newUUID.String(),
-					RouteConfig: RouteConfig{
-						Routes: []Route{Route{Cluster: clusterName}},
+			Address: envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: portMap.ContainerTLSProxyPort}},
+			FilterChains: []envoy.FilterChain{envoy.FilterChain{
+				Filters: []envoy.Filter{
+					envoy.Filter{
+						Name: listenerName,
+						Config: envoy.Config{
+							StatPrefix: IngressListener + "_" + newUUID.String(),
+							Cluster:    clusterName,
+						},
+					},
+				},
+				TLSContext: envoy.TLSContext{
+					CommonTLSContext: envoy.CommonTLSContext{
+						TLSParams: envoy.TLSParams{
+							CipherSuites: SupportedCipherSuites,
+						},
+						TLSCertificates: []envoy.TLSCertificate{
+							envoy.TLSCertificate{
+								CertificateChain: envoy.File{Filename: path.Join(containerMountPath, "instance.crt")},
+								PrivateKey:       envoy.File{Filename: path.Join(containerMountPath, "instance.key")},
+							},
+						},
 					},
 				},
 			},
 			},
-			SSLContext: SSLContext{
-				CertChainFile:  path.Join(containerMountPath, "instance.crt"),
-				PrivateKeyFile: path.Join(containerMountPath, "instance.key"),
-				CipherSuites:   SupportedCipherSuites,
-			},
 		})
 	}
 
-	config := ListenerConfig{
-		Listeners: listeners,
+	config := envoy.ListenerConfig{
+		VersionInfo: "0",
+		Resources:   resources,
 	}
 
 	return config, nil
