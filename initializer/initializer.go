@@ -133,8 +133,8 @@ type ExecutorConfig struct {
 	TrustedSystemCertificatesPath      string                `json:"trusted_system_certificates_path"`
 	UnhealthyMonitoringInterval        durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	VolmanDriverPaths                  string                `json:"volman_driver_paths"`
-	CsiPaths                           []string              `json:"csi_paths"`
-	CsiMountRootDir                    string                `json:"csi_mount_root_dir"`
+	CSIPaths                           []string              `json:"csi_paths"`
+	CSIMountRootDir                    string                `json:"csi_mount_root_dir"`
 }
 
 const (
@@ -182,8 +182,8 @@ var DefaultConfiguration = ExecutorConfig{
 	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
 	EnvoyConfigRefreshDelay:            durationjson.Duration(time.Second),
 	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
-	CsiPaths:                           []string{"/var/vcap/data/csiplugins"},
-	CsiMountRootDir:                    "/var/vcap/data/csimountroot",
+	CSIPaths:                           []string{"/var/vcap/data/csiplugins"},
+	CSIMountRootDir:                    "/var/vcap/data/csimountroot",
 }
 
 func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient, clock clock.Clock) (executor.Client, grouper.Members, error) {
@@ -274,8 +274,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
-	driverConfig.CsiPaths = config.CsiPaths
-	driverConfig.CsiMountRootDir = config.CsiMountRootDir
+	driverConfig.CSIPaths = config.CSIPaths
+	driverConfig.CSIMountRootDir = config.CSIMountRootDir
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
