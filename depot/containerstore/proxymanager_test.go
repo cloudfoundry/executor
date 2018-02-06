@@ -27,7 +27,7 @@ var _ = Describe("ProxyManager", func() {
 		proxyConfigDir     string
 		proxyDir           string
 		configPath         string
-		rotatingCredChan   chan struct{}
+		rotatingCredChan   chan containerstore.Credential
 		container          executor.Container
 		listenerConfigFile string
 		proxyConfigFile    string
@@ -61,7 +61,7 @@ var _ = Describe("ProxyManager", func() {
 
 		logger = lagertest.NewTestLogger("proxymanager")
 
-		rotatingCredChan = make(chan struct{}, 1)
+		rotatingCredChan = make(chan containerstore.Credential, 1)
 		refreshDelayMS = 1000 * time.Millisecond
 	})
 
@@ -72,6 +72,10 @@ var _ = Describe("ProxyManager", func() {
 			proxyConfigDir,
 			refreshDelayMS,
 		)
+		Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{
+			Cert: "some-cert",
+			Key:  "some-key",
+		}))
 	})
 
 	AfterEach(func() {
@@ -95,10 +99,6 @@ var _ = Describe("ProxyManager", func() {
 				runner ifrit.Runner
 			)
 
-			BeforeEach(func() {
-				rotatingCredChan = make(chan struct{})
-			})
-
 			JustBeforeEach(func() {
 				var err error
 				runner, err = proxyManager.Runner(logger, container, rotatingCredChan)
@@ -115,8 +115,8 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("continues to read from the rotatingCredChannel", func() {
-				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
-				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
+				Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{}))
+				Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{}))
 			})
 
 			Context("when signaled", func() {
@@ -357,8 +357,8 @@ var _ = Describe("ProxyManager", func() {
 			chain := listener.FilterChains[0]
 			certs := chain.TLSContext.CommonTLSContext.TLSCertificates
 			Expect(certs).To(ConsistOf(envoy.TLSCertificate{
-				CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
-				PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
+				CertificateChain: envoy.DataSource{InlineString: "some-cert"},
+				PrivateKey:       envoy.DataSource{InlineString: "some-key"},
 			}))
 			Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 
@@ -416,8 +416,8 @@ var _ = Describe("ProxyManager", func() {
 				chain := listener.FilterChains[0]
 				certs := chain.TLSContext.CommonTLSContext.TLSCertificates
 				Expect(certs).To(ConsistOf(envoy.TLSCertificate{
-					CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
-					PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
+					CertificateChain: envoy.DataSource{InlineString: "some-cert"},
+					PrivateKey:       envoy.DataSource{InlineString: "some-key"},
 				}))
 				Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 
@@ -438,8 +438,8 @@ var _ = Describe("ProxyManager", func() {
 				chain = listener.FilterChains[0]
 				certs = chain.TLSContext.CommonTLSContext.TLSCertificates
 				Expect(certs).To(ConsistOf(envoy.TLSCertificate{
-					CertificateChain: envoy.File{Filename: "/etc/cf-instance-credentials/instance.crt"},
-					PrivateKey:       envoy.File{Filename: "/etc/cf-instance-credentials/instance.key"},
+					CertificateChain: envoy.DataSource{InlineString: "some-cert"},
+					PrivateKey:       envoy.DataSource{InlineString: "some-key"},
 				}))
 				Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
 
@@ -530,19 +530,6 @@ var _ = Describe("ProxyManager", func() {
 				err = yaml.Unmarshal(data, &initialListenerConfig)
 				Expect(err).NotTo(HaveOccurred())
 			})
-
-			It("changes the listener config stat prefix", func() {
-				Eventually(rotatingCredChan).Should(BeSent(struct{}{}))
-
-				Eventually(func() []envoy.Resource {
-					data, err := ioutil.ReadFile(listenerConfigFile)
-					Expect(err).NotTo(HaveOccurred())
-					var listenerConfig envoy.ListenerConfig
-					err = yaml.Unmarshal(data, &listenerConfig)
-					Expect(err).NotTo(HaveOccurred())
-					return listenerConfig.Resources
-				}).ShouldNot(Equal(initialListenerConfig.Resources))
-			})
 		})
 
 		Context("when creds are not rotated", func() {
@@ -578,7 +565,6 @@ var _ = Describe("ProxyManager", func() {
 				runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
 				Expect(proxyRunnerErr).NotTo(HaveOccurred())
 				containerProcess = ifrit.Background(runner)
-				rotatingCredChan <- struct{}{}
 				Eventually(containerProcess.Ready()).Should(BeClosed())
 				containerProcess.Signal(os.Interrupt)
 			})

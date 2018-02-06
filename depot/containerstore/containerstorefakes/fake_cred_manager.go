@@ -28,7 +28,7 @@ type FakeCredManager struct {
 		result2 []executor.EnvironmentVariable
 		result3 error
 	}
-	RunnerStub        func(lager.Logger, executor.Container) (ifrit.Runner, <-chan struct{})
+	RunnerStub        func(lager.Logger, executor.Container) (ifrit.Runner, <-chan containerstore.Credential)
 	runnerMutex       sync.RWMutex
 	runnerArgsForCall []struct {
 		arg1 lager.Logger
@@ -36,11 +36,11 @@ type FakeCredManager struct {
 	}
 	runnerReturns struct {
 		result1 ifrit.Runner
-		result2 <-chan struct{}
+		result2 <-chan containerstore.Credential
 	}
 	runnerReturnsOnCall map[int]struct {
 		result1 ifrit.Runner
-		result2 <-chan struct{}
+		result2 <-chan containerstore.Credential
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -101,7 +101,7 @@ func (fake *FakeCredManager) CreateCredDirReturnsOnCall(i int, result1 []garden.
 	}{result1, result2, result3}
 }
 
-func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) (ifrit.Runner, <-chan struct{}) {
+func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) (ifrit.Runner, <-chan containerstore.Credential) {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
 	fake.runnerArgsForCall = append(fake.runnerArgsForCall, struct {
@@ -131,25 +131,25 @@ func (fake *FakeCredManager) RunnerArgsForCall(i int) (lager.Logger, executor.Co
 	return fake.runnerArgsForCall[i].arg1, fake.runnerArgsForCall[i].arg2
 }
 
-func (fake *FakeCredManager) RunnerReturns(result1 ifrit.Runner, result2 <-chan struct{}) {
+func (fake *FakeCredManager) RunnerReturns(result1 ifrit.Runner, result2 <-chan containerstore.Credential) {
 	fake.RunnerStub = nil
 	fake.runnerReturns = struct {
 		result1 ifrit.Runner
-		result2 <-chan struct{}
+		result2 <-chan containerstore.Credential
 	}{result1, result2}
 }
 
-func (fake *FakeCredManager) RunnerReturnsOnCall(i int, result1 ifrit.Runner, result2 <-chan struct{}) {
+func (fake *FakeCredManager) RunnerReturnsOnCall(i int, result1 ifrit.Runner, result2 <-chan containerstore.Credential) {
 	fake.RunnerStub = nil
 	if fake.runnerReturnsOnCall == nil {
 		fake.runnerReturnsOnCall = make(map[int]struct {
 			result1 ifrit.Runner
-			result2 <-chan struct{}
+			result2 <-chan containerstore.Credential
 		})
 	}
 	fake.runnerReturnsOnCall[i] = struct {
 		result1 ifrit.Runner
-		result2 <-chan struct{}
+		result2 <-chan containerstore.Credential
 	}{result1, result2}
 }
 

@@ -10,13 +10,13 @@ type Filter struct {
 	Config Config `yaml:"config"`
 }
 
-type File struct {
-	Filename string `yaml:"filename"`
+type DataSource struct {
+	InlineString string `yaml:"inline_string"`
 }
 
 type TLSCertificate struct {
-	CertificateChain File `yaml:"certificate_chain"`
-	PrivateKey       File `yaml:"private_key"`
+	CertificateChain DataSource `yaml:"certificate_chain"`
+	PrivateKey       DataSource `yaml:"private_key"`
 }
 
 type CommonTLSContext struct {

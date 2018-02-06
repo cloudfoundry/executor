@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
-	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	yaml "gopkg.in/yaml.v2"
 
@@ -39,7 +37,7 @@ var (
 	SupportedCipherSuites = "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"
 )
 
-var dummyRunner = func(credRotatedChan <-chan struct{}) ifrit.Runner {
+var dummyRunner = func(credRotatedChan <-chan Credential) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		for {
@@ -56,7 +54,7 @@ var dummyRunner = func(credRotatedChan <-chan struct{}) ifrit.Runner {
 type ProxyManager interface {
 	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
 	BindMounts(lager.Logger, executor.Container) ([]garden.BindMount, error)
-	Runner(lager.Logger, executor.Container, <-chan struct{}) (ProxyRunner, error)
+	Runner(lager.Logger, executor.Container, <-chan Credential) (ProxyRunner, error)
 }
 
 //go:generate counterfeiter -o containerstorefakes/fake_proxyrunner.go . ProxyRunner
@@ -87,7 +85,7 @@ func (p *noopProxyManager) ProxyPorts(lager.Logger, *executor.Container) ([]exec
 	return nil, nil
 }
 
-func (p *noopProxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) (ProxyRunner, error) {
+func (p *noopProxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ProxyRunner, error) {
 	return &proxyRunner{
 		Runner: dummyRunner(credRotatedChan),
 	}, nil
@@ -177,7 +175,7 @@ func (p *proxyManager) ProxyPorts(logger lager.Logger, container *executor.Conta
 	return proxyPortMapping, extraPorts
 }
 
-func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan struct{}) (ProxyRunner, error) {
+func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ProxyRunner, error) {
 	if !container.EnableContainerProxy {
 		return &proxyRunner{
 			Runner: dummyRunner(credRotatedChan),
@@ -215,16 +213,28 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 				return err
 			}
 
-			listenerConfig, err := generateListenerConfig(logger, container)
-			if err != nil {
-				logger.Error("failed-generating-initial-proxy-listener-config", err)
-				return err
-			}
+			select {
+			case creds := <-credRotatedChan:
+				logger = logger.Session("updating-proxy-listener-config")
+				logger.Debug("started")
 
-			err = writeListenerConfig(listenerConfig, listenerConfigPath)
-			if err != nil {
-				logger.Error("failed-writing-initial-proxy-listener-config", err)
-				return err
+				listenerConfig, err := generateListenerConfig(logger, container, creds)
+				if err != nil {
+					logger.Error("failed-generating-initial-proxy-listener-config", err)
+					return err
+				}
+
+				err = writeListenerConfig(listenerConfig, listenerConfigPath)
+				if err != nil {
+					logger.Error("failed-writing-initial-proxy-listener-config", err)
+					return err
+				}
+				logger.Debug("completed")
+			case signal := <-signals:
+				logger.Info("signaled", lager.Data{"signal": signal.String()})
+				configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
+				p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
+				return os.RemoveAll(configPath)
 			}
 
 			close(ready)
@@ -232,11 +242,11 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 
 			for {
 				select {
-				case <-credRotatedChan:
+				case creds := <-credRotatedChan:
 					logger = logger.Session("updating-proxy-listener-config")
 					logger.Debug("started")
 
-					listenerConfig, err := generateListenerConfig(logger, container)
+					listenerConfig, err := generateListenerConfig(logger, container, creds)
 					if err != nil {
 						logger.Error("failed-generating-proxy-listener-config", err)
 						return err
@@ -323,19 +333,12 @@ func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error
 	return os.Rename(tmpPath, path)
 }
 
-func generateListenerConfig(logger lager.Logger, container executor.Container) (envoy.ListenerConfig, error) {
+func generateListenerConfig(logger lager.Logger, container executor.Container, creds Credential) (envoy.ListenerConfig, error) {
 	resources := []envoy.Resource{}
 
 	for index, portMap := range container.Ports {
 		listenerName := TcpProxy
-		containerMountPath := "/etc/cf-instance-credentials"
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-
-		newUUID, err := uuid.NewV4()
-		if err != nil {
-			logger.Error("failed-to-create-uuid-for-stat-prefix", err)
-			return envoy.ListenerConfig{}, err
-		}
 
 		resources = append(resources, envoy.Resource{
 			Type:    "type.googleapis.com/envoy.api.v2.Listener",
@@ -346,7 +349,7 @@ func generateListenerConfig(logger lager.Logger, container executor.Container) (
 					envoy.Filter{
 						Name: listenerName,
 						Config: envoy.Config{
-							StatPrefix: IngressListener + "_" + newUUID.String(),
+							StatPrefix: fmt.Sprintf("%d-stats", index),
 							Cluster:    clusterName,
 						},
 					},
@@ -358,8 +361,8 @@ func generateListenerConfig(logger lager.Logger, container executor.Container) (
 						},
 						TLSCertificates: []envoy.TLSCertificate{
 							envoy.TLSCertificate{
-								CertificateChain: envoy.File{Filename: path.Join(containerMountPath, "instance.crt")},
-								PrivateKey:       envoy.File{Filename: path.Join(containerMountPath, "instance.key")},
+								CertificateChain: envoy.DataSource{InlineString: creds.Cert},
+								PrivateKey:       envoy.DataSource{InlineString: creds.Key},
 							},
 						},
 					},

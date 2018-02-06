@@ -1,6 +1,7 @@
 package containerstore
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -30,10 +31,15 @@ const (
 	CredCreationFailedCount       = "CredCreationFailedCount"
 )
 
+type Credential struct {
+	Cert string
+	Key  string
+}
+
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
-	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan struct{})
+	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential)
 }
 
 type noopManager struct{}
@@ -46,7 +52,7 @@ func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Cont
 	return nil, nil, nil
 }
 
-func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan struct{}) {
+func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential) {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		<-signals
@@ -99,15 +105,15 @@ func calculateCredentialRotationPeriod(validityPeriod time.Duration) time.Durati
 	}
 }
 
-func (c *credManager) Runner(logger lager.Logger, container executor.Container) (ifrit.Runner, <-chan struct{}) {
-	rotatingCred := make(chan struct{}, 1)
+func (c *credManager) Runner(logger lager.Logger, container executor.Container) (ifrit.Runner, <-chan Credential) {
+	rotatingCred := make(chan Credential, 1)
 	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
 		defer logger.Info("finished")
 
 		start := c.clock.Now()
-		err := c.generateCreds(logger, container)
+		creds, err := c.generateCreds(logger, container)
 		duration := c.clock.Since(start)
 		if err != nil {
 			logger.Error("failed-to-generate-credentials", err)
@@ -123,6 +129,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 
 		close(ready)
 		logger.Info("started")
+		rotatingCred <- creds
 
 		for {
 			select {
@@ -130,7 +137,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				regenLogger := logger.Session("regenerating-cert-and-key")
 				regenLogger.Debug("started")
 				start := c.clock.Now()
-				err = c.generateCreds(regenLogger, container)
+				creds, err := c.generateCreds(regenLogger, container)
 				duration := c.clock.Since(start)
 				if err != nil {
 					regenLogger.Error("failed-to-generate-credentials", err)
@@ -142,7 +149,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 
 				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
 				regenCertTimer.Reset(rotationDuration)
-				rotatingCred <- struct{}{}
+				rotatingCred <- creds
 				regenLogger.Debug("completed")
 			case signal := <-signals:
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
@@ -184,7 +191,7 @@ const (
 	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
-func (c *credManager) generateCreds(logger lager.Logger, container executor.Container) error {
+func (c *credManager) generateCreds(logger lager.Logger, container executor.Container) (Credential, error) {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -192,7 +199,7 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	logger.Debug("generating-private-key")
 	privateKey, err := rsa.GenerateKey(c.entropyReader, 2048)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 	logger.Debug("generated-private-key")
 
@@ -212,7 +219,7 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	guid, err := uuid.NewV4()
 	if err != nil {
 		logger.Error("failed-to-generate-uuid", err)
-		return err
+		return Credential{}, err
 	}
 	logger.Debug("generated-serial-number")
 
@@ -222,7 +229,7 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	logger.Debug("generating-certificate")
 	certBytes, err := x509.CreateCertificate(c.entropyReader, template, c.CaCert, privateKey.Public(), c.privateKey)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 	logger.Debug("generated-certificate")
 
@@ -234,48 +241,60 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
 	instanceKey, err := os.Create(tmpInstanceKeyPath)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
 	defer instanceKey.Close()
 
-	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, instanceKey)
+	var keyBuf bytes.Buffer
+	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, io.MultiWriter(instanceKey, &keyBuf))
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
 	certificate, err := os.Create(tmpCertificatePath)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
-
 	defer certificate.Close()
-	err = pemEncode(certBytes, certificatePEMBlockType, certificate)
+
+	var certificateBuf bytes.Buffer
+	certificateWriter := io.MultiWriter(certificate, &certificateBuf)
+	err = pemEncode(certBytes, certificatePEMBlockType, certificateWriter)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
-	err = pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificate)
+	err = pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificateWriter)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
 	err = instanceKey.Close()
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
 	err = certificate.Close()
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
 	err = os.Rename(tmpInstanceKeyPath, instanceKeyPath)
 	if err != nil {
-		return err
+		return Credential{}, err
 	}
 
-	return os.Rename(tmpCertificatePath, certificatePath)
+	err = os.Rename(tmpCertificatePath, certificatePath)
+	if err != nil {
+		return Credential{}, err
+	}
+
+	creds := Credential{
+		Cert: certificateBuf.String(),
+		Key:  keyBuf.String(),
+	}
+	return creds, nil
 }
 
 func (c *credManager) removeCreds(logger lager.Logger, container executor.Container) error {

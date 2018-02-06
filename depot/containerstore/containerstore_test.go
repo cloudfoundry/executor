@@ -1342,7 +1342,7 @@ var _ = Describe("Container Store", func() {
 					cmFinishSetup         chan struct{}
 					pmFinishSetup         chan struct{}
 					containerRunnerCalled chan struct{}
-					rotatingCredChan      chan struct{}
+					rotatingCredChan      chan containerstore.Credential
 					ldsPort               uint16
 					credManagerBindMount  []garden.BindMount
 				)
@@ -1350,7 +1350,7 @@ var _ = Describe("Container Store", func() {
 				BeforeEach(func() {
 					cmFinishSetup = make(chan struct{}, 1)
 					pmFinishSetup = make(chan struct{}, 1)
-					rotatingCredChan = make(chan struct{})
+					rotatingCredChan = make(chan containerstore.Credential)
 					containerRunnerCalled = make(chan struct{})
 					ldsPort = 65535
 

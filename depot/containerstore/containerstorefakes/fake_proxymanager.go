@@ -39,12 +39,12 @@ type FakeProxyManager struct {
 		result1 []garden.BindMount
 		result2 error
 	}
-	RunnerStub        func(lager.Logger, executor.Container, <-chan struct{}) (containerstore.ProxyRunner, error)
+	RunnerStub        func(lager.Logger, executor.Container, <-chan containerstore.Credential) (containerstore.ProxyRunner, error)
 	runnerMutex       sync.RWMutex
 	runnerArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 executor.Container
-		arg3 <-chan struct{}
+		arg3 <-chan containerstore.Credential
 	}
 	runnerReturns struct {
 		result1 containerstore.ProxyRunner
@@ -162,13 +162,13 @@ func (fake *FakeProxyManager) BindMountsReturnsOnCall(i int, result1 []garden.Bi
 	}{result1, result2}
 }
 
-func (fake *FakeProxyManager) Runner(arg1 lager.Logger, arg2 executor.Container, arg3 <-chan struct{}) (containerstore.ProxyRunner, error) {
+func (fake *FakeProxyManager) Runner(arg1 lager.Logger, arg2 executor.Container, arg3 <-chan containerstore.Credential) (containerstore.ProxyRunner, error) {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
 	fake.runnerArgsForCall = append(fake.runnerArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 executor.Container
-		arg3 <-chan struct{}
+		arg3 <-chan containerstore.Credential
 	}{arg1, arg2, arg3})
 	fake.recordInvocation("Runner", []interface{}{arg1, arg2, arg3})
 	fake.runnerMutex.Unlock()
@@ -187,7 +187,7 @@ func (fake *FakeProxyManager) RunnerCallCount() int {
 	return len(fake.runnerArgsForCall)
 }
 
-func (fake *FakeProxyManager) RunnerArgsForCall(i int) (lager.Logger, executor.Container, <-chan struct{}) {
+func (fake *FakeProxyManager) RunnerArgsForCall(i int) (lager.Logger, executor.Container, <-chan containerstore.Credential) {
 	fake.runnerMutex.RLock()
 	defer fake.runnerMutex.RUnlock()
 	return fake.runnerArgsForCall[i].arg1, fake.runnerArgsForCall[i].arg2, fake.runnerArgsForCall[i].arg3
