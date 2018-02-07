@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -346,6 +347,9 @@ var _ = Describe("CredManager", func() {
 						})
 
 						It("rotates the cert atomically", func() {
+							if runtime.GOOS == "windows" {
+								Skip("skipping test because running on Windows")
+							}
 							before := string(certBefore)
 							var after string
 							// similar to eventually but faster, to ensure we sample the cert
@@ -370,6 +374,9 @@ var _ = Describe("CredManager", func() {
 						})
 
 						It("rotates the key atomically", func() {
+							if runtime.GOOS == "windows" {
+								Skip("skipping test because running on Windows")
+							}
 							before := string(keyBefore)
 							var after string
 							// similar to eventually but faster, to ensure we sample the key
