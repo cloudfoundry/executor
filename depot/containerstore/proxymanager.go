@@ -283,7 +283,7 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 			ConnectionTimeout: TimeOut,
 			Type:              Static,
 			LbPolicy:          RoundRobin,
-			Hosts:             []envoy.Address{envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: portMap.ContainerPort}}},
+			Hosts:             []envoy.Address{envoy.Address{SocketAddress: envoy.SocketAddress{Address: container.InternalIP, PortValue: portMap.ContainerPort}}},
 		})
 	}
 

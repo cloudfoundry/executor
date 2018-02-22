@@ -42,7 +42,7 @@ var _ = Describe("ProxyManager", func() {
 
 		container = executor.Container{
 			Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
-			InternalIP: "127.0.0.1",
+			InternalIP: "10.0.0.1",
 			RunInfo: executor.RunInfo{
 				EnableContainerProxy: true,
 			},
@@ -323,7 +323,7 @@ var _ = Describe("ProxyManager", func() {
 			Expect(cluster.Type).To(Equal("STATIC"))
 			Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
 			Expect(cluster.Hosts).To(Equal([]envoy.Address{
-				{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 8080}},
+				{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 			}))
 
 			Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{
@@ -477,7 +477,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(cluster.Type).To(Equal("STATIC"))
 				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
-					{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 8080}},
+					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 				}))
 
 				cluster = proxyConfig.StaticResources.Clusters[1]
@@ -486,7 +486,7 @@ var _ = Describe("ProxyManager", func() {
 				Expect(cluster.Type).To(Equal("STATIC"))
 				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
-					{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 2222}},
+					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 2222}},
 				}))
 
 				Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{
