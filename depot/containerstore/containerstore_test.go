@@ -539,7 +539,6 @@ var _ = Describe("Container Store", func() {
 			It("emits metrics after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationDuration))
 				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationSucceededDuration))
 			})
 
