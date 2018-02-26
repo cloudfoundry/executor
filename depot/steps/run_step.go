@@ -28,7 +28,6 @@ type runStep struct {
 	externalIP               string
 	internalIP               string
 	portMappings             []executor.PortMapping
-	exportNetworkEnvVars     bool
 	clock                    clock.Clock
 	gracefulShutdownInterval time.Duration
 	suppressExitStatusCode   bool
@@ -51,7 +50,6 @@ func NewRun(
 	externalIP string,
 	internalIP string,
 	portMappings []executor.PortMapping,
-	exportNetworkEnvVars bool,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
 	suppressExitStatusCode bool,
@@ -64,7 +62,6 @@ func NewRun(
 		externalIP,
 		internalIP,
 		portMappings,
-		exportNetworkEnvVars,
 		clock,
 		gracefulShutdownInterval,
 		suppressExitStatusCode,
@@ -81,7 +78,6 @@ func NewRunWithSidecar(
 	externalIP string,
 	internalIP string,
 	portMappings []executor.PortMapping,
-	exportNetworkEnvVars bool,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
 	suppressExitStatusCode bool,
@@ -93,15 +89,14 @@ func NewRunWithSidecar(
 		sidecar = Sidecar{} // run in the main container
 	}
 	return &runStep{
-		container:            container,
-		model:                model,
-		streamer:             streamer,
-		logger:               logger,
-		externalIP:           externalIP,
-		internalIP:           internalIP,
-		portMappings:         portMappings,
-		exportNetworkEnvVars: exportNetworkEnvVars,
-		clock:                clock,
+		container:    container,
+		model:        model,
+		streamer:     streamer,
+		logger:       logger,
+		externalIP:   externalIP,
+		internalIP:   internalIP,
+		portMappings: portMappings,
+		clock:        clock,
 		gracefulShutdownInterval: gracefulShutdownInterval,
 		suppressExitStatusCode:   suppressExitStatusCode,
 		sidecar:                  sidecar,
@@ -114,9 +109,7 @@ func (step *runStep) Perform() error {
 
 	envVars := convertEnvironmentVariables(step.model.Env)
 
-	if step.exportNetworkEnvVars {
-		envVars = append(envVars, step.networkingEnvVars()...)
-	}
+	envVars = append(envVars, step.networkingEnvVars()...)
 
 	cancel := step.Cancelled()
 

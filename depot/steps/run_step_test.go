@@ -35,7 +35,6 @@ var _ = Describe("RunAction", func() {
 		fileDescriptorLimit, processesLimit uint64
 		externalIP, internalIP              string
 		portMappings                        []executor.PortMapping
-		exportNetworkEnvVars                bool
 		fakeClock                           *fakeclock.FakeClock
 		suppressExitStatusCode              bool
 
@@ -86,7 +85,6 @@ var _ = Describe("RunAction", func() {
 		externalIP = "external-ip"
 		internalIP = "internal-ip"
 		portMappings = nil
-		exportNetworkEnvVars = false
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
 
@@ -106,7 +104,6 @@ var _ = Describe("RunAction", func() {
 			externalIP,
 			internalIP,
 			portMappings,
-			exportNetworkEnvVars,
 			fakeClock,
 			gracefulShutdownInterval,
 			suppressExitStatusCode,
@@ -282,34 +279,49 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Context("CF_INSTANCE_* networking env vars", func() {
-			Context("when exportNetworkEnvVars is set to true", func() {
+			It("sets CF_INSTANCE_IP on the container", func() {
+				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+				Expect(spec.Env).To(ContainElement("CF_INSTANCE_IP=external-ip"))
+			})
+
+			It("sets CF_INSTANCE_INTERNAL_IP on the container", func() {
+				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+				Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IP=internal-ip"))
+			})
+
+			Context("when the container has port mappings configured", func() {
 				BeforeEach(func() {
-					exportNetworkEnvVars = true
+					portMappings = []executor.PortMapping{
+						{HostPort: 1, ContainerPort: 2},
+						{HostPort: 3, ContainerPort: 4},
+					}
 				})
 
-				It("sets CF_INSTANCE_IP on the container", func() {
+				It("sets CF_INSTANCE_* networking env vars", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Expect(spec.Env).To(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT=1"))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
+
+					var cfPortsValue string
+					for _, env := range spec.Env {
+						if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
+							cfPortsValue = strings.Split(env, "=")[1]
+							break
+						}
+					}
+					Expect(cfPortsValue).To(MatchJSON("[{\"internal\":2,\"external\":1},{\"internal\":4,\"external\":3}]"))
 				})
 
-				It("sets CF_INSTANCE_INTERNAL_IP on the container", func() {
-					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IP=internal-ip"))
-				})
-
-				Context("when the container has port mappings configured", func() {
+				Context("when the container has proxy port mappings configured", func() {
 					BeforeEach(func() {
 						portMappings = []executor.PortMapping{
-							{HostPort: 1, ContainerPort: 2},
-							{HostPort: 3, ContainerPort: 4},
+							{HostPort: 1, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
+							{HostPort: 3, ContainerPort: 4, ContainerTLSProxyPort: 7, HostTLSProxyPort: 8},
 						}
 					})
 
-					It("sets CF_INSTANCE_* networking env vars", func() {
+					It("includes the tls_proxy_ports in CF_INSTANCE_PORTS", func() {
 						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT=1"))
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR=external-ip:1"))
-
 						var cfPortsValue string
 						for _, env := range spec.Env {
 							if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
@@ -317,28 +329,8 @@ var _ = Describe("RunAction", func() {
 								break
 							}
 						}
-						Expect(cfPortsValue).To(MatchJSON("[{\"internal\":2,\"external\":1},{\"internal\":4,\"external\":3}]"))
-					})
 
-					Context("when the container has proxy port mappings configured", func() {
-						BeforeEach(func() {
-							portMappings = []executor.PortMapping{
-								{HostPort: 1, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
-								{HostPort: 3, ContainerPort: 4, ContainerTLSProxyPort: 7, HostTLSProxyPort: 8},
-							}
-						})
-
-						It("includes the tls_proxy_ports in CF_INSTANCE_PORTS", func() {
-							_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-							var cfPortsValue string
-							for _, env := range spec.Env {
-								if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
-									cfPortsValue = strings.Split(env, "=")[1]
-									break
-								}
-							}
-
-							expectedPortsValue := `[{
+						expectedPortsValue := `[{
 							"internal":2,
 							"external":1,
 							"internal_tls_proxy":5,
@@ -351,39 +343,27 @@ var _ = Describe("RunAction", func() {
 							"external_tls_proxy":8
 					  }]`
 
-							var aval []interface{}
-							var eval []interface{}
+						var aval []interface{}
+						var eval []interface{}
 
-							json.Unmarshal([]byte(cfPortsValue), &aval)
-							json.Unmarshal([]byte(expectedPortsValue), &eval)
-							Expect(eval).To(ContainElement(aval[0]))
-							Expect(eval).To(ContainElement(aval[1]))
-						})
-					})
-				})
-
-				Context("when the container does not have any port mappings configured", func() {
-					BeforeEach(func() {
-						portMappings = []executor.PortMapping{}
-					})
-
-					It("sets all port-related env vars to the empty string", func() {
-						_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT="))
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR="))
-						Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS=[]"))
+						json.Unmarshal([]byte(cfPortsValue), &aval)
+						json.Unmarshal([]byte(expectedPortsValue), &eval)
+						Expect(eval).To(ContainElement(aval[0]))
+						Expect(eval).To(ContainElement(aval[1]))
 					})
 				})
 			})
 
-			Context("when exportNetworkEnvVars is set to false", func() {
+			Context("when the container does not have any port mappings configured", func() {
 				BeforeEach(func() {
-					exportNetworkEnvVars = false
+					portMappings = []executor.PortMapping{}
 				})
 
-				It("does not set CF_INSTANCE_IP on the container", func() {
+				It("sets all port-related env vars to the empty string", func() {
 					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
-					Expect(spec.Env).NotTo(ContainElement("CF_INSTANCE_IP=external-ip"))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORT="))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_ADDR="))
+					Expect(spec.Env).To(ContainElement("CF_INSTANCE_PORTS=[]"))
 				})
 			})
 		})

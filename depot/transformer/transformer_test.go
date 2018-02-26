@@ -312,7 +312,14 @@ var _ = Describe("Transformer", func() {
 						"-c",
 						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 					},
-					Env: []string{},
+
+					Env: []string{
+						"CF_INSTANCE_IP=",
+						"CF_INSTANCE_INTERNAL_IP=",
+						"CF_INSTANCE_PORT=0",
+						"CF_INSTANCE_ADDR=:0",
+						"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
+					},
 					Limits: garden.ResourceLimits{
 						Nofile: proto.Uint64(1024),
 					},
@@ -359,7 +366,13 @@ var _ = Describe("Transformer", func() {
 							"-c",
 							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 						},
-						Env: []string{},
+						Env: []string{
+							"CF_INSTANCE_IP=",
+							"CF_INSTANCE_INTERNAL_IP=",
+							"CF_INSTANCE_PORT=0",
+							"CF_INSTANCE_ADDR=:0",
+							"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
+						},
 						Limits: garden.ResourceLimits{
 							Nofile: proto.Uint64(1024),
 						},
@@ -613,7 +626,13 @@ var _ = Describe("Transformer", func() {
 									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
 									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
 								},
-								Env: []string{},
+								Env: []string{
+									"CF_INSTANCE_IP=",
+									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_PORT=",
+									"CF_INSTANCE_ADDR=",
+									"CF_INSTANCE_PORTS=[]",
+								},
 								Limits: garden.ResourceLimits{
 									Nofile: proto.Uint64(1024),
 								},
@@ -673,7 +692,13 @@ var _ = Describe("Transformer", func() {
 									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
 									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
 								},
-								Env: []string{},
+								Env: []string{
+									"CF_INSTANCE_IP=",
+									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_PORT=",
+									"CF_INSTANCE_ADDR=",
+									"CF_INSTANCE_PORTS=[]",
+								},
 								Limits: garden.ResourceLimits{
 									Nofile: proto.Uint64(1024),
 								},
@@ -707,7 +732,13 @@ var _ = Describe("Transformer", func() {
 								fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
 								fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
 							},
-							Env: []string{},
+							Env: []string{
+								"CF_INSTANCE_IP=",
+								"CF_INSTANCE_INTERNAL_IP=",
+								"CF_INSTANCE_PORT=",
+								"CF_INSTANCE_ADDR=",
+								"CF_INSTANCE_PORTS=[]",
+							},
 							Limits: garden.ResourceLimits{
 								Nofile: proto.Uint64(1024),
 							},
@@ -745,7 +776,13 @@ var _ = Describe("Transformer", func() {
 									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
 									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
 								},
-								Env: []string{},
+								Env: []string{
+									"CF_INSTANCE_IP=",
+									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_PORT=",
+									"CF_INSTANCE_ADDR=",
+									"CF_INSTANCE_PORTS=[]",
+								},
 								Limits: garden.ResourceLimits{
 									Nofile: proto.Uint64(1024),
 								},

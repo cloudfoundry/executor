@@ -96,7 +96,6 @@ type ExecutorConfig struct {
 	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
-	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"`
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
 	GardenHealthcheckEmissionInterval  durationjson.Duration `json:"garden_healthcheck_emission_interval,omitempty"`
@@ -163,7 +162,6 @@ var DefaultConfiguration = ExecutorConfig{
 	SkipCertVerify:                     false,
 	HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
 	UnhealthyMonitoringInterval:        durationjson.Duration(500 * time.Millisecond),
-	ExportNetworkEnvVars:               false,
 	ContainerOwnerName:                 "executor",
 	HealthCheckContainerOwnerName:      "executor-health-check",
 	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
@@ -243,7 +241,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		downloadRateLimiter,
 		maxConcurrentUploads,
 		uploader,
-		config.ExportNetworkEnvVars,
 		time.Duration(config.HealthyMonitoringInterval),
 		time.Duration(config.UnhealthyMonitoringInterval),
 		time.Duration(config.GracefulShutdownInterval),
@@ -492,7 +489,6 @@ func initializeTransformer(
 	downloadRateLimiter chan struct{},
 	maxConcurrentUploads uint,
 	uploader uploader.Uploader,
-	exportNetworkEnvVars bool,
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
@@ -507,10 +503,6 @@ func initializeTransformer(
 ) transformer.Transformer {
 	var options []transformer.Option
 	compressor := compressor.NewTgz()
-
-	if exportNetworkEnvVars {
-		options = append(options, transformer.WithExportedNetworkEnvVars())
-	}
 
 	options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
 

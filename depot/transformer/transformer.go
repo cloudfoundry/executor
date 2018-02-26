@@ -47,14 +47,13 @@ type Config struct {
 }
 
 type transformer struct {
-	cachedDownloader     cacheddownloader.CachedDownloader
-	uploader             uploader.Uploader
-	compressor           compressor.Compressor
-	downloadLimiter      chan struct{}
-	uploadLimiter        chan struct{}
-	tempDir              string
-	exportNetworkEnvVars bool
-	clock                clock.Clock
+	cachedDownloader cacheddownloader.CachedDownloader
+	uploader         uploader.Uploader
+	compressor       compressor.Compressor
+	downloadLimiter  chan struct{}
+	uploadLimiter    chan struct{}
+	tempDir          string
+	clock            clock.Clock
 
 	sidecarRootFS               string
 	useDeclarativeHealthCheck   bool
@@ -97,12 +96,6 @@ func WithPostSetupHook(user string, hook []string) Option {
 	return func(t *transformer) {
 		t.postSetupUser = user
 		t.postSetupHook = hook
-	}
-}
-
-func WithExportedNetworkEnvVars() Option {
-	return func(t *transformer) {
-		t.exportNetworkEnvVars = true
 	}
 }
 
@@ -163,7 +156,6 @@ func (t *transformer) StepFor(
 			externalIP,
 			internalIP,
 			ports,
-			t.exportNetworkEnvVars,
 			t.clock,
 			t.gracefulShutdownInterval,
 			suppressExitStatusCode,
@@ -402,7 +394,6 @@ func (t *transformer) StepsRunner(
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
-			t.exportNetworkEnvVars,
 			t.clock,
 			t.gracefulShutdownInterval,
 			suppressExitStatusCode,
@@ -592,7 +583,6 @@ func (t *transformer) createCheck(
 		container.ExternalIP,
 		container.InternalIP,
 		container.Ports,
-		t.exportNetworkEnvVars,
 		t.clock,
 		t.gracefulShutdownInterval,
 		true,
@@ -774,7 +764,6 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
 		execContainer.Ports,
-		t.exportNetworkEnvVars,
 		t.clock,
 		t.gracefulShutdownInterval,
 		true,
