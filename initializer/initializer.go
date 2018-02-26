@@ -35,6 +35,7 @@ import (
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/systemcerts"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
 	"github.com/google/shlex"
@@ -69,11 +70,11 @@ type CertPoolRetriever interface {
 type systemcertsRetriever struct{}
 
 func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
-	caCertPool, err := x509.SystemCertPool()
-	if err != nil {
-		caCertPool = x509.NewCertPool()
+	caCertPool := systemcerts.SystemRootsPool()
+	if caCertPool == nil {
+		caCertPool = systemcerts.NewCertPool()
 	}
-	return caCertPool
+	return caCertPool.AsX509CertPool()
 }
 
 type ExecutorConfig struct {
