@@ -11,7 +11,6 @@ import (
 	efakes "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	msfake "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -31,7 +30,6 @@ var _ = Describe("StatsReporter", func() {
 		interval           time.Duration
 		fakeClock          *fakeclock.FakeClock
 		fakeExecutorClient *efakes.FakeClient
-		fakeMetricSender   *msfake.FakeMetricSender
 		fakeMetronClient   *mfakes.FakeIngressClient
 
 		metricsResultsChan chan map[string]executor.Metrics
@@ -44,6 +42,17 @@ var _ = Describe("StatsReporter", func() {
 
 	sendResults := func() {
 		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-metrics-guid": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: ""},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: megsToBytes(123),
+					DiskUsageInBytes:   megsToBytes(456),
+					TimeSpentInCPU:     100 * time.Second,
+					MemoryLimitInBytes: megsToBytes(789),
+					DiskLimitInBytes:   megsToBytes(1024),
+				},
+			},
+
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
@@ -77,6 +86,17 @@ var _ = Describe("StatsReporter", func() {
 		}
 
 		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-metrics-guid": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: ""},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: megsToBytes(123),
+					DiskUsageInBytes:   megsToBytes(456),
+					TimeSpentInCPU:     100 * time.Second,
+					MemoryLimitInBytes: megsToBytes(789),
+					DiskLimitInBytes:   megsToBytes(1024),
+				},
+			},
+
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
@@ -109,6 +129,17 @@ var _ = Describe("StatsReporter", func() {
 		}
 
 		metricsResultsChan <- map[string]executor.Metrics{
+			"container-guid-without-metrics-guid": executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Guid: ""},
+				ContainerMetrics: executor.ContainerMetrics{
+					MemoryUsageInBytes: megsToBytes(123),
+					DiskUsageInBytes:   megsToBytes(456),
+					TimeSpentInCPU:     100 * time.Second,
+					MemoryLimitInBytes: megsToBytes(789),
+					DiskLimitInBytes:   megsToBytes(1024),
+				},
+			},
+
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
@@ -144,13 +175,22 @@ var _ = Describe("StatsReporter", func() {
 
 	sendContainers := func() {
 		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-index"},
+			{Guid: "container-guid-with-index"},
+			{Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-metrics-guid"},
 		}
 		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-index"},
+			{Guid: "container-guid-with-index"},
+			{Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-metrics-guid"},
 		}
 		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"}, {Guid: "container-guid-with-index"}, {Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-index"},
+			{Guid: "container-guid-with-index"},
+			{Guid: "container-guid-without-preloaded-rootfs"},
+			{Guid: "container-guid-without-metrics-guid"},
 		}
 	}
 
@@ -174,8 +214,6 @@ var _ = Describe("StatsReporter", func() {
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeExecutorClient = new(efakes.FakeClient)
 		fakeMetronClient = new(mfakes.FakeIngressClient)
-
-		fakeMetricSender = msfake.NewFakeMetricSender()
 
 		metricsResultsChan = make(chan map[string]executor.Metrics, 10)
 		listContainersChan = make(chan []executor.Container, 10)
@@ -357,9 +395,9 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
-			Consistently(func() msfake.ContainerMetric {
-				return fakeMetricSender.GetContainerMetric("")
-			}).Should(BeZero())
+			Consistently(sentMetrics).ShouldNot(ContainElement(WithTransform(func(m events.ContainerMetric) string {
+				return m.GetApplicationId()
+			}, BeEmpty())))
 		})
 
 		Context("and the interval elapses again", func() {
