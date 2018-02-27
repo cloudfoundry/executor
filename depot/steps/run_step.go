@@ -85,9 +85,6 @@ func NewRunWithSidecar(
 	privileged bool,
 ) *runStep {
 	logger = logger.Session("run-step")
-	if privileged {
-		sidecar = Sidecar{} // run in the main container
-	}
 	return &runStep{
 		container:    container,
 		model:        model,

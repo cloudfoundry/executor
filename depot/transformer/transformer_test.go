@@ -239,7 +239,7 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "sh":
+					case "/etc/cf-assets/envoy/envoy":
 						return envoyProcess, nil
 					}
 
@@ -307,10 +307,18 @@ var _ = Describe("Transformer", func() {
 
 				Expect(specs).To(ContainElement(garden.ProcessSpec{
 					ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
-					Path: "sh",
+					Path: "/etc/cf-assets/envoy/envoy",
 					Args: []string{
 						"-c",
-						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+						"/etc/cf-assets/envoy_config/envoy.yaml",
+						"--service-cluster",
+						"proxy-cluster",
+						"--service-node",
+						"proxy-node",
+						"--drain-time-s",
+						"1",
+						"--log-level",
+						"critical",
 					},
 
 					Env: []string{
@@ -351,7 +359,7 @@ var _ = Describe("Transformer", func() {
 					container.Privileged = true
 				})
 
-				It("runs the container proxy in the main container", func() {
+				It("runs the container proxy in a sidecar container", func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					specs := []garden.ProcessSpec{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -360,12 +368,21 @@ var _ = Describe("Transformer", func() {
 					}
 
 					Expect(specs).To(ContainElement(garden.ProcessSpec{
-						ID:   "",
-						Path: "sh",
+						ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
+						Path: "/etc/cf-assets/envoy/envoy",
 						Args: []string{
 							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+							"/etc/cf-assets/envoy_config/envoy.yaml",
+							"--service-cluster",
+							"proxy-cluster",
+							"--service-node",
+							"proxy-node",
+							"--drain-time-s",
+							"1",
+							"--log-level",
+							"critical",
 						},
+
 						Env: []string{
 							"CF_INSTANCE_IP=",
 							"CF_INSTANCE_INTERNAL_IP=",
@@ -375,6 +392,15 @@ var _ = Describe("Transformer", func() {
 						},
 						Limits: garden.ResourceLimits{
 							Nofile: proto.Uint64(1024),
+						},
+						Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+						BindMounts: []garden.BindMount{
+							{
+								SrcPath: "/some/source",
+								DstPath: "/some/destintation",
+								Mode:    garden.BindMountModeRO,
+								Origin:  garden.BindMountOriginHost,
+							},
 						},
 					}))
 				})
@@ -765,9 +791,9 @@ var _ = Describe("Transformer", func() {
 							container.Privileged = true
 						})
 
-						It("runs the healthcheck in the same container", func() {
+						It("runs the healthcheck in a sidecar container", func() {
 							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-								ID:   "",
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
 									"-port=5432",
@@ -785,6 +811,21 @@ var _ = Describe("Transformer", func() {
 								},
 								Limits: garden.ResourceLimits{
 									Nofile: proto.Uint64(1024),
+								},
+								OverrideContainerLimits: &garden.ProcessLimits{},
+								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								BindMounts: []garden.BindMount{
+									{
+										SrcPath: "/some/source",
+										DstPath: "/some/destintation",
+										Mode:    garden.BindMountModeRO,
+										Origin:  garden.BindMountOriginHost,
+									},
+									{
+										Origin:  garden.BindMountOriginHost,
+										SrcPath: declarativeHealthcheckSrcPath,
+										DstPath: transformer.HealthCheckDstPath,
+									},
 								},
 							})))
 						})
