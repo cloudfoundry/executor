@@ -96,6 +96,7 @@ type ExecutorConfig struct {
 	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
+	ExportNetworkEnvVars               bool                  `json:"export_network_env_vars,omitempty"` // DEPRECATED. Kept around for dusts compatability
 	GardenAddr                         string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
 	GardenHealthcheckEmissionInterval  durationjson.Duration `json:"garden_healthcheck_emission_interval,omitempty"`
