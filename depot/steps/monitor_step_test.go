@@ -30,8 +30,6 @@ var _ = Describe("MonitorStep", func() {
 		clock            *fakeclock.FakeClock
 		fakeStreamer     *fake_log_streamer.FakeLogStreamer
 
-		monitorErr string
-
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
 		unhealthyInterval time.Duration
@@ -241,7 +239,6 @@ var _ = Describe("MonitorStep", func() {
 
 					BeforeEach(func() {
 						checkResults <- disaster
-						monitorErr = "healthcheck failed"
 					})
 
 					Context("and the healthy interval passes", func() {
