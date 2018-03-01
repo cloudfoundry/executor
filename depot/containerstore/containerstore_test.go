@@ -37,6 +37,8 @@ import (
 )
 
 var _ = Describe("Container Store", func() {
+	const cellID = "93ae1d34-4f95-4fb1-a283-4bbccac4d0f2"
+
 	var (
 		containerConfig containerstore.ContainerConfig
 		containerStore  containerstore.ContainerStore
@@ -142,6 +144,7 @@ var _ = Describe("Container Store", func() {
 			false,
 			"/var/vcap/packages/healthcheck",
 			proxyManager,
+			cellID,
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
@@ -549,7 +552,7 @@ var _ = Describe("Container Store", func() {
 				Eventually(func() string {
 					_, msg, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
 					return msg
-				}).Should(ContainSubstring("Successfully created container"))
+				}).Should(ContainSubstring(fmt.Sprintf("Cell %s successfully created container for instance %s", cellID, containerGuid)))
 			})
 
 			It("generates container credential directory", func() {
@@ -592,6 +595,7 @@ var _ = Describe("Container Store", func() {
 						true,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
+						cellID,
 					)
 				})
 
@@ -1058,7 +1062,7 @@ var _ = Describe("Container Store", func() {
 
 					Expect(fakeMetronClient.SendAppErrorLogCallCount()).To(Equal(1))
 					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppErrorLogArgsForCall(0)
-					Expect(msg).To(Equal(fmt.Sprintf("Failed to create container: boom!")))
+					Expect(msg).To(Equal(fmt.Sprintf("Cell %s failed to create container for instance %s: boom!", cellID, containerGuid)))
 					Expect(appId).To(Equal(logGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(sourceInstance).To(Equal("1"))
@@ -1151,6 +1155,7 @@ var _ = Describe("Container Store", func() {
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
+						cellID,
 					)
 
 					portMapping := []executor.PortMapping{
@@ -1945,7 +1950,7 @@ var _ = Describe("Container Store", func() {
 				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
 				Expect(appId).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
-				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
 				Expect(sourceInstance).To(Equal("1"))
 			})
 		})
@@ -2141,13 +2146,13 @@ var _ = Describe("Container Store", func() {
 					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
 					Expect(appId).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
-					Expect(msg).To(Equal("Destroying container"))
+					Expect(msg).To(Equal(fmt.Sprintf("Cell %s destroying container for instance %s", cellID, containerGuid)))
 					Expect(sourceInstance).To(Equal("1"))
 
 					appId, msg, sourceType, sourceInstance = fakeMetronClient.SendAppLogArgsForCall(3)
 					Expect(appId).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
-					Expect(msg).To(Equal("Successfully destroyed container"))
+					Expect(msg).To(Equal(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", cellID, containerGuid)))
 					Expect(sourceInstance).To(Equal("1"))
 				})
 			})
@@ -2247,7 +2252,7 @@ var _ = Describe("Container Store", func() {
 				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
 				Expect(appId).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
-				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
 				Expect(sourceInstance).To(Equal("1"))
 			})
 		})
@@ -2309,7 +2314,7 @@ var _ = Describe("Container Store", func() {
 				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
 				Expect(appId).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
-				Expect(msg).To(Equal(fmt.Sprintf("Stopping instance %s", containerGuid)))
+				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
 				Expect(sourceInstance).To(Equal("1"))
 			})
 
@@ -2336,6 +2341,7 @@ var _ = Describe("Container Store", func() {
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
+						cellID,
 					)
 
 					signalled := proxyRunnerSignalled

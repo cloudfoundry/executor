@@ -81,6 +81,8 @@ type containerStore struct {
 	trustedSystemCertificatesPath string
 
 	reapingLock *sync.RWMutex
+
+	cellID string
 }
 
 func New(
@@ -98,6 +100,7 @@ func New(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	proxyManager ProxyManager,
+	cellID string,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -116,6 +119,8 @@ func New(
 		proxyManager:                  proxyManager,
 
 		reapingLock: &sync.RWMutex{},
+
+		cellID: cellID,
 	}
 }
 
@@ -144,6 +149,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
 			cs.proxyManager,
+			cs.cellID,
 		))
 
 	if err != nil {

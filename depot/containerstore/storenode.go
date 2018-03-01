@@ -64,6 +64,7 @@ type storeNode struct {
 	useContainerProxy          bool
 	proxyManager               ProxyManager
 	bindMounts                 []garden.BindMount
+	cellID                     string
 }
 
 func newStoreNode(
@@ -80,6 +81,7 @@ func newStoreNode(
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
 	proxyManager ProxyManager,
+	cellID string,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -98,6 +100,7 @@ func newStoreNode(
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 		proxyManager:                proxyManager,
+		cellID:                      cellID,
 	}
 }
 
@@ -209,15 +212,15 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		})
 	}
 
-	fmt.Fprintf(logStreamer.Stdout(), "Creating container\n")
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s creating container for instance %s\n", n.cellID, n.Info().Guid)
 	gardenContainer, err := n.createGardenContainer(logger, &info)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
-		fmt.Fprintf(logStreamer.Stderr(), "Failed to create container: %s\n", err.Error())
+		fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
 		n.complete(logger, true, truncatedErrorMessage("%s: %s", ContainerInitializationFailedMessage, err.Error()))
 		return err
 	}
-	fmt.Fprintf(logStreamer.Stdout(), "Successfully created container\n")
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
 
 	n.infoLock.Lock()
 	n.gardenContainer = gardenContainer
@@ -502,7 +505,7 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	if n.process != nil {
 		if !stopped {
 			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
-			fmt.Fprintf(logStreamer.Stdout(), fmt.Sprintf("Stopping instance %s\n", n.Info().Guid))
+			fmt.Fprintf(logStreamer.Stdout(), "Cell %s stopping instance %s\n", n.cellID, n.Info().Guid)
 		}
 
 		n.process.Signal(os.Interrupt)
@@ -529,13 +532,14 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	fmt.Fprintf(logStreamer.Stdout(), "Destroying container\n")
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, n.Info().Guid)
+
 	err = n.destroyContainer(logger)
 	if err != nil {
-		fmt.Fprintf(logStreamer.Stderr(), "Failed to destroy container\n")
+		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, n.Info().Guid)
 		return err
 	}
-	fmt.Fprintf(logStreamer.Stdout(), "Successfully destroyed container\n")
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, n.Info().Guid)
 
 	n.infoLock.Lock()
 	info := n.info.Copy()

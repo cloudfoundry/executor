@@ -185,7 +185,10 @@ var DefaultConfiguration = ExecutorConfig{
 	CSIMountRootDir:                    "/var/vcap/data/csimountroot",
 }
 
-func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient, clock clock.Clock) (executor.Client, grouper.Members, error) {
+func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
+	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
+	clock clock.Clock) (executor.Client, grouper.Members, error) {
+
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
@@ -308,6 +311,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, gardenHealthcheckRoo
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
 		proxyManager,
+		cellID,
 	)
 
 	workPoolSettings := executor.WorkPoolSettings{
