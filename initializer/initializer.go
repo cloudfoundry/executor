@@ -92,7 +92,7 @@ type ExecutorConfig struct {
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
 	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
-	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout"`
+	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout,omitempty"`
 	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb",omitempty`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`

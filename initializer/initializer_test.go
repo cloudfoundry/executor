@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
+	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
 	"net/http"
@@ -145,7 +146,33 @@ var _ = Describe("Initializer", func() {
 		})
 	})
 
-	Context("graceful shutdown interval", func() {
+	Context("when the drain timeout isn't specified", func() {
+		var (
+			configFilePath string
+		)
+
+		BeforeEach(func() {
+			configFile, err := ioutil.TempFile(os.TempDir(), "executor-config")
+			Expect(err).NotTo(HaveOccurred())
+			defer configFile.Close()
+			configFilePath = configFile.Name()
+			cfg := initializer.ExecutorConfig{}
+			err = json.NewEncoder(configFile).Encode(cfg)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			os.RemoveAll(configFilePath)
+		})
+
+		It("uses the default value", func() {
+			config := initializer.DefaultConfiguration
+			f, err := os.Open(configFilePath)
+			Expect(err).NotTo(HaveOccurred())
+			err = json.NewDecoder(f).Decode(&config)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(config.EnvoyDrainTimeout).To(Equal(durationjson.Duration(15 * time.Minute)))
+		})
 	})
 
 	Context("when garden doesn't respond", func() {
