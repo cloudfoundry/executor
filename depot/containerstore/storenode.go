@@ -335,18 +335,13 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	containerInfo, err := gardenContainer.Info()
 	if err != nil {
+		n.destroyContainer(logger)
 		return nil, err
 	}
 
 	info.Ports = portMappingFromContainerInfo(containerInfo, proxyPortMapping)
-
-	externalIP, containerIP, err := fetchIPs(logger, gardenContainer)
-	if err != nil {
-		n.destroyContainer(logger)
-		return nil, err
-	}
-	info.ExternalIP = externalIP
-	info.InternalIP = containerIP
+	info.ExternalIP = containerInfo.ExternalIP
+	info.InternalIP = containerInfo.ContainerIP
 
 	err = info.TransistionToCreate()
 	if err != nil {
@@ -657,18 +652,6 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationSucceededDuration})
 	}
 	return container, nil
-}
-
-func fetchIPs(logger lager.Logger, gardenContainer garden.Container) (string, string, error) {
-	logger.Debug("container-info")
-	gardenInfo, err := gardenContainer.Info()
-	if err != nil {
-		logger.Error("failed-container-info", err)
-		return "", "", err
-	}
-	logger.Debug("container-info-complete")
-
-	return gardenInfo.ExternalIP, gardenInfo.ContainerIP, nil
 }
 
 func truncatedErrorMessage(msg string, a ...interface{}) string {
