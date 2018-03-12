@@ -2011,6 +2011,12 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("cleans up the proxy config dir", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(1))
+		})
+
 		Context("when there are volumes mounted", func() {
 			BeforeEach(func() {
 				someConfig := map[string]interface{}{"some-config": "interface"}

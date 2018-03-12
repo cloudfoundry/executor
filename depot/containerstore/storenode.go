@@ -561,6 +561,15 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
 		}
 	}
+
+	err = n.proxyManager.RemoveProxyConfigDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+		if bindMountCleanupErr == nil {
+			bindMountCleanupErr = err
+		}
+	}
+
 	return bindMountCleanupErr
 }
 

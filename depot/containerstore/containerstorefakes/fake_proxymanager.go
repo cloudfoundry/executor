@@ -39,6 +39,18 @@ type FakeProxyManager struct {
 		result1 []garden.BindMount
 		result2 error
 	}
+	RemoveProxyConfigDirStub        func(lager.Logger, executor.Container) error
+	removeProxyConfigDirMutex       sync.RWMutex
+	removeProxyConfigDirArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}
+	removeProxyConfigDirReturns struct {
+		result1 error
+	}
+	removeProxyConfigDirReturnsOnCall map[int]struct {
+		result1 error
+	}
 	RunnerStub        func(lager.Logger, executor.Container, <-chan containerstore.Credential) (containerstore.ProxyRunner, error)
 	runnerMutex       sync.RWMutex
 	runnerArgsForCall []struct {
@@ -162,6 +174,55 @@ func (fake *FakeProxyManager) BindMountsReturnsOnCall(i int, result1 []garden.Bi
 	}{result1, result2}
 }
 
+func (fake *FakeProxyManager) RemoveProxyConfigDir(arg1 lager.Logger, arg2 executor.Container) error {
+	fake.removeProxyConfigDirMutex.Lock()
+	ret, specificReturn := fake.removeProxyConfigDirReturnsOnCall[len(fake.removeProxyConfigDirArgsForCall)]
+	fake.removeProxyConfigDirArgsForCall = append(fake.removeProxyConfigDirArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}{arg1, arg2})
+	fake.recordInvocation("RemoveProxyConfigDir", []interface{}{arg1, arg2})
+	fake.removeProxyConfigDirMutex.Unlock()
+	if fake.RemoveProxyConfigDirStub != nil {
+		return fake.RemoveProxyConfigDirStub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fake.removeProxyConfigDirReturns.result1
+}
+
+func (fake *FakeProxyManager) RemoveProxyConfigDirCallCount() int {
+	fake.removeProxyConfigDirMutex.RLock()
+	defer fake.removeProxyConfigDirMutex.RUnlock()
+	return len(fake.removeProxyConfigDirArgsForCall)
+}
+
+func (fake *FakeProxyManager) RemoveProxyConfigDirArgsForCall(i int) (lager.Logger, executor.Container) {
+	fake.removeProxyConfigDirMutex.RLock()
+	defer fake.removeProxyConfigDirMutex.RUnlock()
+	return fake.removeProxyConfigDirArgsForCall[i].arg1, fake.removeProxyConfigDirArgsForCall[i].arg2
+}
+
+func (fake *FakeProxyManager) RemoveProxyConfigDirReturns(result1 error) {
+	fake.RemoveProxyConfigDirStub = nil
+	fake.removeProxyConfigDirReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeProxyManager) RemoveProxyConfigDirReturnsOnCall(i int, result1 error) {
+	fake.RemoveProxyConfigDirStub = nil
+	if fake.removeProxyConfigDirReturnsOnCall == nil {
+		fake.removeProxyConfigDirReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.removeProxyConfigDirReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeProxyManager) Runner(arg1 lager.Logger, arg2 executor.Container, arg3 <-chan containerstore.Credential) (containerstore.ProxyRunner, error) {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
@@ -222,6 +283,8 @@ func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
 	defer fake.proxyPortsMutex.RUnlock()
 	fake.bindMountsMutex.RLock()
 	defer fake.bindMountsMutex.RUnlock()
+	fake.removeProxyConfigDirMutex.RLock()
+	defer fake.removeProxyConfigDirMutex.RUnlock()
 	fake.runnerMutex.RLock()
 	defer fake.runnerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

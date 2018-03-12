@@ -54,6 +54,7 @@ var dummyRunner = func(credRotatedChan <-chan Credential) ifrit.Runner {
 type ProxyManager interface {
 	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
 	BindMounts(lager.Logger, executor.Container) ([]garden.BindMount, error)
+	RemoveProxyConfigDir(lager.Logger, executor.Container) error
 	Runner(lager.Logger, executor.Container, <-chan Credential) (ProxyRunner, error)
 }
 
@@ -79,6 +80,10 @@ type noopProxyManager struct{}
 
 func (p *noopProxyManager) BindMounts(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
 	return []garden.BindMount{}, nil
+}
+
+func (p *noopProxyManager) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+	return nil
 }
 
 func (p *noopProxyManager) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
@@ -134,6 +139,12 @@ func (p *proxyManager) BindMounts(logger lager.Logger, container executor.Contai
 		return nil, err
 	}
 	return mounts, nil
+}
+
+func (p *proxyManager) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+	logger.Info("removing-container-proxy-config-dir")
+	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
+	return os.RemoveAll(proxyConfigDir)
 }
 
 // This modifies the container pointer in order to create garden NetIn rules in the storenode.Create

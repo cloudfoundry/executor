@@ -572,6 +572,7 @@ var _ = Describe("ProxyManager", func() {
 			It("removes listener config from the filesystem", func() {
 				Eventually(listenerConfigFile).ShouldNot(BeAnExistingFile())
 				Eventually(proxyConfigFile).ShouldNot(BeAnExistingFile())
+				Eventually(filepath.Dir(proxyConfigFile)).ShouldNot(BeADirectory())
 			})
 		})
 
