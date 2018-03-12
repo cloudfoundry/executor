@@ -26,7 +26,6 @@ import (
 
 const (
 	healthCheckNofiles                          uint64 = 1024
-	envoyNofiles                                uint64 = 1024
 	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond)
 	HealthLogSource                                    = "HEALTH"
 )
@@ -739,13 +738,11 @@ func (t *transformer) transformContainerProxyStep(
 		"--log-level",
 		"critical",
 	}
-	nofiles := envoyNofiles
 
 	runAction := models.RunAction{
-		LogSource:      "PROXY",
-		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
-		Path:           "/etc/cf-assets/envoy/envoy",
-		Args:           args,
+		LogSource: "PROXY",
+		Path:      "/etc/cf-assets/envoy/envoy",
+		Args:      args,
 	}
 
 	sidecar := steps.Sidecar{

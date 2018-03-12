@@ -328,9 +328,6 @@ var _ = Describe("Transformer", func() {
 						"CF_INSTANCE_ADDR=:0",
 						"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
 					},
-					Limits: garden.ResourceLimits{
-						Nofile: proto.Uint64(1024),
-					},
 					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 					BindMounts: []garden.BindMount{
 						{
@@ -389,9 +386,6 @@ var _ = Describe("Transformer", func() {
 							"CF_INSTANCE_PORT=0",
 							"CF_INSTANCE_ADDR=:0",
 							"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
-						},
-						Limits: garden.ResourceLimits{
-							Nofile: proto.Uint64(1024),
 						},
 						Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 						BindMounts: []garden.BindMount{
