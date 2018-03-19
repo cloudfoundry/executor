@@ -239,7 +239,7 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "/etc/cf-assets/envoy/envoy":
+					case "sh":
 						return envoyProcess, nil
 					}
 
@@ -307,18 +307,10 @@ var _ = Describe("Transformer", func() {
 
 				Expect(specs).To(ContainElement(garden.ProcessSpec{
 					ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
-					Path: "/etc/cf-assets/envoy/envoy",
+					Path: "sh",
 					Args: []string{
 						"-c",
-						"/etc/cf-assets/envoy_config/envoy.yaml",
-						"--service-cluster",
-						"proxy-cluster",
-						"--service-node",
-						"proxy-node",
-						"--drain-time-s",
-						"1",
-						"--log-level",
-						"critical",
+						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 					},
 
 					Env: []string{
@@ -366,18 +358,10 @@ var _ = Describe("Transformer", func() {
 
 					Expect(specs).To(ContainElement(garden.ProcessSpec{
 						ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
-						Path: "/etc/cf-assets/envoy/envoy",
+						Path: "sh",
 						Args: []string{
 							"-c",
-							"/etc/cf-assets/envoy_config/envoy.yaml",
-							"--service-cluster",
-							"proxy-cluster",
-							"--service-node",
-							"proxy-node",
-							"--drain-time-s",
-							"1",
-							"--log-level",
-							"critical",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 						},
 
 						Env: []string{
