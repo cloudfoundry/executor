@@ -286,6 +286,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	var proxyManager containerstore.ProxyManager
 	if config.EnableContainerProxy {
+		err := os.RemoveAll(config.ContainerProxyConfigPath)
+		if err != nil {
+			logger.Error("failed-removing-container-proxy-config-path", err)
+		}
 		proxyManager = containerstore.NewProxyManager(
 			logger,
 			config.ContainerProxyPath,

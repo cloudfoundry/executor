@@ -2014,7 +2014,7 @@ var _ = Describe("Container Store", func() {
 		It("cleans up the proxy config dir", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(1))
+			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(2))
 		})
 
 		Context("when there are volumes mounted", func() {

@@ -530,6 +530,11 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		<-n.process.Wait()
 	}
 
+	n.infoLock.Lock()
+	info := n.info.Copy()
+	n.removeProxyConfigDir(logger, info)
+	n.infoLock.Unlock()
+
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, n.Info().Guid)
@@ -540,10 +545,6 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		return err
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, n.Info().Guid)
-
-	n.infoLock.Lock()
-	info := n.info.Copy()
-	n.infoLock.Unlock()
 
 	cacheKeys := n.bindMountCacheKeys
 
@@ -559,14 +560,6 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 		if err != nil {
 			logger.Error("failed-to-unmount-volume", err)
 			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
-		}
-	}
-
-	err = n.proxyManager.RemoveProxyConfigDir(logger, info)
-	if err != nil {
-		logger.Error("failed-to-delete-container-proxy-config-dir", err)
-		if bindMountCleanupErr == nil {
-			bindMountCleanupErr = err
 		}
 	}
 
@@ -628,6 +621,7 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
+	n.removeProxyConfigDir(logger, n.info.Copy())
 	if n.info.IsCreated() {
 		n.info.TransitionToComplete(true, ContainerMissingMessage)
 		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
@@ -642,8 +636,16 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason)
-
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
+	n.removeProxyConfigDir(logger, n.info.Copy())
+}
+
+func (n *storeNode) removeProxyConfigDir(logger lager.Logger, info executor.Container) error {
+	err := n.proxyManager.RemoveProxyConfigDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+	return err
 }
 
 func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggingclient.IngressClient) (garden.Container, error) {
