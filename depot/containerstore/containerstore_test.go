@@ -1072,9 +1072,6 @@ var _ = Describe("Container Store", func() {
 			Context("when requesting the container info for the created container fails", func() {
 				BeforeEach(func() {
 					gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
-						if gardenContainer.InfoCallCount() == 1 {
-							return garden.ContainerInfo{}, nil
-						}
 						return garden.ContainerInfo{}, errors.New("could not obtain info")
 					}
 				})
