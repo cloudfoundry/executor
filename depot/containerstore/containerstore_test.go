@@ -2431,7 +2431,7 @@ var _ = Describe("Container Store", func() {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	initializeContainer := func(guid string) {
+	initializeContainer := func(guid string, diskScope executor.DiskLimitScope) {
 		runInfo := executor.RunInfo{
 			CPUWeight:          2,
 			StartTimeoutMs:     50000,
@@ -2451,6 +2451,7 @@ var _ = Describe("Container Store", func() {
 			Network: &executor.Network{
 				Properties: map[string]string{},
 			},
+			DiskScope: diskScope,
 		}
 
 		req := &executor.RunRequest{
@@ -2484,10 +2485,10 @@ var _ = Describe("Container Store", func() {
 			reserveContainer(containerGuid5)
 			reserveContainer(containerGuid6)
 
-			initializeContainer(containerGuid1)
-			initializeContainer(containerGuid2)
-			initializeContainer(containerGuid3)
-			initializeContainer(containerGuid4)
+			initializeContainer(containerGuid1, executor.ExclusiveDiskLimit)
+			initializeContainer(containerGuid2, executor.TotalDiskLimit)
+			initializeContainer(containerGuid3, executor.ExclusiveDiskLimit)
+			initializeContainer(containerGuid4, executor.ExclusiveDiskLimit)
 
 			gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: "6.6.6.6"}, nil)
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -2520,7 +2521,8 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 512,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							ExclusiveBytesUsed: 128,
+							TotalBytesUsed:     256,
+							ExclusiveBytesUsed: 128, // should not be reported back. TotalBytesUsed should be used instead
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
@@ -2570,7 +2572,7 @@ var _ = Describe("Container Store", func() {
 			container2Metrics, ok := metrics[containerGuid2]
 			Expect(ok).To(BeTrue())
 			Expect(container2Metrics.MemoryUsageInBytes).To(BeEquivalentTo(512))
-			Expect(container2Metrics.DiskUsageInBytes).To(BeEquivalentTo(128))
+			Expect(container2Metrics.DiskUsageInBytes).To(BeEquivalentTo(256))
 			Expect(container2Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Memory.LimitInBytes))
 			Expect(container2Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Disk.ByteHard))
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))

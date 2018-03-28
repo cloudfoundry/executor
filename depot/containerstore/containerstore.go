@@ -301,15 +301,13 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 
 	nodes := cs.containers.List()
 	containerGuids := make([]string, 0, len(nodes))
-	memoryLimitMap := make(map[string]uint64)
-	diskLimitMap := make(map[string]uint64)
+	nodeInfoMap := make(map[string]executor.Container)
 
 	for i := range nodes {
 		nodeInfo := nodes[i].Info()
 		if nodeInfo.State == executor.StateRunning || nodeInfo.State == executor.StateCreated {
 			containerGuids = append(containerGuids, nodeInfo.Guid)
-			memoryLimitMap[nodeInfo.Guid] = nodeInfo.MemoryLimit
-			diskLimitMap[nodeInfo.Guid] = nodeInfo.DiskLimit
+			nodeInfoMap[nodeInfo.Guid] = nodeInfo
 		}
 	}
 
@@ -322,18 +320,24 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 	logger.Debug("getting-metrics-in-garden-complete")
 
 	containerMetrics := map[string]executor.ContainerMetrics{}
-	for _, guid := range containerGuids {
-		if metricEntry, found := gardenMetrics[guid]; found {
-			if metricEntry.Err == nil {
-				gardenMetric := metricEntry.Metrics
-				containerMetrics[guid] = executor.ContainerMetrics{
-					MemoryUsageInBytes: gardenMetric.MemoryStat.TotalUsageTowardLimit,
-					DiskUsageInBytes:   gardenMetric.DiskStat.ExclusiveBytesUsed,
-					MemoryLimitInBytes: memoryLimitMap[guid],
-					DiskLimitInBytes:   diskLimitMap[guid],
-					TimeSpentInCPU:     time.Duration(gardenMetric.CPUStat.Usage),
-				}
-			}
+	for guid, nodeInfo := range nodeInfoMap {
+		metricEntry, found := gardenMetrics[guid]
+		if !found || metricEntry.Err != nil {
+			continue
+		}
+		gardenMetric := metricEntry.Metrics
+		var diskUsage uint64
+		if nodeInfo.DiskScope == executor.ExclusiveDiskLimit {
+			diskUsage = gardenMetric.DiskStat.ExclusiveBytesUsed
+		} else {
+			diskUsage = gardenMetric.DiskStat.TotalBytesUsed
+		}
+		containerMetrics[guid] = executor.ContainerMetrics{
+			MemoryUsageInBytes: gardenMetric.MemoryStat.TotalUsageTowardLimit,
+			DiskUsageInBytes:   diskUsage,
+			MemoryLimitInBytes: nodeInfo.MemoryLimit,
+			DiskLimitInBytes:   nodeInfo.DiskLimit,
+			TimeSpentInCPU:     time.Duration(gardenMetric.CPUStat.Usage),
 		}
 	}
 
