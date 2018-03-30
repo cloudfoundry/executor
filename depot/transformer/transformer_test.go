@@ -343,6 +343,25 @@ var _ = Describe("Transformer", func() {
 				})
 			})
 
+			Context("when the envoy process is signalled", func() {
+				JustBeforeEach(func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					envoyCh <- 134
+				})
+
+				It("logs the exit status", func() {
+					Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
+					_, msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+					_, msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+					Expect([]string{msg0, msg1}).To(ContainElement("Exit status 134"))
+				})
+
+				It("process should fail with a descriptive error", func() {
+					actionCh <- 0
+					Eventually(process.Wait()).Should(Receive(MatchError("PROXY: Exited with status 134")))
+				})
+			})
+
 			Context("when the container is privileged", func() {
 				BeforeEach(func() {
 					container.Privileged = true

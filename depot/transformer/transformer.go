@@ -763,7 +763,7 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.Ports,
 		t.clock,
 		t.gracefulShutdownInterval,
-		true,
+		false,
 		sidecar,
 		execContainer.Privileged,
 	), proxyLogger)
