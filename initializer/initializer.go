@@ -28,9 +28,11 @@ import (
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/depot/uploader"
+	"code.cloudfoundry.org/executor/depot/vcontainer"
 	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/guidgen"
 	"code.cloudfoundry.org/executor/initializer/configuration"
+	"code.cloudfoundry.org/executor/model"
 	"code.cloudfoundry.org/garden"
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
@@ -41,6 +43,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	vcmodels "github.com/virtualcloudfoundry/vcontainercommon/vcontainermodels"
 )
 
 const (
@@ -148,7 +151,7 @@ const (
 	defaultGracefulShutdownInterval = 10 * time.Second
 )
 
-var DefaultConfiguration = ExecutorConfig{
+var DefaultConfiguration = model.ExecutorConfig{
 	GardenNetwork:                      "unix",
 	GardenAddr:                         "/tmp/garden.sock",
 	MemoryMB:                           configuration.Automatic,
@@ -187,17 +190,24 @@ var DefaultConfiguration = ExecutorConfig{
 	MapfsPath:                          "/var/vcap/packages/mapfs/bin/mapfs",
 }
 
-func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
+func Initialize(logger lager.Logger, config model.ExecutorConfig, vcontainerClientConfig vcmodels.VContainerClientConfig, cellID string,
 	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
 	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
+	model.GetExecutorEnvInstance().Config = config
+	model.GetExecutorEnvInstance().VContainerClientConfig = vcontainerClientConfig
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
 		return nil, nil, grouper.Members{}, err
 	}
-
-	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
+	var gardenClient garden.Client
+	if vcontainerClientConfig.UseVContainer {
+		// TODO: remove the inner garden client.
+		gardenClient = vcontainer.NewVGardenWithAdapter(logger, model.GetExecutorEnvInstance().VContainerClientConfig)
+	} else {
+		gardenClient = GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
+	}
 	err = waitForGarden(logger, gardenClient, metronClient, clock)
 	if err != nil {
 		return nil, nil, nil, err
@@ -210,7 +220,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	destroyContainers(gardenClient, containersFetcher, logger)
 
-	workDir := setupWorkDir(logger, config.TempDir)
+	workDir := setupWorkDir(logger, config.TempDir) // /var/vcap/data/executer-work
 
 	healthCheckWorkPool, err := workpool.NewWorkPool(config.HealthCheckWorkPoolSize)
 	if err != nil {
@@ -440,7 +450,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, metron
 	}
 }
 
-func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config ExecutorConfig) (executor.ExecutorResources, error) {
+func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config model.ExecutorConfig) (executor.ExecutorResources, error) {
 	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB, config.MaxCacheSizeInBytes, config.AutoDiskOverheadMB)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)
@@ -557,7 +567,7 @@ func closeHub(logger lager.Logger, hub event.Hub) ifrit.Runner {
 	})
 }
 
-func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, config ExecutorConfig) (*tls.Config, error) {
+func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, config model.ExecutorConfig) (*tls.Config, error) {
 	var tlsConfig *tls.Config
 	var err error
 
@@ -605,7 +615,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	return tlsConfig, nil
 }
 
-func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
+func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config model.ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
 		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)
@@ -653,47 +663,6 @@ func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.Ingre
 
 	logger.Info("instance-identity-disabled")
 	return containerstore.NewNoopCredManager(), nil
-}
-
-func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
-	valid := true
-
-	if config.ContainerMaxCpuShares == 0 {
-		logger.Error("max-cpu-shares-invalid", nil)
-		valid = false
-	}
-
-	if config.HealthyMonitoringInterval <= 0 {
-		logger.Error("healthy-monitoring-interval-invalid", nil)
-		valid = false
-	}
-
-	if config.UnhealthyMonitoringInterval <= 0 {
-		logger.Error("unhealthy-monitoring-interval-invalid", nil)
-		valid = false
-	}
-
-	if config.GardenHealthcheckInterval <= 0 {
-		logger.Error("garden-healthcheck-interval-invalid", nil)
-		valid = false
-	}
-
-	if config.GardenHealthcheckProcessUser == "" {
-		logger.Error("garden-healthcheck-process-user-invalid", nil)
-		valid = false
-	}
-
-	if config.GardenHealthcheckProcessPath == "" {
-		logger.Error("garden-healthcheck-process-path-invalid", nil)
-		valid = false
-	}
-
-	if config.PostSetupHook != "" && config.PostSetupUser == "" {
-		logger.Error("post-setup-hook-requires-a-user", nil)
-		valid = false
-	}
-
-	return valid
 }
 
 func appendCACerts(caCertPool *x509.CertPool, pathToCA string) (*x509.CertPool, error) {

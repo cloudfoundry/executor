@@ -3,6 +3,8 @@ package steps
 import (
 	"time"
 
+	"code.cloudfoundry.org/lager"
+
 	"code.cloudfoundry.org/clock"
 )
 
@@ -10,17 +12,19 @@ type eventuallySucceedsStep struct {
 	create             func() Step
 	frequency, timeout time.Duration
 	clock              clock.Clock
+	logger             lager.Logger
 	*canceller
 }
 
 // TODO: use a workpool when running the substep
-func NewEventuallySucceedsStep(create func() Step, frequency, timeout time.Duration, clock clock.Clock) Step {
+func NewEventuallySucceedsStep(create func() Step, logger lager.Logger, frequency, timeout time.Duration, clock clock.Clock) Step {
 	return &eventuallySucceedsStep{
 		create:    create,
 		frequency: frequency,
 		timeout:   timeout,
 		clock:     clock,
 		canceller: newCanceller(),
+		logger:    logger,
 	}
 }
 
@@ -40,7 +44,8 @@ func (s *eventuallySucceedsStep) Perform() error {
 
 		step := s.create()
 		go func() {
-			errCh <- step.Perform()
+			err := step.Perform()
+			errCh <- err
 		}()
 
 		select {

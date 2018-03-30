@@ -70,6 +70,7 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 
 	for key := range handles {
 		if !r.containers.Contains(key) {
+			logger.Info("reap-extra-garden-containers", lager.Data{"key": key})
 			err := r.gardenClient.Destroy(key)
 			if err != nil {
 				logger.Error("failed-to-destroy-container", err, lager.Data{"handle": key})

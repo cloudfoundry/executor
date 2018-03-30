@@ -25,7 +25,7 @@ func NewMonitor(
 		return NewThrottle(checkFunc(), workPool)
 	}
 
-	readiness := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
+	readiness := NewEventuallySucceedsStep(throttledCheckFunc, logger, unhealthyInterval, startTimeout, clock)
 	liveness := NewConsistentlySucceedsStep(throttledCheckFunc, healthyInterval, clock)
 
 	// add the proxy readiness checks (if any)

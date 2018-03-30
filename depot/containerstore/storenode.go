@@ -194,7 +194,6 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return err
 	}
 	n.bindMounts = append(n.bindMounts, volumeMounts...)
-
 	proxyMounts, err := n.proxyManager.BindMounts(logger, n.info)
 	if err != nil {
 		return err
@@ -219,6 +218,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s creating container for instance %s\n", n.cellID, n.Info().Guid)
+
 	gardenContainer, err := n.createGardenContainer(logger, &info)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
@@ -348,6 +348,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	}
 
 	info.Ports = portMappingFromContainerInfo(containerInfo, proxyPortMapping)
+
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
 
@@ -429,6 +430,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	}
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {
+		logger.Error("steps-runner-failed", err, lager.Data{"container": n.gardenContainer})
 		return err
 	}
 
@@ -472,6 +474,7 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 
 func (n *storeNode) run(logger lager.Logger) {
 	// wait for container runner to start
+	logger.Info("node-go-to-complete-state-run", lager.Data{"info": n.info})
 	logger.Debug("execute-process")
 	select {
 	case err := <-n.process.Wait():
@@ -483,6 +486,7 @@ func (n *storeNode) run(logger lager.Logger) {
 	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
+	logger.Info("node-go-to-complete-state-set-running", lager.Data{"info-id": n.info.Guid})
 	n.info.State = executor.StateRunning
 	info := n.info.Copy()
 	n.infoLock.Unlock()
@@ -512,6 +516,7 @@ func (n *storeNode) stop(logger lager.Logger) error {
 		}
 
 		n.process.Signal(os.Interrupt)
+
 		logger.Debug("signalled-process")
 	} else {
 		n.complete(logger, true, "stopped-before-running", false)
@@ -644,6 +649,7 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 
 func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason string, retryable bool) {
 	logger.Debug("node-complete", lager.Data{"failed": failed, "reason": failureReason})
+	logger.Info("node-complete", lager.Data{"failed": failed, "reason": failureReason, "info": n.info})
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason, retryable)
@@ -668,6 +674,7 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
 	container, err := client.Create(spec)
+
 	createDuration := time.Now().Sub(startTime)
 	if err != nil {
 		logger.Error("failed-to-create-container-in-garden", err)

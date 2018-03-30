@@ -458,11 +458,17 @@ func (t *transformer) StepsRunner(
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
+		a := container.Monitor.GetValue()
+		switch actionModel := a.(type) {
+		case *models.TimeoutAction:
+			logger.Info("container-monitor-time-out", lager.Data{"timeout": actionModel.TimeoutMs})
+			break
+		}
 		monitor = steps.NewMonitor(
 			func() steps.Step {
 				return t.stepFor(
 					logStreamer,
-					container.Monitor,
+					container.Monitor, // normally a timeout
 					gardenContainer,
 					container.ExternalIP,
 					container.InternalIP,
@@ -517,7 +523,6 @@ func (t *transformer) StepsRunner(
 			cumulativeStep = steps.NewSerial([]steps.Step{setup, postSetup, longLivedAction})
 		}
 	}
-
 	return newStepRunner(cumulativeStep, hasStartedRunning), nil
 }
 
