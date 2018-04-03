@@ -2,14 +2,14 @@ package containermetrics
 
 import (
 	"os"
+	"sync/atomic"
 	"time"
-
-	"github.com/cloudfoundry/sonde-go/events"
 
 	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
+	"github.com/cloudfoundry/sonde-go/events"
 )
 
 var megabytesToBytes int = 1024 * 1024
@@ -20,6 +20,7 @@ type StatsReporter struct {
 	interval       time.Duration
 	clock          clock.Clock
 	executorClient executor.Client
+	metrics        atomic.Value
 
 	metronClient          loggingclient.IngressClient
 	enableContainerProxy  bool
@@ -72,6 +73,13 @@ func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct
 	}
 }
 
+func (reporter *StatsReporter) Metrics() map[string]*CachedContainerMetrics {
+	if v := reporter.metrics.Load(); v != nil {
+		return v.(map[string]*CachedContainerMetrics)
+	}
+	return nil
+}
+
 func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
 	logger = logger.Session("tick")
 
@@ -102,23 +110,30 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	}
 
 	newCpuInfos := make(map[string]*cpuInfo)
+	repMetricsMap := make(map[string]*CachedContainerMetrics)
+
 	for _, container := range containers {
 		guid := container.Guid
 		metric := metrics[guid]
 
-		previousCpuInfo := previousCpuInfos[guid]
+		previousCPUInfo := previousCpuInfos[guid]
 
 		if reporter.enableContainerProxy && container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
 			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}
 
-		cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCpuInfo, now)
+		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, now)
 		if cpu != nil {
 			newCpuInfos[guid] = cpu
 		}
+
+		if repMetrics != nil {
+			repMetricsMap[guid] = repMetrics
+		}
 	}
 
+	reporter.metrics.Store(repMetricsMap)
 	return newCpuInfos
 }
 
@@ -128,11 +143,40 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	containerMetrics executor.ContainerMetrics,
 	previousInfo *cpuInfo,
 	now time.Time,
-) *cpuInfo {
-	if metricsConfig.Guid == "" {
-		return nil
+) (*CachedContainerMetrics, *cpuInfo) {
+	currentInfo, cpuPercent := calculateInfo(containerMetrics, previousInfo, now)
+
+	if metricsConfig.Guid != "" {
+		instanceIndex := int32(metricsConfig.Index)
+		err := reporter.metronClient.SendAppMetrics(&events.ContainerMetric{
+			ApplicationId:    &metricsConfig.Guid,
+			InstanceIndex:    &instanceIndex,
+			CpuPercentage:    &cpuPercent,
+			MemoryBytes:      &containerMetrics.MemoryUsageInBytes,
+			DiskBytes:        &containerMetrics.DiskUsageInBytes,
+			MemoryBytesQuota: &containerMetrics.MemoryLimitInBytes,
+			DiskBytesQuota:   &containerMetrics.DiskLimitInBytes,
+		})
+
+		if err != nil {
+			logger.Error("failed-to-send-container-metrics", err, lager.Data{
+				"metrics_guid":  metricsConfig.Guid,
+				"metrics_index": metricsConfig.Index,
+			})
+		}
 	}
 
+	return &CachedContainerMetrics{
+		MetricGUID:       metricsConfig.Guid,
+		CPUUsageFraction: cpuPercent,
+		DiskUsageBytes:   containerMetrics.DiskUsageInBytes,
+		DiskQuotaBytes:   containerMetrics.DiskLimitInBytes,
+		MemoryUsageBytes: containerMetrics.MemoryUsageInBytes,
+		MemoryQuotaBytes: containerMetrics.MemoryLimitInBytes,
+	}, &currentInfo
+}
+
+func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64) {
 	currentInfo := cpuInfo{
 		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
 		timeOfSample:   now,
@@ -149,26 +193,7 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 			currentInfo.timeOfSample,
 		)
 	}
-
-	instanceIndex := int32(metricsConfig.Index)
-	err := reporter.metronClient.SendAppMetrics(&events.ContainerMetric{
-		ApplicationId:    &metricsConfig.Guid,
-		InstanceIndex:    &instanceIndex,
-		CpuPercentage:    &cpuPercent,
-		MemoryBytes:      &containerMetrics.MemoryUsageInBytes,
-		DiskBytes:        &containerMetrics.DiskUsageInBytes,
-		MemoryBytesQuota: &containerMetrics.MemoryLimitInBytes,
-		DiskBytesQuota:   &containerMetrics.DiskLimitInBytes,
-	})
-
-	if err != nil {
-		logger.Error("failed-to-send-container-metrics", err, lager.Data{
-			"metrics_guid":  metricsConfig.Guid,
-			"metrics_index": metricsConfig.Index,
-		})
-	}
-
-	return &currentInfo
+	return currentInfo, cpuPercent
 }
 
 // scale from (0 - 100) * runtime.NumCPU()

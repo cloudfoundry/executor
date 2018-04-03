@@ -120,7 +120,7 @@ var _ = Describe("Initializer", func() {
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
-			_, _, err := initializer.Initialize(logger, config, "cell-id", "fake-rootfs", fakeMetronClient, fakeClock)
+			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "fake-rootfs", fakeMetronClient, fakeClock)
 			errCh <- err
 			close(done)
 		}()

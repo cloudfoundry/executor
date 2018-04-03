@@ -181,12 +181,10 @@ func (c *client) GetBulkMetrics(logger lager.Logger) (map[string]executor.Metric
 
 		metrics := make(map[string]executor.Metrics)
 		for _, container := range c.containerStore.List(logger) {
-			if container.MetricsConfig.Guid != "" {
-				if cmetric, found := cmetrics[container.Guid]; found {
-					metrics[container.Guid] = executor.Metrics{
-						MetricsConfig:    container.MetricsConfig,
-						ContainerMetrics: cmetric,
-					}
+			if cmetric, found := cmetrics[container.Guid]; found {
+				metrics[container.Guid] = executor.Metrics{
+					MetricsConfig:    container.MetricsConfig,
+					ContainerMetrics: cmetric,
 				}
 			}
 		}

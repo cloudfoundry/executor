@@ -529,8 +529,12 @@ var _ = Describe("Depot", func() {
 				Expect(metricsErr).NotTo(HaveOccurred())
 			})
 
-			It("returns the metrics", func() {
-				Expect(metrics).To(HaveLen(1))
+			It("returns all metrics", func() {
+				Expect(metrics).To(HaveLen(2))
+				Expect(metrics["a-guid"]).To(Equal(executor.Metrics{
+					MetricsConfig:    executor.MetricsConfig{},
+					ContainerMetrics: expectedMetrics["a-guid"],
+				}))
 				Expect(metrics["b-guid"]).To(Equal(executor.Metrics{
 					MetricsConfig:    executor.MetricsConfig{Guid: "b-metrics", Index: 1},
 					ContainerMetrics: expectedMetrics["b-guid"],

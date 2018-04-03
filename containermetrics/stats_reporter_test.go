@@ -38,6 +38,7 @@ var _ = Describe("StatsReporter", func() {
 
 		enableContainerProxy    bool
 		proxyMemoryAllocationMB int
+		reporter                *containermetrics.StatsReporter
 	)
 
 	sendResults := func() {
@@ -91,7 +92,7 @@ var _ = Describe("StatsReporter", func() {
 				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: megsToBytes(123),
 					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     100 * time.Second,
+					TimeSpentInCPU:     101 * time.Second,
 					MemoryLimitInBytes: megsToBytes(789),
 					DiskLimitInBytes:   megsToBytes(1024),
 				},
@@ -240,7 +241,8 @@ var _ = Describe("StatsReporter", func() {
 	})
 
 	JustBeforeEach(func() {
-		process = ifrit.Invoke(containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, proxyMemoryAllocationMB, fakeExecutorClient, fakeMetronClient))
+		reporter = containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, proxyMemoryAllocationMB, fakeExecutorClient, fakeMetronClient)
+		process = ifrit.Invoke(reporter)
 	})
 
 	AfterEach(func() {
@@ -428,6 +430,45 @@ var _ = Describe("StatsReporter", func() {
 						},
 					},
 						100.0)))
+			})
+
+			Context("Metrics", func() {
+				It("returns the cached metrics last emitted", func() {
+					containerMetrics := reporter.Metrics()
+					Expect(containerMetrics).To(HaveLen(4))
+					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-index", &containermetrics.CachedContainerMetrics{
+						MetricGUID:       "metrics-guid-without-index",
+						CPUUsageFraction: 50.0,
+						MemoryUsageBytes: megsToBytes(1230),
+						DiskUsageBytes:   4560,
+						MemoryQuotaBytes: megsToBytes(7890),
+						DiskQuotaBytes:   4096,
+					}))
+					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-with-index", &containermetrics.CachedContainerMetrics{
+						MetricGUID:       "metrics-guid-with-index",
+						CPUUsageFraction: 100.0,
+						MemoryUsageBytes: megsToBytes(3210),
+						DiskUsageBytes:   6540,
+						MemoryQuotaBytes: megsToBytes(9870),
+						DiskQuotaBytes:   512,
+					}))
+					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-metrics-guid", &containermetrics.CachedContainerMetrics{
+						MetricGUID:       "",
+						CPUUsageFraction: 10.0,
+						MemoryUsageBytes: megsToBytes(123),
+						DiskUsageBytes:   megsToBytes(456),
+						MemoryQuotaBytes: megsToBytes(789),
+						DiskQuotaBytes:   megsToBytes(1024),
+					}))
+					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-preloaded-rootfs", &containermetrics.CachedContainerMetrics{
+						MetricGUID:       "metrics-guid-without-preloaded-rootfs",
+						CPUUsageFraction: 100.0,
+						MemoryUsageBytes: megsToBytes(3450),
+						DiskUsageBytes:   4560,
+						MemoryQuotaBytes: megsToBytes(6780),
+						DiskQuotaBytes:   2048,
+					}))
+				})
 			})
 
 			Context("and the interval elapses again", func() {

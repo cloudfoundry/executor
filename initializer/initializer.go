@@ -187,18 +187,18 @@ var DefaultConfiguration = ExecutorConfig{
 
 func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
-	clock clock.Clock) (executor.Client, grouper.Members, error) {
+	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
 	err = waitForGarden(logger, gardenClient, metronClient, clock)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	containersFetcher := &executorContainers{
@@ -212,13 +212,13 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	healthCheckWorkPool, err := workpool.NewWorkPool(config.HealthCheckWorkPoolSize)
 	if err != nil {
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	certsRetriever := systemcertsRetriever{}
 	assetTLSConfig, err := TLSConfigFromConfig(logger, certsRetriever, config)
 	if err != nil {
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), assetTLSConfig)
@@ -234,7 +234,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	err = cachedDownloader.RecoverState(logger.Session("downloader"))
 	if err != nil {
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	downloadRateLimiter := make(chan struct{}, uint(config.MaxConcurrentDownloads))
@@ -262,7 +262,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	totalCapacity, err := fetchCapacity(logger, gardenClient, config)
 	if err != nil {
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	containerConfig := containerstore.ContainerConfig{
@@ -281,7 +281,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
 	if err != nil {
-		return nil, grouper.Members{}, err
+		return nil, nil, grouper.Members{}, err
 	}
 
 	var proxyManager containerstore.ProxyManager
@@ -351,7 +351,17 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		guidgen.DefaultGenerator,
 	)
 
-	return depotClient,
+	statsReporter := containermetrics.NewStatsReporter(
+		logger,
+		time.Duration(config.ContainerMetricsReportInterval),
+		clock,
+		config.EnableContainerProxy,
+		config.ProxyMemoryAllocationMB,
+		depotClient,
+		metronClient,
+	)
+
+	return depotClient, statsReporter,
 		grouper.Members{
 			{"volman-driver-syncer", volmanDriverSyncer},
 			{"metrics-reporter", &metrics.Reporter{
@@ -362,15 +372,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 				MetronClient:   metronClient,
 			}},
 			{"hub-closer", closeHub(logger, hub)},
-			{"container-metrics-reporter", containermetrics.NewStatsReporter(
-				logger,
-				time.Duration(config.ContainerMetricsReportInterval),
-				clock,
-				config.EnableContainerProxy,
-				config.ProxyMemoryAllocationMB,
-				depotClient,
-				metronClient,
-			)},
+			{"container-metrics-reporter", statsReporter},
 			{"garden_health_checker", gardenhealth.NewRunner(
 				time.Duration(config.GardenHealthcheckInterval),
 				time.Duration(config.GardenHealthcheckEmissionInterval),
