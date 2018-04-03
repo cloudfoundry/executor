@@ -80,7 +80,7 @@ func (reporter *StatsReporter) Metrics() map[string]*CachedContainerMetrics {
 	return nil
 }
 
-func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCpuInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
+func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCPUInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
 	logger = logger.Session("tick")
 
 	startTime := reporter.clock.Now()
@@ -95,7 +95,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	metrics, err := reporter.executorClient.GetBulkMetrics(logger)
 	if err != nil {
 		logger.Error("failed-to-get-all-metrics", err)
-		return previousCpuInfos
+		return previousCPUInfos
 	}
 
 	logger.Debug("emitting", lager.Data{
@@ -106,17 +106,17 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	containers, err := reporter.executorClient.ListContainers(logger)
 	if err != nil {
 		logger.Error("failed-to-fetch-containers", err)
-		return previousCpuInfos
+		return previousCPUInfos
 	}
 
-	newCpuInfos := make(map[string]*cpuInfo)
+	newCPUInfos := make(map[string]*cpuInfo)
 	repMetricsMap := make(map[string]*CachedContainerMetrics)
 
 	for _, container := range containers {
 		guid := container.Guid
 		metric := metrics[guid]
 
-		previousCPUInfo := previousCpuInfos[guid]
+		previousCPUInfo := previousCPUInfos[guid]
 
 		if reporter.enableContainerProxy && container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
@@ -125,7 +125,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, now)
 		if cpu != nil {
-			newCpuInfos[guid] = cpu
+			newCPUInfos[guid] = cpu
 		}
 
 		if repMetrics != nil {
@@ -134,7 +134,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 	}
 
 	reporter.metrics.Store(repMetricsMap)
-	return newCpuInfos
+	return newCPUInfos
 }
 
 func (reporter *StatsReporter) calculateAndSendMetrics(
