@@ -707,9 +707,7 @@ func newAllocationRequest(guid string, tagses ...executor.Tags) executor.Allocat
 }
 
 func newRunRequest(guid string) *executor.RunRequest {
-	runInfo := executor.RunInfo{
-	// TODO: Fill in required fields.
-	}
+	runInfo := executor.RunInfo{}
 	r := executor.NewRunRequest(guid, &runInfo, nil)
 	return &r
 }
