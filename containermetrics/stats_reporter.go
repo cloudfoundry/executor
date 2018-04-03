@@ -171,10 +171,10 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	return &currentInfo
 }
 
-// scale from 0 - 100
+// scale from (0 - 100) * runtime.NumCPU()
 func computeCPUPercent(timeSpentA, timeSpentB time.Duration, sampleTimeA, sampleTimeB time.Time) float64 {
 	// divide change in time spent in CPU over time between samples.
-	// result is out of 100.
+	// result is out of 100 * runtime.NumCPU()
 	//
 	// don't worry about overflowing int64. it's like, 30 years.
 	return float64((timeSpentB-timeSpentA)*100) / float64(sampleTimeB.UnixNano()-sampleTimeA.UnixNano())
