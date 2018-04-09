@@ -168,7 +168,7 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 
 	return &CachedContainerMetrics{
 		MetricGUID:       metricsConfig.Guid,
-		CPUUsageFraction: cpuPercent,
+		CPUUsageFraction: cpuPercent / 100,
 		DiskUsageBytes:   containerMetrics.DiskUsageInBytes,
 		DiskQuotaBytes:   containerMetrics.DiskLimitInBytes,
 		MemoryUsageBytes: containerMetrics.MemoryUsageInBytes,

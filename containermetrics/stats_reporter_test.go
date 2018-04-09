@@ -438,7 +438,7 @@ var _ = Describe("StatsReporter", func() {
 					Expect(containerMetrics).To(HaveLen(4))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-index", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "metrics-guid-without-index",
-						CPUUsageFraction: 50.0,
+						CPUUsageFraction: 0.5,
 						MemoryUsageBytes: megsToBytes(1230),
 						DiskUsageBytes:   4560,
 						MemoryQuotaBytes: megsToBytes(7890),
@@ -446,7 +446,7 @@ var _ = Describe("StatsReporter", func() {
 					}))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-with-index", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "metrics-guid-with-index",
-						CPUUsageFraction: 100.0,
+						CPUUsageFraction: 1.0,
 						MemoryUsageBytes: megsToBytes(3210),
 						DiskUsageBytes:   6540,
 						MemoryQuotaBytes: megsToBytes(9870),
@@ -454,7 +454,7 @@ var _ = Describe("StatsReporter", func() {
 					}))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-metrics-guid", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "",
-						CPUUsageFraction: 10.0,
+						CPUUsageFraction: 0.1,
 						MemoryUsageBytes: megsToBytes(123),
 						DiskUsageBytes:   megsToBytes(456),
 						MemoryQuotaBytes: megsToBytes(789),
@@ -462,7 +462,7 @@ var _ = Describe("StatsReporter", func() {
 					}))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-preloaded-rootfs", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "metrics-guid-without-preloaded-rootfs",
-						CPUUsageFraction: 100.0,
+						CPUUsageFraction: 1.0,
 						MemoryUsageBytes: megsToBytes(3450),
 						DiskUsageBytes:   4560,
 						MemoryQuotaBytes: megsToBytes(6780),
