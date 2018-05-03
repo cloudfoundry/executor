@@ -3,6 +3,7 @@ package containerstore_test
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -325,6 +326,8 @@ var _ = Describe("ProxyManager", func() {
 			Expect(cluster.Hosts).To(Equal([]envoy.Address{
 				{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 			}))
+			Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(1))
+			Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections).To(BeNumerically("==", math.MaxUint32))
 
 			Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{
 				Path: "/etc/cf-assets/envoy_config/listeners.yaml",

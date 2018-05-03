@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -294,7 +295,12 @@ func generateProxyConfig(logger lager.Logger, container executor.Container, refr
 			ConnectionTimeout: TimeOut,
 			Type:              Static,
 			LbPolicy:          RoundRobin,
-			Hosts:             []envoy.Address{envoy.Address{SocketAddress: envoy.SocketAddress{Address: container.InternalIP, PortValue: portMap.ContainerPort}}},
+			Hosts: []envoy.Address{
+				{SocketAddress: envoy.SocketAddress{Address: container.InternalIP, PortValue: portMap.ContainerPort}},
+			},
+			CircuitBreakers: envoy.CircuitBreakers{Thresholds: []envoy.Threshold{
+				{MaxConnections: math.MaxUint32},
+			}},
 		})
 	}
 

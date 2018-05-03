@@ -63,12 +63,21 @@ type Admin struct {
 	Address       Address `yaml:"address"`
 }
 
+type Threshold struct {
+	MaxConnections uint32 `yaml:"max_connections"`
+}
+
+type CircuitBreakers struct {
+	Thresholds []Threshold `yamls:"thresholds"`
+}
+
 type Cluster struct {
-	Name              string    `yaml:"name"`
-	ConnectionTimeout string    `yaml:"connect_timeout"`
-	Type              string    `yaml:"type"`
-	LbPolicy          string    `yaml:"lb_policy"`
-	Hosts             []Address `yaml:"hosts"`
+	Name              string          `yaml:"name"`
+	ConnectionTimeout string          `yaml:"connect_timeout"`
+	Type              string          `yaml:"type"`
+	LbPolicy          string          `yaml:"lb_policy"`
+	Hosts             []Address       `yaml:"hosts"`
+	CircuitBreakers   CircuitBreakers `yaml:"circuit_breakers"`
 }
 
 type StaticResources struct {
