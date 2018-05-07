@@ -183,8 +183,14 @@ func (n *storeNode) Create(logger lager.Logger) error {
 
 	volumeMounts, err := n.mountVolumes(logger, info)
 	if err != nil {
+		var failMsg string
+		if safeError, ok := err.(volman.SafeError); ok {
+			failMsg = fmt.Sprintf("%s, errors: %s", VolmanMountFailed, safeError.Error())
+		} else {
+			failMsg = VolmanMountFailed
+		}
 		logger.Error("failed-to-mount-volume", err)
-		n.complete(logger, true, VolmanMountFailed)
+		n.complete(logger, true, failMsg)
 		return err
 	}
 	n.bindMounts = append(n.bindMounts, volumeMounts...)

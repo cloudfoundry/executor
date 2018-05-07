@@ -706,21 +706,43 @@ var _ = Describe("Container Store", func() {
 				})
 
 				Context("when it errors on mount", func() {
-					BeforeEach(func() {
-						volumeManager.MountReturns(volman.MountResponse{Path: "host-path"}, errors.New("some-error"))
+					Context("when the driver returns a safeError", func() {
+						BeforeEach(func() {
+							volumeManager.MountReturns(volman.MountResponse{Path: "host-path"}, volman.SafeError{SafeDescription: "some-error"})
+						})
+
+						It("fails fast and completes the container", func() {
+							_, err := containerStore.Create(logger, containerGuid)
+							Expect(err).To(HaveOccurred())
+							Expect(volumeManager.MountCallCount()).To(Equal(1))
+
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(container.State).To(Equal(executor.StateCompleted))
+							Expect(container.RunResult.Failed).To(BeTrue())
+							Expect(container.RunResult.FailureReason).To(Equal(fmt.Sprintf("%s, errors: some-error", containerstore.VolmanMountFailed)))
+						})
+
 					})
 
-					It("fails fast and completes the container", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(HaveOccurred())
-						Expect(volumeManager.MountCallCount()).To(Equal(1))
+					Context("when the driver returns a unsafeError", func() {
+						BeforeEach(func() {
+							volumeManager.MountReturns(volman.MountResponse{Path: "host-path"}, errors.New("some-error"))
+						})
 
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(container.State).To(Equal(executor.StateCompleted))
-						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect(container.RunResult.FailureReason).To(Equal(containerstore.VolmanMountFailed))
+						It("fails fast and completes the container", func() {
+							_, err := containerStore.Create(logger, containerGuid)
+							Expect(err).To(HaveOccurred())
+							Expect(volumeManager.MountCallCount()).To(Equal(1))
+
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(container.State).To(Equal(executor.StateCompleted))
+							Expect(container.RunResult.Failed).To(BeTrue())
+							Expect(container.RunResult.FailureReason).To(Equal(containerstore.VolmanMountFailed))
+						})
 					})
+
 				})
 			})
 
