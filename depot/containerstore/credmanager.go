@@ -39,6 +39,7 @@ type Credential struct {
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
+	RemoveCredDir(lager.Logger, executor.Container) error
 	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential)
 }
 
@@ -50,6 +51,10 @@ func NewNoopCredManager() CredManager {
 
 func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	return nil, nil, nil
+}
+
+func (c *noopManager) RemoveCredDir(logger lager.Logger, container executor.Container) error {
+	return nil
 }
 
 func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential) {
@@ -154,7 +159,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 			case signal := <-signals:
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				close(rotatingCred)
-				return c.removeCreds(logger, container)
+				return nil
 			}
 		}
 	})
@@ -297,17 +302,12 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	return creds, nil
 }
 
-func (c *credManager) removeCreds(logger lager.Logger, container executor.Container) error {
+func (c *credManager) RemoveCredDir(logger lager.Logger, container executor.Container) error {
 	logger = logger.Session("remove-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	err := os.RemoveAll(filepath.Join(c.credDir, container.Guid))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return os.RemoveAll(filepath.Join(c.credDir, container.Guid))
 }
 
 func pemEncode(bytes []byte, blockType string, writer io.Writer) error {

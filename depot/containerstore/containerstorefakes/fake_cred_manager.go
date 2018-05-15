@@ -28,6 +28,18 @@ type FakeCredManager struct {
 		result2 []executor.EnvironmentVariable
 		result3 error
 	}
+	RemoveCredDirStub        func(lager.Logger, executor.Container) error
+	removeCredDirMutex       sync.RWMutex
+	removeCredDirArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}
+	removeCredDirReturns struct {
+		result1 error
+	}
+	removeCredDirReturnsOnCall map[int]struct {
+		result1 error
+	}
 	RunnerStub        func(lager.Logger, executor.Container) (ifrit.Runner, <-chan containerstore.Credential)
 	runnerMutex       sync.RWMutex
 	runnerArgsForCall []struct {
@@ -101,6 +113,55 @@ func (fake *FakeCredManager) CreateCredDirReturnsOnCall(i int, result1 []garden.
 	}{result1, result2, result3}
 }
 
+func (fake *FakeCredManager) RemoveCredDir(arg1 lager.Logger, arg2 executor.Container) error {
+	fake.removeCredDirMutex.Lock()
+	ret, specificReturn := fake.removeCredDirReturnsOnCall[len(fake.removeCredDirArgsForCall)]
+	fake.removeCredDirArgsForCall = append(fake.removeCredDirArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}{arg1, arg2})
+	fake.recordInvocation("RemoveCredDir", []interface{}{arg1, arg2})
+	fake.removeCredDirMutex.Unlock()
+	if fake.RemoveCredDirStub != nil {
+		return fake.RemoveCredDirStub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fake.removeCredDirReturns.result1
+}
+
+func (fake *FakeCredManager) RemoveCredDirCallCount() int {
+	fake.removeCredDirMutex.RLock()
+	defer fake.removeCredDirMutex.RUnlock()
+	return len(fake.removeCredDirArgsForCall)
+}
+
+func (fake *FakeCredManager) RemoveCredDirArgsForCall(i int) (lager.Logger, executor.Container) {
+	fake.removeCredDirMutex.RLock()
+	defer fake.removeCredDirMutex.RUnlock()
+	return fake.removeCredDirArgsForCall[i].arg1, fake.removeCredDirArgsForCall[i].arg2
+}
+
+func (fake *FakeCredManager) RemoveCredDirReturns(result1 error) {
+	fake.RemoveCredDirStub = nil
+	fake.removeCredDirReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeCredManager) RemoveCredDirReturnsOnCall(i int, result1 error) {
+	fake.RemoveCredDirStub = nil
+	if fake.removeCredDirReturnsOnCall == nil {
+		fake.removeCredDirReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.removeCredDirReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) (ifrit.Runner, <-chan containerstore.Credential) {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
@@ -158,6 +219,8 @@ func (fake *FakeCredManager) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.createCredDirMutex.RLock()
 	defer fake.createCredDirMutex.RUnlock()
+	fake.removeCredDirMutex.RLock()
+	defer fake.removeCredDirMutex.RUnlock()
 	fake.runnerMutex.RLock()
 	defer fake.runnerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

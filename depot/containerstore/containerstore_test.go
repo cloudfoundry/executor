@@ -2030,10 +2030,16 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("cleans up the credentials dir", func() {
+			err := containerStore.Destroy(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(credManager.RemoveCredDirCallCount()).To(Equal(1))
+		})
+
 		It("cleans up the proxy config dir", func() {
 			err := containerStore.Destroy(logger, containerGuid)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(2))
+			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(1))
 		})
 
 		Context("when there are volumes mounted", func() {
@@ -2853,6 +2859,12 @@ var _ = Describe("Container Store", func() {
 			Eventually(gardenClient.ContainersCallCount).Should(Equal(4))
 
 			Eventually(logger).Should(gbytes.Say("reaped-missing-container"))
+		})
+
+		It("removes the proxy configuration and credentials directories", func() {
+			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
+			Eventually(credManager.RemoveCredDirCallCount).Should(Equal(2))
+			Eventually(proxyManager.RemoveProxyConfigDirCallCount).Should(Equal(2))
 		})
 
 		Context("while in the process of reaping containers", func() {

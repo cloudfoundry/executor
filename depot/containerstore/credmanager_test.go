@@ -476,8 +476,9 @@ var _ = Describe("CredManager", func() {
 					containerProcess.Signal(os.Interrupt)
 				})
 
-				It("removes container credentials from the filesystem", func() {
-					Eventually(certMount[0].SrcPath).ShouldNot(BeADirectory())
+				// deleting the directory this early can cause failures on windows 1803, see #156406881
+				It("does not remove container credentials from the filesystem", func() {
+					Eventually(certMount[0].SrcPath).Should(BeADirectory())
 				})
 
 				It("closes the rotating cred channel", func() {

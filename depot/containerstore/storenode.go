@@ -341,7 +341,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	containerInfo, err := gardenContainer.Info()
 	if err != nil {
-		n.destroyContainer(logger)
+		if err := n.destroyContainer(logger); err != nil {
+			logger.Error("failed-to-destroy-container", err)
+		}
 		return nil, err
 	}
 
@@ -533,12 +535,15 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 
 	n.infoLock.Lock()
 	info := n.info.Copy()
-	n.removeProxyConfigDir(logger, info)
 	n.infoLock.Unlock()
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, n.Info().Guid)
+
+	// ensure these directories are removed even if the container fails to destroy
+	defer n.removeProxyConfigDir(logger, n.info.Copy())
+	defer n.removeCredsDir(logger, n.info.Copy())
 
 	err = n.destroyContainer(logger)
 	if err != nil {
@@ -618,12 +623,17 @@ func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
 	return false
 }
 
+// returns true if the container was reaped (i.e. a container was previously
+// created in garden but disappeared)
 func (n *storeNode) Reap(logger lager.Logger) bool {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
-	n.removeProxyConfigDir(logger, n.info.Copy())
 	if n.info.IsCreated() {
+		// ensure these directories are removed even if the container fails to destroy
+		n.removeProxyConfigDir(logger, n.info.Copy())
+		n.removeCredsDir(logger, n.info.Copy())
+
 		n.info.TransitionToComplete(true, ContainerMissingMessage)
 		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 		return true
@@ -638,15 +648,20 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason)
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
-	n.removeProxyConfigDir(logger, n.info.Copy())
 }
 
-func (n *storeNode) removeProxyConfigDir(logger lager.Logger, info executor.Container) error {
+func (n *storeNode) removeProxyConfigDir(logger lager.Logger, info executor.Container) {
 	err := n.proxyManager.RemoveProxyConfigDir(logger, info)
 	if err != nil {
 		logger.Error("failed-to-delete-container-proxy-config-dir", err)
 	}
-	return err
+}
+
+func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container) {
+	err := n.credManager.RemoveCredDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
 }
 
 func createContainer(logger lager.Logger, spec garden.ContainerSpec, client garden.Client, metronClient loggingclient.IngressClient) (garden.Container, error) {
