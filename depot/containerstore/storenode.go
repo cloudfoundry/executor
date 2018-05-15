@@ -597,6 +597,12 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 	if err := n.metronClient.SendDuration(GardenContainerDestructionSucceededDuration, destroyDuration); err != nil {
 		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerDestructionSucceededDuration})
 	}
+
+	logger.Info("removing-creds", lager.Data{"garden-handle": n.gardenContainer.Handle()})
+	if err := n.removeCredsDir(logger, n.info.Copy()); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -618,6 +624,7 @@ func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
 	return false
 }
 
+// TODO: true if the container was reaped (i.e. was indeed created and transitioned to complete)
 func (n *storeNode) Reap(logger lager.Logger) bool {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
@@ -639,6 +646,14 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	n.info.TransitionToComplete(failed, failureReason)
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 	n.removeProxyConfigDir(logger, n.info.Copy())
+}
+
+func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container) error {
+	err := n.credManager.RemoveCredDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+	return err
 }
 
 func (n *storeNode) removeProxyConfigDir(logger lager.Logger, info executor.Container) error {
