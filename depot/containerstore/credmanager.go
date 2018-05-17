@@ -159,6 +159,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 			case signal := <-signals:
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				close(rotatingCred)
+				return nil
 				// return c.removeCreds(logger, container)
 			}
 		}
