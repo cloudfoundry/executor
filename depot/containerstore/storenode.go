@@ -537,20 +537,20 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
+	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
 
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, n.Info().Guid)
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, info.Guid)
 
 	// ensure these directories are removed even if the container fails to destroy
-	defer n.removeProxyConfigDir(logger, n.info.Copy())
-	defer n.removeCredsDir(logger, n.info.Copy())
+	defer n.removeProxyConfigDir(logger, info)
+	defer n.removeCredsDir(logger, info)
 
 	err = n.destroyContainer(logger)
 	if err != nil {
-		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, n.Info().Guid)
+		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, info.Guid)
 		return err
 	}
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, n.Info().Guid)
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, info.Guid)
 
 	cacheKeys := n.bindMountCacheKeys
 
