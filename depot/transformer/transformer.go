@@ -35,7 +35,6 @@ var HealthCheckDstPath string = filepath.Join(string(os.PathSeparator), "etc", "
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepFor(log_streamer.LogStreamer, *models.Action, garden.Container, string, string, []executor.PortMapping, bool, bool, lager.Logger) steps.Step
 	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
 }
 
@@ -133,7 +132,7 @@ func NewTransformer(
 	return t
 }
 
-func (t *transformer) StepFor(
+func (t *transformer) stepFor(
 	logStreamer log_streamer.LogStreamer,
 	action *models.Action,
 	container garden.Container,
@@ -184,7 +183,7 @@ func (t *transformer) StepFor(
 
 	case *models.EmitProgressAction:
 		return steps.NewEmitProgress(
-			t.StepFor(
+			t.stepFor(
 				logStreamer,
 				actionModel.Action,
 				container,
@@ -204,7 +203,7 @@ func (t *transformer) StepFor(
 
 	case *models.TimeoutAction:
 		return steps.NewTimeout(
-			t.StepFor(
+			t.stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
@@ -221,7 +220,7 @@ func (t *transformer) StepFor(
 
 	case *models.TryAction:
 		return steps.NewTry(
-			t.StepFor(
+			t.stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
@@ -242,7 +241,7 @@ func (t *transformer) StepFor(
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-				subStep = steps.NewOutputWrapper(t.StepFor(
+				subStep = steps.NewOutputWrapper(t.stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
@@ -256,7 +255,7 @@ func (t *transformer) StepFor(
 					buffer,
 				)
 			} else {
-				subStep = t.StepFor(
+				subStep = t.stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
@@ -279,7 +278,7 @@ func (t *transformer) StepFor(
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
-				subStep = steps.NewOutputWrapper(t.StepFor(
+				subStep = steps.NewOutputWrapper(t.stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
@@ -293,7 +292,7 @@ func (t *transformer) StepFor(
 					buffer,
 				)
 			} else {
-				subStep = t.StepFor(
+				subStep = t.stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
@@ -313,7 +312,7 @@ func (t *transformer) StepFor(
 	case *models.SerialAction:
 		subSteps := make([]steps.Step, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			subSteps[i] = t.StepFor(
+			subSteps[i] = t.stepFor(
 				logStreamer,
 				action,
 				container,
@@ -365,7 +364,7 @@ func (t *transformer) StepsRunner(
 	var substeps []steps.Step
 
 	if container.Setup != nil {
-		setup = t.StepFor(
+		setup = t.stepFor(
 			logStreamer,
 			container.Setup,
 			gardenContainer,
@@ -405,7 +404,7 @@ func (t *transformer) StepsRunner(
 		return nil, err
 	}
 
-	action = t.StepFor(
+	action = t.stepFor(
 		logStreamer,
 		container.Action,
 		gardenContainer,
@@ -461,7 +460,7 @@ func (t *transformer) StepsRunner(
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
 			func() steps.Step {
-				return t.StepFor(
+				return t.stepFor(
 					logStreamer,
 					container.Monitor,
 					gardenContainer,
