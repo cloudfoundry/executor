@@ -1,28 +1,29 @@
 package steps
 
 import (
+	"os"
+
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type backgroundStep struct {
-	substep Step
+	substep ifrit.Runner
 	logger  lager.Logger
-	*canceller
 }
 
-func NewBackground(substep Step, logger lager.Logger) *backgroundStep {
+func NewBackground(substep ifrit.Runner, logger lager.Logger) *backgroundStep {
 	logger = logger.Session("background-step")
 	return &backgroundStep{
-		substep:   substep,
-		logger:    logger,
-		canceller: newCanceller(),
+		substep: substep,
+		logger:  logger,
 	}
 }
 
-func (step *backgroundStep) Perform() error {
+func (step *backgroundStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	errCh := make(chan error)
 	go func() {
-		errCh <- step.substep.Perform()
+		errCh <- step.substep.Run(nil, nil)
 	}()
 
 	select {
@@ -31,10 +32,9 @@ func (step *backgroundStep) Perform() error {
 			step.logger.Info("failed", lager.Data{
 				"error": err.Error(),
 			})
-
 		}
 		return err
-	case <-step.cancelled:
+	case <-signals:
 		step.logger.Info("detaching-from-substep")
 		return nil
 	}

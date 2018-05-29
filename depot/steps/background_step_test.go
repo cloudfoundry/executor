@@ -2,19 +2,35 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
 )
 
-var _ = Describe("BackgroundStep", func() {
+// we should probably switch over to use counterfieter for this... i initially thought this might be simpler, but i'm not sure that's true
+type fakeRunner struct {
+	runCallCount, signalCount int
+	runErr                    error
+}
+
+func (fr *fakeRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	fr.runCallCount++
+	if signals != nil {
+		<-signals
+		fr.signalCount++
+	}
+	return fr.runErr
+}
+
+var _ = FDescribe("BackgroundStep", func() {
 	var (
 		substepPerformError error
-		substep             *fakes.FakeStep
+		substep             *fakeRunner
 		logger              *lagertest.TestLogger
 	)
 
@@ -27,16 +43,9 @@ var _ = Describe("BackgroundStep", func() {
 			err error
 		)
 
-		BeforeEach(func() {
-			substep = &fakes.FakeStep{
-				PerformStub: func() error {
-					return substepPerformError
-				},
-			}
-		})
-
 		JustBeforeEach(func() {
-			err = steps.NewBackground(substep, logger).Perform()
+			substep = &fakeRunner{runErr: substepPerformError}
+			err = steps.NewBackground(substep, logger).Run(nil, nil)
 		})
 
 		Context("when the substep returns an error", func() {
@@ -45,7 +54,7 @@ var _ = Describe("BackgroundStep", func() {
 			})
 
 			It("performs the substep", func() {
-				Expect(substep.PerformCallCount()).To(Equal(1))
+				Expect(substep.runCallCount).To(Equal(1))
 			})
 
 			It("returns this error", func() {
@@ -59,7 +68,7 @@ var _ = Describe("BackgroundStep", func() {
 			})
 
 			It("performs the substep", func() {
-				Expect(substep.PerformCallCount()).To(Equal(1))
+				Expect(substep.runCallCount).To(Equal(1))
 			})
 
 			It("does not error", func() {
@@ -70,37 +79,29 @@ var _ = Describe("BackgroundStep", func() {
 
 	Describe("Cancel", func() {
 		var (
-			errs          chan error
-			step          steps.Step
-			blkChannel    chan struct{}
-			calledChannel chan struct{}
+			errs    chan error
+			signals chan os.Signal
+			step    ifrit.Runner
 		)
 
 		BeforeEach(func() {
-			errs = make(chan error, 10)
-			calledChannel = make(chan struct{}, 10)
-			blkChannel = make(chan struct{})
-			substep = &fakes.FakeStep{
-				PerformStub: func() error {
-					calledChannel <- struct{}{}
-					<-blkChannel
-					return nil
-				},
-			}
+			errs = make(chan error, 1)
+			signals = make(chan os.Signal, 1)
+			substep = &fakeRunner{}
 			step = steps.NewBackground(substep, logger)
 		})
 
 		JustBeforeEach(func() {
 			go func() {
-				errs <- step.Perform()
+				errs <- step.Run(signals, nil)
 			}()
 		})
 
 		It("never cancels the substep", func() {
-			Eventually(calledChannel).Should(Receive())
-			step.Cancel()
+			Eventually(substep.runCallCount).Should(Equal(1)) // I HAVE NO IDEA WHY THIS IS FAILING!
+			signals <- os.Interrupt
 			Eventually(errs).Should(Receive())
-			Expect(substep.CancelCallCount()).To(BeZero())
+			Expect(substep.signalCount).To(BeZero())
 		})
 	})
 })
