@@ -21,7 +21,7 @@ type FakeClient struct {
 	pingReturnsOnCall map[int]struct {
 		result1 error
 	}
-	AllocateContainersStub        func(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error)
+	AllocateContainersStub        func(logger lager.Logger, requests []executor.AllocationRequest) []executor.AllocationFailure
 	allocateContainersMutex       sync.RWMutex
 	allocateContainersArgsForCall []struct {
 		logger   lager.Logger
@@ -29,11 +29,9 @@ type FakeClient struct {
 	}
 	allocateContainersReturns struct {
 		result1 []executor.AllocationFailure
-		result2 error
 	}
 	allocateContainersReturnsOnCall map[int]struct {
 		result1 []executor.AllocationFailure
-		result2 error
 	}
 	GetContainerStub        func(logger lager.Logger, guid string) (executor.Container, error)
 	getContainerMutex       sync.RWMutex
@@ -252,7 +250,7 @@ func (fake *FakeClient) PingReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeClient) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
+func (fake *FakeClient) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) []executor.AllocationFailure {
 	var requestsCopy []executor.AllocationRequest
 	if requests != nil {
 		requestsCopy = make([]executor.AllocationRequest, len(requests))
@@ -270,9 +268,9 @@ func (fake *FakeClient) AllocateContainers(logger lager.Logger, requests []execu
 		return fake.AllocateContainersStub(logger, requests)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2
+		return ret.result1
 	}
-	return fake.allocateContainersReturns.result1, fake.allocateContainersReturns.result2
+	return fake.allocateContainersReturns.result1
 }
 
 func (fake *FakeClient) AllocateContainersCallCount() int {
@@ -287,26 +285,23 @@ func (fake *FakeClient) AllocateContainersArgsForCall(i int) (lager.Logger, []ex
 	return fake.allocateContainersArgsForCall[i].logger, fake.allocateContainersArgsForCall[i].requests
 }
 
-func (fake *FakeClient) AllocateContainersReturns(result1 []executor.AllocationFailure, result2 error) {
+func (fake *FakeClient) AllocateContainersReturns(result1 []executor.AllocationFailure) {
 	fake.AllocateContainersStub = nil
 	fake.allocateContainersReturns = struct {
 		result1 []executor.AllocationFailure
-		result2 error
-	}{result1, result2}
+	}{result1}
 }
 
-func (fake *FakeClient) AllocateContainersReturnsOnCall(i int, result1 []executor.AllocationFailure, result2 error) {
+func (fake *FakeClient) AllocateContainersReturnsOnCall(i int, result1 []executor.AllocationFailure) {
 	fake.AllocateContainersStub = nil
 	if fake.allocateContainersReturnsOnCall == nil {
 		fake.allocateContainersReturnsOnCall = make(map[int]struct {
 			result1 []executor.AllocationFailure
-			result2 error
 		})
 	}
 	fake.allocateContainersReturnsOnCall[i] = struct {
 		result1 []executor.AllocationFailure
-		result2 error
-	}{result1, result2}
+	}{result1}
 }
 
 func (fake *FakeClient) GetContainer(logger lager.Logger, guid string) (executor.Container, error) {

@@ -10,7 +10,7 @@ import (
 
 type Client interface {
 	Ping(logger lager.Logger) error
-	AllocateContainers(logger lager.Logger, requests []AllocationRequest) ([]AllocationFailure, error)
+	AllocateContainers(logger lager.Logger, requests []AllocationRequest) []AllocationFailure
 	GetContainer(logger lager.Logger, guid string) (Container, error)
 	RunContainer(lager.Logger, *RunRequest) error
 	StopContainer(logger lager.Logger, guid string) error

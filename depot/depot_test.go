@@ -68,8 +68,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate the container", func() {
-				errMessageMap, err := depotClient.AllocateContainers(logger, requests)
-				Expect(err).NotTo(HaveOccurred())
+				errMessageMap := depotClient.AllocateContainers(logger, requests)
 				Expect(errMessageMap).To(BeEmpty())
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(1))
@@ -90,8 +89,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate all the containers", func() {
-				errMessageMap, err := depotClient.AllocateContainers(logger, requests)
-				Expect(err).NotTo(HaveOccurred())
+				errMessageMap := depotClient.AllocateContainers(logger, requests)
 				Expect(errMessageMap).To(BeEmpty())
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(3))
@@ -128,8 +126,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with duplicate guid", func() {
-				failures, err := depotClient.AllocateContainers(logger, requests)
-				Expect(err).NotTo(HaveOccurred())
+				failures := depotClient.AllocateContainers(logger, requests)
 
 				Expect(failures).To(HaveLen(1))
 				expectedFailure := executor.NewAllocationFailure(&requests[0], executor.ErrContainerGuidNotAvailable.Error())
@@ -155,8 +152,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with empty guid", func() {
-				failures, err := depotClient.AllocateContainers(logger, requests)
-				Expect(err).NotTo(HaveOccurred())
+				failures := depotClient.AllocateContainers(logger, requests)
 				Expect(failures).To(HaveLen(1))
 				expectedFailure := executor.NewAllocationFailure(&requests[1], executor.ErrGuidNotSpecified.Error())
 				Expect(failures[0]).To(BeEquivalentTo(expectedFailure))

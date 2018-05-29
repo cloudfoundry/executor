@@ -78,7 +78,7 @@ func (c *client) Cleanup(logger lager.Logger) {
 	c.containerStore.Cleanup(logger)
 }
 
-func (c *client) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) ([]executor.AllocationFailure, error) {
+func (c *client) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) []executor.AllocationFailure {
 	logger = logger.Session("allocate-containers")
 	failures := make([]executor.AllocationFailure, 0)
 
@@ -99,7 +99,7 @@ func (c *client) AllocateContainers(logger lager.Logger, requests []executor.All
 		}
 	}
 
-	return failures, nil
+	return failures
 }
 
 func (c *client) GetContainer(logger lager.Logger, guid string) (executor.Container, error) {
