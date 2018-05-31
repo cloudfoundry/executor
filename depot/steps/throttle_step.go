@@ -1,31 +1,30 @@
 package steps
 
 import (
+	"os"
+
 	"code.cloudfoundry.org/workpool"
+	"github.com/tedsuo/ifrit"
 )
 
 type throttleStep struct {
-	substep  Step
+	substep  ifrit.Runner
 	workPool *workpool.WorkPool
 }
 
-func NewThrottle(substep Step, workPool *workpool.WorkPool) *throttleStep {
+func NewThrottle(substep ifrit.Runner, workPool *workpool.WorkPool) *throttleStep {
 	return &throttleStep{
 		substep:  substep,
 		workPool: workPool,
 	}
 }
 
-func (step *throttleStep) Perform() error {
+func (step *throttleStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	stepResult := make(chan error)
 
 	step.workPool.Submit(func() {
-		stepResult <- step.substep.Perform()
+		stepResult <- step.substep.Run(signals, ready)
 	})
 
 	return <-stepResult
-}
-
-func (step *throttleStep) Cancel() {
-	step.substep.Cancel()
 }

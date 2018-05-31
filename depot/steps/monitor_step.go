@@ -21,15 +21,17 @@ func NewMonitor(
 	workPool *workpool.WorkPool,
 	proxyReadinessChecks ...Step,
 ) Step {
-	throttledCheckFunc := func() Step {
-		return NewThrottle(checkFunc(), workPool)
-	}
+	// throttledCheckFunc := func() ifrit.Runner {
+	// 	return NewThrottle(checkFunc(), workPool)
+	// }
 
-	readiness := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
-	liveness := NewConsistentlySucceedsStep(throttledCheckFunc, healthyInterval, clock)
+	//	readiness := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
+	//	liveness := NewConsistentlySucceedsStep(throttledCheckFunc, healthyInterval, clock)
+	//
+	//	// add the proxy readiness checks (if any)
+	//	readiness = NewParallel(append(proxyReadinessChecks, readiness))
+	//
+	//	return NewHealthCheckStep(readiness, liveness, hasStartedRunning, logger, clock, logStreamer, logStreamer, startTimeout)
 
-	// add the proxy readiness checks (if any)
-	readiness = NewParallel(append(proxyReadinessChecks, readiness))
-
-	return NewHealthCheckStep(readiness, liveness, hasStartedRunning, logger, clock, logStreamer, logStreamer, startTimeout)
+	return nil
 }

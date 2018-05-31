@@ -2,6 +2,7 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -10,21 +11,20 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
 )
 
-var _ = Describe("EventuallySucceedsStep", func() {
+var _ = FDescribe("EventuallySucceedsStep", func() {
 	var (
-		step      steps.Step
+		step    ifrit.Runner
+		process ifrit.Process
+
 		fakeStep  *fakes.FakeStep
 		fakeClock *fakeclock.FakeClock
-		errCh     chan error
-		done      chan struct{}
 		blockCh   chan error
 	)
 
 	BeforeEach(func() {
-		errCh = make(chan error, 1)
-		done = make(chan struct{}, 1)
 		fakeClock = fakeclock.NewFakeClock(time.Now())
 		fakeStep = &fakes.FakeStep{}
 		blockCh = make(chan error, 10)
@@ -36,16 +36,13 @@ var _ = Describe("EventuallySucceedsStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		go func() {
-			errCh <- step.Perform()
-			close(done)
-		}()
+		process = ifrit.Background(step)
 	})
 
 	AfterEach(func() {
 		close(blockCh)
-		step.Cancel()
-		Eventually(done).Should(BeClosed())
+		process.Signal(os.Interrupt)
+		Eventually(process.Wait()).Should(Receive())
 	})
 
 	It("should not trigger the substep initially", func() {
@@ -59,21 +56,22 @@ var _ = Describe("EventuallySucceedsStep", func() {
 		})
 
 		It("should exits with no errors", func() {
-			Eventually(errCh).Should(Receive(BeNil()))
+			Eventually(process.Wait()).Should(Receive(BeNil()))
 		})
 	})
 
 	Context("when the step is stuck", func() {
-		Context("and the step is cancelled", func() {
+		Context("and the step is signalled", func() {
 			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(time.Second)
-				step.Cancel()
+				Eventually(fakeStep.PerformCallCount).Should(Equal(1))
+				process.Signal(os.Interrupt)
 			})
 
 			It("cancels the substep", func() {
 				Eventually(fakeStep.CancelCallCount).ShouldNot(BeZero())
 				blockCh <- errors.New("BOOOOM")
-				Eventually(errCh).Should(Receive(MatchError("BOOOOM")))
+				Eventually(process.Wait()).Should(Receive(MatchError("BOOOOM")))
 			})
 		})
 	})
@@ -86,12 +84,11 @@ var _ = Describe("EventuallySucceedsStep", func() {
 
 		Context("when the step is cancelled", func() {
 			JustBeforeEach(func() {
-				Eventually(fakeStep.PerformCallCount).Should(Equal(1))
-				step.Cancel()
+				process.Signal(os.Interrupt)
 			})
 
 			It("returns ErrCancelled", func() {
-				Eventually(errCh).Should(Receive(MatchError(steps.ErrCancelled)))
+				Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
 			})
 		})
 
@@ -108,7 +105,7 @@ var _ = Describe("EventuallySucceedsStep", func() {
 			})
 
 			It("returns the last error received from the substep", func() {
-				Eventually(errCh).Should(Receive(MatchError(ContainSubstring("BOOOOM"))))
+				Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("BOOOOM"))))
 			})
 		})
 
@@ -120,7 +117,7 @@ var _ = Describe("EventuallySucceedsStep", func() {
 			})
 
 			It("should succeed", func() {
-				Eventually(errCh).Should(Receive(BeNil()))
+				Eventually(process.Wait()).Should(Receive(BeNil()))
 			})
 		})
 	})
