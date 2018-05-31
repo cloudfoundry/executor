@@ -23,7 +23,7 @@ func NewBackground(substep ifrit.Runner, logger lager.Logger) *backgroundStep {
 func (step *backgroundStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	errCh := make(chan error)
 	go func() {
-		errCh <- step.substep.Run(nil, nil)
+		errCh <- step.substep.Run(make(chan os.Signal, 1), ready)
 	}()
 
 	select {

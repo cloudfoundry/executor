@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -32,7 +33,6 @@ type runStep struct {
 	gracefulShutdownInterval time.Duration
 	suppressExitStatusCode   bool
 	sidecar                  Sidecar
-	*canceller
 }
 
 type Sidecar struct {
@@ -97,21 +97,18 @@ func NewRunWithSidecar(
 		gracefulShutdownInterval: gracefulShutdownInterval,
 		suppressExitStatusCode:   suppressExitStatusCode,
 		sidecar:                  sidecar,
-		canceller:                newCanceller(),
 	}
 }
 
-func (step *runStep) Perform() error {
+func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	step.logger.Info("running")
 
 	envVars := convertEnvironmentVariables(step.model.Env)
 
 	envVars = append(envVars, step.networkingEnvVars()...)
 
-	cancel := step.Cancelled()
-
 	select {
-	case <-cancel:
+	case <-signals:
 		step.logger.Info("cancelled-before-creating-process")
 		return ErrCancelled
 	default:
@@ -174,13 +171,15 @@ func (step *runStep) Perform() error {
 			return err
 		}
 	case process = <-processChan:
-	case <-cancel:
+	case <-signals:
 		step.logger.Info("cancelled-before-process-creation-completed")
 		return ErrCancelled
 	}
 
 	logger := step.logger.WithData(lager.Data{"process": process.ID()})
 	logger.Debug("successful-process-create", lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
+
+	close(ready)
 
 	go func() {
 		exitStatus, err := process.Wait()
@@ -197,7 +196,7 @@ func (step *runStep) Perform() error {
 	for {
 		select {
 		case exitStatus := <-exitStatusChan:
-			cancelled := cancel == nil
+			cancelled := signals == nil
 
 			logger.Info("process-exit", lager.Data{
 				"exitStatus": exitStatus,
@@ -246,7 +245,7 @@ func (step *runStep) Perform() error {
 			logger.Error("running-error", err)
 			return err
 
-		case <-cancel:
+		case <-signals:
 			logger.Debug("signalling-terminate")
 			err := process.Signal(garden.SignalTerminate)
 			if err != nil {
@@ -254,7 +253,7 @@ func (step *runStep) Perform() error {
 			}
 
 			logger.Debug("signalling-terminate-success")
-			cancel = nil
+			signals = nil
 
 			killTimer := step.clock.NewTimer(step.gracefulShutdownInterval)
 			defer killTimer.Stop()

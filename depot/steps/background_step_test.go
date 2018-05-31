@@ -10,98 +10,78 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
-// we should probably switch over to use counterfieter for this... i initially thought this might be simpler, but i'm not sure that's true
-type fakeRunner struct {
-	runCallCount, signalCount int
-	runErr                    error
-}
-
-func (fr *fakeRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	fr.runCallCount++
-	if signals != nil {
-		<-signals
-		fr.signalCount++
-	}
-	return fr.runErr
-}
-
-var _ = FDescribe("BackgroundStep", func() {
+var _ = Describe("BackgroundStep", func() {
 	var (
-		substepPerformError error
-		substep             *fakeRunner
-		logger              *lagertest.TestLogger
+		substepRunError error
+		substep         *fake_runner.TestRunner
+		logger          *lagertest.TestLogger
+		process         ifrit.Process
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
+		substep = fake_runner.NewTestRunner()
+		process = ifrit.Background(steps.NewBackground(substep, logger))
 	})
 
-	Describe("Perform", func() {
-		var (
-			err error
-		)
+	Describe("Run", func() {
+		Context("when the substep exits", func() {
+			JustBeforeEach(func() {
+				substep.TriggerExit(substepRunError)
+			})
 
-		JustBeforeEach(func() {
-			substep = &fakeRunner{runErr: substepPerformError}
-			err = steps.NewBackground(substep, logger).Run(nil, nil)
+			Context("when the substep returns an error", func() {
+				BeforeEach(func() {
+					substepRunError = errors.New("some error")
+				})
+
+				It("performs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
+				})
+
+				It("returns this error", func() {
+					Eventually(process.Wait()).Should(Receive(Equal(substepRunError)))
+				})
+			})
+
+			Context("when the substep does not error", func() {
+				BeforeEach(func() {
+					substepRunError = nil
+				})
+
+				It("performs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
+				})
+
+				It("does not error", func() {
+					Eventually(process.Wait()).Should(Receive(BeNil()))
+				})
+			})
 		})
 
-		Context("when the substep returns an error", func() {
-			BeforeEach(func() {
-				substepPerformError = errors.New("some error")
-			})
-
-			It("performs the substep", func() {
-				Expect(substep.runCallCount).To(Equal(1))
-			})
-
-			It("returns this error", func() {
-				Expect(err).To(Equal(substepPerformError))
+		Context("when the substep does not exit", func() {
+			It("does not exit", func() {
+				Consistently(process.Wait()).ShouldNot(Receive())
 			})
 		})
 
-		Context("when the substep does not error", func() {
-			BeforeEach(func() {
-				substepPerformError = nil
-			})
-
-			It("performs the substep", func() {
-				Expect(substep.runCallCount).To(Equal(1))
-			})
-
-			It("does not error", func() {
-				Expect(err).NotTo(HaveOccurred())
+		Context("readiness", func() {
+			It("becomes ready when the substep is ready", func() {
+				Consistently(process.Ready()).ShouldNot(BeClosed())
+				substep.TriggerReady()
+				Eventually(process.Ready()).Should(BeClosed())
 			})
 		})
 	})
 
-	Describe("Cancel", func() {
-		var (
-			errs    chan error
-			signals chan os.Signal
-			step    ifrit.Runner
-		)
-
-		BeforeEach(func() {
-			errs = make(chan error, 1)
-			signals = make(chan os.Signal, 1)
-			substep = &fakeRunner{}
-			step = steps.NewBackground(substep, logger)
-		})
-
-		JustBeforeEach(func() {
-			go func() {
-				errs <- step.Run(signals, nil)
-			}()
-		})
-
-		It("never cancels the substep", func() {
-			Eventually(substep.runCallCount).Should(Equal(1)) // I HAVE NO IDEA WHY THIS IS FAILING!
-			signals <- os.Interrupt
-			Eventually(errs).Should(Receive())
-			Expect(substep.signalCount).To(BeZero())
+	Describe("Signalling", func() {
+		It("never signals the substep", func() {
+			Eventually(substep.RunCallCount).Should(Equal(1))
+			process.Signal(os.Interrupt)
+			Consistently(substep.WaitForCall()).ShouldNot(Receive())
 		})
 	})
 })

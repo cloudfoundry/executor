@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -26,7 +28,7 @@ import (
 
 var _ = Describe("RunAction", func() {
 	var (
-		step steps.Step
+		step ifrit.Runner
 
 		runAction                           models.RunAction
 		fakeStreamer                        *fake_log_streamer.FakeLogStreamer
@@ -112,11 +114,12 @@ var _ = Describe("RunAction", func() {
 		)
 	})
 
-	Describe("Perform", func() {
-		var stepErr error
+	Describe("Run", func() {
+		var process ifrit.Process
 
 		JustBeforeEach(func() {
-			stepErr = step.Perform()
+			process = ifrit.Background(step)
+			Eventually(gardenClient.Connection.RunCallCount).Should(Equal(1))
 		})
 
 		Context("when the Garden process succeeds", func() {
@@ -129,7 +132,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("does not return an error", func() {
-				Expect(stepErr).NotTo(HaveOccurred())
+				Eventually(process.Wait()).Should(Receive(BeNil()))
 			})
 
 			It("executed the command in the passed-in container", func() {
@@ -243,7 +246,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("returns an error", func() {
-					Expect(stepErr).To(MatchError(waitErr))
+					Eventually(process.Wait()).Should(Receive(MatchError(waitErr)))
 				})
 
 				It("logs the step", func() {
@@ -263,7 +266,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("returns an error", func() {
-					Expect(stepErr).To(MatchError(waitErr))
+					Eventually(process.Wait()).Should(Receive(MatchError(waitErr)))
 				})
 
 				It("logs the step", func() {
@@ -397,7 +400,7 @@ var _ = Describe("RunAction", func() {
 
 				It("should return an emittable error with the exit code", func() {
 					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
+					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
 				})
 			})
 
@@ -408,8 +411,26 @@ var _ = Describe("RunAction", func() {
 
 				It("should return an emittable error with the exit code", func() {
 					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
-					Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
+					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
 				})
+			})
+		})
+
+		Context("readiness", func() {
+			var waitCh chan struct{}
+
+			BeforeEach(func() {
+				waitCh = make(chan struct{})
+				gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
+					<-waitCh
+					return spawnedProcess, nil
+				}
+			})
+
+			It("becomes ready once the garden process is started", func() {
+				Consistently(process.Ready()).ShouldNot(BeClosed())
+				close(waitCh)
+				Eventually(process.Ready()).Should(BeClosed())
 			})
 		})
 
@@ -421,7 +442,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("returns the error", func() {
-				Expect(stepErr).To(Equal(disaster))
+				Eventually(process.Wait()).Should(Receive(MatchError(disaster)))
 			})
 
 			It("logs the step", func() {
@@ -431,6 +452,11 @@ var _ = Describe("RunAction", func() {
 					"test.run-step.failed-creating-process",
 				}))
 			})
+
+			It("never becomes ready", func() {
+				Expect(process.Ready()).ToNot(BeClosed())
+			})
+
 			Context("", func() {
 				BeforeEach(func() {
 					gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
@@ -459,7 +485,7 @@ var _ = Describe("RunAction", func() {
 
 			It("returns an emittable error", func() {
 				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
+				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
 			})
 		})
 
@@ -477,7 +503,7 @@ var _ = Describe("RunAction", func() {
 
 			It("returns an emittable error", func() {
 				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
-				Expect(stepErr).To(MatchError(steps.NewEmittableError(nil, errMsg)))
+				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
 			})
 		})
 
@@ -524,7 +550,6 @@ var _ = Describe("RunAction", func() {
 			})
 
 			Context("when logs are not suppressed", func() {
-
 				It("emits the output chunks as they come in", func() {
 					Expect(stdoutBuffer).To(gbytes.Say("hi out"))
 					Expect(stderrBuffer).To(gbytes.Say("hi err"))
@@ -597,7 +622,6 @@ var _ = Describe("RunAction", func() {
 			})
 
 			Context("when logs are suppressed", func() {
-
 				BeforeEach(func() {
 					runAction.SuppressLogOutput = true
 				})
@@ -611,21 +635,16 @@ var _ = Describe("RunAction", func() {
 					Expect(stdoutBuffer).ToNot(gbytes.Say("Exit status 34"))
 				})
 			})
-
 		})
 	})
 
-	Describe("Cancel", func() {
+	Describe("Signalling", func() {
 		var (
-			performErr chan error
-
 			waiting    chan struct{}
 			waitExited chan int
 		)
 
 		BeforeEach(func() {
-			performErr = make(chan error)
-
 			waitingCh := make(chan struct{})
 			waiting = waitingCh
 
@@ -638,20 +657,18 @@ var _ = Describe("RunAction", func() {
 			}
 		})
 
-		Context("when cancelling after perform", func() {
-			JustBeforeEach(func() {
-				go func() {
-					performErr <- step.Perform()
-					close(performErr)
-				}()
+		Context("when signalling after running the process", func() {
+			var process ifrit.Process
 
+			JustBeforeEach(func() {
+				process = ifrit.Background(step)
 				Eventually(waiting).Should(BeClosed())
-				step.Cancel()
+				process.Signal(os.Interrupt)
 			})
 
 			AfterEach(func() {
 				close(waitExited)
-				Eventually(performErr).Should(BeClosed())
+				Eventually(process.Wait()).Should(Receive())
 			})
 
 			It("sends an interrupt to the process", func() {
@@ -660,12 +677,12 @@ var _ = Describe("RunAction", func() {
 			})
 
 			Context("when the process exits", func() {
-				It("completes the perform without having sent kill", func() {
+				It("completes the run without having sent kill", func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
 					waitExited <- (128 + 15)
 
-					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 
 					Expect(spawnedProcess.SignalCallCount()).To(Equal(1))
 					Expect(spawnedProcess.SignalArgsForCall(0)).To(Equal(garden.SignalTerminate))
@@ -683,7 +700,7 @@ var _ = Describe("RunAction", func() {
 
 					waitExited <- (128 + 9)
 
-					Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 
 					Expect(logger.TestSink.LogMessages()).To(ContainElement(
 						ContainSubstring("graceful-shutdown-timeout-exceeded"),
@@ -691,7 +708,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {
-					It("finishes performing with failure", func() {
+					It("finishes running with failure", func() {
 						Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
 						fakeClock.WaitForWatcherAndIncrement(steps.TerminateTimeout)
@@ -701,11 +718,11 @@ var _ = Describe("RunAction", func() {
 
 						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
-						Consistently(performErr).ShouldNot(Receive())
+						Consistently(process.Wait()).ShouldNot(Receive())
 
 						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
-						Eventually(performErr).Should(Receive(Equal(steps.ErrExitTimeout)))
+						Eventually(process.Wait()).Should(Receive(Equal(steps.ErrExitTimeout)))
 
 						Expect(logger.TestSink.LogMessages()).To(ContainElement(
 							ContainSubstring("process-did-not-exit"),
@@ -713,11 +730,14 @@ var _ = Describe("RunAction", func() {
 					})
 				})
 			})
-
 		})
 
 		Context("when Garden hangs on spawning a process", func() {
-			var hangChan chan struct{}
+			var (
+				process  ifrit.Process
+				hangChan chan struct{}
+			)
+
 			BeforeEach(func() {
 				hangChan = make(chan struct{})
 				gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
@@ -728,42 +748,44 @@ var _ = Describe("RunAction", func() {
 			})
 
 			JustBeforeEach(func() {
-				go func() {
-					performErr <- step.Perform()
-					close(performErr)
-				}()
-
+				process = ifrit.Background(step)
 				Eventually(gardenClient.Connection.RunCallCount).Should(Equal(1))
-				step.Cancel()
+				process.Signal(os.Interrupt)
 			})
 
 			AfterEach(func() {
 				close(hangChan)
-				Eventually(performErr).Should(BeClosed())
+				Eventually(process.Wait()).Should(Receive())
 			})
 
-			It("finishes performing with failure", func() {
-				Eventually(performErr).Should(Receive(Equal(steps.ErrCancelled)))
+			It("finishes running with failure", func() {
+				Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 
-		Context("when cancelling before perform", func() {
-			JustBeforeEach(func() {
-				step.Cancel()
+		Context("when signalling before running", func() {
+			var (
+				runErr chan error
+				ready  chan struct{}
+			)
 
+			JustBeforeEach(func() {
+				runErr = make(chan error)
+				ready = make(chan struct{})
+				signals := make(chan os.Signal, 1)
+				signals <- os.Interrupt
 				go func() {
-					performErr <- step.Perform()
-					close(performErr)
+					runErr <- step.Run(signals, ready)
 				}()
 			})
 
-			AfterEach(func() {
-				close(waitExited)
-				Eventually(performErr).Should(BeClosed())
+			It("does not start the process", func() {
+				Eventually(runErr).Should(Receive(MatchError(steps.ErrCancelled)))
+				Expect(gardenClient.Connection.RunCallCount()).To(Equal(0))
 			})
 
-			It("sends an interrupt to the process", func() {
-				Consistently(waiting).ShouldNot(BeClosed())
+			It("never becomes ready", func() {
+				Consistently(ready).ShouldNot(BeClosed())
 			})
 		})
 	})
