@@ -91,9 +91,10 @@ func (c *Container) TransistionToCreate() error {
 	return nil
 }
 
-func (c *Container) TransitionToComplete(failed bool, failureReason string) {
+func (c *Container) TransitionToComplete(failed bool, failureReason string, retryable bool) {
 	c.RunResult.Failed = failed
 	c.RunResult.FailureReason = failureReason
+	c.RunResult.Retryable = retryable
 	c.State = StateCompleted
 }
 
@@ -246,6 +247,7 @@ type PortMapping struct {
 type ContainerRunResult struct {
 	Failed        bool   `json:"failed"`
 	FailureReason string `json:"failure_reason"`
+	Retryable     bool
 
 	Stopped bool `json:"stopped"`
 }

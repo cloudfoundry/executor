@@ -655,6 +655,7 @@ var _ = Describe("Container Store", func() {
 						Expect(container.State).To(Equal(executor.StateCompleted))
 						Expect(container.RunResult.Failed).To(BeTrue())
 						Expect(container.RunResult.FailureReason).To(Equal(containerstore.CredDirFailed))
+						Expect(container.RunResult.Retryable).To(BeTrue())
 					})
 				})
 			})
@@ -721,6 +722,7 @@ var _ = Describe("Container Store", func() {
 							Expect(container.State).To(Equal(executor.StateCompleted))
 							Expect(container.RunResult.Failed).To(BeTrue())
 							Expect(container.RunResult.FailureReason).To(Equal(fmt.Sprintf("%s, errors: some-error", containerstore.VolmanMountFailed)))
+							Expect(container.RunResult.Retryable).To(BeTrue())
 						})
 
 					})
@@ -740,6 +742,7 @@ var _ = Describe("Container Store", func() {
 							Expect(container.State).To(Equal(executor.StateCompleted))
 							Expect(container.RunResult.Failed).To(BeTrue())
 							Expect(container.RunResult.FailureReason).To(Equal(containerstore.VolmanMountFailed))
+							Expect(container.RunResult.Retryable).To(BeTrue())
 						})
 					})
 
@@ -818,6 +821,7 @@ var _ = Describe("Container Store", func() {
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
 					Expect(container.RunResult.FailureReason).To(Equal(containerstore.DownloadCachedDependenciesFailed))
+					Expect(container.RunResult.Retryable).To(BeTrue())
 				})
 			})
 
@@ -1049,6 +1053,7 @@ var _ = Describe("Container Store", func() {
 					Expect(container.RunResult.Failed).To(BeTrue())
 					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
 					Expect(container.RunResult.FailureReason).To(ContainSubstring("boom!"))
+					Expect(container.RunResult.Retryable).To(BeTrue())
 				})
 
 				Context("when the failure message is too long", func() {
@@ -1069,6 +1074,7 @@ var _ = Describe("Container Store", func() {
 						Expect([]byte(container.RunResult.FailureReason)).To(HaveLen(1024))
 						Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
 						Expect(container.RunResult.FailureReason).To(ContainSubstring("(error truncated)"))
+						Expect(container.RunResult.Retryable).To(BeTrue())
 					})
 				})
 
@@ -1116,6 +1122,7 @@ var _ = Describe("Container Store", func() {
 					Expect(container.RunResult.Failed).To(BeTrue())
 					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
 					Expect(container.RunResult.FailureReason).To(ContainSubstring("could not obtain info"))
+					Expect(container.RunResult.Retryable).To(BeTrue())
 				})
 			})
 
@@ -1489,6 +1496,7 @@ var _ = Describe("Container Store", func() {
 					// make sure the error message is at the end so that
 					// FailureReasonSanitizer can properly map the error messages
 					Expect(container.RunResult.FailureReason).To(MatchRegexp("cred-manager-runner exited: BOOOM$"))
+					Expect(container.RunResult.Retryable).To(BeFalse())
 				})
 
 				It("tranistions immediately to Completed state", func() {
@@ -1544,6 +1552,7 @@ var _ = Describe("Container Store", func() {
 					// make sure the error message is at the end so that
 					// FailureReasonSanitizer can properly map the error messages
 					Expect(container.RunResult.FailureReason).To(MatchRegexp("proxy-config-runner exited: BOOOM$"))
+					Expect(container.RunResult.Retryable).To(BeFalse())
 				})
 
 				It("transitions immediately to Completed state", func() {
@@ -1603,6 +1612,7 @@ var _ = Describe("Container Store", func() {
 					container, _ := containerStore.Get(logger, containerGuid)
 					Expect(container.RunResult.Failed).To(BeTrue())
 					Expect(container.RunResult.FailureReason).To(MatchRegexp("no ports available"))
+					Expect(container.RunResult.Retryable).To(BeFalse())
 				})
 			})
 
@@ -1684,6 +1694,7 @@ var _ = Describe("Container Store", func() {
 						// make sure the error message is at the end so that
 						// FailureReasonSanitizer can properly map the error messages
 						Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
+						Expect(container.RunResult.Retryable).To(BeFalse())
 					})
 
 					It("signals the proxy manager runner to exit", func() {
@@ -1732,6 +1743,7 @@ var _ = Describe("Container Store", func() {
 						// make sure the error message is at the end so that
 						// FailureReasonSanitizer can properly map the error messages
 						Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
+						Expect(container.RunResult.Retryable).To(BeFalse())
 					})
 
 					It("signals the proxy manager runner to exit", func() {
@@ -1852,6 +1864,7 @@ var _ = Describe("Container Store", func() {
 							Expect(err).NotTo(HaveOccurred())
 							Expect(container.RunResult.Failed).To(Equal(false))
 							Expect(container.RunResult.Stopped).To(Equal(false))
+							Expect(container.RunResult.Retryable).To(BeFalse())
 						})
 					})
 
@@ -1877,6 +1890,7 @@ var _ = Describe("Container Store", func() {
 							// FailureReasonSanitizer can properly map the error messages
 							Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOOM!!!!$"))
 							Expect(container.RunResult.Stopped).To(Equal(false))
+							Expect(container.RunResult.Retryable).To(BeFalse())
 						})
 					})
 				})
@@ -1960,6 +1974,7 @@ var _ = Describe("Container Store", func() {
 				container, err := containerStore.Get(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.RunResult.Stopped).To(BeTrue())
+				Expect(container.RunResult.Retryable).To(BeFalse())
 			})
 
 			It("logs that the container is stopping", func() {
@@ -1984,6 +1999,7 @@ var _ = Describe("Container Store", func() {
 
 				Expect(container.RunResult.Stopped).To(BeTrue())
 				Expect(container.State).To(Equal(executor.StateCompleted))
+				Expect(container.RunResult.Retryable).To(BeFalse())
 			})
 		})
 

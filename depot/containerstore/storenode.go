@@ -163,7 +163,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 
 	mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
 	if err != nil {
-		n.complete(logger, true, DownloadCachedDependenciesFailed)
+		n.complete(logger, true, DownloadCachedDependenciesFailed, true)
 		return err
 	}
 
@@ -190,7 +190,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			failMsg = VolmanMountFailed
 		}
 		logger.Error("failed-to-mount-volume", err)
-		n.complete(logger, true, failMsg)
+		n.complete(logger, true, failMsg, true)
 		return err
 	}
 	n.bindMounts = append(n.bindMounts, volumeMounts...)
@@ -203,7 +203,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 
 	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
 	if err != nil {
-		n.complete(logger, true, CredDirFailed)
+		n.complete(logger, true, CredDirFailed, true)
 		return err
 	}
 	n.bindMounts = append(n.bindMounts, credMounts...)
@@ -223,7 +223,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
-		n.complete(logger, true, truncatedErrorMessage("%s: %s", ContainerInitializationFailedMessage, err.Error()))
+		n.complete(logger, true, truncatedErrorMessage("%s: %s", ContainerInitializationFailedMessage, err.Error()), true)
 		return err
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
@@ -464,10 +464,10 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 	}
 
 	if errorStr != "" {
-		n.complete(logger, true, errorStr)
+		n.complete(logger, true, errorStr, false)
 		return
 	}
-	n.complete(logger, false, "")
+	n.complete(logger, false, "", false)
 }
 
 func (n *storeNode) run(logger lager.Logger) {
@@ -514,7 +514,7 @@ func (n *storeNode) stop(logger lager.Logger) error {
 		n.process.Signal(os.Interrupt)
 		logger.Debug("signalled-process")
 	} else {
-		n.complete(logger, true, "stopped-before-running")
+		n.complete(logger, true, "stopped-before-running", false)
 	}
 	return nil
 }
@@ -615,7 +615,7 @@ func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
 
 	lifespan := now.Sub(time.Unix(0, n.info.AllocatedAt))
 	if lifespan >= n.config.ReservedExpirationTime {
-		n.info.TransitionToComplete(true, ContainerExpirationMessage)
+		n.info.TransitionToComplete(true, ContainerExpirationMessage, false)
 		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 		return true
 	}
@@ -634,7 +634,7 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 		n.removeProxyConfigDir(logger, n.info.Copy())
 		n.removeCredsDir(logger, n.info.Copy())
 
-		n.info.TransitionToComplete(true, ContainerMissingMessage)
+		n.info.TransitionToComplete(true, ContainerMissingMessage, false)
 		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 		return true
 	}
@@ -642,11 +642,11 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 	return false
 }
 
-func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason string) {
+func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason string, retryable bool) {
 	logger.Debug("node-complete", lager.Data{"failed": failed, "reason": failureReason})
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
-	n.info.TransitionToComplete(failed, failureReason)
+	n.info.TransitionToComplete(failed, failureReason, retryable)
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
 }
 
