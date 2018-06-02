@@ -1,55 +1,54 @@
 package steps
 
 import (
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/clock"
+	"github.com/tedsuo/ifrit"
 )
 
 type consistentlySucceedsStep struct {
-	create             func() Step
+	create             func() ifrit.Runner
 	clock              clock.Clock
 	frequency, timeout time.Duration
-	*canceller
 }
 
 // TODO: use a workpool when running the substep
-func NewConsistentlySucceedsStep(create func() Step, frequency time.Duration, clock clock.Clock) Step {
+func NewConsistentlySucceedsStep(create func() ifrit.Runner, frequency time.Duration, clock clock.Clock) *consistentlySucceedsStep {
 	return &consistentlySucceedsStep{
 		create:    create,
 		frequency: frequency,
 		clock:     clock,
-		canceller: newCanceller(),
 	}
 }
 
-func (s *consistentlySucceedsStep) Perform() error {
-	errCh := make(chan error, 1)
-	t := s.clock.NewTimer(s.frequency)
+func (step *consistentlySucceedsStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	t := step.clock.NewTimer(step.frequency)
+
+	close(ready)
 
 	for {
 		select {
-		case <-s.Cancelled():
+		case <-signals:
 			return ErrCancelled
 		case <-t.C():
 		}
 
-		step := s.create()
+		consistentStep := step.create()
 
-		go func() {
-			errCh <- step.Perform()
-		}()
+		process := ifrit.Background(consistentStep)
 
 		select {
-		case err := <-errCh:
+		case err := <-process.Wait():
 			if err != nil {
 				return err
 			}
-		case <-s.Cancelled():
-			step.Cancel()
-			return <-errCh
+		case s := <-signals:
+			process.Signal(s)
+			return <-process.Wait()
 		}
 
-		t.Reset(s.frequency)
+		t.Reset(step.frequency)
 	}
 }

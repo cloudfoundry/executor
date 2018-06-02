@@ -5,16 +5,17 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
+	"github.com/tedsuo/ifrit"
 )
 
 type eventuallySucceedsStep struct {
-	create             func() Step
+	create             func() ifrit.Runner
 	frequency, timeout time.Duration
 	clock              clock.Clock
 }
 
 // TODO: use a workpool when running the substep
-func NewEventuallySucceedsStep(create func() Step, frequency, timeout time.Duration, clock clock.Clock) *eventuallySucceedsStep {
+func NewEventuallySucceedsStep(create func() ifrit.Runner, frequency, timeout time.Duration, clock clock.Clock) *eventuallySucceedsStep {
 	return &eventuallySucceedsStep{
 		create:    create,
 		frequency: frequency,
@@ -24,8 +25,9 @@ func NewEventuallySucceedsStep(create func() Step, frequency, timeout time.Durat
 }
 
 func (step *eventuallySucceedsStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	errCh := make(chan error, 1)
 	var err error
+
+	close(ready)
 
 	startTime := step.clock.Now()
 	t := step.clock.NewTimer(step.frequency)
@@ -37,19 +39,16 @@ func (step *eventuallySucceedsStep) Run(signals <-chan os.Signal, ready chan<- s
 			return ErrCancelled
 		}
 
-		eventualStep := step.create()
-		go func() {
-			errCh <- eventualStep.Perform()
-		}()
+		subProcess := ifrit.Background(step.create())
 
 		select {
-		case err = <-errCh:
+		case s := <-signals:
+			subProcess.Signal(s)
+			return <-subProcess.Wait()
+		case err = <-subProcess.Wait():
 			if err == nil {
 				return nil
 			}
-		case <-signals:
-			eventualStep.Cancel()
-			return <-errCh
 		}
 
 		if step.timeout > 0 && step.clock.Now().After(startTime.Add(step.timeout)) {
