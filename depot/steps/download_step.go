@@ -135,14 +135,12 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 		step.logger.Error("fetch-failed", err)
 		return nil, 0, err
 	}
-
 	step.logger.Info("fetch-complete", lager.Data{"size": downloadedSize})
 	return tarStream, downloadedSize, nil
 }
 
 func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
 	step.logger.Info("stream-in-starting")
-
 	// StreamIn will close the reader
 	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: reader, User: step.model.User})
 	if err != nil {
