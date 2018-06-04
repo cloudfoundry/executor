@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/workpool"
+	"github.com/tedsuo/ifrit"
 )
 
 func NewMonitor(
@@ -21,9 +22,9 @@ func NewMonitor(
 	workPool *workpool.WorkPool,
 	proxyReadinessChecks ...Step,
 ) Step {
-	// throttledCheckFunc := func() ifrit.Runner {
-	// 	return NewThrottle(checkFunc(), workPool)
-	// }
+	throttledCheckFunc := func() ifrit.Runner {
+		return NewThrottle(checkFunc(), workPool)
+	}
 
 	//	readiness := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
 	//	liveness := NewConsistentlySucceedsStep(throttledCheckFunc, healthyInterval, clock)

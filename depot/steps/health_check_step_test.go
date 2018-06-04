@@ -18,7 +18,7 @@ import (
 	"github.com/tedsuo/ifrit/fake_runner"
 )
 
-var _ = FDescribe("NewHealthCheckStep", func() {
+var _ = Describe("NewHealthCheckStep", func() {
 	var (
 		readinessCheck, livenessCheck *fake_runner.TestRunner
 		clock                         *fakeclock.FakeClock

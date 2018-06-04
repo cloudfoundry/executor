@@ -18,7 +18,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = Describe("MonitorStep", func() {
+var _ = FDescribe("MonitorStep", func() {
 	var (
 		fakeStep1 *fakes.FakeStep
 		fakeStep2 *fakes.FakeStep
