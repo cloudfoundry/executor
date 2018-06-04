@@ -14,7 +14,7 @@ import (
 	"github.com/tedsuo/ifrit/fake_runner"
 )
 
-var _ = FDescribe("ConsistentlySucceedsStep", func() {
+var _ = Describe("ConsistentlySucceedsStep", func() {
 	var (
 		step    ifrit.Runner
 		process ifrit.Process

@@ -2,90 +2,55 @@ package steps_test
 
 import (
 	"errors"
-	"sync"
+	"os"
 
 	"github.com/hashicorp/go-multierror"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 )
 
 var _ = Describe("ParallelStep", func() {
-	var step steps.Step
-	var subStep1 steps.Step
-	var subStep2 steps.Step
+	var (
+		step    ifrit.Runner
+		process ifrit.Process
 
-	var thingHappened chan bool
-	var cancelled chan bool
+		subStep1 *fake_runner.TestRunner
+		subStep2 *fake_runner.TestRunner
+	)
 
 	BeforeEach(func() {
-		thingHappened = make(chan bool, 2)
-		cancelled = make(chan bool, 2)
-
-		running := new(sync.WaitGroup)
-		running.Add(2)
-
-		subStep1 = &fakes.FakeStep{
-			PerformStub: func() error {
-				running.Done()
-				running.Wait()
-				thingHappened <- true
-				return nil
-			},
-			CancelStub: func() {
-				cancelled <- true
-			},
-		}
-
-		subStep2 = &fakes.FakeStep{
-			PerformStub: func() error {
-				running.Done()
-				running.Wait()
-				thingHappened <- true
-				return nil
-			},
-			CancelStub: func() {
-				cancelled <- true
-			},
-		}
+		subStep1 = fake_runner.NewTestRunner()
+		subStep2 = fake_runner.NewTestRunner()
 	})
 
 	JustBeforeEach(func() {
-		step = steps.NewParallel([]steps.Step{subStep1, subStep2})
+		step = steps.NewParallel([]ifrit.Runner{subStep1, subStep2})
+		process = ifrit.Background(step)
 	})
 
-	It("performs its substeps in parallel", func(done Done) {
-		defer close(done)
+	It("performs its substeps in parallel", func() {
+		Eventually(subStep1.RunCallCount).Should(Equal(1))
+		Eventually(subStep2.RunCallCount).Should(Equal(1))
+		subStep1.TriggerExit(nil)
+		subStep2.TriggerExit(nil)
 
-		err := step.Perform()
-		Expect(err).NotTo(HaveOccurred())
-
-		Eventually(thingHappened).Should(Receive())
-		Eventually(thingHappened).Should(Receive())
-	}, 2)
+		Eventually(process.Wait()).Should(Receive(BeNil()))
+	})
 
 	Context("when multiple substeps fail", func() {
 		disaster1 := errors.New("oh no")
 		disaster2 := errors.New("oh my")
 
-		BeforeEach(func() {
-			subStep1 = &fakes.FakeStep{
-				PerformStub: func() error {
-					return disaster1
-				},
-			}
-
-			subStep2 = &fakes.FakeStep{
-				PerformStub: func() error {
-					return disaster2
-				},
-			}
-		})
-
 		It("joins the error messages with a semicolon", func() {
-			err := step.Perform()
+			subStep1.TriggerExit(disaster1)
+			subStep2.TriggerExit(disaster2)
+
+			var err error
+			Eventually(process.Wait()).Should(Receive(&err))
 			Expect(err).To(HaveOccurred())
 			errMsg := err.Error()
 			Expect(errMsg).NotTo(HavePrefix(";"))
@@ -95,16 +60,12 @@ var _ = Describe("ParallelStep", func() {
 		})
 
 		Context("when step is cancelled", func() {
-			BeforeEach(func() {
-				subStep1 = &fakes.FakeStep{
-					PerformStub: func() error {
-						return steps.ErrCancelled
-					},
-				}
-			})
-
 			It("does not add cancelled error to message", func() {
-				err := step.Perform()
+				subStep1.TriggerExit(steps.ErrCancelled)
+				subStep2.TriggerExit(disaster2)
+
+				var err error
+				Eventually(process.Wait()).Should(Receive(&err))
 				Expect(err).To(HaveOccurred())
 				errMsg := err.Error()
 				Expect(errMsg).NotTo(HavePrefix(";"))
@@ -116,53 +77,48 @@ var _ = Describe("ParallelStep", func() {
 
 	Context("when one of the substeps fails", func() {
 		disaster := errors.New("oh no!")
-		var triggerStep2 chan struct{}
-		var step2Completed chan struct{}
-
-		BeforeEach(func() {
-			triggerStep2 = make(chan struct{})
-			step2Completed = make(chan struct{})
-
-			subStep1 = &fakes.FakeStep{
-				PerformStub: func() error {
-					return disaster
-				},
-			}
-
-			subStep2 = &fakes.FakeStep{
-				PerformStub: func() error {
-					<-triggerStep2
-					close(step2Completed)
-					return nil
-				},
-			}
-		})
 
 		It("waits for the rest to finish", func() {
-			errs := make(chan error)
+			subStep1.TriggerExit(disaster)
 
-			go func() {
-				errs <- step.Perform()
-			}()
+			Consistently(process.Wait()).ShouldNot(Receive())
 
-			Consistently(errs).ShouldNot(Receive())
-
-			close(triggerStep2)
-
-			Eventually(step2Completed).Should(BeClosed())
+			subStep2.TriggerExit(nil)
 
 			var err error
-			Eventually(errs).Should(Receive(&err))
+			Eventually(process.Wait()).Should(Receive(&err))
 			Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(disaster))
 		})
 	})
 
 	Context("when told to cancel", func() {
-		It("passes the message along", func() {
-			step.Cancel()
+		It("cancels its substeps", func() {
+			process.Signal(os.Interrupt)
 
-			Eventually(cancelled).Should(Receive())
-			Eventually(cancelled).Should(Receive())
+			Eventually(subStep1.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
+			Eventually(subStep2.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
+		})
+	})
+
+	Describe("readiness", func() {
+		It("does not become ready until its subprocesses are", func() {
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+
+			subStep1.TriggerReady()
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+
+			subStep2.TriggerReady()
+			Eventually(process.Ready()).Should(BeClosed())
+		})
+
+		It("never becomes ready if a subprocess exits without becoming ready", func() {
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+
+			subStep1.TriggerReady()
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+
+			subStep2.TriggerExit(errors.New("some error"))
+			Consistently(process.Ready()).ShouldNot(BeClosed())
 		})
 	})
 })
