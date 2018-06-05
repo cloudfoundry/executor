@@ -115,10 +115,8 @@ var _ = Describe("NewHealthCheckStep", func() {
 			})
 
 			It("completes with failure", func() {
-				var expectedError interface{}
-				Eventually(performErr).Should(Receive(&expectedError))
-				err, ok := expectedError.(*steps.EmittableError)
-				Expect(ok).To(BeTrue())
+				var err *steps.EmittableError
+				Eventually(performErr).Should(Receive(&err))
 				Expect(err.WrappedError()).To(MatchError(ContainSubstring("booom!")))
 			})
 
@@ -217,10 +215,8 @@ var _ = Describe("NewHealthCheckStep", func() {
 				})
 
 				It("completes with failure", func() {
-					var expectedError interface{}
-					Eventually(performErr).Should(Receive(&expectedError))
-					err, ok := expectedError.(*steps.EmittableError)
-					Expect(ok).To(BeTrue())
+					var err *steps.EmittableError
+					Eventually(performErr).Should(Receive(&err))
 					Expect(err.WrappedError()).To(Equal(disaster))
 				})
 			})
