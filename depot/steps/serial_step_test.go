@@ -35,11 +35,20 @@ var _ = Describe("SerialStep", func() {
 		testRunner3.EnsureExit()
 	})
 
-	Describe("Run", func() {
-		It("closes the ready channel immediately", func() {
+	Describe("Ready", func() {
+		It("becomes ready when the last step is ready", func() {
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			testRunner1.TriggerExit(nil)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			testRunner2.TriggerExit(nil)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			testRunner3.TriggerReady()
 			Eventually(p.Ready()).Should(BeClosed())
+			Consistently(p.Wait()).ShouldNot(Receive())
 		})
+	})
 
+	Describe("Run", func() {
 		It("runs all substeps in order and returns nil", func() {
 			Eventually(testRunner1.RunCallCount).Should(Equal(1))
 			go testRunner1.TriggerExit(nil)

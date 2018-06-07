@@ -17,9 +17,20 @@ func NewSerial(steps []ifrit.Runner) ifrit.Runner {
 }
 
 func (runner *serialStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	close(ready)
-	for _, action := range runner.steps {
+	for i, action := range runner.steps {
 		p := ifrit.Background(action)
+
+		// wait for the last process to be ready
+		if i == len(runner.steps)-1 {
+			go func() {
+				select {
+				case <-p.Ready():
+					close(ready)
+				case <-p.Wait():
+				}
+			}()
+		}
+
 		select {
 		case substepErr := <-p.Wait():
 			if substepErr != nil {

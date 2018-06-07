@@ -130,73 +130,89 @@ var _ = Describe("Transformer", func() {
 			})
 		})
 
-		It("returns a step encapsulating setup, post-setup, monitor, and action", func() {
-			setupReceived := make(chan struct{})
-			postSetupReceived := make(chan struct{})
-			monitorProcess := &gardenfakes.FakeProcess{}
-			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
-				if processSpec.Path == "/setup/path" {
-					setupReceived <- struct{}{}
-				} else if processSpec.Path == "/post-setup/path" {
-					postSetupReceived <- struct{}{}
-				} else if processSpec.Path == "/monitor/path" {
-					return monitorProcess, nil
+		Context("when there is a monitor action", func() {
+			var (
+				setupReceived, postSetupReceived chan struct{}
+				monitorProcess, actionProcess    *gardenfakes.FakeProcess
+				process                          ifrit.Process
+			)
+
+			BeforeEach(func() {
+				setupReceived = make(chan struct{})
+				postSetupReceived = make(chan struct{})
+				monitorProcess = &gardenfakes.FakeProcess{}
+				actionProcess = &gardenfakes.FakeProcess{}
+				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
+					if processSpec.Path == "/setup/path" {
+						setupReceived <- struct{}{}
+					} else if processSpec.Path == "/post-setup/path" {
+						postSetupReceived <- struct{}{}
+					} else if processSpec.Path == "/monitor/path" {
+						return monitorProcess, nil
+					}
+					return actionProcess, nil
 				}
-				return &gardenfakes.FakeProcess{}, nil
-			}
 
-			monitorProcess.WaitStub = func() (int, error) {
-				if monitorProcess.WaitCallCount() == 1 {
-					return 1, errors.New("boom")
+				monitorProcess.WaitStub = func() (int, error) {
+					if monitorProcess.WaitCallCount() == 1 {
+						return 1, errors.New("boom")
+					}
+					return 0, nil
 				}
-				return 0, nil
-			}
+			})
 
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
-			Expect(err).NotTo(HaveOccurred())
+			JustBeforeEach(func() {
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+				Expect(err).NotTo(HaveOccurred())
+				process = ifrit.Background(runner)
+			})
 
-			process := ifrit.Background(runner)
+			It("returns a step encapsulating setup, post-setup, monitor, and action", func() {
+				Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+				processSpec, _ := gardenContainer.RunArgsForCall(0)
+				Expect(processSpec.Path).To(Equal("/setup/path"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(1))
 
-			Eventually(gardenContainer.RunCallCount).Should(Equal(1))
-			processSpec, _ := gardenContainer.RunArgsForCall(0)
-			Expect(processSpec.Path).To(Equal("/setup/path"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(1))
+				<-setupReceived
 
-			<-setupReceived
+				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				processSpec, _ = gardenContainer.RunArgsForCall(1)
+				Expect(processSpec.Path).To(Equal("/post-setup/path"))
+				Expect(processSpec.Args).To(Equal([]string{"-x", "argument"}))
+				Expect(processSpec.User).To(Equal("jim"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(2))
 
-			Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-			processSpec, _ = gardenContainer.RunArgsForCall(1)
-			Expect(processSpec.Path).To(Equal("/post-setup/path"))
-			Expect(processSpec.Args).To(Equal([]string{"-x", "argument"}))
-			Expect(processSpec.User).To(Equal("jim"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(2))
+				<-postSetupReceived
 
-			<-postSetupReceived
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				processSpec, _ = gardenContainer.RunArgsForCall(2)
+				Expect(processSpec.Path).To(Equal("/action/path"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(3))
 
-			Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-			processSpec, _ = gardenContainer.RunArgsForCall(2)
-			Expect(processSpec.Path).To(Equal("/action/path"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+				Consistently(process.Ready()).ShouldNot(Receive())
 
-			Consistently(process.Ready()).ShouldNot(Receive())
+				clock.Increment(1 * time.Second)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(4))
+				processSpec, _ = gardenContainer.RunArgsForCall(3)
+				Expect(processSpec.Path).To(Equal("/monitor/path"))
+				Consistently(process.Ready()).ShouldNot(Receive())
 
-			clock.Increment(1 * time.Second)
-			Eventually(gardenContainer.RunCallCount).Should(Equal(4))
-			processSpec, _ = gardenContainer.RunArgsForCall(3)
-			Expect(processSpec.Path).To(Equal("/monitor/path"))
-			Consistently(process.Ready()).ShouldNot(Receive())
+				clock.Increment(1 * time.Second)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+				processSpec, processIO := gardenContainer.RunArgsForCall(4)
+				Expect(processSpec.Path).To(Equal("/monitor/path"))
+				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
+				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+				Eventually(process.Ready()).Should(BeClosed())
 
-			clock.Increment(1 * time.Second)
-			Eventually(gardenContainer.RunCallCount).Should(Equal(5))
-			processSpec, processIO := gardenContainer.RunArgsForCall(4)
-			Expect(processSpec.Path).To(Equal("/monitor/path"))
-			Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
-			Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
-			Eventually(process.Ready()).Should(BeClosed())
+				process.Signal(os.Interrupt)
+				clock.Increment(1 * time.Second)
+				Eventually(process.Wait()).Should(Receive(nil))
+			})
 
-			process.Signal(os.Interrupt)
-			clock.Increment(1 * time.Second)
-			Eventually(process.Wait()).Should(Receive(nil))
+			It("does not become ready until the healthcheck pass ", func() {
+				Consistently(process.Ready()).ShouldNot(BeClosed())
+			})
 		})
 
 		makeProcess := func(waitCh chan int) *gardenfakes.FakeProcess {
