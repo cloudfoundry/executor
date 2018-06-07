@@ -15,6 +15,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type uploadStep struct {
@@ -27,7 +28,7 @@ type uploadStep struct {
 	rateLimiter chan struct{}
 	logger      lager.Logger
 
-	*canceller
+	cancelUpload chan struct{}
 }
 
 func NewUpload(
@@ -39,7 +40,7 @@ func NewUpload(
 	streamer log_streamer.LogStreamer,
 	rateLimiter chan struct{},
 	logger lager.Logger,
-) *uploadStep {
+) ifrit.Runner {
 	logger = logger.Session("upload-step", lager.Data{
 		"from": model.From,
 	})
@@ -54,7 +55,7 @@ func NewUpload(
 		rateLimiter: rateLimiter,
 		logger:      logger,
 
-		canceller: newCanceller(),
+		cancelUpload: make(chan struct{}),
 	}
 }
 
@@ -67,7 +68,9 @@ const (
 	ErrParsingURL      = "Failed to parse URL"
 )
 
-func (step *uploadStep) Perform() (err error) {
+func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (err error) {
+	close(ready)
+
 	step.rateLimiter <- struct{}{}
 	defer func() {
 		<-step.rateLimiter
@@ -133,10 +136,14 @@ func (step *uploadStep) Perform() (err error) {
 
 	defer os.RemoveAll(finalFileLocation)
 
-	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.Cancelled())
+	finished := make(chan struct{})
+	defer close(finished)
+	go step.cancelUploadOnSignal(finished, signals)
+
+	uploadedBytes, err := step.uploader.Upload(finalFileLocation, url, step.cancelUpload)
 	if err != nil {
 		select {
-		case <-step.Cancelled():
+		case <-step.cancelUpload:
 			return ErrCancelled
 
 		default:
@@ -153,6 +160,14 @@ func (step *uploadStep) Perform() (err error) {
 
 	step.logger.Info("upload-successful")
 	return nil
+}
+
+func (step *uploadStep) cancelUploadOnSignal(finished chan struct{}, signals <-chan os.Signal) {
+	select {
+	case <-signals:
+		close(step.cancelUpload)
+	case <-finished:
+	}
 }
 
 func (step *uploadStep) emit(format string, a ...interface{}) {

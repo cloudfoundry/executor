@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/bytefmt"
@@ -11,6 +12,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type downloadStep struct {
@@ -19,10 +21,9 @@ type downloadStep struct {
 	cachedDownloader cacheddownloader.CachedDownloader
 	streamer         log_streamer.LogStreamer
 	rateLimiter      chan struct{}
+	cancelDownload   chan struct{}
 
 	logger lager.Logger
-
-	*canceller
 }
 
 func NewDownload(
@@ -32,7 +33,7 @@ func NewDownload(
 	rateLimiter chan struct{},
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
-) *downloadStep {
+) ifrit.Runner {
 	logger = logger.Session("download-step", lager.Data{
 		"to":       model.To,
 		"cacheKey": model.CacheKey,
@@ -46,16 +47,17 @@ func NewDownload(
 		streamer:         streamer,
 		rateLimiter:      rateLimiter,
 		logger:           logger,
-
-		canceller: newCanceller(),
+		cancelDownload:   make(chan struct{}),
 	}
 }
 
-func (step *downloadStep) Perform() error {
+func (step *downloadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	close(ready)
+
 	step.logger.Info("acquiring-limiter")
 	select {
 	case step.rateLimiter <- struct{}{}:
-	case <-step.Cancelled():
+	case <-signals:
 		return ErrCancelled
 	}
 	defer func() {
@@ -63,17 +65,18 @@ func (step *downloadStep) Perform() error {
 	}()
 	step.logger.Info("acquired-limiter")
 
-	err := step.perform()
-	if err != nil {
-		select {
-		case <-step.Cancelled():
-			return ErrCancelled
-		default:
-			return err
-		}
-	}
+	errCh := make(chan error)
+	go func() {
+		errCh <- step.perform()
+	}()
 
-	return nil
+	select {
+	case err := <-errCh:
+		return err
+	case <-signals:
+		close(step.cancelDownload)
+		return ErrCancelled
+	}
 }
 
 func (step *downloadStep) perform() error {
@@ -129,7 +132,7 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 			Algorithm: step.model.GetChecksumAlgorithm(),
 			Value:     step.model.GetChecksumValue(),
 		},
-		step.Cancelled(),
+		step.cancelDownload,
 	)
 	if err != nil {
 		step.logger.Error("fetch-failed", err)

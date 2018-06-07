@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
 
 	Compressor "code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
@@ -52,7 +53,7 @@ func newFakeStreamer() *fake_log_streamer.FakeLogStreamer {
 
 var _ = Describe("UploadStep", func() {
 	var (
-		step steps.Step
+		step ifrit.Runner
 
 		uploadAction    *models.UploadAction
 		uploader        Uploader.Uploader
@@ -124,7 +125,21 @@ var _ = Describe("UploadStep", func() {
 		)
 	})
 
-	Describe("Perform", func() {
+	Describe("Ready", func() {
+		BeforeEach(func() {
+			gardenClient.Connection.StreamOutStub = func(handle string, spec garden.StreamOutSpec) (io.ReadCloser, error) {
+				buffer := gbytes.NewBuffer()
+				return buffer, nil
+			}
+		})
+
+		It("becomes ready immediately", func() {
+			p := ifrit.Background(step)
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+	})
+
+	Describe("Run", func() {
 		Context("when streaming out works", func() {
 			var buffer *gbytes.Buffer
 
@@ -157,7 +172,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("uploads the specified file to the destination", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(uploadedPayload).NotTo(BeZero())
@@ -168,7 +183,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("logs the step", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
@@ -178,16 +193,22 @@ var _ = Describe("UploadStep", func() {
 				}))
 			})
 
-			Describe("Cancel", func() {
+			Describe("Signal", func() {
 				cancelledErr := errors.New("upload cancelled")
 
-				var fakeUploader *fake_uploader.FakeUploader
+				var (
+					cancelled    chan struct{}
+					fakeUploader *fake_uploader.FakeUploader
+				)
 
 				BeforeEach(func() {
 					fakeUploader = new(fake_uploader.FakeUploader)
 
+					cancelled = make(chan struct{})
+
 					fakeUploader.UploadStub = func(from string, dest *url.URL, cancel <-chan struct{}) (int64, error) {
 						<-cancel
+						close(cancelled)
 						return 0, cancelledErr
 					}
 
@@ -195,19 +216,17 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("cancels any in-flight upload", func() {
-					errs := make(chan error)
-
-					go func() {
-						errs <- step.Perform()
-					}()
+					p := ifrit.Background(step)
 
 					Eventually(fakeUploader.UploadCallCount).Should(Equal(1))
 
-					Consistently(errs).ShouldNot(Receive())
+					Consistently(p.Wait()).ShouldNot(Receive())
 
-					step.Cancel()
+					p.Signal(os.Interrupt)
 
-					Eventually(errs).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(cancelled).Should(BeClosed())
+
+					Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 				})
 			})
 
@@ -219,7 +238,7 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("logs the step", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(logger.TestSink.LogMessages()).To(ContainElement("test.upload-step.failed-to-create-tmp-dir"))
 				})
@@ -230,7 +249,7 @@ var _ = Describe("UploadStep", func() {
 					})
 
 					It("should emit an error with the name", func() {
-						err := step.Perform()
+						err := <-ifrit.Invoke(step).Wait()
 						Expect(err).To(HaveOccurred())
 						Expect(err.Error()).To(ContainSubstring("Failed to create temp dir for artifact"))
 						Expect(stderr).To(gbytes.Say("Failed to create temp dir for artifact\n"))
@@ -251,7 +270,7 @@ var _ = Describe("UploadStep", func() {
 					})
 
 					It("streams the upload filesize", func() {
-						err := step.Perform()
+						err := <-ifrit.Invoke(step).Wait()
 						Expect(err).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
@@ -261,7 +280,7 @@ var _ = Describe("UploadStep", func() {
 
 				Context("when an artifact is not specified", func() {
 					It("does not stream the upload information", func() {
-						err := step.Perform()
+						err := <-ifrit.Invoke(step).Wait()
 						Expect(err).NotTo(HaveOccurred())
 
 						stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
@@ -270,7 +289,7 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("does not stream an error", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).NotTo(HaveOccurred())
 
 					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
@@ -292,12 +311,12 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("returns the appropriate error", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(MatchError(errUploadFailed))
 				})
 
 				It("logs the step", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 						"test.upload-step.upload-starting",
@@ -311,7 +330,7 @@ var _ = Describe("UploadStep", func() {
 					})
 
 					It("should emit an error with the name", func() {
-						err := step.Perform()
+						err := <-ifrit.Invoke(step).Wait()
 						Expect(err).To(HaveOccurred())
 						Expect(stderr).To(gbytes.Say("Failed to upload payload for artifact\n"))
 						Expect(stderr).NotTo(gbytes.Say(errUploadFailed.Error()))
@@ -328,12 +347,12 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("returns the appropriate error", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
 			})
 
 			It("logs the step", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(HaveOccurred())
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
@@ -342,7 +361,7 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("should not emit an error", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(HaveOccurred())
 				Expect(stderr).NotTo(gbytes.Say("Failed to parse URL"))
 			})
@@ -353,13 +372,13 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("should emit an error with the name", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(stderr).To(gbytes.Say("Failed to parse URL for artifact\n"))
 				})
 
 				It("returns the appropriate error", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
 				})
 			})
@@ -373,12 +392,12 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("returns the appropriate error", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(MatchError(steps.NewEmittableError(errStream, steps.ErrEstablishStream)))
 			})
 
 			It("logs the step", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(HaveOccurred())
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
@@ -394,13 +413,13 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("should emits an error with the artifact name", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrEstablishStream, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(stderr).To(gbytes.Say("Failed to establish stream from container for artifact\n"))
 				})
@@ -415,12 +434,12 @@ var _ = Describe("UploadStep", func() {
 			})
 
 			It("returns the appropriate error", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(MatchError(steps.NewEmittableError(errStream, steps.ErrReadTar)))
 			})
 
 			It("logs the step", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).To(HaveOccurred())
 				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
 					"test.upload-step.upload-starting",
@@ -437,13 +456,13 @@ var _ = Describe("UploadStep", func() {
 				})
 
 				It("should emits an error with the artifact name", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(MatchError(steps.NewEmittableError(errStream, fmt.Sprintf("%s for %s", steps.ErrReadTar, "artifact"))))
 				})
 
 				It("should log error with artifact name", func() {
-					err := step.Perform()
+					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
 					Expect(stderr).To(gbytes.Say("Failed to find first item in tar stream for artifact\n"))
 				})
@@ -533,24 +552,9 @@ var _ = Describe("UploadStep", func() {
 				logger,
 			)
 
-			go func() {
-				defer GinkgoRecover()
-
-				err := step1.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			go func() {
-				defer GinkgoRecover()
-
-				err := step2.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			go func() {
-				defer GinkgoRecover()
-
-				err := step3.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
+			ifrit.Background(step1)
+			ifrit.Background(step2)
+			ifrit.Background(step3)
 
 			Eventually(ready).Should(Receive())
 			Eventually(ready).Should(Receive())

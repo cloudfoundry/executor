@@ -7,11 +7,11 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/workpool"
+	"github.com/tedsuo/ifrit"
 )
 
 func NewMonitor(
-	checkFunc func() Step,
-	hasStartedRunning chan<- struct{},
+	checkFunc func() ifrit.Runner,
 	logger lager.Logger,
 	clock clock.Clock,
 	logStreamer log_streamer.LogStreamer,
@@ -19,9 +19,9 @@ func NewMonitor(
 	healthyInterval time.Duration,
 	unhealthyInterval time.Duration,
 	workPool *workpool.WorkPool,
-	proxyReadinessChecks ...Step,
-) Step {
-	throttledCheckFunc := func() Step {
+	proxyReadinessChecks ...ifrit.Runner,
+) ifrit.Runner {
+	throttledCheckFunc := func() ifrit.Runner {
 		return NewThrottle(checkFunc(), workPool)
 	}
 
@@ -31,5 +31,5 @@ func NewMonitor(
 	// add the proxy readiness checks (if any)
 	readiness = NewParallel(append(proxyReadinessChecks, readiness))
 
-	return NewHealthCheckStep(readiness, liveness, hasStartedRunning, logger, clock, logStreamer, logStreamer, startTimeout)
+	return NewHealthCheckStep(readiness, liveness, logger, clock, logStreamer, logStreamer, startTimeout)
 }

@@ -947,6 +947,10 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("returns the readiness check output in the error", func() {
+							Consistently(process.Ready()).ShouldNot(BeClosed())
+						})
+
+						It("returns the readiness check output in the error", func() {
 							Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance never healthy after 1s: readiness check failed"))))
 						})
 					})

@@ -142,7 +142,7 @@ func (t *transformer) stepFor(
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
-) steps.Step {
+) ifrit.Runner {
 	a := action.GetValue()
 	switch actionModel := a.(type) {
 	case *models.RunAction:
@@ -215,6 +215,7 @@ func (t *transformer) stepFor(
 				logger,
 			),
 			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
+			t.clock,
 			logger,
 		)
 
@@ -235,9 +236,9 @@ func (t *transformer) stepFor(
 		)
 
 	case *models.ParallelAction:
-		subSteps := make([]steps.Step, len(actionModel.Actions))
+		subSteps := make([]ifrit.Runner, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			var subStep steps.Step
+			var subStep ifrit.Runner
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
@@ -272,9 +273,9 @@ func (t *transformer) stepFor(
 		return steps.NewParallel(subSteps)
 
 	case *models.CodependentAction:
-		subSteps := make([]steps.Step, len(actionModel.Actions))
+		subSteps := make([]ifrit.Runner, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
-			var subStep steps.Step
+			var subStep ifrit.Runner
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
@@ -310,7 +311,7 @@ func (t *transformer) stepFor(
 		return steps.NewCodependent(subSteps, errorOnExit, false)
 
 	case *models.SerialAction:
-		subSteps := make([]steps.Step, len(actionModel.Actions))
+		subSteps := make([]ifrit.Runner, len(actionModel.Actions))
 		for i, action := range actionModel.Actions {
 			subSteps[i] = t.stepFor(
 				logStreamer,
@@ -360,8 +361,8 @@ func (t *transformer) StepsRunner(
 	logStreamer log_streamer.LogStreamer,
 	config Config,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor, longLivedAction steps.Step
-	var substeps []steps.Step
+	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
+	var substeps []ifrit.Runner
 
 	if container.Setup != nil {
 		setup = t.stepFor(
@@ -417,9 +418,8 @@ func (t *transformer) StepsRunner(
 	)
 
 	substeps = append(substeps, action)
-	hasStartedRunning := make(chan struct{}, 1)
 
-	var proxyReadinessChecks []steps.Step
+	var proxyReadinessChecks []ifrit.Runner
 
 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
 		envoyReadinessLogger := logger.Session("envoy-readiness-check")
@@ -450,7 +450,6 @@ func (t *transformer) StepsRunner(
 		monitor = t.transformCheckDefinition(logger,
 			&container,
 			gardenContainer,
-			hasStartedRunning,
 			logStreamer,
 			config.BindMounts,
 			proxyReadinessChecks,
@@ -459,7 +458,7 @@ func (t *transformer) StepsRunner(
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
-			func() steps.Step {
+			func() ifrit.Runner {
 				return t.stepFor(
 					logStreamer,
 					container.Monitor,
@@ -472,7 +471,6 @@ func (t *transformer) StepsRunner(
 					logger.Session("monitor-run"),
 				)
 			},
-			hasStartedRunning,
 			logger.Session("monitor"),
 			t.clock,
 			logStreamer,
@@ -499,26 +497,21 @@ func (t *transformer) StepsRunner(
 			logStreamer,
 			config.BindMounts,
 		)
-		longLivedAction = steps.NewCodependent([]steps.Step{longLivedAction, containerProxyStep}, false, true)
+		longLivedAction = steps.NewCodependent([]ifrit.Runner{longLivedAction, containerProxyStep}, false, true)
 	}
 
-	if monitor == nil {
-		// this container isn't monitored, so we mark it running right away
-		hasStartedRunning <- struct{}{}
-	}
-
-	var cumulativeStep steps.Step
+	var cumulativeStep ifrit.Runner
 	if setup == nil {
 		cumulativeStep = longLivedAction
 	} else {
 		if postSetup == nil {
-			cumulativeStep = steps.NewSerial([]steps.Step{setup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, longLivedAction})
 		} else {
-			cumulativeStep = steps.NewSerial([]steps.Step{setup, postSetup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, postSetup, longLivedAction})
 		}
 	}
 
-	return newStepRunner(cumulativeStep, hasStartedRunning), nil
+	return cumulativeStep, nil
 }
 
 func (t *transformer) createCheck(
@@ -534,7 +527,7 @@ func (t *transformer) createCheck(
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
-) steps.Step {
+) ifrit.Runner {
 
 	nofiles := healthCheckNofiles
 
@@ -597,13 +590,12 @@ func (t *transformer) transformCheckDefinition(
 	logger lager.Logger,
 	container *executor.Container,
 	gardenContainer garden.Container,
-	hasStartedRunning chan<- struct{},
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
-	proxyReadinessChecks []steps.Step,
-) steps.Step {
-	var readinessChecks []steps.Step
-	var livenessChecks []steps.Step
+	proxyReadinessChecks []ifrit.Runner,
+) ifrit.Runner {
+	var readinessChecks []ifrit.Runner
+	var livenessChecks []ifrit.Runner
 
 	sourceName := HealthLogSource
 	if container.CheckDefinition.LogSource != "" {
@@ -707,7 +699,6 @@ func (t *transformer) transformCheckDefinition(
 	return steps.NewHealthCheckStep(
 		readinessCheck,
 		livenessCheck,
-		hasStartedRunning,
 		logger,
 		t.clock,
 		logstreamer,
@@ -722,7 +713,7 @@ func (t *transformer) transformContainerProxyStep(
 	logger lager.Logger,
 	streamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
-) steps.Step {
+) ifrit.Runner {
 
 	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{

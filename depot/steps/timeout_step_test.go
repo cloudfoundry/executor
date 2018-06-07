@@ -2,79 +2,86 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 	"time"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("TimeoutStep", func() {
 	var (
-		substepReadyChan    chan struct{}
-		substepPerformTime  time.Duration
-		substepFinishedChan chan struct{}
-		substepPerformError error
-		substep             *fakes.FakeStep
+		substep    *fake_runner.TestRunner
+		substepErr error
+
+		clock *fakeclock.FakeClock
 
 		timeout time.Duration
 		logger  *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
-		substepReadyChan = make(chan struct{})
-		substepFinishedChan = make(chan struct{})
-
-		substep = &fakes.FakeStep{
-			PerformStub: func() error {
-				close(substepReadyChan)
-				time.Sleep(substepPerformTime)
-				close(substepFinishedChan)
-				return substepPerformError
-			},
-		}
-
+		timeout = 100 * time.Millisecond
+		clock = fakeclock.NewFakeClock(time.Now())
+		substep = fake_runner.NewTestRunner()
 		logger = lagertest.NewTestLogger("test")
 	})
 
-	Describe("Perform", func() {
-		var err error
+	Describe("Ready", func() {
+		It("becomes ready when the substep is ready", func() {
+			runner := steps.NewTimeout(substep, timeout, clock, logger)
+			p := ifrit.Background(runner)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			substep.TriggerReady()
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+	})
+
+	Describe("Run", func() {
+		var (
+			err error
+			p   ifrit.Process
+		)
 
 		JustBeforeEach(func() {
-			err = steps.NewTimeout(substep, timeout, logger).Perform()
+			runner := steps.NewTimeout(substep, timeout, clock, logger)
+			p = ifrit.Background(runner)
 		})
 
 		Context("When the substep finishes before the timeout expires", func() {
-			BeforeEach(func() {
-				substepPerformTime = 10 * time.Millisecond
-				timeout = 100 * time.Millisecond
+			JustBeforeEach(func() {
+				substep.TriggerExit(substepErr)
+				err = <-p.Wait()
 			})
 
 			Context("when the substep returns an error", func() {
 				BeforeEach(func() {
-					substepPerformError = errors.New("some error")
+					substepErr = errors.New("some error")
 				})
 
-				It("performs the substep", func() {
-					Expect(substepFinishedChan).To(BeClosed())
+				It("runs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
 				})
 
 				It("returns this error", func() {
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(Equal(substepPerformError))
+					Expect(err).To(Equal(substepErr))
 				})
 			})
 
 			Context("when the substep does not error", func() {
 				BeforeEach(func() {
-					substepPerformError = nil
+					substepErr = nil
 				})
 
-				It("performs the substep", func() {
-					Expect(substepFinishedChan).To(BeClosed())
+				It("runs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
 				})
 
 				It("does not error", func() {
@@ -85,71 +92,82 @@ var _ = Describe("TimeoutStep", func() {
 
 		Context("When the timeout expires before the substep finishes", func() {
 			BeforeEach(func() {
-				substepPerformTime = 100 * time.Millisecond
-				timeout = 10 * time.Millisecond
+				substepErr = steps.ErrCancelled
 			})
 
-			It("cancels the substep", func() {
-				Expect(substep.CancelCallCount()).To(Equal(1))
+			JustBeforeEach(func() {
+				clock.WaitForWatcherAndIncrement(timeout)
 			})
 
-			It("waits until the substep completes performing", func() {
-				Expect(substepFinishedChan).To(BeClosed())
+			It("signals the sub process", func() {
+				signals := substep.WaitForCall()
+				Eventually(signals).Should(Receive())
 			})
 
-			It("logs the timeout", func() {
-				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
-					"test.timeout-step.timed-out",
-				}))
-			})
-
-			Context("when the substep does not error", func() {
-				BeforeEach(func() {
-					substepPerformError = nil
+			Context("and the subprocess is signaled", func() {
+				JustBeforeEach(func() {
+					signals := substep.WaitForCall()
+					Eventually(signals).Should(Receive())
+					substep.TriggerExit(substepErr)
+					err = <-p.Wait()
 				})
 
-				It("returns an emittable error", func() {
-					Expect(err).To(HaveOccurred())
-					Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
+				It("logs the timeout", func() {
+					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
+						"test.timeout-step.timed-out",
+					}))
 				})
-			})
 
-			Context("when the substep returns an error", func() {
-				Context("when the error is not emittable", func() {
+				Context("when the substep does not error", func() {
 					BeforeEach(func() {
-						substepPerformError = errors.New("some error")
+						substepErr = nil
 					})
 
-					It("returns a timeout error which does not include the error returned by the substep", func() {
+					It("returns an emittable error", func() {
 						Expect(err).To(HaveOccurred())
 						Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
-						Expect(err.Error()).NotTo(ContainSubstring("some error"))
-						Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepPerformError))
 					})
 				})
 
-				Context("when the error is emittable", func() {
-					BeforeEach(func() {
-						substepPerformError = steps.NewEmittableError(nil, "some error")
+				Context("when the substep returns an error", func() {
+					Context("when the error is not emittable", func() {
+						BeforeEach(func() {
+							substepErr = errors.New("some error")
+						})
+
+						It("returns a timeout error which does not include the error returned by the substep", func() {
+							Expect(err).To(HaveOccurred())
+							Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
+							Expect(err.Error()).NotTo(ContainSubstring("some error"))
+							Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepErr))
+						})
 					})
 
-					It("returns a timeout error which includes the error returned by the substep", func() {
-						Expect(err).To(HaveOccurred())
-						Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
-						Expect(err.Error()).To(ContainSubstring("some error"))
-						Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepPerformError))
+					Context("when the error is emittable", func() {
+						BeforeEach(func() {
+							substepErr = steps.NewEmittableError(nil, "some error")
+						})
+
+						It("returns a timeout error which includes the error returned by the substep", func() {
+							Expect(err).To(HaveOccurred())
+							Expect(err).To(BeAssignableToTypeOf(&steps.EmittableError{}))
+							Expect(err.Error()).To(ContainSubstring("some error"))
+							Expect(err.(*steps.EmittableError).WrappedError()).To(Equal(substepErr))
+						})
 					})
 				})
 			})
 		})
 	})
 
-	Describe("Cancel", func() {
-		It("cancels the nested step", func() {
-			step := steps.NewTimeout(substep, timeout, logger)
-			step.Cancel()
+	Describe("Signal", func() {
+		It("signals the nested step", func() {
+			step := steps.NewTimeout(substep, timeout, clock, logger)
+			p := ifrit.Background(step)
+			p.Signal(os.Interrupt)
 
-			Expect(substep.CancelCallCount()).To(Equal(1))
+			signals := substep.WaitForCall()
+			Eventually(signals).Should(Receive())
 		})
 	})
 })

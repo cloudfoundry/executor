@@ -3,21 +3,23 @@ package steps_test
 import (
 	"bytes"
 	"errors"
+	"os"
 
 	"code.cloudfoundry.org/lager/lagertest"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("EmitProgressStep", func() {
-	var step steps.Step
-	var subStep steps.Step
+	var step ifrit.Runner
+	var subStep *fake_runner.FakeRunner
 	var cancelled bool
 	var errorToReturn error
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
@@ -37,14 +39,11 @@ var _ = Describe("EmitProgressStep", func() {
 		fakeStreamer.StderrReturns(stderrBuffer)
 		fakeStreamer.StdoutReturns(stdoutBuffer)
 
-		subStep = &fakes.FakeStep{
-			PerformStub: func() error {
-				fakeStreamer.Stdout().Write([]byte("RUNNING\n"))
-				return errorToReturn
-			},
-			CancelStub: func() {
-				cancelled = true
-			},
+		subStep = &fake_runner.FakeRunner{}
+
+		subStep.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+			fakeStreamer.Stdout().Write([]byte("RUNNING\n"))
+			return errorToReturn
 		}
 
 		logger = lagertest.NewTestLogger("test")
@@ -54,14 +53,40 @@ var _ = Describe("EmitProgressStep", func() {
 		step = steps.NewEmitProgress(subStep, startMessage, successMessage, failureMessage, fakeStreamer, logger)
 	})
 
+	Context("Ready", func() {
+		var (
+			fakeRunner *fake_runner.TestRunner
+		)
+
+		BeforeEach(func() {
+			fakeRunner = fake_runner.NewTestRunner()
+			subStep = fakeRunner.FakeRunner
+		})
+
+		It("becomes ready when the substep is ready", func() {
+
+			p := ifrit.Background(step)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			fakeRunner.TriggerReady()
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+	})
+
 	Context("running", func() {
+		var (
+			err error
+		)
+
+		JustBeforeEach(func() {
+			err = <-ifrit.Invoke(step).Wait()
+		})
+
 		Context("when there is a start message", func() {
 			BeforeEach(func() {
 				startMessage = "STARTING"
 			})
 
 			It("should emit the start message before performing", func() {
-				err := step.Perform()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(stdoutBuffer.String()).To(Equal("STARTING\nRUNNING\n"))
 			})
@@ -69,7 +94,6 @@ var _ = Describe("EmitProgressStep", func() {
 
 		Context("when there is no start or success message", func() {
 			It("should not emit the start message (i.e. a newline) before performing", func() {
-				err := step.Perform()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 			})
@@ -81,7 +105,6 @@ var _ = Describe("EmitProgressStep", func() {
 			})
 
 			It("should emit the sucess message", func() {
-				err := step.Perform()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(stdoutBuffer.String()).To(Equal("RUNNING\nSUCCESS\n"))
 			})
@@ -93,7 +116,6 @@ var _ = Describe("EmitProgressStep", func() {
 			})
 
 			It("should pass the error along", func() {
-				err := step.Perform()
 				Expect(err).To(MatchError(errorToReturn))
 			})
 
@@ -103,7 +125,6 @@ var _ = Describe("EmitProgressStep", func() {
 				})
 
 				It("should emit the failure message", func() {
-					step.Perform()
 
 					Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 					Expect(stderrBuffer.String()).To(Equal("FAIL\n"))
@@ -115,14 +136,12 @@ var _ = Describe("EmitProgressStep", func() {
 					})
 
 					It("should print out the emittable error", func() {
-						step.Perform()
 
 						Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 						Expect(stderrBuffer.String()).To(Equal("FAIL: Failed to reticulate\n"))
 					})
 
 					It("logs the error", func() {
-						step.Perform()
 
 						logs := logger.TestSink.Logs()
 						Expect(logs).To(HaveLen(1))
@@ -138,15 +157,12 @@ var _ = Describe("EmitProgressStep", func() {
 						})
 
 						It("should print out the emittable error", func() {
-							step.Perform()
 
 							Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 							Expect(stderrBuffer.String()).To(Equal("FAIL: Failed to reticulate\n"))
 						})
 
 						It("logs the error", func() {
-							step.Perform()
-
 							logs := logger.TestSink.Logs()
 							Expect(logs).To(HaveLen(1))
 
@@ -164,8 +180,6 @@ var _ = Describe("EmitProgressStep", func() {
 				})
 
 				It("should not emit the failure message or error, even with an emittable error", func() {
-					step.Perform()
-
 					Expect(stdoutBuffer.String()).To(Equal("RUNNING\n"))
 					Expect(stderrBuffer.String()).To(BeEmpty())
 				})
@@ -173,11 +187,29 @@ var _ = Describe("EmitProgressStep", func() {
 		})
 	})
 
-	Context("when told to cancel", func() {
+	Context("Signal", func() {
+		var (
+			p        ifrit.Process
+			finished chan struct{}
+		)
+
+		BeforeEach(func() {
+			finished = make(chan struct{})
+			subStep.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+				<-signals
+				close(finished)
+				return steps.ErrCancelled
+			}
+		})
+
+		JustBeforeEach(func() {
+			p = ifrit.Background(step)
+		})
+
 		It("passes the message along", func() {
-			Expect(cancelled).To(BeFalse())
-			step.Cancel()
-			Expect(cancelled).To(BeTrue())
+			Consistently(finished).ShouldNot(BeClosed())
+			p.Signal(os.Interrupt)
+			Eventually(finished).Should(BeClosed())
 		})
 	})
 })

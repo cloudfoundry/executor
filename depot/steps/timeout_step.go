@@ -1,54 +1,59 @@
 package steps
 
 import (
+	"os"
 	"time"
 
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type timeoutStep struct {
-	substep    Step
+	substep    ifrit.Runner
 	timeout    time.Duration
 	cancelChan chan struct{}
 	logger     lager.Logger
+	clock      clock.Clock
 }
 
-func NewTimeout(substep Step, timeout time.Duration, logger lager.Logger) *timeoutStep {
+func NewTimeout(substep ifrit.Runner, timeout time.Duration, clock clock.Clock, logger lager.Logger) ifrit.Runner {
 	return &timeoutStep{
-		substep:    substep,
-		timeout:    timeout,
-		cancelChan: make(chan struct{}),
-		logger:     logger.Session("timeout-step"),
+		substep: substep,
+		timeout: timeout,
+		clock:   clock,
+		logger:  logger.Session("timeout-step"),
 	}
 }
 
-func (step *timeoutStep) Perform() error {
-	resultChan := make(chan error, 1)
-	timer := time.NewTimer(step.timeout)
+func (step *timeoutStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (err error) {
+	timer := step.clock.NewTimer(step.timeout)
 	defer timer.Stop()
 
+	subStepSignals := make(chan os.Signal)
+	resultCh := make(chan error)
+
 	go func() {
-		resultChan <- step.substep.Perform()
+		resultCh <- step.substep.Run(subStepSignals, ready)
 	}()
 
-	for {
-		select {
-		case err := <-resultChan:
-			return err
+	go func() {
+		s := <-signals
+		subStepSignals <- s
+	}()
 
-		case <-timer.C:
-			step.logger.Error("timed-out", nil)
+	select {
+	case err := <-resultCh:
+		return err
 
-			step.substep.Cancel()
+	case <-timer.C():
+		step.logger.Error("timed-out", nil)
 
-			err := <-resultChan
-			return NewEmittableError(err, emittableMessage(step.timeout, err))
-		}
+		subStepSignals <- os.Interrupt
+
+		err := <-resultCh
+		return NewEmittableError(err, emittableMessage(step.timeout, err))
 	}
-}
-
-func (step *timeoutStep) Cancel() {
-	step.substep.Cancel()
 }
 
 func emittableMessage(timeout time.Duration, substepErr error) string {

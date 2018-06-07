@@ -2,35 +2,25 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 )
 
 var _ = Describe("TryStep", func() {
-	var step steps.Step
-	var subStep steps.Step
-	var thingHappened bool
-	var cancelled bool
+	var step ifrit.Runner
+	var subStep *fake_runner.TestRunner
 	var logger *lagertest.TestLogger
 
 	BeforeEach(func() {
-		thingHappened, cancelled = false, false
-
-		subStep = &fakes.FakeStep{
-			PerformStub: func() error {
-				thingHappened = true
-				return nil
-			},
-			CancelStub: func() {
-				cancelled = true
-			},
-		}
+		subStep = fake_runner.NewTestRunner()
 
 		logger = lagertest.NewTestLogger("test")
 	})
@@ -39,43 +29,65 @@ var _ = Describe("TryStep", func() {
 		step = steps.NewTry(subStep, logger)
 	})
 
-	It("performs its substep", func() {
-		err := step.Perform()
-		Expect(err).NotTo(HaveOccurred())
+	AfterEach(func() {
+		subStep.EnsureExit()
+	})
 
-		Expect(thingHappened).To(BeTrue())
+	It("runs its substep", func() {
+		ifrit.Background(step)
+		Eventually(subStep.RunCallCount).Should(Equal(1))
 	})
 
 	Context("when the substep fails", func() {
 		disaster := errors.New("oh no!")
 
 		BeforeEach(func() {
-			subStep = &fakes.FakeStep{
-				PerformStub: func() error {
-					return disaster
-				},
-			}
+			go subStep.TriggerExit(disaster)
 		})
 
 		It("succeeds anyway", func() {
-			err := step.Perform()
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(ifrit.Invoke(step).Wait()).Should(Receive(BeNil()))
 		})
 
 		It("logs the failure", func() {
-			err := step.Perform()
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(ifrit.Invoke(step).Wait()).Should(Receive(BeNil()))
 
 			Expect(logger).To(gbytes.Say("failed"))
 			Expect(logger).To(gbytes.Say("oh no!"))
 		})
 	})
 
-	Context("when told to cancel", func() {
+	It("does not become ready", func() {
+		p := ifrit.Background(step)
+		Consistently(p.Ready()).ShouldNot(BeClosed())
+	})
+
+	Context("when the substep is ready", func() {
+		var (
+			p ifrit.Process
+		)
+
+		JustBeforeEach(func() {
+			p = ifrit.Background(step)
+			subStep.TriggerReady()
+		})
+
+		It("becomes ready", func() {
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+
+		It("does not exit", func() {
+			Consistently(p.Wait()).ShouldNot(Receive())
+		})
+	})
+
+	Context("when signalled", func() {
 		It("passes the message along", func() {
-			Expect(cancelled).To(BeFalse())
-			step.Cancel()
-			Expect(cancelled).To(BeTrue())
+			p := ifrit.Background(step)
+			signals := subStep.WaitForCall()
+			Consistently(signals).ShouldNot(Receive())
+			p.Signal(os.Interrupt)
+			Eventually(signals).Should(Receive())
 		})
 	})
 })

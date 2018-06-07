@@ -2,70 +2,57 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("ConsistentlySucceedsStep", func() {
 	var (
-		step      steps.Step
-		fakeStep  *fakes.FakeStep
-		fakeClock *fakeclock.FakeClock
-		errCh     chan error
-		blockCh   chan error
-		done      chan struct{}
+		step    ifrit.Runner
+		process ifrit.Process
+
+		fakeRunner *fake_runner.TestRunner
+		fakeClock  *fakeclock.FakeClock
 	)
 
-	AfterEach(func() {
-		close(blockCh)
-	})
-
 	BeforeEach(func() {
-		errCh = make(chan error, 1)
-		done = make(chan struct{}, 1)
 		fakeClock = fakeclock.NewFakeClock(time.Now())
-		fakeStep = &fakes.FakeStep{}
-		blockCh = make(chan error, 10)
-		fakeStep.PerformStub = func() error {
-			return <-blockCh
-		}
+		fakeRunner = fake_runner.NewTestRunner()
 
-		step = steps.NewConsistentlySucceedsStep(func() steps.Step { return fakeStep }, time.Second, fakeClock)
+		step = steps.NewConsistentlySucceedsStep(func() ifrit.Runner { return fakeRunner }, time.Second, fakeClock)
 	})
 
 	JustBeforeEach(func() {
-		go func() {
-			errCh <- step.Perform()
-			close(done)
-		}()
-	})
-
-	AfterEach(func() {
-		step.Cancel()
-		Eventually(done).Should(BeClosed())
+		process = ifrit.Background(step)
 	})
 
 	It("should not exit", func() {
-		Consistently(errCh).ShouldNot(Receive(BeNil()))
+		Consistently(process.Wait()).ShouldNot(Receive(BeNil()))
 	})
 
 	It("does not perform the substep initially", func() {
-		Consistently(fakeStep.PerformCallCount).Should(BeZero())
+		Consistently(fakeRunner.RunCallCount).Should(BeZero())
+	})
+
+	It("becomes ready immediately", func() {
+		Eventually(process.Ready()).Should(BeClosed())
 	})
 
 	Context("when the step is cancelled", func() {
 		JustBeforeEach(func() {
-			step.Cancel()
+			process.Signal(os.Interrupt)
 		})
 
 		It("cancels the substep", func() {
-			Eventually(errCh).Should(Receive(MatchError(steps.ErrCancelled)))
+			Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
 		})
 	})
 
@@ -73,14 +60,15 @@ var _ = Describe("ConsistentlySucceedsStep", func() {
 		Context("and the step is cancelled", func() {
 			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(time.Second)
-				Eventually(fakeStep.PerformCallCount).Should(Equal(1))
-				step.Cancel()
+				Eventually(fakeRunner.RunCallCount).Should(Equal(1))
+				process.Signal(os.Interrupt)
 			})
 
 			It("cancels the substep", func() {
-				Eventually(fakeStep.CancelCallCount).ShouldNot(BeZero())
-				blockCh <- errors.New("BOOOM")
-				Eventually(errCh).Should(Receive(MatchError("BOOOM")))
+				signals := fakeRunner.WaitForCall()
+				Eventually(signals).Should(Receive())
+				fakeRunner.TriggerExit(errors.New("BOOOM"))
+				Eventually(process.Wait()).Should(Receive(MatchError("BOOOM")))
 			})
 		})
 	})
@@ -88,24 +76,24 @@ var _ = Describe("ConsistentlySucceedsStep", func() {
 	Context("when the step is succeeding", func() {
 		JustBeforeEach(func() {
 			fakeClock.WaitForWatcherAndIncrement(time.Second)
-			Eventually(fakeStep.PerformCallCount).Should(Equal(1))
-			blockCh <- nil
+			Eventually(fakeRunner.RunCallCount).Should(Equal(1))
+			fakeRunner.TriggerExit(nil)
 		})
 
 		It("retries after the timeout has elapsed", func() {
 			fakeClock.WaitForWatcherAndIncrement(time.Second)
-			Eventually(fakeStep.PerformCallCount).Should(Equal(2))
+			Eventually(fakeRunner.RunCallCount).Should(Equal(2))
 		})
 
 		Context("when it later fails", func() {
 			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(time.Second)
-				Eventually(fakeStep.PerformCallCount).Should(Equal(2))
-				blockCh <- errors.New("BOOOM")
+				Eventually(fakeRunner.RunCallCount).Should(Equal(2))
+				fakeRunner.TriggerExit(errors.New("BOOOM"))
 			})
 
 			It("should fail", func() {
-				Eventually(errCh).Should(Receive(MatchError("BOOOM")))
+				Eventually(process.Wait()).Should(Receive(MatchError("BOOOM")))
 			})
 		})
 	})

@@ -3,11 +3,14 @@ package steps
 import (
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
+
+	"github.com/tedsuo/ifrit"
 )
 
 type outputWrapperStep struct {
-	substep Step
+	substep ifrit.Runner
 	prefix  string
 	reader  io.Reader
 }
@@ -15,11 +18,11 @@ type outputWrapperStep struct {
 // This step ignores the error from the substep and returns the content of
 // Reader as an emittable error. This is used to wrap the output of the
 // healthcheck as the error instead of using the exit status or the process
-func NewOutputWrapper(substep Step, reader io.Reader) *outputWrapperStep {
+func NewOutputWrapper(substep ifrit.Runner, reader io.Reader) ifrit.Runner {
 	return NewOutputWrapperWithPrefix(substep, reader, "")
 }
 
-func NewOutputWrapperWithPrefix(substep Step, reader io.Reader, prefix string) *outputWrapperStep {
+func NewOutputWrapperWithPrefix(substep ifrit.Runner, reader io.Reader, prefix string) ifrit.Runner {
 	return &outputWrapperStep{
 		substep: substep,
 		reader:  reader,
@@ -27,29 +30,27 @@ func NewOutputWrapperWithPrefix(substep Step, reader io.Reader, prefix string) *
 	}
 }
 
-func (step *outputWrapperStep) Perform() error {
-	substepErr := step.substep.Perform()
-	if substepErr != nil {
-		bytes, err := ioutil.ReadAll(step.reader)
-		if err != nil {
-			return err
-		}
+func (step *outputWrapperStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	subStepErr := step.substep.Run(signals, ready)
 
-		readerErr := string(bytes)
-		if readerErr != "" {
-			msg := strings.TrimSpace(readerErr)
-			if step.prefix != "" {
-				msg = step.prefix + ": " + msg
-			}
-			return NewEmittableError(nil, msg)
-		}
-
-		return substepErr
+	if subStepErr == nil {
+		return nil
 	}
 
-	return nil
-}
+	bytes, err := ioutil.ReadAll(step.reader)
+	if err != nil {
+		return err
+	}
 
-func (step *outputWrapperStep) Cancel() {
-	step.substep.Cancel()
+	readerErr := string(bytes)
+	if readerErr != "" {
+		msg := strings.TrimSpace(readerErr)
+		if step.prefix != "" {
+			msg = step.prefix + ": " + msg
+		}
+		return NewEmittableError(nil, msg)
+	}
+
+	return subStepErr
+
 }

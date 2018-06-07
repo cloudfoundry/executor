@@ -1,13 +1,16 @@
 package steps
 
 import (
+	"os"
+
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"github.com/tedsuo/ifrit"
 
 	"code.cloudfoundry.org/lager"
 )
 
 type emitProgressStep struct {
-	substep        Step
+	substep        ifrit.Runner
 	logger         lager.Logger
 	startMessage   string
 	successMessage string
@@ -16,7 +19,7 @@ type emitProgressStep struct {
 }
 
 func NewEmitProgress(
-	substep Step,
+	substep ifrit.Runner,
 	startMessage,
 	successMessage,
 	failureMessage string,
@@ -34,12 +37,13 @@ func NewEmitProgress(
 	}
 }
 
-func (step *emitProgressStep) Perform() error {
+func (step *emitProgressStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	if step.startMessage != "" {
 		step.streamer.Stdout().Write([]byte(step.startMessage + "\n"))
 	}
 
-	err := step.substep.Perform()
+	err := step.substep.Run(signals, ready)
+
 	if err != nil {
 		if step.failureMessage != "" {
 			step.streamer.Stderr().Write([]byte(step.failureMessage))
@@ -68,8 +72,4 @@ func (step *emitProgressStep) Perform() error {
 	}
 
 	return err
-}
-
-func (step *emitProgressStep) Cancel() {
-	step.substep.Cancel()
 }

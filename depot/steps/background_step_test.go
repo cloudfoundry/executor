@@ -2,105 +2,86 @@ package steps_test
 
 import (
 	"errors"
+	"os"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("BackgroundStep", func() {
 	var (
-		substepPerformError error
-		substep             *fakes.FakeStep
-		logger              *lagertest.TestLogger
+		substepRunError error
+		substep         *fake_runner.TestRunner
+		logger          *lagertest.TestLogger
+		process         ifrit.Process
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
+		substep = fake_runner.NewTestRunner()
+		process = ifrit.Background(steps.NewBackground(substep, logger))
 	})
 
-	Describe("Perform", func() {
-		var (
-			err error
-		)
+	Describe("Run", func() {
+		Context("when the substep exits", func() {
+			JustBeforeEach(func() {
+				substep.TriggerExit(substepRunError)
+			})
 
-		BeforeEach(func() {
-			substep = &fakes.FakeStep{
-				PerformStub: func() error {
-					return substepPerformError
-				},
-			}
+			Context("when the substep returns an error", func() {
+				BeforeEach(func() {
+					substepRunError = errors.New("some error")
+				})
+
+				It("performs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
+				})
+
+				It("returns this error", func() {
+					Eventually(process.Wait()).Should(Receive(Equal(substepRunError)))
+				})
+			})
+
+			Context("when the substep does not error", func() {
+				BeforeEach(func() {
+					substepRunError = nil
+				})
+
+				It("performs the substep", func() {
+					Eventually(substep.RunCallCount).Should(Equal(1))
+				})
+
+				It("does not error", func() {
+					Eventually(process.Wait()).Should(Receive(BeNil()))
+				})
+			})
 		})
 
-		JustBeforeEach(func() {
-			err = steps.NewBackground(substep, logger).Perform()
-		})
-
-		Context("when the substep returns an error", func() {
-			BeforeEach(func() {
-				substepPerformError = errors.New("some error")
-			})
-
-			It("performs the substep", func() {
-				Expect(substep.PerformCallCount()).To(Equal(1))
-			})
-
-			It("returns this error", func() {
-				Expect(err).To(Equal(substepPerformError))
+		Context("when the substep does not exit", func() {
+			It("does not exit", func() {
+				Consistently(process.Wait()).ShouldNot(Receive())
 			})
 		})
 
-		Context("when the substep does not error", func() {
-			BeforeEach(func() {
-				substepPerformError = nil
-			})
-
-			It("performs the substep", func() {
-				Expect(substep.PerformCallCount()).To(Equal(1))
-			})
-
-			It("does not error", func() {
-				Expect(err).NotTo(HaveOccurred())
+		Context("readiness", func() {
+			It("becomes ready when the substep is ready", func() {
+				Consistently(process.Ready()).ShouldNot(BeClosed())
+				substep.TriggerReady()
+				Eventually(process.Ready()).Should(BeClosed())
 			})
 		})
 	})
 
-	Describe("Cancel", func() {
-		var (
-			errs          chan error
-			step          steps.Step
-			blkChannel    chan struct{}
-			calledChannel chan struct{}
-		)
-
-		BeforeEach(func() {
-			errs = make(chan error, 10)
-			calledChannel = make(chan struct{}, 10)
-			blkChannel = make(chan struct{})
-			substep = &fakes.FakeStep{
-				PerformStub: func() error {
-					calledChannel <- struct{}{}
-					<-blkChannel
-					return nil
-				},
-			}
-			step = steps.NewBackground(substep, logger)
-		})
-
-		JustBeforeEach(func() {
-			go func() {
-				errs <- step.Perform()
-			}()
-		})
-
-		It("never cancels the substep", func() {
-			Eventually(calledChannel).Should(Receive())
-			step.Cancel()
-			Eventually(errs).Should(Receive())
-			Expect(substep.CancelCallCount()).To(BeZero())
+	Describe("Signalling", func() {
+		It("never signals the substep", func() {
+			Eventually(substep.RunCallCount).Should(Equal(1))
+			process.Signal(os.Interrupt)
+			Consistently(substep.WaitForCall()).ShouldNot(Receive())
 		})
 	})
 })

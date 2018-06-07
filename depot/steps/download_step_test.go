@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"code.cloudfoundry.org/cacheddownloader"
 	cdfakes "code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
@@ -24,13 +25,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
 
 	archiveHelper "code.cloudfoundry.org/archiver/extractor/test_helper"
 )
 
 var _ = Describe("DownloadAction", func() {
 	var (
-		step steps.Step
+		step ifrit.Runner
 
 		downloadAction models.DownloadAction
 		cache          *cdfakes.FakeCachedDownloader
@@ -61,8 +63,10 @@ var _ = Describe("DownloadAction", func() {
 		rateLimiter = make(chan struct{}, 1)
 	})
 
-	Describe("Perform", func() {
-		var stepErr error
+	Describe("Run", func() {
+		var (
+			stepErr error
+		)
 
 		JustBeforeEach(func() {
 			container, err := gardenClient.Create(garden.ContainerSpec{
@@ -79,7 +83,7 @@ var _ = Describe("DownloadAction", func() {
 				logger,
 			)
 
-			stepErr = step.Perform()
+			stepErr = <-ifrit.Invoke(step).Wait()
 		})
 
 		var tarReader *tar.Reader
@@ -126,7 +130,7 @@ var _ = Describe("DownloadAction", func() {
 
 		Context("when an artifact is not specified", func() {
 			It("does not stream the download information", func() {
-				err := step.Perform()
+				err := <-ifrit.Invoke(step).Wait()
 				Expect(err).NotTo(HaveOccurred())
 
 				stdout := fakeStreamer.Stdout().(*gbytes.Buffer)
@@ -327,11 +331,16 @@ var _ = Describe("DownloadAction", func() {
 		})
 	})
 
-	Describe("Cancel", func() {
-		var result chan error
+	Describe("Ready", func() {
+		var (
+			p ifrit.Process
+		)
 
 		BeforeEach(func() {
-			result = make(chan error)
+			cache.FetchStub = func(_ lager.Logger, u *url.URL, key string, checksumInfo cacheddownloader.ChecksumInfoType, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
+				<-cancelCh
+				return nil, 0, errors.New("some error indicating a cancel")
+			}
 
 			container, err := gardenClient.Create(garden.ContainerSpec{
 				Handle: handle,
@@ -348,31 +357,77 @@ var _ = Describe("DownloadAction", func() {
 			)
 		})
 
+		JustBeforeEach(func() {
+			p = ifrit.Background(step)
+		})
+
+		AfterEach(func() {
+			p.Signal(os.Interrupt)
+		})
+
+		It("becomes ready immediately", func() {
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+	})
+
+	Describe("Cancel", func() {
+		var (
+			p ifrit.Process
+		)
+
+		BeforeEach(func() {
+			container, err := gardenClient.Create(garden.ContainerSpec{
+				Handle: handle,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			step = steps.NewDownload(
+				container,
+				downloadAction,
+				cache,
+				rateLimiter,
+				fakeStreamer,
+				logger,
+			)
+		})
+
+		JustBeforeEach(func() {
+			p = ifrit.Background(step)
+		})
+
 		Context("when waiting on the rate limiter", func() {
+			var (
+				p ifrit.Process
+			)
+
 			JustBeforeEach(func() {
 				rateLimiter <- struct{}{}
-				go func() { result <- step.Perform() }()
+				p = ifrit.Background(step)
 			})
 
 			It("cancels the wait", func() {
-				step.Cancel()
-				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
+				p.Signal(os.Interrupt)
+				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 
 			It("does not fetch the download artifact", func() {
-				step.Cancel()
-				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
+				p.Signal(os.Interrupt)
+				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 				Expect(cache.FetchCallCount()).To(Equal(0))
 			})
 		})
 
 		Context("when downloading the file", func() {
-			var calledChan chan struct{}
+			var (
+				calledChan chan struct{}
+			)
 
 			BeforeEach(func() {
 				calledChan = make(chan struct{})
 
 				cache.FetchStub = func(_ lager.Logger, u *url.URL, key string, checksumInfo cacheddownloader.ChecksumInfoType, cancelCh <-chan struct{}) (io.ReadCloser, int64, error) {
+					defer GinkgoRecover()
+
 					Expect(cancelCh).NotTo(BeNil())
 					Expect(cancelCh).NotTo(BeClosed())
 
@@ -385,21 +440,19 @@ var _ = Describe("DownloadAction", func() {
 				}
 			})
 
-			JustBeforeEach(func() {
-				go func() { result <- step.Perform() }()
-			})
-
 			It("closes the cancel channel and propagates the cancel error", func() {
 				Eventually(calledChan).Should(BeClosed())
-				step.Cancel()
+				p.Signal(os.Interrupt)
 
-				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 
 		Context("when streaming the file into the container", func() {
-			var calledChan chan struct{}
-			var barrierChan chan struct{}
+			var (
+				calledChan  chan struct{}
+				barrierChan chan struct{}
+			)
 
 			BeforeEach(func() {
 				tarFile := createTempTar()
@@ -412,6 +465,7 @@ var _ = Describe("DownloadAction", func() {
 				gardenClient.Connection.StreamInStub = func(handle string, spec garden.StreamInSpec) error {
 					writer := func(p []byte) (n int, err error) {
 						close(calledChan)
+
 						<-barrierChan
 						return 1, nil
 					}
@@ -420,16 +474,12 @@ var _ = Describe("DownloadAction", func() {
 				}
 			})
 
-			JustBeforeEach(func() {
-				go func() { result <- step.Perform() }()
-			})
-
 			It("aborts the streaming", func() {
 				Eventually(calledChan).Should(BeClosed())
-				step.Cancel()
+				p.Signal(os.Interrupt)
 				close(barrierChan)
 
-				Eventually(result).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait(), 2*time.Second).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 	})
@@ -499,24 +549,9 @@ var _ = Describe("DownloadAction", func() {
 				return nopCloser, 42, nil
 			}
 
-			go func() {
-				defer GinkgoRecover()
-
-				err := step1.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			go func() {
-				defer GinkgoRecover()
-
-				err := step2.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
-			go func() {
-				defer GinkgoRecover()
-
-				err := step3.Perform()
-				Expect(err).NotTo(HaveOccurred())
-			}()
+			ifrit.Background(step1)
+			ifrit.Background(step2)
+			ifrit.Background(step3)
 
 			Eventually(fetchCh).Should(Receive())
 			Eventually(fetchCh).Should(Receive())

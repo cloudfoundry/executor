@@ -3,38 +3,38 @@ package steps_test
 import (
 	"errors"
 	"fmt"
-	"sync"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/workpool"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("MonitorStep", func() {
 	var (
-		fakeStep1 *fakes.FakeStep
-		fakeStep2 *fakes.FakeStep
+		fakeStep1 *fake_runner.TestRunner
+		fakeStep2 *fake_runner.TestRunner
 
-		checkSteps chan *fakes.FakeStep
+		checkSteps chan ifrit.Runner
 
-		checkFunc        func() steps.Step
-		hasBecomeHealthy <-chan struct{}
-		clock            *fakeclock.FakeClock
-		fakeStreamer     *fake_log_streamer.FakeLogStreamer
+		checkFunc    func() ifrit.Runner
+		clock        *fakeclock.FakeClock
+		fakeStreamer *fake_log_streamer.FakeLogStreamer
 
 		startTimeout      time.Duration
 		healthyInterval   time.Duration
 		unhealthyInterval time.Duration
 
-		step   steps.Step
+		step   ifrit.Runner
 		logger *lagertest.TestLogger
 	)
 
@@ -45,10 +45,10 @@ var _ = Describe("MonitorStep", func() {
 		healthyInterval = 1 * time.Second
 		unhealthyInterval = 500 * time.Millisecond
 
-		fakeStep1 = new(fakes.FakeStep)
-		fakeStep2 = new(fakes.FakeStep)
+		fakeStep1 = fake_runner.NewTestRunner()
+		fakeStep2 = fake_runner.NewTestRunner()
 
-		checkSteps = make(chan *fakes.FakeStep, 2)
+		checkSteps = make(chan ifrit.Runner, 2)
 		checkSteps <- fakeStep1
 		checkSteps <- fakeStep2
 
@@ -56,7 +56,7 @@ var _ = Describe("MonitorStep", func() {
 
 		fakeStreamer = newFakeStreamer()
 
-		checkFunc = func() steps.Step {
+		checkFunc = func() ifrit.Runner {
 			return <-checkSteps
 		}
 
@@ -64,9 +64,6 @@ var _ = Describe("MonitorStep", func() {
 	})
 
 	JustBeforeEach(func() {
-		hasBecomeHealthyChannel := make(chan struct{}, 1000)
-		hasBecomeHealthy = hasBecomeHealthyChannel
-
 		workPool, err := workpool.NewWorkPool(numOfConcurrentMonitorSteps)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -74,7 +71,6 @@ var _ = Describe("MonitorStep", func() {
 
 		step = steps.NewMonitor(
 			checkFunc,
-			hasBecomeHealthyChannel,
 			logger,
 			clock,
 			fakeStreamer,
@@ -85,110 +81,59 @@ var _ = Describe("MonitorStep", func() {
 		)
 	})
 
-	expectCheckAfterInterval := func(fakeStep *fakes.FakeStep, d time.Duration) {
-		previousCheckCount := fakeStep.PerformCallCount()
+	expectCheckAfterInterval := func(fakeStep *fake_runner.TestRunner, d time.Duration) {
+		previousCheckCount := fakeStep.RunCallCount()
 
 		clock.Increment(d - 1*time.Microsecond)
-		Consistently(fakeStep.PerformCallCount, 0.05).Should(Equal(previousCheckCount))
+		Consistently(fakeStep.RunCallCount, 0.05).Should(Equal(previousCheckCount))
 
 		clock.WaitForWatcherAndIncrement(d)
-		Eventually(fakeStep.PerformCallCount).Should(Equal(previousCheckCount + 1))
+		Eventually(fakeStep.RunCallCount).Should(Equal(previousCheckCount + 1))
 	}
 
 	Describe("Throttling", func() {
 		var (
-			throttleChan chan struct{}
-			doneChan     chan struct{}
-			fakeStep     *fakes.FakeStep
+			fakeStep *fake_runner.TestRunner
 		)
 
 		BeforeEach(func() {
-			throttleChan = make(chan struct{}, numOfConcurrentMonitorSteps)
-			doneChan = make(chan struct{}, 1)
-			fakeStep = new(fakes.FakeStep)
-			fakeStep.PerformStub = func() error {
-				throttleChan <- struct{}{}
-				<-doneChan
-				return nil
-			}
-			checkFunc = func() steps.Step {
+			fakeStep = fake_runner.NewTestRunner()
+			checkFunc = func() ifrit.Runner {
 				return fakeStep
 			}
 
 		})
 
-		AfterEach(func() {
-			step.Cancel()
-		})
-
 		It("throttles concurrent health check", func() {
 			for i := 0; i < 5; i++ {
-				go step.Perform()
+				ifrit.Background(step)
 			}
 
-			Consistently(fakeStep.PerformCallCount).Should(Equal(0))
+			Consistently(fakeStep.RunCallCount).Should(Equal(0))
 			clock.Increment(501 * time.Millisecond)
 
-			Eventually(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numOfConcurrentMonitorSteps))
-			Consistently(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numOfConcurrentMonitorSteps))
+			Eventually(fakeStep.RunCallCount).Should(Equal(3))
+			Consistently(fakeStep.RunCallCount).Should(Equal(3))
 
-			Eventually(fakeStep.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps))
+			fakeStep.TriggerExit(nil)
+			Eventually(fakeStep.RunCallCount).Should(Equal(numOfConcurrentMonitorSteps + 1))
 
-			doneChan <- struct{}{}
+			fakeStep.TriggerExit(nil)
+			Eventually(fakeStep.RunCallCount).Should(Equal(numOfConcurrentMonitorSteps + 2))
 
-			Eventually(fakeStep.PerformCallCount).Should(Equal(numOfConcurrentMonitorSteps + 1))
-
-			close(doneChan)
-
-			Eventually(fakeStep.PerformCallCount).Should(Equal(5))
+			for i := 0; i < 3; i++ {
+				fakeStep.TriggerExit(nil)
+			}
 		})
 	})
 
-	Describe("Perform", func() {
+	Describe("Run", func() {
 		var (
-			checkResults chan<- error
-
-			performErr     chan error
-			donePerforming *sync.WaitGroup
+			process ifrit.Process
 		)
 
-		BeforeEach(func() {
-			results := make(chan error, 10)
-			checkResults = results
-
-			var currentResult error
-
-			fakedResult := func() error {
-				select {
-				case currentResult = <-results:
-				default:
-				}
-
-				return currentResult
-			}
-
-			fakeStep1.PerformStub = fakedResult
-			fakeStep2.PerformStub = fakedResult
-		})
-
 		JustBeforeEach(func() {
-			performErr = make(chan error, 1)
-			donePerforming = new(sync.WaitGroup)
-
-			donePerforming.Add(1)
-			go func() {
-				defer donePerforming.Done()
-				performErr <- step.Perform()
-			}()
-		})
-
-		AfterEach(func() {
-			step.Cancel()
-			donePerforming.Wait()
+			process = ifrit.Background(step)
 		})
 
 		It("emits a message to the applications log stream", func() {
@@ -198,8 +143,8 @@ var _ = Describe("MonitorStep", func() {
 		})
 
 		Context("when the check succeeds", func() {
-			BeforeEach(func() {
-				checkResults <- nil
+			JustBeforeEach(func() {
+				go fakeStep1.TriggerExit(nil)
 			})
 
 			Context("and the unhealthy interval passes", func() {
@@ -208,7 +153,7 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("emits a healthy event", func() {
-					Eventually(hasBecomeHealthy).Should(Receive())
+					Eventually(process.Ready()).Should(BeClosed())
 				})
 
 				It("emits a log message for the success", func() {
@@ -223,32 +168,17 @@ var _ = Describe("MonitorStep", func() {
 					}))
 				})
 
-				Context("and the healthy interval passes", func() {
-					JustBeforeEach(func() {
-						Eventually(hasBecomeHealthy).Should(Receive())
-						expectCheckAfterInterval(fakeStep2, healthyInterval)
-					})
-
-					It("does not emit another healthy event", func() {
-						Consistently(hasBecomeHealthy).ShouldNot(Receive())
-					})
-				})
-
-				Context("and the check begins to fail", func() {
+				Context("and later the check begins to fail", func() {
 					disaster := errors.New("oh no!")
 
 					BeforeEach(func() {
-						checkResults <- disaster
+						go fakeStep2.TriggerExit(disaster)
 					})
 
 					Context("and the healthy interval passes", func() {
 						JustBeforeEach(func() {
-							Eventually(hasBecomeHealthy).Should(Receive())
+							Eventually(process.Ready()).Should(BeClosed())
 							expectCheckAfterInterval(fakeStep2, healthyInterval)
-						})
-
-						It("emits nothing", func() {
-							Consistently(hasBecomeHealthy).ShouldNot(Receive())
 						})
 
 						It("logs the step", func() {
@@ -271,10 +201,8 @@ var _ = Describe("MonitorStep", func() {
 						})
 
 						It("completes with failure", func() {
-							var expectedError interface{}
-							Eventually(performErr).Should(Receive(&expectedError))
-							err, ok := expectedError.(*steps.EmittableError)
-							Expect(ok).To(BeTrue())
+							var err *steps.EmittableError
+							Eventually(process.Wait()).Should(Receive(&err))
 							Expect(err.WrappedError()).To(Equal(disaster))
 						})
 					})
@@ -286,7 +214,8 @@ var _ = Describe("MonitorStep", func() {
 			var expectedErr error
 			BeforeEach(func() {
 				expectedErr = errors.New("not up yet!")
-				checkResults <- expectedErr
+				go fakeStep1.TriggerExit(expectedErr)
+				go fakeStep2.TriggerExit(expectedErr)
 			})
 
 			Context("and the start timeout is exceeded", func() {
@@ -297,12 +226,10 @@ var _ = Describe("MonitorStep", func() {
 
 				It("completes with failure", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
-					Consistently(performErr).ShouldNot(Receive())
+					Consistently(process.Wait()).ShouldNot(Receive())
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
-					var expectedError interface{}
-					Eventually(performErr).Should(Receive(&expectedError))
-					err, ok := expectedError.(*steps.EmittableError)
-					Expect(ok).To(BeTrue())
+					var err *steps.EmittableError
+					Eventually(process.Wait()).Should(Receive(&err))
 					Expect(err.WrappedError()).To(MatchError("not up yet!"))
 				})
 
@@ -337,11 +264,11 @@ var _ = Describe("MonitorStep", func() {
 				})
 
 				It("does not emit an unhealthy event", func() {
-					Consistently(hasBecomeHealthy).ShouldNot(Receive())
+					Consistently(process.Ready()).ShouldNot(BeClosed())
 				})
 
 				It("does not exit", func() {
-					Consistently(performErr).ShouldNot(Receive())
+					Consistently(process.Wait()).ShouldNot(Receive())
 				})
 
 				Context("and the unhealthy interval passes again", func() {
@@ -350,58 +277,41 @@ var _ = Describe("MonitorStep", func() {
 					})
 
 					It("does not emit an unhealthy event", func() {
-						Consistently(hasBecomeHealthy).ShouldNot(Receive())
+						Consistently(process.Ready()).ShouldNot(BeClosed())
 					})
 
 					It("does not exit", func() {
-						Consistently(performErr).ShouldNot(Receive())
+						Consistently(process.Wait()).ShouldNot(Receive())
 					})
 				})
 			})
 		})
 	})
 
-	Describe("Cancel", func() {
+	Describe("Signalling", func() {
+		var (
+			process ifrit.Process
+		)
+
 		It("interrupts the monitoring", func() {
-			performResult := make(chan error)
-			go func() { performResult <- step.Perform() }()
-			step.Cancel()
-			Eventually(performResult).Should(Receive(Equal(steps.ErrCancelled)))
+			process = ifrit.Background(step)
+			process.Signal(os.Interrupt)
+			Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 		})
 
 		Context("while checking", func() {
-			var performing chan struct{}
-
-			BeforeEach(func() {
-				performing = make(chan struct{})
-				cancelled := make(chan struct{})
-
-				fakeStep1.PerformStub = func() error {
-					close(performing)
-
-					select {
-					case <-cancelled:
-						return steps.ErrCancelled
-					}
-				}
-
-				fakeStep1.CancelStub = func() {
-					close(cancelled)
-				}
-			})
-
 			It("cancels the in-flight check", func() {
-				performResult := make(chan error)
-
-				go func() { performResult <- step.Perform() }()
+				process = ifrit.Background(step)
 
 				expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 
-				Eventually(performing).Should(BeClosed())
+				Eventually(fakeStep1.RunCallCount).Should(Equal(1))
 
-				step.Cancel()
+				process.Signal(os.Interrupt)
 
-				Eventually(performResult).Should(Receive(Equal(steps.ErrCancelled)))
+				fakeStep1.TriggerExit(steps.ErrCancelled)
+
+				Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 	})

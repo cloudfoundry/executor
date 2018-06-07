@@ -1,31 +1,35 @@
 package steps
 
+import (
+	"os"
+
+	"github.com/tedsuo/ifrit"
+)
+
 type serialStep struct {
-	steps  []Step
-	cancel chan struct{}
+	steps []ifrit.Runner
 }
 
-func NewSerial(steps []Step) *serialStep {
+func NewSerial(steps []ifrit.Runner) ifrit.Runner {
 	return &serialStep{
 		steps: steps,
-
-		cancel: make(chan struct{}),
 	}
 }
 
-func (runner *serialStep) Perform() error {
+func (runner *serialStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	close(ready)
 	for _, action := range runner.steps {
-		err := action.Perform()
-		if err != nil {
-			return err
+		p := ifrit.Background(action)
+		select {
+		case substepErr := <-p.Wait():
+			if substepErr != nil {
+				return substepErr
+			}
+		case signal := <-signals:
+			p.Signal(signal)
+			return ErrCancelled
 		}
 	}
 
 	return nil
-}
-
-func (runner *serialStep) Cancel() {
-	for _, step := range runner.steps {
-		step.Cancel()
-	}
 }

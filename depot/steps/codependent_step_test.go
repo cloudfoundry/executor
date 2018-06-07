@@ -2,23 +2,36 @@ package steps_test
 
 import (
 	"errors"
-	"sync"
+	"os"
 
 	"github.com/hashicorp/go-multierror"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 )
 
 var _ = Describe("CodependentStep", func() {
-	var step steps.Step
-	var subStep1 *fakes.FakeStep
-	var subStep2 *fakes.FakeStep
+	var (
+		step     ifrit.Runner
+		subStep1 *fake_runner.FakeRunner
+		subStep2 *fake_runner.FakeRunner
 
-	var thingHappened chan bool
-	var cancelled chan bool
+		subStep1TriggerExit func(err error)
+		subStep2TriggerExit func(err error)
+
+		subStep1Cancelled chan struct{}
+		subStep2Cancelled chan struct{}
+
+		triggerReady1 chan struct{}
+		triggerReady2 chan struct{}
+
+		exitChan1, exitChan2 chan error
+
+		process ifrit.Process
+	)
 
 	var errorOnExit bool
 	var cancelOthersOnExit bool
@@ -27,135 +40,119 @@ var _ = Describe("CodependentStep", func() {
 		errorOnExit = false
 		cancelOthersOnExit = false
 
-		thingHappened = make(chan bool, 2)
-		cancelled = make(chan bool, 2)
+		subStep1Cancelled = make(chan struct{})
+		subStep2Cancelled = make(chan struct{})
 
-		running := new(sync.WaitGroup)
-		running.Add(2)
+		triggerReady1 = make(chan struct{})
+		triggerReady2 = make(chan struct{})
 
-		subStep1 = &fakes.FakeStep{
-			PerformStub: func() error {
-				running.Done()
-				running.Wait()
-				thingHappened <- true
-				return nil
-			},
-			CancelStub: func() {
-				cancelled <- true
-			},
+		subStep1 = &fake_runner.FakeRunner{}
+		subStep2 = &fake_runner.FakeRunner{}
+		exitChan1 = make(chan error, 1)
+		exitChan2 = make(chan error, 1)
+		subStep1TriggerExit = func(err error) { exitChan1 <- err }
+		subStep1.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+			select {
+			case <-triggerReady1:
+				close(ready)
+			case <-signals:
+				close(subStep1Cancelled)
+				return steps.ErrCancelled
+			case err := <-exitChan1:
+				return err
+			}
+			select {
+			case <-signals:
+				close(subStep1Cancelled)
+				return steps.ErrCancelled
+			case err := <-exitChan1:
+				return err
+			}
 		}
 
-		subStep2 = &fakes.FakeStep{
-			PerformStub: func() error {
-				running.Done()
-				running.Wait()
-				thingHappened <- true
-				return nil
-			},
-			CancelStub: func() {
-				cancelled <- true
-			},
+		subStep2TriggerExit = func(err error) { exitChan2 <- err }
+		subStep2.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+			select {
+			case <-triggerReady2:
+				close(ready)
+			case <-signals:
+				close(subStep2Cancelled)
+				return steps.ErrCancelled
+			case err := <-exitChan2:
+				return err
+			}
+			select {
+			case <-signals:
+				close(subStep2Cancelled)
+				return steps.ErrCancelled
+			case err := <-exitChan2:
+				return err
+			}
 		}
 	})
 
-	Describe("Perform", func() {
-		JustBeforeEach(func() {
-			step = steps.NewCodependent([]steps.Step{subStep1, subStep2}, errorOnExit, cancelOthersOnExit)
-		})
+	AfterEach(func() {
+		select {
+		case exitChan1 <- nil:
+		default:
+		}
+		select {
+		case exitChan2 <- nil:
+		default:
+		}
+	})
 
-		It("performs its substeps in parallel", func() {
-			err := step.Perform()
-			Expect(err).NotTo(HaveOccurred())
+	JustBeforeEach(func() {
+		step = steps.NewCodependent([]ifrit.Runner{subStep1, subStep2}, errorOnExit, cancelOthersOnExit)
+		process = ifrit.Background(step)
+		Eventually(subStep1.RunCallCount).Should(Equal(1))
+		Eventually(subStep2.RunCallCount).Should(Equal(1))
+	})
 
-			Eventually(thingHappened).Should(Receive())
-			Eventually(thingHappened).Should(Receive())
+	Describe("Run", func() {
+		It("runs its substeps in parallel", func() {
+			subStep1TriggerExit(nil)
+			subStep2TriggerExit(nil)
+
+			Eventually(process.Wait()).Should(Receive(BeNil()))
 		})
 
 		Context("when one of the substeps fails", func() {
 			disaster := errors.New("oh no!")
 
 			BeforeEach(func() {
-				subStep1 = &fakes.FakeStep{
-					PerformStub: func() error {
-						return disaster
-					},
-				}
-
-				subStep2 = &fakes.FakeStep{
-					PerformStub: func() error {
-						return nil
-					},
-				}
+				subStep1TriggerExit(disaster)
 			})
 
 			It("returns an aggregate of the failures", func() {
-				err := step.Perform()
-				Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(disaster))
+				var err *multierror.Error
+				Eventually(process.Wait()).Should(Receive(&err))
+				Expect(err.WrappedErrors()).To(ConsistOf(disaster))
 			})
 
-			It("cancels all the steps", func() {
-				step.Perform()
+			It("cancels all remaining steps", func() {
+				Eventually(subStep2Cancelled).Should(BeClosed())
+			})
+		})
+		Context("when step is cancelled", func() {
+			disaster := errors.New("oh no!")
 
-				Expect(subStep1.CancelCallCount()).To(Equal(1))
-				Expect(subStep2.CancelCallCount()).To(Equal(1))
+			BeforeEach(func() {
+				subStep1TriggerExit(disaster)
+				subStep2TriggerExit(steps.ErrCancelled)
 			})
 
-			Context("when step is cancelled", func() {
-				BeforeEach(func() {
-					subStep2 = &fakes.FakeStep{
-						PerformStub: func() error {
-							return steps.ErrCancelled
-						},
-					}
-				})
-
-				It("does not add cancelled error to message", func() {
-					err := step.Perform()
-					Expect(err).To(HaveOccurred())
-					errMsg := err.Error()
-					Expect(errMsg).To(Equal("oh no!"))
-				})
+			It("does not add cancelled error to message", func() {
+				var err *multierror.Error
+				Eventually(process.Wait()).Should(Receive(&err))
+				Expect(err.Error()).To(Equal("oh no!"))
 			})
 		})
 
 		Context("when one of the substeps exits without failure", func() {
-			var (
-				cancelledError, err error
-				errCh               chan error
-			)
-
-			BeforeEach(func() {
-				cancelledError = errors.New("I was cancelled yo.")
-				cancelled2 := make(chan bool, 1)
-
-				subStep1.PerformStub = func() error {
-					return nil
-				}
-
-				subStep2.PerformStub = func() error {
-					<-cancelled2
-					return cancelledError
-				}
-
-				subStep2.CancelStub = func() {
-					cancelled2 <- true
-				}
-			})
-
-			JustBeforeEach(func() {
-				errCh = make(chan error)
-
-				go func() {
-					errCh <- step.Perform()
-				}()
-			})
-
-			It("continues to perform the other step", func() {
-				Consistently(errCh).ShouldNot(Receive())
-
-				By("cancelling, it should return")
-				step.Cancel()
-				Eventually(errCh).Should(Receive())
+			It("continues to run the other step", func() {
+				subStep1TriggerExit(nil)
+				Consistently(process.Wait()).ShouldNot(Receive())
 			})
 
 			Context("when cancelOthersOnExit is set to true", func() {
@@ -163,9 +160,10 @@ var _ = Describe("CodependentStep", func() {
 					cancelOthersOnExit = true
 				})
 
-				It("should cancel other step", func() {
-					Eventually(subStep2.CancelCallCount).Should(Equal(1))
-					Eventually(errCh).Should(Receive())
+				It("should cancel all other steps", func() {
+					subStep1TriggerExit(nil)
+					Eventually(subStep2Cancelled).Should(BeClosed())
+					Eventually(process.Wait()).Should(Receive())
 				})
 			})
 
@@ -175,15 +173,22 @@ var _ = Describe("CodependentStep", func() {
 				})
 
 				It("returns an aggregate of the failures", func() {
-					Eventually(errCh).Should(Receive(&err))
-					Expect(err.(*multierror.Error).WrappedErrors()).To(ConsistOf(cancelledError, steps.CodependentStepExitedError))
+					subStep1TriggerExit(nil)
+					var err *multierror.Error
+					Eventually(process.Wait()).Should(Receive(&err))
+					Expect(err.WrappedErrors()).To(ConsistOf(steps.CodependentStepExitedError))
 				})
 
-				It("cancels all the steps", func() {
-					Eventually(errCh).Should(Receive())
+				It("should cancel all other steps", func() {
+					subStep1TriggerExit(nil)
+					Eventually(subStep2Cancelled).Should(BeClosed())
+					Eventually(process.Wait()).Should(Receive())
+				})
 
-					Expect(subStep1.CancelCallCount()).To(Equal(1))
-					Expect(subStep2.CancelCallCount()).To(Equal(1))
+				It("should cancel all other steps regardless of the step that failed", func() {
+					subStep2TriggerExit(nil)
+					Eventually(subStep1Cancelled).Should(BeClosed())
+					Eventually(process.Wait()).Should(Receive())
 				})
 			})
 		})
@@ -193,22 +198,20 @@ var _ = Describe("CodependentStep", func() {
 			disaster2 := errors.New("oh my")
 
 			BeforeEach(func() {
-				subStep1 = &fakes.FakeStep{
-					PerformStub: func() error {
-						return disaster1
-					},
+				// ensure subSteps cannot be cancelled when the other step fail
+				subStep2.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					return <-exitChan2
 				}
-
-				subStep2 = &fakes.FakeStep{
-					PerformStub: func() error {
-						return disaster2
-					},
+				subStep1.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					return <-exitChan1
 				}
+				subStep1TriggerExit(disaster1)
+				subStep2TriggerExit(disaster2)
 			})
 
 			It("joins the error messages with a semicolon", func() {
-				err := step.Perform()
-				Expect(err).To(HaveOccurred())
+				var err *multierror.Error
+				Eventually(process.Wait()).Should(Receive(&err))
 				errMsg := err.Error()
 				Expect(errMsg).NotTo(HavePrefix(";"))
 				Expect(errMsg).To(ContainSubstring("oh no"))
@@ -218,19 +221,26 @@ var _ = Describe("CodependentStep", func() {
 		})
 	})
 
-	Describe("Cancel", func() {
+	Describe("Ready", func() {
+		It("becomes ready only when all substeps are ready", func() {
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+			close(triggerReady1)
+			Consistently(process.Ready()).ShouldNot(BeClosed())
+			close(triggerReady2)
+			Eventually(process.Ready()).Should(BeClosed())
+		})
+	})
+
+	Describe("Signal", func() {
 		It("cancels all sub-steps", func() {
-			step1 := &fakes.FakeStep{}
-			step2 := &fakes.FakeStep{}
-			step3 := &fakes.FakeStep{}
+			Consistently(process.Wait()).ShouldNot(Receive())
 
-			sequence := steps.NewCodependent([]steps.Step{step1, step2, step3}, errorOnExit, cancelOthersOnExit)
+			process.Signal(os.Interrupt)
 
-			sequence.Cancel()
+			Eventually(subStep1Cancelled).Should(BeClosed())
+			Eventually(subStep2Cancelled).Should(BeClosed())
 
-			Expect(step1.CancelCallCount()).To(Equal(1))
-			Expect(step2.CancelCallCount()).To(Equal(1))
-			Expect(step3.CancelCallCount()).To(Equal(1))
+			Eventually(process.Wait()).Should(Receive())
 		})
 	})
 })

@@ -3,31 +3,46 @@ package steps_test
 import (
 	"bytes"
 	"errors"
+	"os"
 
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/steps/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 )
 
 var _ = Describe("OutputWrapperStep", func() {
 	var (
-		subStep *fakes.FakeStep
-		step    steps.Step
+		subStep *fake_runner.TestRunner
+		step    ifrit.Runner
 		buffer  *bytes.Buffer
 	)
 
 	BeforeEach(func() {
-		subStep = &fakes.FakeStep{}
+		subStep = fake_runner.NewTestRunner()
 		buffer = bytes.NewBuffer(nil)
 		step = steps.NewOutputWrapper(subStep, buffer)
 	})
 
-	Context("Perform", func() {
+	AfterEach(func() {
+		subStep.EnsureExit()
+	})
+
+	Context("Ready", func() {
+		It("becomes ready when the substep is ready", func() {
+			p := ifrit.Background(step)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
+			subStep.TriggerReady()
+			Eventually(p.Ready()).Should(BeClosed())
+		})
+	})
+
+	Context("Run", func() {
 		It("calls perform on the substep", func() {
-			step.Perform()
-			Expect(subStep.PerformCallCount()).To(Equal(1))
+			ifrit.Background(step)
+			Eventually(subStep.RunCallCount).Should(Equal(1))
 		})
 
 		Context("when the substep fails", func() {
@@ -36,7 +51,7 @@ var _ = Describe("OutputWrapperStep", func() {
 			)
 
 			BeforeEach(func() {
-				subStep.PerformReturns(errors.New("BOOOM!"))
+				go subStep.TriggerExit(errors.New("BOOOM!"))
 				errStr = "error reason"
 			})
 
@@ -45,8 +60,8 @@ var _ = Describe("OutputWrapperStep", func() {
 			})
 
 			It("wraps the buffer content in an emittable error", func() {
-				err := step.Perform()
-				Expect(err).To(MatchError("error reason"))
+				p := ifrit.Background(step)
+				Eventually(p.Wait()).Should(Receive(MatchError("error reason")))
 			})
 
 			Context("when the output has whitespaces", func() {
@@ -55,20 +70,20 @@ var _ = Describe("OutputWrapperStep", func() {
 				})
 
 				It("trims the extra whitespace", func() {
-					err := step.Perform()
-					Expect(err).To(MatchError("error reason"))
+					p := ifrit.Background(step)
+					Eventually(p.Wait()).Should(Receive(MatchError("error reason")))
 				})
 			})
 		})
 
 		Context("when the substep is cancelled", func() {
 			BeforeEach(func() {
-				subStep.PerformReturns(steps.ErrCancelled)
+				go subStep.TriggerExit(steps.ErrCancelled)
 			})
 
 			It("returns the ErrCancelled error", func() {
-				err := step.Perform()
-				Expect(err).To(Equal(steps.ErrCancelled))
+				p := ifrit.Background(step)
+				Eventually(p.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
 			})
 
 			Context("and the buffer has data", func() {
@@ -77,17 +92,22 @@ var _ = Describe("OutputWrapperStep", func() {
 				})
 
 				It("wraps the buffer content in an emittable error", func() {
-					err := step.Perform()
-					Expect(err).To(MatchError("error reason"))
+					p := ifrit.Background(step)
+					Eventually(p.Wait()).Should(Receive(MatchError("error reason")))
 				})
 			})
 		})
 	})
 
-	Context("Cancel", func() {
-		It("calls cancel on the substep", func() {
-			step.Cancel()
-			Expect(subStep.CancelCallCount()).To(Equal(1))
+	Context("Signal", func() {
+		It("calls Signal on the substep", func() {
+			ch := make(chan struct{})
+			defer close(ch)
+
+			p := ifrit.Background(step)
+			p.Signal(os.Interrupt)
+			signals := subStep.WaitForCall()
+			Eventually(signals).Should(Receive())
 		})
 	})
 })

@@ -1,15 +1,18 @@
 package steps
 
 import (
+	"os"
+
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 type tryStep struct {
-	substep Step
+	substep ifrit.Runner
 	logger  lager.Logger
 }
 
-func NewTry(substep Step, logger lager.Logger) *tryStep {
+func NewTry(substep ifrit.Runner, logger lager.Logger) ifrit.Runner {
 	logger = logger.Session("try-step")
 	return &tryStep{
 		substep: substep,
@@ -17,17 +20,28 @@ func NewTry(substep Step, logger lager.Logger) *tryStep {
 	}
 }
 
-func (step *tryStep) Perform() error {
-	err := step.substep.Perform()
-	if err != nil {
-		step.logger.Info("failed", lager.Data{
-			"error": err.Error(),
-		})
+func (step *tryStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	subStepSignals := make(chan os.Signal, 1)
+	errCh := make(chan error)
+	go func() {
+		errCh <- step.substep.Run(subStepSignals, ready)
+	}()
+
+	logErr := func(err error) {
+		if err != nil {
+			step.logger.Info("failed", lager.Data{
+				"error": err.Error(),
+			})
+		}
 	}
 
-	return nil //We never return an error.  That's the point.
-}
-
-func (step *tryStep) Cancel() {
-	step.substep.Cancel()
+	select {
+	case s := <-signals:
+		subStepSignals <- s
+		logErr(<-errCh)
+		return nil
+	case err := <-errCh:
+		logErr(err)
+		return nil
+	}
 }

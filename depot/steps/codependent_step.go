@@ -3,19 +3,21 @@ package steps
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/tedsuo/ifrit"
 )
 
 var CodependentStepExitedError = errors.New("Codependent step exited")
 
 type codependentStep struct {
-	substeps           []Step
+	substeps           []ifrit.Runner
 	errorOnExit        bool
 	cancelOthersOnExit bool
 }
 
-func NewCodependent(substeps []Step, errorOnExit bool, cancelOthersOnExit bool) *codependentStep {
+func NewCodependent(substeps []ifrit.Runner, errorOnExit bool, cancelOthersOnExit bool) ifrit.Runner {
 	return &codependentStep{
 		substeps:           substeps,
 		errorOnExit:        errorOnExit,
@@ -23,22 +25,32 @@ func NewCodependent(substeps []Step, errorOnExit bool, cancelOthersOnExit bool) 
 	}
 }
 
-func (step *codependentStep) Perform() error {
-	errs := make(chan error, len(step.substeps))
+func (step *codependentStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	errCh := make(chan error, len(step.substeps))
 
-	for _, step := range step.substeps {
-		go func(step Step) {
-			errs <- step.Perform()
-		}(step)
+	var subProcesses []ifrit.Process
+	for _, subStep := range step.substeps {
+		subProcess := ifrit.Background(subStep)
+		subProcesses = append(subProcesses, subProcess)
+		go func() {
+			err := <-subProcess.Wait()
+			errCh <- err
+		}()
 	}
+
+	done := make(chan struct{})
+	defer close(done)
+
+	go waitForSignal(done, signals, subProcesses)
+	go waitForChildrenToBeReady(done, subProcesses, ready)
 
 	aggregate := &multierror.Error{}
 	aggregate.ErrorFormat = step.errorFormat
 
 	var cancelled bool
 
-	for _ = range step.substeps {
-		err := <-errs
+	for range subProcesses {
+		err := <-errCh
 		if step.errorOnExit && err == nil {
 			err = CodependentStepExitedError
 		}
@@ -46,7 +58,7 @@ func (step *codependentStep) Perform() error {
 		if step.cancelOthersOnExit && err == nil {
 			if !cancelled {
 				cancelled = true
-				step.Cancel()
+				cancel(subProcesses, os.Interrupt)
 			}
 		}
 
@@ -55,18 +67,12 @@ func (step *codependentStep) Perform() error {
 
 			if !cancelled {
 				cancelled = true
-				step.Cancel()
+				cancel(subProcesses, os.Interrupt)
 			}
 		}
 	}
 
 	return aggregate.ErrorOrNil()
-}
-
-func (step *codependentStep) Cancel() {
-	for _, substep := range step.substeps {
-		substep.Cancel()
-	}
 }
 
 func (step *codependentStep) errorFormat(errs []error) string {
