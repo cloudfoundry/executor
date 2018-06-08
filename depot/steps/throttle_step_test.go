@@ -28,44 +28,18 @@ var _ = Describe("ThrottleStep", func() {
 	})
 
 	Describe("Run", func() {
-		var (
-			throttleChan   chan struct{}
-			doneChan       chan struct{}
-			substepExitErr = errors.New("substp exit")
-		)
-
-		BeforeEach(func() {
-			throttleChan = make(chan struct{}, numConcurrentSteps)
-			doneChan = make(chan struct{}, 1)
-
-			fakeStep.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
-				throttleChan <- struct{}{}
-				<-doneChan
-				return substepExitErr
-			}
-		})
-
 		It("throttles its substep", func() {
 			for i := 0; i < 5; i++ {
 				go step.Run(nil, nil)
 			}
 
-			Eventually(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numConcurrentSteps))
-
-			Consistently(func() int {
-				return len(throttleChan)
-			}).Should(Equal(numConcurrentSteps))
-
 			Eventually(fakeStep.RunCallCount).Should(Equal(numConcurrentSteps))
+			Consistently(fakeStep.RunCallCount).Should(Equal(numConcurrentSteps))
 
-			doneChan <- struct{}{}
-
+			fakeStep.TriggerExit(nil)
 			Eventually(fakeStep.RunCallCount).Should(Equal(numConcurrentSteps + 1))
 
-			close(doneChan)
-
+			fakeStep.TriggerExit(nil)
 			Eventually(fakeStep.RunCallCount).Should(Equal(5))
 		})
 
@@ -80,8 +54,8 @@ var _ = Describe("ThrottleStep", func() {
 			process := ifrit.Background(step)
 			Eventually(fakeStep.RunCallCount).Should(Equal(1))
 			Consistently(process.Wait()).ShouldNot(Receive())
-			doneChan <- struct{}{}
-			Eventually(process.Wait()).Should(Receive(MatchError(substepExitErr)))
+			fakeStep.TriggerExit(errors.New("substep exited"))
+			Eventually(process.Wait()).Should(Receive(MatchError("substep exited")))
 		})
 	})
 

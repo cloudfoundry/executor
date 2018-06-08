@@ -764,27 +764,17 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Context("when signalling before running", func() {
-			var (
-				runErr chan error
-				ready  chan struct{}
-			)
-
-			JustBeforeEach(func() {
-				runErr = make(chan error)
-				ready = make(chan struct{})
+			It("does not start the process or become ready", func() {
+				runErr := make(chan error)
+				ready := make(chan struct{})
 				signals := make(chan os.Signal, 1)
 				signals <- os.Interrupt
 				go func() {
 					runErr <- step.Run(signals, ready)
 				}()
-			})
 
-			It("does not start the process", func() {
 				Eventually(runErr).Should(Receive(MatchError(steps.ErrCancelled)))
 				Expect(gardenClient.Connection.RunCallCount()).To(Equal(0))
-			})
-
-			It("never becomes ready", func() {
 				Consistently(ready).ShouldNot(BeClosed())
 			})
 		})
