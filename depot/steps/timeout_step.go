@@ -10,11 +10,10 @@ import (
 )
 
 type timeoutStep struct {
-	substep    ifrit.Runner
-	timeout    time.Duration
-	cancelChan chan struct{}
-	logger     lager.Logger
-	clock      clock.Clock
+	substep ifrit.Runner
+	timeout time.Duration
+	logger  lager.Logger
+	clock   clock.Clock
 }
 
 func NewTimeout(substep ifrit.Runner, timeout time.Duration, clock clock.Clock, logger lager.Logger) ifrit.Runner {

@@ -20,7 +20,6 @@ import (
 var _ = Describe("EmitProgressStep", func() {
 	var step ifrit.Runner
 	var subStep *fake_runner.FakeRunner
-	var cancelled bool
 	var errorToReturn error
 	var fakeStreamer *fake_log_streamer.FakeLogStreamer
 	var startMessage, successMessage, failureMessage string
@@ -33,7 +32,6 @@ var _ = Describe("EmitProgressStep", func() {
 		stdoutBuffer = new(bytes.Buffer)
 		errorToReturn = nil
 		startMessage, successMessage, failureMessage = "", "", ""
-		cancelled = false
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
 
 		fakeStreamer.StderrReturns(stderrBuffer)

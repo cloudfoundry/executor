@@ -9,9 +9,9 @@ import (
 )
 
 type consistentlySucceedsStep struct {
-	create             func() ifrit.Runner
-	clock              clock.Clock
-	frequency, timeout time.Duration
+	create    func() ifrit.Runner
+	clock     clock.Clock
+	frequency time.Duration
 }
 
 // TODO: use a workpool when running the substep
