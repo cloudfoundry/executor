@@ -690,12 +690,15 @@ var _ = Describe("RunAction", func() {
 			})
 
 			Context("when the process does not exit after the graceful shutdown interval expires", func() {
-				It("sends a kill signal to the process", func() {
+				JustBeforeEach(func() {
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
 
 					fakeClock.WaitForWatcherAndIncrement(gracefulShutdownInterval + 1*time.Second)
 
 					Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
+				})
+
+				It("sends a kill signal to the process", func() {
 					Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
 
 					waitExited <- (128 + 9)
@@ -709,13 +712,6 @@ var _ = Describe("RunAction", func() {
 
 				Context("when the process *still* does not exit after 1m", func() {
 					It("finishes running with failure", func() {
-						Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
-
-						fakeClock.WaitForWatcherAndIncrement(steps.TerminateTimeout)
-
-						Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
-						Expect(spawnedProcess.SignalArgsForCall(1)).To(Equal(garden.SignalKill))
-
 						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
 						Consistently(process.Wait()).ShouldNot(Receive())

@@ -16,7 +16,6 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
-const TerminateTimeout = 10 * time.Second
 const ExitTimeout = 1 * time.Second
 
 var ErrExitTimeout = errors.New("process did not exit")
