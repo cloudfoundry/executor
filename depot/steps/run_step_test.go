@@ -71,7 +71,8 @@ var _ = Describe("RunAction", func() {
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
-		fakeStreamer.StdoutReturns(noOpWriter{})
+		fakeStreamer.StdoutReturns(gbytes.NewBuffer())
+		fakeStreamer.StderrReturns(gbytes.NewBuffer())
 		fakeStreamer.SourceNameReturns(testLogSource)
 		gardenClient = fakes.NewGardenClient()
 
@@ -527,15 +528,7 @@ var _ = Describe("RunAction", func() {
 		})
 
 		Describe("emitting logs", func() {
-			var stdoutBuffer, stderrBuffer *gbytes.Buffer
-
 			BeforeEach(func() {
-				stdoutBuffer = gbytes.NewBuffer()
-				stderrBuffer = gbytes.NewBuffer()
-
-				fakeStreamer.StdoutReturns(stdoutBuffer)
-				fakeStreamer.StderrReturns(stderrBuffer)
-
 				spawnedProcess.WaitStub = func() (int, error) {
 					_, _, io := gardenClient.Connection.RunArgsForCall(0)
 
@@ -551,8 +544,8 @@ var _ = Describe("RunAction", func() {
 
 			Context("when logs are not suppressed", func() {
 				It("emits the output chunks as they come in", func() {
-					Expect(stdoutBuffer).To(gbytes.Say("hi out"))
-					Expect(stderrBuffer).To(gbytes.Say("hi err"))
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("hi out"))
+					Expect(fakeStreamer.Stderr()).To(gbytes.Say("hi err"))
 				})
 
 				It("should flush the output when the code exits", func() {
@@ -560,7 +553,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("emits the exit status code", func() {
-					Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 34$"))
 				})
 
 				Context("when exit code suppressed for healthcheck", func() {
@@ -569,7 +562,7 @@ var _ = Describe("RunAction", func() {
 					})
 
 					It("does not emits the exit status code", func() {
-						Expect(stdoutBuffer).NotTo(gbytes.Say("Exit status 34"))
+						Expect(fakeStreamer.Stdout()).NotTo(gbytes.Say("Exit status 34"))
 					})
 				})
 
@@ -586,7 +579,7 @@ var _ = Describe("RunAction", func() {
 					})
 
 					It("emits the exit status code", func() {
-						Expect(stdoutBuffer).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
+						Expect(fakeStreamer.Stdout()).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
 					})
 
 					Context("when there are multiple out of memory events", func() {
@@ -602,9 +595,9 @@ var _ = Describe("RunAction", func() {
 						})
 
 						It("emits only one out of memory error", func() {
-							Expect(stdoutBuffer).To(gbytes.Say("Exit status 34"))
-							Expect(stdoutBuffer).To(gbytes.Say(`(out of memory)`))
-							Expect(stdoutBuffer).ToNot(gbytes.Say(`(out of memory)`))
+							Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 34"))
+							Expect(fakeStreamer.Stdout()).To(gbytes.Say(`(out of memory)`))
+							Expect(fakeStreamer.Stdout()).ToNot(gbytes.Say(`(out of memory)`))
 						})
 					})
 
@@ -614,8 +607,8 @@ var _ = Describe("RunAction", func() {
 						})
 
 						It("does not emits the exit status code", func() {
-							Expect(stdoutBuffer).ToNot(gbytes.Say("Exit status 34"))
-							Expect(stdoutBuffer).To(gbytes.Say(`(out of memory)`))
+							Expect(fakeStreamer.Stdout()).ToNot(gbytes.Say("Exit status 34"))
+							Expect(fakeStreamer.Stdout()).To(gbytes.Say(`(out of memory)`))
 						})
 					})
 				})
@@ -627,12 +620,12 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("does not emit the output chunks as they come in", func() {
-					Expect(stdoutBuffer).ToNot(gbytes.Say("hi out"))
-					Expect(stderrBuffer).ToNot(gbytes.Say("hi err"))
+					Expect(fakeStreamer.Stdout()).ToNot(gbytes.Say("hi out"))
+					Expect(fakeStreamer.Stderr()).ToNot(gbytes.Say("hi err"))
 				})
 
 				It("does not emit the exit status code", func() {
-					Expect(stdoutBuffer).ToNot(gbytes.Say("Exit status 34"))
+					Expect(fakeStreamer.Stdout()).ToNot(gbytes.Say("Exit status 34"))
 				})
 			})
 		})
@@ -708,6 +701,12 @@ var _ = Describe("RunAction", func() {
 					Expect(logger.TestSink.LogMessages()).To(ContainElement(
 						ContainSubstring("graceful-shutdown-timeout-exceeded"),
 					))
+				})
+
+				It("logs that the process was killed", func() {
+					waitExited <- (128 + 9)
+					Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 5s graceful shutdown interval\\)"))
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {

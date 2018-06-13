@@ -196,6 +196,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 		select {
 		case exitStatus := <-exitStatusChan:
 			cancelled := signals == nil
+			killed := cancelled && killSwitch == nil
 
 			logger.Info("process-exit", lager.Data{
 				"exitStatus": exitStatus,
@@ -207,6 +208,10 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 			if !step.suppressExitStatusCode {
 				exitErrorMessage = fmt.Sprintf("Exit status %d", exitStatus)
 				emittableExitErrorMessage = fmt.Sprintf("%s: Exited with status %d", step.streamer.SourceName(), exitStatus)
+			}
+
+			if killed {
+				exitErrorMessage = fmt.Sprintf("%s (exceeded %s graceful shutdown interval)", exitErrorMessage, step.gracefulShutdownInterval)
 			}
 
 			if exitStatus != 0 {
