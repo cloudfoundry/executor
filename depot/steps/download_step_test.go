@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"code.cloudfoundry.org/cacheddownloader"
 	cdfakes "code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
@@ -474,12 +473,15 @@ var _ = Describe("DownloadAction", func() {
 				}
 			})
 
+			AfterEach(func() {
+				close(barrierChan)
+			})
+
 			It("aborts the streaming", func() {
 				Eventually(calledChan).Should(BeClosed())
 				p.Signal(os.Interrupt)
-				close(barrierChan)
 
-				Eventually(p.Wait(), 2*time.Second).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 			})
 		})
 	})

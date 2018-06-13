@@ -69,20 +69,20 @@ var _ = Describe("EventuallySucceedsStep", func() {
 		})
 	})
 
+	Context("when the step is signalled", func() {
+		JustBeforeEach(func() {
+			process.Signal(os.Interrupt)
+		})
+
+		It("returns ErrCancelled", func() {
+			Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
+		})
+	})
+
 	Context("when the step is failing", func() {
 		JustBeforeEach(func() {
 			fakeClock.WaitForWatcherAndIncrement(time.Second)
 			fakeStep.TriggerExit(errors.New("BOOOOM"))
-		})
-
-		Context("when the step is signalled", func() {
-			JustBeforeEach(func() {
-				process.Signal(os.Interrupt)
-			})
-
-			It("returns ErrCancelled", func() {
-				Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
-			})
 		})
 
 		It("retries after the timeout has elapsed", func() {
