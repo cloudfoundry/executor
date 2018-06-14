@@ -21,7 +21,7 @@ import (
 )
 
 const DownloadCachedDependenciesFailed = "failed to download cached artifacts"
-const ContainerInitializationFailedMessage = "failed to initialize container"
+const ContainerCreationFailedMessage = "failed to create container"
 const ContainerExpirationMessage = "expired container"
 const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
@@ -223,7 +223,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
-		n.complete(logger, true, truncatedErrorMessage("%s: %s", ContainerInitializationFailedMessage, err.Error()), true)
+		n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
 		return err
 	}
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
@@ -684,15 +684,4 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationSucceededDuration})
 	}
 	return container, nil
-}
-
-func truncatedErrorMessage(msg string, a ...interface{}) string {
-	msgBytes := []byte(fmt.Sprintf(msg, a...))
-
-	if len(msgBytes) > maxErrorMsgLength {
-		truncationLength := maxErrorMsgLength - len([]byte(" (error truncated)"))
-		msgBytes = append(msgBytes[:truncationLength], []byte(" (error truncated)")...)
-	}
-
-	return string(msgBytes)
 }

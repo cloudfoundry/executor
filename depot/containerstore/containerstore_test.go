@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -1051,31 +1050,9 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerCreationFailedMessage))
 					Expect(container.RunResult.FailureReason).To(ContainSubstring("boom!"))
 					Expect(container.RunResult.Retryable).To(BeTrue())
-				})
-
-				Context("when the failure message is too long", func() {
-					var errString string = strings.Repeat("meow", 1024)
-
-					BeforeEach(func() {
-						gardenClient.CreateReturns(nil, errors.New(errString))
-					})
-
-					It("returns a truncated error", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).To(Equal(errors.New(errString)))
-
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(container.State).To(Equal(executor.StateCompleted))
-						Expect(container.RunResult.Failed).To(BeTrue())
-						Expect([]byte(container.RunResult.FailureReason)).To(HaveLen(1024))
-						Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
-						Expect(container.RunResult.FailureReason).To(ContainSubstring("(error truncated)"))
-						Expect(container.RunResult.Retryable).To(BeTrue())
-					})
 				})
 
 				It("emits a metric after failing to create the container", func() {
@@ -1120,7 +1097,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(container.State).To(Equal(executor.StateCompleted))
 					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerInitializationFailedMessage))
+					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerCreationFailedMessage))
 					Expect(container.RunResult.FailureReason).To(ContainSubstring("could not obtain info"))
 					Expect(container.RunResult.Retryable).To(BeTrue())
 				})
