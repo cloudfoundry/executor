@@ -76,15 +76,30 @@ var _ = Describe("SerialStep", func() {
 	})
 
 	Describe("Signal", func() {
-		It("cancels the currently running substep", func() {
-			Eventually(testRunner1.RunCallCount).Should(Equal(1))
-			go testRunner1.TriggerExit(nil)
-			signalsChan := testRunner2.WaitForCall()
-			p.Signal(os.Interrupt)
-			Eventually(signalsChan).Should(Receive())
-			Consistently(testRunner3.RunCallCount).Should(Equal(0))
+		var (
+			signalsChan <-chan os.Signal
+		)
 
-			Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+		BeforeEach(func() {
+			go testRunner1.TriggerExit(nil)
+			Eventually(testRunner1.RunCallCount).Should(Equal(1))
+			Eventually(testRunner2.RunCallCount).Should(Equal(1))
+			signalsChan = testRunner2.WaitForCall()
+			p.Signal(os.Interrupt)
+		})
+
+		AfterEach(func() {
+			testRunner1.EnsureExit()
+		})
+
+		It("cancels the currently running substep", func() {
+			Eventually(signalsChan).Should(Receive())
+		})
+
+		It("waits for the substep to exit", func() {
+			Consistently(p.Wait()).ShouldNot(Receive())
+			testRunner2.TriggerExit(errors.New("boooom!"))
+			Eventually(p.Wait()).Should(Receive(MatchError("boooom!")))
 		})
 	})
 })

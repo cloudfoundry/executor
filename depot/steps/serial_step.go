@@ -38,7 +38,7 @@ func (runner *serialStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 			}
 		case signal := <-signals:
 			p.Signal(signal)
-			return ErrCancelled
+			return <-p.Wait()
 		}
 	}
 
