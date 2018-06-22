@@ -210,8 +210,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	destroyContainers(gardenClient, containersFetcher, logger)
 
-	workDir := setupWorkDir(logger, config.TempDir)
-
 	healthCheckWorkPool, err := workpool.NewWorkPool(config.HealthCheckWorkPoolSize)
 	if err != nil {
 		return nil, nil, grouper.Members{}, err
@@ -228,7 +226,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
 	cachedDownloader := cacheddownloader.New(
-		workDir,
 		downloader,
 		cache,
 		cacheddownloader.TarTransform,
@@ -243,7 +240,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 
 	transformer := initializeTransformer(
 		cachedDownloader,
-		workDir,
+		setupWorkDir(logger, config.TempDir),
 		downloadRateLimiter,
 		maxConcurrentUploads,
 		uploader,
