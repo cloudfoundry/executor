@@ -1905,6 +1905,77 @@ var _ = Describe("Container Store", func() {
 		})
 	})
 
+	Context("when the container creation is hung", func() {
+		var blockCh chan struct{}
+
+		BeforeEach(func() {
+			blockCh = make(chan struct{})
+			gardenClient.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
+				<-blockCh
+				return &gardenfakes.FakeContainer{}, nil
+			}
+		})
+
+		JustBeforeEach(func() {
+			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			Expect(err).NotTo(HaveOccurred())
+
+			runInfo := executor.RunInfo{
+				LogConfig: executor.LogConfig{
+					Guid:       containerGuid,
+					Index:      1,
+					SourceName: "test-source",
+				},
+			}
+			runReq := &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
+			err = containerStore.Initialize(logger, runReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			go containerStore.Create(logger, containerGuid)
+			Eventually(gardenClient.CreateCallCount).Should(Equal(1))
+		})
+
+		AfterEach(func() {
+			close(blockCh)
+		})
+
+		Context("when Destroy has been called", func() {
+			JustBeforeEach(func() {
+				blockCh := make(chan error)
+				go func() {
+					blockCh <- containerStore.Destroy(logger, containerGuid)
+				}()
+				Consistently(blockCh, time.Second).ShouldNot(Receive())
+			})
+
+			It("should return immediately", func() {
+				errCh := make(chan error)
+				go func() {
+					errCh <- containerStore.Destroy(logger, containerGuid)
+				}()
+				Eventually(errCh).Should(Receive(BeNil()))
+			})
+		})
+
+		Context("when Stop has been called and is hanging", func() {
+			JustBeforeEach(func() {
+				blockCh := make(chan error)
+				go func() {
+					blockCh <- containerStore.Stop(logger, containerGuid)
+				}()
+				Consistently(blockCh, time.Second).ShouldNot(Receive())
+			})
+
+			It("should return immediately", func() {
+				errCh := make(chan error)
+				go func() {
+					errCh <- containerStore.Stop(logger, containerGuid)
+				}()
+				Eventually(errCh).Should(Receive(BeNil()))
+			})
+		})
+	})
+
 	Describe("Stop", func() {
 		var (
 			runReq *executor.RunRequest
