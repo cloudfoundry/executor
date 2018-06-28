@@ -231,10 +231,11 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	n.infoLock.Lock()
 	n.gardenContainer = gardenContainer
 	n.info = info
+	err = n.info.TransitionToCreate()
 	n.bindMountCacheKeys = mounts.CacheKeys
 	n.infoLock.Unlock()
 
-	return nil
+	return err
 }
 
 func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) ([]garden.BindMount, error) {
@@ -350,11 +351,6 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	info.Ports = portMappingFromContainerInfo(containerInfo, proxyPortMapping)
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
-
-	err = info.TransitionToCreate()
-	if err != nil {
-		return nil, err
-	}
 
 	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
 	info.DiskLimit = containerSpec.Limits.Disk.ByteHard
