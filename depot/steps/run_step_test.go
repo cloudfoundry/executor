@@ -579,7 +579,7 @@ var _ = Describe("RunAction", func() {
 					})
 
 					It("emits the exit status code", func() {
-						Expect(fakeStreamer.Stdout()).To(gbytes.Say(`Exit status 34 \(out of memory\)`))
+						Eventually(fakeStreamer.Stdout()).Should(gbytes.Say(`Exit status 34 \(out of memory\)`))
 					})
 
 					Context("when there are multiple out of memory events", func() {
