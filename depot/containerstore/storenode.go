@@ -488,15 +488,15 @@ func (n *storeNode) run(logger lager.Logger) {
 	n.completeWithError(logger, err)
 }
 
-func (n *storeNode) Stop(logger lager.Logger) error {
+func (n *storeNode) Stop(logger lager.Logger) {
 	logger = logger.Session("node-stop")
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
-	return n.stop(logger)
+	n.stop(logger)
 }
 
-func (n *storeNode) stop(logger lager.Logger) error {
+func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Lock()
 	stopped := n.info.RunResult.Stopped
 	n.info.RunResult.Stopped = true
@@ -512,7 +512,6 @@ func (n *storeNode) stop(logger lager.Logger) error {
 	} else {
 		n.complete(logger, true, "stopped-before-running", false)
 	}
-	return nil
 }
 
 func (n *storeNode) Destroy(logger lager.Logger) error {
@@ -520,10 +519,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
-	err := n.stop(logger)
-	if err != nil {
-		return err
-	}
+	n.stop(logger)
 
 	if n.process != nil {
 		<-n.process.Wait()
@@ -541,7 +537,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	defer n.removeProxyConfigDir(logger, info)
 	defer n.removeCredsDir(logger, info)
 
-	err = n.destroyContainer(logger)
+	err := n.destroyContainer(logger)
 	if err != nil {
 		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, info.Guid)
 		return err

@@ -237,11 +237,7 @@ func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	err = node.Stop(logger)
-	if err != nil {
-		logger.Error("failed-to-stop-container", err)
-		return err
-	}
+	node.Stop(logger)
 
 	return nil
 }
