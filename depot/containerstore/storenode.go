@@ -351,7 +351,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
 
-	err = info.TransistionToCreate()
+	err = info.TransitionToCreate()
 	if err != nil {
 		return nil, err
 	}

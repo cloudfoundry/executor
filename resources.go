@@ -82,7 +82,7 @@ func (c *Container) TransistionToInitialize(req *RunRequest) error {
 	return nil
 }
 
-func (c *Container) TransistionToCreate() error {
+func (c *Container) TransitionToCreate() error {
 	if !c.ValidateTransitionTo(StateCreated) {
 		return ErrInvalidTransition
 	}
