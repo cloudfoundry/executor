@@ -6,6 +6,7 @@ import (
 	"encoding/asn1"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -61,7 +62,7 @@ var _ = Describe("Initializer", func() {
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		config = initializer.ExecutorConfig{
 			AutoDiskOverheadMB:             1,
-			CachePath:                      "/tmp/cache",
+			CachePath:                      fmt.Sprintf("%s-%d", "/tmp/cache", GinkgoParallelNode()),
 			ContainerInodeLimit:            200000,
 			ContainerMaxCpuShares:          0,
 			ContainerMetricsReportInterval: durationjson.Duration(15 * time.Second),
