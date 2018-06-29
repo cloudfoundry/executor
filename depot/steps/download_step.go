@@ -95,7 +95,7 @@ func (step *downloadStep) perform() error {
 		return NewEmittableError(err, errString)
 	}
 
-	err = step.streamIn(step.model.To, downloadedFile, downloadedSize)
+	err = step.streamIn(step.model.To, downloadedFile)
 	if err != nil {
 		var errString string
 		if step.model.Artifact != "" {
@@ -143,11 +143,13 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 	return tarStream, downloadedSize, nil
 }
 
-func (step *downloadStep) streamIn(destination string, reader io.ReadCloser, size int64) error {
+func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
 	step.logger.Info("stream-in-starting")
 
+	wrappedReader := &ReadSizer{Reader: reader}
+
 	// StreamIn will close the reader
-	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: reader, User: step.model.User})
+	err := step.container.StreamIn(garden.StreamInSpec{Path: destination, TarStream: wrappedReader, User: step.model.User})
 	if err != nil {
 		step.logger.Error("stream-in-failed", err, lager.Data{
 			"destination": destination,
@@ -155,7 +157,7 @@ func (step *downloadStep) streamIn(destination string, reader io.ReadCloser, siz
 		return err
 	}
 
-	step.logger.Info("stream-in-complete", lager.Data{"size": size})
+	step.logger.Info("stream-in-complete", lager.Data{"size": wrappedReader.BytesRead()})
 	return nil
 }
 
@@ -173,4 +175,19 @@ func (step *downloadStep) emitError(format string, a ...interface{}) {
 	}
 
 	fmt.Fprintf(step.streamer.Stderr(), string(err_bytes))
+}
+
+type ReadSizer struct {
+	bytesRead int
+	io.Reader
+}
+
+func (r *ReadSizer) Read(dest []byte) (int, error) {
+	n, err := r.Reader.Read(dest)
+	r.bytesRead += n
+	return n, err
+}
+
+func (r *ReadSizer) BytesRead() int {
+	return r.bytesRead
 }

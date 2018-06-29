@@ -568,6 +568,25 @@ var _ = Describe("DownloadAction", func() {
 	})
 })
 
+var _ = Describe("ReadSizer", func() {
+	Describe("BytesRead", func() {
+		It("returns the number of bytes read", func() {
+			base := bytes.NewBufferString("FooBar BazQux")
+			readSizer := &steps.ReadSizer{Reader: base}
+			buf := make([]byte, 7)
+			n, err := readSizer.Read(buf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(7))
+			Expect(readSizer.BytesRead()).To(Equal(7))
+
+			n, err = readSizer.Read(buf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(6))
+			Expect(readSizer.BytesRead()).To(Equal(13))
+		})
+	})
+})
+
 func createTempTar() *os.File {
 	tarFile, err := ioutil.TempFile("", "some-tar")
 	Expect(err).NotTo(HaveOccurred())
