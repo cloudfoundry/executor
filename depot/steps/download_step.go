@@ -95,7 +95,7 @@ func (step *downloadStep) perform() error {
 		return NewEmittableError(err, errString)
 	}
 
-	err = step.streamIn(step.model.To, downloadedFile)
+	err = step.streamIn(step.model.To, downloadedFile, downloadedSize)
 	if err != nil {
 		var errString string
 		if step.model.Artifact != "" {
@@ -143,7 +143,7 @@ func (step *downloadStep) fetch() (io.ReadCloser, int64, error) {
 	return tarStream, downloadedSize, nil
 }
 
-func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) error {
+func (step *downloadStep) streamIn(destination string, reader io.ReadCloser, size int64) error {
 	step.logger.Info("stream-in-starting")
 
 	// StreamIn will close the reader
@@ -155,7 +155,7 @@ func (step *downloadStep) streamIn(destination string, reader io.ReadCloser) err
 		return err
 	}
 
-	step.logger.Info("stream-in-complete")
+	step.logger.Info("stream-in-complete", lager.Data{"size": size})
 	return nil
 }
 
