@@ -36,22 +36,18 @@ func (step *timeoutStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (e
 		resultCh <- step.substep.Run(subStepSignals, ready)
 	}()
 
-	go func() {
-		s := <-signals
-		subStepSignals <- s
-	}()
-
-	select {
-	case err := <-resultCh:
-		return err
-
-	case <-timer.C():
-		step.logger.Error("timed-out", nil)
-
-		subStepSignals <- os.Interrupt
-
-		err := <-resultCh
-		return NewEmittableError(err, emittableMessage(step.timeout, err))
+	for {
+		select {
+		case s := <-signals:
+			subStepSignals <- s
+		case err := <-resultCh:
+			return err
+		case <-timer.C():
+			step.logger.Error("timed-out", nil)
+			subStepSignals <- os.Interrupt
+			err := <-resultCh
+			return NewEmittableError(err, emittableMessage(step.timeout, err))
+		}
 	}
 }
 
