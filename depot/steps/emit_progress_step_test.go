@@ -61,8 +61,11 @@ var _ = Describe("EmitProgressStep", func() {
 			subStep = fakeRunner.FakeRunner
 		})
 
-		It("becomes ready when the substep is ready", func() {
+		AfterEach(func() {
+			fakeRunner.EnsureExit()
+		})
 
+		It("becomes ready when the substep is ready", func() {
 			p := ifrit.Background(step)
 			Consistently(p.Ready()).ShouldNot(BeClosed())
 			fakeRunner.TriggerReady()

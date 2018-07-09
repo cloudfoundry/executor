@@ -34,16 +34,23 @@ var _ = Describe("ConsistentlySucceedsStep", func() {
 		process = ifrit.Background(step)
 	})
 
-	It("should not exit", func() {
-		Consistently(process.Wait()).ShouldNot(Receive(BeNil()))
-	})
+	Context("when the process is started", func() {
+		AfterEach(func() {
+			fakeClock.WaitForWatcherAndIncrement(time.Second)
+			fakeRunner.TriggerExit(errors.New("boooom!"))
+		})
 
-	It("does not perform the substep initially", func() {
-		Consistently(fakeRunner.RunCallCount).Should(BeZero())
-	})
+		It("should not exit", func() {
+			Consistently(process.Wait()).ShouldNot(Receive(BeNil()))
+		})
 
-	It("becomes ready immediately", func() {
-		Eventually(process.Ready()).Should(BeClosed())
+		It("does not perform the substep initially", func() {
+			Consistently(fakeRunner.RunCallCount).Should(BeZero())
+		})
+
+		It("becomes ready immediately", func() {
+			Eventually(process.Ready()).Should(BeClosed())
+		})
 	})
 
 	Context("when the step is cancelled", func() {
@@ -83,6 +90,7 @@ var _ = Describe("ConsistentlySucceedsStep", func() {
 		It("retries after the timeout has elapsed", func() {
 			fakeClock.WaitForWatcherAndIncrement(time.Second)
 			Eventually(fakeRunner.RunCallCount).Should(Equal(2))
+			fakeRunner.TriggerExit(errors.New("boooom!"))
 		})
 
 		Context("when it later fails", func() {

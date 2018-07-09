@@ -24,8 +24,6 @@ var _ = Describe("TimeoutStep", func() {
 
 		timeout time.Duration
 		logger  *lagertest.TestLogger
-
-		process ifrit.Process
 	)
 
 	BeforeEach(func() {
@@ -35,26 +33,35 @@ var _ = Describe("TimeoutStep", func() {
 		logger = lagertest.NewTestLogger("test")
 	})
 
-	JustBeforeEach(func() {
-		step := steps.NewTimeout(substep, timeout, clock, logger)
-		process = ifrit.Background(step)
+	AfterEach(func() {
+		substep.EnsureExit()
 	})
 
 	Describe("Ready", func() {
 		It("becomes ready when the substep is ready", func() {
-			Consistently(process.Ready()).ShouldNot(BeClosed())
+			runner := steps.NewTimeout(substep, timeout, clock, logger)
+			p := ifrit.Background(runner)
+			Consistently(p.Ready()).ShouldNot(BeClosed())
 			substep.TriggerReady()
-			Eventually(process.Ready()).Should(BeClosed())
+			Eventually(p.Ready()).Should(BeClosed())
 		})
 	})
 
 	Describe("Run", func() {
-		var err error
+		var (
+			err error
+			p   ifrit.Process
+		)
+
+		JustBeforeEach(func() {
+			runner := steps.NewTimeout(substep, timeout, clock, logger)
+			p = ifrit.Background(runner)
+		})
 
 		Context("When the substep finishes before the timeout expires", func() {
 			JustBeforeEach(func() {
 				substep.TriggerExit(substepErr)
-				err = <-process.Wait()
+				err = <-p.Wait()
 			})
 
 			Context("when the substep returns an error", func() {
@@ -106,7 +113,7 @@ var _ = Describe("TimeoutStep", func() {
 					signals := substep.WaitForCall()
 					Eventually(signals).Should(Receive())
 					substep.TriggerExit(substepErr)
-					err = <-process.Wait()
+					err = <-p.Wait()
 				})
 
 				It("logs the timeout", func() {
@@ -159,7 +166,9 @@ var _ = Describe("TimeoutStep", func() {
 
 	Describe("Signal", func() {
 		It("signals the nested step", func() {
-			process.Signal(os.Interrupt)
+			step := steps.NewTimeout(substep, timeout, clock, logger)
+			p := ifrit.Background(step)
+			p.Signal(os.Interrupt)
 
 			signals := substep.WaitForCall()
 			Eventually(signals).Should(Receive())

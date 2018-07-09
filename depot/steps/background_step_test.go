@@ -63,12 +63,20 @@ var _ = Describe("BackgroundStep", func() {
 		})
 
 		Context("when the substep does not exit", func() {
+			AfterEach(func() {
+				substep.EnsureExit()
+			})
+
 			It("does not exit", func() {
 				Consistently(process.Wait()).ShouldNot(Receive())
 			})
 		})
 
 		Context("readiness", func() {
+			AfterEach(func() {
+				substep.EnsureExit()
+			})
+
 			It("becomes ready when the substep is ready", func() {
 				Consistently(process.Ready()).ShouldNot(BeClosed())
 				substep.TriggerReady()
@@ -78,6 +86,10 @@ var _ = Describe("BackgroundStep", func() {
 	})
 
 	Describe("Signalling", func() {
+		AfterEach(func() {
+			substep.EnsureExit()
+		})
+
 		It("never signals the substep", func() {
 			Eventually(substep.RunCallCount).Should(Equal(1))
 			process.Signal(os.Interrupt)

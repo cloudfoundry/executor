@@ -65,7 +65,7 @@ func (step *downloadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 	}()
 	step.logger.Info("acquired-limiter")
 
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	go func() {
 		errCh <- step.perform()
 	}()

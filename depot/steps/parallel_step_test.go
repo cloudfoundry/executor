@@ -32,6 +32,11 @@ var _ = Describe("ParallelStep", func() {
 		process = ifrit.Background(step)
 	})
 
+	AfterEach(func() {
+		subStep1.EnsureExit()
+		subStep2.EnsureExit()
+	})
+
 	It("performs its substeps in parallel", func() {
 		Eventually(subStep1.RunCallCount).Should(Equal(1))
 		Eventually(subStep2.RunCallCount).Should(Equal(1))

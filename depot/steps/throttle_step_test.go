@@ -17,14 +17,21 @@ var _ = Describe("ThrottleStep", func() {
 
 	var (
 		step     ifrit.Runner
+		workPool *workpool.WorkPool
 		fakeStep *fake_runner.TestRunner
 	)
 
 	BeforeEach(func() {
 		fakeStep = fake_runner.NewTestRunner()
-		workPool, err := workpool.NewWorkPool(numConcurrentSteps)
+		var err error
+		workPool, err = workpool.NewWorkPool(numConcurrentSteps)
 		Expect(err).NotTo(HaveOccurred())
 		step = steps.NewThrottle(fakeStep, workPool)
+	})
+
+	AfterEach(func() {
+		fakeStep.EnsureExit()
+		workPool.Stop()
 	})
 
 	Describe("Run", func() {
@@ -41,6 +48,10 @@ var _ = Describe("ThrottleStep", func() {
 
 			fakeStep.TriggerExit(nil)
 			Eventually(fakeStep.RunCallCount).Should(Equal(5))
+
+			fakeStep.TriggerExit(nil)
+			fakeStep.TriggerExit(nil)
+			fakeStep.TriggerExit(nil)
 		})
 
 		It("becomes ready once the substep is ready", func() {

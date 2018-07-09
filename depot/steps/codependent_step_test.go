@@ -33,6 +33,11 @@ var _ = Describe("CodependentStep", func() {
 		subStep2 = fake_runner.NewTestRunner()
 	})
 
+	AfterEach(func() {
+		subStep1.EnsureExit()
+		subStep2.EnsureExit()
+	})
+
 	JustBeforeEach(func() {
 		step = steps.NewCodependent([]ifrit.Runner{subStep1, subStep2}, errorOnExit, cancelOthersOnExit)
 		process = ifrit.Background(step)

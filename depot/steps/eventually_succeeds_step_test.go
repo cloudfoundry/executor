@@ -34,12 +34,19 @@ var _ = Describe("EventuallySucceedsStep", func() {
 		process = ifrit.Background(step)
 	})
 
-	It("should not trigger the substep initially", func() {
-		Consistently(fakeStep.RunCallCount).Should(BeZero())
-	})
+	Context("when the process is started", func() {
+		AfterEach(func() {
+			fakeClock.WaitForWatcherAndIncrement(10 * time.Second)
+			fakeStep.TriggerExit(nil)
+		})
 
-	It("becomes ready immediately", func() {
-		Eventually(process.Ready()).Should(BeClosed())
+		It("should not trigger the substep initially", func() {
+			Consistently(fakeStep.RunCallCount).Should(BeZero())
+		})
+
+		It("becomes ready immediately", func() {
+			Eventually(process.Ready()).Should(BeClosed())
+		})
 	})
 
 	Context("when the step succeeds", func() {
@@ -88,6 +95,7 @@ var _ = Describe("EventuallySucceedsStep", func() {
 		It("retries after the timeout has elapsed", func() {
 			fakeClock.WaitForWatcherAndIncrement(time.Second)
 			Eventually(fakeStep.RunCallCount).Should(Equal(2))
+			fakeStep.TriggerExit(nil)
 		})
 
 		Context("and the timeout elapsed", func() {

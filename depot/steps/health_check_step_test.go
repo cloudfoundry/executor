@@ -62,6 +62,15 @@ var _ = Describe("NewHealthCheckStep", func() {
 		process = ifrit.Background(step)
 	})
 
+	AfterEach(func() {
+		Eventually(readinessCheck.RunCallCount).Should(Equal(1))
+		readinessCheck.EnsureExit()
+		if livenessCheck != nil {
+			Eventually(livenessCheck.RunCallCount).Should(Equal(1))
+			livenessCheck.TriggerExit(errors.New("booom!")) // liveness check must exit with non-nil error
+		}
+	})
+
 	Describe("Run", func() {
 		It("emits a message to the applications log stream", func() {
 			Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
@@ -72,6 +81,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 		Context("when the readiness check fails", func() {
 			JustBeforeEach(func() {
 				readinessCheck.TriggerExit(errors.New("booom!"))
+				livenessCheck = nil
 			})
 
 			It("completes with failure", func() {
@@ -125,6 +135,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 
 				JustBeforeEach(func() {
 					livenessCheck.TriggerExit(disaster)
+					livenessCheck = nil
 				})
 
 				It("logs the step", func() {
@@ -157,6 +168,10 @@ var _ = Describe("NewHealthCheckStep", func() {
 
 	Describe("Signalling", func() {
 		Context("while doing readiness check", func() {
+			BeforeEach(func() {
+				livenessCheck = nil
+			})
+
 			It("cancels the in-flight check", func() {
 				Eventually(readinessCheck.RunCallCount).Should(Equal(1))
 
@@ -177,6 +192,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 					process.Signal(os.Interrupt)
 					Eventually(livenessCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
 					livenessCheck.TriggerExit(nil)
+					livenessCheck = nil
 					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
 				})
 			})

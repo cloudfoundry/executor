@@ -21,7 +21,7 @@ func NewBackground(substep ifrit.Runner, logger lager.Logger) ifrit.Runner {
 }
 
 func (step *backgroundStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	go func() {
 		errCh <- step.substep.Run(make(chan os.Signal, 1), ready)
 	}()

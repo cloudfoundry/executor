@@ -395,13 +395,8 @@ var _ = Describe("DownloadAction", func() {
 		})
 
 		Context("when waiting on the rate limiter", func() {
-			var (
-				p ifrit.Process
-			)
-
-			JustBeforeEach(func() {
+			BeforeEach(func() {
 				rateLimiter <- struct{}{}
-				p = ifrit.Background(step)
 			})
 
 			It("cancels the wait", func() {
