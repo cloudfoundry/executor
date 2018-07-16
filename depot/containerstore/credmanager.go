@@ -40,6 +40,7 @@ type Credential struct {
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	RemoveCredDir(lager.Logger, executor.Container) error
+	GenerateCreds(lager.Logger, executor.Container, time.Time, time.Time) (Credential, error)
 	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential)
 }
 
@@ -55,6 +56,10 @@ func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Cont
 
 func (c *noopManager) RemoveCredDir(logger lager.Logger, container executor.Container) error {
 	return nil
+}
+
+func (c *noopManager) GenerateCreds(logger lager.Logger, container executor.Container, start time.Time, end time.Time) (Credential, error) {
+	return Credential{}, nil
 }
 
 func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential) {
@@ -118,7 +123,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		defer logger.Info("finished")
 
 		start := c.clock.Now()
-		creds, err := c.generateCreds(logger, container)
+		creds, err := c.generateAndRotateCredsOnDisk(logger, container)
 		duration := c.clock.Since(start)
 		if err != nil {
 			logger.Error("failed-to-generate-credentials", err)
@@ -142,7 +147,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				regenLogger := logger.Session("regenerating-cert-and-key")
 				regenLogger.Debug("started")
 				start := c.clock.Now()
-				creds, err := c.generateCreds(regenLogger, container)
+				creds, err := c.generateAndRotateCredsOnDisk(regenLogger, container)
 				duration := c.clock.Since(start)
 				if err != nil {
 					regenLogger.Error("failed-to-generate-credentials", err)
@@ -196,7 +201,58 @@ const (
 	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
-func (c *credManager) generateCreds(logger lager.Logger, container executor.Container) (Credential, error) {
+func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, container executor.Container) (Credential, error) {
+	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
+	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
+	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
+	tmpCertificatePath := certificatePath + ".tmp"
+
+	instanceKey, err := os.Create(tmpInstanceKeyPath)
+	if err != nil {
+		return Credential{}, err
+	}
+	defer instanceKey.Close()
+
+	certificate, err := os.Create(tmpCertificatePath)
+	if err != nil {
+		return Credential{}, err
+	}
+	defer certificate.Close()
+
+	startValidity := time.Now()
+	creds, err := c.generateAndWriteCreds(logger, container, certificate, instanceKey, startValidity, startValidity.Add(c.validityPeriod))
+	if err != nil {
+		return Credential{}, err
+	}
+
+	err = instanceKey.Close()
+	if err != nil {
+		return Credential{}, err
+	}
+
+	err = certificate.Close()
+	if err != nil {
+		return Credential{}, err
+	}
+
+	err = os.Rename(tmpInstanceKeyPath, instanceKeyPath)
+	if err != nil {
+		return Credential{}, err
+	}
+
+	err = os.Rename(tmpCertificatePath, certificatePath)
+	if err != nil {
+		return Credential{}, err
+	}
+
+	return creds, nil
+}
+
+func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Container, startValidity time.Time, endValidity time.Time) (Credential, error) {
+	return c.generateAndWriteCreds(logger, container, ioutil.Discard, ioutil.Discard, startValidity, endValidity)
+}
+
+func (c *credManager) generateAndWriteCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, startValidity time.Time, endValidity time.Time) (Credential, error) {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -208,15 +264,14 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	}
 	logger.Debug("generated-private-key")
 
-	now := c.clock.Now()
 	ipForCert := container.InternalIP
 	if len(ipForCert) == 0 {
 		ipForCert = container.ExternalIP
 	}
 	template := createCertificateTemplate(ipForCert,
 		container.Guid,
-		now,
-		now.Add(c.validityPeriod),
+		startValidity,
+		endValidity,
 		container.CertificateProperties.OrganizationalUnit,
 	)
 
@@ -238,30 +293,13 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	}
 	logger.Debug("generated-certificate")
 
-	instanceKeyPath := filepath.Join(c.credDir, container.Guid, "instance.key")
-	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
-	certificatePath := filepath.Join(c.credDir, container.Guid, "instance.crt")
-	tmpCertificatePath := certificatePath + ".tmp"
-
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	instanceKey, err := os.Create(tmpInstanceKeyPath)
-	if err != nil {
-		return Credential{}, err
-	}
-
-	defer instanceKey.Close()
 
 	var keyBuf bytes.Buffer
 	err = pemEncode(privateKeyBytes, privateKeyPEMBlockType, io.MultiWriter(instanceKey, &keyBuf))
 	if err != nil {
 		return Credential{}, err
 	}
-
-	certificate, err := os.Create(tmpCertificatePath)
-	if err != nil {
-		return Credential{}, err
-	}
-	defer certificate.Close()
 
 	var certificateBuf bytes.Buffer
 	certificateWriter := io.MultiWriter(certificate, &certificateBuf)
@@ -271,26 +309,6 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	}
 
 	err = pemEncode(c.CaCert.Raw, certificatePEMBlockType, certificateWriter)
-	if err != nil {
-		return Credential{}, err
-	}
-
-	err = instanceKey.Close()
-	if err != nil {
-		return Credential{}, err
-	}
-
-	err = certificate.Close()
-	if err != nil {
-		return Credential{}, err
-	}
-
-	err = os.Rename(tmpInstanceKeyPath, instanceKeyPath)
-	if err != nil {
-		return Credential{}, err
-	}
-
-	err = os.Rename(tmpCertificatePath, certificatePath)
 	if err != nil {
 		return Credential{}, err
 	}

@@ -3,6 +3,7 @@ package containerstorefakes
 
 import (
 	"sync"
+	"time"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
@@ -39,6 +40,22 @@ type FakeCredManager struct {
 	}
 	removeCredDirReturnsOnCall map[int]struct {
 		result1 error
+	}
+	GenerateCredsStub        func(lager.Logger, executor.Container, time.Time, time.Time) (containerstore.Credential, error)
+	generateCredsMutex       sync.RWMutex
+	generateCredsArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+		arg3 time.Time
+		arg4 time.Time
+	}
+	generateCredsReturns struct {
+		result1 containerstore.Credential
+		result2 error
+	}
+	generateCredsReturnsOnCall map[int]struct {
+		result1 containerstore.Credential
+		result2 error
 	}
 	RunnerStub        func(lager.Logger, executor.Container) (ifrit.Runner, <-chan containerstore.Credential)
 	runnerMutex       sync.RWMutex
@@ -162,6 +179,60 @@ func (fake *FakeCredManager) RemoveCredDirReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
+func (fake *FakeCredManager) GenerateCreds(arg1 lager.Logger, arg2 executor.Container, arg3 time.Time, arg4 time.Time) (containerstore.Credential, error) {
+	fake.generateCredsMutex.Lock()
+	ret, specificReturn := fake.generateCredsReturnsOnCall[len(fake.generateCredsArgsForCall)]
+	fake.generateCredsArgsForCall = append(fake.generateCredsArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+		arg3 time.Time
+		arg4 time.Time
+	}{arg1, arg2, arg3, arg4})
+	fake.recordInvocation("GenerateCreds", []interface{}{arg1, arg2, arg3, arg4})
+	fake.generateCredsMutex.Unlock()
+	if fake.GenerateCredsStub != nil {
+		return fake.GenerateCredsStub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fake.generateCredsReturns.result1, fake.generateCredsReturns.result2
+}
+
+func (fake *FakeCredManager) GenerateCredsCallCount() int {
+	fake.generateCredsMutex.RLock()
+	defer fake.generateCredsMutex.RUnlock()
+	return len(fake.generateCredsArgsForCall)
+}
+
+func (fake *FakeCredManager) GenerateCredsArgsForCall(i int) (lager.Logger, executor.Container, time.Time, time.Time) {
+	fake.generateCredsMutex.RLock()
+	defer fake.generateCredsMutex.RUnlock()
+	return fake.generateCredsArgsForCall[i].arg1, fake.generateCredsArgsForCall[i].arg2, fake.generateCredsArgsForCall[i].arg3, fake.generateCredsArgsForCall[i].arg4
+}
+
+func (fake *FakeCredManager) GenerateCredsReturns(result1 containerstore.Credential, result2 error) {
+	fake.GenerateCredsStub = nil
+	fake.generateCredsReturns = struct {
+		result1 containerstore.Credential
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeCredManager) GenerateCredsReturnsOnCall(i int, result1 containerstore.Credential, result2 error) {
+	fake.GenerateCredsStub = nil
+	if fake.generateCredsReturnsOnCall == nil {
+		fake.generateCredsReturnsOnCall = make(map[int]struct {
+			result1 containerstore.Credential
+			result2 error
+		})
+	}
+	fake.generateCredsReturnsOnCall[i] = struct {
+		result1 containerstore.Credential
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) (ifrit.Runner, <-chan containerstore.Credential) {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
@@ -221,6 +292,8 @@ func (fake *FakeCredManager) Invocations() map[string][][]interface{} {
 	defer fake.createCredDirMutex.RUnlock()
 	fake.removeCredDirMutex.RLock()
 	defer fake.removeCredDirMutex.RUnlock()
+	fake.generateCredsMutex.RLock()
+	defer fake.generateCredsMutex.RUnlock()
 	fake.runnerMutex.RLock()
 	defer fake.runnerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
