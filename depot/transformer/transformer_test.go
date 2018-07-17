@@ -1449,10 +1449,19 @@ var _ = Describe("Transformer", func() {
 		Context("when there is no monitor", func() {
 			BeforeEach(func() {
 				container.Monitor = nil
+				container.Setup = nil
 			})
 
 			It("does not run the monitor step and immediately says the healthcheck passed", func() {
-				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
+				blockCh := make(chan struct{})
+				defer close(blockCh)
+
+				fakeGardenProcess := &gardenfakes.FakeProcess{}
+				fakeGardenProcess.WaitStub = func() (int, error) {
+					<-blockCh
+					return 0, nil
+				}
+				gardenContainer.RunReturns(fakeGardenProcess, nil)
 
 				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
@@ -1460,10 +1469,10 @@ var _ = Describe("Transformer", func() {
 				process := ifrit.Background(runner)
 				Eventually(process.Ready()).Should(BeClosed())
 
-				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-				processSpec, _ := gardenContainer.RunArgsForCall(2)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+				processSpec, _ := gardenContainer.RunArgsForCall(0)
 				Expect(processSpec.Path).To(Equal("/action/path"))
-				Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(1))
 			})
 		})
 
