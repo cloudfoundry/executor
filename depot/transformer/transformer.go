@@ -389,7 +389,7 @@ func (t *transformer) StepsRunner(
 			gardenContainer,
 			actionModel,
 			log_streamer.NewNoopStreamer(),
-			logger,
+			logger.Session("post-setup"),
 			container.ExternalIP,
 			container.InternalIP,
 			container.Ports,
