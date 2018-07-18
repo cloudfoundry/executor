@@ -1,6 +1,8 @@
 package containerstore
 
 import (
+	"bytes"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -71,10 +73,14 @@ type proxyRunner struct {
 }
 
 type proxyManager struct {
-	logger                   lager.Logger
-	containerProxyPath       string
-	containerProxyConfigPath string
-	refreshDelayMS           time.Duration
+	logger                             lager.Logger
+	containerProxyPath                 string
+	containerProxyConfigPath           string
+	containerProxyTrustedCACerts       []string
+	containerProxyVerifySubjectAltName []string
+	containerProxyRequireClientCerts   bool
+
+	refreshDelayMS time.Duration
 }
 
 type noopProxyManager struct{}
@@ -105,13 +111,19 @@ func NewProxyManager(
 	logger lager.Logger,
 	containerProxyPath string,
 	containerProxyConfigPath string,
+	ContainerProxyTrustedCACerts []string,
+	ContainerProxyVerifySubjectAltName []string,
+	containerProxyRequireClientCerts bool,
 	refreshDelayMS time.Duration,
 ) ProxyManager {
 	return &proxyManager{
-		logger:                   logger.Session("proxy-manager"),
-		containerProxyPath:       containerProxyPath,
-		containerProxyConfigPath: containerProxyConfigPath,
-		refreshDelayMS:           refreshDelayMS,
+		logger:                             logger.Session("proxy-manager"),
+		containerProxyPath:                 containerProxyPath,
+		containerProxyConfigPath:           containerProxyConfigPath,
+		containerProxyTrustedCACerts:       ContainerProxyTrustedCACerts,
+		containerProxyVerifySubjectAltName: ContainerProxyVerifySubjectAltName,
+		containerProxyRequireClientCerts:   containerProxyRequireClientCerts,
+		refreshDelayMS:                     refreshDelayMS,
 	}
 }
 
@@ -230,7 +242,7 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 				logger = logger.Session("updating-proxy-listener-config")
 				logger.Debug("started")
 
-				listenerConfig, err := generateListenerConfig(logger, container, creds)
+				listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
 				if err != nil {
 					logger.Error("failed-generating-initial-proxy-listener-config", err)
 					return err
@@ -258,7 +270,7 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 					logger = logger.Session("updating-proxy-listener-config")
 					logger.Debug("started")
 
-					listenerConfig, err := generateListenerConfig(logger, container, creds)
+					listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
 					if err != nil {
 						logger.Error("failed-generating-proxy-listener-config", err)
 						return err
@@ -350,12 +362,17 @@ func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error
 	return os.Rename(tmpPath, path)
 }
 
-func generateListenerConfig(logger lager.Logger, container executor.Container, creds Credential) (envoy.ListenerConfig, error) {
+func generateListenerConfig(logger lager.Logger, container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string, requireClientCerts bool) (envoy.ListenerConfig, error) {
 	resources := []envoy.Resource{}
 
 	for index, portMap := range container.Ports {
 		listenerName := TcpProxy
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
+
+		certs, err := pemConcatenate(trustedCaCerts)
+		if err != nil {
+			return envoy.ListenerConfig{}, err
+		}
 
 		resources = append(resources, envoy.Resource{
 			Type:    "type.googleapis.com/envoy.api.v2.Listener",
@@ -372,6 +389,7 @@ func generateListenerConfig(logger lager.Logger, container executor.Container, c
 					},
 				},
 				TLSContext: envoy.TLSContext{
+					RequireClientCertificate: requireClientCerts,
 					CommonTLSContext: envoy.CommonTLSContext{
 						TLSParams: envoy.TLSParams{
 							CipherSuites: SupportedCipherSuites,
@@ -381,6 +399,10 @@ func generateListenerConfig(logger lager.Logger, container executor.Container, c
 								CertificateChain: envoy.DataSource{InlineString: creds.Cert},
 								PrivateKey:       envoy.DataSource{InlineString: creds.Key},
 							},
+						},
+						ValidationContext: envoy.CertificateValidationContext{
+							TrustedCA:            envoy.DataSource{InlineString: certs},
+							VerifySubjectAltName: subjectAltNames,
 						},
 					},
 				},
@@ -395,6 +417,18 @@ func generateListenerConfig(logger lager.Logger, container executor.Container, c
 	}
 
 	return config, nil
+}
+
+func pemConcatenate(certs []string) (string, error) {
+	var certificateBuf bytes.Buffer
+	for _, cert := range certs {
+		block, _ := pem.Decode([]byte(cert))
+		if block == nil {
+			return "", errors.New("failed to read certificate.")
+		}
+		pem.Encode(&certificateBuf, block)
+	}
+	return certificateBuf.String(), nil
 }
 
 func getAvailablePort(allocatedPorts []executor.PortMapping, extraKnownPorts ...uint16) (uint16, error) {

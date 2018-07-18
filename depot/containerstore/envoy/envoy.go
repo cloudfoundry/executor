@@ -19,9 +19,15 @@ type TLSCertificate struct {
 	PrivateKey       DataSource `yaml:"private_key"`
 }
 
+type CertificateValidationContext struct {
+	TrustedCA            DataSource `yaml:"trusted_ca,omitempty"`
+	VerifySubjectAltName []string   `yaml:"verify_subject_alt_name,omitempty"`
+}
+
 type CommonTLSContext struct {
-	TLSCertificates []TLSCertificate `yaml:"tls_certificates"`
-	TLSParams       TLSParams        `yaml:"tls_params"`
+	TLSCertificates   []TLSCertificate             `yaml:"tls_certificates"`
+	TLSParams         TLSParams                    `yaml:"tls_params"`
+	ValidationContext CertificateValidationContext `yaml:"validation_context"`
 }
 
 type TLSParams struct {
@@ -29,7 +35,8 @@ type TLSParams struct {
 }
 
 type TLSContext struct {
-	CommonTLSContext CommonTLSContext `yaml:"common_tls_context"`
+	CommonTLSContext         CommonTLSContext `yaml:"common_tls_context"`
+	RequireClientCertificate bool             `yaml:"require_client_certificate"`
 }
 
 type FilterChain struct {

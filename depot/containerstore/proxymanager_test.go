@@ -1,9 +1,15 @@
 package containerstore_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,28 +18,31 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
-	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	yaml "gopkg.in/yaml.v2"
 )
 
-var _ = Describe("ProxyManager", func() {
+var _ = FDescribe("ProxyManager", func() {
 
 	var (
-		logger             lager.Logger
-		containerProcess   ifrit.Process
-		proxyConfigDir     string
-		proxyDir           string
-		configPath         string
-		rotatingCredChan   chan containerstore.Credential
-		container          executor.Container
-		listenerConfigFile string
-		proxyConfigFile    string
-		proxyManager       containerstore.ProxyManager
-		refreshDelayMS     time.Duration
+		logger                             *lagertest.TestLogger
+		containerProcess                   ifrit.Process
+		proxyConfigDir                     string
+		proxyDir                           string
+		configPath                         string
+		rotatingCredChan                   chan containerstore.Credential
+		container                          executor.Container
+		listenerConfigFile                 string
+		proxyConfigFile                    string
+		proxyManager                       containerstore.ProxyManager
+		refreshDelayMS                     time.Duration
+		containerProxyTrustedCACerts       []string
+		containerProxyVerifySubjectAltName []string
+		containerProxyRequireClientCerts   bool
 	)
 
 	BeforeEach(func() {
@@ -71,6 +80,9 @@ var _ = Describe("ProxyManager", func() {
 			logger,
 			proxyDir,
 			proxyConfigDir,
+			containerProxyTrustedCACerts,
+			containerProxyVerifySubjectAltName,
+			containerProxyRequireClientCerts,
 			refreshDelayMS,
 		)
 		Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{
@@ -81,6 +93,7 @@ var _ = Describe("ProxyManager", func() {
 
 	AfterEach(func() {
 		os.RemoveAll(proxyConfigDir)
+		os.RemoveAll(proxyDir)
 	})
 
 	Context("No-op Proxy Manager", func() {
@@ -334,42 +347,98 @@ var _ = Describe("ProxyManager", func() {
 			}))
 		})
 
-		It("writes the initial listener config at start", func() {
-			runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
-			Expect(proxyRunnerErr).NotTo(HaveOccurred())
-			containerProcess = ifrit.Background(runner)
-			Eventually(containerProcess.Ready()).Should(BeClosed())
-			Eventually(listenerConfigFile).Should(BeAnExistingFile())
-
-			data, err := ioutil.ReadFile(listenerConfigFile)
-			Expect(err).NotTo(HaveOccurred())
-
+		FContext("for listener config", func() {
 			var listenerConfig envoy.ListenerConfig
+			BeforeEach(func() {
+				containerProxyTrustedCACerts = []string{}
+				containerProxyRequireClientCerts = true
+			})
 
-			err = yaml.Unmarshal(data, &listenerConfig)
-			Expect(err).NotTo(HaveOccurred())
+			Context("with invalid trusted cert", func() {
+				BeforeEach(func() {
+					containerProxyTrustedCACerts = []string{"some-cert"}
+				})
 
-			Expect(listenerConfig.Resources).To(HaveLen(1))
+				It("should error out", func() {
+					runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+					Expect(proxyRunnerErr).NotTo(HaveOccurred())
+					containerProcess = ifrit.Background(runner)
+					Consistently(containerProcess.Ready).ShouldNot(Receive())
+					Eventually(logger).Should(gbytes.Say("failed-generating-initial-proxy-listener-config"))
+				})
+			})
 
-			listener := listenerConfig.Resources[0]
+			Context("with valid config", func() {
+				JustBeforeEach(func() {
+					runner, proxyRunnerErr := proxyManager.Runner(logger, container, rotatingCredChan)
+					Expect(proxyRunnerErr).NotTo(HaveOccurred())
+					containerProcess = ifrit.Background(runner)
+					Eventually(containerProcess.Ready()).Should(BeClosed())
+					Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
-			Expect(listener.Type).To(Equal("type.googleapis.com/envoy.api.v2.Listener"))
-			Expect(listener.Name).To(Equal("listener-8080"))
-			Expect(listener.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: 61001}}))
-			Expect(listener.FilterChains).To(HaveLen(1))
-			chain := listener.FilterChains[0]
-			certs := chain.TLSContext.CommonTLSContext.TLSCertificates
-			Expect(certs).To(ConsistOf(envoy.TLSCertificate{
-				CertificateChain: envoy.DataSource{InlineString: "some-cert"},
-				PrivateKey:       envoy.DataSource{InlineString: "some-key"},
-			}))
-			Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
+					data, err := ioutil.ReadFile(listenerConfigFile)
+					Expect(err).NotTo(HaveOccurred())
 
-			Expect(chain.Filters).To(HaveLen(1))
-			filter := chain.Filters[0]
-			Expect(filter.Name).To(Equal("envoy.tcp_proxy"))
-			Expect(filter.Config.Cluster).To(Equal("0-service-cluster"))
-			Expect(filter.Config.StatPrefix).NotTo(BeEmpty())
+					err = yaml.Unmarshal(data, &listenerConfig)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(listenerConfig.Resources).To(HaveLen(1))
+				})
+
+				It("writes the initial listener config at start", func() {
+					listener := listenerConfig.Resources[0]
+
+					Expect(listener.Type).To(Equal("type.googleapis.com/envoy.api.v2.Listener"))
+					Expect(listener.Name).To(Equal("listener-8080"))
+					Expect(listener.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: 61001}}))
+					Expect(listener.FilterChains).To(HaveLen(1))
+
+					chain := listener.FilterChains[0]
+					certs := chain.TLSContext.CommonTLSContext.TLSCertificates
+					validations := chain.TLSContext.CommonTLSContext.ValidationContext
+					Expect(chain.TLSContext.RequireClientCertificate).To(BeTrue())
+					Expect(certs).To(ConsistOf(envoy.TLSCertificate{
+						CertificateChain: envoy.DataSource{InlineString: "some-cert"},
+						PrivateKey:       envoy.DataSource{InlineString: "some-key"},
+					}))
+					Expect(validations.TrustedCA).To(Equal(envoy.DataSource{InlineString: ""}))
+					Expect(validations.VerifySubjectAltName).To(BeNil())
+					Expect(chain.TLSContext.CommonTLSContext.TLSParams.CipherSuites).To(Equal("[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"))
+
+					Expect(chain.Filters).To(HaveLen(1))
+					filter := chain.Filters[0]
+					Expect(filter.Name).To(Equal("envoy.tcp_proxy"))
+					Expect(filter.Config.Cluster).To(Equal("0-service-cluster"))
+					Expect(filter.Config.StatPrefix).NotTo(BeEmpty())
+				})
+
+				Context("with container proxy trusted certs set", func() {
+					var inlinedCert string
+					BeforeEach(func() {
+						privateKey, err := rsa.GenerateKey(rand.Reader, 512)
+						Expect(err).ToNot(HaveOccurred())
+						template := x509.Certificate{
+							SerialNumber: new(big.Int),
+							Subject:      pkix.Name{CommonName: "sample-cert"},
+						}
+						derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
+						Expect(err).ToNot(HaveOccurred())
+						certBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+						cert := string(certBytes)
+
+						inlinedCert = fmt.Sprintf("%s%s", cert, cert)
+						containerProxyTrustedCACerts = []string{cert, cert}
+						containerProxyVerifySubjectAltName = []string{"valid-alt-name-1", "valid-alt-name-2"}
+					})
+
+					It("writes trusted certs info into listener config", func() {
+						listener := listenerConfig.Resources[0]
+						chain := listener.FilterChains[0]
+						validations := chain.TLSContext.CommonTLSContext.ValidationContext
+						Expect(validations.TrustedCA).To(Equal(envoy.DataSource{InlineString: inlinedCert}))
+						Expect(validations.VerifySubjectAltName).To(ConsistOf("valid-alt-name-1", "valid-alt-name-2"))
+					})
+				})
+			})
 		})
 
 		It("exposes proxyConfigPort", func() {
