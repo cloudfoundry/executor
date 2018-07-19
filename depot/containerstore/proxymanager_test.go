@@ -73,6 +73,10 @@ var _ = Describe("ProxyManager", func() {
 
 		rotatingCredChan = make(chan containerstore.Credential, 1)
 		refreshDelayMS = 1000 * time.Millisecond
+
+		containerProxyTrustedCACerts = []string{}
+		containerProxyVerifySubjectAltName = []string{}
+		containerProxyRequireClientCerts = false
 	})
 
 	JustBeforeEach(func() {
@@ -350,9 +354,7 @@ var _ = Describe("ProxyManager", func() {
 		Context("for listener config", func() {
 			var listenerConfig envoy.ListenerConfig
 			BeforeEach(func() {
-				containerProxyTrustedCACerts = []string{}
 				containerProxyRequireClientCerts = true
-				containerProxyVerifySubjectAltName = []string{}
 			})
 
 			Context("with invalid trusted cert", func() {
