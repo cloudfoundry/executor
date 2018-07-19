@@ -352,6 +352,7 @@ var _ = Describe("ProxyManager", func() {
 			BeforeEach(func() {
 				containerProxyTrustedCACerts = []string{}
 				containerProxyRequireClientCerts = true
+				containerProxyVerifySubjectAltName = []string{}
 			})
 
 			Context("with invalid trusted cert", func() {
