@@ -55,7 +55,6 @@ type storeNode struct {
 	gardenClient                garden.Client
 	dependencyManager           DependencyManager
 	volumeManager               volman.Manager
-	rotatingCredChan            <-chan Credential
 	credManager                 CredManager
 	eventEmitter                event.Hub
 	transformer                 transformer.Transformer
@@ -438,9 +437,8 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	var credManagerRunner ifrit.Runner
-	credManagerRunner, n.rotatingCredChan = n.credManager.Runner(logger, n.info)
-	proxyConfigRunner, err := n.proxyManager.Runner(logger, n.info, n.rotatingCredChan)
+	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
+	proxyConfigRunner, err := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
 	if err != nil {
 		n.completeWithError(logger, err)
 		return err
@@ -461,9 +459,11 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	}
 
 	members := grouper.Members{
-		{"cred-manager-runner", credManagerRunner},
 		{"proxy-config-runner", proxyConfigRunner},
-		{"runner", runner},
+		{"queue-order-runners", NewQueueOrdered(os.Interrupt, grouper.Members{
+			{"cred-manager-runner", credManagerRunner},
+			{"runner", runner},
+		})},
 	}
 	group := grouper.NewOrdered(os.Interrupt, members)
 	n.process = ifrit.Background(group)
@@ -472,18 +472,22 @@ func (n *storeNode) Run(logger lager.Logger) error {
 }
 
 func (n *storeNode) completeWithError(logger lager.Logger, err error) {
-	exitTrace, ok := err.(grouper.ErrorTrace)
+	exitTrace, ok := err.(grouper.ErrorTrace) // [err, [err, err]]
 	if ok {
 		for _, event := range exitTrace {
 			err := event.Err
-			if err != nil {
+			errorTrace, ok := err.(grouper.ErrorTrace)
+			if ok {
+				n.completeWithError(logger, errorTrace)
+				return
+			} else if err != nil {
 				if event.Member.Name != "runner" {
 					err = errors.New(event.Member.Name + " exited: " + err.Error())
 				}
 				n.completeWithError(logger, err)
-				return
 			}
 		}
+		return
 	}
 
 	var errorStr string
@@ -537,20 +541,11 @@ func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Lock()
 	stopped := n.info.RunResult.Stopped
 	n.info.RunResult.Stopped = true
-	info := n.info.Copy()
 	n.infoLock.Unlock()
 	if n.process != nil {
 		if !stopped {
 			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 			fmt.Fprintf(logStreamer.Stdout(), "Cell %s stopping instance %s\n", n.cellID, n.Info().Guid)
-		}
-
-		creds, err := n.credManager.GenerateCreds(logger, info, time.Time{}, time.Time{})
-		if err != nil {
-			//log?
-		}
-		if n.rotatingCredChan != nil {
-			n.rotatingCredChan <- creds
 		}
 
 		n.process.Signal(os.Interrupt)

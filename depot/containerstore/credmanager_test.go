@@ -186,286 +186,435 @@ var _ = Describe("CredManager", func() {
 				Eventually(containerProcess.Wait()).Should(Receive())
 			})
 
-			It("puts private key into container directory", func() {
-				Eventually(containerProcess.Ready()).Should(BeClosed())
+			Context("when runner returns early", func() {
+				Context("when regenerating certificate and key fails", func() {
+					JustBeforeEach(func() {
+						Eventually(containerProcess.Ready()).Should(BeClosed())
+						Eventually(filepath.Join(certPath, "instance.key")).Should(BeARegularFile())
+						Expect(os.RemoveAll(tmpdir)).To(Succeed())
+						clock.WaitForWatcherAndIncrement(1 * time.Hour)
+					})
 
-				keyFile := filepath.Join(certPath, "instance.key")
-				data, err := ioutil.ReadFile(keyFile)
-				Expect(err).NotTo(HaveOccurred())
+					It("returns an error", func() {
+						var err error
+						Eventually(containerProcess.Wait()).Should(Receive(&err))
+						Expect(err).To(HaveOccurred())
+					})
 
-				block, rest := pem.Decode(data)
-				Expect(block).NotTo(BeNil())
-				Expect(rest).To(BeEmpty())
-
-				Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
-				key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-				Expect(err).NotTo(HaveOccurred())
-
-				var bits int
-				for _, p := range key.Primes {
-					bits += p.BitLen()
-				}
-				Expect(bits).To(Equal(2048))
-			})
-
-			It("signs and puts the certificate into container directory", func() {
-				Eventually(containerProcess.Ready()).Should(BeClosed())
-
-				certFile := filepath.Join(certPath, "instance.crt")
-				Expect(certFile).To(BeARegularFile())
-			})
-
-			It("emits metrics on successful creation", func() {
-				Eventually(containerProcess.Ready()).Should(BeClosed())
-
-				Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
-				metric := fakeMetronClient.IncrementCounterArgsForCall(0)
-				Expect(metric).To(Equal("CredCreationSucceededCount"))
-
-				Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(1))
-				metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
-				Expect(metric).To(Equal("CredCreationSucceededDuration"))
-				Expect(value).To(BeNumerically(">=", 0))
-			})
-
-			Context("when the certificate is about to expire", func() {
-				var (
-					keyBefore             []byte
-					certBefore            []byte
-					serialNumber          *big.Int
-					durationPriorToExpiry time.Duration
-				)
-
-				readKeyAndCert := func() ([]byte, []byte) {
-					keyFile := filepath.Join(certPath, "instance.key")
-					key, err := ioutil.ReadFile(keyFile)
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
-					certFile := filepath.Join(certPath, "instance.crt")
-					cert, err := ioutil.ReadFile(certFile)
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
-					return key, cert
-				}
-
-				JustBeforeEach(func() {
-					Eventually(containerProcess.Ready()).Should(BeClosed())
-					keyBefore, certBefore = readKeyAndCert()
-
-					var cred containerstore.Credential
-					Eventually(rotatingCredChan).Should(Receive(&cred))
-					Expect(cred.Key).To(Equal(string(keyBefore)))
-					Expect(cred.Cert).To(Equal(string(certBefore)))
-
-					var block *pem.Block
-					block, _ = pem.Decode(certBefore)
-					certs, err := x509.ParseCertificates(block.Bytes)
-					Expect(err).NotTo(HaveOccurred())
-					cert := certs[0]
-					increment := cert.NotAfter.Add(-durationPriorToExpiry).Sub(clock.Now())
-
-					Expect(increment).To(BeNumerically(">", 0))
-					clock.WaitForWatcherAndIncrement(increment)
+					It("emits metrics around failed credential creation", func() {
+						Eventually(containerProcess.Wait()).Should(Receive())
+						Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+						metric := fakeMetronClient.IncrementCounterArgsForCall(1)
+						Expect(metric).To(Equal("CredCreationFailedCount"))
+					})
 				})
 
-				testCredentialRotation := func() {
-					It("generates a new certificate and keypair", func() {
+				Context("when generating private key fails", func() {
+					BeforeEach(func() {
+						reader = io.LimitReader(rand.Reader, 0)
+					})
+
+					It("returns an error", func() {
+						var err error
+						Eventually(containerProcess.Wait()).Should(Receive(&err))
+						Expect(err).To(MatchError("EOF"))
+					})
+
+					It("emits metrics around failed credential creation", func() {
+						var err error
+						Eventually(containerProcess.Wait()).Should(Receive(&err))
+						Expect(err).To(MatchError("EOF"))
+
+						Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+						metric := fakeMetronClient.IncrementCounterArgsForCall(0)
+						Expect(metric).To(Equal("CredCreationFailedCount"))
+					})
+				})
+			})
+
+			Context("when runner executes normally", func() {
+				AfterEach(func() {
+					containerProcess.Signal(os.Interrupt)
+					Eventually(rotatingCredChan).Should(Receive()) // reads the invalid cert
+				})
+
+				It("puts private key into container directory", func() {
+					Eventually(containerProcess.Ready()).Should(BeClosed())
+
+					keyFile := filepath.Join(certPath, "instance.key")
+					data, err := ioutil.ReadFile(keyFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					block, rest := pem.Decode(data)
+					Expect(block).NotTo(BeNil())
+					Expect(rest).To(BeEmpty())
+
+					Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
+					key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+					Expect(err).NotTo(HaveOccurred())
+
+					var bits int
+					for _, p := range key.Primes {
+						bits += p.BitLen()
+					}
+					Expect(bits).To(Equal(2048))
+				})
+
+				It("signs and puts the certificate into container directory", func() {
+					Eventually(containerProcess.Ready()).Should(BeClosed())
+
+					certFile := filepath.Join(certPath, "instance.crt")
+					Expect(certFile).To(BeARegularFile())
+				})
+
+				It("emits metrics on successful creation", func() {
+					Eventually(containerProcess.Ready()).Should(BeClosed())
+
+					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
+					Expect(metric).To(Equal("CredCreationSucceededCount"))
+
+					Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(1))
+					metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
+					Expect(metric).To(Equal("CredCreationSucceededDuration"))
+					Expect(value).To(BeNumerically(">=", 0))
+				})
+
+				Context("when the certificate is about to expire", func() {
+					var (
+						keyBefore             []byte
+						certBefore            []byte
+						serialNumber          *big.Int
+						durationPriorToExpiry time.Duration
+					)
+
+					readKeyAndCert := func() ([]byte, []byte) {
+						keyFile := filepath.Join(certPath, "instance.key")
+						key, err := ioutil.ReadFile(keyFile)
+						ExpectWithOffset(1, err).NotTo(HaveOccurred())
+						certFile := filepath.Join(certPath, "instance.crt")
+						cert, err := ioutil.ReadFile(certFile)
+						ExpectWithOffset(1, err).NotTo(HaveOccurred())
+						return key, cert
+					}
+
+					JustBeforeEach(func() {
+						Eventually(containerProcess.Ready()).Should(BeClosed())
+						keyBefore, certBefore = readKeyAndCert()
+
 						var cred containerstore.Credential
 						Eventually(rotatingCredChan).Should(Receive(&cred))
-
-						var key, cert []byte
-
-						Eventually(func() []byte {
-							key, _ = readKeyAndCert()
-							return key
-						}).ShouldNot(Equal(keyBefore))
-
-						Eventually(func() []byte {
-							_, cert = readKeyAndCert()
-							return cert
-						}).ShouldNot(Equal(certBefore))
-
-						Expect(cred.Key).To(Equal(string(key)))
-						Expect(cred.Cert).To(Equal(string(cert)))
+						Expect(cred.Key).To(Equal(string(keyBefore)))
+						Expect(cred.Cert).To(Equal(string(certBefore)))
 
 						var block *pem.Block
-						_, certAfter := readKeyAndCert()
-						block, _ = pem.Decode(certAfter)
+						block, _ = pem.Decode(certBefore)
 						certs, err := x509.ParseCertificates(block.Bytes)
 						Expect(err).NotTo(HaveOccurred())
-						x509Cert := certs[0]
-						Expect(x509Cert.SerialNumber).ToNot(Equal(serialNumber))
-					})
-				}
+						cert := certs[0]
+						increment := cert.NotAfter.Add(-durationPriorToExpiry).Sub(clock.Now())
 
-				testNoCredentialRotation := func() {
-					It("does not rotate the credentials", func() {
-						Consistently(func() []byte {
-							keyFile := filepath.Join(certPath, "instance.key")
-							keyAfter, err := ioutil.ReadFile(keyFile)
+						Expect(increment).To(BeNumerically(">", 0))
+						clock.WaitForWatcherAndIncrement(increment)
+					})
+
+					testCredentialRotation := func() {
+						It("generates a new certificate and keypair", func() {
+							var cred containerstore.Credential
+							Eventually(rotatingCredChan).Should(Receive(&cred))
+
+							var key, cert []byte
+
+							Eventually(func() []byte {
+								key, _ = readKeyAndCert()
+								return key
+							}).ShouldNot(Equal(keyBefore))
+
+							Eventually(func() []byte {
+								_, cert = readKeyAndCert()
+								return cert
+							}).ShouldNot(Equal(certBefore))
+
+							Expect(cred.Key).To(Equal(string(key)))
+							Expect(cred.Cert).To(Equal(string(cert)))
+
+							var block *pem.Block
+							_, certAfter := readKeyAndCert()
+							block, _ = pem.Decode(certAfter)
+							certs, err := x509.ParseCertificates(block.Bytes)
 							Expect(err).NotTo(HaveOccurred())
-							return keyAfter
-						}).Should(Equal(keyBefore))
+							x509Cert := certs[0]
+							Expect(x509Cert.SerialNumber).ToNot(Equal(serialNumber))
+						})
+					}
 
-						Consistently(func() []byte {
-							certFile := filepath.Join(certPath, "instance.crt")
-							certAfter, err := ioutil.ReadFile(certFile)
-							Expect(err).NotTo(HaveOccurred())
-							return certAfter
-						}).Should(Equal(certBefore))
-					})
-				}
+					testNoCredentialRotation := func() {
+						It("does not rotate the credentials", func() {
+							Consistently(func() []byte {
+								keyFile := filepath.Join(certPath, "instance.key")
+								keyAfter, err := ioutil.ReadFile(keyFile)
+								Expect(err).NotTo(HaveOccurred())
+								return keyAfter
+							}).Should(Equal(keyBefore))
 
-				Context("when the certificate validity is less than 4 hours", func() {
-					BeforeEach(func() {
-						validityPeriod = time.Minute
-					})
+							Consistently(func() []byte {
+								certFile := filepath.Join(certPath, "instance.crt")
+								certAfter, err := ioutil.ReadFile(certFile)
+								Expect(err).NotTo(HaveOccurred())
+								return certAfter
+							}).Should(Equal(certBefore))
+						})
+					}
 
-					Context("when 15 seconds prior to expiry", func() {
+					Context("when the certificate validity is less than 4 hours", func() {
 						BeforeEach(func() {
-							durationPriorToExpiry = 15 * time.Second
-						})
-
-						testNoCredentialRotation()
-					})
-
-					Context("when 5 seconds prior to expiry", func() {
-						BeforeEach(func() {
-							durationPriorToExpiry = 5 * time.Second
-						})
-
-						testCredentialRotation()
-
-						It("emits metrics on successful creation", func() {
-							Eventually(rotatingCredChan).Should(Receive())
-							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
-							metric := fakeMetronClient.IncrementCounterArgsForCall(1)
-							Expect(metric).To(Equal("CredCreationSucceededCount"))
-
-							Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
-							metric, value, _ := fakeMetronClient.SendDurationArgsForCall(1)
-							Expect(metric).To(Equal("CredCreationSucceededDuration"))
-							Expect(value).To(BeNumerically(">=", 0))
-						})
-
-						It("rotates the cert atomically", func() {
-							if runtime.GOOS == "windows" {
-								Skip("skipping test because running on Windows")
-							}
-							before := string(certBefore)
-							var after string
-							// similar to eventually but faster, to ensure we sample the cert
-							// file as soon as it is overwritten. stop as soon as we see a
-							// change to the file
-							//
-							// arbitrary limit to prevent infinite loop
-							limit := 100000
-							for ; limit > 0; limit-- {
-								_, certBytes := readKeyAndCert()
-								after = string(certBytes)
-								if after != before {
-									break
-								}
-							}
-							Expect(limit).To(BeNumerically(">", 0))
-
-							block, _ := pem.Decode([]byte(after))
-							Expect(block).NotTo(BeNil(), "invalid data in cert file")
-							_, err := x509.ParseCertificates(block.Bytes)
-							Expect(err).NotTo(HaveOccurred())
-						})
-
-						It("rotates the key atomically", func() {
-							if runtime.GOOS == "windows" {
-								Skip("skipping test because running on Windows")
-							}
-							before := string(keyBefore)
-							var after string
-							// similar to eventually but faster, to ensure we sample the key
-							// file as soon as it is overwritten. stop as soon as we see a
-							// change to the file
-							//
-							// arbitrary limit to prevent infinite loop
-							limit := 100000
-							for ; limit > 0; limit-- {
-								keyBytes, _ := readKeyAndCert()
-								after = string(keyBytes)
-								if after != before {
-									break
-								}
-							}
-							Expect(limit).To(BeNumerically(">", 0))
-
-							block, _ := pem.Decode([]byte(after))
-							Expect(block).NotTo(BeNil(), "invalid data in key file")
-							_, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-							Expect(err).NotTo(HaveOccurred())
-						})
-
-						// test timer reset logic
-						Context("when 5 seconds prior to expiry", func() {
-							// wait for the cert to rotate from the outer context before running this test
-							JustBeforeEach(func() {
-								keyBefore, certBefore = readKeyAndCert()
-								clock.WaitForWatcherAndIncrement(5 * time.Second)
-							})
-
-							testCredentialRotation()
+							validityPeriod = time.Minute
 						})
 
 						Context("when 15 seconds prior to expiry", func() {
-							JustBeforeEach(func() {
-								// wait for the cert to rotate from the outer context before running this test
-								Eventually(rotatingCredChan).Should(Receive())
-								keyBefore, certBefore = readKeyAndCert()
-								clock.WaitForWatcherAndIncrement(15 * time.Second)
+							BeforeEach(func() {
+								durationPriorToExpiry = 15 * time.Second
 							})
 
 							testNoCredentialRotation()
 						})
-					})
-				})
 
-				Context("when certificate validity is longer than 4 hours", func() {
-					BeforeEach(func() {
-						validityPeriod = 24 * time.Hour
+						Context("when 5 seconds prior to expiry", func() {
+							BeforeEach(func() {
+								durationPriorToExpiry = 5 * time.Second
+							})
+
+							testCredentialRotation()
+
+							It("emits metrics on successful creation", func() {
+								Eventually(rotatingCredChan).Should(Receive())
+								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								metric := fakeMetronClient.IncrementCounterArgsForCall(1)
+								Expect(metric).To(Equal("CredCreationSucceededCount"))
+
+								Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
+								metric, value, _ := fakeMetronClient.SendDurationArgsForCall(1)
+								Expect(metric).To(Equal("CredCreationSucceededDuration"))
+								Expect(value).To(BeNumerically(">=", 0))
+							})
+
+							It("rotates the cert atomically", func() {
+								if runtime.GOOS == "windows" {
+									Skip("skipping test because running on Windows")
+								}
+								before := string(certBefore)
+								var after string
+								// similar to eventually but faster, to ensure we sample the cert
+								// file as soon as it is overwritten. stop as soon as we see a
+								// change to the file
+								//
+								// arbitrary limit to prevent infinite loop
+								limit := 100000
+								for ; limit > 0; limit-- {
+									_, certBytes := readKeyAndCert()
+									after = string(certBytes)
+									if after != before {
+										break
+									}
+								}
+								Expect(limit).To(BeNumerically(">", 0))
+
+								block, _ := pem.Decode([]byte(after))
+								Expect(block).NotTo(BeNil(), "invalid data in cert file")
+								_, err := x509.ParseCertificates(block.Bytes)
+								Expect(err).NotTo(HaveOccurred())
+							})
+
+							It("rotates the key atomically", func() {
+								if runtime.GOOS == "windows" {
+									Skip("skipping test because running on Windows")
+								}
+								before := string(keyBefore)
+								var after string
+								// similar to eventually but faster, to ensure we sample the key
+								// file as soon as it is overwritten. stop as soon as we see a
+								// change to the file
+								//
+								// arbitrary limit to prevent infinite loop
+								limit := 100000
+								for ; limit > 0; limit-- {
+									keyBytes, _ := readKeyAndCert()
+									after = string(keyBytes)
+									if after != before {
+										break
+									}
+								}
+								Expect(limit).To(BeNumerically(">", 0))
+
+								block, _ := pem.Decode([]byte(after))
+								Expect(block).NotTo(BeNil(), "invalid data in key file")
+								_, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+								Expect(err).NotTo(HaveOccurred())
+							})
+
+							// test timer reset logic
+							Context("when 5 seconds prior to expiry", func() {
+								// wait for the cert to rotate from the outer context before running this test
+								JustBeforeEach(func() {
+									keyBefore, certBefore = readKeyAndCert()
+									clock.WaitForWatcherAndIncrement(5 * time.Second)
+								})
+
+								testCredentialRotation()
+							})
+
+							Context("when 15 seconds prior to expiry", func() {
+								JustBeforeEach(func() {
+									// wait for the cert to rotate from the outer context before running this test
+									Eventually(rotatingCredChan).Should(Receive())
+									keyBefore, certBefore = readKeyAndCert()
+									clock.WaitForWatcherAndIncrement(15 * time.Second)
+								})
+
+								testNoCredentialRotation()
+							})
+						})
 					})
 
-					Context("when 90 minutes prior to expiry", func() {
+					Context("when certificate validity is longer than 4 hours", func() {
 						BeforeEach(func() {
-							durationPriorToExpiry = 90 * time.Minute
+							validityPeriod = 24 * time.Hour
 						})
 
-						testNoCredentialRotation()
-					})
+						Context("when 90 minutes prior to expiry", func() {
+							BeforeEach(func() {
+								durationPriorToExpiry = 90 * time.Minute
+							})
 
-					Context("when 30 minutes prior to expiry", func() {
-						BeforeEach(func() {
-							durationPriorToExpiry = 30 * time.Minute
+							testNoCredentialRotation()
 						})
 
-						testCredentialRotation()
+						Context("when 30 minutes prior to expiry", func() {
+							BeforeEach(func() {
+								durationPriorToExpiry = 30 * time.Minute
+							})
+
+							testCredentialRotation()
+						})
 					})
 				})
-			})
 
-			Context("when regenerating certificate and key fails", func() {
-				JustBeforeEach(func() {
-					Eventually(containerProcess.Ready()).Should(BeClosed())
-					Eventually(filepath.Join(certPath, "instance.key")).Should(BeARegularFile())
-					Expect(os.RemoveAll(tmpdir)).To(Succeed())
-					clock.WaitForWatcherAndIncrement(1 * time.Hour)
-				})
+				Describe("the certificate", func() {
+					var (
+						cert *x509.Certificate
+						rest []byte
+					)
 
-				It("returns an error", func() {
-					var err error
-					Eventually(containerProcess.Wait()).Should(Receive(&err))
-					Expect(err).To(HaveOccurred())
-				})
+					JustBeforeEach(func() {
+						Eventually(containerProcess.Ready()).Should(BeClosed())
 
-				It("emits metrics around failed credential creation", func() {
-					Eventually(containerProcess.Wait()).Should(Receive())
-					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
-					metric := fakeMetronClient.IncrementCounterArgsForCall(1)
-					Expect(metric).To(Equal("CredCreationFailedCount"))
+						certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
+						data, err := ioutil.ReadFile(certFile)
+						Expect(err).NotTo(HaveOccurred())
+						var block *pem.Block
+						block, rest = pem.Decode(data)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(block).NotTo(BeNil())
+						Expect(block.Type).To(Equal("CERTIFICATE"))
+						certs, err := x509.ParseCertificates(block.Bytes)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(certs).To(HaveLen(1))
+						cert = certs[0]
+					})
+
+					It("has the container ip", func() {
+						ip := net.ParseIP(container.InternalIP)
+						Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+					})
+
+					It("has all required usages in the KU & EKU fields", func() {
+						Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageClientAuth))
+						Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth))
+						Expect(cert.KeyUsage).To(Equal(x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement))
+					})
+
+					It("signed by the rep intermediate CA", func() {
+						CaCertPool := x509.NewCertPool()
+						CaCertPool.AddCert(CaCert)
+						verifyOpts := x509.VerifyOptions{Roots: CaCertPool}
+						Expect(cert.CheckSignatureFrom(CaCert)).To(Succeed())
+						_, err := cert.Verify(verifyOpts)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("common name should be set to the container guid", func() {
+						Expect(cert.Subject.CommonName).To(Equal(container.Guid))
+					})
+
+					It("DNS SAN should be set to the container guid", func() {
+						Expect(cert.DNSNames).To(ContainElement(container.Guid))
+					})
+
+					It("expires in after the configured validity period", func() {
+						Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
+					})
+
+					It("not before is set to current timestamp", func() {
+						Expect(cert.NotBefore).To(Equal(clock.Now()))
+					})
+
+					It("has the rep intermediate CA", func() {
+						block, rest := pem.Decode(rest)
+						Expect(block).NotTo(BeNil())
+						Expect(rest).To(BeEmpty())
+						Expect(block.Type).To(Equal("CERTIFICATE"))
+						certs, err := x509.ParseCertificates(block.Bytes)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(certs).To(HaveLen(1))
+						cert = certs[0]
+						Expect(cert).To(Equal(CaCert))
+					})
+
+					It("has the app guid in the subject's organizational units", func() {
+						Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
+					})
+
+					Context("when the container doesn't have an internal ip", func() {
+						Context("when the container has an external IP", func() {
+							BeforeEach(func() {
+								container = executor.Container{
+									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+									InternalIP: "",
+									ExternalIP: "54.23.123.234",
+									RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+										OrganizationalUnit: []string{"app:iamthelizardking"}},
+									},
+								}
+							})
+
+							It("has the external ip", func() {
+								ip := net.ParseIP(container.ExternalIP)
+								Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+							})
+
+							It("does not have the empty internal ip", func() {
+								ip := net.ParseIP(container.InternalIP)
+								Expect(cert.IPAddresses).NotTo(ContainElement(ip.To4()))
+							})
+						})
+						Context("when the container doesn't have an external ip", func() {
+							BeforeEach(func() {
+								container = executor.Container{
+									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+									InternalIP: "",
+									ExternalIP: "",
+									RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+										OrganizationalUnit: []string{"app:iamthelizardking"}},
+									},
+								}
+							})
+
+							It("has no SubjectAltName", func() {
+								Expect(cert.IPAddresses).To(BeEmpty())
+							})
+
+						})
+					})
 				})
 			})
 
@@ -473,12 +622,26 @@ var _ = Describe("CredManager", func() {
 				JustBeforeEach(func() {
 					Eventually(containerProcess.Ready()).Should(BeClosed())
 					Eventually(certMount[0].SrcPath).Should(BeADirectory())
+					Eventually(rotatingCredChan).Should(Receive()) // added this to read the existing cred from startup
 					containerProcess.Signal(os.Interrupt)
 				})
 
 				// deleting the directory this early can cause failures on windows 1803, see #156406881
 				It("does not remove container credentials from the filesystem", func() {
-					Consistently(certMount[0].SrcPath).Should(BeADirectory())
+					Eventually(certMount[0].SrcPath).Should(BeADirectory())
+				})
+
+				It("Generates an invalid cert and sends the invalid cert on the cred channel", func() {
+					var cred containerstore.Credential
+					Eventually(rotatingCredChan).Should(Receive(&cred))
+
+					block, _ := pem.Decode([]byte(cred.Cert))
+					Expect(block).NotTo(BeNil())
+					certs, err := x509.ParseCertificates(block.Bytes)
+					Expect(err).NotTo(HaveOccurred())
+					cert := certs[0]
+					fmt.Println(validityPeriod)
+					Expect(cert.NotAfter).Should(Equal(cert.NotBefore))
 				})
 
 				It("closes the rotating cred channel", func() {
@@ -486,145 +649,6 @@ var _ = Describe("CredManager", func() {
 				})
 			})
 
-			Context("when generating private key fails", func() {
-				BeforeEach(func() {
-					reader = io.LimitReader(rand.Reader, 0)
-				})
-
-				It("returns an error", func() {
-					var err error
-					Eventually(containerProcess.Wait()).Should(Receive(&err))
-					Expect(err).To(MatchError("EOF"))
-				})
-
-				It("emits metrics around failed credential creation", func() {
-					var err error
-					Eventually(containerProcess.Wait()).Should(Receive(&err))
-					Expect(err).To(MatchError("EOF"))
-
-					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
-					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
-					Expect(metric).To(Equal("CredCreationFailedCount"))
-				})
-			})
-
-			Describe("the certificate", func() {
-				var (
-					cert *x509.Certificate
-					rest []byte
-				)
-
-				JustBeforeEach(func() {
-					Eventually(containerProcess.Ready()).Should(BeClosed())
-
-					certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
-					data, err := ioutil.ReadFile(certFile)
-					Expect(err).NotTo(HaveOccurred())
-					var block *pem.Block
-					block, rest = pem.Decode(data)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(block).NotTo(BeNil())
-					Expect(block.Type).To(Equal("CERTIFICATE"))
-					certs, err := x509.ParseCertificates(block.Bytes)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(certs).To(HaveLen(1))
-					cert = certs[0]
-				})
-
-				It("has the container ip", func() {
-					ip := net.ParseIP(container.InternalIP)
-					Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
-				})
-
-				It("has all required usages in the KU & EKU fields", func() {
-					Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageClientAuth))
-					Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth))
-					Expect(cert.KeyUsage).To(Equal(x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement))
-				})
-
-				It("signed by the rep intermediate CA", func() {
-					CaCertPool := x509.NewCertPool()
-					CaCertPool.AddCert(CaCert)
-					verifyOpts := x509.VerifyOptions{Roots: CaCertPool}
-					Expect(cert.CheckSignatureFrom(CaCert)).To(Succeed())
-					_, err := cert.Verify(verifyOpts)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				It("common name should be set to the container guid", func() {
-					Expect(cert.Subject.CommonName).To(Equal(container.Guid))
-				})
-
-				It("DNS SAN should be set to the container guid", func() {
-					Expect(cert.DNSNames).To(ContainElement(container.Guid))
-				})
-
-				It("expires in after the configured validity period", func() {
-					Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
-				})
-
-				It("not before is set to current timestamp", func() {
-					Expect(cert.NotBefore).To(Equal(clock.Now()))
-				})
-
-				It("has the rep intermediate CA", func() {
-					block, rest := pem.Decode(rest)
-					Expect(block).NotTo(BeNil())
-					Expect(rest).To(BeEmpty())
-					Expect(block.Type).To(Equal("CERTIFICATE"))
-					certs, err := x509.ParseCertificates(block.Bytes)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(certs).To(HaveLen(1))
-					cert = certs[0]
-					Expect(cert).To(Equal(CaCert))
-				})
-
-				It("has the app guid in the subject's organizational units", func() {
-					Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
-				})
-
-				Context("when the container doesn't have an internal ip", func() {
-					Context("when the container has an external IP", func() {
-						BeforeEach(func() {
-							container = executor.Container{
-								Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
-								InternalIP: "",
-								ExternalIP: "54.23.123.234",
-								RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-									OrganizationalUnit: []string{"app:iamthelizardking"}},
-								},
-							}
-						})
-
-						It("has the external ip", func() {
-							ip := net.ParseIP(container.ExternalIP)
-							Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
-						})
-
-						It("does not have the empty internal ip", func() {
-							ip := net.ParseIP(container.InternalIP)
-							Expect(cert.IPAddresses).NotTo(ContainElement(ip.To4()))
-						})
-					})
-					Context("when the container doesn't have an external ip", func() {
-						BeforeEach(func() {
-							container = executor.Container{
-								Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
-								InternalIP: "",
-								ExternalIP: "",
-								RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-									OrganizationalUnit: []string{"app:iamthelizardking"}},
-								},
-							}
-						})
-
-						It("has no SubjectAltName", func() {
-							Expect(cert.IPAddresses).To(BeEmpty())
-						})
-
-					})
-				})
-			})
 		})
 	})
 })

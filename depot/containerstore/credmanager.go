@@ -40,7 +40,6 @@ type Credential struct {
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	RemoveCredDir(lager.Logger, executor.Container) error
-	GenerateCreds(lager.Logger, executor.Container, time.Time, time.Time) (Credential, error)
 	Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential)
 }
 
@@ -56,10 +55,6 @@ func (c *noopManager) CreateCredDir(logger lager.Logger, container executor.Cont
 
 func (c *noopManager) RemoveCredDir(logger lager.Logger, container executor.Container) error {
 	return nil
-}
-
-func (c *noopManager) GenerateCreds(logger lager.Logger, container executor.Container, start time.Time, end time.Time) (Credential, error) {
-	return Credential{}, nil
 }
 
 func (c *noopManager) Runner(lager.Logger, executor.Container) (ifrit.Runner, <-chan Credential) {
@@ -141,10 +136,10 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		logger.Info("started")
 		rotatingCred <- creds
 
+		regenLogger := logger.Session("regenerating-cert-and-key")
 		for {
 			select {
 			case <-regenCertTimer.C():
-				regenLogger := logger.Session("regenerating-cert-and-key")
 				regenLogger.Debug("started")
 				start := c.clock.Now()
 				creds, err := c.generateAndRotateCredsOnDisk(regenLogger, container)
@@ -162,6 +157,14 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				rotatingCred <- creds
 				regenLogger.Debug("completed")
 			case signal := <-signals:
+				invalidTime := c.clock.Now().Add(-time.Hour)
+				creds, err := c.generateAndWriteCreds(logger, container, ioutil.Discard, ioutil.Discard, invalidTime, invalidTime)
+				if err != nil {
+					regenLogger.Error("failed-to-generate-credentials", err)
+					c.metronClient.IncrementCounter(CredCreationFailedCount)
+					return err
+				}
+				rotatingCred <- creds
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				close(rotatingCred)
 				return nil
@@ -219,7 +222,7 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	}
 	defer certificate.Close()
 
-	startValidity := time.Now()
+	startValidity := c.clock.Now()
 	creds, err := c.generateAndWriteCreds(logger, container, certificate, instanceKey, startValidity, startValidity.Add(c.validityPeriod))
 	if err != nil {
 		return Credential{}, err
@@ -246,10 +249,6 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	}
 
 	return creds, nil
-}
-
-func (c *credManager) GenerateCreds(logger lager.Logger, container executor.Container, startValidity time.Time, endValidity time.Time) (Credential, error) {
-	return c.generateAndWriteCreds(logger, container, ioutil.Discard, ioutil.Discard, startValidity, endValidity)
 }
 
 func (c *credManager) generateAndWriteCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, startValidity time.Time, endValidity time.Time) (Credential, error) {
