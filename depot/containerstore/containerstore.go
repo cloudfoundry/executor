@@ -83,6 +83,8 @@ type containerStore struct {
 	reapingLock *sync.RWMutex
 
 	cellID string
+
+	enableUnproxiedPortMappings bool
 }
 
 func New(
@@ -101,6 +103,7 @@ func New(
 	declarativeHealthcheckPath string,
 	proxyManager ProxyManager,
 	cellID string,
+	enableUnproxiedPortMappings bool,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -121,6 +124,8 @@ func New(
 		reapingLock: &sync.RWMutex{},
 
 		cellID: cellID,
+
+		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
 	}
 }
 
@@ -150,6 +155,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.metronClient,
 			cs.proxyManager,
 			cs.cellID,
+			cs.enableUnproxiedPortMappings,
 		))
 
 	if err != nil {

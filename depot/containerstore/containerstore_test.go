@@ -148,6 +148,7 @@ var _ = Describe("Container Store", func() {
 			"/var/vcap/packages/healthcheck",
 			proxyManager,
 			cellID,
+			true,
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
@@ -599,6 +600,7 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
+						true,
 					)
 				})
 
@@ -904,73 +906,54 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
-			Context("when ports are requested", func() {
-				Context("with containerProxy disabled", func() {
-					BeforeEach(func() {
-						portMapping := []executor.PortMapping{
-							{ContainerPort: 8080},
-							{ContainerPort: 9090},
-						}
-						runReq.Ports = portMapping
+			Context("when containerProxy is disabled", func() {
+				BeforeEach(func() {
+					portMapping := []executor.PortMapping{
+						{ContainerPort: 8080},
+						{ContainerPort: 9090},
+					}
+					runReq.Ports = portMapping
 
-						gardenClient.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
-							gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
-								info := garden.ContainerInfo{}
-								info.MappedPorts = []garden.PortMapping{}
-								for _, netIn := range spec.NetIn {
-									switch netIn.ContainerPort {
-									case 8080:
-										info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16000, ContainerPort: 8080})
-									case 9090:
-										info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 32000, ContainerPort: 9090})
-									default:
-										return info, errors.New("failed-net-in")
-									}
+					gardenClient.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
+						gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
+							info := garden.ContainerInfo{}
+							info.MappedPorts = []garden.PortMapping{}
+							for _, netIn := range spec.NetIn {
+								switch netIn.ContainerPort {
+								case 8080:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16000, ContainerPort: 8080})
+								case 9090:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 32000, ContainerPort: 9090})
+								default:
+									return info, errors.New("failed-net-in")
 								}
-								return info, nil
 							}
-							return gardenContainer, nil
+							return info, nil
 						}
+						return gardenContainer, nil
+					}
+				})
+
+				It("passes all port mappings to NetIn on container creation", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.NetIn).To(HaveLen(2))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 8080,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 9090,
+					}))
+				})
+
+				Context("when the app has duplicate port exposed", func() {
+					BeforeEach(func() {
+						runReq.Ports = append(runReq.Ports, executor.PortMapping{ContainerPort: 8080})
 					})
 
-					It("calls NetIn on the container for each port", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetIn).To(HaveLen(2))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 8080,
-						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 9090,
-						}))
-					})
-
-					Context("when the app has duplicate port exposed", func() {
-						BeforeEach(func() {
-							runReq.Ports = append(runReq.Ports, executor.PortMapping{ContainerPort: 8080})
-						})
-
-						It("de duplicate the exposed ports", func() {
-							container, err := containerStore.Create(logger, containerGuid)
-							Expect(err).NotTo(HaveOccurred())
-
-							Expect(container.Ports).To(ConsistOf(executor.PortMapping{
-								ContainerPort: 8080,
-								HostPort:      16000,
-							}, executor.PortMapping{
-								ContainerPort: 9090,
-								HostPort:      32000,
-							}))
-
-							fetchedContainer, err := containerStore.Get(logger, containerGuid)
-							Expect(err).NotTo(HaveOccurred())
-							Expect(fetchedContainer).To(Equal(container))
-						})
-					})
-
-					It("saves the actual port mappings on the container", func() {
+					It("de duplicate the exposed ports", func() {
 						container, err := containerStore.Create(logger, containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
@@ -986,38 +969,279 @@ var _ = Describe("Container Store", func() {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(fetchedContainer).To(Equal(container))
 					})
+				})
 
-					It("preserves port orders", func() {
-						Consistently(func() uint16 {
-							containerGUID := "new-container-guid"
-							allocationReq = &executor.AllocationRequest{
-								Guid: containerGUID,
-								Tags: executor.Tags{
-									"Foo": "Bar",
-								},
-							}
+				It("saves the actual port mappings on the container", func() {
+					container, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
 
-							_, err := containerStore.Reserve(logger, allocationReq)
-							Expect(err).NotTo(HaveOccurred())
+					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+						ContainerPort: 8080,
+						HostPort:      16000,
+					}, executor.PortMapping{
+						ContainerPort: 9090,
+						HostPort:      32000,
+					}))
 
-							defer containerStore.Destroy(logger, containerGUID)
+					fetchedContainer, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(fetchedContainer).To(Equal(container))
+				})
 
-							runReq = &executor.RunRequest{
-								Guid:    containerGUID,
-								RunInfo: runInfo,
-							}
-							runReq.Ports = []executor.PortMapping{
-								{ContainerPort: 8080},
-								{ContainerPort: 9090},
-							}
-							err = containerStore.Initialize(logger, runReq)
-							Expect(err).NotTo(HaveOccurred())
+				It("preserves port orders", func() {
+					Consistently(func() uint16 {
+						containerGUID := "new-container-guid"
+						allocationReq = &executor.AllocationRequest{
+							Guid: containerGUID,
+							Tags: executor.Tags{
+								"Foo": "Bar",
+							},
+						}
 
-							container, err := containerStore.Create(logger, containerGUID)
-							Expect(err).NotTo(HaveOccurred())
-							return container.Ports[0].ContainerPort
-						}).Should(Equal(uint16(8080)))
+						_, err := containerStore.Reserve(logger, allocationReq)
+						Expect(err).NotTo(HaveOccurred())
+
+						defer containerStore.Destroy(logger, containerGUID)
+
+						runReq = &executor.RunRequest{
+							Guid:    containerGUID,
+							RunInfo: runInfo,
+						}
+						runReq.Ports = []executor.PortMapping{
+							{ContainerPort: 8080},
+							{ContainerPort: 9090},
+						}
+						err = containerStore.Initialize(logger, runReq)
+						Expect(err).NotTo(HaveOccurred())
+
+						container, err := containerStore.Create(logger, containerGUID)
+						Expect(err).NotTo(HaveOccurred())
+						return container.Ports[0].ContainerPort
+					}).Should(Equal(uint16(8080)))
+				})
+			})
+
+			Context("when containerProxy is enabled", func() {
+				var (
+					envoySourceDir string
+					envoyConfigDir string
+					err            error
+				)
+
+				BeforeEach(func() {
+					envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+					Expect(err).NotTo(HaveOccurred())
+					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
+					Expect(err).NotTo(HaveOccurred())
+
+					proxyBindMounts := []garden.BindMount{
+						{
+							Origin:  garden.BindMountOriginHost,
+							SrcPath: envoySourceDir,
+							DstPath: "/etc/cf-assets/envoy",
+						},
+						{
+							Origin:  garden.BindMountOriginHost,
+							SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+							DstPath: "/etc/cf-assets/envoy_config",
+						},
+					}
+					proxyManager.BindMountsReturns(proxyBindMounts, nil)
+					proxyManager.ProxyPortsReturns([]executor.ProxyPortMapping{
+						{
+							AppPort:   8080,
+							ProxyPort: 61001,
+						},
+						{
+							AppPort:   9090,
+							ProxyPort: 61002,
+						},
+					}, []uint16{
+						61001,
+						61002,
 					})
+
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						fakeMetronClient,
+						false,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+						cellID,
+						true,
+					)
+
+					portMapping := []executor.PortMapping{
+						{ContainerPort: 8080},
+						{ContainerPort: 9090},
+					}
+					runReq.Ports = portMapping
+
+					gardenClient.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
+						gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
+							info := garden.ContainerInfo{}
+							info.MappedPorts = []garden.PortMapping{}
+							for _, netIn := range spec.NetIn {
+								switch netIn.ContainerPort {
+								case 8080:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16000, ContainerPort: 8080})
+								case 9090:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16004, ContainerPort: 9090})
+								case 61001:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16001, ContainerPort: 61001})
+								case 61002:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16002, ContainerPort: 61002})
+								case 61003:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16003, ContainerPort: 61003})
+								default:
+									return info, errors.New("failed-net-in")
+								}
+							}
+							return info, nil
+						}
+						return gardenContainer, nil
+					}
+				})
+
+				AfterEach(func() {
+					err := os.RemoveAll(envoySourceDir)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = os.RemoveAll(envoyConfigDir)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("passes all port mappings to NetIn on container creation", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.NetIn).To(HaveLen(4))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 8080,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 9090,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 61001,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 61002,
+					}))
+				})
+
+				Context("when disabling unproxied port mappings", func() {
+					BeforeEach(func() {
+						containerStore = containerstore.New(
+							containerConfig,
+							&totalCapacity,
+							gardenClient,
+							dependencyManager,
+							volumeManager,
+							credManager,
+							clock,
+							eventEmitter,
+							megatron,
+							"/var/vcap/data/cf-system-trusted-certs",
+							fakeMetronClient,
+							false,
+							"/var/vcap/packages/healthcheck",
+							proxyManager,
+							cellID,
+							false,
+						)
+					})
+
+					It("passes only proxied port mappings to NetIn on container creation", func() {
+						_, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.NetIn).To(HaveLen(2))
+						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+							HostPort: 0, ContainerPort: 61001,
+						}))
+						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+							HostPort: 0, ContainerPort: 61002,
+						}))
+					})
+
+					It("unproxied host ports are set to 0", func() {
+						container, err := containerStore.Create(logger, containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+							ContainerPort:         8080,
+							HostPort:              0,
+							ContainerTLSProxyPort: 61001,
+							HostTLSProxyPort:      16001,
+						}, executor.PortMapping{
+							ContainerPort:         9090,
+							HostPort:              0,
+							ContainerTLSProxyPort: 61002,
+							HostTLSProxyPort:      16002,
+						}))
+					})
+				})
+
+				It("each port gets an equivalent extra proxy port", func() {
+					container, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
+						ContainerPort:         8080,
+						HostPort:              16000,
+						ContainerTLSProxyPort: 61001,
+						HostTLSProxyPort:      16001,
+					}, executor.PortMapping{
+						ContainerPort:         9090,
+						HostPort:              16004,
+						ContainerTLSProxyPort: 61002,
+						HostTLSProxyPort:      16002,
+					}))
+				})
+
+				It("passes the proxy ports in the config", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+						return nil
+					}), nil)
+					Expect(containerStore.Run(logger, containerGuid)).NotTo(HaveOccurred())
+					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
+					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
+					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002)))
+				})
+
+				It("bind mounts envoy", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: envoySourceDir,
+						DstPath: "/etc/cf-assets/envoy",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
+
+					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
+						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
+						DstPath: "/etc/cf-assets/envoy_config",
+						Mode:    garden.BindMountModeRO,
+						Origin:  garden.BindMountOriginHost,
+					}))
 				})
 			})
 
@@ -1104,155 +1328,6 @@ var _ = Describe("Container Store", func() {
 					Expect(container.RunResult.FailureReason).To(ContainSubstring(containerstore.ContainerCreationFailedMessage))
 					Expect(container.RunResult.FailureReason).To(ContainSubstring("could not obtain info"))
 					Expect(container.RunResult.Retryable).To(BeTrue())
-				})
-			})
-
-			Context("when containerProxy is enabled", func() {
-				var (
-					envoySourceDir string
-					envoyConfigDir string
-					err            error
-				)
-
-				BeforeEach(func() {
-					envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
-					Expect(err).NotTo(HaveOccurred())
-					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
-					Expect(err).NotTo(HaveOccurred())
-
-					proxyBindMounts := []garden.BindMount{
-						{
-							Origin:  garden.BindMountOriginHost,
-							SrcPath: envoySourceDir,
-							DstPath: "/etc/cf-assets/envoy",
-						},
-						{
-							Origin:  garden.BindMountOriginHost,
-							SrcPath: filepath.Join(envoyConfigDir, containerGuid),
-							DstPath: "/etc/cf-assets/envoy_config",
-						},
-					}
-					proxyManager.BindMountsReturns(proxyBindMounts, nil)
-					proxyManager.ProxyPortsReturns([]executor.ProxyPortMapping{
-						{
-							AppPort:   8080,
-							ProxyPort: 61001,
-						},
-						{
-							AppPort:   9090,
-							ProxyPort: 61002,
-						},
-					}, []uint16{
-						61001,
-						61002,
-					})
-
-					containerStore = containerstore.New(
-						containerConfig,
-						&totalCapacity,
-						gardenClient,
-						dependencyManager,
-						volumeManager,
-						credManager,
-						clock,
-						eventEmitter,
-						megatron,
-						"/var/vcap/data/cf-system-trusted-certs",
-						fakeMetronClient,
-						false,
-						"/var/vcap/packages/healthcheck",
-						proxyManager,
-						cellID,
-					)
-
-					portMapping := []executor.PortMapping{
-						{ContainerPort: 8080},
-						{ContainerPort: 9090},
-					}
-					runReq.Ports = portMapping
-
-					gardenClient.CreateStub = func(spec garden.ContainerSpec) (garden.Container, error) {
-						gardenContainer.InfoStub = func() (garden.ContainerInfo, error) {
-							info := garden.ContainerInfo{}
-							info.MappedPorts = []garden.PortMapping{}
-							for _, netIn := range spec.NetIn {
-								switch netIn.ContainerPort {
-								case 8080:
-									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16000, ContainerPort: 8080})
-								case 9090:
-									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16004, ContainerPort: 9090})
-								case 61001:
-									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16001, ContainerPort: 61001})
-								case 61002:
-									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16002, ContainerPort: 61002})
-								case 61003:
-									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16003, ContainerPort: 61003})
-								default:
-									return info, errors.New("failed-net-in")
-								}
-							}
-							return info, nil
-						}
-						return gardenContainer, nil
-					}
-				})
-
-				AfterEach(func() {
-					err := os.RemoveAll(envoySourceDir)
-					Expect(err).NotTo(HaveOccurred())
-
-					err = os.RemoveAll(envoyConfigDir)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				It("each port gets an equivalent extra proxy port", func() {
-					container, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
-						ContainerPort:         8080,
-						HostPort:              16000,
-						ContainerTLSProxyPort: 61001,
-						HostTLSProxyPort:      16001,
-					}, executor.PortMapping{
-						ContainerPort:         9090,
-						HostPort:              16004,
-						ContainerTLSProxyPort: 61002,
-						HostTLSProxyPort:      16002,
-					}))
-				})
-
-				It("passes the proxy ports in the config", func() {
-					_, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						return nil
-					}), nil)
-					Expect(containerStore.Run(logger, containerGuid)).NotTo(HaveOccurred())
-					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
-					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
-					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002)))
-				})
-
-				It("bind mounts envoy", func() {
-					_, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(gardenClient.CreateCallCount()).To(Equal(1))
-					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
-						SrcPath: envoySourceDir,
-						DstPath: "/etc/cf-assets/envoy",
-						Mode:    garden.BindMountModeRO,
-						Origin:  garden.BindMountOriginHost,
-					}))
-
-					Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
-						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
-						DstPath: "/etc/cf-assets/envoy_config",
-						Mode:    garden.BindMountModeRO,
-						Origin:  garden.BindMountOriginHost,
-					}))
 				})
 			})
 		})
@@ -2444,6 +2519,7 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
+						true,
 					)
 
 					signalled := proxyRunnerSignalled

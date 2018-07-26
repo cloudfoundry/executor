@@ -316,7 +316,7 @@ var _ = Describe("RunAction", func() {
 					Expect(cfPortsValue).To(MatchJSON("[{\"internal\":2,\"external\":1},{\"internal\":4,\"external\":3}]"))
 				})
 
-				Context("when the container has proxy port mappings configured", func() {
+				Context("and a container proxy is enabled", func() {
 					BeforeEach(func() {
 						portMappings = []executor.PortMapping{
 							{HostPort: 1, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
@@ -354,6 +354,44 @@ var _ = Describe("RunAction", func() {
 						json.Unmarshal([]byte(expectedPortsValue), &eval)
 						Expect(eval).To(ContainElement(aval[0]))
 						Expect(eval).To(ContainElement(aval[1]))
+					})
+
+					Context("and unproxied ports are disabled", func() {
+						BeforeEach(func() {
+							portMappings = []executor.PortMapping{
+								{HostPort: 0, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
+							}
+						})
+
+						It("does not set CF_INSTANCE_ADDR or CF_INSTANCE_PORT", func() {
+							_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+							Expect(spec.Env).NotTo(ContainElement(MatchRegexp("^CF_INSTANCE_PORT=")))
+							Expect(spec.Env).NotTo(ContainElement(MatchRegexp("^CF_INSTANCE_ADDR=")))
+						})
+
+						It("does not set an 'external' port in CF_INSTANCE_PORTS", func() {
+							_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+							var cfPortsValue string
+							for _, env := range spec.Env {
+								if strings.HasPrefix(env, "CF_INSTANCE_PORTS=") {
+									cfPortsValue = strings.Split(env, "=")[1]
+									break
+								}
+							}
+
+							expectedPortsValue := `[{
+								"internal":2,
+								"internal_tls_proxy":5,
+								"external_tls_proxy":6
+							}]`
+
+							var actual []interface{}
+							var expected []interface{}
+							json.Unmarshal([]byte(cfPortsValue), &actual)
+							json.Unmarshal([]byte(expectedPortsValue), &expected)
+
+							Expect(actual).To(Equal(expected))
+						})
 					})
 				})
 			})

@@ -51,21 +51,22 @@ type storeNode struct {
 	gardenContainer    garden.Container
 
 	// opLock serializes public methods that involve garden interactions
-	opLock                     *sync.Mutex
-	gardenClient               garden.Client
-	dependencyManager          DependencyManager
-	volumeManager              volman.Manager
-	credManager                CredManager
-	eventEmitter               event.Hub
-	transformer                transformer.Transformer
-	process                    ifrit.Process
-	config                     *ContainerConfig
-	useDeclarativeHealthCheck  bool
-	declarativeHealthcheckPath string
-	useContainerProxy          bool
-	proxyManager               ProxyManager
-	bindMounts                 []garden.BindMount
-	cellID                     string
+	opLock                      *sync.Mutex
+	gardenClient                garden.Client
+	dependencyManager           DependencyManager
+	volumeManager               volman.Manager
+	credManager                 CredManager
+	eventEmitter                event.Hub
+	transformer                 transformer.Transformer
+	process                     ifrit.Process
+	config                      *ContainerConfig
+	useDeclarativeHealthCheck   bool
+	declarativeHealthcheckPath  string
+	useContainerProxy           bool
+	proxyManager                ProxyManager
+	bindMounts                  []garden.BindMount
+	cellID                      string
+	enableUnproxiedPortMappings bool
 
 	destroying, stopping int32
 }
@@ -85,6 +86,7 @@ func newStoreNode(
 	metronClient loggingclient.IngressClient,
 	proxyManager ProxyManager,
 	cellID string,
+	enableUnproxiedPortMappings bool,
 ) *storeNode {
 	return &storeNode{
 		config:                      config,
@@ -104,6 +106,7 @@ func newStoreNode(
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
 		proxyManager:                proxyManager,
 		cellID:                      cellID,
+		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
 	}
 }
 
@@ -299,8 +302,18 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		})
 	}
 
-	netInRules := make([]garden.NetIn, len(info.Ports))
-	for i, portMapping := range info.Ports {
+	netInPorts := info.Ports
+	if !n.enableUnproxiedPortMappings {
+		netInPorts = []executor.PortMapping{}
+		for _, port := range extraPorts {
+			netInPorts = append(netInPorts, executor.PortMapping{
+				ContainerPort: port,
+			})
+		}
+	}
+
+	netInRules := make([]garden.NetIn, len(netInPorts))
+	for i, portMapping := range netInPorts {
 		netInRules[i] = garden.NetIn{
 			HostPort:      uint32(portMapping.HostPort),
 			ContainerPort: uint32(portMapping.ContainerPort),
@@ -351,7 +364,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		return nil, err
 	}
 
-	info.Ports = portMappingFromContainerInfo(containerInfo, proxyPortMapping)
+	info.Ports = n.portMappingFromContainerInfo(containerInfo, info.Ports, proxyPortMapping)
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
 
@@ -361,31 +374,45 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	return gardenContainer, nil
 }
 
-func portMappingFromContainerInfo(info garden.ContainerInfo, mappings []executor.ProxyPortMapping) []executor.PortMapping {
+func (n *storeNode) portMappingFromContainerInfo(
+	containerInfo garden.ContainerInfo,
+	appPorts []executor.PortMapping,
+	proxyToAppPort []executor.ProxyPortMapping,
+) []executor.PortMapping {
 	proxyPorts := make(map[uint16]struct{})
-	appPortToProxyPortMappings := make(map[uint16]uint16)
-	for _, mapping := range mappings {
-		appPortToProxyPortMappings[mapping.AppPort] = mapping.ProxyPort
+
+	// construct a map from unproxied to proxied port
+	appToProxyPortMappings := make(map[uint16]uint16)
+	for _, mapping := range proxyToAppPort {
+		appToProxyPortMappings[mapping.AppPort] = mapping.ProxyPort
 		proxyPorts[mapping.ProxyPort] = struct{}{}
 	}
-	portMappings := make(map[uint16]uint16)
-	for _, portMapping := range info.MappedPorts {
-		portMappings[uint16(portMapping.ContainerPort)] = uint16(portMapping.HostPort)
+
+	// construct a map from container to host port
+	containerToHostPortMappings := make(map[uint16]uint16)
+	for _, portMapping := range containerInfo.MappedPorts {
+		containerToHostPortMappings[uint16(portMapping.ContainerPort)] = uint16(portMapping.HostPort)
 	}
 
+	// use the above two mappings to construct a list of PortMappings containing
+	// the following information for each application port:
+	//
+	// - app-container-port
+	// - app-host-port
+	// - proxy-container-port
+	// - proxy-host-port
 	ports := []executor.PortMapping{}
-
-	for _, portMapping := range info.MappedPorts {
-		appPort := uint16(portMapping.ContainerPort)
-		hostPort := uint16(portMapping.HostPort)
+	for _, portMapping := range appPorts {
+		appPort := portMapping.ContainerPort
 
 		// skip if this is a proxy port
 		if _, ok := proxyPorts[appPort]; ok {
 			continue
 		}
 
-		proxyContainerPort := appPortToProxyPortMappings[appPort]
-		proxyHostPort := portMappings[proxyContainerPort]
+		hostPort := containerToHostPortMappings[appPort]
+		proxyContainerPort := appToProxyPortMappings[appPort]
+		proxyHostPort := containerToHostPortMappings[proxyContainerPort]
 		ports = append(ports, executor.PortMapping{
 			HostPort:              hostPort,
 			ContainerPort:         appPort,

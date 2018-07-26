@@ -308,11 +308,13 @@ func (step *runStep) networkingEnvVars() []string {
 	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IP="+step.internalIP)
 
 	if len(step.portMappings) > 0 {
-		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))
-		envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
+		if step.portMappings[0].HostPort > 0 {
+			envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_PORT=%d", step.portMappings[0].HostPort))
+			envVars = append(envVars, fmt.Sprintf("CF_INSTANCE_ADDR=%s:%d", step.externalIP, step.portMappings[0].HostPort))
+		}
 
 		type cfPortMapping struct {
-			External         uint16 `json:"external"`
+			External         uint16 `json:"external,omitempty"`
 			Internal         uint16 `json:"internal"`
 			ExternalTLSProxy uint16 `json:"external_tls_proxy,omitempty"`
 			InternalTLSProxy uint16 `json:"internal_tls_proxy,omitempty"`

@@ -256,6 +256,8 @@ var _ = Describe("Transformer", func() {
 				}
 
 				container = executor.Container{
+					ExternalIP: "10.0.0.1",
+					InternalIP: "11.0.0.1",
 					RunInfo: executor.RunInfo{
 						Action: &models.Action{
 							RunAction: &models.RunAction{
@@ -280,9 +282,11 @@ var _ = Describe("Transformer", func() {
 						},
 						Ports: []executor.PortMapping{
 							executor.PortMapping{
+								HostPort:      61001,
 								ContainerPort: 8080,
 							},
 							executor.PortMapping{
+								HostPort:      61002,
 								ContainerPort: 61001,
 							},
 						},
@@ -321,11 +325,11 @@ var _ = Describe("Transformer", func() {
 					},
 
 					Env: []string{
-						"CF_INSTANCE_IP=",
-						"CF_INSTANCE_INTERNAL_IP=",
-						"CF_INSTANCE_PORT=0",
-						"CF_INSTANCE_ADDR=:0",
-						"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
+						"CF_INSTANCE_IP=10.0.0.1",
+						"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+						"CF_INSTANCE_PORT=61001",
+						"CF_INSTANCE_ADDR=10.0.0.1:61001",
+						"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
 					},
 					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 					BindMounts: []garden.BindMount{
@@ -391,11 +395,11 @@ var _ = Describe("Transformer", func() {
 						},
 
 						Env: []string{
-							"CF_INSTANCE_IP=",
-							"CF_INSTANCE_INTERNAL_IP=",
-							"CF_INSTANCE_PORT=0",
-							"CF_INSTANCE_ADDR=:0",
-							"CF_INSTANCE_PORTS=[{\"external\":0,\"internal\":8080},{\"external\":0,\"internal\":61001}]",
+							"CF_INSTANCE_IP=10.0.0.1",
+							"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+							"CF_INSTANCE_PORT=61001",
+							"CF_INSTANCE_ADDR=10.0.0.1:61001",
+							"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
 						},
 						Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 						BindMounts: []garden.BindMount{
