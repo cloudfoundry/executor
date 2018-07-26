@@ -91,7 +91,6 @@ var _ = Describe("QueueQueued", func() {
 			var (
 				signal1 <-chan os.Signal
 				signal2 <-chan os.Signal
-				signal3 <-chan os.Signal
 			)
 
 			BeforeEach(func() {
@@ -99,7 +98,7 @@ var _ = Describe("QueueQueued", func() {
 				childRunner1.TriggerReady()
 				signal2 = childRunner2.WaitForCall()
 				childRunner2.TriggerReady()
-				signal3 = childRunner3.WaitForCall()
+				childRunner3.WaitForCall()
 				childRunner3.TriggerReady()
 
 				Eventually(started).Should(BeClosed())

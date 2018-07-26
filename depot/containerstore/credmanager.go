@@ -158,7 +158,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				regenLogger.Debug("completed")
 			case signal := <-signals:
 				invalidTime := c.clock.Now().Add(-time.Hour)
-				creds, err := c.generateAndWriteCreds(logger, container, ioutil.Discard, ioutil.Discard, invalidTime, invalidTime)
+				creds, err := c.generateCreds(logger, container, ioutil.Discard, ioutil.Discard, invalidTime, invalidTime)
 				if err != nil {
 					regenLogger.Error("failed-to-generate-credentials", err)
 					c.metronClient.IncrementCounter(CredCreationFailedCount)
@@ -223,7 +223,7 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	defer certificate.Close()
 
 	startValidity := c.clock.Now()
-	creds, err := c.generateAndWriteCreds(logger, container, certificate, instanceKey, startValidity, startValidity.Add(c.validityPeriod))
+	creds, err := c.generateCreds(logger, container, certificate, instanceKey, startValidity, startValidity.Add(c.validityPeriod))
 	if err != nil {
 		return Credential{}, err
 	}
@@ -251,7 +251,7 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	return creds, nil
 }
 
-func (c *credManager) generateAndWriteCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, startValidity time.Time, endValidity time.Time) (Credential, error) {
+func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, startValidity time.Time, endValidity time.Time) (Credential, error) {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")

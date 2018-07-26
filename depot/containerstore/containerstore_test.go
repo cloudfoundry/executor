@@ -1560,16 +1560,10 @@ var _ = Describe("Container Store", func() {
 			})
 
 			Context("when the runner fails the initial credential generation", func() {
-				var pmSignaled chan struct{}
-
 				BeforeEach(func() {
-					pmSignaled = make(chan struct{}, 1)
-					signaled := pmSignaled
-
 					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						close(ready)
 						<-signals
-						signaled <- struct{}{}
 						return nil
 					})
 
@@ -1616,17 +1610,15 @@ var _ = Describe("Container Store", func() {
 						return events
 					}).Should(ConsistOf("container_reserved", "container_complete"))
 				})
-
-				It("signals the proxy manager to shut down", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(pmSignaled).Should(Receive())
-				})
 			})
 
 			Context("when the runner fails the initial proxy config generation", func() {
+				var cmSignaled chan struct{}
+
 				BeforeEach(func() {
+					cmSignaled = make(chan struct{}, 1)
+					signaled := cmSignaled
+
 					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						return errors.New("BOOOM")
 					})
@@ -1635,6 +1627,7 @@ var _ = Describe("Container Store", func() {
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						close(ready)
 						<-signals
+						signaled <- struct{}{}
 						return nil
 					}), nil)
 				})
@@ -1670,6 +1663,13 @@ var _ = Describe("Container Store", func() {
 						}
 						return events
 					}).Should(ConsistOf("container_reserved", "container_complete"))
+				})
+
+				It("signals the proxy manager to shut down", func() {
+					err := containerStore.Run(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(cmSignaled).Should(Receive())
 				})
 			})
 
