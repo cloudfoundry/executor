@@ -365,14 +365,23 @@ func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error
 func generateListenerConfig(logger lager.Logger, container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string, requireClientCerts bool) (envoy.ListenerConfig, error) {
 	resources := []envoy.Resource{}
 
-	for index, portMap := range container.Ports {
-		listenerName := TcpProxy
-		clusterName := fmt.Sprintf("%d-service-cluster", index)
+	if !requireClientCerts {
+		subjectAltNames = nil
+	}
 
-		certs, err := pemConcatenate(trustedCaCerts)
+	var certs string
+	var err error
+
+	if requireClientCerts {
+		certs, err = pemConcatenate(trustedCaCerts)
 		if err != nil {
 			return envoy.ListenerConfig{}, err
 		}
+	}
+
+	for index, portMap := range container.Ports {
+		listenerName := TcpProxy
+		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
 		resources = append(resources, envoy.Resource{
 			Type:    "type.googleapis.com/envoy.api.v2.Listener",
