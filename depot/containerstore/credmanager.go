@@ -116,6 +116,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
 		defer logger.Info("finished")
+		defer close(rotatingCred)
 
 		start := c.clock.Now()
 		creds, err := c.generateAndRotateCredsOnDisk(logger, container)
@@ -157,8 +158,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				rotatingCred <- creds
 				regenLogger.Debug("completed")
 			case signal := <-signals:
-				invalidTime := c.clock.Now().Add(-time.Hour)
-				creds, err := c.generateCreds(logger, container, ioutil.Discard, ioutil.Discard, invalidTime, invalidTime)
+				creds, err := c.generateCreds(logger, container, ioutil.Discard, ioutil.Discard, "")
 				if err != nil {
 					regenLogger.Error("failed-to-generate-credentials", err)
 					c.metronClient.IncrementCounter(CredCreationFailedCount)
@@ -166,7 +166,6 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				}
 				rotatingCred <- creds
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
-				close(rotatingCred)
 				return nil
 			}
 		}
@@ -222,8 +221,7 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	}
 	defer certificate.Close()
 
-	startValidity := c.clock.Now()
-	creds, err := c.generateCreds(logger, container, certificate, instanceKey, startValidity, startValidity.Add(c.validityPeriod))
+	creds, err := c.generateCreds(logger, container, certificate, instanceKey, container.Guid)
 	if err != nil {
 		return Credential{}, err
 	}
@@ -251,7 +249,7 @@ func (c *credManager) generateAndRotateCredsOnDisk(logger lager.Logger, containe
 	return creds, nil
 }
 
-func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, startValidity time.Time, endValidity time.Time) (Credential, error) {
+func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certificate io.Writer, instanceKey io.Writer, certGUID string) (Credential, error) {
 	logger = logger.Session("generating-credentials")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -267,10 +265,13 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	if len(ipForCert) == 0 {
 		ipForCert = container.ExternalIP
 	}
+
+	startValidity := c.clock.Now()
+
 	template := createCertificateTemplate(ipForCert,
-		container.Guid,
+		certGUID,
 		startValidity,
-		endValidity,
+		startValidity.Add(c.validityPeriod),
 		container.CertificateProperties.OrganizationalUnit,
 	)
 

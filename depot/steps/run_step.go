@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"github.com/tedsuo/ifrit"
 )
 
 const ExitTimeout = 1 * time.Second
@@ -52,7 +53,7 @@ func NewRun(
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
 	suppressExitStatusCode bool,
-) *runStep {
+) ifrit.Runner {
 	return NewRunWithSidecar(
 		container,
 		model,

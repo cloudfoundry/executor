@@ -325,7 +325,7 @@ func (t *transformer) stepFor(
 				logger,
 			)
 		}
-		return steps.NewSerial(subSteps)
+		return steps.NewSerial(logger, subSteps)
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))
@@ -505,9 +505,9 @@ func (t *transformer) StepsRunner(
 		cumulativeStep = longLivedAction
 	} else {
 		if postSetup == nil {
-			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, longLivedAction})
+			cumulativeStep = steps.NewSerial(logger, []ifrit.Runner{setup, longLivedAction})
 		} else {
-			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, postSetup, longLivedAction})
+			cumulativeStep = steps.NewSerial(logger, []ifrit.Runner{setup, postSetup, longLivedAction})
 		}
 	}
 
@@ -715,7 +715,7 @@ func (t *transformer) transformContainerProxyStep(
 	bindMounts []garden.BindMount,
 ) ifrit.Runner {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level trace& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -743,18 +743,20 @@ func (t *transformer) transformContainerProxyStep(
 
 	proxyLogger := logger.Session("proxy")
 
-	return steps.NewBackground(steps.NewRunWithSidecar(
-		container,
-		runAction,
-		streamer.WithSource("PROXY"),
-		proxyLogger,
-		execContainer.ExternalIP,
-		execContainer.InternalIP,
-		execContainer.Ports,
-		t.clock,
-		t.gracefulShutdownInterval,
-		false,
-		sidecar,
-		execContainer.Privileged,
-	), proxyLogger)
+	return steps.NewParallel([]ifrit.Runner{
+		steps.NewBackground(steps.NewRunWithSidecar(
+			container,
+			runAction,
+			streamer.WithSource("PROXY"),
+			proxyLogger,
+			execContainer.ExternalIP,
+			execContainer.InternalIP,
+			execContainer.Ports,
+			t.clock,
+			t.gracefulShutdownInterval,
+			false,
+			sidecar,
+			execContainer.Privileged,
+		), proxyLogger),
+	})
 }

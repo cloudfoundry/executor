@@ -458,14 +458,6 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return err
 	}
 
-	// members := grouper.Members{
-	// 	{"proxy-config-runner", proxyConfigRunner},
-	// 	{"queue-order-runners", NewQueueOrdered(os.Interrupt, grouper.Members{
-	// 		{"cred-manager-runner", credManagerRunner},
-	// 		{"runner", runner},
-	// 	})},
-	// }
-	// group := grouper.NewOrdered(os.Interrupt, members)
 	group := NewQueueOrdered(os.Interrupt, grouper.Members{
 		{"cred-manager-runner", credManagerRunner},
 		{"proxy-config-runner", proxyConfigRunner},

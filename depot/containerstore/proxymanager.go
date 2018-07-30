@@ -265,30 +265,35 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 			logger.Info("started")
 
 			for {
-				select {
-				case creds := <-credRotatedChan:
-					logger = logger.Session("updating-proxy-listener-config")
-					logger.Debug("started")
-
-					listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
-					if err != nil {
-						logger.Error("failed-generating-proxy-listener-config", err)
-						return err
-					}
-
-					err = writeListenerConfig(listenerConfig, listenerConfigPath)
-					if err != nil {
-						logger.Error("failed-writing-proxy-listener-config", err)
-						return err
-					}
-					logger.Debug("completed")
-				case signal := <-signals:
-					logger.Info("signaled", lager.Data{"signal": signal.String()})
-					configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
-					p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
-					return os.RemoveAll(configPath)
+				creds, ok := <-credRotatedChan
+				if !ok {
+					break
 				}
+				logger = logger.Session("updating-proxy-listener-config")
+				logger.Debug("started")
+
+				listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
+				if err != nil {
+					logger.Error("failed-generating-proxy-listener-config", err)
+					return err
+				}
+
+				err = writeListenerConfig(listenerConfig, listenerConfigPath)
+				if err != nil {
+					logger.Error("failed-writing-proxy-listener-config", err)
+					return err
+				}
+				logger.Debug("completed")
 			}
+
+			// time.Sleep(2 * time.Second)
+
+			signal := <-signals
+			logger.Info("signaled", lager.Data{"signal": signal.String()})
+			configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
+			p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
+			// return os.RemoveAll(configPath)
+			return nil
 		}),
 		ldsPort: port}
 	return proxyRunner, nil
@@ -394,6 +399,14 @@ func generateListenerConfig(logger lager.Logger, container executor.Container, c
 						Config: envoy.Config{
 							StatPrefix: fmt.Sprintf("%d-stats", index),
 							Cluster:    clusterName,
+							AccessLogs: []envoy.AccessLog{
+								{
+									Name: "envoy.file_access_log",
+									Config: envoy.AccessLogConfig{
+										Path: "/dev/stdout",
+									},
+								},
+							},
 						},
 					},
 				},
