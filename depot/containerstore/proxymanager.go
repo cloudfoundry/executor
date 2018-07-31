@@ -2,6 +2,7 @@ package containerstore
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -286,7 +287,34 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
 				logger.Debug("completed")
 			}
 
-			// time.Sleep(2 * time.Second)
+			getPeerCertCommonName := func() (string, error) {
+				addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
+				conn, err := tls.Dial("tcp", addr, &tls.Config{
+					InsecureSkipVerify: true,
+				})
+				if err != nil {
+					return "", err
+				}
+				defer conn.Close()
+				if err := conn.Handshake(); err != nil {
+					return "", err
+				}
+
+				logger.Info("proxy-cert-info", lager.Data{"cert-subject": conn.ConnectionState().PeerCertificates[0].Subject})
+
+				return conn.ConnectionState().PeerCertificates[0].Subject.CommonName, nil
+			}
+
+			for i := 0; i < 10; i++ {
+				commonName, err := getPeerCertCommonName()
+				if err != nil {
+					logger.Error("failed-connecting-to-proxy", err, lager.Data{"port": container.Ports[0].HostTLSProxyPort})
+				}
+				if err == nil && commonName == "" {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
 
 			signal := <-signals
 			logger.Info("signaled", lager.Data{"signal": signal.String()})

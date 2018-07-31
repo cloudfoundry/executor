@@ -419,14 +419,16 @@ func (t *transformer) StepsRunner(
 
 	substeps = append(substeps, action)
 
-	var proxyReadinessChecks []ifrit.Runner
+	var proxyReadinessChecks, proxyLivenessChecks []ifrit.Runner
 
 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
 		envoyReadinessLogger := logger.Session("envoy-readiness-check")
+		// envoyLivenessLogger := logger.Session("envoy-liveness-check")
 
 		for idx, p := range config.ProxyTLSPorts {
 			// add envoy readiness checks
 			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
+			// livenessSidecarName := fmt.Sprintf("%s-envoy-liveness-healthcheck-%d", gardenContainer.Handle(), idx)
 
 			step := t.createCheck(
 				&container,
@@ -441,8 +443,31 @@ func (t *transformer) StepsRunner(
 				t.unhealthyMonitoringInterval,
 				envoyReadinessLogger,
 				"instance proxy failed to start",
+				false,
 			)
 			proxyReadinessChecks = append(proxyReadinessChecks, step)
+
+			// if idx > 0 {
+			// 	// only add the liveness check for the first port mapping
+			// 	continue
+			// }
+
+			// step = t.createCheck(
+			// 	&container,
+			// 	gardenContainer,
+			// 	config.BindMounts,
+			// 	"",
+			// 	livenessSidecarName,
+			// 	int(p),
+			// 	DefaultDeclarativeHealthcheckRequestTimeout,
+			// 	false,
+			// 	false,
+			// 	t.unhealthyMonitoringInterval,
+			// 	envoyLivenessLogger,
+			// 	"instance proxy failed to start",
+			// 	true,
+			// )
+			// proxyLivenessChecks = append(proxyLivenessChecks, step)
 		}
 	}
 
@@ -453,6 +478,7 @@ func (t *transformer) StepsRunner(
 			logStreamer,
 			config.BindMounts,
 			proxyReadinessChecks,
+			proxyLivenessChecks,
 		)
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
@@ -527,6 +553,7 @@ func (t *transformer) createCheck(
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
+	checkTLSSubjectName bool,
 ) ifrit.Runner {
 
 	nofiles := healthCheckNofiles
@@ -550,6 +577,9 @@ func (t *transformer) createCheck(
 		args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
 	} else {
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
+		if checkTLSSubjectName {
+			args = append(args, "-check-tls-subject-name=true")
+		}
 	}
 
 	runAction := models.RunAction{
@@ -593,6 +623,7 @@ func (t *transformer) transformCheckDefinition(
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyReadinessChecks []ifrit.Runner,
+	proxyLivenessChecks []ifrit.Runner,
 ) ifrit.Runner {
 	var readinessChecks []ifrit.Runner
 	var livenessChecks []ifrit.Runner
@@ -640,6 +671,7 @@ func (t *transformer) transformCheckDefinition(
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
+				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -654,6 +686,7 @@ func (t *transformer) transformCheckDefinition(
 				t.healthyMonitoringInterval,
 				livenessLogger,
 				"",
+				false,
 			))
 
 		} else if check.TcpCheck != nil {
@@ -675,6 +708,7 @@ func (t *transformer) transformCheckDefinition(
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
+				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -689,12 +723,13 @@ func (t *transformer) transformCheckDefinition(
 				t.healthyMonitoringInterval,
 				livenessLogger,
 				"",
+				false,
 			))
 		}
 	}
 
 	readinessCheck := steps.NewParallel(append(proxyReadinessChecks, readinessChecks...))
-	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
+	livenessCheck := steps.NewCodependent(append(livenessChecks, proxyLivenessChecks...), false, false)
 
 	return steps.NewHealthCheckStep(
 		readinessCheck,
