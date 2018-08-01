@@ -66,7 +66,6 @@ var _ = Describe("Transformer", func() {
 
 			ldsPort = 65535
 			cfg = transformer.Config{
-				LDSPort: ldsPort,
 				BindMounts: []garden.BindMount{
 					{
 						SrcPath: "/some/source",
@@ -409,65 +408,6 @@ var _ = Describe("Transformer", func() {
 								Mode:    garden.BindMountModeRO,
 								Origin:  garden.BindMountOriginHost,
 							},
-						},
-					}))
-				})
-			})
-
-			It("runs the listener discovery service (lds) in a sidecar", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-				specs := []garden.ProcessSpec{}
-				for i := 0; i < gardenContainer.RunCallCount(); i++ {
-					spec, _ := gardenContainer.RunArgsForCall(i)
-					specs = append(specs, spec)
-				}
-
-				Expect(specs).NotTo(ContainElement(garden.ProcessSpec{
-					ID:   fmt.Sprintf("%s-lds", gardenContainer.Handle()),
-					Path: "/etc/cf-assets/envoy/lds",
-					Args: []string{
-						fmt.Sprintf("-port=%d", ldsPort),
-						"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
-					},
-					Env: []string{},
-					Limits: garden.ResourceLimits{
-						Nofile: proto.Uint64(1024),
-					},
-					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
-					BindMounts: []garden.BindMount{
-						{
-							SrcPath: "/some/source",
-							DstPath: "/some/destintation",
-							Mode:    garden.BindMountModeRO,
-							Origin:  garden.BindMountOriginHost,
-						},
-					},
-				}))
-			})
-
-			Context("when the container is privileged", func() {
-				BeforeEach(func() {
-					container.Privileged = true
-				})
-
-				It("runs the listener discovery service (lds) in the same container", func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-					specs := []garden.ProcessSpec{}
-					for i := 0; i < gardenContainer.RunCallCount(); i++ {
-						spec, _ := gardenContainer.RunArgsForCall(i)
-						specs = append(specs, spec)
-					}
-
-					Expect(specs).NotTo(ContainElement(garden.ProcessSpec{
-						ID:   "",
-						Path: "/etc/cf-assets/envoy/lds",
-						Args: []string{
-							fmt.Sprintf("-port=%d", ldsPort),
-							"-listener-config=/etc/cf-assets/envoy_config/listeners.json",
-						},
-						Env: []string{},
-						Limits: garden.ResourceLimits{
-							Nofile: proto.Uint64(1024),
 						},
 					}))
 				})

@@ -3,19 +3,16 @@ package steps
 import (
 	"os"
 
-	"code.cloudfoundry.org/lager"
 	"github.com/tedsuo/ifrit"
 )
 
 type serialStep struct {
-	steps  []ifrit.Runner
-	logger lager.Logger
+	steps []ifrit.Runner
 }
 
-func NewSerial(logger lager.Logger, steps []ifrit.Runner) ifrit.Runner {
+func NewSerial(steps []ifrit.Runner) ifrit.Runner {
 	return &serialStep{
-		steps:  steps,
-		logger: logger.Session("serial-step"),
+		steps: steps,
 	}
 }
 
@@ -40,7 +37,6 @@ func (runner *serialStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				return substepErr
 			}
 		case signal := <-signals:
-			runner.logger.Info("signaled")
 			p.Signal(signal)
 			return <-p.Wait()
 		}

@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -57,7 +58,6 @@ var _ = Describe("Container Store", func() {
 		megatron          *faketransformer.FakeTransformer
 		dependencyManager *containerstorefakes.FakeDependencyManager
 		credManager       *containerstorefakes.FakeCredManager
-		proxyRunner       *containerstorefakes.FakeProxyRunner
 		proxyManager      *containerstorefakes.FakeProxyManager
 		volumeManager     *volmanfakes.FakeManager
 
@@ -95,7 +95,6 @@ var _ = Describe("Container Store", func() {
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		credManager = &containerstorefakes.FakeCredManager{}
 		proxyManager = &containerstorefakes.FakeProxyManager{}
-		proxyRunner = &containerstorefakes.FakeProxyRunner{}
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
@@ -104,14 +103,7 @@ var _ = Describe("Container Store", func() {
 			close(ready)
 			<-signals
 			return nil
-		}), nil)
-
-		proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-			close(ready)
-			<-signals
-			return nil
-		})
-		proxyManager.RunnerReturns(proxyRunner, nil)
+		}))
 
 		iNodeLimit = 64
 		maxCPUShares = 100
@@ -1034,7 +1026,7 @@ var _ = Describe("Container Store", func() {
 					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
 					Expect(err).NotTo(HaveOccurred())
 
-					proxyBindMounts := []garden.BindMount{
+					bindMounts := []garden.BindMount{
 						{
 							Origin:  garden.BindMountOriginHost,
 							SrcPath: envoySourceDir,
@@ -1046,7 +1038,8 @@ var _ = Describe("Container Store", func() {
 							DstPath: "/etc/cf-assets/envoy_config",
 						},
 					}
-					proxyManager.BindMountsReturns(proxyBindMounts, nil)
+					credManager.CreateCredDirReturns(bindMounts, nil, nil)
+
 					proxyManager.ProxyPortsReturns([]executor.ProxyPortMapping{
 						{
 							AppPort:   8080,
@@ -1396,20 +1389,6 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 				envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
 				Expect(err).NotTo(HaveOccurred())
-
-				proxyBindMounts := []garden.BindMount{
-					{
-						Origin:  garden.BindMountOriginHost,
-						SrcPath: envoySourceDir,
-						DstPath: "/etc/cf-assets/envoy",
-					},
-					{
-						Origin:  garden.BindMountOriginHost,
-						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
-						DstPath: "/etc/cf-assets/envoy_config",
-					},
-				}
-				proxyManager.BindMountsReturns(proxyBindMounts, nil)
 			})
 
 			JustBeforeEach(func() {
@@ -1423,27 +1402,19 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			Context("while the cred manager & proxy manager are still setting up", func() {
+			Context("while the cred manager is still setting up", func() {
 				var (
 					cmFinishSetup            chan struct{}
-					pmFinishSetup            chan struct{}
 					containerRunnerCalled    chan struct{}
-					rotatingCredChan         chan containerstore.Credential
-					ldsPort                  uint16
 					credManagerBindMount     []garden.BindMount
-					proxyManagerSignalled    chan struct{}
 					credManagerSignalled     chan struct{}
 					containerRunnerSignalled chan struct{}
 				)
 
 				BeforeEach(func() {
 					cmFinishSetup = make(chan struct{}, 1)
-					pmFinishSetup = make(chan struct{}, 1)
-					rotatingCredChan = make(chan containerstore.Credential)
 					containerRunnerCalled = make(chan struct{})
-					ldsPort = 65535
 
-					proxyManagerSignalled = make(chan struct{}, 1)
 					credManagerSignalled = make(chan struct{}, 1)
 					containerRunnerSignalled = make(chan struct{}, 1)
 
@@ -1466,18 +1437,7 @@ var _ = Describe("Container Store", func() {
 						<-signals
 						credManagerSignalled <- struct{}{}
 						return nil
-					}), rotatingCredChan)
-
-					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-
-						<-pmFinishSetup
-						close(ready)
-						<-signals
-						proxyManagerSignalled <- struct{}{}
-						return nil
-					})
-					proxyManager.RunnerReturns(proxyRunner, nil)
-					proxyRunner.PortReturns(ldsPort)
+					}))
 
 					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						close(containerRunnerCalled)
@@ -1489,7 +1449,6 @@ var _ = Describe("Container Store", func() {
 
 				AfterEach(func() {
 					close(cmFinishSetup)
-					close(pmFinishSetup)
 					Expect(containerStore.Destroy(logger, containerGuid)).To(Succeed())
 				})
 
@@ -1498,80 +1457,23 @@ var _ = Describe("Container Store", func() {
 					Consistently(containerRunnerCalled).ShouldNot(BeClosed())
 				})
 
-				It("correctly initializes the listener discovery service setup", func() {
-					go containerStore.Run(logger, containerGuid)
-					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
-					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
-					Expect(cfg.LDSPort).To(Equal(ldsPort))
-					Expect(cfg.BindMounts).To(ContainElement(garden.BindMount{
-						SrcPath: envoySourceDir,
-						DstPath: "/etc/cf-assets/envoy",
-						Mode:    garden.BindMountModeRO,
-						Origin:  garden.BindMountOriginHost,
-					}))
-
-					Expect(cfg.BindMounts).To(ContainElement(garden.BindMount{
-						SrcPath: filepath.Join(envoyConfigDir, containerGuid),
-						DstPath: "/etc/cf-assets/envoy_config",
-						Mode:    garden.BindMountModeRO,
-						Origin:  garden.BindMountOriginHost,
-					}))
-					Expect(cfg.BindMounts).To(ContainElement(credManagerBindMount[0]))
-				})
-
 				Context("when cred manager is finished setting up", func() {
 					BeforeEach(func() {
 						cmFinishSetup <- struct{}{}
 					})
 
-					It("does not start the container while proxy manager is setting up", func() {
+					It("starts the container", func() {
 						go containerStore.Run(logger, containerGuid)
-						Consistently(containerRunnerCalled).ShouldNot(BeClosed())
-					})
-
-					Context("when proxy manager is finished setting up", func() {
-						BeforeEach(func() {
-							pmFinishSetup <- struct{}{}
-						})
-
-						It("starts the container", func() {
-							go containerStore.Run(logger, containerGuid)
-							Eventually(containerRunnerCalled).Should(BeClosed())
-						})
-
-						Context("when the runner is signalled", func() {
-							JustBeforeEach(func() {
-								err := containerStore.Run(logger, containerGuid)
-								Expect(err).NotTo(HaveOccurred())
-								Eventually(containerRunnerCalled).Should(BeClosed())
-							})
-
-							It("shuts down the app before shutting down the proxy manager", func() {
-								err := containerStore.Stop(logger, containerGuid)
-								Expect(err).NotTo(HaveOccurred())
-
-								Eventually(credManagerSignalled).Should(Receive())
-								Eventually(containerRunnerSignalled).Should(Receive())
-								Eventually(proxyManagerSignalled).Should(Receive())
-							})
-						})
+						Eventually(containerRunnerCalled).Should(BeClosed())
 					})
 				})
 			})
 
 			Context("when the runner fails the initial credential generation", func() {
 				BeforeEach(func() {
-					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						close(ready)
-						<-signals
-						return nil
-					})
-
-					proxyManager.RunnerReturns(proxyRunner, nil)
-
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						return errors.New("BOOOM")
-					}), nil)
+					}))
 				})
 
 				It("destroys the container and returns an error", func() {
@@ -1612,109 +1514,10 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
-			Context("when the runner fails the initial proxy config generation", func() {
-				var cmSignaled chan struct{}
-
-				BeforeEach(func() {
-					cmSignaled = make(chan struct{}, 1)
-					signaled := cmSignaled
-
-					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						return errors.New("BOOOM")
-					})
-					proxyManager.RunnerReturns(proxyRunner, nil)
-
-					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						close(ready)
-						<-signals
-						signaled <- struct{}{}
-						return nil
-					}), nil)
-				})
-
-				It("destroys the container and returns an error", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(func() executor.State {
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						return container.State
-					}).Should(Equal(executor.StateCompleted))
-					container, _ := containerStore.Get(logger, containerGuid)
-					Expect(container.RunResult.Failed).To(BeTrue())
-					// make sure the error message is at the end so that
-					// FailureReasonSanitizer can properly map the error messages
-					Expect(container.RunResult.FailureReason).To(MatchRegexp("proxy-config-runner exited: BOOOM$"))
-					Expect(container.RunResult.Retryable).To(BeFalse())
-				})
-
-				It("transitions immediately to Completed state", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-
-					Eventually(func() []string {
-						var events []string
-						for i := 0; i < eventEmitter.EmitCallCount(); i++ {
-							event := eventEmitter.EmitArgsForCall(i)
-							events = append(events, string(event.EventType()))
-						}
-						return events
-					}).Should(ConsistOf("container_reserved", "container_complete"))
-				})
-
-				It("signals the proxy manager to shut down", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(cmSignaled).Should(Receive())
-				})
-			})
-
-			Context("when generating the proxy config runner returns an error", func() {
-				BeforeEach(func() {
-					proxyManager.RunnerReturns(nil, containerstore.ErrNoPortsAvailable)
-				})
-
-				It("transitions immediately to Completed state", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).To(HaveOccurred())
-
-					Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-
-					Eventually(func() []string {
-						var events []string
-						for i := 0; i < eventEmitter.EmitCallCount(); i++ {
-							event := eventEmitter.EmitArgsForCall(i)
-							events = append(events, string(event.EventType()))
-						}
-						return events
-					}).Should(ConsistOf("container_reserved", "container_complete"))
-				})
-
-				It("destroys the container and returns an error", func() {
-					err := containerStore.Run(logger, containerGuid)
-					Expect(err).To(HaveOccurred())
-
-					Eventually(func() executor.State {
-						container, err := containerStore.Get(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-						return container.State
-					}).Should(Equal(executor.StateCompleted))
-					container, _ := containerStore.Get(logger, containerGuid)
-					Expect(container.RunResult.Failed).To(BeTrue())
-					Expect(container.RunResult.FailureReason).To(MatchRegexp("no ports available"))
-					Expect(container.RunResult.Retryable).To(BeFalse())
-				})
-			})
-
 			Context("when instance credential is ready", func() {
 				var (
-					containerRunnerCalled    chan struct{}
-					credManagerRunnerCalled  chan struct{}
-					proxyManagerRunnerCalled chan struct{}
+					containerRunnerCalled   chan struct{}
+					credManagerRunnerCalled chan struct{}
 				)
 
 				BeforeEach(func() {
@@ -1725,17 +1528,7 @@ var _ = Describe("Container Store", func() {
 						close(cmCalled)
 						<-signals
 						return nil
-					}), nil)
-
-					proxyManagerRunnerCalled = make(chan struct{})
-					pmCalled := proxyManagerRunnerCalled
-					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-						close(ready)
-						close(pmCalled)
-						<-signals
-						return nil
-					})
-					proxyManager.RunnerReturns(proxyRunner, nil)
+					}))
 
 					containerRunnerCalled = make(chan struct{})
 
@@ -1752,10 +1545,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				Context("when the runner fails subsequent credential generation", func() {
-					var pmSignaled chan struct{}
 					BeforeEach(func() {
-						pmSignaled = make(chan struct{}, 1)
-						signaled := pmSignaled
 						credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 							close(ready)
 							select {
@@ -1764,14 +1554,7 @@ var _ = Describe("Container Store", func() {
 							case <-signals:
 								return nil
 							}
-						}), nil)
-						proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-							close(ready)
-							<-signals
-							signaled <- struct{}{}
-							return nil
-						})
-						proxyManager.RunnerReturns(proxyRunner, nil)
+						}))
 					})
 
 					It("destroys the container and returns an error", func() {
@@ -1789,62 +1572,6 @@ var _ = Describe("Container Store", func() {
 						// FailureReasonSanitizer can properly map the error messages
 						Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
 						Expect(container.RunResult.Retryable).To(BeFalse())
-					})
-
-					It("signals the proxy manager runner to exit", func() {
-						err := containerStore.Run(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						Eventually(pmSignaled).Should(Receive())
-					})
-				})
-
-				Context("when the runner fails subsequent proxy listener config generation", func() {
-					var cmSignaled chan struct{}
-					BeforeEach(func() {
-						cmSignaled = make(chan struct{}, 1)
-						signaled := cmSignaled
-						proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-							close(ready)
-							select {
-							case <-containerRunnerCalled:
-								return errors.New("BOOOM")
-							case <-signals:
-								return nil
-							}
-						})
-						proxyManager.RunnerReturns(proxyRunner, nil)
-
-						credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-							close(ready)
-							<-signals
-							signaled <- struct{}{}
-							return nil
-						}), nil)
-					})
-
-					It("destroys the container and returns an error", func() {
-						err := containerStore.Run(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						Eventually(func() executor.State {
-							container, err := containerStore.Get(logger, containerGuid)
-							Expect(err).NotTo(HaveOccurred())
-							return container.State
-						}).Should(Equal(executor.StateCompleted))
-						container, _ := containerStore.Get(logger, containerGuid)
-						Expect(container.RunResult.Failed).To(BeTrue())
-						// make sure the error message is at the end so that
-						// FailureReasonSanitizer can properly map the error messages
-						Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOM$"))
-						Expect(container.RunResult.Retryable).To(BeFalse())
-					})
-
-					It("signals the proxy manager runner to exit", func() {
-						err := containerStore.Run(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						Eventually(cmSignaled).Should(Receive())
 					})
 				})
 
@@ -2220,12 +1947,6 @@ var _ = Describe("Container Store", func() {
 			Expect(credManager.RemoveCredDirCallCount()).To(Equal(1))
 		})
 
-		It("cleans up the proxy config dir", func() {
-			err := containerStore.Destroy(logger, containerGuid)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(proxyManager.RemoveProxyConfigDirCallCount()).To(Equal(1))
-		})
-
 		Context("when there are volumes mounted", func() {
 			BeforeEach(func() {
 				someConfig := map[string]interface{}{"some-config": "interface"}
@@ -2437,7 +2158,7 @@ var _ = Describe("Container Store", func() {
 					<-signals
 					close(signalled)
 					return nil
-				}), nil)
+				}))
 			})
 
 			JustBeforeEach(func() {
@@ -2497,7 +2218,7 @@ var _ = Describe("Container Store", func() {
 					<-signals
 					close(signalled)
 					return nil
-				}), nil)
+				}))
 			})
 
 			JustBeforeEach(func() {
@@ -2533,13 +2254,13 @@ var _ = Describe("Container Store", func() {
 				Expect(sourceInstance).To(Equal("1"))
 			})
 
-			Context("when the container proxy config process is running in the container", func() {
+			Context("when the container credManager config process is running in the container", func() {
 				var (
-					proxyRunnerSignalled chan struct{}
+					credManagerRunnerSignalled chan struct{}
 				)
 
 				BeforeEach(func() {
-					proxyRunnerSignalled = make(chan struct{})
+					credManagerRunnerSignalled = make(chan struct{})
 
 					containerStore = containerstore.New(
 						containerConfig,
@@ -2560,19 +2281,20 @@ var _ = Describe("Container Store", func() {
 						true,
 					)
 
-					signalled := proxyRunnerSignalled
-					proxyRunner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+					signalled := credManagerRunnerSignalled
+					runner := &fake_runner.FakeRunner{}
+					runner.RunStub = ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						close(ready)
 						<-signals
 						close(signalled)
 						return nil
 					})
-					proxyManager.RunnerReturns(proxyRunner, nil)
+					credManager.RunnerReturns(runner)
 				})
 
-				It("signals the proxy config runner", func() {
+				It("signals the credManager config runner", func() {
 					close(finishRun)
-					Eventually(proxyRunnerSignalled).Should(BeClosed())
+					Eventually(credManagerRunnerSignalled).Should(BeClosed())
 				})
 			})
 		})
@@ -3044,12 +2766,6 @@ var _ = Describe("Container Store", func() {
 			Eventually(gardenClient.ContainersCallCount).Should(Equal(4))
 
 			Eventually(logger).Should(gbytes.Say("reaped-missing-container"))
-		})
-
-		It("removes the proxy configuration and credentials directories", func() {
-			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
-			Eventually(credManager.RemoveCredDirCallCount).Should(Equal(2))
-			Eventually(proxyManager.RemoveProxyConfigDirCallCount).Should(Equal(2))
 		})
 
 		Context("while in the process of reaping containers", func() {

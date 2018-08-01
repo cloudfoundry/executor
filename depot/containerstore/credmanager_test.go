@@ -5,20 +5,19 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -29,29 +28,25 @@ import (
 
 var _ = Describe("CredManager", func() {
 	var (
-		credManager        containerstore.CredManager
-		validityPeriod     time.Duration
-		CaCert             *x509.Certificate
-		privateKey         *rsa.PrivateKey
-		reader             io.Reader
-		tmpdir             string
-		containerMountPath string
-		logger             lager.Logger
-		clock              *fakeclock.FakeClock
-		fakeMetronClient   *mfakes.FakeIngressClient
+		credManager      containerstore.CredManager
+		validityPeriod   time.Duration
+		CaCert           *x509.Certificate
+		privateKey       *rsa.PrivateKey
+		reader           io.Reader
+		logger           lager.Logger
+		clock            *fakeclock.FakeClock
+		fakeMetronClient *mfakes.FakeIngressClient
+		fakeCredHandler  *containerstorefakes.FakeCredentialHandler
 	)
 
 	BeforeEach(func() {
-		var err error
 
 		SetDefaultEventuallyTimeout(10 * time.Second)
 
-		tmpdir, err = ioutil.TempDir("", "credsmanager")
-		Expect(err).ToNot(HaveOccurred())
-
 		validityPeriod = time.Minute
-		containerMountPath = "containerpath"
 		fakeMetronClient = &mfakes.FakeIngressClient{}
+
+		fakeCredHandler = &containerstorefakes.FakeCredentialHandler{}
 
 		// we have seen private key generation take a long time in CI, the
 		// suspicion is that `getrandom` is getting slower with the increased
@@ -72,18 +67,13 @@ var _ = Describe("CredManager", func() {
 		credManager = containerstore.NewCredManager(
 			logger,
 			fakeMetronClient,
-			tmpdir,
 			validityPeriod,
 			reader,
 			clock,
 			CaCert,
 			privateKey,
-			containerMountPath,
+			fakeCredHandler,
 		)
-	})
-
-	AfterEach(func() {
-		os.RemoveAll(tmpdir)
 	})
 
 	Context("NoopCredManager", func() {
@@ -96,7 +86,7 @@ var _ = Describe("CredManager", func() {
 				},
 			}
 
-			runner, _ := containerstore.NewNoopCredManager().Runner(logger, container)
+			runner := containerstore.NewNoopCredManager().Runner(logger, container)
 			process := ifrit.Background(runner)
 			Eventually(process.Ready()).Should(BeClosed())
 			Consistently(process.Wait()).ShouldNot(Receive())
@@ -105,51 +95,127 @@ var _ = Describe("CredManager", func() {
 		})
 	})
 
+	Context("RemoveCredDir", func() {
+		var (
+			fakeCredHandler1, fakeCredHandler2 *containerstorefakes.FakeCredentialHandler
+		)
+
+		JustBeforeEach(func() {
+			fakeCredHandler1 = &containerstorefakes.FakeCredentialHandler{}
+			fakeCredHandler2 = &containerstorefakes.FakeCredentialHandler{}
+
+			credManager = containerstore.NewCredManager(
+				logger,
+				fakeMetronClient,
+				validityPeriod,
+				reader,
+				clock,
+				CaCert,
+				privateKey,
+				fakeCredHandler1,
+				fakeCredHandler2,
+			)
+		})
+
+		It("calls the handlers RemoveDir", func() {
+			container := executor.Container{Guid: "guid"}
+			credManager.RemoveCredDir(logger, container)
+			Expect(fakeCredHandler1.RemoveDirCallCount()).To(Equal(1))
+			Expect(fakeCredHandler2.RemoveDirCallCount()).To(Equal(1))
+			_, actualContainer := fakeCredHandler1.RemoveDirArgsForCall(0)
+			Expect(actualContainer).To(Equal(container))
+			_, actualContainer = fakeCredHandler2.RemoveDirArgsForCall(0)
+			Expect(actualContainer).To(Equal(container))
+		})
+
+		It("if the first handler returned an error continue to call RemoveDir on other handlers", func() {
+			fakeCredHandler1.RemoveDirReturns(errors.New("boooom!"))
+			credManager.RemoveCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(fakeCredHandler1.RemoveDirCallCount()).Should(Equal(1))
+			Expect(fakeCredHandler2.RemoveDirCallCount()).Should(Equal(1))
+		})
+
+		It("returns an error if one of the handlers returned an error", func() {
+			fakeCredHandler2.RemoveDirReturns(errors.New("boooom!"))
+			err := credManager.RemoveCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(err.Error()).To(Equal("boooom!"))
+		})
+	})
+
 	Context("CreateCredDir", func() {
-		It("returns a valid directory path", func() {
-			mount, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
-			Expect(err).To(Succeed())
+		var (
+			fakeCredHandler1, fakeCredHandler2 *containerstorefakes.FakeCredentialHandler
+		)
 
-			Expect(mount).To(HaveLen(1))
-			Expect(mount[0].SrcPath).To(BeADirectory())
-			Expect(mount[0].DstPath).To(Equal("containerpath"))
-			Expect(mount[0].Mode).To(Equal(garden.BindMountModeRO))
-			Expect(mount[0].Origin).To(Equal(garden.BindMountOriginHost))
+		JustBeforeEach(func() {
+			fakeCredHandler1 = &containerstorefakes.FakeCredentialHandler{}
+			fakeCredHandler2 = &containerstorefakes.FakeCredentialHandler{}
+
+			credManager = containerstore.NewCredManager(
+				logger,
+				fakeMetronClient,
+				validityPeriod,
+				reader,
+				clock,
+				CaCert,
+				privateKey,
+				fakeCredHandler1,
+				fakeCredHandler2,
+			)
 		})
 
-		It("returns CF_INSTANCE_CERT and CF_INSTANCE_KEY environment variable values", func() {
-			_, envVariables, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
-			Expect(err).To(Succeed())
-
-			Expect(envVariables).To(HaveLen(2))
-			values := map[string]string{}
-			values[envVariables[0].Name] = envVariables[0].Value
-			values[envVariables[1].Name] = envVariables[1].Value
-			Expect(values).To(Equal(map[string]string{
-				"CF_INSTANCE_CERT": "containerpath/instance.crt",
-				"CF_INSTANCE_KEY":  "containerpath/instance.key",
-			}))
+		It("calls the handlers CreateDir", func() {
+			container := executor.Container{Guid: "guid"}
+			credManager.CreateCredDir(logger, container)
+			Expect(fakeCredHandler1.CreateDirCallCount()).To(Equal(1))
+			Expect(fakeCredHandler2.CreateDirCallCount()).To(Equal(1))
+			_, actualContainer := fakeCredHandler1.CreateDirArgsForCall(0)
+			Expect(actualContainer).To(Equal(container))
+			_, actualContainer = fakeCredHandler2.CreateDirArgsForCall(0)
+			Expect(actualContainer).To(Equal(container))
 		})
 
-		Context("when making directory fails", func() {
-			BeforeEach(func() {
-				tmpdir = filepath.Join(tmpdir, "creds")
-			})
+		It("collects the bind mounts from all handlers", func() {
+			mount1 := garden.BindMount{
+				SrcPath: "/src/path1",
+				DstPath: "/dst/path1",
+			}
+			mount2 := garden.BindMount{
+				SrcPath: "/src/path2",
+				DstPath: "/dst/path2",
+			}
+			fakeCredHandler1.CreateDirReturns([]garden.BindMount{mount1}, nil, nil)
+			fakeCredHandler2.CreateDirReturns([]garden.BindMount{mount2}, nil, nil)
 
-			It("returns an error", func() {
-				_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "somefailure"})
-				Expect(err).To(HaveOccurred())
-			})
+			mounts, _, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(mounts).To(ConsistOf(mount1, mount2))
+		})
+
+		It("collects all environment variables", func() {
+			env1 := executor.EnvironmentVariable{Name: "env1", Value: "val1"}
+			env2 := executor.EnvironmentVariable{Name: "env2", Value: "val2"}
+			fakeCredHandler1.CreateDirReturns(nil, []executor.EnvironmentVariable{env1}, nil)
+			fakeCredHandler2.CreateDirReturns(nil, []executor.EnvironmentVariable{env2}, nil)
+
+			_, envs, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(envs).To(ConsistOf(env1, env2))
+		})
+
+		It("returns an error if one of the handlers returned an error", func() {
+			fakeCredHandler2.CreateDirReturns(nil, nil, errors.New("boooom!"))
+			_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(err).To(MatchError("boooom!"))
 		})
 	})
 
 	Context("WithCreds", func() {
 		var (
-			container        executor.Container
-			certMount        []garden.BindMount
-			err              error
-			certPath         string
-			rotatingCredChan <-chan containerstore.Credential
+			container executor.Container
 		)
 
 		BeforeEach(func() {
@@ -162,14 +228,6 @@ var _ = Describe("CredManager", func() {
 			}
 		})
 
-		JustBeforeEach(func() {
-			certMount, _, err = credManager.CreateCredDir(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(certMount[0].SrcPath).To(BeADirectory())
-
-			certPath = filepath.Join(tmpdir, container.Guid)
-		})
-
 		Context("Runner", func() {
 			var (
 				containerProcess ifrit.Process
@@ -177,7 +235,7 @@ var _ = Describe("CredManager", func() {
 
 			JustBeforeEach(func() {
 				var runner ifrit.Runner
-				runner, rotatingCredChan = credManager.Runner(logger, container)
+				runner = credManager.Runner(logger, container)
 				containerProcess = ifrit.Background(runner)
 			})
 
@@ -186,90 +244,50 @@ var _ = Describe("CredManager", func() {
 				Eventually(containerProcess.Wait()).Should(Receive())
 			})
 
-			Context("when runner returns early", func() {
-				Context("when regenerating certificate and key fails", func() {
-					JustBeforeEach(func() {
-						Eventually(containerProcess.Ready()).Should(BeClosed())
-						Eventually(filepath.Join(certPath, "instance.key")).Should(BeARegularFile())
-						Expect(os.RemoveAll(tmpdir)).To(Succeed())
-						clock.WaitForWatcherAndIncrement(1 * time.Hour)
-					})
-
-					It("returns an error", func() {
-						var err error
-						Eventually(containerProcess.Wait()).Should(Receive(&err))
-						Expect(err).To(HaveOccurred())
-					})
-
-					It("emits metrics around failed credential creation", func() {
-						Eventually(containerProcess.Wait()).Should(Receive())
-						Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
-						metric := fakeMetronClient.IncrementCounterArgsForCall(1)
-						Expect(metric).To(Equal("CredCreationFailedCount"))
-					})
+			// TODO: we cannot simulate failing to generate a certificate, but the
+			// following should be sufficient
+			Context("when generating private key fails", func() {
+				BeforeEach(func() {
+					reader = io.LimitReader(rand.Reader, 0)
 				})
 
-				Context("when generating private key fails", func() {
-					BeforeEach(func() {
-						reader = io.LimitReader(rand.Reader, 0)
-					})
+				It("returns an error", func() {
+					var err error
+					Eventually(containerProcess.Wait()).Should(Receive(&err))
+					Expect(err).To(MatchError("EOF"))
+				})
 
-					It("returns an error", func() {
-						var err error
-						Eventually(containerProcess.Wait()).Should(Receive(&err))
-						Expect(err).To(MatchError("EOF"))
-					})
+				It("emits metrics around failed credential creation", func() {
+					var err error
+					Eventually(containerProcess.Wait()).Should(Receive(&err))
+					Expect(err).To(MatchError("EOF"))
 
-					It("emits metrics around failed credential creation", func() {
-						var err error
-						Eventually(containerProcess.Wait()).Should(Receive(&err))
-						Expect(err).To(MatchError("EOF"))
-
-						Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
-						metric := fakeMetronClient.IncrementCounterArgsForCall(0)
-						Expect(metric).To(Equal("CredCreationFailedCount"))
-					})
+					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
+					Expect(metric).To(Equal("CredCreationFailedCount"))
 				})
 			})
 
-			Context("when runner executes normally", func() {
+			Context("when the handler returns an error", func() {
+				BeforeEach(func() {
+					fakeCredHandler.UpdateReturns(errors.New("boooom!"))
+				})
+
+				It("the runner exits", func() {
+					Eventually(containerProcess.Wait()).Should(Receive(MatchError("boooom!")))
+				})
+			})
+
+			Context("when runner becomes ready", func() {
 				AfterEach(func() {
 					containerProcess.Signal(os.Interrupt)
-					Eventually(rotatingCredChan).Should(Receive()) // reads the invalid cert
 				})
 
-				It("puts private key into container directory", func() {
+				JustBeforeEach(func() {
 					Eventually(containerProcess.Ready()).Should(BeClosed())
-
-					keyFile := filepath.Join(certPath, "instance.key")
-					data, err := ioutil.ReadFile(keyFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					block, rest := pem.Decode(data)
-					Expect(block).NotTo(BeNil())
-					Expect(rest).To(BeEmpty())
-
-					Expect(block.Type).To(Equal("RSA PRIVATE KEY"))
-					key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-					Expect(err).NotTo(HaveOccurred())
-
-					var bits int
-					for _, p := range key.Primes {
-						bits += p.BitLen()
-					}
-					Expect(bits).To(Equal(2048))
-				})
-
-				It("signs and puts the certificate into container directory", func() {
-					Eventually(containerProcess.Ready()).Should(BeClosed())
-
-					certFile := filepath.Join(certPath, "instance.crt")
-					Expect(certFile).To(BeARegularFile())
 				})
 
 				It("emits metrics on successful creation", func() {
-					Eventually(containerProcess.Ready()).Should(BeClosed())
-
 					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
 					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
 					Expect(metric).To(Equal("CredCreationSucceededCount"))
@@ -280,91 +298,71 @@ var _ = Describe("CredManager", func() {
 					Expect(value).To(BeNumerically(">=", 0))
 				})
 
+				It("calls the handler with the initiali credentials", func() {
+					Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
+				})
+
 				Context("when the certificate is about to expire", func() {
 					var (
-						keyBefore             []byte
-						certBefore            []byte
-						serialNumber          *big.Int
-						durationPriorToExpiry time.Duration
+						credBefore containerstore.Credential
 					)
 
-					readKeyAndCert := func() ([]byte, []byte) {
-						keyFile := filepath.Join(certPath, "instance.key")
-						key, err := ioutil.ReadFile(keyFile)
-						ExpectWithOffset(1, err).NotTo(HaveOccurred())
-						certFile := filepath.Join(certPath, "instance.crt")
-						cert, err := ioutil.ReadFile(certFile)
-						ExpectWithOffset(1, err).NotTo(HaveOccurred())
-						return key, cert
-					}
-
 					JustBeforeEach(func() {
+						Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
+
 						Eventually(containerProcess.Ready()).Should(BeClosed())
-						keyBefore, certBefore = readKeyAndCert()
-
-						var cred containerstore.Credential
-						Eventually(rotatingCredChan).Should(Receive(&cred))
-						Expect(cred.Key).To(Equal(string(keyBefore)))
-						Expect(cred.Cert).To(Equal(string(certBefore)))
-
-						var block *pem.Block
-						block, _ = pem.Decode(certBefore)
-						certs, err := x509.ParseCertificates(block.Bytes)
-						Expect(err).NotTo(HaveOccurred())
-						cert := certs[0]
-						increment := cert.NotAfter.Add(-durationPriorToExpiry).Sub(clock.Now())
-
-						Expect(increment).To(BeNumerically(">", 0))
-						clock.WaitForWatcherAndIncrement(increment)
+						credBefore, _ = fakeCredHandler.UpdateArgsForCall(0)
 					})
 
-					testCredentialRotation := func() {
-						It("generates a new certificate and keypair", func() {
-							var cred containerstore.Credential
-							Eventually(rotatingCredChan).Should(Receive(&cred))
+					testCredentialRotation := func(dur time.Duration) {
+						callCount := fakeCredHandler.UpdateCallCount()
 
-							var key, cert []byte
+						var actualContainer executor.Container
+						credBefore, actualContainer = fakeCredHandler.UpdateArgsForCall(callCount - 1)
 
-							Eventually(func() []byte {
-								key, _ = readKeyAndCert()
-								return key
-							}).ShouldNot(Equal(keyBefore))
+						Expect(actualContainer).To(Equal(container))
 
-							Eventually(func() []byte {
-								_, cert = readKeyAndCert()
-								return cert
-							}).ShouldNot(Equal(certBefore))
+						certBefore, _ := parseCert(credBefore)
+						increment := certBefore.NotAfter.Add(-dur).Sub(clock.Now())
+						Expect(increment).To(BeNumerically(">", 0))
+						clock.WaitForWatcherAndIncrement(increment)
 
-							Expect(cred.Key).To(Equal(string(key)))
-							Expect(cred.Cert).To(Equal(string(cert)))
+						Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(callCount + 1))
 
-							var block *pem.Block
-							_, certAfter := readKeyAndCert()
-							block, _ = pem.Decode(certAfter)
-							certs, err := x509.ParseCertificates(block.Bytes)
-							Expect(err).NotTo(HaveOccurred())
-							x509Cert := certs[0]
-							Expect(x509Cert.SerialNumber).ToNot(Equal(serialNumber))
-						})
+						cred, actualContainer := fakeCredHandler.UpdateArgsForCall(callCount)
+						Expect(actualContainer).To(Equal(container))
+
+						Expect(cred.Cert).NotTo(Equal(credBefore.Cert))
+						Expect(cred.Key).NotTo(Equal(credBefore.Key))
+
+						cert, _ := parseCert(cred)
+						Expect(cert.SerialNumber).NotTo(Equal(certBefore.SerialNumber))
 					}
 
-					testNoCredentialRotation := func() {
-						It("does not rotate the credentials", func() {
-							Consistently(func() []byte {
-								keyFile := filepath.Join(certPath, "instance.key")
-								keyAfter, err := ioutil.ReadFile(keyFile)
-								Expect(err).NotTo(HaveOccurred())
-								return keyAfter
-							}).Should(Equal(keyBefore))
+					testNoCredentialRotation := func(dur time.Duration) {
+						callCount := fakeCredHandler.UpdateCallCount()
+						credBefore, _ = fakeCredHandler.UpdateArgsForCall(callCount - 1)
 
-							Consistently(func() []byte {
-								certFile := filepath.Join(certPath, "instance.crt")
-								certAfter, err := ioutil.ReadFile(certFile)
-								Expect(err).NotTo(HaveOccurred())
-								return certAfter
-							}).Should(Equal(certBefore))
-						})
+						cert, _ := parseCert(credBefore)
+						increment := cert.NotAfter.Add(-dur).Sub(clock.Now())
+						Expect(increment).To(BeNumerically(">", 0))
+						clock.WaitForWatcherAndIncrement(increment)
+
+						Consistently(fakeCredHandler.UpdateCallCount).Should(Equal(callCount))
 					}
+
+					Context("when the handler returns an error", func() {
+						JustBeforeEach(func() {
+							fakeCredHandler.UpdateReturnsOnCall(1, errors.New("boooom!"))
+							certBefore, _ := parseCert(credBefore)
+							increment := certBefore.NotAfter.Sub(clock.Now())
+							clock.WaitForWatcherAndIncrement(increment)
+						})
+
+						It("the runner exits", func() {
+							Eventually(containerProcess.Wait()).Should(Receive(MatchError("boooom!")))
+						})
+					})
 
 					Context("when the certificate validity is less than 4 hours", func() {
 						BeforeEach(func() {
@@ -372,23 +370,23 @@ var _ = Describe("CredManager", func() {
 						})
 
 						Context("when 15 seconds prior to expiry", func() {
-							BeforeEach(func() {
-								durationPriorToExpiry = 15 * time.Second
+							It("does not rotate the credentials", func() {
+								testNoCredentialRotation(15 * time.Second)
 							})
-
-							testNoCredentialRotation()
 						})
 
 						Context("when 5 seconds prior to expiry", func() {
-							BeforeEach(func() {
-								durationPriorToExpiry = 5 * time.Second
+							It("rotates the certificates", func() {
+								testCredentialRotation(5 * time.Second)
 							})
 
-							testCredentialRotation()
-
 							It("emits metrics on successful creation", func() {
-								Eventually(rotatingCredChan).Should(Receive())
-								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								cert, _ := parseCert(credBefore)
+								increment := cert.NotAfter.Add(-5 * time.Second).Sub(clock.Now())
+								Expect(increment).To(BeNumerically(">", 0))
+								clock.WaitForWatcherAndIncrement(increment)
+
+								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(2))
 								metric := fakeMetronClient.IncrementCounterArgsForCall(1)
 								Expect(metric).To(Equal("CredCreationSucceededCount"))
 
@@ -397,81 +395,24 @@ var _ = Describe("CredManager", func() {
 								Expect(metric).To(Equal("CredCreationSucceededDuration"))
 								Expect(value).To(BeNumerically(">=", 0))
 							})
+						})
 
-							It("rotates the cert atomically", func() {
-								if runtime.GOOS == "windows" {
-									Skip("skipping test because running on Windows")
-								}
-								before := string(certBefore)
-								var after string
-								// similar to eventually but faster, to ensure we sample the cert
-								// file as soon as it is overwritten. stop as soon as we see a
-								// change to the file
-								//
-								// arbitrary limit to prevent infinite loop
-								limit := 100000
-								for ; limit > 0; limit-- {
-									_, certBytes := readKeyAndCert()
-									after = string(certBytes)
-									if after != before {
-										break
-									}
-								}
-								Expect(limit).To(BeNumerically(">", 0))
-
-								block, _ := pem.Decode([]byte(after))
-								Expect(block).NotTo(BeNil(), "invalid data in cert file")
-								_, err := x509.ParseCertificates(block.Bytes)
-								Expect(err).NotTo(HaveOccurred())
+						// test timer reset logic
+						Context("after credential rotation", func() {
+							JustBeforeEach(func() {
+								testCredentialRotation(5 * time.Second)
 							})
 
-							It("rotates the key atomically", func() {
-								if runtime.GOOS == "windows" {
-									Skip("skipping test because running on Windows")
-								}
-								before := string(keyBefore)
-								var after string
-								// similar to eventually but faster, to ensure we sample the key
-								// file as soon as it is overwritten. stop as soon as we see a
-								// change to the file
-								//
-								// arbitrary limit to prevent infinite loop
-								limit := 100000
-								for ; limit > 0; limit-- {
-									keyBytes, _ := readKeyAndCert()
-									after = string(keyBytes)
-									if after != before {
-										break
-									}
-								}
-								Expect(limit).To(BeNumerically(">", 0))
-
-								block, _ := pem.Decode([]byte(after))
-								Expect(block).NotTo(BeNil(), "invalid data in key file")
-								_, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-								Expect(err).NotTo(HaveOccurred())
-							})
-
-							// test timer reset logic
 							Context("when 5 seconds prior to expiry", func() {
-								// wait for the cert to rotate from the outer context before running this test
-								JustBeforeEach(func() {
-									keyBefore, certBefore = readKeyAndCert()
-									clock.WaitForWatcherAndIncrement(5 * time.Second)
+								It("rotates the certs", func() {
+									testCredentialRotation(5 * time.Second)
 								})
-
-								testCredentialRotation()
 							})
 
 							Context("when 15 seconds prior to expiry", func() {
-								JustBeforeEach(func() {
-									// wait for the cert to rotate from the outer context before running this test
-									Eventually(rotatingCredChan).Should(Receive())
-									keyBefore, certBefore = readKeyAndCert()
-									clock.WaitForWatcherAndIncrement(15 * time.Second)
+								It("does not rotate the credentials", func() {
+									testNoCredentialRotation(15 * time.Second)
 								})
-
-								testNoCredentialRotation()
 							})
 						})
 					})
@@ -482,19 +423,15 @@ var _ = Describe("CredManager", func() {
 						})
 
 						Context("when 90 minutes prior to expiry", func() {
-							BeforeEach(func() {
-								durationPriorToExpiry = 90 * time.Minute
+							It("does not rotate the credentials", func() {
+								testNoCredentialRotation(90 * time.Minute)
 							})
-
-							testNoCredentialRotation()
 						})
 
 						Context("when 30 minutes prior to expiry", func() {
-							BeforeEach(func() {
-								durationPriorToExpiry = 30 * time.Minute
+							It("rotates the certs", func() {
+								testCredentialRotation(30 * time.Minute)
 							})
-
-							testCredentialRotation()
 						})
 					})
 				})
@@ -508,18 +445,10 @@ var _ = Describe("CredManager", func() {
 					JustBeforeEach(func() {
 						Eventually(containerProcess.Ready()).Should(BeClosed())
 
-						certFile := filepath.Join(tmpdir, container.Guid, "instance.crt")
-						data, err := ioutil.ReadFile(certFile)
-						Expect(err).NotTo(HaveOccurred())
-						var block *pem.Block
-						block, rest = pem.Decode(data)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(block).NotTo(BeNil())
-						Expect(block.Type).To(Equal("CERTIFICATE"))
-						certs, err := x509.ParseCertificates(block.Bytes)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(certs).To(HaveLen(1))
-						cert = certs[0]
+						Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
+						cred, actualContainer := fakeCredHandler.UpdateArgsForCall(0)
+						Expect(actualContainer).To(Equal(container))
+						cert, rest = parseCert(cred)
 					})
 
 					It("has the container ip", func() {
@@ -621,34 +550,29 @@ var _ = Describe("CredManager", func() {
 			Context("when signalled", func() {
 				JustBeforeEach(func() {
 					Eventually(containerProcess.Ready()).Should(BeClosed())
-					Eventually(certMount[0].SrcPath).Should(BeADirectory())
-					Eventually(rotatingCredChan).Should(Receive()) // added this to read the existing cred from startup
 					containerProcess.Signal(os.Interrupt)
 				})
 
 				// deleting the directory this early can cause failures on windows 1803, see #156406881
-				It("does not remove container credentials from the filesystem", func() {
-					Eventually(certMount[0].SrcPath).Should(BeADirectory())
+				It("does not call RemoveDir on the handlers", func() {
+					Eventually(fakeCredHandler.RemoveDirCallCount).Should(BeZero())
 				})
 
 				It("Generates an invalid cert and sends the invalid cert on the cred channel", func() {
-					var cred containerstore.Credential
-					Eventually(rotatingCredChan).Should(Receive(&cred))
+					Eventually(fakeCredHandler.CloseCallCount).Should(Equal(1))
+
+					cred, actualContainer := fakeCredHandler.CloseArgsForCall(0)
+					Expect(actualContainer).To(Equal(container))
 
 					block, _ := pem.Decode([]byte(cred.Cert))
 					Expect(block).NotTo(BeNil())
 					certs, err := x509.ParseCertificates(block.Bytes)
 					Expect(err).NotTo(HaveOccurred())
 					cert := certs[0]
-					fmt.Println(validityPeriod)
-					Expect(cert.NotAfter).Should(Equal(cert.NotBefore))
-				})
 
-				It("closes the rotating cred channel", func() {
-					Eventually(rotatingCredChan).Should(BeClosed())
+					Expect(cert.Subject.CommonName).To(BeEmpty())
 				})
 			})
-
 		})
 	})
 })
@@ -670,4 +594,15 @@ func createIntermediateCert() (*x509.Certificate, *rsa.PrivateKey) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(certs).To(HaveLen(1))
 	return certs[0], privateKey
+}
+
+func parseCert(cred containerstore.Credential) (*x509.Certificate, []byte) {
+	var block *pem.Block
+	var rest []byte
+	block, rest = pem.Decode([]byte(cred.Cert))
+	Expect(block).NotTo(BeNil())
+	Expect(block.Type).To(Equal("CERTIFICATE"))
+	certs, err := x509.ParseCertificates(block.Bytes)
+	Expect(err).NotTo(HaveOccurred())
+	return certs[0], rest
 }

@@ -6,7 +6,6 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -24,47 +23,6 @@ type FakeProxyManager struct {
 	proxyPortsReturnsOnCall map[int]struct {
 		result1 []executor.ProxyPortMapping
 		result2 []uint16
-	}
-	BindMountsStub        func(lager.Logger, executor.Container) ([]garden.BindMount, error)
-	bindMountsMutex       sync.RWMutex
-	bindMountsArgsForCall []struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-	}
-	bindMountsReturns struct {
-		result1 []garden.BindMount
-		result2 error
-	}
-	bindMountsReturnsOnCall map[int]struct {
-		result1 []garden.BindMount
-		result2 error
-	}
-	RemoveProxyConfigDirStub        func(lager.Logger, executor.Container) error
-	removeProxyConfigDirMutex       sync.RWMutex
-	removeProxyConfigDirArgsForCall []struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-	}
-	removeProxyConfigDirReturns struct {
-		result1 error
-	}
-	removeProxyConfigDirReturnsOnCall map[int]struct {
-		result1 error
-	}
-	RunnerStub        func(lager.Logger, executor.Container, <-chan containerstore.Credential) (containerstore.ProxyRunner, error)
-	runnerMutex       sync.RWMutex
-	runnerArgsForCall []struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-		arg3 <-chan containerstore.Credential
-	}
-	runnerReturns struct {
-		result1 containerstore.ProxyRunner
-		result2 error
-	}
-	runnerReturnsOnCall map[int]struct {
-		result1 containerstore.ProxyRunner
-		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -122,171 +80,11 @@ func (fake *FakeProxyManager) ProxyPortsReturnsOnCall(i int, result1 []executor.
 	}{result1, result2}
 }
 
-func (fake *FakeProxyManager) BindMounts(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, error) {
-	fake.bindMountsMutex.Lock()
-	ret, specificReturn := fake.bindMountsReturnsOnCall[len(fake.bindMountsArgsForCall)]
-	fake.bindMountsArgsForCall = append(fake.bindMountsArgsForCall, struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-	}{arg1, arg2})
-	fake.recordInvocation("BindMounts", []interface{}{arg1, arg2})
-	fake.bindMountsMutex.Unlock()
-	if fake.BindMountsStub != nil {
-		return fake.BindMountsStub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fake.bindMountsReturns.result1, fake.bindMountsReturns.result2
-}
-
-func (fake *FakeProxyManager) BindMountsCallCount() int {
-	fake.bindMountsMutex.RLock()
-	defer fake.bindMountsMutex.RUnlock()
-	return len(fake.bindMountsArgsForCall)
-}
-
-func (fake *FakeProxyManager) BindMountsArgsForCall(i int) (lager.Logger, executor.Container) {
-	fake.bindMountsMutex.RLock()
-	defer fake.bindMountsMutex.RUnlock()
-	return fake.bindMountsArgsForCall[i].arg1, fake.bindMountsArgsForCall[i].arg2
-}
-
-func (fake *FakeProxyManager) BindMountsReturns(result1 []garden.BindMount, result2 error) {
-	fake.BindMountsStub = nil
-	fake.bindMountsReturns = struct {
-		result1 []garden.BindMount
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeProxyManager) BindMountsReturnsOnCall(i int, result1 []garden.BindMount, result2 error) {
-	fake.BindMountsStub = nil
-	if fake.bindMountsReturnsOnCall == nil {
-		fake.bindMountsReturnsOnCall = make(map[int]struct {
-			result1 []garden.BindMount
-			result2 error
-		})
-	}
-	fake.bindMountsReturnsOnCall[i] = struct {
-		result1 []garden.BindMount
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeProxyManager) RemoveProxyConfigDir(arg1 lager.Logger, arg2 executor.Container) error {
-	fake.removeProxyConfigDirMutex.Lock()
-	ret, specificReturn := fake.removeProxyConfigDirReturnsOnCall[len(fake.removeProxyConfigDirArgsForCall)]
-	fake.removeProxyConfigDirArgsForCall = append(fake.removeProxyConfigDirArgsForCall, struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-	}{arg1, arg2})
-	fake.recordInvocation("RemoveProxyConfigDir", []interface{}{arg1, arg2})
-	fake.removeProxyConfigDirMutex.Unlock()
-	if fake.RemoveProxyConfigDirStub != nil {
-		return fake.RemoveProxyConfigDirStub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.removeProxyConfigDirReturns.result1
-}
-
-func (fake *FakeProxyManager) RemoveProxyConfigDirCallCount() int {
-	fake.removeProxyConfigDirMutex.RLock()
-	defer fake.removeProxyConfigDirMutex.RUnlock()
-	return len(fake.removeProxyConfigDirArgsForCall)
-}
-
-func (fake *FakeProxyManager) RemoveProxyConfigDirArgsForCall(i int) (lager.Logger, executor.Container) {
-	fake.removeProxyConfigDirMutex.RLock()
-	defer fake.removeProxyConfigDirMutex.RUnlock()
-	return fake.removeProxyConfigDirArgsForCall[i].arg1, fake.removeProxyConfigDirArgsForCall[i].arg2
-}
-
-func (fake *FakeProxyManager) RemoveProxyConfigDirReturns(result1 error) {
-	fake.RemoveProxyConfigDirStub = nil
-	fake.removeProxyConfigDirReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeProxyManager) RemoveProxyConfigDirReturnsOnCall(i int, result1 error) {
-	fake.RemoveProxyConfigDirStub = nil
-	if fake.removeProxyConfigDirReturnsOnCall == nil {
-		fake.removeProxyConfigDirReturnsOnCall = make(map[int]struct {
-			result1 error
-		})
-	}
-	fake.removeProxyConfigDirReturnsOnCall[i] = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeProxyManager) Runner(arg1 lager.Logger, arg2 executor.Container, arg3 <-chan containerstore.Credential) (containerstore.ProxyRunner, error) {
-	fake.runnerMutex.Lock()
-	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
-	fake.runnerArgsForCall = append(fake.runnerArgsForCall, struct {
-		arg1 lager.Logger
-		arg2 executor.Container
-		arg3 <-chan containerstore.Credential
-	}{arg1, arg2, arg3})
-	fake.recordInvocation("Runner", []interface{}{arg1, arg2, arg3})
-	fake.runnerMutex.Unlock()
-	if fake.RunnerStub != nil {
-		return fake.RunnerStub(arg1, arg2, arg3)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fake.runnerReturns.result1, fake.runnerReturns.result2
-}
-
-func (fake *FakeProxyManager) RunnerCallCount() int {
-	fake.runnerMutex.RLock()
-	defer fake.runnerMutex.RUnlock()
-	return len(fake.runnerArgsForCall)
-}
-
-func (fake *FakeProxyManager) RunnerArgsForCall(i int) (lager.Logger, executor.Container, <-chan containerstore.Credential) {
-	fake.runnerMutex.RLock()
-	defer fake.runnerMutex.RUnlock()
-	return fake.runnerArgsForCall[i].arg1, fake.runnerArgsForCall[i].arg2, fake.runnerArgsForCall[i].arg3
-}
-
-func (fake *FakeProxyManager) RunnerReturns(result1 containerstore.ProxyRunner, result2 error) {
-	fake.RunnerStub = nil
-	fake.runnerReturns = struct {
-		result1 containerstore.ProxyRunner
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeProxyManager) RunnerReturnsOnCall(i int, result1 containerstore.ProxyRunner, result2 error) {
-	fake.RunnerStub = nil
-	if fake.runnerReturnsOnCall == nil {
-		fake.runnerReturnsOnCall = make(map[int]struct {
-			result1 containerstore.ProxyRunner
-			result2 error
-		})
-	}
-	fake.runnerReturnsOnCall[i] = struct {
-		result1 containerstore.ProxyRunner
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.proxyPortsMutex.RLock()
 	defer fake.proxyPortsMutex.RUnlock()
-	fake.bindMountsMutex.RLock()
-	defer fake.bindMountsMutex.RUnlock()
-	fake.removeProxyConfigDirMutex.RLock()
-	defer fake.removeProxyConfigDirMutex.RUnlock()
-	fake.runnerMutex.RLock()
-	defer fake.runnerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

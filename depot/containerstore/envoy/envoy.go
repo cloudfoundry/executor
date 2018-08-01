@@ -1,18 +1,8 @@
 package envoy
 
 type Config struct {
-	StatPrefix string      `yaml:"stat_prefix"` // envoy.tcp_proxy
-	Cluster    string      `yaml:"cluster"`
-	AccessLogs []AccessLog `yaml:"access_log"`
-}
-
-type AccessLogConfig struct {
-	Path string `yaml:"path"`
-}
-
-type AccessLog struct {
-	Name   string          `yaml:"name"` // envoy.file_access_log
-	Config AccessLogConfig `yaml:"config"`
+	StatPrefix string `yaml:"stat_prefix"` // envoy.tcp_proxy
+	Cluster    string `yaml:"cluster"`
 }
 
 type Filter struct {

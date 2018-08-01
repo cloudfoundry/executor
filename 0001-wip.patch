@@ -1,0 +1,189 @@
+From bbd9aa82d11c047b60e0fbe4093fff1faa71be16 Mon Sep 17 00:00:00 2001
+From: Sunjay Bhatia <sbhatia@pivotal.io>
+Date: Tue, 31 Jul 2018 10:57:49 -0700
+Subject: [PATCH] wip
+
+Signed-off-by: John Shahid <jvshahid@gmail.com>
+---
+ depot/containerstore/proxymanager.go | 30 ++++++++++++++++++++-
+ depot/transformer/transformer.go     | 39 ++++++++++++++++++++++++++--
+ 2 files changed, 66 insertions(+), 3 deletions(-)
+
+diff --git a/depot/containerstore/proxymanager.go b/depot/containerstore/proxymanager.go
+index c156dc0..27117cd 100644
+--- a/depot/containerstore/proxymanager.go
++++ b/depot/containerstore/proxymanager.go
+@@ -2,6 +2,7 @@ package containerstore
+ 
+ import (
+ 	"bytes"
++	"crypto/tls"
+ 	"encoding/pem"
+ 	"errors"
+ 	"fmt"
+@@ -286,7 +287,34 @@ func (p *proxyManager) Runner(logger lager.Logger, container executor.Container,
+ 				logger.Debug("completed")
+ 			}
+ 
+-			// time.Sleep(2 * time.Second)
++			getPeerCertCommonName := func() (string, error) {
++				addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
++				conn, err := tls.Dial("tcp", addr, &tls.Config{
++					InsecureSkipVerify: true,
++				})
++				if err != nil {
++					return "", err
++				}
++				defer conn.Close()
++				if err := conn.Handshake(); err != nil {
++					return "", err
++				}
++
++				logger.Info("proxy-cert-info", lager.Data{"cert-subject": conn.ConnectionState().PeerCertificates[0].Subject})
++
++				return conn.ConnectionState().PeerCertificates[0].Subject.CommonName, nil
++			}
++
++			for i := 0; i < 10; i++ {
++				commonName, err := getPeerCertCommonName()
++				if err != nil {
++					logger.Error("failed-connecting-to-proxy", err, lager.Data{"port": container.Ports[0].HostTLSProxyPort})
++				}
++				if err == nil && commonName == "" {
++					break
++				}
++				time.Sleep(500 * time.Millisecond)
++			}
+ 
+ 			signal := <-signals
+ 			logger.Info("signaled", lager.Data{"signal": signal.String()})
+diff --git a/depot/transformer/transformer.go b/depot/transformer/transformer.go
+index fb47e55..95c02b7 100644
+--- a/depot/transformer/transformer.go
++++ b/depot/transformer/transformer.go
+@@ -419,14 +419,16 @@ func (t *transformer) StepsRunner(
+ 
+ 	substeps = append(substeps, action)
+ 
+-	var proxyReadinessChecks []ifrit.Runner
++	var proxyReadinessChecks, proxyLivenessChecks []ifrit.Runner
+ 
+ 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
+ 		envoyReadinessLogger := logger.Session("envoy-readiness-check")
++		// envoyLivenessLogger := logger.Session("envoy-liveness-check")
+ 
+ 		for idx, p := range config.ProxyTLSPorts {
+ 			// add envoy readiness checks
+ 			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
++			// livenessSidecarName := fmt.Sprintf("%s-envoy-liveness-healthcheck-%d", gardenContainer.Handle(), idx)
+ 
+ 			step := t.createCheck(
+ 				&container,
+@@ -441,8 +443,31 @@ func (t *transformer) StepsRunner(
+ 				t.unhealthyMonitoringInterval,
+ 				envoyReadinessLogger,
+ 				"instance proxy failed to start",
++				false,
+ 			)
+ 			proxyReadinessChecks = append(proxyReadinessChecks, step)
++
++			// if idx > 0 {
++			// 	// only add the liveness check for the first port mapping
++			// 	continue
++			// }
++
++			// step = t.createCheck(
++			// 	&container,
++			// 	gardenContainer,
++			// 	config.BindMounts,
++			// 	"",
++			// 	livenessSidecarName,
++			// 	int(p),
++			// 	DefaultDeclarativeHealthcheckRequestTimeout,
++			// 	false,
++			// 	false,
++			// 	t.unhealthyMonitoringInterval,
++			// 	envoyLivenessLogger,
++			// 	"instance proxy failed to start",
++			// 	true,
++			// )
++			// proxyLivenessChecks = append(proxyLivenessChecks, step)
+ 		}
+ 	}
+ 
+@@ -453,6 +478,7 @@ func (t *transformer) StepsRunner(
+ 			logStreamer,
+ 			config.BindMounts,
+ 			proxyReadinessChecks,
++			proxyLivenessChecks,
+ 		)
+ 		substeps = append(substeps, monitor)
+ 	} else if container.Monitor != nil {
+@@ -527,6 +553,7 @@ func (t *transformer) createCheck(
+ 	interval time.Duration,
+ 	logger lager.Logger,
+ 	prefix string,
++	checkTLSSubjectName bool,
+ ) ifrit.Runner {
+ 
+ 	nofiles := healthCheckNofiles
+@@ -550,6 +577,9 @@ func (t *transformer) createCheck(
+ 		args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
+ 	} else {
+ 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
++		if checkTLSSubjectName {
++			args = append(args, "-check-tls-subject-name=true")
++		}
+ 	}
+ 
+ 	runAction := models.RunAction{
+@@ -593,6 +623,7 @@ func (t *transformer) transformCheckDefinition(
+ 	logstreamer log_streamer.LogStreamer,
+ 	bindMounts []garden.BindMount,
+ 	proxyReadinessChecks []ifrit.Runner,
++	proxyLivenessChecks []ifrit.Runner,
+ ) ifrit.Runner {
+ 	var readinessChecks []ifrit.Runner
+ 	var livenessChecks []ifrit.Runner
+@@ -640,6 +671,7 @@ func (t *transformer) transformCheckDefinition(
+ 				t.unhealthyMonitoringInterval,
+ 				readinessLogger,
+ 				"",
++				false,
+ 			))
+ 			livenessChecks = append(livenessChecks, t.createCheck(
+ 				container,
+@@ -654,6 +686,7 @@ func (t *transformer) transformCheckDefinition(
+ 				t.healthyMonitoringInterval,
+ 				livenessLogger,
+ 				"",
++				false,
+ 			))
+ 
+ 		} else if check.TcpCheck != nil {
+@@ -675,6 +708,7 @@ func (t *transformer) transformCheckDefinition(
+ 				t.unhealthyMonitoringInterval,
+ 				readinessLogger,
+ 				"",
++				false,
+ 			))
+ 			livenessChecks = append(livenessChecks, t.createCheck(
+ 				container,
+@@ -689,12 +723,13 @@ func (t *transformer) transformCheckDefinition(
+ 				t.healthyMonitoringInterval,
+ 				livenessLogger,
+ 				"",
++				false,
+ 			))
+ 		}
+ 	}
+ 
+ 	readinessCheck := steps.NewParallel(append(proxyReadinessChecks, readinessChecks...))
+-	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
++	livenessCheck := steps.NewCodependent(append(livenessChecks, proxyLivenessChecks...), false, false)
+ 
+ 	return steps.NewHealthCheckStep(
+ 		readinessCheck,
+-- 
+2.18.0
+

@@ -39,7 +39,6 @@ type Transformer interface {
 }
 
 type Config struct {
-	LDSPort       uint16
 	ProxyTLSPorts []uint16
 	BindMounts    []garden.BindMount
 }
@@ -325,7 +324,7 @@ func (t *transformer) stepFor(
 				logger,
 			)
 		}
-		return steps.NewSerial(logger, subSteps)
+		return steps.NewSerial(subSteps)
 	}
 
 	panic(fmt.Sprintf("unknown action: %T", action))
@@ -419,16 +418,14 @@ func (t *transformer) StepsRunner(
 
 	substeps = append(substeps, action)
 
-	var proxyReadinessChecks, proxyLivenessChecks []ifrit.Runner
+	var proxyReadinessChecks []ifrit.Runner
 
 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
 		envoyReadinessLogger := logger.Session("envoy-readiness-check")
-		// envoyLivenessLogger := logger.Session("envoy-liveness-check")
 
 		for idx, p := range config.ProxyTLSPorts {
 			// add envoy readiness checks
 			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
-			// livenessSidecarName := fmt.Sprintf("%s-envoy-liveness-healthcheck-%d", gardenContainer.Handle(), idx)
 
 			step := t.createCheck(
 				&container,
@@ -443,31 +440,8 @@ func (t *transformer) StepsRunner(
 				t.unhealthyMonitoringInterval,
 				envoyReadinessLogger,
 				"instance proxy failed to start",
-				false,
 			)
 			proxyReadinessChecks = append(proxyReadinessChecks, step)
-
-			// if idx > 0 {
-			// 	// only add the liveness check for the first port mapping
-			// 	continue
-			// }
-
-			// step = t.createCheck(
-			// 	&container,
-			// 	gardenContainer,
-			// 	config.BindMounts,
-			// 	"",
-			// 	livenessSidecarName,
-			// 	int(p),
-			// 	DefaultDeclarativeHealthcheckRequestTimeout,
-			// 	false,
-			// 	false,
-			// 	t.unhealthyMonitoringInterval,
-			// 	envoyLivenessLogger,
-			// 	"instance proxy failed to start",
-			// 	true,
-			// )
-			// proxyLivenessChecks = append(proxyLivenessChecks, step)
 		}
 	}
 
@@ -478,7 +452,6 @@ func (t *transformer) StepsRunner(
 			logStreamer,
 			config.BindMounts,
 			proxyReadinessChecks,
-			proxyLivenessChecks,
 		)
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
@@ -531,9 +504,9 @@ func (t *transformer) StepsRunner(
 		cumulativeStep = longLivedAction
 	} else {
 		if postSetup == nil {
-			cumulativeStep = steps.NewSerial(logger, []ifrit.Runner{setup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, longLivedAction})
 		} else {
-			cumulativeStep = steps.NewSerial(logger, []ifrit.Runner{setup, postSetup, longLivedAction})
+			cumulativeStep = steps.NewSerial([]ifrit.Runner{setup, postSetup, longLivedAction})
 		}
 	}
 
@@ -553,7 +526,6 @@ func (t *transformer) createCheck(
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
-	checkTLSSubjectName bool,
 ) ifrit.Runner {
 
 	nofiles := healthCheckNofiles
@@ -577,9 +549,6 @@ func (t *transformer) createCheck(
 		args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
 	} else {
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
-		if checkTLSSubjectName {
-			args = append(args, "-check-tls-subject-name=true")
-		}
 	}
 
 	runAction := models.RunAction{
@@ -623,7 +592,6 @@ func (t *transformer) transformCheckDefinition(
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyReadinessChecks []ifrit.Runner,
-	proxyLivenessChecks []ifrit.Runner,
 ) ifrit.Runner {
 	var readinessChecks []ifrit.Runner
 	var livenessChecks []ifrit.Runner
@@ -671,7 +639,6 @@ func (t *transformer) transformCheckDefinition(
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
-				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -686,7 +653,6 @@ func (t *transformer) transformCheckDefinition(
 				t.healthyMonitoringInterval,
 				livenessLogger,
 				"",
-				false,
 			))
 
 		} else if check.TcpCheck != nil {
@@ -708,7 +674,6 @@ func (t *transformer) transformCheckDefinition(
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
-				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -723,13 +688,12 @@ func (t *transformer) transformCheckDefinition(
 				t.healthyMonitoringInterval,
 				livenessLogger,
 				"",
-				false,
 			))
 		}
 	}
 
 	readinessCheck := steps.NewParallel(append(proxyReadinessChecks, readinessChecks...))
-	livenessCheck := steps.NewCodependent(append(livenessChecks, proxyLivenessChecks...), false, false)
+	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
 
 	return steps.NewHealthCheckStep(
 		readinessCheck,
@@ -750,7 +714,7 @@ func (t *transformer) transformContainerProxyStep(
 	bindMounts []garden.BindMount,
 ) ifrit.Runner {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level trace& pid=$!; wait $pid", int(t.drainWait.Seconds()))
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -778,20 +742,18 @@ func (t *transformer) transformContainerProxyStep(
 
 	proxyLogger := logger.Session("proxy")
 
-	return steps.NewParallel([]ifrit.Runner{
-		steps.NewBackground(steps.NewRunWithSidecar(
-			container,
-			runAction,
-			streamer.WithSource("PROXY"),
-			proxyLogger,
-			execContainer.ExternalIP,
-			execContainer.InternalIP,
-			execContainer.Ports,
-			t.clock,
-			t.gracefulShutdownInterval,
-			false,
-			sidecar,
-			execContainer.Privileged,
-		), proxyLogger),
-	})
+	return steps.NewBackground(steps.NewRunWithSidecar(
+		container,
+		runAction,
+		streamer.WithSource("PROXY"),
+		proxyLogger,
+		execContainer.ExternalIP,
+		execContainer.InternalIP,
+		execContainer.Ports,
+		t.clock,
+		t.gracefulShutdownInterval,
+		false,
+		sidecar,
+		execContainer.Privileged,
+	), proxyLogger)
 }
