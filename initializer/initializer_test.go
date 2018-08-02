@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/executor/initializer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
@@ -515,7 +516,17 @@ var _ = Describe("Initializer", func() {
 			container = executor.Container{
 				Guid: "1234",
 			}
-			credManager, err = initializer.CredManagerFromConfig(logger, fakeMetronClient, config, fakeClock)
+
+			mounts := []garden.BindMount{
+				{
+					Origin:  garden.BindMountOriginHost,
+					SrcPath: "some-path",
+					DstPath: "/etc/cf-assets/envoy",
+				},
+			}
+			fakeCredHandler := &containerstorefakes.FakeCredentialHandler{}
+			fakeCredHandler.CreateDirReturns(mounts, nil, nil)
+			credManager, err = initializer.CredManagerFromConfig(logger, fakeMetronClient, config, fakeClock, fakeCredHandler)
 		})
 
 		Describe("when instance identity creds directory is not set", func() {

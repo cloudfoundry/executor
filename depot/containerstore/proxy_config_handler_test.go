@@ -40,7 +40,7 @@ var _ = Describe("ProxyManager", func() {
 		container                          executor.Container
 		listenerConfigFile                 string
 		proxyConfigFile                    string
-		proxyManager                       *containerstore.ProxyConfigHandler
+		proxyManager                       containerstore.ProxyManager
 		refreshDelayMS                     time.Duration
 		containerProxyTrustedCACerts       []string
 		containerProxyVerifySubjectAltName []string
@@ -564,7 +564,6 @@ var _ = Describe("ProxyManager", func() {
 	Context("Close", func() {
 		var (
 			cert, key string
-			sn        *big.Int
 		)
 
 		BeforeEach(func() {
@@ -575,7 +574,7 @@ var _ = Describe("ProxyManager", func() {
 				},
 			}
 
-			cert, key, sn = generateCertAndKey()
+			cert, key, _ = generateCertAndKey()
 		})
 
 		JustBeforeEach(func() {

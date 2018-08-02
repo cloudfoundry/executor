@@ -11,28 +11,22 @@ import (
 )
 
 func NewInstanceIdentityHandler(
-	logger lager.Logger,
-	containerGUID string,
 	credDir string,
 	containerMountPath string,
 ) *InstanceIdentityHandler {
 	return &InstanceIdentityHandler{
-		logger:             logger,
-		containerGUID:      containerGUID,
 		credDir:            credDir,
 		containerMountPath: containerMountPath,
 	}
 }
 
 type InstanceIdentityHandler struct {
-	logger             lager.Logger
-	containerGUID      string
 	containerMountPath string
 	credDir            string
 }
 
-func (h *InstanceIdentityHandler) CreateDir(container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
-	containerDir := filepath.Join(h.credDir, h.containerGUID)
+func (h *InstanceIdentityHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+	containerDir := filepath.Join(h.credDir, container.Guid)
 	err := os.Mkdir(containerDir, 0755)
 	if err != nil {
 		return nil, nil, err
@@ -51,14 +45,14 @@ func (h *InstanceIdentityHandler) CreateDir(container executor.Container) ([]gar
 		}, nil
 }
 
-func (h *InstanceIdentityHandler) RemoveCredDir(container executor.Container) error {
-	return os.RemoveAll(filepath.Join(h.credDir, h.containerGUID))
+func (h *InstanceIdentityHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	return os.RemoveAll(filepath.Join(h.credDir, container.Guid))
 }
 
 func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Container) error {
-	instanceKeyPath := filepath.Join(h.credDir, h.containerGUID, "instance.key")
+	instanceKeyPath := filepath.Join(h.credDir, container.Guid, "instance.key")
 	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
-	certificatePath := filepath.Join(h.credDir, h.containerGUID, "instance.crt")
+	certificatePath := filepath.Join(h.credDir, container.Guid, "instance.crt")
 	tmpCertificatePath := certificatePath + ".tmp"
 
 	instanceKey, err := os.Create(tmpInstanceKeyPath)

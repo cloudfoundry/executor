@@ -1365,9 +1365,7 @@ var _ = Describe("Container Store", func() {
 
 		Context("when it is in the created state", func() {
 			var (
-				runReq         *executor.RunRequest
-				envoySourceDir string
-				envoyConfigDir string
+				runReq *executor.RunRequest
 			)
 
 			BeforeEach(func() {
@@ -1385,9 +1383,9 @@ var _ = Describe("Container Store", func() {
 				}
 
 				var err error
-				envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+				_, err = ioutil.TempDir("", "envoy_dir")
 				Expect(err).NotTo(HaveOccurred())
-				envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
+				_, err = ioutil.TempDir("", "envoy_config_dir")
 				Expect(err).NotTo(HaveOccurred())
 			})
 

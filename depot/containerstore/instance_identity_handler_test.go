@@ -25,13 +25,11 @@ var _ = Describe("InstanceIdentityHandler", func() {
 	})
 
 	BeforeEach(func() {
-		container = executor.Container{Guid: "guid"}
+		container = executor.Container{Guid: "some-guid"}
 		var err error
 		tmpdir, err = ioutil.TempDir("", "credsmanager")
 		Expect(err).NotTo(HaveOccurred())
 		handler = containerstore.NewInstanceIdentityHandler(
-			logger,
-			"some-guid",
 			tmpdir,
 			"containerpath",
 		)
@@ -39,7 +37,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Context("CreateDir", func() {
 		It("returns a valid directory path", func() {
-			mount, _, err := handler.CreateDir(container)
+			mount, _, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
 
 			Expect(mount).To(HaveLen(1))
@@ -50,7 +48,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		})
 
 		It("returns CF_INSTANCE_CERT and CF_INSTANCE_KEY environment variable values", func() {
-			_, envVariables, err := handler.CreateDir(container)
+			_, envVariables, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
 
 			Expect(envVariables).To(HaveLen(2))
@@ -66,15 +64,13 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		Context("when making directory fails", func() {
 			BeforeEach(func() {
 				handler = containerstore.NewInstanceIdentityHandler(
-					logger,
-					"some-guid",
 					"/invalid/path",
 					"containerpath",
 				)
 			})
 
 			It("returns an error", func() {
-				_, _, err := handler.CreateDir(executor.Container{Guid: "somefailure"})
+				_, _, err := handler.CreateDir(logger, executor.Container{Guid: "somefailure"})
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -82,7 +78,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Describe("Update", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(container)
+			_, _, err := handler.CreateDir(logger, container)
 			Expect(err).To(BeNil())
 		})
 
@@ -117,7 +113,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Describe("Close", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(container)
+			_, _, err := handler.CreateDir(logger, container)
 			Expect(err).To(BeNil())
 			err = handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 			Expect(err).NotTo(HaveOccurred())
@@ -154,14 +150,14 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Context("RemoveDir", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(container)
+			_, _, err := handler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			certPath := filepath.Join(tmpdir, "some-guid")
 			Eventually(certPath).Should(BeADirectory())
 		})
 
 		It("removes the directory created", func() {
-			err := handler.RemoveCredDir(container)
+			err := handler.RemoveDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			certPath := filepath.Join(tmpdir, "some-guid")
 			Eventually(certPath).ShouldNot(BeADirectory())

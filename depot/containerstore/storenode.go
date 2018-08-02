@@ -41,6 +41,7 @@ const (
 
 //go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
 type ProxyManager interface {
+	CredentialHandler
 	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
 }
 
