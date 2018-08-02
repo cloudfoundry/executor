@@ -10,7 +10,7 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
-type FakeProxyManager struct {
+type FakeCredentialHandler struct {
 	CreateDirStub        func(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	createDirMutex       sync.RWMutex
 	createDirArgsForCall []struct {
@@ -63,25 +63,11 @@ type FakeProxyManager struct {
 	closeReturnsOnCall map[int]struct {
 		result1 error
 	}
-	ProxyPortsStub        func(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
-	proxyPortsMutex       sync.RWMutex
-	proxyPortsArgsForCall []struct {
-		arg1 lager.Logger
-		arg2 *executor.Container
-	}
-	proxyPortsReturns struct {
-		result1 []executor.ProxyPortMapping
-		result2 []uint16
-	}
-	proxyPortsReturnsOnCall map[int]struct {
-		result1 []executor.ProxyPortMapping
-		result2 []uint16
-	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeProxyManager) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (fake *FakeCredentialHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	fake.createDirMutex.Lock()
 	ret, specificReturn := fake.createDirReturnsOnCall[len(fake.createDirArgsForCall)]
 	fake.createDirArgsForCall = append(fake.createDirArgsForCall, struct {
@@ -99,19 +85,19 @@ func (fake *FakeProxyManager) CreateDir(logger lager.Logger, container executor.
 	return fake.createDirReturns.result1, fake.createDirReturns.result2, fake.createDirReturns.result3
 }
 
-func (fake *FakeProxyManager) CreateDirCallCount() int {
+func (fake *FakeCredentialHandler) CreateDirCallCount() int {
 	fake.createDirMutex.RLock()
 	defer fake.createDirMutex.RUnlock()
 	return len(fake.createDirArgsForCall)
 }
 
-func (fake *FakeProxyManager) CreateDirArgsForCall(i int) (lager.Logger, executor.Container) {
+func (fake *FakeCredentialHandler) CreateDirArgsForCall(i int) (lager.Logger, executor.Container) {
 	fake.createDirMutex.RLock()
 	defer fake.createDirMutex.RUnlock()
 	return fake.createDirArgsForCall[i].logger, fake.createDirArgsForCall[i].container
 }
 
-func (fake *FakeProxyManager) CreateDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredentialHandler) CreateDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
 	fake.CreateDirStub = nil
 	fake.createDirReturns = struct {
 		result1 []garden.BindMount
@@ -120,7 +106,7 @@ func (fake *FakeProxyManager) CreateDirReturns(result1 []garden.BindMount, resul
 	}{result1, result2, result3}
 }
 
-func (fake *FakeProxyManager) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredentialHandler) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
 	fake.CreateDirStub = nil
 	if fake.createDirReturnsOnCall == nil {
 		fake.createDirReturnsOnCall = make(map[int]struct {
@@ -136,7 +122,7 @@ func (fake *FakeProxyManager) CreateDirReturnsOnCall(i int, result1 []garden.Bin
 	}{result1, result2, result3}
 }
 
-func (fake *FakeProxyManager) RemoveDir(logger lager.Logger, container executor.Container) error {
+func (fake *FakeCredentialHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
 	fake.removeDirMutex.Lock()
 	ret, specificReturn := fake.removeDirReturnsOnCall[len(fake.removeDirArgsForCall)]
 	fake.removeDirArgsForCall = append(fake.removeDirArgsForCall, struct {
@@ -154,26 +140,26 @@ func (fake *FakeProxyManager) RemoveDir(logger lager.Logger, container executor.
 	return fake.removeDirReturns.result1
 }
 
-func (fake *FakeProxyManager) RemoveDirCallCount() int {
+func (fake *FakeCredentialHandler) RemoveDirCallCount() int {
 	fake.removeDirMutex.RLock()
 	defer fake.removeDirMutex.RUnlock()
 	return len(fake.removeDirArgsForCall)
 }
 
-func (fake *FakeProxyManager) RemoveDirArgsForCall(i int) (lager.Logger, executor.Container) {
+func (fake *FakeCredentialHandler) RemoveDirArgsForCall(i int) (lager.Logger, executor.Container) {
 	fake.removeDirMutex.RLock()
 	defer fake.removeDirMutex.RUnlock()
 	return fake.removeDirArgsForCall[i].logger, fake.removeDirArgsForCall[i].container
 }
 
-func (fake *FakeProxyManager) RemoveDirReturns(result1 error) {
+func (fake *FakeCredentialHandler) RemoveDirReturns(result1 error) {
 	fake.RemoveDirStub = nil
 	fake.removeDirReturns = struct {
 		result1 error
 	}{result1}
 }
 
-func (fake *FakeProxyManager) RemoveDirReturnsOnCall(i int, result1 error) {
+func (fake *FakeCredentialHandler) RemoveDirReturnsOnCall(i int, result1 error) {
 	fake.RemoveDirStub = nil
 	if fake.removeDirReturnsOnCall == nil {
 		fake.removeDirReturnsOnCall = make(map[int]struct {
@@ -185,7 +171,7 @@ func (fake *FakeProxyManager) RemoveDirReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeProxyManager) Update(credentials containerstore.Credential, container executor.Container) error {
+func (fake *FakeCredentialHandler) Update(credentials containerstore.Credential, container executor.Container) error {
 	fake.updateMutex.Lock()
 	ret, specificReturn := fake.updateReturnsOnCall[len(fake.updateArgsForCall)]
 	fake.updateArgsForCall = append(fake.updateArgsForCall, struct {
@@ -203,26 +189,26 @@ func (fake *FakeProxyManager) Update(credentials containerstore.Credential, cont
 	return fake.updateReturns.result1
 }
 
-func (fake *FakeProxyManager) UpdateCallCount() int {
+func (fake *FakeCredentialHandler) UpdateCallCount() int {
 	fake.updateMutex.RLock()
 	defer fake.updateMutex.RUnlock()
 	return len(fake.updateArgsForCall)
 }
 
-func (fake *FakeProxyManager) UpdateArgsForCall(i int) (containerstore.Credential, executor.Container) {
+func (fake *FakeCredentialHandler) UpdateArgsForCall(i int) (containerstore.Credential, executor.Container) {
 	fake.updateMutex.RLock()
 	defer fake.updateMutex.RUnlock()
 	return fake.updateArgsForCall[i].credentials, fake.updateArgsForCall[i].container
 }
 
-func (fake *FakeProxyManager) UpdateReturns(result1 error) {
+func (fake *FakeCredentialHandler) UpdateReturns(result1 error) {
 	fake.UpdateStub = nil
 	fake.updateReturns = struct {
 		result1 error
 	}{result1}
 }
 
-func (fake *FakeProxyManager) UpdateReturnsOnCall(i int, result1 error) {
+func (fake *FakeCredentialHandler) UpdateReturnsOnCall(i int, result1 error) {
 	fake.UpdateStub = nil
 	if fake.updateReturnsOnCall == nil {
 		fake.updateReturnsOnCall = make(map[int]struct {
@@ -234,7 +220,7 @@ func (fake *FakeProxyManager) UpdateReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeProxyManager) Close(invalidCredentials containerstore.Credential, container executor.Container) error {
+func (fake *FakeCredentialHandler) Close(invalidCredentials containerstore.Credential, container executor.Container) error {
 	fake.closeMutex.Lock()
 	ret, specificReturn := fake.closeReturnsOnCall[len(fake.closeArgsForCall)]
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
@@ -252,26 +238,26 @@ func (fake *FakeProxyManager) Close(invalidCredentials containerstore.Credential
 	return fake.closeReturns.result1
 }
 
-func (fake *FakeProxyManager) CloseCallCount() int {
+func (fake *FakeCredentialHandler) CloseCallCount() int {
 	fake.closeMutex.RLock()
 	defer fake.closeMutex.RUnlock()
 	return len(fake.closeArgsForCall)
 }
 
-func (fake *FakeProxyManager) CloseArgsForCall(i int) (containerstore.Credential, executor.Container) {
+func (fake *FakeCredentialHandler) CloseArgsForCall(i int) (containerstore.Credential, executor.Container) {
 	fake.closeMutex.RLock()
 	defer fake.closeMutex.RUnlock()
 	return fake.closeArgsForCall[i].invalidCredentials, fake.closeArgsForCall[i].container
 }
 
-func (fake *FakeProxyManager) CloseReturns(result1 error) {
+func (fake *FakeCredentialHandler) CloseReturns(result1 error) {
 	fake.CloseStub = nil
 	fake.closeReturns = struct {
 		result1 error
 	}{result1}
 }
 
-func (fake *FakeProxyManager) CloseReturnsOnCall(i int, result1 error) {
+func (fake *FakeCredentialHandler) CloseReturnsOnCall(i int, result1 error) {
 	fake.CloseStub = nil
 	if fake.closeReturnsOnCall == nil {
 		fake.closeReturnsOnCall = make(map[int]struct {
@@ -283,59 +269,7 @@ func (fake *FakeProxyManager) CloseReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeProxyManager) ProxyPorts(arg1 lager.Logger, arg2 *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
-	fake.proxyPortsMutex.Lock()
-	ret, specificReturn := fake.proxyPortsReturnsOnCall[len(fake.proxyPortsArgsForCall)]
-	fake.proxyPortsArgsForCall = append(fake.proxyPortsArgsForCall, struct {
-		arg1 lager.Logger
-		arg2 *executor.Container
-	}{arg1, arg2})
-	fake.recordInvocation("ProxyPorts", []interface{}{arg1, arg2})
-	fake.proxyPortsMutex.Unlock()
-	if fake.ProxyPortsStub != nil {
-		return fake.ProxyPortsStub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	return fake.proxyPortsReturns.result1, fake.proxyPortsReturns.result2
-}
-
-func (fake *FakeProxyManager) ProxyPortsCallCount() int {
-	fake.proxyPortsMutex.RLock()
-	defer fake.proxyPortsMutex.RUnlock()
-	return len(fake.proxyPortsArgsForCall)
-}
-
-func (fake *FakeProxyManager) ProxyPortsArgsForCall(i int) (lager.Logger, *executor.Container) {
-	fake.proxyPortsMutex.RLock()
-	defer fake.proxyPortsMutex.RUnlock()
-	return fake.proxyPortsArgsForCall[i].arg1, fake.proxyPortsArgsForCall[i].arg2
-}
-
-func (fake *FakeProxyManager) ProxyPortsReturns(result1 []executor.ProxyPortMapping, result2 []uint16) {
-	fake.ProxyPortsStub = nil
-	fake.proxyPortsReturns = struct {
-		result1 []executor.ProxyPortMapping
-		result2 []uint16
-	}{result1, result2}
-}
-
-func (fake *FakeProxyManager) ProxyPortsReturnsOnCall(i int, result1 []executor.ProxyPortMapping, result2 []uint16) {
-	fake.ProxyPortsStub = nil
-	if fake.proxyPortsReturnsOnCall == nil {
-		fake.proxyPortsReturnsOnCall = make(map[int]struct {
-			result1 []executor.ProxyPortMapping
-			result2 []uint16
-		})
-	}
-	fake.proxyPortsReturnsOnCall[i] = struct {
-		result1 []executor.ProxyPortMapping
-		result2 []uint16
-	}{result1, result2}
-}
-
-func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
+func (fake *FakeCredentialHandler) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.createDirMutex.RLock()
@@ -346,8 +280,6 @@ func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
 	defer fake.updateMutex.RUnlock()
 	fake.closeMutex.RLock()
 	defer fake.closeMutex.RUnlock()
-	fake.proxyPortsMutex.RLock()
-	defer fake.proxyPortsMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value
@@ -355,7 +287,7 @@ func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
 	return copiedInvocations
 }
 
-func (fake *FakeProxyManager) recordInvocation(key string, args []interface{}) {
+func (fake *FakeCredentialHandler) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -367,4 +299,4 @@ func (fake *FakeProxyManager) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ containerstore.ProxyManager = new(FakeProxyManager)
+var _ containerstore.CredentialHandler = new(FakeCredentialHandler)

@@ -283,14 +283,13 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	driverConfig.MapfsPath = config.MapfsPath
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
-	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock)
-	if err != nil {
-		return nil, nil, grouper.Members{}, err
-	}
-
-	var proxyManager containerstore.ProxyManager
+	var proxyConfigHandler containerstore.ProxyManager
 	if config.EnableContainerProxy {
-		proxyManager = containerstore.NewProxyManager(
+		err := os.RemoveAll(config.ContainerProxyConfigPath)
+		if err != nil {
+			logger.Error("failed-removing-container-proxy-config-path", err)
+		}
+		proxyConfigHandler = containerstore.NewProxyConfigHandler(
 			logger,
 			config.ContainerProxyPath,
 			config.ContainerProxyConfigPath,
@@ -300,7 +299,17 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 			time.Duration(config.EnvoyConfigRefreshDelay),
 		)
 	} else {
-		proxyManager = containerstore.NewNoopProxyManager()
+		proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
+	}
+
+	instanceIdentityHandler := containerstore.NewInstanceIdentityHandler(
+		config.InstanceIdentityCredDir,
+		"/etc/cf-instance-credentials",
+	)
+
+	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, proxyConfigHandler, instanceIdentityHandler)
+	if err != nil {
+		return nil, nil, grouper.Members{}, err
 	}
 
 	containerStore := containerstore.New(
@@ -317,7 +326,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		metronClient,
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
-		proxyManager,
+		proxyConfigHandler,
 		cellID,
 		config.EnableUnproxiedPortMappings,
 	)
@@ -606,7 +615,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	return tlsConfig, nil
 }
 
-func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config ExecutorConfig, clock clock.Clock) (containerstore.CredManager, error) {
+func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config ExecutorConfig, clock clock.Clock, handlers ...containerstore.CredentialHandler) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
 		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)
@@ -642,13 +651,12 @@ func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.Ingre
 		return containerstore.NewCredManager(
 			logger,
 			metronClient,
-			config.InstanceIdentityCredDir,
 			time.Duration(config.InstanceIdentityValidityPeriod),
 			rand.Reader,
 			clock,
 			certs[0],
 			privateKey,
-			"/etc/cf-instance-credentials",
+			handlers...,
 		), nil
 	}
 

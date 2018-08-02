@@ -39,6 +39,12 @@ const (
 	GardenContainerDestructionFailedDuration    = "GardenContainerDestructionFailedDuration"
 )
 
+//go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
+type ProxyManager interface {
+	CredentialHandler
+	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
+}
+
 type storeNode struct {
 	modifiedIndex               uint
 	hostTrustedCertificatesPath string
@@ -56,6 +62,7 @@ type storeNode struct {
 	dependencyManager           DependencyManager
 	volumeManager               volman.Manager
 	credManager                 CredManager
+	instanceIdentityHandler     *InstanceIdentityHandler
 	eventEmitter                event.Hub
 	transformer                 transformer.Transformer
 	process                     ifrit.Process
@@ -63,7 +70,7 @@ type storeNode struct {
 	useDeclarativeHealthCheck   bool
 	declarativeHealthcheckPath  string
 	useContainerProxy           bool
-	proxyManager                ProxyManager
+	proxyConfigHandler          ProxyManager
 	bindMounts                  []garden.BindMount
 	cellID                      string
 	enableUnproxiedPortMappings bool
@@ -84,7 +91,7 @@ func newStoreNode(
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
-	proxyManager ProxyManager,
+	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
 ) *storeNode {
@@ -104,7 +111,7 @@ func newStoreNode(
 		metronClient:                metronClient,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
-		proxyManager:                proxyManager,
+		proxyConfigHandler:          proxyConfigHandler,
 		cellID:                      cellID,
 		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
 	}
@@ -201,12 +208,6 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	n.bindMounts = append(n.bindMounts, volumeMounts...)
 
-	proxyMounts, err := n.proxyManager.BindMounts(logger, n.info)
-	if err != nil {
-		return err
-	}
-	n.bindMounts = append(n.bindMounts, proxyMounts...)
-
 	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
 	if err != nil {
 		n.complete(logger, true, CredDirFailed, true)
@@ -295,7 +296,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	info.Ports = dedupPorts(info.Ports)
 
-	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
+	proxyPortMapping, extraPorts := n.proxyConfigHandler.ProxyPorts(logger, info)
 	for _, port := range extraPorts {
 		info.Ports = append(info.Ports, executor.PortMapping{
 			ContainerPort: port,
@@ -437,19 +438,13 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
 
-	credManagerRunner, rotatingCredChan := n.credManager.Runner(logger, n.info)
-	proxyConfigRunner, err := n.proxyManager.Runner(logger, n.info, rotatingCredChan)
-	if err != nil {
-		n.completeWithError(logger, err)
-		return err
-	}
+	credManagerRunner := n.credManager.Runner(logger, n.info)
 
 	proxyTLSPorts := make([]uint16, len(n.info.Ports))
 	for i, p := range n.info.Ports {
 		proxyTLSPorts[i] = p.ContainerTLSProxyPort
 	}
 	cfg := transformer.Config{
-		LDSPort:       proxyConfigRunner.Port(),
 		BindMounts:    n.bindMounts,
 		ProxyTLSPorts: proxyTLSPorts,
 	}
@@ -458,12 +453,10 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return err
 	}
 
-	members := grouper.Members{
+	group := grouper.NewQueueOrdered(os.Interrupt, grouper.Members{
 		{"cred-manager-runner", credManagerRunner},
-		{"proxy-config-runner", proxyConfigRunner},
 		{"runner", runner},
-	}
-	group := grouper.NewOrdered(os.Interrupt, members)
+	})
 	n.process = ifrit.Background(group)
 	go n.run(logger)
 	return nil
@@ -474,14 +467,18 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 	if ok {
 		for _, event := range exitTrace {
 			err := event.Err
-			if err != nil {
+			errorTrace, ok := err.(grouper.ErrorTrace)
+			if ok {
+				n.completeWithError(logger, errorTrace)
+				return
+			} else if err != nil {
 				if event.Member.Name != "runner" {
 					err = errors.New(event.Member.Name + " exited: " + err.Error())
 				}
 				n.completeWithError(logger, err)
-				return
 			}
 		}
+		return
 	}
 
 	var errorStr string
@@ -574,7 +571,6 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, info.Guid)
 
 	// ensure these directories are removed even if the container fails to destroy
-	defer n.removeProxyConfigDir(logger, info)
 	defer n.removeCredsDir(logger, info)
 
 	err := n.destroyContainer(logger)
@@ -663,7 +659,6 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 
 	if n.info.IsCreated() {
 		// ensure these directories are removed even if the container fails to destroy
-		n.removeProxyConfigDir(logger, n.info.Copy())
 		n.removeCredsDir(logger, n.info.Copy())
 
 		n.info.TransitionToComplete(true, ContainerMissingMessage, false)
@@ -680,13 +675,6 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason, retryable)
 	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
-}
-
-func (n *storeNode) removeProxyConfigDir(logger lager.Logger, info executor.Container) {
-	err := n.proxyManager.RemoveProxyConfigDir(logger, info)
-	if err != nil {
-		logger.Error("failed-to-delete-container-proxy-config-dir", err)
-	}
 }
 
 func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container) {

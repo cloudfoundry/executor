@@ -2,11 +2,14 @@ package containerstore
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -35,7 +38,8 @@ const (
 )
 
 var (
-	ErrNoPortsAvailable = errors.New("no ports available")
+	ErrNoPortsAvailable   = errors.New("no ports available")
+	ErrInvalidCertificate = errors.New("cannot parse invalid certificate")
 
 	SupportedCipherSuites = "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"
 )
@@ -53,26 +57,7 @@ var dummyRunner = func(credRotatedChan <-chan Credential) ifrit.Runner {
 	})
 }
 
-//go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
-type ProxyManager interface {
-	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
-	BindMounts(lager.Logger, executor.Container) ([]garden.BindMount, error)
-	RemoveProxyConfigDir(lager.Logger, executor.Container) error
-	Runner(lager.Logger, executor.Container, <-chan Credential) (ProxyRunner, error)
-}
-
-//go:generate counterfeiter -o containerstorefakes/fake_proxyrunner.go . ProxyRunner
-type ProxyRunner interface {
-	ifrit.Runner
-	Port() uint16
-}
-
-type proxyRunner struct {
-	ifrit.Runner
-	ldsPort uint16
-}
-
-type proxyManager struct {
+type ProxyConfigHandler struct {
 	logger                             lager.Logger
 	containerProxyPath                 string
 	containerProxyConfigPath           string
@@ -83,31 +68,38 @@ type proxyManager struct {
 	refreshDelayMS time.Duration
 }
 
-type noopProxyManager struct{}
+type NoopProxyConfigHandler struct{}
 
-func (p *noopProxyManager) BindMounts(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
-	return []garden.BindMount{}, nil
+func (p *NoopProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+	return nil, nil, nil
 }
-
-func (p *noopProxyManager) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+func (p *NoopProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	return nil
+}
+func (p *NoopProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+	return nil
+}
+func (p *NoopProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
 	return nil
 }
 
-func (p *noopProxyManager) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (p *NoopProxyConfigHandler) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+	return nil
+}
+
+func (p *NoopProxyConfigHandler) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
 	return nil, nil
 }
 
-func (p *noopProxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ProxyRunner, error) {
-	return &proxyRunner{
-		Runner: dummyRunner(credRotatedChan),
-	}, nil
+func (p *NoopProxyConfigHandler) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ifrit.Runner, error) {
+	return dummyRunner(credRotatedChan), nil
 }
 
-func NewNoopProxyManager() ProxyManager {
-	return &noopProxyManager{}
+func NewNoopProxyConfigHandler() *NoopProxyConfigHandler {
+	return &NoopProxyConfigHandler{}
 }
 
-func NewProxyManager(
+func NewProxyConfigHandler(
 	logger lager.Logger,
 	containerProxyPath string,
 	containerProxyConfigPath string,
@@ -115,8 +107,8 @@ func NewProxyManager(
 	ContainerProxyVerifySubjectAltName []string,
 	containerProxyRequireClientCerts bool,
 	refreshDelayMS time.Duration,
-) ProxyManager {
-	return &proxyManager{
+) *ProxyConfigHandler {
+	return &ProxyConfigHandler{
 		logger:                             logger.Session("proxy-manager"),
 		containerProxyPath:                 containerProxyPath,
 		containerProxyConfigPath:           containerProxyConfigPath,
@@ -127,41 +119,8 @@ func NewProxyManager(
 	}
 }
 
-func (p *proxyManager) BindMounts(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
-	if !container.EnableContainerProxy {
-		return nil, nil
-	}
-
-	logger.Info("adding-container-proxy-bindmounts")
-	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
-	mounts := []garden.BindMount{
-		{
-			Origin:  garden.BindMountOriginHost,
-			SrcPath: p.containerProxyPath,
-			DstPath: "/etc/cf-assets/envoy",
-		},
-		{
-			Origin:  garden.BindMountOriginHost,
-			SrcPath: proxyConfigDir,
-			DstPath: "/etc/cf-assets/envoy_config",
-		},
-	}
-
-	err := os.MkdirAll(proxyConfigDir, 0755)
-	if err != nil {
-		return nil, err
-	}
-	return mounts, nil
-}
-
-func (p *proxyManager) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
-	logger.Info("removing-container-proxy-config-dir")
-	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
-	return os.RemoveAll(proxyConfigDir)
-}
-
 // This modifies the container pointer in order to create garden NetIn rules in the storenode.Create
-func (p *proxyManager) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
 	if !container.EnableContainerProxy {
 		return nil, nil
 	}
@@ -199,106 +158,137 @@ func (p *proxyManager) ProxyPorts(logger lager.Logger, container *executor.Conta
 	return proxyPortMapping, extraPorts
 }
 
-func (p *proxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ProxyRunner, error) {
+func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	if !container.EnableContainerProxy {
-		return &proxyRunner{
-			Runner: dummyRunner(credRotatedChan),
-		}, nil
+		return nil, nil, nil
 	}
 
-	port, err := getAvailablePort(container.Ports)
+	logger.Info("adding-container-proxy-bindmounts")
+	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
+	mounts := []garden.BindMount{
+		{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: p.containerProxyPath,
+			DstPath: "/etc/cf-assets/envoy",
+		},
+		{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: proxyConfigDir,
+			DstPath: "/etc/cf-assets/envoy_config",
+		},
+	}
+
+	err := os.MkdirAll(proxyConfigDir, 0755)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	adminPort, err := getAvailablePort(container.Ports, port)
-	if err != nil {
-		return nil, err
-	}
-
-	proxyRunner := &proxyRunner{
-		Runner: ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-			logger = logger.Session("proxy-manager")
-			logger.Info("starting")
-			defer logger.Info("finished")
-
-			proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
-			listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.yaml")
-
-			proxyConfig, err := generateProxyConfig(logger, container, p.refreshDelayMS, port, adminPort)
-			if err != nil {
-				logger.Error("failed-generating-proxy-config", err)
-				return err
-			}
-
-			err = writeProxyConfig(proxyConfig, proxyConfigPath)
-			if err != nil {
-				logger.Error("failed-writing-initial-proxy-listener-config", err)
-				return err
-			}
-
-			select {
-			case creds := <-credRotatedChan:
-				logger = logger.Session("updating-proxy-listener-config")
-				logger.Debug("started")
-
-				listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
-				if err != nil {
-					logger.Error("failed-generating-initial-proxy-listener-config", err)
-					return err
-				}
-
-				err = writeListenerConfig(listenerConfig, listenerConfigPath)
-				if err != nil {
-					logger.Error("failed-writing-initial-proxy-listener-config", err)
-					return err
-				}
-				logger.Debug("completed")
-			case signal := <-signals:
-				logger.Info("signaled", lager.Data{"signal": signal.String()})
-				configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
-				p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
-				return os.RemoveAll(configPath)
-			}
-
-			close(ready)
-			logger.Info("started")
-
-			for {
-				select {
-				case creds := <-credRotatedChan:
-					logger = logger.Session("updating-proxy-listener-config")
-					logger.Debug("started")
-
-					listenerConfig, err := generateListenerConfig(logger, container, creds, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName, p.containerProxyRequireClientCerts)
-					if err != nil {
-						logger.Error("failed-generating-proxy-listener-config", err)
-						return err
-					}
-
-					err = writeListenerConfig(listenerConfig, listenerConfigPath)
-					if err != nil {
-						logger.Error("failed-writing-proxy-listener-config", err)
-						return err
-					}
-					logger.Debug("completed")
-				case signal := <-signals:
-					logger.Info("signaled", lager.Data{"signal": signal.String()})
-					configPath := filepath.Join(p.containerProxyConfigPath, container.Guid)
-					p.logger.Info("cleanup-proxy-config-path", lager.Data{"config-path": configPath})
-					return os.RemoveAll(configPath)
-				}
-			}
-		}),
-		ldsPort: port}
-	return proxyRunner, nil
+	return mounts, nil, nil
 }
 
-func (p *proxyRunner) Port() uint16 {
-	return p.ldsPort
+func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	logger.Info("removing-container-proxy-config-dir")
+	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
+	return os.RemoveAll(proxyConfigDir)
 }
 
-func generateProxyConfig(logger lager.Logger, container executor.Container, refreshDelayMS time.Duration, port, adminPort uint16) (envoy.ProxyConfig, error) {
+func (p *ProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+	return p.writeConfig(credentials, container)
+}
+
+func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+	err := p.writeConfig(invalidCredentials, container)
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode([]byte(invalidCredentials.Cert))
+	if block == nil {
+		return ErrInvalidCertificate
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return err
+	}
+	return waitForEnvoyToReloadCerts(container, cert.SerialNumber)
+}
+
+func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
+
+	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
+	listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.yaml")
+
+	adminPort, err := getAvailablePort(container.Ports)
+	if err != nil {
+		return err
+	}
+
+	proxyConfig, err := generateProxyConfig(container, p.refreshDelayMS, adminPort)
+	if err != nil {
+		return err
+	}
+
+	err = writeProxyConfig(proxyConfig, proxyConfigPath)
+	if err != nil {
+		return err
+	}
+
+	listenerConfig, err := generateListenerConfig(
+		container,
+		credentials,
+		p.containerProxyTrustedCACerts,
+		p.containerProxyVerifySubjectAltName,
+		p.containerProxyRequireClientCerts,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = writeListenerConfig(listenerConfig, listenerConfigPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func waitForEnvoyToReloadCerts(container executor.Container, newSerialNumber *big.Int) error {
+	getSerialNumber := func() (*big.Int, error) {
+		addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
+		conn, err := tls.Dial("tcp", addr, &tls.Config{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		if err := conn.Handshake(); err != nil {
+			return nil, err
+		}
+
+		return conn.ConnectionState().PeerCertificates[0].SerialNumber, nil
+	}
+
+	// TODO: test this
+	for i := 0; i < 10; i++ {
+		seriaNumber, err := getSerialNumber()
+		if err != nil {
+			return err
+		}
+		if err == nil && seriaNumber == newSerialNumber {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return nil
+}
+
+func generateProxyConfig(container executor.Container, refreshDelayMS time.Duration, adminPort uint16) (envoy.ProxyConfig, error) {
 	clusters := []envoy.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
@@ -362,7 +352,7 @@ func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error
 	return os.Rename(tmpPath, path)
 }
 
-func generateListenerConfig(logger lager.Logger, container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string, requireClientCerts bool) (envoy.ListenerConfig, error) {
+func generateListenerConfig(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string, requireClientCerts bool) (envoy.ListenerConfig, error) {
 	resources := []envoy.Resource{}
 
 	if !requireClientCerts {

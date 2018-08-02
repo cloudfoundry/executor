@@ -39,7 +39,6 @@ type Transformer interface {
 }
 
 type Config struct {
-	LDSPort       uint16
 	ProxyTLSPorts []uint16
 	BindMounts    []garden.BindMount
 }
