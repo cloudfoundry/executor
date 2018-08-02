@@ -70,7 +70,7 @@ type storeNode struct {
 	useDeclarativeHealthCheck   bool
 	declarativeHealthcheckPath  string
 	useContainerProxy           bool
-	proxyManager                ProxyManager
+	proxyConfigHandler          ProxyManager
 	bindMounts                  []garden.BindMount
 	cellID                      string
 	enableUnproxiedPortMappings bool
@@ -91,7 +91,7 @@ func newStoreNode(
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
-	proxyManager ProxyManager,
+	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
 ) *storeNode {
@@ -111,7 +111,7 @@ func newStoreNode(
 		metronClient:                metronClient,
 		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:  declarativeHealthcheckPath,
-		proxyManager:                proxyManager,
+		proxyConfigHandler:          proxyConfigHandler,
 		cellID:                      cellID,
 		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
 	}
@@ -296,7 +296,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	info.Ports = dedupPorts(info.Ports)
 
-	proxyPortMapping, extraPorts := n.proxyManager.ProxyPorts(logger, info)
+	proxyPortMapping, extraPorts := n.proxyConfigHandler.ProxyPorts(logger, info)
 	for _, port := range extraPorts {
 		info.Ports = append(info.Ports, executor.PortMapping{
 			ContainerPort: port,

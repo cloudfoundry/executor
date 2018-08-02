@@ -283,13 +283,13 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	driverConfig.MapfsPath = config.MapfsPath
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
-	var proxyManager containerstore.ProxyManager
+	var proxyConfigHandler containerstore.ProxyManager
 	if config.EnableContainerProxy {
 		err := os.RemoveAll(config.ContainerProxyConfigPath)
 		if err != nil {
 			logger.Error("failed-removing-container-proxy-config-path", err)
 		}
-		proxyManager = containerstore.NewProxyManager(
+		proxyConfigHandler = containerstore.NewProxyConfigHandler(
 			logger,
 			config.ContainerProxyPath,
 			config.ContainerProxyConfigPath,
@@ -299,7 +299,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 			time.Duration(config.EnvoyConfigRefreshDelay),
 		)
 	} else {
-		proxyManager = containerstore.NewNoopProxyManager()
+		proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
 	}
 
 	instanceIdentityHandler := containerstore.NewInstanceIdentityHandler(
@@ -307,7 +307,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		"/etc/cf-instance-credentials",
 	)
 
-	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, proxyManager, instanceIdentityHandler)
+	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, proxyConfigHandler, instanceIdentityHandler)
 	if err != nil {
 		return nil, nil, grouper.Members{}, err
 	}
@@ -326,7 +326,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		metronClient,
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
-		proxyManager,
+		proxyConfigHandler,
 		cellID,
 		config.EnableUnproxiedPortMappings,
 	)

@@ -57,7 +57,7 @@ var dummyRunner = func(credRotatedChan <-chan Credential) ifrit.Runner {
 	})
 }
 
-type proxyConfigHandler struct {
+type ProxyConfigHandler struct {
 	logger                             lager.Logger
 	containerProxyPath                 string
 	containerProxyConfigPath           string
@@ -68,38 +68,38 @@ type proxyConfigHandler struct {
 	refreshDelayMS time.Duration
 }
 
-type NoopProxyManager struct{}
+type NoopProxyConfigHandler struct{}
 
-func (p *NoopProxyManager) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (p *NoopProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	return nil, nil, nil
 }
-func (p *NoopProxyManager) RemoveDir(logger lager.Logger, container executor.Container) error {
+func (p *NoopProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
 	return nil
 }
-func (p *NoopProxyManager) Update(credentials Credential, container executor.Container) error {
+func (p *NoopProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
 	return nil
 }
-func (p *NoopProxyManager) Close(invalidCredentials Credential, container executor.Container) error {
-	return nil
-}
-
-func (p *NoopProxyManager) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+func (p *NoopProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
 	return nil
 }
 
-func (p *NoopProxyManager) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (p *NoopProxyConfigHandler) RemoveProxyConfigDir(logger lager.Logger, container executor.Container) error {
+	return nil
+}
+
+func (p *NoopProxyConfigHandler) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
 	return nil, nil
 }
 
-func (p *NoopProxyManager) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ifrit.Runner, error) {
+func (p *NoopProxyConfigHandler) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ifrit.Runner, error) {
 	return dummyRunner(credRotatedChan), nil
 }
 
-func NewNoopProxyManager() *NoopProxyManager {
-	return &NoopProxyManager{}
+func NewNoopProxyConfigHandler() *NoopProxyConfigHandler {
+	return &NoopProxyConfigHandler{}
 }
 
-func NewProxyManager(
+func NewProxyConfigHandler(
 	logger lager.Logger,
 	containerProxyPath string,
 	containerProxyConfigPath string,
@@ -107,8 +107,8 @@ func NewProxyManager(
 	ContainerProxyVerifySubjectAltName []string,
 	containerProxyRequireClientCerts bool,
 	refreshDelayMS time.Duration,
-) ProxyManager {
-	return &proxyConfigHandler{
+) *ProxyConfigHandler {
+	return &ProxyConfigHandler{
 		logger:                             logger.Session("proxy-manager"),
 		containerProxyPath:                 containerProxyPath,
 		containerProxyConfigPath:           containerProxyConfigPath,
@@ -120,7 +120,7 @@ func NewProxyManager(
 }
 
 // This modifies the container pointer in order to create garden NetIn rules in the storenode.Create
-func (p *proxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
 	if !container.EnableContainerProxy {
 		return nil, nil
 	}
@@ -158,7 +158,7 @@ func (p *proxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 	return proxyPortMapping, extraPorts
 }
 
-func (p *proxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
 	if !container.EnableContainerProxy {
 		return nil, nil, nil
 	}
@@ -186,17 +186,17 @@ func (p *proxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 	return mounts, nil, nil
 }
 
-func (p *proxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
 	logger.Info("removing-container-proxy-config-dir")
 	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
 	return os.RemoveAll(proxyConfigDir)
 }
 
-func (p *proxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
 	return p.writeConfig(credentials, container)
 }
 
-func (p *proxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
 	err := p.writeConfig(invalidCredentials, container)
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func (p *proxyConfigHandler) Close(invalidCredentials Credential, container exec
 	return waitForEnvoyToReloadCerts(container, cert.SerialNumber)
 }
 
-func (p *proxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
 	if !container.EnableContainerProxy {
 		return nil
 	}

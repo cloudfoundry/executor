@@ -29,7 +29,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-var _ = Describe("ProxyManager", func() {
+var _ = Describe("ProxyConfigHandler", func() {
 
 	var (
 		logger                             *lagertest.TestLogger
@@ -40,7 +40,7 @@ var _ = Describe("ProxyManager", func() {
 		container                          executor.Container
 		listenerConfigFile                 string
 		proxyConfigFile                    string
-		proxyManager                       containerstore.ProxyManager
+		proxyConfigHandler                 *containerstore.ProxyConfigHandler
 		refreshDelayMS                     time.Duration
 		containerProxyTrustedCACerts       []string
 		containerProxyVerifySubjectAltName []string
@@ -82,7 +82,7 @@ var _ = Describe("ProxyManager", func() {
 	})
 
 	JustBeforeEach(func() {
-		proxyManager = containerstore.NewProxyManager(
+		proxyConfigHandler = containerstore.NewProxyConfigHandler(
 			logger,
 			proxyDir,
 			proxyConfigDir,
@@ -102,24 +102,24 @@ var _ = Describe("ProxyManager", func() {
 		os.RemoveAll(proxyDir)
 	})
 
-	Context("No-op Proxy Manager", func() {
+	Context("No-op Proxy ConfigHandler", func() {
 		var (
-			proxyManager *containerstore.NoopProxyManager
+			proxyConfigHandler *containerstore.NoopProxyConfigHandler
 		)
 
 		JustBeforeEach(func() {
-			proxyManager = containerstore.NewNoopProxyManager()
+			proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
 		})
 
 		Context("CreateDir", func() {
 			It("returns an empty bind mount", func() {
-				mounts, _, err := proxyManager.CreateDir(logger, container)
+				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mounts).To(BeEmpty())
 			})
 
 			It("returns an empty environment variables", func() {
-				_, env, err := proxyManager.CreateDir(logger, container)
+				_, env, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(env).To(BeEmpty())
 			})
@@ -128,7 +128,7 @@ var _ = Describe("ProxyManager", func() {
 		Context("Close", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-				err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -140,7 +140,7 @@ var _ = Describe("ProxyManager", func() {
 		Context("Update", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-				err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -150,7 +150,7 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		It("returns an empty proxy port mapping", func() {
-			ports, extraPorts := proxyManager.ProxyPorts(logger, &container)
+			ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
 			Expect(ports).To(BeEmpty())
 			Expect(extraPorts).To(BeEmpty())
 		})
@@ -163,14 +163,14 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("returns an empty bind mount", func() {
-				mounts, _, err := proxyManager.CreateDir(logger, container)
+				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mounts).To(BeEmpty())
 			})
 		})
 
 		It("returns the appropriate bind mounts for container proxy", func() {
-			mounts, _, err := proxyManager.CreateDir(logger, container)
+			mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mounts).To(ConsistOf([]garden.BindMount{
 				{
@@ -187,7 +187,7 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		It("makes the proxy config directory on the host", func() {
-			_, _, err := proxyManager.CreateDir(logger, container)
+			_, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			proxyConfigDir := fmt.Sprintf("%s/%s", proxyConfigDir, container.Guid)
 			Expect(proxyConfigDir).To(BeADirectory())
@@ -200,7 +200,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("returns an error", func() {
-				_, _, err := proxyManager.CreateDir(logger, container)
+				_, _, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -208,13 +208,13 @@ var _ = Describe("ProxyManager", func() {
 
 	Context("RemoveDir", func() {
 		JustBeforeEach(func() {
-			_, _, err := proxyManager.CreateDir(logger, container)
+			_, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configPath).To(BeADirectory())
 		})
 
 		It("removes the directory created by CreateDir", func() {
-			err := proxyManager.RemoveDir(logger, container)
+			err := proxyConfigHandler.RemoveDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configPath).NotTo(BeADirectory())
 		})
@@ -238,14 +238,14 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("returns an empty proxy port mapping", func() {
-				ports, extraPorts := proxyManager.ProxyPorts(logger, &container)
+				ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
 				Expect(ports).To(BeEmpty())
 				Expect(extraPorts).To(BeEmpty())
 			})
 		})
 
 		It("each port gets an equivalent extra proxy port", func() {
-			ports, extraPorts := proxyManager.ProxyPorts(logger, &container)
+			ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
 			Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
 				{
 					AppPort:   8080,
@@ -270,7 +270,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("the additional proxy ports don't collide with requested ports", func() {
-				ports, extraPorts := proxyManager.ProxyPorts(logger, &container)
+				ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
 				Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
 					{
 						AppPort:   61001,
@@ -306,7 +306,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("returns a ProxyRunner that does nothing", func() {
-				err := proxyManager.Update(containerstore.Credential{Cert: "", Key: ""}, container)
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "", Key: ""}, container)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
@@ -314,7 +314,7 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		It("creates the appropriate proxy config at start", func() {
-			err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
@@ -360,14 +360,14 @@ var _ = Describe("ProxyManager", func() {
 				})
 
 				It("should error out", func() {
-					err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+					err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 					Expect(err).To(MatchError("failed to read certificate."))
 				})
 			})
 
 			Context("with valid config", func() {
 				JustBeforeEach(func() {
-					err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+					err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 					Expect(err).NotTo(HaveOccurred())
 					Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
@@ -441,7 +441,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("creates the appropriate listener config with a unique stat prefix", func() {
-				err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
@@ -500,7 +500,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("creates the appropriate proxy config file", func() {
-				err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -554,7 +554,7 @@ var _ = Describe("ProxyManager", func() {
 				})
 
 				It("returns an error", func() {
-					err := proxyManager.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+					err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 					Expect(err).To(Equal(containerstore.ErrNoPortsAvailable))
 				})
 			})
@@ -578,7 +578,7 @@ var _ = Describe("ProxyManager", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, _, err := proxyManager.CreateDir(logger, container)
+			_, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -601,7 +601,7 @@ var _ = Describe("ProxyManager", func() {
 			})
 
 			It("updates the listener configuration with the invalid certificate", func() {
-				err := proxyManager.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+				err := proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(listenerConfigFile).Should(BeAnExistingFile())
@@ -629,7 +629,7 @@ var _ = Describe("ProxyManager", func() {
 			It("returns", func() {
 				ch := make(chan struct{})
 				go func() {
-					proxyManager.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
 					close(ch)
 				}()
 
@@ -641,7 +641,7 @@ var _ = Describe("ProxyManager", func() {
 			It("doesn't return until the proxy is serving the new cert", func() {
 				ch := make(chan struct{})
 				go func() {
-					proxyManager.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
 					close(ch)
 				}()
 

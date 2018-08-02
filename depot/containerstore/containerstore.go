@@ -75,8 +75,8 @@ type containerStore struct {
 	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
 
-	ldsSourcePath string
-	proxyManager  ProxyManager
+	ldsSourcePath      string
+	proxyConfigHandler ProxyManager
 
 	trustedSystemCertificatesPath string
 
@@ -101,7 +101,7 @@ func New(
 	metronClient loggingclient.IngressClient,
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
-	proxyManager ProxyManager,
+	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
 ) ContainerStore {
@@ -119,7 +119,7 @@ func New(
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
-		proxyManager:                  proxyManager,
+		proxyConfigHandler:            proxyConfigHandler,
 
 		reapingLock: &sync.RWMutex{},
 
@@ -153,7 +153,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
-			cs.proxyManager,
+			cs.proxyConfigHandler,
 			cs.cellID,
 			cs.enableUnproxiedPortMappings,
 		))
