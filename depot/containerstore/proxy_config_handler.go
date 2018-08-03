@@ -187,16 +187,28 @@ func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 }
 
 func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
+
 	logger.Info("removing-container-proxy-config-dir")
 	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
 	return os.RemoveAll(proxyConfigDir)
 }
 
 func (p *ProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
+
 	return p.writeConfig(credentials, container)
 }
 
 func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
+
 	err := p.writeConfig(invalidCredentials, container)
 	if err != nil {
 		return err
@@ -215,10 +227,6 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container exec
 }
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
-	if !container.EnableContainerProxy {
-		return nil
-	}
-
 	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
 	listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.yaml")
 

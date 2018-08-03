@@ -207,16 +207,25 @@ var _ = Describe("ProxyConfigHandler", func() {
 	})
 
 	Context("RemoveDir", func() {
-		JustBeforeEach(func() {
+		It("removes the directory created by CreateDir", func() {
 			_, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configPath).To(BeADirectory())
-		})
 
-		It("removes the directory created by CreateDir", func() {
-			err := proxyConfigHandler.RemoveDir(logger, container)
+			err = proxyConfigHandler.RemoveDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configPath).NotTo(BeADirectory())
+		})
+
+		Context("the EnableContainerProxy is disabled on the container", func() {
+			BeforeEach(func() {
+				container.EnableContainerProxy = false
+			})
+
+			It("does not return an error when deleting a non existing directory", func() {
+				err := proxyConfigHandler.RemoveDir(logger, container)
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
 	})
 
@@ -305,7 +314,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				container.EnableContainerProxy = false
 			})
 
-			It("returns a ProxyRunner that does nothing", func() {
+			It("does not write a envoy config file", func() {
 				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "", Key: ""}, container)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -584,7 +593,6 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 		Context("when the envoy proxy loads the listener cert and port", func() {
 			BeforeEach(func() {
-				// TODO: how do we simulate this ?
 				s := ghttp.NewUnstartedServer()
 				cert, err := tls.X509KeyPair([]byte(cert), []byte(key))
 				s.HTTPTestServer.TLS = &tls.Config{
@@ -646,6 +654,30 @@ var _ = Describe("ProxyConfigHandler", func() {
 				}()
 
 				Consistently(ch).ShouldNot(BeClosed())
+			})
+		})
+
+		Context("the EnableContainerProxy is disabled on the container", func() {
+			BeforeEach(func() {
+				container.EnableContainerProxy = false
+			})
+
+			It("does not write a envoy config file", func() {
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "", Key: ""}, container)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+			})
+
+			It("doesn't wait until the proxy is serving the new cert", func() {
+				ch := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+					close(ch)
+				}()
+
+				Eventually(ch).Should(BeClosed())
 			})
 		})
 	})
