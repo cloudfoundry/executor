@@ -352,6 +352,10 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		NetOut:     netOutRules,
 	}
 
+	if n.config.SetCPUWeight {
+		containerSpec.Limits.CPU.Weight = uint64(info.MemoryMB)
+	}
+
 	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient, n.metronClient)
 	if err != nil {
 		return nil, err

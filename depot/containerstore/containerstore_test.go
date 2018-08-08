@@ -439,6 +439,52 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
+			Context("when SetCPUWeight is set", func() {
+				BeforeEach(func() {
+					containerConfig.SetCPUWeight = true
+
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						fakeMetronClient,
+						false,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+						cellID,
+						true,
+					)
+				})
+
+				It("creates the container in garden with the correct limits", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
+
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeExclusive))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(resource.DiskMB * 1024 * 1024))
+					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
+
+					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
+
+					expectedCPUShares := uint64(float64(maxCPUShares) * float64(runReq.CPUWeight) / 100.0)
+					Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
+
+					expectedCPUWeight := uint64(resource.MemoryMB)
+					Expect(containerSpec.Limits.CPU.Weight).To(Equal(expectedCPUWeight))
+				})
+			})
+
 			It("creates the container in garden with the correct limits", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
@@ -455,6 +501,7 @@ var _ = Describe("Container Store", func() {
 
 				expectedCPUShares := uint64(float64(maxCPUShares) * float64(runReq.CPUWeight) / 100.0)
 				Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
+				Expect(containerSpec.Limits.CPU.Weight).To(BeZero())
 			})
 
 			It("downloads the correct cache dependencies", func() {

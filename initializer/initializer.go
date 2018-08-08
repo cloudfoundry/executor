@@ -82,6 +82,7 @@ type ExecutorConfig struct {
 	CachePath                          string                `json:"cache_path,omitempty"`
 	ContainerInodeLimit                uint64                `json:"container_inode_limit,omitempty"`
 	ContainerMaxCpuShares              uint64                `json:"container_max_cpu_shares,omitempty"`
+	SetCPUWeight                       bool                  `json:"set_cpu_weight,omitempty"`
 	ContainerMetricsReportInterval     durationjson.Duration `json:"container_metrics_report_interval,omitempty"`
 	ContainerOwnerName                 string                `json:"container_owner_name,omitempty"`
 	ContainerReapInterval              durationjson.Duration `json:"container_reap_interval,omitempty"`
@@ -272,6 +273,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		OwnerName:              config.ContainerOwnerName,
 		INodeLimit:             config.ContainerInodeLimit,
 		MaxCPUShares:           config.ContainerMaxCpuShares,
+		SetCPUWeight:           config.SetCPUWeight,
 		ReservedExpirationTime: time.Duration(config.ReservedExpirationTime),
 		ReapInterval:           time.Duration(config.ContainerReapInterval),
 	}

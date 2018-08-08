@@ -55,6 +55,7 @@ type ContainerConfig struct {
 	OwnerName    string
 	INodeLimit   uint64
 	MaxCPUShares uint64
+	SetCPUWeight bool
 
 	ReservedExpirationTime time.Duration
 	ReapInterval           time.Duration
