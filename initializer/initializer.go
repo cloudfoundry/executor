@@ -91,11 +91,11 @@ type ExecutorConfig struct {
 	DiskMB                             string                `json:"disk_mb,omitempty"`
 	EnableDeclarativeHealthcheck       bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthcheckPath         string                `json:"declarative_healthcheck_path,omitempty"`
-	EnableContainerProxy               bool                  `json:"enable_container_proxy",omitempty`
+	EnableContainerProxy               bool                  `json:"enable_container_proxy,omitempty"`
 	EnableUnproxiedPortMappings        bool                  `json:"enable_unproxied_port_mappings"`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
 	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout,omitempty"`
-	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb",omitempty`
+	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb,omitempty"`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
 	ContainerProxyConfigPath           string                `json:"container_proxy_config_path,omitempty"`
 	ContainerProxyTrustedCACerts       []string              `json:"container_proxy_trusted_ca_certs"`
