@@ -140,7 +140,6 @@ type ExecutorConfig struct {
 	VolmanDriverPaths                  string                `json:"volman_driver_paths"`
 	CSIPaths                           []string              `json:"csi_paths"`
 	CSIMountRootDir                    string                `json:"csi_mount_root_dir"`
-	MapfsPath                          string                `json:"mapfs_path"`
 }
 
 const (
@@ -189,7 +188,6 @@ var DefaultConfiguration = ExecutorConfig{
 	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
 	CSIPaths:                           []string{"/var/vcap/data/csiplugins"},
 	CSIMountRootDir:                    "/var/vcap/data/csimountroot",
-	MapfsPath:                          "/var/vcap/packages/mapfs/bin/mapfs",
 }
 
 func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
@@ -282,7 +280,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	driverConfig.CSIPaths = config.CSIPaths
 	driverConfig.CSIMountRootDir = config.CSIMountRootDir
-	driverConfig.MapfsPath = config.MapfsPath
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	var proxyConfigHandler containerstore.ProxyManager
