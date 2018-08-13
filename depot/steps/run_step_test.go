@@ -151,7 +151,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("logs the step", func() {
-				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.successful-process-create",
@@ -251,7 +251,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.run-step.running",
 						"test.run-step.creating-process",
 						"test.run-step.successful-process-create",
@@ -271,7 +271,7 @@ var _ = Describe("RunAction", func() {
 				})
 
 				It("logs the step", func() {
-					Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+					Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 						"test.run-step.running",
 						"test.run-step.creating-process",
 						"test.run-step.successful-process-create",
@@ -485,7 +485,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("logs the step", func() {
-				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.failed-creating-process",
@@ -553,7 +553,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("logs the step", func() {
-				Expect(logger.TestSink.LogMessages()).To(ConsistOf([]string{
+				Eventually(logger.TestSink.LogMessages).Should(ConsistOf([]string{
 					"test.run-step.running",
 					"test.run-step.creating-process",
 					"test.run-step.successful-process-create",
