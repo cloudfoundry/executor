@@ -20,6 +20,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
+	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/initializer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
@@ -209,6 +210,95 @@ var _ = Describe("Initializer", func() {
 			Eventually(getMetrics).Should(HaveKeyWithValue(StalledGardenDuration, BeEquivalentTo(0)))
 
 			Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
+		})
+	})
+
+	Context("when there are leftover containers while initializing", func() {
+		BeforeEach(func() {
+			fakeGarden.RouteToHandler("GET", "/containers",
+				func(w http.ResponseWriter, r *http.Request) {
+					r.ParseForm()
+					healthcheckTagQueryParam := gardenhealth.HealthcheckTag
+					if r.FormValue(healthcheckTagQueryParam) == gardenhealth.HealthcheckTagValue {
+						ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{})(w, r)
+					} else {
+						ghttp.RespondWithJSONEncoded(http.StatusOK, map[string][]string{"handles": []string{"cnr1", "cnr2"}})(w, r)
+					}
+				},
+			)
+		})
+
+		Context("when containers are deleted successfully", func() {
+			var deleteChan, doneChan chan struct{}
+
+			BeforeEach(func() {
+				deleteChan = make(chan struct{}, 2)
+				doneChan = make(chan struct{})
+				fakeGarden.RouteToHandler("DELETE", "/containers/cnr1",
+					ghttp.CombineHandlers(
+						func(http.ResponseWriter, *http.Request) {
+							deleteChan <- struct{}{}
+							<-doneChan
+						},
+						ghttp.RespondWithJSONEncoded(http.StatusOK, &struct{}{})))
+				fakeGarden.RouteToHandler("DELETE", "/containers/cnr2",
+					ghttp.CombineHandlers(
+						func(http.ResponseWriter, *http.Request) {
+							deleteChan <- struct{}{}
+							<-doneChan
+						},
+						ghttp.RespondWithJSONEncoded(http.StatusOK, &struct{}{})))
+			})
+
+			AfterEach(func() {
+				close(doneChan)
+			})
+
+			It("should delete them concurrently", func() {
+				Eventually(func() int {
+					return len(deleteChan)
+				}).Should(Equal(2))
+			})
+
+			Context("when the number of containers exceeds the number of deletion workers", func() {
+				BeforeEach(func() {
+					config.DeleteWorkPoolSize = 1
+				})
+
+				It("should only delete size of deletion pool containers at a time", func() {
+					Eventually(func() int {
+						return len(deleteChan)
+					}).Should(Equal(1))
+					Consistently(func() int {
+						return len(deleteChan)
+					}).Should(Equal(1))
+
+					doneChan <- struct{}{}
+
+					Eventually(func() int {
+						return len(deleteChan)
+					}).Should(Equal(2))
+				})
+			})
+		})
+
+		Context("when garden fails to delete leftover containers", func() {
+			BeforeEach(func() {
+				fakeGarden.RouteToHandler(
+					"DELETE",
+					"/containers/cnr1",
+					ghttp.RespondWith(http.StatusInternalServerError, ""),
+				)
+				fakeGarden.RouteToHandler(
+					"DELETE",
+					"/containers/cnr2",
+					ghttp.RespondWithJSONEncoded(http.StatusOK, &struct{}{}),
+				)
+			})
+
+			It("should fail the initializer", func() {
+				Eventually(errCh).Should(Receive(HaveOccurred()))
+			})
 		})
 	})
 

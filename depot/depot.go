@@ -36,26 +36,11 @@ func NewClient(
 	gardenClient garden.Client,
 	volmanClient volman.Manager,
 	eventHub event.Hub,
-	workPoolSettings executor.WorkPoolSettings,
+	creationWorkPool *workpool.WorkPool,
+	deletionWorkPool *workpool.WorkPool,
+	readWorkPool *workpool.WorkPool,
+	metricsWorkPool *workpool.WorkPool,
 ) executor.Client {
-	// A misconfigured WorkPool is non-recoverable, so we panic here
-	creationWorkPool, err := workpool.NewWorkPool(workPoolSettings.CreateWorkPoolSize)
-	if err != nil {
-		panic(err)
-	}
-	deletionWorkPool, err := workpool.NewWorkPool(workPoolSettings.DeleteWorkPoolSize)
-	if err != nil {
-		panic(err)
-	}
-	readWorkPool, err := workpool.NewWorkPool(workPoolSettings.ReadWorkPoolSize)
-	if err != nil {
-		panic(err)
-	}
-	metricsWorkPool, err := workpool.NewWorkPool(workPoolSettings.MetricsWorkPoolSize)
-	if err != nil {
-		panic(err)
-	}
-
 	return &client{
 		totalCapacity:    totalCapacity,
 		containerStore:   containerStore,

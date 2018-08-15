@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
+	"code.cloudfoundry.org/workpool"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,15 +23,18 @@ import (
 
 var _ = Describe("Depot", func() {
 	var (
-		depotClient      executor.Client
-		logger           lager.Logger
-		eventHub         *efakes.FakeHub
-		gardenClient     *fakes.FakeGardenClient
-		volmanClient     *volmanfakes.FakeManager
-		containerStore   *containerstorefakes.FakeContainerStore
-		resources        executor.ExecutorResources
-		volumeDrivers    []string
-		workPoolSettings executor.WorkPoolSettings
+		depotClient         executor.Client
+		logger              lager.Logger
+		eventHub            *efakes.FakeHub
+		gardenClient        *fakes.FakeGardenClient
+		volmanClient        *volmanfakes.FakeManager
+		containerStore      *containerstorefakes.FakeContainerStore
+		resources           executor.ExecutorResources
+		volumeDrivers       []string
+		CreateWorkPoolSize  int
+		DeleteWorkPoolSize  int
+		ReadWorkPoolSize    int
+		MetricsWorkPoolSize int
 	)
 
 	BeforeEach(func() {
@@ -46,16 +50,26 @@ var _ = Describe("Depot", func() {
 			Containers: 3,
 		}
 
-		workPoolSettings = executor.WorkPoolSettings{
-			CreateWorkPoolSize:  5,
-			DeleteWorkPoolSize:  5,
-			ReadWorkPoolSize:    5,
-			MetricsWorkPoolSize: 5,
-		}
+		CreateWorkPoolSize = 5
+		DeleteWorkPoolSize = 5
+		ReadWorkPoolSize = 5
+		MetricsWorkPoolSize = 5
 	})
 
 	JustBeforeEach(func() {
-		depotClient = depot.NewClient(resources, containerStore, gardenClient, volmanClient, eventHub, workPoolSettings)
+		creationWorkPool, err := workpool.NewWorkPool(CreateWorkPoolSize)
+		Expect(err).NotTo(HaveOccurred())
+		deletionWorkPool, err := workpool.NewWorkPool(DeleteWorkPoolSize)
+		Expect(err).NotTo(HaveOccurred())
+		readWorkPool, err := workpool.NewWorkPool(ReadWorkPoolSize)
+		Expect(err).NotTo(HaveOccurred())
+		metricsWorkPool, err := workpool.NewWorkPool(MetricsWorkPoolSize)
+		Expect(err).NotTo(HaveOccurred())
+
+		depotClient = depot.NewClient(
+			resources, containerStore, gardenClient, volmanClient, eventHub,
+			creationWorkPool, deletionWorkPool, readWorkPool, metricsWorkPool,
+		)
 	})
 
 	Describe("AllocateContainers", func() {
@@ -252,12 +266,10 @@ var _ = Describe("Depot", func() {
 				Containers: 10,
 			}
 
-			workPoolSettings = executor.WorkPoolSettings{
-				CreateWorkPoolSize:  2,
-				DeleteWorkPoolSize:  6,
-				ReadWorkPoolSize:    4,
-				MetricsWorkPoolSize: 5,
-			}
+			CreateWorkPoolSize = 2
+			DeleteWorkPoolSize = 6
+			ReadWorkPoolSize = 4
+			MetricsWorkPoolSize = 5
 		})
 
 		Context("Container creation", func() {
@@ -282,20 +294,20 @@ var _ = Describe("Depot", func() {
 					go depotClient.RunContainer(logger, newRunRequest(containerGuid))
 				}
 
-				Eventually(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
-				Consistently(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+				Eventually(containerStore.CreateCallCount).Should(Equal(CreateWorkPoolSize))
+				Consistently(containerStore.CreateCallCount).Should(Equal(CreateWorkPoolSize))
 
 				Eventually(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+				}).Should(Equal(CreateWorkPoolSize))
 				Consistently(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.CreateWorkPoolSize))
+				}).Should(Equal(CreateWorkPoolSize))
 
 				doneChan <- struct{}{}
 
-				Eventually(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize + 1))
-				Consistently(containerStore.CreateCallCount).Should(Equal(workPoolSettings.CreateWorkPoolSize + 1))
+				Eventually(containerStore.CreateCallCount).Should(Equal(CreateWorkPoolSize + 1))
+				Consistently(containerStore.CreateCallCount).Should(Equal(CreateWorkPoolSize + 1))
 
 				close(doneChan)
 				Eventually(containerStore.CreateCallCount).Should(Equal(numRequests))
@@ -332,17 +344,17 @@ var _ = Describe("Depot", func() {
 
 				Eventually(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize))
+				}).Should(Equal(DeleteWorkPoolSize))
 
 				Consistently(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize))
+				}).Should(Equal(DeleteWorkPoolSize))
 
 				doneChan <- struct{}{}
 
 				Eventually(func() int {
 					return containerStore.StopCallCount() + containerStore.DestroyCallCount()
-				}).Should(Equal(workPoolSettings.DeleteWorkPoolSize + 1))
+				}).Should(Equal(DeleteWorkPoolSize + 1))
 
 				close(doneChan)
 
@@ -378,14 +390,14 @@ var _ = Describe("Depot", func() {
 					go depotClient.GetFiles(logger, containerGuid, "/some/path")
 				}
 
-				Eventually(throttleChan).Should(HaveLen(workPoolSettings.ReadWorkPoolSize))
-				Consistently(throttleChan).Should(HaveLen(workPoolSettings.ReadWorkPoolSize))
+				Eventually(throttleChan).Should(HaveLen(ReadWorkPoolSize))
+				Consistently(throttleChan).Should(HaveLen(ReadWorkPoolSize))
 
 				doneChan <- struct{}{}
 
 				Eventually(func() int {
 					return containerStore.ListCallCount() + containerStore.GetFilesCallCount()
-				}).Should(Equal(workPoolSettings.ReadWorkPoolSize + 1))
+				}).Should(Equal(ReadWorkPoolSize + 1))
 
 				close(doneChan)
 
@@ -420,13 +432,13 @@ var _ = Describe("Depot", func() {
 
 				Eventually(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.MetricsWorkPoolSize))
+				}).Should(Equal(MetricsWorkPoolSize))
 				Consistently(func() int {
 					return len(throttleChan)
-				}).Should(Equal(workPoolSettings.MetricsWorkPoolSize))
+				}).Should(Equal(MetricsWorkPoolSize))
 
 				doneChan <- struct{}{}
-				Eventually(containerStore.MetricsCallCount).Should(Equal(workPoolSettings.MetricsWorkPoolSize + 1))
+				Eventually(containerStore.MetricsCallCount).Should(Equal(MetricsWorkPoolSize + 1))
 				close(doneChan)
 				Eventually(containerStore.MetricsCallCount).Should(Equal(numRequests))
 			})

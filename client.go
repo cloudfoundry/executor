@@ -27,13 +27,6 @@ type Client interface {
 	Cleanup(lager.Logger)
 }
 
-type WorkPoolSettings struct {
-	CreateWorkPoolSize  int
-	DeleteWorkPoolSize  int
-	ReadWorkPoolSize    int
-	MetricsWorkPoolSize int
-}
-
 //go:generate counterfeiter -o fakes/fake_event_source.go . EventSource
 
 type EventSource interface {

@@ -190,6 +190,11 @@ var DefaultConfiguration = ExecutorConfig{
 	CSIMountRootDir:                    "/var/vcap/data/csimountroot",
 }
 
+var (
+	creationWorkPool, deletionWorkPool *workpool.WorkPool
+	metricsWorkPool, readWorkPool      *workpool.WorkPool
+)
+
 func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
 	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
@@ -211,7 +216,27 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		owner:        config.ContainerOwnerName,
 	}
 
-	destroyContainers(gardenClient, containersFetcher, logger)
+	creationWorkPool, err = workpool.NewWorkPool(config.CreateWorkPoolSize)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	deletionWorkPool, err = workpool.NewWorkPool(config.DeleteWorkPoolSize)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	readWorkPool, err = workpool.NewWorkPool(config.ReadWorkPoolSize)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	metricsWorkPool, err = workpool.NewWorkPool(config.MetricsWorkPoolSize)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	err = destroyContainers(gardenClient, containersFetcher, logger)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	healthCheckWorkPool, err := workpool.NewWorkPool(config.HealthCheckWorkPoolSize)
 	if err != nil {
@@ -330,20 +355,16 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 		config.EnableUnproxiedPortMappings,
 	)
 
-	workPoolSettings := executor.WorkPoolSettings{
-		CreateWorkPoolSize:  config.CreateWorkPoolSize,
-		DeleteWorkPoolSize:  config.DeleteWorkPoolSize,
-		ReadWorkPoolSize:    config.ReadWorkPoolSize,
-		MetricsWorkPoolSize: config.MetricsWorkPoolSize,
-	}
-
 	depotClient := depot.NewClient(
 		totalCapacity,
 		containerStore,
 		gardenClient,
 		volmanClient,
 		hub,
-		workPoolSettings,
+		creationWorkPool,
+		deletionWorkPool,
+		readWorkPool,
+		metricsWorkPool,
 	)
 
 	healthcheckSpec := garden.ProcessSpec{
@@ -463,29 +484,48 @@ func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config
 	return capacity, nil
 }
 
-func destroyContainers(gardenClient garden.Client, containersFetcher *executorContainers, logger lager.Logger) {
+func destroyContainers(gardenClient garden.Client, containersFetcher *executorContainers, logger lager.Logger) error {
 	logger.Info("executor-fetching-containers-to-destroy")
 	containers, err := containersFetcher.Containers()
 	if err != nil {
-		logger.Fatal("executor-failed-to-get-containers", err)
-		return
-	} else {
-		logger.Info("executor-fetched-containers-to-destroy", lager.Data{"num-containers": len(containers)})
+		logger.Error("executor-failed-to-get-containers", err)
+		return err
 	}
 
+	logger.Info("executor-fetched-containers-to-destroy", lager.Data{"num-containers": len(containers)})
+
+	type containerDeletionResult struct {
+		handle string
+		err    error
+	}
+
+	errInfoChannel := make(chan containerDeletionResult, len(containers))
 	for _, container := range containers {
-		logger.Info("executor-destroying-container", lager.Data{"container-handle": container.Handle()})
-		err := gardenClient.Destroy(container.Handle())
-		if err != nil {
-			logger.Fatal("executor-failed-to-destroy-container", err, lager.Data{
-				"handle": container.Handle(),
+		go func(c garden.Container) {
+			deletionWorkPool.Submit(func() {
+				err := gardenClient.Destroy(c.Handle())
+				errInfoChannel <- containerDeletionResult{handle: c.Handle(), err: err}
 			})
-		} else {
-			logger.Info("executor-destroyed-stray-container", lager.Data{
-				"handle": container.Handle(),
-			})
+		}(container)
+	}
+
+	for _, _ = range containers {
+		select {
+		case result := <-errInfoChannel:
+			if result.err != nil {
+				logger.Error("executor-failed-to-destroy-container", result.err, lager.Data{
+					"handle": result.handle,
+				})
+				return result.err
+			} else {
+				logger.Info("executor-destroyed-stray-container", lager.Data{
+					"handle": result.handle,
+				})
+			}
 		}
 	}
+
+	return nil
 }
 
 func setupWorkDir(logger lager.Logger, tempDir string) string {
