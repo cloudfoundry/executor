@@ -33,11 +33,11 @@ var _ = Describe("EmittableError", func() {
 	})
 
 	Describe("Error", func() {
-		Context("with no format args", func() {
-			It("should just be the message", func() {
-				Expect(steps.NewEmittableError(wrappedError, "Fancy %s %d").Error()).To(Equal("Fancy %s %d"))
-			})
-		})
+		// Context("with no format args", func() {
+		// 	It("should just be the message", func() {
+		// 		Expect(steps.NewEmittableError(wrappedError, "Fancy %s %d").Error()).To(Equal("Fancy %s %d"))
+		// 	})
+		// })
 
 		Context("with format args", func() {
 			It("should Sprintf", func() {
