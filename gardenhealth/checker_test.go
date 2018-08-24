@@ -77,7 +77,7 @@ var _ = Describe("Checker", func() {
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
 				containerSpec := gardenClient.CreateArgsForCall(0)
 				Expect(containerSpec).To(Equal(garden.ContainerSpec{
-					Handle:     "executor-healthcheck-abc-123",
+					Handle:     "check-abc-123",
 					RootFSPath: rootfsPath,
 					Properties: garden.Properties{
 						containerstore.ContainerOwnerProperty: containerOwnerName,
@@ -97,7 +97,7 @@ var _ = Describe("Checker", func() {
 
 				By("Destroys the container")
 				guid = gardenClient.DestroyArgsForCall(1)
-				Expect(guid).To(Equal("executor-healthcheck-abc-123"))
+				Expect(guid).To(Equal("check-abc-123"))
 
 				By("Returns success")
 				Expect(err).Should(BeNil())
