@@ -142,54 +142,6 @@ type ExecutorConfig struct {
 	CSIMountRootDir                    string                `json:"csi_mount_root_dir"`
 }
 
-const (
-	defaultMaxConcurrentDownloads   = 5
-	defaultCreateWorkPoolSize       = 32
-	defaultDeleteWorkPoolSize       = 32
-	defaultReadWorkPoolSize         = 64
-	defaultMetricsWorkPoolSize      = 8
-	defaultHealthCheckWorkPoolSize  = 64
-	defaultGracefulShutdownInterval = 10 * time.Second
-)
-
-var DefaultConfiguration = ExecutorConfig{
-	GardenNetwork:                      "unix",
-	GardenAddr:                         "/tmp/garden.sock",
-	MemoryMB:                           configuration.Automatic,
-	DiskMB:                             configuration.Automatic,
-	TempDir:                            "/tmp",
-	ReservedExpirationTime:             durationjson.Duration(time.Minute),
-	ContainerReapInterval:              durationjson.Duration(time.Minute),
-	ContainerInodeLimit:                200000,
-	ContainerMaxCpuShares:              0,
-	CachePath:                          "/tmp/cache",
-	EnableDeclarativeHealthcheck:       false,
-	MaxCacheSizeInBytes:                10 * 1024 * 1024 * 1024,
-	SkipCertVerify:                     false,
-	HealthyMonitoringInterval:          durationjson.Duration(30 * time.Second),
-	UnhealthyMonitoringInterval:        durationjson.Duration(500 * time.Millisecond),
-	ContainerOwnerName:                 "executor",
-	HealthCheckContainerOwnerName:      "executor-health-check",
-	CreateWorkPoolSize:                 defaultCreateWorkPoolSize,
-	DeleteWorkPoolSize:                 defaultDeleteWorkPoolSize,
-	ReadWorkPoolSize:                   defaultReadWorkPoolSize,
-	MetricsWorkPoolSize:                defaultMetricsWorkPoolSize,
-	HealthCheckWorkPoolSize:            defaultHealthCheckWorkPoolSize,
-	MaxConcurrentDownloads:             defaultMaxConcurrentDownloads,
-	GardenHealthcheckInterval:          durationjson.Duration(10 * time.Minute),
-	GardenHealthcheckEmissionInterval:  durationjson.Duration(30 * time.Second),
-	GardenHealthcheckTimeout:           durationjson.Duration(10 * time.Minute),
-	GardenHealthcheckCommandRetryPause: durationjson.Duration(time.Second),
-	GardenHealthcheckProcessArgs:       []string{},
-	GardenHealthcheckProcessEnv:        []string{},
-	GracefulShutdownInterval:           durationjson.Duration(defaultGracefulShutdownInterval),
-	ContainerMetricsReportInterval:     durationjson.Duration(15 * time.Second),
-	EnvoyConfigRefreshDelay:            durationjson.Duration(time.Second),
-	EnvoyDrainTimeout:                  durationjson.Duration(15 * time.Minute),
-	CSIPaths:                           []string{"/var/vcap/data/csiplugins"},
-	CSIMountRootDir:                    "/var/vcap/data/csimountroot",
-}
-
 var (
 	creationWorkPool, deletionWorkPool *workpool.WorkPool
 	metricsWorkPool, readWorkPool      *workpool.WorkPool
