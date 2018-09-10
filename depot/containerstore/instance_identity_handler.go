@@ -100,6 +100,6 @@ func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Con
 	return nil
 }
 
-func (h *InstanceIdentityHandler) Close(cred Credential, container executor.Container) error {
+func (h *InstanceIdentityHandler) Close(logger lager.Logger, cred Credential, container executor.Container) error {
 	return nil
 }

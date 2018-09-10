@@ -79,7 +79,7 @@ func (p *NoopProxyConfigHandler) RemoveDir(logger lager.Logger, container execut
 func (p *NoopProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
 	return nil
 }
-func (p *NoopProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+func (p *NoopProxyConfigHandler) Close(_ lager.Logger, invalidCredentials Credential, container executor.Container) error {
 	return nil
 }
 
@@ -204,7 +204,7 @@ func (p *ProxyConfigHandler) Update(credentials Credential, container executor.C
 	return p.writeConfig(credentials, container)
 }
 
-func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) Close(logger lager.Logger, invalidCredentials Credential, container executor.Container) error {
 	if !container.EnableContainerProxy {
 		return nil
 	}
@@ -223,7 +223,7 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container exec
 	if err != nil {
 		return err
 	}
-	return waitForEnvoyToReloadCerts(container, cert.SerialNumber)
+	return waitForEnvoyToReloadCerts(logger, container, cert.SerialNumber)
 }
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
@@ -264,9 +264,10 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 	return nil
 }
 
-func waitForEnvoyToReloadCerts(container executor.Container, newSerialNumber *big.Int) error {
+func waitForEnvoyToReloadCerts(logger lager.Logger, container executor.Container, newSerialNumber *big.Int) error {
+	addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
+
 	getSerialNumber := func() (*big.Int, error) {
-		addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
 		conn, err := tls.Dial("tcp", addr, &tls.Config{
 			InsecureSkipVerify: true,
 		})
@@ -274,6 +275,7 @@ func waitForEnvoyToReloadCerts(container executor.Container, newSerialNumber *bi
 			return nil, err
 		}
 		defer conn.Close()
+
 		if err := conn.Handshake(); err != nil {
 			return nil, err
 		}
@@ -285,6 +287,7 @@ func waitForEnvoyToReloadCerts(container executor.Container, newSerialNumber *bi
 	for i := 0; i < 10; i++ {
 		seriaNumber, err := getSerialNumber()
 		if err != nil {
+			logger.Error("error-getting-serial-number", err, lager.Data{"addr": addr})
 			return err
 		}
 		if err == nil && seriaNumber == newSerialNumber {

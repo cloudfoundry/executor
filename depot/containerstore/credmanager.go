@@ -90,7 +90,7 @@ type CredentialHandler interface {
 	// Called when the CredManager is preparing to exit. This is mainly to update
 	// the EnvoyProxy with invalid certificates and prevent it from accepting
 	// more incoming traffic from the gorouter
-	Close(invalidCredentials Credential, container executor.Container) error
+	Close(logger lager.Logger, invalidCredentials Credential, container executor.Container) error
 }
 
 func NewCredManager(
@@ -224,7 +224,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 					return err
 				}
 				for _, h := range c.handlers {
-					h.Close(cred, container)
+					h.Close(regenLogger, cred, container)
 				}
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				return nil
