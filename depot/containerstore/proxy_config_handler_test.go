@@ -102,7 +102,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		os.RemoveAll(proxyDir)
 	})
 
-	Context("No-op Proxy ConfigHandler", func() {
+	Describe("NoopProxyConfigHandler", func() {
 		var (
 			proxyConfigHandler *containerstore.NoopProxyConfigHandler
 		)
@@ -111,7 +111,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
 		})
 
-		Context("CreateDir", func() {
+		Describe("CreateDir", func() {
 			It("returns an empty bind mount", func() {
 				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
@@ -125,7 +125,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 		})
 
-		Context("Close", func() {
+		Describe("Close", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
 				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
@@ -137,7 +137,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 		})
 
-		Context("Update", func() {
+		Describe("Update", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
 				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
@@ -156,7 +156,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Context("CreateDir", func() {
+	Describe("CreateDir", func() {
 		Context("the EnableContainerProxy is disabled on the container", func() {
 			BeforeEach(func() {
 				container.EnableContainerProxy = false
@@ -206,7 +206,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Context("RemoveDir", func() {
+	Describe("RemoveDir", func() {
 		It("removes the directory created by CreateDir", func() {
 			_, _, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
@@ -229,7 +229,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Context("ProxyPorts", func() {
+	Describe("ProxyPorts", func() {
 		BeforeEach(func() {
 			container.Ports = []executor.PortMapping{
 				{
@@ -296,7 +296,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Context("Update", func() {
+	Describe("Update", func() {
 		BeforeEach(func() {
 			err := os.MkdirAll(configPath, 0755)
 			Expect(err).ToNot(HaveOccurred())
@@ -570,7 +570,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Context("Close", func() {
+	Describe("Close", func() {
 		var (
 			cert, key string
 		)
