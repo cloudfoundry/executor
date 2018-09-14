@@ -3,7 +3,6 @@ package containerstore_test
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -11,12 +10,11 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
+	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
@@ -25,7 +23,6 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/ghttp"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -41,7 +38,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 		listenerConfigFile                 string
 		proxyConfigFile                    string
 		proxyConfigHandler                 *containerstore.ProxyConfigHandler
-		refreshDelayMS                     time.Duration
+		reloadDuration                     time.Duration
+		reloadClock                        *fakeclock.FakeClock
 		containerProxyTrustedCACerts       []string
 		containerProxyVerifySubjectAltName []string
 		containerProxyRequireClientCerts   bool
@@ -74,7 +72,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 		logger = lagertest.NewTestLogger("proxymanager")
 
 		rotatingCredChan = make(chan containerstore.Credential, 1)
-		refreshDelayMS = 1000 * time.Millisecond
+		reloadDuration = 1 * time.Second
+		reloadClock = fakeclock.NewFakeClock(time.Now())
 
 		containerProxyTrustedCACerts = []string{}
 		containerProxyVerifySubjectAltName = []string{}
@@ -89,7 +88,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 			containerProxyTrustedCACerts,
 			containerProxyVerifySubjectAltName,
 			containerProxyRequireClientCerts,
-			refreshDelayMS,
+			reloadDuration,
+			reloadClock,
 		)
 		Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{
 			Cert: "some-cert",
@@ -591,70 +591,45 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Context("when the envoy proxy loads the listener cert and port", func() {
-			BeforeEach(func() {
-				s := ghttp.NewUnstartedServer()
-				cert, err := tls.X509KeyPair([]byte(cert), []byte(key))
-				s.HTTPTestServer.TLS = &tls.Config{
-					Certificates: []tls.Certificate{cert},
-				}
-				Expect(err).NotTo(HaveOccurred())
-				s.HTTPTestServer.StartTLS()
-				host, portStr, err := net.SplitHostPort(s.Addr())
-				Expect(err).NotTo(HaveOccurred())
-				port, err := strconv.Atoi(portStr)
-				Expect(err).NotTo(HaveOccurred())
-				container.InternalIP = host
-				container.Ports[0].ContainerTLSProxyPort = uint16(port)
-			})
+		It("updates the listener configuration with the invalid certificate", func() {
+			go func() {
+				reloadClock.WaitForWatcherAndIncrement(1 * time.Second)
+			}()
+			err := proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+			Expect(err).NotTo(HaveOccurred())
 
-			It("updates the listener configuration with the invalid certificate", func() {
-				err := proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
-				Expect(err).NotTo(HaveOccurred())
+			Eventually(listenerConfigFile).Should(BeAnExistingFile())
 
-				Eventually(listenerConfigFile).Should(BeAnExistingFile())
+			data, err := ioutil.ReadFile(listenerConfigFile)
+			Expect(err).NotTo(HaveOccurred())
 
-				data, err := ioutil.ReadFile(listenerConfigFile)
-				Expect(err).NotTo(HaveOccurred())
+			var listenerConfig envoy.ListenerConfig
+			err = yaml.Unmarshal(data, &listenerConfig)
+			Expect(err).NotTo(HaveOccurred())
 
-				var listenerConfig envoy.ListenerConfig
-				err = yaml.Unmarshal(data, &listenerConfig)
-				Expect(err).NotTo(HaveOccurred())
+			Expect(listenerConfig.Resources).To(HaveLen(1))
+			listener := listenerConfig.Resources[0]
 
-				Expect(listenerConfig.Resources).To(HaveLen(1))
-				listener := listenerConfig.Resources[0]
+			Expect(listener.FilterChains).To(HaveLen(1))
+			chain := listener.FilterChains[0]
 
-				Expect(listener.FilterChains).To(HaveLen(1))
-				chain := listener.FilterChains[0]
-
-				certs := chain.TLSContext.CommonTLSContext.TLSCertificates
-				Expect(certs).To(ConsistOf(envoy.TLSCertificate{
-					CertificateChain: envoy.DataSource{InlineString: cert},
-					PrivateKey:       envoy.DataSource{InlineString: key},
-				}))
-			})
-
-			It("returns", func() {
-				ch := make(chan struct{})
-				go func() {
-					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
-					close(ch)
-				}()
-
-				Eventually(ch).Should(BeClosed())
-			})
+			certs := chain.TLSContext.CommonTLSContext.TLSCertificates
+			Expect(certs).To(ConsistOf(envoy.TLSCertificate{
+				CertificateChain: envoy.DataSource{InlineString: cert},
+				PrivateKey:       envoy.DataSource{InlineString: key},
+			}))
 		})
 
-		Context("when the envoy proxy takes some time to update the listener cert", func() {
-			It("doesn't return until the proxy is serving the new cert", func() {
-				ch := make(chan struct{})
-				go func() {
-					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
-					close(ch)
-				}()
+		It("returns after the configured reload duration", func() {
+			ch := make(chan struct{})
+			go func() {
+				proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+				close(ch)
+			}()
 
-				Consistently(ch).ShouldNot(BeClosed())
-			})
+			Consistently(ch).ShouldNot(BeClosed())
+			reloadClock.WaitForWatcherAndIncrement(1000 * time.Millisecond)
+			Eventually(ch).Should(BeClosed())
 		})
 
 		Context("the EnableContainerProxy is disabled on the container", func() {

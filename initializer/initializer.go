@@ -94,6 +94,7 @@ type ExecutorConfig struct {
 	EnableContainerProxy               bool                  `json:"enable_container_proxy,omitempty"`
 	EnableUnproxiedPortMappings        bool                  `json:"enable_unproxied_port_mappings"`
 	EnvoyConfigRefreshDelay            durationjson.Duration `json:"envoy_config_refresh_delay"`
+	EnvoyConfigReloadDuration          durationjson.Duration `json:"envoy_config_reload_duration"`
 	EnvoyDrainTimeout                  durationjson.Duration `json:"envoy_drain_timeout,omitempty"`
 	ProxyMemoryAllocationMB            int                   `json:"proxy_memory_allocation_mb,omitempty"`
 	ContainerProxyPath                 string                `json:"container_proxy_path,omitempty"`
@@ -272,7 +273,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 			config.ContainerProxyTrustedCACerts,
 			config.ContainerProxyVerifySubjectAltName,
 			config.ContainerProxyRequireClientCerts,
-			time.Duration(config.EnvoyConfigRefreshDelay),
+			time.Duration(config.EnvoyConfigReloadDuration),
+			clock,
 		)
 	} else {
 		proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()

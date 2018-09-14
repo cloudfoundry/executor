@@ -2,14 +2,11 @@ package containerstore
 
 import (
 	"bytes"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
-	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,6 +14,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	yaml "gopkg.in/yaml.v2"
 
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
@@ -65,7 +63,8 @@ type ProxyConfigHandler struct {
 	containerProxyVerifySubjectAltName []string
 	containerProxyRequireClientCerts   bool
 
-	refreshDelayMS time.Duration
+	reloadDuration time.Duration
+	reloadClock    clock.Clock
 }
 
 type NoopProxyConfigHandler struct{}
@@ -106,7 +105,8 @@ func NewProxyConfigHandler(
 	ContainerProxyTrustedCACerts []string,
 	ContainerProxyVerifySubjectAltName []string,
 	containerProxyRequireClientCerts bool,
-	refreshDelayMS time.Duration,
+	reloadDuration time.Duration,
+	reloadClock clock.Clock,
 ) *ProxyConfigHandler {
 	return &ProxyConfigHandler{
 		logger:                             logger.Session("proxy-manager"),
@@ -115,7 +115,8 @@ func NewProxyConfigHandler(
 		containerProxyTrustedCACerts:       ContainerProxyTrustedCACerts,
 		containerProxyVerifySubjectAltName: ContainerProxyVerifySubjectAltName,
 		containerProxyRequireClientCerts:   containerProxyRequireClientCerts,
-		refreshDelayMS:                     refreshDelayMS,
+		reloadDuration:                     reloadDuration,
+		reloadClock:                        reloadClock,
 	}
 }
 
@@ -214,16 +215,8 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container exec
 		return err
 	}
 
-	block, _ := pem.Decode([]byte(invalidCredentials.Cert))
-	if block == nil {
-		return ErrInvalidCertificate
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return err
-	}
-	return waitForEnvoyToReloadCerts(container, cert.SerialNumber)
+	p.reloadClock.Sleep(p.reloadDuration)
+	return nil
 }
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
@@ -235,7 +228,7 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		return err
 	}
 
-	proxyConfig, err := generateProxyConfig(container, p.refreshDelayMS, adminPort)
+	proxyConfig, err := generateProxyConfig(container, adminPort)
 	if err != nil {
 		return err
 	}
@@ -263,40 +256,7 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 
 	return nil
 }
-
-func waitForEnvoyToReloadCerts(container executor.Container, newSerialNumber *big.Int) error {
-	getSerialNumber := func() (*big.Int, error) {
-		addr := fmt.Sprintf("%s:%d", container.InternalIP, container.Ports[0].ContainerTLSProxyPort)
-		conn, err := tls.Dial("tcp", addr, &tls.Config{
-			InsecureSkipVerify: true,
-		})
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		if err := conn.Handshake(); err != nil {
-			return nil, err
-		}
-
-		return conn.ConnectionState().PeerCertificates[0].SerialNumber, nil
-	}
-
-	// TODO: test this
-	for i := 0; i < 10; i++ {
-		seriaNumber, err := getSerialNumber()
-		if err != nil {
-			return err
-		}
-		if err == nil && seriaNumber == newSerialNumber {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	return nil
-}
-
-func generateProxyConfig(container executor.Container, refreshDelayMS time.Duration, adminPort uint16) (envoy.ProxyConfig, error) {
+func generateProxyConfig(container executor.Container, adminPort uint16) (envoy.ProxyConfig, error) {
 	clusters := []envoy.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
