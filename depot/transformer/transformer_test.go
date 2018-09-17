@@ -42,7 +42,6 @@ var _ = Describe("Transformer", func() {
 			unhealthyMonitoringInterval time.Duration
 			gracefulShutdownInterval    time.Duration
 			healthCheckWorkPool         *workpool.WorkPool
-			ldsPort                     uint16
 			cfg                         transformer.Config
 			options                     []transformer.Option
 		)
@@ -64,7 +63,6 @@ var _ = Describe("Transformer", func() {
 
 			clock = fakeclock.NewFakeClock(time.Now())
 
-			ldsPort = 65535
 			cfg = transformer.Config{
 				BindMounts: []garden.BindMount{
 					{
