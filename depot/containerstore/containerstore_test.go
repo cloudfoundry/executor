@@ -373,7 +373,7 @@ var _ = Describe("Container Store", func() {
 						Guid:  "metric-guid",
 						Index: 1,
 					},
-					Env:                           env,
+					Env: env,
 					TrustedSystemCertificatesPath: "",
 					Network: &executor.Network{
 						Properties: map[string]string{
@@ -2432,7 +2432,7 @@ var _ = Describe("Container Store", func() {
 				Guid:  "metric-guid",
 				Index: 1,
 			},
-			Env:                           []executor.EnvironmentVariable{},
+			Env: []executor.EnvironmentVariable{},
 			TrustedSystemCertificatesPath: "",
 			Network: &executor.Network{
 				Properties: map[string]string{},
