@@ -248,7 +248,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) ([]garden.BindMount, error) {
 	gardenMounts := []garden.BindMount{}
 	for _, volume := range info.VolumeMounts {
-		hostMount, err := n.volumeManager.Mount(logger, volume.Driver, volume.VolumeId, volume.Config)
+		hostMount, err := n.volumeManager.Mount(logger, volume.Driver, volume.VolumeId, info.Guid, volume.Config)
 		if err != nil {
 			return nil, err
 		}
@@ -594,7 +594,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	}
 
 	for _, volume := range info.VolumeMounts {
-		err = n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId)
+		err = n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId, info.Guid)
 		if err != nil {
 			logger.Error("failed-to-unmount-volume", err)
 			bindMountCleanupErr = errors.New(BindMountCleanupFailed)

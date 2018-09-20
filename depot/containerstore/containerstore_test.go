@@ -714,7 +714,7 @@ var _ = Describe("Container Store", func() {
 
 					count := 0
 					volumeManager.MountStub = // first call mounts at a different point than second call
-						func(lager.Logger, string, string, map[string]interface{}) (volman.MountResponse, error) {
+						func(lager.Logger, string, string, string, map[string]interface{}) (volman.MountResponse, error) {
 							defer func() { count = count + 1 }()
 							if count == 0 {
 								return volman.MountResponse{Path: "hpath1"}, nil
@@ -728,14 +728,16 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(volumeManager.MountCallCount()).To(Equal(2))
 
-					_, driverName, volumeId, config := volumeManager.MountArgsForCall(0)
+					_, driverName, volumeId, containerId, config := volumeManager.MountArgsForCall(0)
 					Expect(driverName).To(Equal(runReq.VolumeMounts[0].Driver))
 					Expect(volumeId).To(Equal(runReq.VolumeMounts[0].VolumeId))
+					Expect(containerId).To(Equal(containerGuid))
 					Expect(config).To(Equal(runReq.VolumeMounts[0].Config))
 
-					_, driverName, volumeId, config = volumeManager.MountArgsForCall(1)
+					_, driverName, volumeId, containerId, config = volumeManager.MountArgsForCall(1)
 					Expect(driverName).To(Equal(runReq.VolumeMounts[1].Driver))
 					Expect(volumeId).To(Equal(runReq.VolumeMounts[1].VolumeId))
+					Expect(containerId).To(Equal(containerGuid))
 					Expect(config).To(Equal(runReq.VolumeMounts[1].Config))
 				})
 
@@ -2001,7 +2003,7 @@ var _ = Describe("Container Store", func() {
 				}
 				count := 0
 				volumeManager.MountStub = // first call mounts at a different point than second call
-					func(lager.Logger, string, string, map[string]interface{}) (volman.MountResponse, error) {
+					func(lager.Logger, string, string, string, map[string]interface{}) (volman.MountResponse, error) {
 						defer func() { count = count + 1 }()
 						if count == 0 {
 							return volman.MountResponse{Path: "hpath1"}, nil
@@ -2015,13 +2017,15 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 
-				_, driverId, volumeId := volumeManager.UnmountArgsForCall(0)
+				_, driverId, volumeId, containerId := volumeManager.UnmountArgsForCall(0)
 				Expect(driverId).To(Equal(runReq.RunInfo.VolumeMounts[0].Driver))
 				Expect(volumeId).To(Equal(runReq.RunInfo.VolumeMounts[0].VolumeId))
+				Expect(containerId).To(Equal(containerGuid))
 
-				_, driverId, volumeId = volumeManager.UnmountArgsForCall(1)
+				_, driverId, volumeId, containerId = volumeManager.UnmountArgsForCall(1)
 				Expect(driverId).To(Equal(runReq.RunInfo.VolumeMounts[1].Driver))
 				Expect(volumeId).To(Equal(runReq.RunInfo.VolumeMounts[1].VolumeId))
+				Expect(containerId).To(Equal(containerGuid))
 			})
 
 			Context("when we fail to release cache dependencies", func() {
@@ -2033,13 +2037,15 @@ var _ = Describe("Container Store", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 
-					_, driverId, volumeId := volumeManager.UnmountArgsForCall(0)
+					_, driverId, volumeId, containerId := volumeManager.UnmountArgsForCall(0)
 					Expect(driverId).To(Equal(runReq.RunInfo.VolumeMounts[0].Driver))
 					Expect(volumeId).To(Equal(runReq.RunInfo.VolumeMounts[0].VolumeId))
+					Expect(containerId).To(Equal(containerGuid))
 
-					_, driverId, volumeId = volumeManager.UnmountArgsForCall(1)
+					_, driverId, volumeId, containerId = volumeManager.UnmountArgsForCall(1)
 					Expect(driverId).To(Equal(runReq.RunInfo.VolumeMounts[1].Driver))
 					Expect(volumeId).To(Equal(runReq.RunInfo.VolumeMounts[1].VolumeId))
+					Expect(containerId).To(Equal(containerGuid))
 				})
 			})
 			Context("when an volume unmount fails", func() {
