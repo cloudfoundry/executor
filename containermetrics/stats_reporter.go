@@ -164,6 +164,15 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 				"metrics_index": metricsConfig.Index,
 			})
 		}
+
+		err = reporter.metronClient.SendCPUUsage(metricsConfig.Guid, metricsConfig.Index, uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
+			containerMetrics.AbsoluteCPUEntitlementInNanoseconds, containerMetrics.ContainerAgeInNanoseconds)
+		if err != nil {
+			logger.Error("failed-to-send-cpu-usage", err, lager.Data{
+				"metrics_guid":  metricsConfig.Guid,
+				"metrics_index": metricsConfig.Index,
+			})
+		}
 	}
 
 	return &CachedContainerMetrics{
