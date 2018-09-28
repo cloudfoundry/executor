@@ -9,7 +9,6 @@ import (
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
-	"github.com/cloudfoundry/sonde-go/events"
 )
 
 var megabytesToBytes int = 1024 * 1024
@@ -148,14 +147,17 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 
 	if metricsConfig.Guid != "" {
 		instanceIndex := int32(metricsConfig.Index)
-		err := reporter.metronClient.SendAppMetrics(&events.ContainerMetric{
-			ApplicationId:    &metricsConfig.Guid,
-			InstanceIndex:    &instanceIndex,
-			CpuPercentage:    &cpuPercent,
-			MemoryBytes:      &containerMetrics.MemoryUsageInBytes,
-			DiskBytes:        &containerMetrics.DiskUsageInBytes,
-			MemoryBytesQuota: &containerMetrics.MemoryLimitInBytes,
-			DiskBytesQuota:   &containerMetrics.DiskLimitInBytes,
+		err := reporter.metronClient.SendAppMetrics(loggingclient.ContainerMetric{
+			ApplicationId:          metricsConfig.Guid,
+			InstanceIndex:          instanceIndex,
+			CpuPercentage:          cpuPercent,
+			MemoryBytes:            containerMetrics.MemoryUsageInBytes,
+			DiskBytes:              containerMetrics.DiskUsageInBytes,
+			MemoryBytesQuota:       containerMetrics.MemoryLimitInBytes,
+			DiskBytesQuota:         containerMetrics.DiskLimitInBytes,
+			AbsoluteCPUUsage:       uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
+			AbsoluteCPUEntitlement: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+			ContainerAge:           containerMetrics.ContainerAgeInNanoseconds,
 		})
 
 		if err != nil {

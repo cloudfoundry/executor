@@ -2499,6 +2499,8 @@ var _ = Describe("Container Store", func() {
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 5000000000,
 						},
+						Age:            1000000000,
+						CPUEntitlement: 100,
 					},
 				},
 				containerGuid2: garden.ContainerMetricsEntry{
@@ -2513,6 +2515,8 @@ var _ = Describe("Container Store", func() {
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
 						},
+						Age:            2000000000,
+						CPUEntitlement: 200,
 					},
 				},
 				containerGuid4: garden.ContainerMetricsEntry{
@@ -2527,6 +2531,8 @@ var _ = Describe("Container Store", func() {
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
 						},
+						Age:            4000000000,
+						CPUEntitlement: 300,
 					},
 				},
 				"BOGUS-GUID": garden.ContainerMetricsEntry{},
@@ -2554,6 +2560,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container1Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Memory.LimitInBytes))
 			Expect(container1Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Disk.ByteHard))
 			Expect(container1Metrics.TimeSpentInCPU).To(Equal(5 * time.Second))
+			Expect(container1Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(1000000000)))
+			Expect(container1Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(100)))
 
 			container2Metrics, ok := metrics[containerGuid2]
 			Expect(ok).To(BeTrue())
@@ -2562,6 +2570,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container2Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Memory.LimitInBytes))
 			Expect(container2Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Disk.ByteHard))
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))
+			Expect(container2Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(2000000000)))
+			Expect(container2Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(200)))
 		})
 
 		Context("when fetching bulk metrics fails", func() {

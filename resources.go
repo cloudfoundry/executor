@@ -214,11 +214,13 @@ type EnvironmentVariable struct {
 }
 
 type ContainerMetrics struct {
-	MemoryUsageInBytes uint64        `json:"memory_usage_in_bytes"`
-	DiskUsageInBytes   uint64        `json:"disk_usage_in_bytes"`
-	MemoryLimitInBytes uint64        `json:"memory_limit_in_bytes"`
-	DiskLimitInBytes   uint64        `json:"disk_limit_in_bytes"`
-	TimeSpentInCPU     time.Duration `json:"time_spent_in_cpu"`
+	MemoryUsageInBytes                  uint64        `json:"memory_usage_in_bytes"`
+	DiskUsageInBytes                    uint64        `json:"disk_usage_in_bytes"`
+	MemoryLimitInBytes                  uint64        `json:"memory_limit_in_bytes"`
+	DiskLimitInBytes                    uint64        `json:"disk_limit_in_bytes"`
+	TimeSpentInCPU                      time.Duration `json:"time_spent_in_cpu"`
+	AbsoluteCPUEntitlementInNanoseconds uint64        `json:"absolute_cpu_entitlement_in_ns"`
+	ContainerAgeInNanoseconds           uint64        `json:"container_age_in_ns"`
 }
 
 type MetricsConfig struct {

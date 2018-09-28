@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
+	logging "code.cloudfoundry.org/diego-logging-client"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -46,42 +46,50 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-metrics-guid": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: ""},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(123),
-					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: megsToBytes(789),
-					DiskLimitInBytes:   megsToBytes(1024),
+					MemoryUsageInBytes:                  megsToBytes(123),
+					DiskUsageInBytes:                    megsToBytes(456),
+					TimeSpentInCPU:                      100 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(789),
+					DiskLimitInBytes:                    megsToBytes(1024),
+					ContainerAgeInNanoseconds:           1000,
+					AbsoluteCPUEntitlementInNanoseconds: 2000,
 				},
 			},
 
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(123),
-					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: megsToBytes(789),
-					DiskLimitInBytes:   megsToBytes(1024),
+					MemoryUsageInBytes:                  megsToBytes(123),
+					DiskUsageInBytes:                    megsToBytes(456),
+					TimeSpentInCPU:                      100 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(789),
+					DiskLimitInBytes:                    megsToBytes(1024),
+					ContainerAgeInNanoseconds:           1001,
+					AbsoluteCPUEntitlementInNanoseconds: 2001,
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(321),
-					DiskUsageInBytes:   megsToBytes(654),
-					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: megsToBytes(987),
-					DiskLimitInBytes:   megsToBytes(2048),
+					MemoryUsageInBytes:                  megsToBytes(321),
+					DiskUsageInBytes:                    megsToBytes(654),
+					TimeSpentInCPU:                      100 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(987),
+					DiskLimitInBytes:                    megsToBytes(2048),
+					ContainerAgeInNanoseconds:           1002,
+					AbsoluteCPUEntitlementInNanoseconds: 2002,
 				},
 			},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(345),
-					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: megsToBytes(678),
-					DiskLimitInBytes:   megsToBytes(2048),
+					MemoryUsageInBytes:                  megsToBytes(345),
+					DiskUsageInBytes:                    megsToBytes(456),
+					TimeSpentInCPU:                      100 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(678),
+					DiskLimitInBytes:                    megsToBytes(2048),
+					ContainerAgeInNanoseconds:           1003,
+					AbsoluteCPUEntitlementInNanoseconds: 2003,
 				},
 			},
 		}
@@ -90,41 +98,49 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-metrics-guid": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: ""},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(123),
-					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     101 * time.Second,
-					MemoryLimitInBytes: megsToBytes(789),
-					DiskLimitInBytes:   megsToBytes(1024),
+					MemoryUsageInBytes:                  megsToBytes(123),
+					DiskUsageInBytes:                    megsToBytes(456),
+					TimeSpentInCPU:                      101 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(789),
+					DiskLimitInBytes:                    megsToBytes(1024),
+					ContainerAgeInNanoseconds:           1004,
+					AbsoluteCPUEntitlementInNanoseconds: 2004,
 				},
 			},
 
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(1230),
-					DiskUsageInBytes:   4560,
-					TimeSpentInCPU:     105 * time.Second,
-					MemoryLimitInBytes: megsToBytes(7890),
-					DiskLimitInBytes:   4096,
+					MemoryUsageInBytes:                  megsToBytes(1230),
+					DiskUsageInBytes:                    4560,
+					TimeSpentInCPU:                      105 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(7890),
+					DiskLimitInBytes:                    4096,
+					ContainerAgeInNanoseconds:           1005,
+					AbsoluteCPUEntitlementInNanoseconds: 2005,
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(3210),
-					DiskUsageInBytes:   6540,
-					TimeSpentInCPU:     110 * time.Second,
-					MemoryLimitInBytes: megsToBytes(9870),
-					DiskLimitInBytes:   512,
+					MemoryUsageInBytes:                  megsToBytes(3210),
+					DiskUsageInBytes:                    6540,
+					TimeSpentInCPU:                      110 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(9870),
+					DiskLimitInBytes:                    512,
+					ContainerAgeInNanoseconds:           1006,
+					AbsoluteCPUEntitlementInNanoseconds: 2006,
 				}},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(3450),
-					DiskUsageInBytes:   4560,
-					TimeSpentInCPU:     110 * time.Second,
-					MemoryLimitInBytes: megsToBytes(6780),
-					DiskLimitInBytes:   2048,
+					MemoryUsageInBytes:                  megsToBytes(3450),
+					DiskUsageInBytes:                    4560,
+					TimeSpentInCPU:                      110 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(6780),
+					DiskLimitInBytes:                    2048,
+					ContainerAgeInNanoseconds:           1007,
+					AbsoluteCPUEntitlementInNanoseconds: 2007,
 				},
 			},
 		}
@@ -133,42 +149,50 @@ var _ = Describe("StatsReporter", func() {
 			"container-guid-without-metrics-guid": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: ""},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(123),
-					DiskUsageInBytes:   megsToBytes(456),
-					TimeSpentInCPU:     100 * time.Second,
-					MemoryLimitInBytes: megsToBytes(789),
-					DiskLimitInBytes:   megsToBytes(1024),
+					MemoryUsageInBytes:                  megsToBytes(123),
+					DiskUsageInBytes:                    megsToBytes(456),
+					TimeSpentInCPU:                      100 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(789),
+					DiskLimitInBytes:                    megsToBytes(1024),
+					ContainerAgeInNanoseconds:           1008,
+					AbsoluteCPUEntitlementInNanoseconds: 2008,
 				},
 			},
 
 			"container-guid-without-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(12300),
-					DiskUsageInBytes:   45600,
-					TimeSpentInCPU:     107 * time.Second,
-					MemoryLimitInBytes: megsToBytes(7890),
-					DiskLimitInBytes:   234,
+					MemoryUsageInBytes:                  megsToBytes(12300),
+					DiskUsageInBytes:                    45600,
+					TimeSpentInCPU:                      107 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(7890),
+					DiskLimitInBytes:                    234,
+					ContainerAgeInNanoseconds:           1009,
+					AbsoluteCPUEntitlementInNanoseconds: 2009,
 				},
 			},
 			"container-guid-with-index": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(32100),
-					DiskUsageInBytes:   65400,
-					TimeSpentInCPU:     112 * time.Second,
-					MemoryLimitInBytes: megsToBytes(98700),
-					DiskLimitInBytes:   43200,
+					MemoryUsageInBytes:                  megsToBytes(32100),
+					DiskUsageInBytes:                    65400,
+					TimeSpentInCPU:                      112 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(98700),
+					DiskLimitInBytes:                    43200,
+					ContainerAgeInNanoseconds:           1010,
+					AbsoluteCPUEntitlementInNanoseconds: 2010,
 				},
 			},
 			"container-guid-without-preloaded-rootfs": executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: megsToBytes(34500),
-					DiskUsageInBytes:   45600,
-					TimeSpentInCPU:     112 * time.Second,
-					MemoryLimitInBytes: megsToBytes(6780),
-					DiskLimitInBytes:   2048,
+					MemoryUsageInBytes:                  megsToBytes(34500),
+					DiskUsageInBytes:                    45600,
+					TimeSpentInCPU:                      112 * time.Second,
+					MemoryLimitInBytes:                  megsToBytes(6780),
+					DiskLimitInBytes:                    2048,
+					ContainerAgeInNanoseconds:           1011,
+					AbsoluteCPUEntitlementInNanoseconds: 2011,
 				},
 			},
 		}
@@ -195,17 +219,28 @@ var _ = Describe("StatsReporter", func() {
 		}
 	}
 
-	createEventContainerMetric := func(metrics executor.Metrics, cpuPercentage float64) events.ContainerMetric {
+	createEventContainerMetric := func(metrics executor.Metrics, cpuPercentage float64) logging.ContainerMetric {
 		instanceIndex := int32(metrics.MetricsConfig.Index)
-		return events.ContainerMetric{
-			ApplicationId:    &metrics.MetricsConfig.Guid,
-			InstanceIndex:    &instanceIndex,
-			CpuPercentage:    &cpuPercentage,
-			MemoryBytes:      &metrics.ContainerMetrics.MemoryUsageInBytes,
-			DiskBytes:        &metrics.ContainerMetrics.DiskUsageInBytes,
-			MemoryBytesQuota: &metrics.ContainerMetrics.MemoryLimitInBytes,
-			DiskBytesQuota:   &metrics.ContainerMetrics.DiskLimitInBytes,
+		return logging.ContainerMetric{
+			ApplicationId:          metrics.MetricsConfig.Guid,
+			InstanceIndex:          instanceIndex,
+			CpuPercentage:          cpuPercentage,
+			MemoryBytes:            metrics.ContainerMetrics.MemoryUsageInBytes,
+			DiskBytes:              metrics.ContainerMetrics.DiskUsageInBytes,
+			MemoryBytesQuota:       metrics.ContainerMetrics.MemoryLimitInBytes,
+			DiskBytesQuota:         metrics.ContainerMetrics.DiskLimitInBytes,
+			AbsoluteCPUUsage:       uint64(metrics.TimeSpentInCPU),
+			AbsoluteCPUEntitlement: metrics.AbsoluteCPUEntitlementInNanoseconds,
+			ContainerAge:           metrics.ContainerAgeInNanoseconds,
 		}
+	}
+
+	type cpuUsage struct {
+		applicationID       string
+		instanceIndex       int32
+		absoluteUsage       uint64
+		absoluteEntitlement uint64
+		containerAge        uint64
 	}
 
 	BeforeEach(func() {
@@ -251,12 +286,28 @@ var _ = Describe("StatsReporter", func() {
 		ginkgomon.Interrupt(process)
 	})
 
-	sentMetrics := func() []events.ContainerMetric {
-		evs := []events.ContainerMetric{}
+	sentMetrics := func() []logging.ContainerMetric {
+		evs := []logging.ContainerMetric{}
 		for i := 0; i < fakeMetronClient.SendAppMetricsCallCount(); i++ {
-			evs = append(evs, *fakeMetronClient.SendAppMetricsArgsForCall(i))
+			evs = append(evs, fakeMetronClient.SendAppMetricsArgsForCall(i))
 		}
 		return evs
+	}
+
+	sentCPUUsage := func() []cpuUsage {
+		usage := []cpuUsage{}
+
+		for i := 0; i < fakeMetronClient.SendAppMetricsCallCount(); i++ {
+			metrics := fakeMetronClient.SendAppMetricsArgsForCall(i)
+			usage = append(usage, cpuUsage{
+				applicationID:       metrics.ApplicationId,
+				instanceIndex:       metrics.InstanceIndex,
+				absoluteUsage:       metrics.AbsoluteCPUUsage,
+				absoluteEntitlement: metrics.AbsoluteCPUEntitlement,
+				containerAge:        metrics.ContainerAge,
+			})
+		}
+		return usage
 	}
 
 	Context("when the interval elapses", func() {
@@ -269,38 +320,55 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		It("emits memory and disk usage for each container, but no CPU", func() {
-			Eventually(sentMetrics).Should(ConsistOf([]events.ContainerMetric{
+			Eventually(sentMetrics).Should(ConsistOf([]logging.ContainerMetric{
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: megsToBytes(123),
-						DiskUsageInBytes:   megsToBytes(456),
-						MemoryLimitInBytes: megsToBytes(789),
-						DiskLimitInBytes:   megsToBytes(1024),
+						MemoryUsageInBytes:                  megsToBytes(123),
+						DiskUsageInBytes:                    megsToBytes(456),
+						MemoryLimitInBytes:                  megsToBytes(789),
+						DiskLimitInBytes:                    megsToBytes(1024),
+						TimeSpentInCPU:                      100000000000,
+						AbsoluteCPUEntitlementInNanoseconds: 2001,
+						ContainerAgeInNanoseconds:           1001,
 					},
 				},
 					0.0),
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: megsToBytes(321),
-						DiskUsageInBytes:   megsToBytes(654),
-						MemoryLimitInBytes: megsToBytes(987),
-						DiskLimitInBytes:   megsToBytes(2048),
+						MemoryUsageInBytes:                  megsToBytes(321),
+						DiskUsageInBytes:                    megsToBytes(654),
+						MemoryLimitInBytes:                  megsToBytes(987),
+						DiskLimitInBytes:                    megsToBytes(2048),
+						TimeSpentInCPU:                      100000000000,
+						AbsoluteCPUEntitlementInNanoseconds: 2002,
+						ContainerAgeInNanoseconds:           1002,
 					},
 				},
 					0.0),
 				createEventContainerMetric(executor.Metrics{
 					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: megsToBytes(345),
-						DiskUsageInBytes:   megsToBytes(456),
-						MemoryLimitInBytes: megsToBytes(678),
-						DiskLimitInBytes:   megsToBytes(2048),
+						MemoryUsageInBytes:                  megsToBytes(345),
+						DiskUsageInBytes:                    megsToBytes(456),
+						MemoryLimitInBytes:                  megsToBytes(678),
+						DiskLimitInBytes:                    megsToBytes(2048),
+						TimeSpentInCPU:                      100000000000,
+						AbsoluteCPUEntitlementInNanoseconds: 2003,
+						ContainerAgeInNanoseconds:           1003,
 					},
 				},
 					0.0),
 			}))
+		})
+
+		It("emits container cpu usage for each container", func() {
+			Eventually(sentCPUUsage).Should(ConsistOf(
+				cpuUsage{applicationID: "metrics-guid-without-index", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2001, containerAge: 1001},
+				cpuUsage{applicationID: "metrics-guid-with-index", instanceIndex: 1, absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2002, containerAge: 1002},
+				cpuUsage{applicationID: "metrics-guid-without-preloaded-rootfs", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2003, containerAge: 1003},
+			))
 		})
 
 		Context("when containers EnableContainerProxy is true", func() {
@@ -343,10 +411,13 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
-							DiskUsageInBytes:   megsToBytes(456),
-							MemoryLimitInBytes: megsToBytes(789),
-							DiskLimitInBytes:   megsToBytes(1024),
+							MemoryUsageInBytes:                  uint64(expectedMemoryUsageWithoutIndex),
+							DiskUsageInBytes:                    megsToBytes(456),
+							MemoryLimitInBytes:                  megsToBytes(789),
+							DiskLimitInBytes:                    megsToBytes(1024),
+							TimeSpentInCPU:                      100000000000,
+							AbsoluteCPUEntitlementInNanoseconds: 2001,
+							ContainerAgeInNanoseconds:           1001,
 						},
 					},
 						0.0),
@@ -367,10 +438,13 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: uint64(expectedMemoryUsageWithoutIndex),
-								DiskUsageInBytes:   megsToBytes(456),
-								MemoryLimitInBytes: megsToBytes(784),
-								DiskLimitInBytes:   megsToBytes(1024),
+								MemoryUsageInBytes:                  uint64(expectedMemoryUsageWithoutIndex),
+								DiskUsageInBytes:                    megsToBytes(456),
+								MemoryLimitInBytes:                  megsToBytes(784),
+								DiskLimitInBytes:                    megsToBytes(1024),
+								TimeSpentInCPU:                      100000000000,
+								AbsoluteCPUEntitlementInNanoseconds: 2001,
+								ContainerAgeInNanoseconds:           1001,
 							},
 						},
 							0.0),
@@ -383,10 +457,13 @@ var _ = Describe("StatsReporter", func() {
 							createEventContainerMetric(executor.Metrics{
 								MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
 								ContainerMetrics: executor.ContainerMetrics{
-									MemoryUsageInBytes: megsToBytes(345),
-									DiskUsageInBytes:   megsToBytes(456),
-									MemoryLimitInBytes: megsToBytes(678),
-									DiskLimitInBytes:   megsToBytes(2048),
+									MemoryUsageInBytes:                  megsToBytes(345),
+									DiskUsageInBytes:                    megsToBytes(456),
+									MemoryLimitInBytes:                  megsToBytes(678),
+									DiskLimitInBytes:                    megsToBytes(2048),
+									TimeSpentInCPU:                      100000000000,
+									AbsoluteCPUEntitlementInNanoseconds: 2003,
+									ContainerAgeInNanoseconds:           1003,
 								},
 							},
 								0.0),
@@ -397,8 +474,11 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		It("does not emit anything for containers with no metrics guid", func() {
-			Consistently(sentMetrics).ShouldNot(ContainElement(WithTransform(func(m events.ContainerMetric) string {
-				return m.GetApplicationId()
+			Consistently(sentMetrics).ShouldNot(ContainElement(WithTransform(func(m logging.ContainerMetric) string {
+				return m.ApplicationId
+			}, BeEmpty())))
+			Consistently(sentCPUUsage).ShouldNot(ContainElement(WithTransform(func(m cpuUsage) string {
+				return m.applicationID
 			}, BeEmpty())))
 		})
 
@@ -413,20 +493,26 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: megsToBytes(1230),
-							DiskUsageInBytes:   4560,
-							MemoryLimitInBytes: megsToBytes(7890),
-							DiskLimitInBytes:   4096,
+							MemoryUsageInBytes:                  megsToBytes(1230),
+							DiskUsageInBytes:                    4560,
+							MemoryLimitInBytes:                  megsToBytes(7890),
+							DiskLimitInBytes:                    4096,
+							TimeSpentInCPU:                      105000000000,
+							AbsoluteCPUEntitlementInNanoseconds: 2005,
+							ContainerAgeInNanoseconds:           1005,
 						},
 					}, 50.0)))
 				Eventually(sentMetrics).Should(ContainElement(
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: megsToBytes(3210),
-							DiskUsageInBytes:   6540,
-							MemoryLimitInBytes: megsToBytes(9870),
-							DiskLimitInBytes:   512,
+							MemoryUsageInBytes:                  megsToBytes(3210),
+							DiskUsageInBytes:                    6540,
+							MemoryLimitInBytes:                  megsToBytes(9870),
+							DiskLimitInBytes:                    512,
+							TimeSpentInCPU:                      110000000000,
+							AbsoluteCPUEntitlementInNanoseconds: 2006,
+							ContainerAgeInNanoseconds:           1006,
 						},
 					},
 						100.0)))
@@ -482,10 +568,13 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: megsToBytes(12300),
-								DiskUsageInBytes:   45600,
-								MemoryLimitInBytes: megsToBytes(7890),
-								DiskLimitInBytes:   234,
+								MemoryUsageInBytes:                  megsToBytes(12300),
+								DiskUsageInBytes:                    45600,
+								MemoryLimitInBytes:                  megsToBytes(7890),
+								DiskLimitInBytes:                    234,
+								TimeSpentInCPU:                      107000000000,
+								AbsoluteCPUEntitlementInNanoseconds: 2009,
+								ContainerAgeInNanoseconds:           1009,
 							}},
 							20.0),
 					))
@@ -493,10 +582,13 @@ var _ = Describe("StatsReporter", func() {
 						createEventContainerMetric(executor.Metrics{
 							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
 							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes: megsToBytes(32100),
-								DiskUsageInBytes:   65400,
-								MemoryLimitInBytes: megsToBytes(98700),
-								DiskLimitInBytes:   43200,
+								MemoryUsageInBytes:                  megsToBytes(32100),
+								DiskUsageInBytes:                    65400,
+								MemoryLimitInBytes:                  megsToBytes(98700),
+								DiskLimitInBytes:                    43200,
+								TimeSpentInCPU:                      112000000000,
+								AbsoluteCPUEntitlementInNanoseconds: 2010,
+								ContainerAgeInNanoseconds:           1010,
 							},
 						},
 							20.0)))
@@ -530,21 +622,13 @@ var _ = Describe("StatsReporter", func() {
 					createEventContainerMetric(executor.Metrics{
 						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index", Index: 0},
 						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: megsToBytes(123),
-							DiskUsageInBytes:   megsToBytes(456),
-							MemoryLimitInBytes: megsToBytes(789),
-							DiskLimitInBytes:   megsToBytes(1024),
-						}},
-						0.0),
-				))
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes: megsToBytes(321),
-							DiskUsageInBytes:   megsToBytes(654),
-							MemoryLimitInBytes: megsToBytes(987),
-							DiskLimitInBytes:   megsToBytes(2048),
+							MemoryUsageInBytes:                  megsToBytes(123),
+							DiskUsageInBytes:                    megsToBytes(456),
+							MemoryLimitInBytes:                  megsToBytes(789),
+							DiskLimitInBytes:                    megsToBytes(1024),
+							TimeSpentInCPU:                      100 * time.Second,
+							AbsoluteCPUEntitlementInNanoseconds: 2001,
+							ContainerAgeInNanoseconds:           1001,
 						}},
 						0.0),
 				))
@@ -553,78 +637,70 @@ var _ = Describe("StatsReporter", func() {
 	})
 
 	Context("when a container is no longer present", func() {
-		metrics := func(metricsGuid string, index int, memoryUsage, diskUsage, memoryLimit, diskLimit uint64, cpuTime time.Duration) executor.Metrics {
+		metrics := func(metricsGuid string, index int, cpuTime time.Duration) executor.Metrics {
 			return executor.Metrics{
 				MetricsConfig: executor.MetricsConfig{
 					Guid:  metricsGuid,
 					Index: index,
 				},
 				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes: memoryUsage,
-					DiskUsageInBytes:   diskUsage,
-					MemoryLimitInBytes: memoryLimit,
-					DiskLimitInBytes:   diskLimit,
-					TimeSpentInCPU:     cpuTime,
+					TimeSpentInCPU: cpuTime,
 				},
 			}
 		}
 
-		waitForMetrics := func(id string, instance int32, cpu float64, memoryUsage, diskUsage, memoryLimit, diskLimit uint64) {
-			Eventually(sentMetrics).Should(ContainElement(
-				createEventContainerMetric(executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Guid: id, Index: int(instance)},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes: memoryUsage,
-						DiskUsageInBytes:   diskUsage,
-						MemoryLimitInBytes: memoryLimit,
-						DiskLimitInBytes:   diskLimit,
-					}},
-					cpu),
+		waitForMetrics := func(id string, idx int, instance int32, cpu float64, cpuTime time.Duration) {
+			EventuallyWithOffset(1, fakeMetronClient.SendAppMetricsCallCount).Should(Equal(idx + 1))
+			ExpectWithOffset(1, fakeMetronClient.SendAppMetricsArgsForCall(idx)).To(Equal(
+				createEventContainerMetric(
+					executor.Metrics{
+						MetricsConfig: executor.MetricsConfig{Guid: id, Index: int(instance)},
+						ContainerMetrics: executor.ContainerMetrics{
+							TimeSpentInCPU: cpuTime,
+						},
+					},
+					cpu,
+				),
 			))
 		}
 
-		// Pending test: This test was passing, but the functionality was not actually working.
-		// When we discovered that the test setup does not mimic reality, we filed
-		// a bug [#152337746], and made the test fail, hence it's pending until we get to that bug.
-		PIt("only remembers the previous metrics", func() {
-			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
+		It("only remembers the previous metrics", func() {
+			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}}
 			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 128, 256, 512, 1024, 10*time.Second),
-				"container-guid-1": metrics("metrics-guid-1", 1, 256, 512, 1024, 2048, 10*time.Second),
+				"container-guid-0": metrics("metrics-guid-0", 0, 10*time.Second),
 			}
 
-			fakeClock.Increment(interval)
+			fakeClock.WaitForWatcherAndIncrement(interval)
 
-			waitForMetrics("metrics-guid-0", 0, 0, 128, 256, 512, 1024)
-			waitForMetrics("metrics-guid-1", 1, 0, 256, 512, 1024, 2048)
+			// previousCPUInfos is empty so we emit 0.0
+			waitForMetrics("metrics-guid-0", 0, 0, 0, 10*time.Second)
 
-			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(2))
+			By("getting more metrics from garden")
+			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}}
+			metricsResultsChan <- map[string]executor.Metrics{
+				"container-guid-0": metrics("metrics-guid-0", 0, 20*time.Second),
+			}
+
+			fakeClock.WaitForWatcherAndIncrement(interval)
+
+			waitForMetrics("metrics-guid-0", 1, 0, 100, 20*time.Second)
 
 			By("losing a container")
-			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
-			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 256, 512, 1024, 2048, 30*time.Second),
-			}
+			listContainersChan <- []executor.Container{}
+			metricsResultsChan <- map[string]executor.Metrics{}
 
-			fakeClock.Increment(interval)
-
-			waitForMetrics("metrics-guid-0", 0, 200, 256, 512, 1024, 2048)
-			waitForMetrics("metrics-guid-1", 1, 0, 256, 512, 1024, 2048)
-
-			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(4))
+			fakeClock.WaitForWatcherAndIncrement(interval)
 
 			By("finding the container again")
 			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
 			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 256, 512, 2, 3, 40*time.Second),
-				"container-guid-1": metrics("metrics-guid-1", 1, 512, 1024, 3, 2, 10*time.Second),
+				"container-guid-0": metrics("metrics-guid-0", 0, 40*time.Second),
 			}
 
-			fakeClock.Increment(interval)
+			fakeClock.WaitForWatcherAndIncrement(interval)
 
-			waitForMetrics("metrics-guid-0", 0, 100, 256, 512, 2, 3)
-			waitForMetrics("metrics-guid-1", 1, 0, 512, 1024, 3, 2)
-			Expect(fakeMetronClient.SendAppMetricsCallCount).To(Equal(6))
+			// previousCPUInfos is empty so we emit 0.0
+			waitForMetrics("metrics-guid-0", 2, 0, 0, 40*time.Second)
 		})
 	})
 })
