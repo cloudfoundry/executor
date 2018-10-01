@@ -112,16 +112,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		Describe("CreateDir", func() {
-			It("returns an empty bind mount", func() {
-				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+			It("returns an empty configuration", func() {
+				credentialConfiguration, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(mounts).To(BeEmpty())
-			})
-
-			It("returns an empty environment variables", func() {
-				_, env, err := proxyConfigHandler.CreateDir(logger, container)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(env).To(BeEmpty())
+				Expect(credentialConfiguration).To(Equal(containerstore.CredentialConfiguration{}))
 			})
 		})
 
@@ -162,17 +156,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 				container.EnableContainerProxy = false
 			})
 
-			It("returns an empty bind mount", func() {
-				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+			It("returns an empty configuration", func() {
+				credentialConfiguration, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(mounts).To(BeEmpty())
+				Expect(credentialConfiguration).To(Equal(containerstore.CredentialConfiguration{}))
 			})
 		})
 
 		It("returns the appropriate bind mounts for container proxy", func() {
-			mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+			credentialConfiguration, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mounts).To(ConsistOf([]garden.BindMount{
+			Expect(credentialConfiguration.BindMounts).To(ConsistOf([]garden.BindMount{
 				{
 					Origin:  garden.BindMountOriginHost,
 					SrcPath: proxyDir,
@@ -187,7 +181,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		It("makes the proxy config directory on the host", func() {
-			_, _, err := proxyConfigHandler.CreateDir(logger, container)
+			_, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			proxyConfigDir := fmt.Sprintf("%s/%s", proxyConfigDir, container.Guid)
 			Expect(proxyConfigDir).To(BeADirectory())
@@ -200,7 +194,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("returns an error", func() {
-				_, _, err := proxyConfigHandler.CreateDir(logger, container)
+				_, err := proxyConfigHandler.CreateDir(logger, container)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -208,7 +202,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 	Describe("RemoveDir", func() {
 		It("removes the directory created by CreateDir", func() {
-			_, _, err := proxyConfigHandler.CreateDir(logger, container)
+			_, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configPath).To(BeADirectory())
 
@@ -587,7 +581,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, _, err := proxyConfigHandler.CreateDir(logger, container)
+			_, err := proxyConfigHandler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

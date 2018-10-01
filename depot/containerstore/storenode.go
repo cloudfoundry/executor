@@ -62,7 +62,6 @@ type storeNode struct {
 	dependencyManager           DependencyManager
 	volumeManager               volman.Manager
 	credManager                 CredManager
-	instanceIdentityHandler     *InstanceIdentityHandler
 	eventEmitter                event.Hub
 	transformer                 transformer.Transformer
 	process                     ifrit.Process
@@ -72,6 +71,7 @@ type storeNode struct {
 	useContainerProxy           bool
 	proxyConfigHandler          ProxyManager
 	bindMounts                  []garden.BindMount
+	tmpfs                       []garden.Tmpfs
 	cellID                      string
 	enableUnproxiedPortMappings bool
 
@@ -208,13 +208,14 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 	n.bindMounts = append(n.bindMounts, volumeMounts...)
 
-	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
+	credentialConfiguration, err := n.credManager.CreateCredDir(logger, n.info)
 	if err != nil {
 		n.complete(logger, true, CredDirFailed, true)
 		return err
 	}
-	n.bindMounts = append(n.bindMounts, credMounts...)
-	info.Env = append(info.Env, envs...)
+	n.bindMounts = append(n.bindMounts, credentialConfiguration.BindMounts...)
+	n.tmpfs = append(n.tmpfs, credentialConfiguration.Tmpfs...)
+	info.Env = append(info.Env, credentialConfiguration.Env...)
 
 	if n.useDeclarativeHealthCheck {
 		logger.Info("adding-healthcheck-bindmounts")
@@ -331,6 +332,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		},
 		Env:        convertEnvVars(info.Env),
 		BindMounts: n.bindMounts,
+		Tmpfs:      n.tmpfs,
 		Limits: garden.Limits{
 			Memory: garden.MemoryLimits{
 				LimitInBytes: uint64(info.MemoryMB * 1024 * 1024),

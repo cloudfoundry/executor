@@ -661,21 +661,28 @@ var _ = Describe("Container Store", func() {
 			Context("when credential mounts are configured", func() {
 				var (
 					expectedBindMount garden.BindMount
+					expectedTmpfs     garden.Tmpfs
 				)
 
 				BeforeEach(func() {
 					expectedBindMount = garden.BindMount{SrcPath: "hpath1", DstPath: "cpath1", Mode: garden.BindMountModeRO, Origin: garden.BindMountOriginHost}
+					expectedTmpfs = garden.Tmpfs{Path: "tmpfspath"}
 					envVariables := []executor.EnvironmentVariable{
 						{Name: "CF_INSTANCE_CERT", Value: "some-cert"},
 					}
-					credManager.CreateCredDirReturns([]garden.BindMount{expectedBindMount}, envVariables, nil)
+					credManager.CreateCredDirReturns(containerstore.CredentialConfiguration{
+						BindMounts: []garden.BindMount{expectedBindMount},
+						Tmpfs:      []garden.Tmpfs{expectedTmpfs},
+						Env:        envVariables,
+					}, nil)
 				})
 
-				It("mounts the credential directory into the container", func() {
+				It("configures the credential directory into the container", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount))
+					Expect(gardenClient.CreateArgsForCall(0).Tmpfs).To(ContainElement(expectedTmpfs))
 				})
 
 				It("add the instance identity environment variables to the container", func() {
@@ -687,7 +694,7 @@ var _ = Describe("Container Store", func() {
 
 				Context("when failing to create credential directory on host", func() {
 					BeforeEach(func() {
-						credManager.CreateCredDirReturns(nil, nil, errors.New("failed to create dir"))
+						credManager.CreateCredDirReturns(containerstore.CredentialConfiguration{}, errors.New("failed to create dir"))
 					})
 
 					It("fails fast and completes the container", func() {
@@ -1087,7 +1094,7 @@ var _ = Describe("Container Store", func() {
 							DstPath: "/etc/cf-assets/envoy_config",
 						},
 					}
-					credManager.CreateCredDirReturns(bindMounts, nil, nil)
+					credManager.CreateCredDirReturns(containerstore.CredentialConfiguration{BindMounts: bindMounts}, nil)
 
 					proxyManager.ProxyPortsReturns([]executor.ProxyPortMapping{
 						{
@@ -1476,7 +1483,7 @@ var _ = Describe("Container Store", func() {
 					envVariables := []executor.EnvironmentVariable{
 						{Name: "CF_INSTANCE_CERT", Value: "some-cert"},
 					}
-					credManager.CreateCredDirReturns(credManagerBindMount, envVariables, nil)
+					credManager.CreateCredDirReturns(containerstore.CredentialConfiguration{BindMounts: credManagerBindMount, Env: envVariables}, nil)
 
 					credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						<-cmFinishSetup

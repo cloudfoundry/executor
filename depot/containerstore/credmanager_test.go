@@ -186,28 +186,43 @@ var _ = Describe("CredManager", func() {
 				SrcPath: "/src/path2",
 				DstPath: "/dst/path2",
 			}
-			fakeCredHandler1.CreateDirReturns([]garden.BindMount{mount1}, nil, nil)
-			fakeCredHandler2.CreateDirReturns([]garden.BindMount{mount2}, nil, nil)
+			fakeCredHandler1.CreateDirReturns(containerstore.CredentialConfiguration{BindMounts: []garden.BindMount{mount1}}, nil)
+			fakeCredHandler2.CreateDirReturns(containerstore.CredentialConfiguration{BindMounts: []garden.BindMount{mount2}}, nil)
 
-			mounts, _, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+			credentialConfiguration, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
 
-			Expect(mounts).To(ConsistOf(mount1, mount2))
+			Expect(credentialConfiguration.BindMounts).To(ConsistOf(mount1, mount2))
+		})
+
+		It("collects tmpfs from all handlers", func() {
+			tmpfs1 := garden.Tmpfs{
+				Path: "/path/to/tmpfs1",
+			}
+			tmpfs2 := garden.Tmpfs{
+				Path: "/path/to/tmpfs2",
+			}
+			fakeCredHandler1.CreateDirReturns(containerstore.CredentialConfiguration{Tmpfs: []garden.Tmpfs{tmpfs1}}, nil)
+			fakeCredHandler2.CreateDirReturns(containerstore.CredentialConfiguration{Tmpfs: []garden.Tmpfs{tmpfs2}}, nil)
+
+			credentialConfiguration, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(credentialConfiguration.Tmpfs).To(ConsistOf(tmpfs1, tmpfs2))
 		})
 
 		It("collects all environment variables", func() {
 			env1 := executor.EnvironmentVariable{Name: "env1", Value: "val1"}
 			env2 := executor.EnvironmentVariable{Name: "env2", Value: "val2"}
-			fakeCredHandler1.CreateDirReturns(nil, []executor.EnvironmentVariable{env1}, nil)
-			fakeCredHandler2.CreateDirReturns(nil, []executor.EnvironmentVariable{env2}, nil)
+			fakeCredHandler1.CreateDirReturns(containerstore.CredentialConfiguration{Env: []executor.EnvironmentVariable{env1}}, nil)
+			fakeCredHandler2.CreateDirReturns(containerstore.CredentialConfiguration{Env: []executor.EnvironmentVariable{env2}}, nil)
 
-			_, envs, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+			credentialConfiguration, _ := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
 
-			Expect(envs).To(ConsistOf(env1, env2))
+			Expect(credentialConfiguration.Env).To(ConsistOf(env1, env2))
 		})
 
 		It("returns an error if one of the handlers returned an error", func() {
-			fakeCredHandler2.CreateDirReturns(nil, nil, errors.New("boooom!"))
-			_, _, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
+			fakeCredHandler2.CreateDirReturns(containerstore.CredentialConfiguration{}, errors.New("boooom!"))
+			_, err := credManager.CreateCredDir(logger, executor.Container{Guid: "guid"})
 
 			Expect(err).To(MatchError("boooom!"))
 		})

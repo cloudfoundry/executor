@@ -575,7 +575,7 @@ var _ = Describe("Initializer", func() {
 				},
 			}
 			fakeCredHandler := &containerstorefakes.FakeCredentialHandler{}
-			fakeCredHandler.CreateDirReturns(mounts, nil, nil)
+			fakeCredHandler.CreateDirReturns(containerstore.CredentialConfiguration{BindMounts: mounts}, nil)
 			credManager, err = initializer.CredManagerFromConfig(logger, fakeMetronClient, config, fakeClock, fakeCredHandler)
 		})
 
@@ -585,9 +585,9 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("returns a noop credential manager", func() {
-				bindMounts, _, err := credManager.CreateCredDir(logger, container)
-				Expect(bindMounts).To(BeEmpty())
+				credentialConfiguration, err := credManager.CreateCredDir(logger, container)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(credentialConfiguration).To(Equal(containerstore.CredentialConfiguration{}))
 			})
 		})
 
@@ -600,10 +600,10 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("returns a credential manager", func() {
-				bindMounts, _, err := credManager.CreateCredDir(logger, container)
+				credentialConfiguration, err := credManager.CreateCredDir(logger, container)
 				defer os.RemoveAll(filepath.Join(config.InstanceIdentityCredDir, container.Guid))
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bindMounts).NotTo(BeEmpty())
+				Expect(credentialConfiguration).NotTo(Equal(containerstore.CredentialConfiguration{}))
 			})
 
 			Context("when the private key does not exist", func() {
