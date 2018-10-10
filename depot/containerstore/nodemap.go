@@ -120,9 +120,12 @@ func (n *nodeMap) CompleteMissing(logger lager.Logger, snapshotGuids map[string]
 
 	for guid := range snapshotGuids {
 		if _, exist := existingHandles[guid]; !exist {
-			reaped := n.nodes[guid].Reap(logger)
-			if reaped {
-				logger.Info("reaped-missing-container", lager.Data{"guid": guid})
+			node, ok := n.nodes[guid]
+			if ok {
+				reaped := node.Reap(logger)
+				if reaped {
+					logger.Info("reaped-missing-container", lager.Data{"guid": guid})
+				}
 			}
 		}
 	}
