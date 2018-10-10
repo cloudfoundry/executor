@@ -2819,15 +2819,14 @@ var _ = Describe("Container Store", func() {
 			Eventually(logger).Should(gbytes.Say("reaped-missing-container"))
 		})
 
-		Context("while in the process of reaping containers", func() {
+		Context("when garden's list of containers is stale (ie. a container was created since obtaining the list from garden)", func() {
 			var syncCh chan struct{}
 
 			BeforeEach(func() {
 				syncCh = make(chan struct{})
-				gardenContainers := []garden.Container{gardenContainer, extraGardenContainer}
 				gardenClient.ContainersStub = func(garden.Properties) ([]garden.Container, error) {
 					<-syncCh
-					return gardenContainers, nil
+					return []garden.Container{gardenContainer, extraGardenContainer}, nil
 				}
 			})
 
@@ -2839,36 +2838,29 @@ var _ = Describe("Container Store", func() {
 				}
 			}
 
-			It("does not allow containers to be created at the same time", func() {
+			It("does not reap the newly created container", func() {
 				clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 
-				// Reap extra garden containers first
+				// reap extra garden containers first
 				syncCh <- struct{}{}
 
-				// Wait for container handles to be retrieved
+				// wait for reap missing containers to be called
 				Eventually(gardenClient.ContainersCallCount).Should(Equal(2))
 
 				newContainerGuid := "new-container-guid"
 				_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: newContainerGuid})
 				Expect(err).NotTo(HaveOccurred())
-
 				err = containerStore.Initialize(logger, &executor.RunRequest{Guid: newContainerGuid})
 				Expect(err).NotTo(HaveOccurred())
-
-				go func() {
-					defer GinkgoRecover()
-					_, err = containerStore.Create(logger, newContainerGuid)
-					Expect(err).NotTo(HaveOccurred())
-				}()
-
-				Consistently(getContainerState(newContainerGuid)).ShouldNot(Equal(executor.StateCreated))
-
-				syncCh <- struct{}{}
-
-				Eventually(getContainerState(containerGuid4)).Should(Equal(executor.StateCompleted))
-				Eventually(getContainerState(containerGuid5)).Should(Equal(executor.StateCompleted))
+				_, err = containerStore.Create(logger, newContainerGuid)
+				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(getContainerState(newContainerGuid)).Should(Equal(executor.StateCreated))
+
+				// continue reaping missing garden containers
+				syncCh <- struct{}{}
+
+				// new container should not be reaped despite garden's list of containers not containing the newly created container
 				Consistently(getContainerState(newContainerGuid)).ShouldNot(Equal(executor.StateCompleted))
 			})
 		})

@@ -112,22 +112,31 @@ func (n *nodeMap) CompleteExpired(logger lager.Logger, now time.Time) {
 	}
 }
 
-func (n *nodeMap) CompleteMissing(logger lager.Logger, existingHandles map[string]struct{}) {
+func (n *nodeMap) CompleteMissing(logger lager.Logger, snapshotGuids map[string]struct{}, existingHandles map[string]struct{}) {
 	n.lock.Lock()
 	logger.Debug("lock-acquired")
 	defer n.lock.Unlock()
 	defer logger.Debug("lock-released")
 
-	for i := range n.nodes {
-		node := n.nodes[i]
-		info := node.Info()
-
-		_, ok := existingHandles[info.Guid]
-		if !ok {
-			reaped := node.Reap(logger)
+	for guid := range snapshotGuids {
+		if _, exist := existingHandles[guid]; !exist {
+			reaped := n.nodes[guid].Reap(logger)
 			if reaped {
-				logger.Info("reaped-missing-container", lager.Data{"guid": info.Guid})
+				logger.Info("reaped-missing-container", lager.Data{"guid": guid})
 			}
 		}
 	}
+}
+
+func (n *nodeMap) containerGuids(logger lager.Logger) map[string]struct{} {
+	n.lock.Lock()
+	logger.Debug("lock-acquired")
+	defer n.lock.Unlock()
+	defer logger.Debug("lock-released")
+
+	guids := make(map[string]struct{})
+	for guid := range n.nodes {
+		guids[guid] = struct{}{}
+	}
+	return guids
 }
