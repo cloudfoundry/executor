@@ -283,6 +283,9 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 	instanceIdentityHandler := containerstore.NewInstanceIdentityHandler(
 		config.InstanceIdentityCredDir,
 		"/etc/cf-instance-credentials",
+		&containerstore.GardenContainerWriter{
+			Client: gardenClient,
+		},
 	)
 
 	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, proxyConfigHandler, instanceIdentityHandler)

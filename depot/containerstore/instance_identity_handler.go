@@ -10,39 +10,45 @@ import (
 	"code.cloudfoundry.org/lager"
 )
 
+//go:generate counterfeiter . ContainerWriter
+type ContainerWriter interface {
+	WriteFile(containerID, pathInContainer string, content []byte) error
+}
+
 func NewInstanceIdentityHandler(
 	credDir string,
 	containerMountPath string,
+	containerWriter ContainerWriter,
 ) *InstanceIdentityHandler {
 	return &InstanceIdentityHandler{
 		credDir:            credDir,
 		containerMountPath: containerMountPath,
+		containerWriter:    containerWriter,
 	}
 }
 
 type InstanceIdentityHandler struct {
 	containerMountPath string
 	credDir            string
+	containerWriter    ContainerWriter
 }
 
-func (h *InstanceIdentityHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (h *InstanceIdentityHandler) CreateDir(logger lager.Logger, container executor.Container) (CredentialConfiguration, error) {
 	containerDir := filepath.Join(h.credDir, container.Guid)
 	err := os.Mkdir(containerDir, 0755)
 	if err != nil {
-		return nil, nil, err
+		return CredentialConfiguration{}, err
 	}
 
-	return []garden.BindMount{
-			{
-				SrcPath: containerDir,
-				DstPath: h.containerMountPath,
-				Mode:    garden.BindMountModeRO,
-				Origin:  garden.BindMountOriginHost,
-			},
-		}, []executor.EnvironmentVariable{
+	return CredentialConfiguration{
+		Tmpfs: []garden.Tmpfs{
+			garden.Tmpfs{Path: h.containerMountPath},
+		},
+		Env: []executor.EnvironmentVariable{
 			{Name: "CF_INSTANCE_CERT", Value: path.Join(h.containerMountPath, "instance.crt")},
 			{Name: "CF_INSTANCE_KEY", Value: path.Join(h.containerMountPath, "instance.key")},
-		}, nil
+		},
+	}, nil
 }
 
 func (h *InstanceIdentityHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
@@ -93,6 +99,16 @@ func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Con
 	}
 
 	err = os.Rename(tmpCertificatePath, certificatePath)
+	if err != nil {
+		return err
+	}
+
+	err = h.containerWriter.WriteFile(container.Guid, path.Join(h.containerMountPath, "instance.key"), []byte(cred.Key))
+	if err != nil {
+		return err
+	}
+
+	err = h.containerWriter.WriteFile(container.Guid, path.Join(h.containerMountPath, "instance.crt"), []byte(cred.Cert))
 	if err != nil {
 		return err
 	}

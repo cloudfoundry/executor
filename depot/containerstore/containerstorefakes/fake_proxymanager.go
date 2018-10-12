@@ -6,26 +6,23 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
 
 type FakeProxyManager struct {
-	CreateDirStub        func(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
+	CreateDirStub        func(logger lager.Logger, container executor.Container) (containerstore.CredentialConfiguration, error)
 	createDirMutex       sync.RWMutex
 	createDirArgsForCall []struct {
 		logger    lager.Logger
 		container executor.Container
 	}
 	createDirReturns struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	createDirReturnsOnCall map[int]struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	RemoveDirStub        func(logger lager.Logger, container executor.Container) error
 	removeDirMutex       sync.RWMutex
@@ -81,7 +78,7 @@ type FakeProxyManager struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeProxyManager) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (fake *FakeProxyManager) CreateDir(logger lager.Logger, container executor.Container) (containerstore.CredentialConfiguration, error) {
 	fake.createDirMutex.Lock()
 	ret, specificReturn := fake.createDirReturnsOnCall[len(fake.createDirArgsForCall)]
 	fake.createDirArgsForCall = append(fake.createDirArgsForCall, struct {
@@ -94,9 +91,9 @@ func (fake *FakeProxyManager) CreateDir(logger lager.Logger, container executor.
 		return fake.CreateDirStub(logger, container)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
+		return ret.result1, ret.result2
 	}
-	return fake.createDirReturns.result1, fake.createDirReturns.result2, fake.createDirReturns.result3
+	return fake.createDirReturns.result1, fake.createDirReturns.result2
 }
 
 func (fake *FakeProxyManager) CreateDirCallCount() int {
@@ -111,29 +108,26 @@ func (fake *FakeProxyManager) CreateDirArgsForCall(i int) (lager.Logger, executo
 	return fake.createDirArgsForCall[i].logger, fake.createDirArgsForCall[i].container
 }
 
-func (fake *FakeProxyManager) CreateDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeProxyManager) CreateDirReturns(result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateDirStub = nil
 	fake.createDirReturns = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeProxyManager) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeProxyManager) CreateDirReturnsOnCall(i int, result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateDirStub = nil
 	if fake.createDirReturnsOnCall == nil {
 		fake.createDirReturnsOnCall = make(map[int]struct {
-			result1 []garden.BindMount
-			result2 []executor.EnvironmentVariable
-			result3 error
+			result1 containerstore.CredentialConfiguration
+			result2 error
 		})
 	}
 	fake.createDirReturnsOnCall[i] = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeProxyManager) RemoveDir(logger lager.Logger, container executor.Container) error {

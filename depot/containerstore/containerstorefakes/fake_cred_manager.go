@@ -6,27 +6,24 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"github.com/tedsuo/ifrit"
 )
 
 type FakeCredManager struct {
-	CreateCredDirStub        func(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
+	CreateCredDirStub        func(lager.Logger, executor.Container) (containerstore.CredentialConfiguration, error)
 	createCredDirMutex       sync.RWMutex
 	createCredDirArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 executor.Container
 	}
 	createCredDirReturns struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	createCredDirReturnsOnCall map[int]struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	RemoveCredDirStub        func(lager.Logger, executor.Container) error
 	removeCredDirMutex       sync.RWMutex
@@ -56,7 +53,7 @@ type FakeCredManager struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Container) (containerstore.CredentialConfiguration, error) {
 	fake.createCredDirMutex.Lock()
 	ret, specificReturn := fake.createCredDirReturnsOnCall[len(fake.createCredDirArgsForCall)]
 	fake.createCredDirArgsForCall = append(fake.createCredDirArgsForCall, struct {
@@ -69,9 +66,9 @@ func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Cont
 		return fake.CreateCredDirStub(arg1, arg2)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
+		return ret.result1, ret.result2
 	}
-	return fake.createCredDirReturns.result1, fake.createCredDirReturns.result2, fake.createCredDirReturns.result3
+	return fake.createCredDirReturns.result1, fake.createCredDirReturns.result2
 }
 
 func (fake *FakeCredManager) CreateCredDirCallCount() int {
@@ -86,29 +83,26 @@ func (fake *FakeCredManager) CreateCredDirArgsForCall(i int) (lager.Logger, exec
 	return fake.createCredDirArgsForCall[i].arg1, fake.createCredDirArgsForCall[i].arg2
 }
 
-func (fake *FakeCredManager) CreateCredDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredManager) CreateCredDirReturns(result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateCredDirStub = nil
 	fake.createCredDirReturns = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeCredManager) CreateCredDirReturnsOnCall(i int, result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredManager) CreateCredDirReturnsOnCall(i int, result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateCredDirStub = nil
 	if fake.createCredDirReturnsOnCall == nil {
 		fake.createCredDirReturnsOnCall = make(map[int]struct {
-			result1 []garden.BindMount
-			result2 []executor.EnvironmentVariable
-			result3 error
+			result1 containerstore.CredentialConfiguration
+			result2 error
 		})
 	}
 	fake.createCredDirReturnsOnCall[i] = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeCredManager) RemoveCredDir(arg1 lager.Logger, arg2 executor.Container) error {

@@ -69,8 +69,8 @@ type ProxyConfigHandler struct {
 
 type NoopProxyConfigHandler struct{}
 
-func (p *NoopProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
-	return nil, nil, nil
+func (p *NoopProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) (CredentialConfiguration, error) {
+	return CredentialConfiguration{}, nil
 }
 func (p *NoopProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
 	return nil
@@ -159,9 +159,9 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 	return proxyPortMapping, extraPorts
 }
 
-func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) (CredentialConfiguration, error) {
 	if !container.EnableContainerProxy {
-		return nil, nil, nil
+		return CredentialConfiguration{}, nil
 	}
 
 	logger.Info("adding-container-proxy-bindmounts")
@@ -181,10 +181,12 @@ func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 
 	err := os.MkdirAll(proxyConfigDir, 0755)
 	if err != nil {
-		return nil, nil, err
+		return CredentialConfiguration{}, err
 	}
 
-	return mounts, nil, nil
+	return CredentialConfiguration{
+		BindMounts: mounts,
+	}, nil
 }
 
 func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {

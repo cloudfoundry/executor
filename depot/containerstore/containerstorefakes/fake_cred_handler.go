@@ -6,26 +6,23 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
 
 type FakeCredentialHandler struct {
-	CreateDirStub        func(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
+	CreateDirStub        func(logger lager.Logger, container executor.Container) (containerstore.CredentialConfiguration, error)
 	createDirMutex       sync.RWMutex
 	createDirArgsForCall []struct {
 		logger    lager.Logger
 		container executor.Container
 	}
 	createDirReturns struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	createDirReturnsOnCall map[int]struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
+		result1 containerstore.CredentialConfiguration
+		result2 error
 	}
 	RemoveDirStub        func(logger lager.Logger, container executor.Container) error
 	removeDirMutex       sync.RWMutex
@@ -67,7 +64,7 @@ type FakeCredentialHandler struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeCredentialHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+func (fake *FakeCredentialHandler) CreateDir(logger lager.Logger, container executor.Container) (containerstore.CredentialConfiguration, error) {
 	fake.createDirMutex.Lock()
 	ret, specificReturn := fake.createDirReturnsOnCall[len(fake.createDirArgsForCall)]
 	fake.createDirArgsForCall = append(fake.createDirArgsForCall, struct {
@@ -80,9 +77,9 @@ func (fake *FakeCredentialHandler) CreateDir(logger lager.Logger, container exec
 		return fake.CreateDirStub(logger, container)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
+		return ret.result1, ret.result2
 	}
-	return fake.createDirReturns.result1, fake.createDirReturns.result2, fake.createDirReturns.result3
+	return fake.createDirReturns.result1, fake.createDirReturns.result2
 }
 
 func (fake *FakeCredentialHandler) CreateDirCallCount() int {
@@ -97,29 +94,26 @@ func (fake *FakeCredentialHandler) CreateDirArgsForCall(i int) (lager.Logger, ex
 	return fake.createDirArgsForCall[i].logger, fake.createDirArgsForCall[i].container
 }
 
-func (fake *FakeCredentialHandler) CreateDirReturns(result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredentialHandler) CreateDirReturns(result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateDirStub = nil
 	fake.createDirReturns = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeCredentialHandler) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 []executor.EnvironmentVariable, result3 error) {
+func (fake *FakeCredentialHandler) CreateDirReturnsOnCall(i int, result1 containerstore.CredentialConfiguration, result2 error) {
 	fake.CreateDirStub = nil
 	if fake.createDirReturnsOnCall == nil {
 		fake.createDirReturnsOnCall = make(map[int]struct {
-			result1 []garden.BindMount
-			result2 []executor.EnvironmentVariable
-			result3 error
+			result1 containerstore.CredentialConfiguration
+			result2 error
 		})
 	}
 	fake.createDirReturnsOnCall[i] = struct {
-		result1 []garden.BindMount
-		result2 []executor.EnvironmentVariable
-		result3 error
-	}{result1, result2, result3}
+		result1 containerstore.CredentialConfiguration
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeCredentialHandler) RemoveDir(logger lager.Logger, container executor.Container) error {

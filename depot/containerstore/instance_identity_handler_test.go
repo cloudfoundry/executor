@@ -1,6 +1,7 @@
 package containerstore_test
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,14 +11,15 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 )
 
 var _ = Describe("InstanceIdentityHandler", func() {
 	var (
-		tmpdir    string
-		handler   *containerstore.InstanceIdentityHandler
-		container executor.Container
+		tmpdir          string
+		handler         *containerstore.InstanceIdentityHandler
+		container       executor.Container
+		containerWriter *containerstorefakes.FakeContainerWriter
 	)
 
 	AfterEach(func() {
@@ -29,27 +31,19 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		var err error
 		tmpdir, err = ioutil.TempDir("", "credsmanager")
 		Expect(err).NotTo(HaveOccurred())
+		containerWriter = new(containerstorefakes.FakeContainerWriter)
 		handler = containerstore.NewInstanceIdentityHandler(
 			tmpdir,
 			"containerpath",
+			containerWriter,
 		)
 	})
 
 	Context("CreateDir", func() {
-		It("returns a valid directory path", func() {
-			mount, _, err := handler.CreateDir(logger, container)
-			Expect(err).To(Succeed())
-
-			Expect(mount).To(HaveLen(1))
-			Expect(mount[0].SrcPath).To(BeADirectory())
-			Expect(mount[0].DstPath).To(Equal("containerpath"))
-			Expect(mount[0].Mode).To(Equal(garden.BindMountModeRO))
-			Expect(mount[0].Origin).To(Equal(garden.BindMountOriginHost))
-		})
-
 		It("returns CF_INSTANCE_CERT and CF_INSTANCE_KEY environment variable values", func() {
-			_, envVariables, err := handler.CreateDir(logger, container)
+			containerConfiguration, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
+			envVariables := containerConfiguration.Env
 
 			Expect(envVariables).To(HaveLen(2))
 			values := map[string]string{}
@@ -61,16 +55,26 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			}))
 		})
 
+		It("returns the container tmpfs", func() {
+			containerConfiguration, err := handler.CreateDir(logger, container)
+			Expect(err).To(Succeed())
+			tmpfs := containerConfiguration.Tmpfs
+
+			Expect(tmpfs).To(HaveLen(1))
+			Expect(tmpfs[0].Path).To(Equal("containerpath"))
+		})
+
 		Context("when making directory fails", func() {
 			BeforeEach(func() {
 				handler = containerstore.NewInstanceIdentityHandler(
 					"/invalid/path",
 					"containerpath",
+					containerWriter,
 				)
 			})
 
 			It("returns an error", func() {
-				_, _, err := handler.CreateDir(logger, executor.Container{Guid: "somefailure"})
+				_, err := handler.CreateDir(logger, executor.Container{Guid: "somefailure"})
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -78,7 +82,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Describe("Update", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(logger, container)
+			_, err := handler.CreateDir(logger, container)
 			Expect(err).To(BeNil())
 		})
 
@@ -109,11 +113,55 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 			Expect(string(data)).To(Equal("cert"))
 		})
+
+		It("writes private key into the container", func() {
+			err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerWriter.WriteFileCallCount()).To(Equal(2))
+
+			actualContainerID, actualPath, actualContent := containerWriter.WriteFileArgsForCall(0)
+			Expect(actualContainerID).To(Equal("some-guid"))
+			Expect(actualPath).To(Equal("containerpath/instance.key"))
+			Expect(string(actualContent)).To(Equal("key"))
+		})
+
+		It("writes the certificate into the container", func() {
+			err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containerWriter.WriteFileCallCount()).To(Equal(2))
+
+			actualContainerID, actualPath, actualContent := containerWriter.WriteFileArgsForCall(1)
+			Expect(actualContainerID).To(Equal("some-guid"))
+			Expect(actualPath).To(Equal("containerpath/instance.crt"))
+			Expect(string(actualContent)).To(Equal("cert"))
+		})
+
+		Context("when writing the key to the container fails", func() {
+			BeforeEach(func() {
+				containerWriter.WriteFileReturnsOnCall(0, errors.New("write-key-failure"))
+			})
+
+			It("returns the error", func() {
+				err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).To(MatchError("write-key-failure"))
+			})
+		})
+
+		Context("when writing the certificate to the container fails", func() {
+			BeforeEach(func() {
+				containerWriter.WriteFileReturnsOnCall(1, errors.New("write-cert-failure"))
+			})
+
+			It("returns the error", func() {
+				err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).To(MatchError("write-cert-failure"))
+			})
+		})
 	})
 
 	Describe("Close", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(logger, container)
+			_, err := handler.CreateDir(logger, container)
 			Expect(err).To(BeNil())
 			err = handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 			Expect(err).NotTo(HaveOccurred())
@@ -150,7 +198,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 
 	Context("RemoveDir", func() {
 		BeforeEach(func() {
-			_, _, err := handler.CreateDir(logger, container)
+			_, err := handler.CreateDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 			certPath := filepath.Join(tmpdir, "some-guid")
 			Eventually(certPath).Should(BeADirectory())
