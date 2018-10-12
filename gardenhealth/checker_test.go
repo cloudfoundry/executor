@@ -82,6 +82,7 @@ var _ = Describe("Checker", func() {
 					Properties: garden.Properties{
 						containerstore.ContainerOwnerProperty: containerOwnerName,
 						gardenhealth.HealthcheckTag:           gardenhealth.HealthcheckTagValue,
+						"network.healthcheck":                 "true",
 					},
 				}))
 

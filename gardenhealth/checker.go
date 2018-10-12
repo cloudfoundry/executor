@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	HealthcheckPrefix   = "executor-healthcheck-"
-	HealthcheckTag      = "tag:healthcheck-tag"
-	HealthcheckTagValue = "healthcheck"
+	HealthcheckPrefix          = "executor-healthcheck-"
+	HealthcheckTag             = "tag:healthcheck-tag"
+	HealthcheckTagValue        = "healthcheck"
+	HealthcheckNetworkProperty = "network.healthcheck"
 )
 
 type UnrecoverableError string
@@ -155,6 +156,7 @@ func (c *checker) create(logger lager.Logger) (string, garden.Container, error) 
 			Properties: garden.Properties{
 				containerstore.ContainerOwnerProperty: c.containerOwnerName,
 				HealthcheckTag:                        HealthcheckTagValue,
+				HealthcheckNetworkProperty:            "true",
 			},
 		})
 		if createErr != nil {
