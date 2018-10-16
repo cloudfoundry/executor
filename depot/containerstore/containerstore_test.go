@@ -2055,7 +2055,17 @@ var _ = Describe("Container Store", func() {
 
 				It("still attempts to unmount the remaining volumes", func() {
 					err := containerStore.Destroy(logger, containerGuid)
-					Expect(err).To(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
+				})
+			})
+			Context("when garden fails to destroy the container", func() {
+				BeforeEach(func() {
+					gardenClient.DestroyReturns(errors.New("destroy failed"))
+				})
+				It("should still unmount the volumes", func() {
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).To(MatchError("destroy failed"))
 					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 				})
 			})

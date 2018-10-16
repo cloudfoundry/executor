@@ -576,6 +576,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
+	defer n.umountVolumeMounts(logger, info)
 
 	err := n.destroyContainer(logger)
 	if err != nil {
@@ -591,14 +592,6 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	if err != nil {
 		logger.Error("failed-to-release-cached-deps", err)
 		bindMountCleanupErr = errors.New(BindMountCleanupFailed)
-	}
-
-	for _, volume := range info.VolumeMounts {
-		err = n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId, info.Guid)
-		if err != nil {
-			logger.Error("failed-to-unmount-volume", err)
-			bindMountCleanupErr = errors.New(BindMountCleanupFailed)
-		}
 	}
 
 	return bindMountCleanupErr
@@ -685,6 +678,15 @@ func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container)
 	err := n.credManager.RemoveCredDir(logger, info)
 	if err != nil {
 		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+}
+
+func (n *storeNode) umountVolumeMounts(logger lager.Logger, info executor.Container) {
+	for _, volume := range info.VolumeMounts {
+		err := n.volumeManager.Unmount(logger, volume.Driver, volume.VolumeId, info.Guid)
+		if err != nil {
+			logger.Error("failed-to-unmount-volume", err)
+		}
 	}
 }
 
