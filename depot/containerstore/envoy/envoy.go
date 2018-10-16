@@ -24,10 +24,19 @@ type CertificateValidationContext struct {
 	VerifySubjectAltName []string   `yaml:"verify_subject_alt_name,omitempty"`
 }
 
+type SDSConfig struct {
+	Path string `yaml:"path"`
+}
+
+type SecretConfig struct {
+	Name      string    `yaml:"name"`
+	SDSConfig SDSConfig `yaml:"sds_config"`
+}
+
 type CommonTLSContext struct {
-	TLSCertificates   []TLSCertificate             `yaml:"tls_certificates"`
-	TLSParams         TLSParams                    `yaml:"tls_params"`
-	ValidationContext CertificateValidationContext `yaml:"validation_context"`
+	TLSCertificateSDSSecretConfigs   SecretConfig `yaml:"tls_certificate_sds_secret_configs"`
+	ValidationContextSDSSecretConfig SecretConfig `yaml:"validation_context_sds_secret_config,omitempty"`
+	TLSParams                        TLSParams    `yaml:"tls_params"`
 }
 
 type TLSParams struct {
@@ -44,16 +53,10 @@ type FilterChain struct {
 	TLSContext TLSContext `yaml:"tls_context"`
 }
 
-type Resource struct {
-	Type         string        `yaml:"@type"`
+type Listener struct {
 	Name         string        `yaml:"name"`
 	Address      Address       `yaml:"address"`
 	FilterChains []FilterChain `yaml:"filter_chains"`
-}
-
-type ListenerConfig struct {
-	VersionInfo string     `yaml:"version_info"`
-	Resources   []Resource `yaml:"resources"`
 }
 
 type SocketAddress struct {
@@ -88,19 +91,37 @@ type Cluster struct {
 }
 
 type StaticResources struct {
-	Clusters []Cluster `yaml:"clusters"`
+	Clusters  []Cluster  `yaml:"clusters"`
+	Listeners []Listener `yaml:"listeners"`
 }
 
 type LDSConfig struct {
 	Path string `yaml:"path"`
 }
 
-type DynamicResources struct {
-	LDSConfig LDSConfig `yaml:"lds_config"`
+type ProxyConfig struct {
+	Admin           Admin           `yaml:"admin"`
+	StaticResources StaticResources `yaml:"static_resources"`
 }
 
-type ProxyConfig struct {
-	Admin            Admin            `yaml:"admin"`
-	StaticResources  StaticResources  `yaml:"static_resources"`
-	DynamicResources DynamicResources `yaml:"dynamic_resources"`
+type CAResource struct {
+	Type              string                       `yaml:"@type"`
+	Name              string                       `yaml:"name"`
+	ValidationContext CertificateValidationContext `yaml:"validation_context"`
+}
+
+type SDSCAResource struct {
+	VersionInfo string       `yaml:"version_info"`
+	Resources   []CAResource `yaml:"resources"`
+}
+
+type CertificateResource struct {
+	Type           string         `yaml:"@type"`
+	Name           string         `yaml:"name"`
+	TLSCertificate TLSCertificate `yaml:"tls_certificate"`
+}
+
+type SDSCertificateResource struct {
+	VersionInfo string                `yaml:"version_info"`
+	Resources   []CertificateResource `yaml:"resources"`
 }
