@@ -221,42 +221,40 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container exec
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
 	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
-	listenerConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "listeners.yaml")
+	sdsServerCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-server-cert-and-key.yaml")
+	sdsServerValidationContextPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-server-validation-context.yaml")
 
 	adminPort, err := getAvailablePort(container.Ports)
 	if err != nil {
 		return err
 	}
 
-	proxyConfig, err := generateProxyConfig(container, adminPort)
-	if err != nil {
-		return err
-	}
+	proxyConfig := generateProxyConfig(container, adminPort, p.containerProxyRequireClientCerts)
 
 	err = writeProxyConfig(proxyConfig, proxyConfigPath)
 	if err != nil {
 		return err
 	}
 
-	listenerConfig, err := generateListenerConfig(
-		container,
-		credentials,
-		p.containerProxyTrustedCACerts,
-		p.containerProxyVerifySubjectAltName,
-		p.containerProxyRequireClientCerts,
-	)
+	sdsServerCertAndKey := generateSDSCertificateResource(container, credentials)
+	err = marshalAndWriteToFile(sdsServerCertAndKey, sdsServerCertAndKeyPath)
 	if err != nil {
 		return err
 	}
 
-	err = writeListenerConfig(listenerConfig, listenerConfigPath)
+	sdsServerValidationContext, err := generateSDSCAResource(container, credentials, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName)
+	if err != nil {
+		return err
+	}
+	err = marshalAndWriteToFile(sdsServerValidationContext, sdsServerValidationContextPath)
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-func generateProxyConfig(container executor.Container, adminPort uint16) (envoy.ProxyConfig, error) {
+
+func generateProxyConfig(container executor.Container, adminPort uint16, requireClientCerts bool) envoy.ProxyConfig {
 	clusters := []envoy.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
@@ -285,15 +283,11 @@ func generateProxyConfig(container executor.Container, adminPort uint16) (envoy.
 			},
 		},
 		StaticResources: envoy.StaticResources{
-			Clusters: clusters,
-		},
-		DynamicResources: envoy.DynamicResources{
-			LDSConfig: envoy.LDSConfig{
-				Path: "/etc/cf-assets/envoy_config/listeners.yaml",
-			},
+			Clusters:  clusters,
+			Listeners: generateListeners(container, requireClientCerts),
 		},
 	}
-	return config, nil
+	return config
 }
 
 func writeProxyConfig(proxyConfig envoy.ProxyConfig, path string) error {
@@ -305,10 +299,10 @@ func writeProxyConfig(proxyConfig envoy.ProxyConfig, path string) error {
 	return ioutil.WriteFile(path, data, 0666)
 }
 
-func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error {
+func marshalAndWriteToFile(toMarshal interface{}, path string) error {
 	tmpPath := path + ".tmp"
 
-	data, err := yaml.Marshal(listenerConfig)
+	data, err := yaml.Marshal(toMarshal)
 	if err != nil {
 		return err
 	}
@@ -320,29 +314,14 @@ func writeListenerConfig(listenerConfig envoy.ListenerConfig, path string) error
 	return os.Rename(tmpPath, path)
 }
 
-func generateListenerConfig(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string, requireClientCerts bool) (envoy.ListenerConfig, error) {
-	resources := []envoy.Resource{}
-
-	if !requireClientCerts {
-		subjectAltNames = nil
-	}
-
-	var certs string
-	var err error
-
-	if requireClientCerts {
-		certs, err = pemConcatenate(trustedCaCerts)
-		if err != nil {
-			return envoy.ListenerConfig{}, err
-		}
-	}
+func generateListeners(container executor.Container, requireClientCerts bool) []envoy.Listener {
+	listeners := []envoy.Listener{}
 
 	for index, portMap := range container.Ports {
 		listenerName := TcpProxy
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
-		resources = append(resources, envoy.Resource{
-			Type:    "type.googleapis.com/envoy.api.v2.Listener",
+		listener := envoy.Listener{
 			Name:    fmt.Sprintf("listener-%d", portMap.ContainerPort),
 			Address: envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: portMap.ContainerTLSProxyPort}},
 			FilterChains: []envoy.FilterChain{envoy.FilterChain{
@@ -358,32 +337,61 @@ func generateListenerConfig(container executor.Container, creds Credential, trus
 				TLSContext: envoy.TLSContext{
 					RequireClientCertificate: requireClientCerts,
 					CommonTLSContext: envoy.CommonTLSContext{
+						TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
+							Name:      "server-cert-and-key",
+							SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+						},
 						TLSParams: envoy.TLSParams{
 							CipherSuites: SupportedCipherSuites,
-						},
-						TLSCertificates: []envoy.TLSCertificate{
-							envoy.TLSCertificate{
-								CertificateChain: envoy.DataSource{InlineString: creds.Cert},
-								PrivateKey:       envoy.DataSource{InlineString: creds.Key},
-							},
-						},
-						ValidationContext: envoy.CertificateValidationContext{
-							TrustedCA:            envoy.DataSource{InlineString: certs},
-							VerifySubjectAltName: subjectAltNames,
 						},
 					},
 				},
 			},
 			},
-		})
+		}
+
+		if requireClientCerts {
+			listener.FilterChains[0].TLSContext.CommonTLSContext.ValidationContextSDSSecretConfig = envoy.SecretConfig{
+				Name:      "server-validation-context",
+				SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml"},
+			}
+		}
+
+		listeners = append(listeners, listener)
 	}
 
-	config := envoy.ListenerConfig{
-		VersionInfo: "0",
-		Resources:   resources,
+	return listeners
+}
+
+func generateSDSCertificateResource(container executor.Container, creds Credential) envoy.SDSCertificateResource {
+	resources := []envoy.CertificateResource{{
+		Type: "type.googleapis.com/envoy.api.v2.auth.Secret",
+		Name: "server-cert-and-key",
+		TLSCertificate: envoy.TLSCertificate{
+			CertificateChain: envoy.DataSource{InlineString: creds.Cert},
+			PrivateKey:       envoy.DataSource{InlineString: creds.Key},
+		},
+	}}
+
+	return envoy.SDSCertificateResource{VersionInfo: "0", Resources: resources}
+}
+
+func generateSDSCAResource(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string) (envoy.SDSCAResource, error) {
+	certs, err := pemConcatenate(trustedCaCerts)
+	if err != nil {
+		return envoy.SDSCAResource{}, err
 	}
 
-	return config, nil
+	resources := []envoy.CAResource{{
+		Type: "type.googleapis.com/envoy.api.v2.auth.Secret",
+		Name: "server-validation-context",
+		ValidationContext: envoy.CertificateValidationContext{
+			TrustedCA:            envoy.DataSource{InlineString: certs},
+			VerifySubjectAltName: subjectAltNames,
+		},
+	}}
+
+	return envoy.SDSCAResource{VersionInfo: "0", Resources: resources}, nil
 }
 
 func pemConcatenate(certs []string) (string, error) {
