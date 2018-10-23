@@ -81,13 +81,17 @@ type CircuitBreakers struct {
 	Thresholds []Threshold `yamls:"thresholds"`
 }
 
+type HTTP2ProtocolOptions struct {
+}
+
 type Cluster struct {
-	Name              string          `yaml:"name"`
-	ConnectionTimeout string          `yaml:"connect_timeout"`
-	Type              string          `yaml:"type"`
-	LbPolicy          string          `yaml:"lb_policy"`
-	Hosts             []Address       `yaml:"hosts"`
-	CircuitBreakers   CircuitBreakers `yaml:"circuit_breakers"`
+	Name                 string               `yaml:"name"`
+	ConnectionTimeout    string               `yaml:"connect_timeout"`
+	Type                 string               `yaml:"type"`
+	LbPolicy             string               `yaml:"lb_policy"`
+	Hosts                []Address            `yaml:"hosts"`
+	CircuitBreakers      CircuitBreakers      `yaml:"circuit_breakers"`
+	HTTP2ProtocolOptions HTTP2ProtocolOptions `yaml:"http2_protocol_options"`
 }
 
 type StaticResources struct {
@@ -95,17 +99,39 @@ type StaticResources struct {
 	Listeners []Listener `yaml:"listeners"`
 }
 
+type ADS struct{}
+
 type LDSConfig struct {
-	Path string `yaml:"path"`
+	ADS ADS `yaml:"ads"`
+}
+
+type CDSConfig struct {
+	ADS ADS `yaml:"ads"`
+}
+
+type ADSConfig struct {
+	APIType      string       `yaml:"api_type"`
+	GRPCServices GRPCServices `yaml:"grpc_services"`
+}
+
+type GRPCServices struct {
+	EnvoyGRPC EnvoyGRPC `yaml:"envoy_grpc"`
+}
+
+type EnvoyGRPC struct {
+	ClusterName string `yaml:"cluster_name"`
 }
 
 type DynamicResources struct {
 	LDSConfig LDSConfig `yaml:"lds_config"`
+	CDSConfig CDSConfig `yaml:"cds_config"`
+	ADSConfig ADSConfig `yaml:"ads_config"`
 }
 
 type ProxyConfig struct {
-	Admin           Admin           `yaml:"admin"`
-	StaticResources StaticResources `yaml:"static_resources"`
+	Admin            Admin             `yaml:"admin"`
+	StaticResources  StaticResources   `yaml:"static_resources"`
+	DynamicResources *DynamicResources `yaml:"dynamic_resources,omitempty"`
 }
 
 type CAResource struct {

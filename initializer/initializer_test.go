@@ -74,6 +74,7 @@ var _ = Describe("Initializer", func() {
 			DiskMB:                         configuration.Automatic,
 			EnableDeclarativeHealthcheck:       false,
 			EnableContainerProxy:               false,
+			ContainerProxyADSServers:           []string{"10.0.0.2:15010"},
 			GardenAddr:                         "/tmp/garden.sock",
 			GardenHealthcheckCommandRetryPause: durationjson.Duration(1 * time.Second),
 			GardenHealthcheckEmissionInterval:  durationjson.Duration(30 * time.Second),

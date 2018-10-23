@@ -714,7 +714,8 @@ func (t *transformer) transformContainerProxyStep(
 	bindMounts []garden.BindMount,
 ) ifrit.Runner {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s %d --log-level critical& pid=$!; wait $pid", int(t.drainWait.Seconds()))
+	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~%s~x~x --drain-time-s %d --log-level critical& pid=$!; wait $pid", execContainer.InternalIP, int(t.drainWait.Seconds()))
+
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
