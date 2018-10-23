@@ -318,7 +318,7 @@ var _ = Describe("Transformer", func() {
 					Path: "sh",
 					Args: []string{
 						"-c",
-						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 					},
 
 					Env: []string{
@@ -388,7 +388,7 @@ var _ = Describe("Transformer", func() {
 						Path: "sh",
 						Args: []string{
 							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --service-cluster proxy-cluster --service-node proxy-node --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
+							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
 						},
 
 						Env: []string{

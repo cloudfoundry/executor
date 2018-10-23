@@ -44,6 +44,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		containerProxyTrustedCACerts       []string
 		containerProxyVerifySubjectAltName []string
 		containerProxyRequireClientCerts   bool
+		adsServers                         []string
 	)
 
 	BeforeEach(func() {
@@ -80,6 +81,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 		containerProxyTrustedCACerts = []string{}
 		containerProxyVerifySubjectAltName = []string{}
 		containerProxyRequireClientCerts = false
+
+		adsServers = []string{
+			"10.255.217.2:15010",
+			"10.255.217.3:15010",
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -92,6 +98,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			containerProxyRequireClientCerts,
 			reloadDuration,
 			reloadClock,
+			adsServers,
 		)
 		Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{
 			Cert: "some-cert",
@@ -348,7 +355,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
 				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
 
-				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
+				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
 				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
@@ -359,6 +366,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 				}))
 				Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(1))
 				Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections).To(BeNumerically("==", math.MaxUint32))
+
+				adsCluster := proxyConfig.StaticResources.Clusters[1]
+				Expect(adsCluster.Name).To(Equal("pilot-ads"))
+				Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
+				Expect(adsCluster.Type).To(Equal("STATIC"))
+				Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
+					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
+					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
+				}))
+				Expect(adsCluster.HTTP2ProtocolOptions).To(Equal(envoy.HTTP2ProtocolOptions{}))
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
 				listener := proxyConfig.StaticResources.Listeners[0]
@@ -466,7 +484,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(admin.AccessLogPath).To(Equal("/dev/null"))
 			Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
 
-			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
+			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			cluster := proxyConfig.StaticResources.Clusters[0]
 			Expect(cluster.Name).To(Equal("0-service-cluster"))
 			Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
@@ -477,6 +495,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 			}))
 			Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(1))
 			Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections).To(BeNumerically("==", math.MaxUint32))
+
+			adsCluster := proxyConfig.StaticResources.Clusters[1]
+			Expect(adsCluster.Name).To(Equal("pilot-ads"))
+			Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
+			Expect(adsCluster.Type).To(Equal("STATIC"))
+			Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+			Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
+				{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
+				{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
+			}))
+			Expect(adsCluster.HTTP2ProtocolOptions).To(Equal(envoy.HTTP2ProtocolOptions{}))
 
 			Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
 			listener := proxyConfig.StaticResources.Listeners[0]
@@ -509,6 +538,67 @@ var _ = Describe("ProxyConfigHandler", func() {
 					},
 				},
 			}))
+
+			Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{envoy.ADS{}}))
+			Expect(proxyConfig.DynamicResources.CDSConfig).To(Equal(envoy.CDSConfig{envoy.ADS{}}))
+			Expect(proxyConfig.DynamicResources.ADSConfig).To(Equal(envoy.ADSConfig{
+				APIType: "GRPC", GRPCServices: envoy.GRPCServices{
+					EnvoyGRPC: envoy.EnvoyGRPC{ClusterName: "pilot-ads"},
+				},
+			}))
+		})
+
+		Context("when ads server addresses is empty", func() {
+			BeforeEach(func() {
+				adsServers = []string{}
+			})
+
+			It("creates a proxy config without the ads config", func() {
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(proxyConfigFile).Should(BeAnExistingFile())
+
+				data, err := ioutil.ReadFile(proxyConfigFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				var proxyConfig envoy.ProxyConfig
+
+				err = yaml.Unmarshal(data, &proxyConfig)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
+				cluster := proxyConfig.StaticResources.Clusters[0]
+				Expect(cluster.Name).To(Equal("0-service-cluster"))
+
+				var nilPointerDynamicResources *envoy.DynamicResources
+				Expect(proxyConfig.DynamicResources).To(Equal(nilPointerDynamicResources))
+			})
+		})
+
+		Context("when an ads server address is malformed", func() {
+			BeforeEach(func() {
+				adsServers = []string{
+					"malformed",
+				}
+			})
+
+			It("returns an error", func() {
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).To(MatchError("ads server address is invalid: malformed"))
+			})
+		})
+
+		Context("when an ads server port is malformed", func() {
+			BeforeEach(func() {
+				adsServers = []string{
+					"0.0.0.0:mal",
+				}
+			})
+
+			It("returns an error", func() {
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).To(MatchError("ads server address is invalid: 0.0.0.0:mal"))
+			})
 		})
 
 		Context("with multiple port mappings", func() {
@@ -542,7 +632,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
 				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61003}}))
 
-				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
+				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
 
 				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
@@ -561,6 +651,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 2222}},
 				}))
+
+				adsCluster := proxyConfig.StaticResources.Clusters[2]
+				Expect(adsCluster.Name).To(Equal("pilot-ads"))
+				Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
+				Expect(adsCluster.Type).To(Equal("STATIC"))
+				Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
+					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
+					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
+				}))
+				Expect(adsCluster.HTTP2ProtocolOptions).To(Equal(envoy.HTTP2ProtocolOptions{}))
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				listener := proxyConfig.StaticResources.Listeners[0]

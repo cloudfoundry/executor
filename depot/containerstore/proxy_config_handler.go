@@ -9,6 +9,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/clock"
@@ -64,6 +66,8 @@ type ProxyConfigHandler struct {
 
 	reloadDuration time.Duration
 	reloadClock    clock.Clock
+
+	adsServers []string
 }
 
 type NoopProxyConfigHandler struct{}
@@ -106,6 +110,7 @@ func NewProxyConfigHandler(
 	containerProxyRequireClientCerts bool,
 	reloadDuration time.Duration,
 	reloadClock clock.Clock,
+	adsServers []string,
 ) *ProxyConfigHandler {
 	return &ProxyConfigHandler{
 		logger:                             logger.Session("proxy-manager"),
@@ -116,6 +121,7 @@ func NewProxyConfigHandler(
 		containerProxyRequireClientCerts:   containerProxyRequireClientCerts,
 		reloadDuration:                     reloadDuration,
 		reloadClock:                        reloadClock,
+		adsServers:                         adsServers,
 	}
 }
 
@@ -228,7 +234,15 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		return err
 	}
 
-	proxyConfig := generateProxyConfig(container, adminPort, p.containerProxyRequireClientCerts)
+	proxyConfig, err := generateProxyConfig(
+		container,
+		adminPort,
+		p.containerProxyRequireClientCerts,
+		p.adsServers,
+	)
+	if err != nil {
+		return err
+	}
 
 	err = writeProxyConfig(proxyConfig, proxyConfigPath)
 	if err != nil {
@@ -253,7 +267,12 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 	return nil
 }
 
-func generateProxyConfig(container executor.Container, adminPort uint16, requireClientCerts bool) envoy.ProxyConfig {
+func generateProxyConfig(
+	container executor.Container,
+	adminPort uint16,
+	requireClientCerts bool,
+	adsServers []string,
+) (envoy.ProxyConfig, error) {
 	clusters := []envoy.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
@@ -282,11 +301,69 @@ func generateProxyConfig(container executor.Container, adminPort uint16, require
 			},
 		},
 		StaticResources: envoy.StaticResources{
-			Clusters:  clusters,
 			Listeners: generateListeners(container, requireClientCerts),
 		},
 	}
-	return config
+
+	if len(adsServers) > 0 {
+		hosts := []envoy.Address{}
+		for _, a := range adsServers {
+			address, port, err := splitHost(a)
+			if err != nil {
+				return envoy.ProxyConfig{}, err
+			}
+			hosts = append(hosts, envoy.Address{
+				SocketAddress: envoy.SocketAddress{
+					Address:   address,
+					PortValue: port,
+				},
+			})
+		}
+
+		clusters = append(clusters, envoy.Cluster{
+			Name:                 "pilot-ads",
+			ConnectionTimeout:    TimeOut,
+			Type:                 Static,
+			LbPolicy:             RoundRobin,
+			Hosts:                hosts,
+			HTTP2ProtocolOptions: envoy.HTTP2ProtocolOptions{},
+		})
+
+		dynamicResources := &envoy.DynamicResources{
+			LDSConfig: envoy.LDSConfig{
+				ADS: envoy.ADS{},
+			},
+			CDSConfig: envoy.CDSConfig{
+				ADS: envoy.ADS{},
+			},
+			ADSConfig: envoy.ADSConfig{
+				APIType: "GRPC",
+				GRPCServices: envoy.GRPCServices{
+					EnvoyGRPC: envoy.EnvoyGRPC{
+						ClusterName: "pilot-ads",
+					},
+				},
+			},
+		}
+		config.DynamicResources = dynamicResources
+	}
+
+	config.StaticResources.Clusters = clusters
+
+	return config, nil
+}
+
+func splitHost(host string) (string, uint16, error) {
+	parts := strings.Split(host, ":")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("ads server address is invalid: %s", host)
+	}
+
+	port, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("ads server address is invalid: %s", host)
+	}
+	return parts[0], uint16(port), nil
 }
 
 func writeProxyConfig(proxyConfig envoy.ProxyConfig, path string) error {
