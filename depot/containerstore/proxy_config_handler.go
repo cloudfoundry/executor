@@ -255,7 +255,12 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		return err
 	}
 
-	sdsServerValidationContext, err := generateSDSCAResource(container, credentials, p.containerProxyTrustedCACerts, p.containerProxyVerifySubjectAltName)
+	sdsServerValidationContext, err := generateSDSCAResource(
+		container,
+		credentials,
+		p.containerProxyTrustedCACerts,
+		p.containerProxyVerifySubjectAltName,
+	)
 	if err != nil {
 		return err
 	}
@@ -282,7 +287,12 @@ func generateProxyConfig(
 			Type:              Static,
 			LbPolicy:          RoundRobin,
 			Hosts: []envoy.Address{
-				{SocketAddress: envoy.SocketAddress{Address: container.InternalIP, PortValue: portMap.ContainerPort}},
+				{
+					SocketAddress: envoy.SocketAddress{
+						Address:   container.InternalIP,
+						PortValue: portMap.ContainerPort,
+					},
+				},
 			},
 			CircuitBreakers: envoy.CircuitBreakers{Thresholds: []envoy.Threshold{
 				{MaxConnections: math.MaxUint32},
@@ -398,8 +408,13 @@ func generateListeners(container executor.Container, requireClientCerts bool) []
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
 		listener := envoy.Listener{
-			Name:    fmt.Sprintf("listener-%d", portMap.ContainerPort),
-			Address: envoy.Address{SocketAddress: envoy.SocketAddress{Address: "0.0.0.0", PortValue: portMap.ContainerTLSProxyPort}},
+			Name: fmt.Sprintf("listener-%d", portMap.ContainerPort),
+			Address: envoy.Address{
+				SocketAddress: envoy.SocketAddress{
+					Address:   "0.0.0.0",
+					PortValue: portMap.ContainerTLSProxyPort,
+				},
+			},
 			FilterChains: []envoy.FilterChain{
 				{
 					Filters: []envoy.Filter{
@@ -431,8 +446,10 @@ func generateListeners(container executor.Container, requireClientCerts bool) []
 
 		if requireClientCerts {
 			listener.FilterChains[0].TLSContext.CommonTLSContext.ValidationContextSDSSecretConfig = envoy.SecretConfig{
-				Name:      "server-validation-context",
-				SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml"},
+				Name: "server-validation-context",
+				SDSConfig: envoy.SDSConfig{
+					Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml",
+				},
 			}
 		}
 
