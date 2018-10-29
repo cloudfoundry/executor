@@ -501,7 +501,10 @@ func pemConcatenate(certs []string) (string, error) {
 		if block == nil {
 			return "", errors.New("failed to read certificate.")
 		}
-		pem.Encode(&certificateBuf, block)
+		err := pem.Encode(&certificateBuf, block)
+		if err != nil {
+			return "", err
+		}
 	}
 	return certificateBuf.String(), nil
 }
