@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -718,8 +720,9 @@ func (t *transformer) transformContainerProxyStep(
 	bindMounts []garden.BindMount,
 ) ifrit.Runner {
 
-	envoyCMD := fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~%s~x~x --drain-time-s %d --log-level critical& pid=$!; wait $pid", execContainer.InternalIP, int(t.drainWait.Seconds()))
+	envoyArgs := fmt.Sprintf("-c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~%s~x~x --drain-time-s %d --log-level critical", execContainer.InternalIP, int(t.drainWait.Seconds()))
 
+	path := "sh"
 	args := []string{
 		"-c",
 		// make sure the entire process group is killed if the shell exits
@@ -730,12 +733,17 @@ func (t *transformer) transformContainerProxyStep(
 		// - the wrapper shell script gets signalled and exit
 		// - garden's `process.Wait` won't return until both Stdout & Stderr are
 		//   closed which causes the rep to assume envoy is hanging and send it a SigKill
-		envoyCMD,
+		fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy %s& pid=$!; wait $pid", envoyArgs),
+	}
+
+	if runtime.GOOS == "windows" {
+		path = "/etc/cf-assets/envoy/envoy"
+		args = strings.Split(envoyArgs, " ")
 	}
 
 	runAction := models.RunAction{
 		LogSource: "PROXY",
-		Path:      "sh",
+		Path:      path,
 		Args:      args,
 	}
 

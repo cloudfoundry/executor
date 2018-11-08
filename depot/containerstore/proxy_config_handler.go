@@ -33,7 +33,7 @@ const (
 	IngressListener = "ingress_listener"
 	TcpProxy        = "envoy.tcp_proxy"
 
-	AdminAccessLog = "/dev/null"
+	AdminAccessLog = os.DevNull
 )
 
 var (

@@ -352,7 +352,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				err = yaml.Unmarshal(data, &proxyConfig)
 				Expect(err).NotTo(HaveOccurred())
 				admin := proxyConfig.Admin
-				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
+				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
@@ -481,7 +481,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			err = yaml.Unmarshal(data, &proxyConfig)
 			Expect(err).NotTo(HaveOccurred())
 			admin := proxyConfig.Admin
-			Expect(admin.AccessLogPath).To(Equal("/dev/null"))
+			Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 			Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
 
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
@@ -629,7 +629,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				admin := proxyConfig.Admin
-				Expect(admin.AccessLogPath).To(Equal("/dev/null"))
+				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61003}}))
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
