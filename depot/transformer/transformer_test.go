@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -240,10 +242,12 @@ var _ = Describe("Transformer", func() {
 					processLock.Lock()
 					defer processLock.Unlock()
 
-					switch spec.Path {
-					case "/action/path":
+					switch {
+					case spec.Path == "/action/path":
 						return actionProcess, nil
-					case "sh":
+					case spec.Path == "sh" && runtime.GOOS != "windows":
+						return envoyProcess, nil
+					case spec.Path == "/etc/cf-assets/envoy/envoy" && runtime.GOOS == "windows":
 						return envoyProcess, nil
 					}
 
@@ -313,13 +317,23 @@ var _ = Describe("Transformer", func() {
 					specs = append(specs, spec)
 				}
 
+				envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical"
+
+				path := "sh"
+				args := []string{
+					"-c",
+					fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy %s& pid=$!; wait $pid", envoyArgs),
+				}
+
+				if runtime.GOOS == "windows" {
+					path = "/etc/cf-assets/envoy/envoy"
+					args = strings.Split(envoyArgs, " ")
+				}
+
 				Expect(specs).To(ContainElement(garden.ProcessSpec{
 					ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
-					Path: "sh",
-					Args: []string{
-						"-c",
-						"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
-					},
+					Path: path,
+					Args: args,
 
 					Env: []string{
 						"CF_INSTANCE_IP=10.0.0.1",
@@ -383,13 +397,23 @@ var _ = Describe("Transformer", func() {
 						specs = append(specs, spec)
 					}
 
+					envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical"
+
+					path := "sh"
+					args := []string{
+						"-c",
+						fmt.Sprintf("trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy %s& pid=$!; wait $pid", envoyArgs),
+					}
+
+					if runtime.GOOS == "windows" {
+						path = "/etc/cf-assets/envoy/envoy"
+						args = strings.Split(envoyArgs, " ")
+					}
+
 					Expect(specs).To(ContainElement(garden.ProcessSpec{
 						ID:   fmt.Sprintf("%s-envoy", gardenContainer.Handle()),
-						Path: "sh",
-						Args: []string{
-							"-c",
-							"trap 'kill -9 0' TERM; /etc/cf-assets/envoy/envoy -c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --service-cluster proxy-cluster --service-node sidecar~11.0.0.1~x~x --drain-time-s 1 --log-level critical& pid=$!; wait $pid",
-						},
+						Path: path,
+						Args: args,
 
 						Env: []string{
 							"CF_INSTANCE_IP=10.0.0.1",
@@ -609,7 +633,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -675,7 +699,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -715,7 +739,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -759,7 +783,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -1319,7 +1343,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
