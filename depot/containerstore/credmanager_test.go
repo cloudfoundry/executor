@@ -582,7 +582,7 @@ func createIntermediateCert() (*x509.Certificate, *rsa.PrivateKey) {
 	Expect(err).NotTo(HaveOccurred())
 
 	template := &x509.Certificate{
-		IsCA: true,
+		IsCA:                  true,
 		BasicConstraintsValid: true,
 		SerialNumber:          big.NewInt(1),
 		NotAfter:              time.Now().Add(36 * time.Hour),

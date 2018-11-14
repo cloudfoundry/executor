@@ -85,14 +85,14 @@ func NewRunWithSidecar(
 ) *runStep {
 	logger = logger.Session("run-step")
 	return &runStep{
-		container:    container,
-		model:        model,
-		streamer:     streamer,
-		logger:       logger,
-		externalIP:   externalIP,
-		internalIP:   internalIP,
-		portMappings: portMappings,
-		clock:        clock,
+		container:                container,
+		model:                    model,
+		streamer:                 streamer,
+		logger:                   logger,
+		externalIP:               externalIP,
+		internalIP:               internalIP,
+		portMappings:             portMappings,
+		clock:                    clock,
 		gracefulShutdownInterval: gracefulShutdownInterval,
 		suppressExitStatusCode:   suppressExitStatusCode,
 		sidecar:                  sidecar,

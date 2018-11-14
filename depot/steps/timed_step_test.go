@@ -16,7 +16,7 @@ import (
 	"github.com/tedsuo/ifrit/fake_runner"
 )
 
-var _ = FDescribe("TimedStep", func() {
+var _ = Describe("TimedStep", func() {
 	Describe("Run", func() {
 		var (
 			innerStep        *fake_runner.TestRunner

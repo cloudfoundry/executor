@@ -1404,7 +1404,7 @@ var _ = Describe("Transformer", func() {
 				Eventually(process.Wait()).Should(Receive(nil))
 			})
 
-			FIt("logs the container creation time", func() {
+			It("logs the container creation time", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 				cfg.CreationStartTime = clock.Now()
 				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)

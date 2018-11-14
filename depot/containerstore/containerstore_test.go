@@ -1345,13 +1345,13 @@ var _ = Describe("Container Store", func() {
 					Expect(sourceInstance).To(Equal("1"))
 				})
 
-				FIt("logs the total time it took to create the container before it failed", func() {
+				It("logs the total time it took to create the container before it failed", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(logger).Should(gbytes.Say("failed-to-create-container.*duration.*1000000000"))
 				})
 
-				FIt("emits metric on the total time it took to create the container before it failed", func() {
+				It("emits metric on the total time it took to create the container before it failed", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(getMetrics).Should(HaveKey(steps.ContainerSetupFailedDuration))
