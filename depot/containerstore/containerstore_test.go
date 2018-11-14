@@ -11,29 +11,28 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
-	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
-	"github.com/tedsuo/ifrit/ginkgomon"
-
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
+	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
+	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/garden/gardenfakes"
+	"code.cloudfoundry.org/garden/server"
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
-
-	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
-	"code.cloudfoundry.org/garden/gardenfakes"
-	"code.cloudfoundry.org/garden/server"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/fake_runner"
+	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
 var _ = Describe("Container Store", func() {
@@ -373,7 +372,7 @@ var _ = Describe("Container Store", func() {
 						Guid:  "metric-guid",
 						Index: 1,
 					},
-					Env: env,
+					Env:                           env,
 					TrustedSystemCertificatesPath: "",
 					Network: &executor.Network{
 						Properties: map[string]string{
@@ -1304,7 +1303,10 @@ var _ = Describe("Container Store", func() {
 
 			Context("when creating the container fails", func() {
 				BeforeEach(func() {
-					gardenClient.CreateReturns(nil, errors.New("boom!"))
+					gardenClient.CreateStub = func(garden.ContainerSpec) (garden.Container, error) {
+						clock.Increment(1 * time.Second)
+						return nil, errors.New("boom!")
+					}
 				})
 
 				It("returns an error", func() {
@@ -1341,6 +1343,18 @@ var _ = Describe("Container Store", func() {
 					Expect(appId).To(Equal(logGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(sourceInstance).To(Equal("1"))
+				})
+
+				FIt("logs the total time it took to create the container before it failed", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+					Eventually(logger).Should(gbytes.Say("failed-to-create-container.*duration.*1000000000"))
+				})
+
+				FIt("emits metric on the total time it took to create the container before it failed", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+					Eventually(getMetrics).Should(HaveKey(steps.ContainerSetupFailedDuration))
 				})
 			})
 
@@ -2442,7 +2456,7 @@ var _ = Describe("Container Store", func() {
 				Guid:  "metric-guid",
 				Index: 1,
 			},
-			Env: []executor.EnvironmentVariable{},
+			Env:                           []executor.EnvironmentVariable{},
 			TrustedSystemCertificatesPath: "",
 			Network: &executor.Network{
 				Properties: map[string]string{},

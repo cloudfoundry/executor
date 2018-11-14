@@ -24,6 +24,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -175,6 +176,22 @@ var _ = Describe("Transformer", func() {
 			process.Signal(os.Interrupt)
 			clock.Increment(1 * time.Second)
 			Eventually(process.Wait()).Should(Receive(nil))
+		})
+
+		It("logs container setup time", func() {
+			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
+				if processSpec.Path == "/setup/path" {
+					clock.Increment(1 * time.Second)
+				}
+				return &gardenfakes.FakeProcess{}, nil
+			}
+
+			cfg.CreationStartTime = clock.Now()
+			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+			Expect(err).NotTo(HaveOccurred())
+			ifrit.Background(runner)
+
+			Eventually(logger).Should(gbytes.Say("container-setup.*duration.*1000000000"))
 		})
 
 		It("does not become ready until the healthcheck passes", func() {
@@ -609,7 +626,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -675,7 +692,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -715,7 +732,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -759,7 +776,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -1319,7 +1336,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -1385,6 +1402,16 @@ var _ = Describe("Transformer", func() {
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
 				Eventually(process.Wait()).Should(Receive(nil))
+			})
+
+			FIt("logs the container creation time", func() {
+				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
+				cfg.CreationStartTime = clock.Now()
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+				Expect(err).NotTo(HaveOccurred())
+				ifrit.Background(runner)
+
+				Eventually(logger).Should(gbytes.Say("container-setup.*duration.*:0"))
 			})
 		})
 
