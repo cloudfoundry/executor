@@ -142,6 +142,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.declarativeHealthcheckPath,
 			container,
 			cs.gardenClient,
+			cs.clock,
 			cs.dependencyManager,
 			cs.volumeManager,
 			cs.credManager,

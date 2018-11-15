@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/clock"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
@@ -39,8 +40,10 @@ type Transformer interface {
 }
 
 type Config struct {
-	ProxyTLSPorts []uint16
-	BindMounts    []garden.BindMount
+	ProxyTLSPorts     []uint16
+	BindMounts        []garden.BindMount
+	CreationStartTime time.Time
+	MetronClient      loggingclient.IngressClient
 }
 
 type transformer struct {
@@ -376,6 +379,7 @@ func (t *transformer) StepsRunner(
 			logger.Session("setup"),
 		)
 	}
+	setup = steps.NewTimedStep(logger, setup, config.MetronClient, t.clock, config.CreationStartTime)
 
 	if len(t.postSetupHook) > 0 {
 		actionModel := models.RunAction{

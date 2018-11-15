@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
@@ -37,6 +38,7 @@ const (
 	GardenContainerCreationFailedDuration       = "GardenContainerCreationFailedDuration"
 	GardenContainerDestructionSucceededDuration = "GardenContainerDestructionSucceededDuration"
 	GardenContainerDestructionFailedDuration    = "GardenContainerDestructionFailedDuration"
+	ContainerSetupFailedDuration                = "ContainerSetupFailedDuration"
 )
 
 //go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
@@ -55,6 +57,8 @@ type storeNode struct {
 	info               executor.Container
 	bindMountCacheKeys []BindMountCacheKey
 	gardenContainer    garden.Container
+
+	clock clock.Clock
 
 	// opLock serializes public methods that involve garden interactions
 	opLock                      *sync.Mutex
@@ -76,6 +80,8 @@ type storeNode struct {
 	enableUnproxiedPortMappings bool
 
 	destroying, stopping int32
+
+	startTime time.Time
 }
 
 func newStoreNode(
@@ -84,6 +90,7 @@ func newStoreNode(
 	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClient garden.Client,
+	clock clock.Clock,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
 	credManager CredManager,
@@ -101,6 +108,7 @@ func newStoreNode(
 		infoLock:                    &sync.Mutex{},
 		opLock:                      &sync.Mutex{},
 		gardenClient:                gardenClient,
+		clock:                       clock,
 		dependencyManager:           dependencyManager,
 		volumeManager:               volumeManager,
 		credManager:                 credManager,
@@ -172,75 +180,86 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
+	createContainer := func() error {
+		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
 
-	mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
-	if err != nil {
-		n.complete(logger, true, DownloadCachedDependenciesFailed, true)
-		return err
-	}
-
-	n.bindMounts = mounts.GardenBindMounts
-
-	if n.hostTrustedCertificatesPath != "" && info.TrustedSystemCertificatesPath != "" {
-		mount := garden.BindMount{
-			SrcPath: n.hostTrustedCertificatesPath,
-			DstPath: info.TrustedSystemCertificatesPath,
-			Mode:    garden.BindMountModeRO,
-			Origin:  garden.BindMountOriginHost,
+		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
+		if err != nil {
+			n.complete(logger, true, DownloadCachedDependenciesFailed, true)
+			return err
 		}
-		n.bindMounts = append(n.bindMounts, mount)
 
-		info.Env = append(info.Env, executor.EnvironmentVariable{Name: "CF_SYSTEM_CERT_PATH", Value: info.TrustedSystemCertificatesPath})
-	}
+		n.bindMounts = mounts.GardenBindMounts
 
-	volumeMounts, err := n.mountVolumes(logger, info)
-	if err != nil {
-		var failMsg string
-		if safeError, ok := err.(volman.SafeError); ok {
-			failMsg = fmt.Sprintf("%s, errors: %s", VolmanMountFailed, safeError.Error())
-		} else {
-			failMsg = VolmanMountFailed
+		if n.hostTrustedCertificatesPath != "" && info.TrustedSystemCertificatesPath != "" {
+			mount := garden.BindMount{
+				SrcPath: n.hostTrustedCertificatesPath,
+				DstPath: info.TrustedSystemCertificatesPath,
+				Mode:    garden.BindMountModeRO,
+				Origin:  garden.BindMountOriginHost,
+			}
+			n.bindMounts = append(n.bindMounts, mount)
+
+			info.Env = append(info.Env, executor.EnvironmentVariable{Name: "CF_SYSTEM_CERT_PATH", Value: info.TrustedSystemCertificatesPath})
 		}
-		logger.Error("failed-to-mount-volume", err)
-		n.complete(logger, true, failMsg, true)
+
+		volumeMounts, err := n.mountVolumes(logger, info)
+		if err != nil {
+			var failMsg string
+			if safeError, ok := err.(volman.SafeError); ok {
+				failMsg = fmt.Sprintf("%s, errors: %s", VolmanMountFailed, safeError.Error())
+			} else {
+				failMsg = VolmanMountFailed
+			}
+			logger.Error("failed-to-mount-volume", err)
+			n.complete(logger, true, failMsg, true)
+			return err
+		}
+		n.bindMounts = append(n.bindMounts, volumeMounts...)
+
+		credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
+		if err != nil {
+			n.complete(logger, true, CredDirFailed, true)
+			return err
+		}
+		n.bindMounts = append(n.bindMounts, credMounts...)
+		info.Env = append(info.Env, envs...)
+
+		if n.useDeclarativeHealthCheck {
+			logger.Info("adding-healthcheck-bindmounts")
+			n.bindMounts = append(n.bindMounts, garden.BindMount{
+				Origin:  garden.BindMountOriginHost,
+				SrcPath: n.declarativeHealthcheckPath,
+				DstPath: "/etc/cf-assets/healthcheck",
+			})
+		}
+
+		fmt.Fprintf(logStreamer.Stdout(), "Cell %s creating container for instance %s\n", n.cellID, n.Info().Guid)
+		gardenContainer, err := n.createGardenContainer(logger, &info)
+		if err != nil {
+			fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
+			n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
+			return err
+		}
+		fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
+
+		n.infoLock.Lock()
+		n.gardenContainer = gardenContainer
+		n.info = info
+		err = n.info.TransitionToCreate()
+		n.bindMountCacheKeys = mounts.CacheKeys
+		n.infoLock.Unlock()
+
 		return err
 	}
-	n.bindMounts = append(n.bindMounts, volumeMounts...)
 
-	credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
+	n.startTime = n.clock.Now()
+	err := createContainer()
 	if err != nil {
-		n.complete(logger, true, CredDirFailed, true)
-		return err
+		duration := n.clock.Since(n.startTime)
+		logger.Error("container-setup-failed", err, lager.Data{"duration": duration})
+		go n.metronClient.SendDuration(ContainerSetupFailedDuration, duration)
 	}
-	n.bindMounts = append(n.bindMounts, credMounts...)
-	info.Env = append(info.Env, envs...)
-
-	if n.useDeclarativeHealthCheck {
-		logger.Info("adding-healthcheck-bindmounts")
-		n.bindMounts = append(n.bindMounts, garden.BindMount{
-			Origin:  garden.BindMountOriginHost,
-			SrcPath: n.declarativeHealthcheckPath,
-			DstPath: "/etc/cf-assets/healthcheck",
-		})
-	}
-
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s creating container for instance %s\n", n.cellID, n.Info().Guid)
-	gardenContainer, err := n.createGardenContainer(logger, &info)
-	if err != nil {
-		logger.Error("failed-to-create-container", err)
-		fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
-		n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
-		return err
-	}
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
-
-	n.infoLock.Lock()
-	n.gardenContainer = gardenContainer
-	n.info = info
-	err = n.info.TransitionToCreate()
-	n.bindMountCacheKeys = mounts.CacheKeys
-	n.infoLock.Unlock()
 
 	return err
 }
@@ -449,8 +468,10 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		proxyTLSPorts[i] = p.ContainerTLSProxyPort
 	}
 	cfg := transformer.Config{
-		BindMounts:    n.bindMounts,
-		ProxyTLSPorts: proxyTLSPorts,
+		BindMounts:        n.bindMounts,
+		ProxyTLSPorts:     proxyTLSPorts,
+		CreationStartTime: n.startTime,
+		MetronClient:      n.metronClient,
 	}
 	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
 	if err != nil {

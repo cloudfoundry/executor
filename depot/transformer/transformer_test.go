@@ -24,6 +24,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -64,6 +65,7 @@ var _ = Describe("Transformer", func() {
 			clock = fakeclock.NewFakeClock(time.Now())
 
 			cfg = transformer.Config{
+				MetronClient: fakeMetronClient,
 				BindMounts: []garden.BindMount{
 					{
 						SrcPath: "/some/source",
@@ -75,10 +77,6 @@ var _ = Describe("Transformer", func() {
 			}
 
 			options = []transformer.Option{
-				transformer.WithPostSetupHook(
-					"jim",
-					[]string{"/post-setup/path", "-x", "argument"},
-				),
 				transformer.WithSidecarRootfs("preloaded:cflinuxfs2"),
 			}
 
@@ -127,54 +125,81 @@ var _ = Describe("Transformer", func() {
 			})
 		})
 
-		It("returns a step encapsulating setup, post-setup, action, and monitor", func() {
-			setupReceived := make(chan struct{})
-			postSetupReceived := make(chan struct{})
+		Context("when there is a specified setup, post-setup, action, and monitor", func() {
+			BeforeEach(func() {
+				options = []transformer.Option{
+					transformer.WithPostSetupHook(
+						"jim",
+						[]string{"/post-setup/path", "-x", "argument"},
+					),
+				}
+			})
+
+			It("returns a step encapsulating setup, post-setup, action, and monitor", func() {
+				setupReceived := make(chan struct{})
+				postSetupReceived := make(chan struct{})
+				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
+					if processSpec.Path == "/setup/path" {
+						setupReceived <- struct{}{}
+					} else if processSpec.Path == "/post-setup/path" {
+						postSetupReceived <- struct{}{}
+					}
+					return &gardenfakes.FakeProcess{}, nil
+				}
+
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				process := ifrit.Background(runner)
+
+				Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+				processSpec, _ := gardenContainer.RunArgsForCall(0)
+				Expect(processSpec.Path).To(Equal("/setup/path"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(1))
+
+				<-setupReceived
+
+				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				processSpec, _ = gardenContainer.RunArgsForCall(1)
+				Expect(processSpec.Path).To(Equal("/post-setup/path"))
+				Expect(processSpec.Args).To(Equal([]string{"-x", "argument"}))
+				Expect(processSpec.User).To(Equal("jim"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(2))
+
+				<-postSetupReceived
+
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+				processSpec, _ = gardenContainer.RunArgsForCall(2)
+				Expect(processSpec.Path).To(Equal("/action/path"))
+				Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+
+				clock.Increment(1 * time.Second)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(4))
+				processSpec, processIO := gardenContainer.RunArgsForCall(3)
+				Expect(processSpec.Path).To(Equal("/monitor/path"))
+				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
+				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+
+				process.Signal(os.Interrupt)
+				clock.Increment(1 * time.Second)
+				Eventually(process.Wait()).Should(Receive(nil))
+			})
+		})
+
+		It("logs container setup time", func() {
 			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
 				if processSpec.Path == "/setup/path" {
-					setupReceived <- struct{}{}
-				} else if processSpec.Path == "/post-setup/path" {
-					postSetupReceived <- struct{}{}
+					clock.Increment(1 * time.Second)
 				}
 				return &gardenfakes.FakeProcess{}, nil
 			}
 
+			cfg.CreationStartTime = clock.Now()
 			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 			Expect(err).NotTo(HaveOccurred())
+			ifrit.Background(runner)
 
-			process := ifrit.Background(runner)
-
-			Eventually(gardenContainer.RunCallCount).Should(Equal(1))
-			processSpec, _ := gardenContainer.RunArgsForCall(0)
-			Expect(processSpec.Path).To(Equal("/setup/path"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(1))
-
-			<-setupReceived
-
-			Eventually(gardenContainer.RunCallCount).Should(Equal(2))
-			processSpec, _ = gardenContainer.RunArgsForCall(1)
-			Expect(processSpec.Path).To(Equal("/post-setup/path"))
-			Expect(processSpec.Args).To(Equal([]string{"-x", "argument"}))
-			Expect(processSpec.User).To(Equal("jim"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(2))
-
-			<-postSetupReceived
-
-			Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-			processSpec, _ = gardenContainer.RunArgsForCall(2)
-			Expect(processSpec.Path).To(Equal("/action/path"))
-			Consistently(gardenContainer.RunCallCount).Should(Equal(3))
-
-			clock.Increment(1 * time.Second)
-			Eventually(gardenContainer.RunCallCount).Should(Equal(4))
-			processSpec, processIO := gardenContainer.RunArgsForCall(3)
-			Expect(processSpec.Path).To(Equal("/monitor/path"))
-			Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
-			Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
-
-			process.Signal(os.Interrupt)
-			clock.Increment(1 * time.Second)
-			Eventually(process.Wait()).Should(Receive(nil))
+			Eventually(logger).Should(gbytes.Say("container-setup.*duration.*1000000000"))
 		})
 
 		It("does not become ready until the healthcheck passes", func() {
@@ -609,7 +634,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -675,7 +700,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -715,7 +740,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -759,7 +784,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -1319,7 +1344,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -1385,6 +1410,16 @@ var _ = Describe("Transformer", func() {
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
 				Eventually(process.Wait()).Should(Receive(nil))
+			})
+
+			It("logs the container creation time", func() {
+				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
+				cfg.CreationStartTime = clock.Now()
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+				Expect(err).NotTo(HaveOccurred())
+				ifrit.Background(runner)
+
+				Eventually(logger).Should(gbytes.Say("container-setup.*duration.*:0"))
 			})
 		})
 
