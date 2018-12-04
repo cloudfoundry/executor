@@ -162,9 +162,8 @@ var _ = Describe("Container Store", func() {
 				"Foo": "bar",
 			}
 			containerResource = executor.Resource{
-				MemoryMB:   1024,
-				DiskMB:     1024,
-				RootFSPath: "/foo/bar",
+				MemoryMB: 1024,
+				DiskMB:   1024,
 			}
 
 			req = &executor.AllocationRequest{
@@ -325,10 +324,9 @@ var _ = Describe("Container Store", func() {
 
 		BeforeEach(func() {
 			resource = executor.Resource{
-				MemoryMB:   1024,
-				DiskMB:     1024,
-				MaxPids:    1024,
-				RootFSPath: "/foo/bar",
+				MemoryMB: 1024,
+				DiskMB:   1024,
+				MaxPids:  1024,
 			}
 
 			allocationReq = &executor.AllocationRequest{
@@ -357,6 +355,7 @@ var _ = Describe("Container Store", func() {
 
 				logGuid = "log-guid-foo"
 				runInfo = executor.RunInfo{
+					RootFSPath:     "/foo/bar",
 					Privileged:     true,
 					CPUWeight:      50,
 					StartTimeoutMs: 99000,
@@ -372,7 +371,7 @@ var _ = Describe("Container Store", func() {
 						Guid:  "metric-guid",
 						Index: 1,
 					},
-					Env: env,
+					Env:                           env,
 					TrustedSystemCertificatesPath: "",
 					Network: &executor.Network{
 						Properties: map[string]string{
@@ -416,7 +415,7 @@ var _ = Describe("Container Store", func() {
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
 				containerSpec := gardenClient.CreateArgsForCall(0)
 				Expect(containerSpec.Handle).To(Equal(containerGuid))
-				Expect(containerSpec.Image.URI).To(Equal(resource.RootFSPath))
+				Expect(containerSpec.Image.URI).To(Equal(runInfo.RootFSPath))
 				Expect(containerSpec.Privileged).To(Equal(true))
 			})
 
@@ -432,7 +431,7 @@ var _ = Describe("Container Store", func() {
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.Image.URI).To(Equal(resource.RootFSPath))
+					Expect(containerSpec.Image.URI).To(Equal(runInfo.RootFSPath))
 					Expect(containerSpec.Image.Username).To(Equal("some-username"))
 					Expect(containerSpec.Image.Password).To(Equal("some-password"))
 				})
@@ -1982,7 +1981,7 @@ var _ = Describe("Container Store", func() {
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
-			resource = executor.NewResource(1024, 2048, 1024, "foobar")
+			resource = executor.NewResource(1024, 2048, 1024)
 			expectedMounts = containerstore.BindMounts{
 				CacheKeys: []containerstore.BindMountCacheKey{
 					{CacheKey: "cache-key", Dir: "foo"},
@@ -2432,9 +2431,8 @@ var _ = Describe("Container Store", func() {
 
 	reserveContainer := func(guid string) {
 		resource := executor.Resource{
-			MemoryMB:   10,
-			DiskMB:     10,
-			RootFSPath: "/foo/bar",
+			MemoryMB: 10,
+			DiskMB:   10,
 		}
 		tags := executor.Tags{}
 		_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: guid, Tags: tags, Resource: resource})
@@ -2443,6 +2441,7 @@ var _ = Describe("Container Store", func() {
 
 	initializeContainer := func(guid string, diskScope executor.DiskLimitScope) {
 		runInfo := executor.RunInfo{
+			RootFSPath:         "/foo/bar",
 			CPUWeight:          2,
 			StartTimeoutMs:     50000,
 			Privileged:         true,
@@ -2456,7 +2455,7 @@ var _ = Describe("Container Store", func() {
 				Guid:  "metric-guid",
 				Index: 1,
 			},
-			Env: []executor.EnvironmentVariable{},
+			Env:                           []executor.EnvironmentVariable{},
 			TrustedSystemCertificatesPath: "",
 			Network: &executor.Network{
 				Properties: map[string]string{},
@@ -2669,13 +2668,13 @@ var _ = Describe("Container Store", func() {
 		)
 
 		BeforeEach(func() {
-			resource = executor.NewResource(512, 512, 1024, "")
+			resource = executor.NewResource(512, 512, 1024)
 			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
 
 			_, err := containerStore.Reserve(logger, &req)
 			Expect(err).NotTo(HaveOccurred())
 
-			resource = executor.NewResource(512, 512, 1024, "")
+			resource = executor.NewResource(512, 512, 1024)
 			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
 
 			_, err = containerStore.Reserve(logger, &req)

@@ -134,18 +134,16 @@ func NewReservedContainerFromAllocationRequest(req *AllocationRequest, allocated
 }
 
 type Resource struct {
-	MemoryMB   int    `json:"memory_mb"`
-	DiskMB     int    `json:"disk_mb"`
-	MaxPids    int    `json:"max_pids"`
-	RootFSPath string `json:"rootfs"`
+	MemoryMB int `json:"memory_mb"`
+	DiskMB   int `json:"disk_mb"`
+	MaxPids  int `json:"max_pids"`
 }
 
-func NewResource(memoryMB, diskMB, maxPids int, rootFSPath string) Resource {
+func NewResource(memoryMB, diskMB, maxPids int) Resource {
 	return Resource{
-		MemoryMB:   memoryMB,
-		DiskMB:     diskMB,
-		MaxPids:    maxPids,
-		RootFSPath: rootFSPath,
+		MemoryMB: memoryMB,
+		DiskMB:   diskMB,
+		MaxPids:  maxPids,
 	}
 }
 
@@ -164,6 +162,7 @@ type CertificateProperties struct {
 }
 
 type RunInfo struct {
+	RootFSPath                    string                      `json:"rootfs"`
 	CPUWeight                     uint                        `json:"cpu_weight"`
 	DiskScope                     DiskLimitScope              `json:"disk_scope,omitempty"`
 	Ports                         []PortMapping               `json:"ports"`

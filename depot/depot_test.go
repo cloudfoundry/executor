@@ -15,7 +15,6 @@ import (
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 	"code.cloudfoundry.org/workpool"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -710,7 +709,7 @@ func convertSliceToMap(containers []executor.Container) map[string]executor.Cont
 }
 
 func newAllocationRequest(guid string, tagses ...executor.Tags) executor.AllocationRequest {
-	resource := executor.NewResource(256, 256, -1, "linux")
+	resource := executor.NewResource(256, 256, -1)
 	var tags executor.Tags
 	if len(tagses) > 0 {
 		tags = tagses[0]
