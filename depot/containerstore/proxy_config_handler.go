@@ -502,7 +502,6 @@ func pemConcatenate(certs []string) (string, error) {
 		var block *pem.Block
 		for {
 			block, rest = pem.Decode(rest)
-			fmt.Println(string(rest))
 			if block == nil {
 				if len(rest) == totalCertLen {
 					return "", errors.New("failed to read certificate")
