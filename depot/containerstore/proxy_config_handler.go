@@ -497,13 +497,22 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 func pemConcatenate(certs []string) (string, error) {
 	var certificateBuf bytes.Buffer
 	for _, cert := range certs {
-		block, _ := pem.Decode([]byte(cert))
-		if block == nil {
-			return "", errors.New("failed to read certificate.")
-		}
-		err := pem.Encode(&certificateBuf, block)
-		if err != nil {
-			return "", err
+		rest := []byte(cert)
+		totalCertLen := len(rest)
+		var block *pem.Block
+		for {
+			block, rest = pem.Decode(rest)
+			fmt.Println(string(rest))
+			if block == nil {
+				if len(rest) == totalCertLen {
+					return "", errors.New("failed to read certificate")
+				}
+				break
+			}
+			err := pem.Encode(&certificateBuf, block)
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 	return certificateBuf.String(), nil

@@ -436,10 +436,12 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 		Context("with container proxy trusted certs set", func() {
 			var inlinedCert string
+
 			BeforeEach(func() {
 				cert, _, _ := generateCertAndKey()
-				inlinedCert = fmt.Sprintf("%s%s", cert, cert)
-				containerProxyTrustedCACerts = []string{cert, cert}
+				chainedCert := fmt.Sprintf("%s%s", cert, cert)
+				containerProxyTrustedCACerts = []string{cert, chainedCert}
+				inlinedCert = fmt.Sprintf("%s%s", cert, chainedCert)
 				containerProxyVerifySubjectAltName = []string{"valid-alt-name-1", "valid-alt-name-2"}
 			})
 
