@@ -26,9 +26,7 @@ const (
 	StartProxyPort = 61001
 	EndProxyPort   = 65534
 
-	TimeOut    = "0.25s"
-	Static     = "STATIC"
-	RoundRobin = "ROUND_ROBIN"
+	TimeOut = 250 * time.Millisecond
 
 	IngressListener = "ingress_listener"
 	TcpProxy        = "envoy.tcp_proxy"
@@ -40,7 +38,7 @@ var (
 	ErrNoPortsAvailable   = errors.New("no ports available")
 	ErrInvalidCertificate = errors.New("cannot parse invalid certificate")
 
-	SupportedCipherSuites = "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]"
+	SupportedCipherSuites = []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"}
 )
 
 var dummyRunner = func(credRotatedChan <-chan Credential) ifrit.Runner {
@@ -283,9 +281,7 @@ func generateProxyConfig(
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 		clusters = append(clusters, envoy.Cluster{
 			Name:              clusterName,
-			ConnectionTimeout: TimeOut,
-			Type:              Static,
-			LbPolicy:          RoundRobin,
+			ConnectionTimeout: TimeOut.String(),
 			Hosts: []envoy.Address{
 				{
 					SocketAddress: envoy.SocketAddress{
@@ -332,9 +328,7 @@ func generateProxyConfig(
 
 		clusters = append(clusters, envoy.Cluster{
 			Name:                 "pilot-ads",
-			ConnectionTimeout:    TimeOut,
-			Type:                 Static,
-			LbPolicy:             RoundRobin,
+			ConnectionTimeout:    TimeOut.String(),
 			Hosts:                hosts,
 			HTTP2ProtocolOptions: envoy.HTTP2ProtocolOptions{},
 		})
@@ -348,9 +342,11 @@ func generateProxyConfig(
 			},
 			ADSConfig: envoy.ADSConfig{
 				APIType: "GRPC",
-				GRPCServices: envoy.GRPCServices{
-					EnvoyGRPC: envoy.EnvoyGRPC{
-						ClusterName: "pilot-ads",
+				GRPCServices: []envoy.GRPCService{
+					{
+						EnvoyGRPC: envoy.EnvoyGRPC{
+							ClusterName: "pilot-ads",
+						},
 					},
 				},
 			},
@@ -429,10 +425,12 @@ func generateListeners(container executor.Container, requireClientCerts bool) []
 					TLSContext: envoy.TLSContext{
 						RequireClientCertificate: requireClientCerts,
 						CommonTLSContext: envoy.CommonTLSContext{
-							TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
-								Name: "server-cert-and-key",
-								SDSConfig: envoy.SDSConfig{
-									Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
+							TLSCertificateSDSSecretConfigs: []envoy.SecretConfig{
+								{
+									Name: "server-cert-and-key",
+									SDSConfig: envoy.SDSConfig{
+										Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
+									},
 								},
 							},
 							TLSParams: envoy.TLSParams{

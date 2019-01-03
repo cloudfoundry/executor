@@ -358,9 +358,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
-				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
-				Expect(cluster.Type).To(Equal("STATIC"))
-				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(time.ParseDuration(cluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+				Expect(cluster.Type).To(BeEmpty())
+				Expect(cluster.LbPolicy).To(BeEmpty())
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 				}))
@@ -369,9 +369,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				adsCluster := proxyConfig.StaticResources.Clusters[1]
 				Expect(adsCluster.Name).To(Equal("pilot-ads"))
-				Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
-				Expect(adsCluster.Type).To(Equal("STATIC"))
-				Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(time.ParseDuration(adsCluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+				Expect(adsCluster.Type).To(BeEmpty())
+				Expect(adsCluster.LbPolicy).To(BeEmpty())
 				Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
 					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
@@ -393,12 +393,14 @@ var _ = Describe("ProxyConfigHandler", func() {
 						},
 						TLSContext: envoy.TLSContext{
 							CommonTLSContext: envoy.CommonTLSContext{
-								TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
-									Name:      "server-cert-and-key",
-									SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+								TLSCertificateSDSSecretConfigs: []envoy.SecretConfig{
+									{
+										Name:      "server-cert-and-key",
+										SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+									},
 								},
 								TLSParams: envoy.TLSParams{
-									CipherSuites: "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]",
+									CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
 								},
 							},
 							RequireClientCertificate: false,
@@ -489,9 +491,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			cluster := proxyConfig.StaticResources.Clusters[0]
 			Expect(cluster.Name).To(Equal("0-service-cluster"))
-			Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
-			Expect(cluster.Type).To(Equal("STATIC"))
-			Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+			Expect(time.ParseDuration(cluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+			Expect(cluster.Type).To(BeEmpty())
+			Expect(cluster.LbPolicy).To(BeEmpty())
 			Expect(cluster.Hosts).To(Equal([]envoy.Address{
 				{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 			}))
@@ -500,9 +502,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 			adsCluster := proxyConfig.StaticResources.Clusters[1]
 			Expect(adsCluster.Name).To(Equal("pilot-ads"))
-			Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
-			Expect(adsCluster.Type).To(Equal("STATIC"))
-			Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+			Expect(time.ParseDuration(adsCluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+			Expect(adsCluster.Type).To(BeEmpty())
+			Expect(adsCluster.LbPolicy).To(BeEmpty())
 			Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
 				{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
 				{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
@@ -524,12 +526,14 @@ var _ = Describe("ProxyConfigHandler", func() {
 					},
 					TLSContext: envoy.TLSContext{
 						CommonTLSContext: envoy.CommonTLSContext{
-							TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
-								Name:      "server-cert-and-key",
-								SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+							TLSCertificateSDSSecretConfigs: []envoy.SecretConfig{
+								{
+									Name:      "server-cert-and-key",
+									SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+								},
 							},
 							TLSParams: envoy.TLSParams{
-								CipherSuites: "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]",
+								CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
 							},
 							ValidationContextSDSSecretConfig: envoy.SecretConfig{
 								Name:      "server-validation-context",
@@ -544,8 +548,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.DynamicResources.LDSConfig).To(Equal(envoy.LDSConfig{envoy.ADS{}}))
 			Expect(proxyConfig.DynamicResources.CDSConfig).To(Equal(envoy.CDSConfig{envoy.ADS{}}))
 			Expect(proxyConfig.DynamicResources.ADSConfig).To(Equal(envoy.ADSConfig{
-				APIType: "GRPC", GRPCServices: envoy.GRPCServices{
-					EnvoyGRPC: envoy.EnvoyGRPC{ClusterName: "pilot-ads"},
+				APIType: "GRPC", GRPCServices: []envoy.GRPCService{
+					{
+						EnvoyGRPC: envoy.EnvoyGRPC{ClusterName: "pilot-ads"},
+					},
 				},
 			}))
 		})
@@ -638,27 +644,27 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
-				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
-				Expect(cluster.Type).To(Equal("STATIC"))
-				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(time.ParseDuration(cluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+				Expect(cluster.Type).To(BeEmpty())
+				Expect(cluster.LbPolicy).To(BeEmpty())
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 8080}},
 				}))
 
 				cluster = proxyConfig.StaticResources.Clusters[1]
 				Expect(cluster.Name).To(Equal("1-service-cluster"))
-				Expect(cluster.ConnectionTimeout).To(Equal("0.25s"))
-				Expect(cluster.Type).To(Equal("STATIC"))
-				Expect(cluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(time.ParseDuration(cluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+				Expect(cluster.Type).To(BeEmpty())
+				Expect(cluster.LbPolicy).To(BeEmpty())
 				Expect(cluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.0.0.1", PortValue: 2222}},
 				}))
 
 				adsCluster := proxyConfig.StaticResources.Clusters[2]
 				Expect(adsCluster.Name).To(Equal("pilot-ads"))
-				Expect(adsCluster.ConnectionTimeout).To(Equal("0.25s"))
-				Expect(adsCluster.Type).To(Equal("STATIC"))
-				Expect(adsCluster.LbPolicy).To(Equal("ROUND_ROBIN"))
+				Expect(time.ParseDuration(adsCluster.ConnectionTimeout)).To(Equal(250 * time.Millisecond))
+				Expect(adsCluster.Type).To(BeEmpty())
+				Expect(adsCluster.LbPolicy).To(BeEmpty())
 				Expect(adsCluster.Hosts).To(Equal([]envoy.Address{
 					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.2", PortValue: 15010}},
 					{SocketAddress: envoy.SocketAddress{Address: "10.255.217.3", PortValue: 15010}},
@@ -680,12 +686,14 @@ var _ = Describe("ProxyConfigHandler", func() {
 						},
 						TLSContext: envoy.TLSContext{
 							CommonTLSContext: envoy.CommonTLSContext{
-								TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
-									Name:      "server-cert-and-key",
-									SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+								TLSCertificateSDSSecretConfigs: []envoy.SecretConfig{
+									{
+										Name:      "server-cert-and-key",
+										SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+									},
 								},
 								TLSParams: envoy.TLSParams{
-									CipherSuites: "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]",
+									CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
 								},
 								ValidationContextSDSSecretConfig: envoy.SecretConfig{
 									Name:      "server-validation-context",
@@ -711,12 +719,14 @@ var _ = Describe("ProxyConfigHandler", func() {
 						},
 						TLSContext: envoy.TLSContext{
 							CommonTLSContext: envoy.CommonTLSContext{
-								TLSCertificateSDSSecretConfigs: envoy.SecretConfig{
-									Name:      "server-cert-and-key",
-									SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+								TLSCertificateSDSSecretConfigs: []envoy.SecretConfig{
+									{
+										Name:      "server-cert-and-key",
+										SDSConfig: envoy.SDSConfig{Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml"},
+									},
 								},
 								TLSParams: envoy.TLSParams{
-									CipherSuites: "[ECDHE-RSA-AES256-GCM-SHA384|ECDHE-RSA-AES128-GCM-SHA256]",
+									CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
 								},
 								ValidationContextSDSSecretConfig: envoy.SecretConfig{
 									Name:      "server-validation-context",

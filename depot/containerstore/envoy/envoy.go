@@ -34,13 +34,13 @@ type SecretConfig struct {
 }
 
 type CommonTLSContext struct {
-	TLSCertificateSDSSecretConfigs   SecretConfig `yaml:"tls_certificate_sds_secret_configs"`
-	ValidationContextSDSSecretConfig SecretConfig `yaml:"validation_context_sds_secret_config,omitempty"`
-	TLSParams                        TLSParams    `yaml:"tls_params"`
+	TLSCertificateSDSSecretConfigs   []SecretConfig `yaml:"tls_certificate_sds_secret_configs"`
+	ValidationContextSDSSecretConfig SecretConfig   `yaml:"validation_context_sds_secret_config,omitempty"`
+	TLSParams                        TLSParams      `yaml:"tls_params"`
 }
 
 type TLSParams struct {
-	CipherSuites string `yaml:"cipher_suites"`
+	CipherSuites []string `yaml:"cipher_suites"`
 }
 
 type TLSContext struct {
@@ -110,11 +110,11 @@ type CDSConfig struct {
 }
 
 type ADSConfig struct {
-	APIType      string       `yaml:"api_type"`
-	GRPCServices GRPCServices `yaml:"grpc_services"`
+	APIType      string        `yaml:"api_type"`
+	GRPCServices []GRPCService `yaml:"grpc_services"`
 }
 
-type GRPCServices struct {
+type GRPCService struct {
 	EnvoyGRPC EnvoyGRPC `yaml:"envoy_grpc"`
 }
 
