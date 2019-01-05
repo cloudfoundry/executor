@@ -344,13 +344,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				data, err := ioutil.ReadFile(proxyConfigFile)
-				Expect(err).NotTo(HaveOccurred())
-
 				var proxyConfig envoy.ProxyConfig
+				Expect(yamlFileToStruct(proxyConfigFile, &proxyConfig)).To(Succeed())
 
-				err = yaml.Unmarshal(data, &proxyConfig)
-				Expect(err).NotTo(HaveOccurred())
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
@@ -416,13 +412,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(sdsServerCertAndKeyFile).Should(BeAnExistingFile())
 
-			data, err := ioutil.ReadFile(sdsServerCertAndKeyFile)
-			Expect(err).NotTo(HaveOccurred())
-
 			var sdsCertificateResource envoy.SDSCertificateResource
-
-			err = yaml.Unmarshal(data, &sdsCertificateResource)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(yamlFileToStruct(sdsServerCertAndKeyFile, &sdsCertificateResource)).To(Succeed())
 
 			Expect(sdsCertificateResource.VersionInfo).To(Equal("0"))
 
@@ -452,13 +443,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(sdsServerValidationContextFile).Should(BeAnExistingFile())
 
-				data, err := ioutil.ReadFile(sdsServerValidationContextFile)
-				Expect(err).NotTo(HaveOccurred())
-
 				var sdsCAResource envoy.SDSCAResource
-
-				err = yaml.Unmarshal(data, &sdsCAResource)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(yamlFileToStruct(sdsServerValidationContextFile, &sdsCAResource)).To(Succeed())
 
 				Expect(sdsCAResource.VersionInfo).To(Equal("0"))
 
@@ -477,13 +463,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-			data, err := ioutil.ReadFile(proxyConfigFile)
-			Expect(err).NotTo(HaveOccurred())
-
 			var proxyConfig envoy.ProxyConfig
+			Expect(yamlFileToStruct(proxyConfigFile, &proxyConfig)).To(Succeed())
 
-			err = yaml.Unmarshal(data, &proxyConfig)
-			Expect(err).NotTo(HaveOccurred())
 			admin := proxyConfig.Admin
 			Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 			Expect(admin.Address).To(Equal(envoy.Address{SocketAddress: envoy.SocketAddress{Address: "127.0.0.1", PortValue: 61002}}))
@@ -566,13 +548,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				data, err := ioutil.ReadFile(proxyConfigFile)
-				Expect(err).NotTo(HaveOccurred())
-
 				var proxyConfig envoy.ProxyConfig
-
-				err = yaml.Unmarshal(data, &proxyConfig)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(yamlFileToStruct(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
 				cluster := proxyConfig.StaticResources.Clusters[0]
@@ -628,13 +605,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				data, err := ioutil.ReadFile(proxyConfigFile)
-				Expect(err).NotTo(HaveOccurred())
-
 				var proxyConfig envoy.ProxyConfig
-
-				err = yaml.Unmarshal(data, &proxyConfig)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(yamlFileToStruct(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
@@ -841,4 +813,13 @@ func generateCertAndKey() (string, string, *big.Int) {
 	cert := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}))
 	key := string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: privateKeyBytes}))
 	return cert, key, template.SerialNumber
+}
+
+func yamlFileToStruct(path string, outputStruct interface{}) error {
+	yamlBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	return yaml.Unmarshal(yamlBytes, outputStruct)
 }
