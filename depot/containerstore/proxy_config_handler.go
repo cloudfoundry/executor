@@ -31,6 +31,7 @@ import (
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	proto_types "github.com/gogo/protobuf/types"
 )
 
@@ -259,8 +260,8 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		return err
 	}
 
-	sdsServerCertAndKey := generateSDSCertificateResource(container, credentials)
-	err = marshalAndWriteToFile(sdsServerCertAndKey, sdsServerCertAndKeyPath)
+	sdsServerCertAndKey := generateSDSCertAndKey(container, credentials)
+	err = writeDiscoveryResponseYAML(sdsServerCertAndKey, sdsServerCertAndKeyPath)
 	if err != nil {
 		return err
 	}
@@ -492,19 +493,24 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 	return listeners, nil
 }
 
-func generateSDSCertificateResource(container executor.Container, creds Credential) envoy.SDSCertificateResource {
-	resources := []envoy.CertificateResource{
-		{
-			Type: "type.googleapis.com/envoy.api.v2.auth.Secret",
-			Name: "server-cert-and-key",
-			TLSCertificate: envoy.TLSCertificate{
-				CertificateChain: envoy.DataSource{InlineString: creds.Cert},
-				PrivateKey:       envoy.DataSource{InlineString: creds.Key},
+func generateSDSCertAndKey(container executor.Container, creds Credential) proto.Message {
+	return &envoy_v2_auth.Secret{
+		Name: "server-cert-and-key",
+		Type: &envoy_v2_auth.Secret_TlsCertificate{
+			TlsCertificate: &envoy_v2_auth.TlsCertificate{
+				CertificateChain: &envoy_v2_core.DataSource{
+					Specifier: &envoy_v2_core.DataSource_InlineString{
+						InlineString: creds.Cert,
+					},
+				},
+				PrivateKey: &envoy_v2_core.DataSource{
+					Specifier: &envoy_v2_core.DataSource_InlineString{
+						InlineString: creds.Key,
+					},
+				},
 			},
 		},
 	}
-
-	return envoy.SDSCertificateResource{VersionInfo: "0", Resources: resources}
 }
 
 func generateSDSCAResource(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string) (envoy.SDSCAResource, error) {
@@ -525,6 +531,30 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 	}
 
 	return envoy.SDSCAResource{VersionInfo: "0", Resources: resources}, nil
+}
+
+func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error {
+	resourceAny, err := proto_types.MarshalAny(resourceMsg)
+	if err != nil {
+		return err
+	}
+	dr := &envoy_v2.DiscoveryResponse{
+		VersionInfo: "0",
+		Resources: []proto_types.Any{
+			*resourceAny,
+		},
+	}
+	jsonMarshaler := jsonpb.Marshaler{OrigName: true, EmitDefaults: false}
+	fullJSON, err := jsonMarshaler.MarshalToString(dr)
+	if err != nil {
+		return err
+	}
+
+	yamlStr, err := ghodss_yaml.JSONToYAML([]byte(fullJSON))
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(outPath, yamlStr, 0666)
 }
 
 func pemConcatenate(certs []string) (string, error) {
