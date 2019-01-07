@@ -17,7 +17,6 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/lagertest"
 
@@ -37,6 +36,7 @@ import (
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
+	proto_types "github.com/gogo/protobuf/types"
 )
 
 var _ = Describe("ProxyConfigHandler", func() {
@@ -396,18 +396,29 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(sdsServerCertAndKeyFile).Should(BeAnExistingFile())
 
-			var sdsCertificateResource envoy.SDSCertificateResource
-			Expect(yamlFileToStruct(sdsServerCertAndKeyFile, &sdsCertificateResource)).To(Succeed())
+			var sdsCertificateDiscoveryResponse envoy_v2.DiscoveryResponse
+			Expect(yamlFileToProto(sdsServerCertAndKeyFile, &sdsCertificateDiscoveryResponse)).To(Succeed())
 
-			Expect(sdsCertificateResource.VersionInfo).To(Equal("0"))
+			Expect(sdsCertificateDiscoveryResponse.VersionInfo).To(Equal("0"))
+			Expect(sdsCertificateDiscoveryResponse.Resources).To(HaveLen(1))
 
-			resource := sdsCertificateResource.Resources[0]
-			Expect(resource.Type).To(Equal("type.googleapis.com/envoy.api.v2.auth.Secret"))
-			Expect(resource.Name).To(Equal("server-cert-and-key"))
-			certs := resource.TLSCertificate
-			Expect(certs).To(Equal(envoy.TLSCertificate{
-				CertificateChain: envoy.DataSource{InlineString: "cert"},
-				PrivateKey:       envoy.DataSource{InlineString: "key"},
+			var secret envoy_v2_auth.Secret
+			Expect(proto_types.UnmarshalAny(&sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+
+			Expect(secret.Name).To(Equal("server-cert-and-key"))
+			Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_TlsCertificate{
+				TlsCertificate: &envoy_v2_auth.TlsCertificate{
+					CertificateChain: &envoy_v2_core.DataSource{
+						Specifier: &envoy_v2_core.DataSource_InlineString{
+							InlineString: "cert",
+						},
+					},
+					PrivateKey: &envoy_v2_core.DataSource{
+						Specifier: &envoy_v2_core.DataSource_InlineString{
+							InlineString: "key",
+						},
+					},
+				},
 			}))
 		})
 
@@ -427,17 +438,26 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(sdsServerValidationContextFile).Should(BeAnExistingFile())
 
-				var sdsCAResource envoy.SDSCAResource
-				Expect(yamlFileToStruct(sdsServerValidationContextFile, &sdsCAResource)).To(Succeed())
+				var sdsDiscoveryResponse envoy_v2.DiscoveryResponse
+				Expect(yamlFileToProto(sdsServerValidationContextFile, &sdsDiscoveryResponse)).To(Succeed())
 
-				Expect(sdsCAResource.VersionInfo).To(Equal("0"))
+				Expect(sdsDiscoveryResponse.VersionInfo).To(Equal("0"))
+				Expect(sdsDiscoveryResponse.Resources).To(HaveLen(1))
 
-				resource := sdsCAResource.Resources[0]
-				Expect(resource.Type).To(Equal("type.googleapis.com/envoy.api.v2.auth.Secret"))
-				Expect(resource.Name).To(Equal("server-validation-context"))
-				validations := resource.ValidationContext
-				Expect(validations.TrustedCA).To(Equal(envoy.DataSource{InlineString: inlinedCert}))
-				Expect(validations.VerifySubjectAltName).To(ConsistOf("valid-alt-name-1", "valid-alt-name-2"))
+				var secret envoy_v2_auth.Secret
+				Expect(proto_types.UnmarshalAny(&sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+
+				Expect(secret.Name).To(Equal("server-validation-context"))
+				Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_ValidationContext{
+					ValidationContext: &envoy_v2_auth.CertificateValidationContext{
+						TrustedCa: &envoy_v2_core.DataSource{
+							Specifier: &envoy_v2_core.DataSource_InlineString{
+								InlineString: inlinedCert,
+							},
+						},
+						VerifySubjectAltName: []string{"valid-alt-name-1", "valid-alt-name-2"},
+					},
+				}))
 			})
 		})
 
