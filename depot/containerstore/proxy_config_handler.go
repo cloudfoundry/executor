@@ -15,7 +15,6 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/executor/depot/containerstore/envoy"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	ghodss_yaml "github.com/ghodss/yaml"
@@ -275,7 +274,7 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 	if err != nil {
 		return err
 	}
-	err = marshalAndWriteToFile(sdsServerValidationContext, sdsServerValidationContextPath)
+	err = writeDiscoveryResponseYAML(sdsServerValidationContext, sdsServerValidationContextPath)
 	if err != nil {
 		return err
 	}
@@ -513,24 +512,25 @@ func generateSDSCertAndKey(container executor.Container, creds Credential) proto
 	}
 }
 
-func generateSDSCAResource(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string) (envoy.SDSCAResource, error) {
+func generateSDSCAResource(container executor.Container, creds Credential, trustedCaCerts []string, subjectAltNames []string) (proto.Message, error) {
 	certs, err := pemConcatenate(trustedCaCerts)
 	if err != nil {
-		return envoy.SDSCAResource{}, err
+		return nil, err
 	}
 
-	resources := []envoy.CAResource{
-		{
-			Type: "type.googleapis.com/envoy.api.v2.auth.Secret",
-			Name: "server-validation-context",
-			ValidationContext: envoy.CertificateValidationContext{
-				TrustedCA:            envoy.DataSource{InlineString: certs},
+	return &envoy_v2_auth.Secret{
+		Name: "server-validation-context",
+		Type: &envoy_v2_auth.Secret_ValidationContext{
+			ValidationContext: &envoy_v2_auth.CertificateValidationContext{
+				TrustedCa: &envoy_v2_core.DataSource{
+					Specifier: &envoy_v2_core.DataSource_InlineString{
+						InlineString: certs,
+					},
+				},
 				VerifySubjectAltName: subjectAltNames,
 			},
 		},
-	}
-
-	return envoy.SDSCAResource{VersionInfo: "0", Resources: resources}, nil
+	}, nil
 }
 
 func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error {
