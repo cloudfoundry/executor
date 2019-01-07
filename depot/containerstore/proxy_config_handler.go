@@ -19,7 +19,6 @@ import (
 	"code.cloudfoundry.org/lager"
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/tedsuo/ifrit"
-	yaml "gopkg.in/yaml.v2"
 
 	envoy_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	envoy_v2_auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
@@ -403,21 +402,6 @@ func writeProxyConfig(proxyConfig *envoy_v2_bootstrap.Bootstrap, path string) er
 		return err
 	}
 	return ioutil.WriteFile(path, yamlStr, 0666)
-}
-
-func marshalAndWriteToFile(toMarshal interface{}, path string) error {
-	tmpPath := path + ".tmp"
-
-	data, err := yaml.Marshal(toMarshal)
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(tmpPath, data, 0666)
-	if err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
 }
 
 func generateListeners(container executor.Container, requireClientCerts bool) ([]envoy_v2.Listener, error) {
