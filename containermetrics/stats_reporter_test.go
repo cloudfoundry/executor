@@ -1,7 +1,7 @@
 package containermetrics_test
 
 import (
-	"errors"
+	"strconv"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -10,17 +10,24 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
-	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
 func megsToBytes(mem int) uint64 {
 	return uint64(mem * 1024 * 1024)
+}
+
+type cpuUsage struct {
+	applicationID       string
+	instanceIndex       int32
+	absoluteUsage       uint64
+	absoluteEntitlement uint64
+	containerAge        uint64
 }
 
 var _ = Describe("StatsReporter", func() {
@@ -32,216 +39,12 @@ var _ = Describe("StatsReporter", func() {
 		fakeExecutorClient *efakes.FakeClient
 		fakeMetronClient   *mfakes.FakeIngressClient
 
-		metricsResultsChan chan map[string]executor.Metrics
-		listContainersChan chan []executor.Container
-		process            ifrit.Process
+		process ifrit.Process
 
 		enableContainerProxy    bool
 		proxyMemoryAllocationMB int
 		reporter                *containermetrics.StatsReporter
 	)
-
-	sendResults := func() {
-		metricsResultsChan <- map[string]executor.Metrics{
-			"container-guid-without-metrics-guid": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: ""},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(123),
-					DiskUsageInBytes:                    megsToBytes(456),
-					TimeSpentInCPU:                      100 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(789),
-					DiskLimitInBytes:                    megsToBytes(1024),
-					ContainerAgeInNanoseconds:           1000,
-					AbsoluteCPUEntitlementInNanoseconds: 2000,
-				},
-			},
-
-			"container-guid-without-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(123),
-					DiskUsageInBytes:                    megsToBytes(456),
-					TimeSpentInCPU:                      100 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(789),
-					DiskLimitInBytes:                    megsToBytes(1024),
-					ContainerAgeInNanoseconds:           1001,
-					AbsoluteCPUEntitlementInNanoseconds: 2001,
-				},
-			},
-			"container-guid-with-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(321),
-					DiskUsageInBytes:                    megsToBytes(654),
-					TimeSpentInCPU:                      100 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(987),
-					DiskLimitInBytes:                    megsToBytes(2048),
-					ContainerAgeInNanoseconds:           1002,
-					AbsoluteCPUEntitlementInNanoseconds: 2002,
-				},
-			},
-			"container-guid-without-preloaded-rootfs": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(345),
-					DiskUsageInBytes:                    megsToBytes(456),
-					TimeSpentInCPU:                      100 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(678),
-					DiskLimitInBytes:                    megsToBytes(2048),
-					ContainerAgeInNanoseconds:           1003,
-					AbsoluteCPUEntitlementInNanoseconds: 2003,
-				},
-			},
-		}
-
-		metricsResultsChan <- map[string]executor.Metrics{
-			"container-guid-without-metrics-guid": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: ""},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(123),
-					DiskUsageInBytes:                    megsToBytes(456),
-					TimeSpentInCPU:                      101 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(789),
-					DiskLimitInBytes:                    megsToBytes(1024),
-					ContainerAgeInNanoseconds:           1004,
-					AbsoluteCPUEntitlementInNanoseconds: 2004,
-				},
-			},
-
-			"container-guid-without-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(1230),
-					DiskUsageInBytes:                    4560,
-					TimeSpentInCPU:                      105 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(7890),
-					DiskLimitInBytes:                    4096,
-					ContainerAgeInNanoseconds:           1005,
-					AbsoluteCPUEntitlementInNanoseconds: 2005,
-				},
-			},
-			"container-guid-with-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(3210),
-					DiskUsageInBytes:                    6540,
-					TimeSpentInCPU:                      110 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(9870),
-					DiskLimitInBytes:                    512,
-					ContainerAgeInNanoseconds:           1006,
-					AbsoluteCPUEntitlementInNanoseconds: 2006,
-				}},
-			"container-guid-without-preloaded-rootfs": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(3450),
-					DiskUsageInBytes:                    4560,
-					TimeSpentInCPU:                      110 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(6780),
-					DiskLimitInBytes:                    2048,
-					ContainerAgeInNanoseconds:           1007,
-					AbsoluteCPUEntitlementInNanoseconds: 2007,
-				},
-			},
-		}
-
-		metricsResultsChan <- map[string]executor.Metrics{
-			"container-guid-without-metrics-guid": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: ""},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(123),
-					DiskUsageInBytes:                    megsToBytes(456),
-					TimeSpentInCPU:                      100 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(789),
-					DiskLimitInBytes:                    megsToBytes(1024),
-					ContainerAgeInNanoseconds:           1008,
-					AbsoluteCPUEntitlementInNanoseconds: 2008,
-				},
-			},
-
-			"container-guid-without-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(12300),
-					DiskUsageInBytes:                    45600,
-					TimeSpentInCPU:                      107 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(7890),
-					DiskLimitInBytes:                    234,
-					ContainerAgeInNanoseconds:           1009,
-					AbsoluteCPUEntitlementInNanoseconds: 2009,
-				},
-			},
-			"container-guid-with-index": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(32100),
-					DiskUsageInBytes:                    65400,
-					TimeSpentInCPU:                      112 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(98700),
-					DiskLimitInBytes:                    43200,
-					ContainerAgeInNanoseconds:           1010,
-					AbsoluteCPUEntitlementInNanoseconds: 2010,
-				},
-			},
-			"container-guid-without-preloaded-rootfs": executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
-				ContainerMetrics: executor.ContainerMetrics{
-					MemoryUsageInBytes:                  megsToBytes(34500),
-					DiskUsageInBytes:                    45600,
-					TimeSpentInCPU:                      112 * time.Second,
-					MemoryLimitInBytes:                  megsToBytes(6780),
-					DiskLimitInBytes:                    2048,
-					ContainerAgeInNanoseconds:           1011,
-					AbsoluteCPUEntitlementInNanoseconds: 2011,
-				},
-			},
-		}
-	}
-
-	sendContainers := func() {
-		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"},
-			{Guid: "container-guid-with-index"},
-			{Guid: "container-guid-without-preloaded-rootfs"},
-			{Guid: "container-guid-without-metrics-guid"},
-		}
-		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"},
-			{Guid: "container-guid-with-index"},
-			{Guid: "container-guid-without-preloaded-rootfs"},
-			{Guid: "container-guid-without-metrics-guid"},
-		}
-		listContainersChan <- []executor.Container{
-			{Guid: "container-guid-without-index"},
-			{Guid: "container-guid-with-index"},
-			{Guid: "container-guid-without-preloaded-rootfs"},
-			{Guid: "container-guid-without-metrics-guid"},
-		}
-	}
-
-	createEventContainerMetric := func(metrics executor.Metrics, cpuPercentage float64) logging.ContainerMetric {
-		instanceIndex := int32(metrics.MetricsConfig.Index)
-		return logging.ContainerMetric{
-			ApplicationId:          metrics.MetricsConfig.Guid,
-			InstanceIndex:          instanceIndex,
-			CpuPercentage:          cpuPercentage,
-			MemoryBytes:            metrics.ContainerMetrics.MemoryUsageInBytes,
-			DiskBytes:              metrics.ContainerMetrics.DiskUsageInBytes,
-			MemoryBytesQuota:       metrics.ContainerMetrics.MemoryLimitInBytes,
-			DiskBytesQuota:         metrics.ContainerMetrics.DiskLimitInBytes,
-			AbsoluteCPUUsage:       uint64(metrics.TimeSpentInCPU),
-			AbsoluteCPUEntitlement: metrics.AbsoluteCPUEntitlementInNanoseconds,
-			ContainerAge:           metrics.ContainerAgeInNanoseconds,
-		}
-	}
-
-	type cpuUsage struct {
-		applicationID       string
-		instanceIndex       int32
-		absoluteUsage       uint64
-		absoluteEntitlement uint64
-		containerAge        uint64
-	}
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -251,26 +54,6 @@ var _ = Describe("StatsReporter", func() {
 		fakeExecutorClient = new(efakes.FakeClient)
 		fakeMetronClient = new(mfakes.FakeIngressClient)
 
-		metricsResultsChan = make(chan map[string]executor.Metrics, 10)
-		listContainersChan = make(chan []executor.Container, 10)
-
-		fakeExecutorClient.GetBulkMetricsStub = func(lager.Logger) (map[string]executor.Metrics, error) {
-
-			result, ok := <-metricsResultsChan
-			if !ok || result == nil {
-				return nil, errors.New("closed")
-			}
-			return result, nil
-		}
-
-		fakeExecutorClient.ListContainersStub = func(lager.Logger) ([]executor.Container, error) {
-			result, ok := <-listContainersChan
-			if !ok || result == nil {
-				return nil, errors.New("closed")
-			}
-			return result, nil
-		}
-
 		enableContainerProxy = false
 		proxyMemoryAllocationMB = 5
 	})
@@ -278,13 +61,30 @@ var _ = Describe("StatsReporter", func() {
 	JustBeforeEach(func() {
 		reporter = containermetrics.NewStatsReporter(logger, interval, fakeClock, enableContainerProxy, proxyMemoryAllocationMB, fakeExecutorClient, fakeMetronClient)
 		process = ifrit.Invoke(reporter)
+		fakeClock.WaitForWatcherAndIncrement(interval)
+		Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
 	})
 
 	AfterEach(func() {
-		close(metricsResultsChan)
-		close(listContainersChan)
 		ginkgomon.Interrupt(process)
 	})
+
+	sentCPUUsage := func() []cpuUsage {
+		usage := []cpuUsage{}
+
+		for i := 0; i < fakeMetronClient.SendAppMetricsCallCount(); i++ {
+			metrics := fakeMetronClient.SendAppMetricsArgsForCall(i)
+			index, _ := strconv.Atoi(metrics.Tags["instance_id"])
+			usage = append(usage, cpuUsage{
+				applicationID:       metrics.Tags["source_id"],
+				instanceIndex:       int32(index),
+				absoluteUsage:       metrics.AbsoluteCPUUsage,
+				absoluteEntitlement: metrics.AbsoluteCPUEntitlement,
+				containerAge:        metrics.ContainerAge,
+			})
+		}
+		return usage
+	}
 
 	sentMetrics := func() []logging.ContainerMetric {
 		evs := []logging.ContainerMetric{}
@@ -294,93 +94,256 @@ var _ = Describe("StatsReporter", func() {
 		return evs
 	}
 
-	sentCPUUsage := func() []cpuUsage {
-		usage := []cpuUsage{}
-
-		for i := 0; i < fakeMetronClient.SendAppMetricsCallCount(); i++ {
-			metrics := fakeMetronClient.SendAppMetricsArgsForCall(i)
-			usage = append(usage, cpuUsage{
-				applicationID:       metrics.ApplicationId,
-				instanceIndex:       metrics.InstanceIndex,
-				absoluteUsage:       metrics.AbsoluteCPUUsage,
-				absoluteEntitlement: metrics.AbsoluteCPUEntitlement,
-				containerAge:        metrics.ContainerAge,
-			})
-		}
-		return usage
-	}
-
 	Context("when the interval elapses", func() {
-		JustBeforeEach(func() {
-			sendContainers()
-			sendResults()
+		var metricsMap1, metricsMap2, metricsMap3 map[string]executor.Metrics
 
-			fakeClock.WaitForWatcherAndIncrement(interval)
-			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+		BeforeEach(func() {
+			containers1 := []executor.Container{
+				{Guid: "container-guid-without-index"},
+				{Guid: "container-guid-with-index"},
+				{Guid: "container-guid-without-preloaded-rootfs"},
+				{Guid: "container-guid-without-source-id"},
+			}
+			containers2 := []executor.Container{
+				{Guid: "container-guid-without-index"},
+				{Guid: "container-guid-with-index"},
+				{Guid: "container-guid-without-preloaded-rootfs"},
+				{Guid: "container-guid-without-source-id"},
+			}
+			containers3 := []executor.Container{
+				{Guid: "container-guid-without-index"},
+				{Guid: "container-guid-with-index"},
+				{Guid: "container-guid-without-preloaded-rootfs"},
+				{Guid: "container-guid-without-source-id"},
+			}
+
+			fakeExecutorClient.ListContainersReturnsOnCall(0, containers1, nil)
+			fakeExecutorClient.ListContainersReturnsOnCall(1, containers2, nil)
+			fakeExecutorClient.ListContainersReturnsOnCall(2, containers3, nil)
+
+			metricsMap1 = map[string]executor.Metrics{
+				"container-guid-without-source-id": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(123),
+						DiskUsageInBytes:                    megsToBytes(456),
+						TimeSpentInCPU:                      100 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(789),
+						DiskLimitInBytes:                    megsToBytes(1024),
+						ContainerAgeInNanoseconds:           1000,
+						AbsoluteCPUEntitlementInNanoseconds: 2000,
+					},
+				},
+				"container-guid-without-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(123),
+						DiskUsageInBytes:                    megsToBytes(456),
+						TimeSpentInCPU:                      100 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(789),
+						DiskLimitInBytes:                    megsToBytes(1024),
+						ContainerAgeInNanoseconds:           1001,
+						AbsoluteCPUEntitlementInNanoseconds: 2001,
+					},
+				},
+				"container-guid-with-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(321),
+						DiskUsageInBytes:                    megsToBytes(654),
+						TimeSpentInCPU:                      100 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(987),
+						DiskLimitInBytes:                    megsToBytes(2048),
+						ContainerAgeInNanoseconds:           1002,
+						AbsoluteCPUEntitlementInNanoseconds: 2002,
+					},
+				},
+				"container-guid-without-preloaded-rootfs": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(345),
+						DiskUsageInBytes:                    megsToBytes(456),
+						TimeSpentInCPU:                      100 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(678),
+						DiskLimitInBytes:                    megsToBytes(2048),
+						ContainerAgeInNanoseconds:           1003,
+						AbsoluteCPUEntitlementInNanoseconds: 2003,
+					},
+				},
+			}
+
+			metricsMap2 = map[string]executor.Metrics{
+				"container-guid-without-source-id": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(123),
+						DiskUsageInBytes:                    megsToBytes(456),
+						TimeSpentInCPU:                      101 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(789),
+						DiskLimitInBytes:                    megsToBytes(1024),
+						ContainerAgeInNanoseconds:           1004,
+						AbsoluteCPUEntitlementInNanoseconds: 2004,
+					},
+				},
+
+				"container-guid-without-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(1230),
+						DiskUsageInBytes:                    4560,
+						TimeSpentInCPU:                      105 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(7890),
+						DiskLimitInBytes:                    4096,
+						ContainerAgeInNanoseconds:           1005,
+						AbsoluteCPUEntitlementInNanoseconds: 2005,
+					},
+				},
+				"container-guid-with-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(3210),
+						DiskUsageInBytes:                    6540,
+						TimeSpentInCPU:                      110 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(9870),
+						DiskLimitInBytes:                    512,
+						ContainerAgeInNanoseconds:           1006,
+						AbsoluteCPUEntitlementInNanoseconds: 2006,
+					}},
+				"container-guid-without-preloaded-rootfs": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(3450),
+						DiskUsageInBytes:                    4560,
+						TimeSpentInCPU:                      110 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(6780),
+						DiskLimitInBytes:                    2048,
+						ContainerAgeInNanoseconds:           1007,
+						AbsoluteCPUEntitlementInNanoseconds: 2007,
+					},
+				},
+			}
+
+			metricsMap3 = map[string]executor.Metrics{
+				"container-guid-without-source-id": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(123),
+						DiskUsageInBytes:                    megsToBytes(456),
+						TimeSpentInCPU:                      100 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(789),
+						DiskLimitInBytes:                    megsToBytes(1024),
+						ContainerAgeInNanoseconds:           1008,
+						AbsoluteCPUEntitlementInNanoseconds: 2008,
+					},
+				},
+
+				"container-guid-without-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(12300),
+						DiskUsageInBytes:                    45600,
+						TimeSpentInCPU:                      107 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(7890),
+						DiskLimitInBytes:                    234,
+						ContainerAgeInNanoseconds:           1009,
+						AbsoluteCPUEntitlementInNanoseconds: 2009,
+					},
+				},
+				"container-guid-with-index": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(32100),
+						DiskUsageInBytes:                    65400,
+						TimeSpentInCPU:                      112 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(98700),
+						DiskLimitInBytes:                    43200,
+						ContainerAgeInNanoseconds:           1010,
+						AbsoluteCPUEntitlementInNanoseconds: 2010,
+					},
+				},
+				"container-guid-without-preloaded-rootfs": executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						MemoryUsageInBytes:                  megsToBytes(34500),
+						DiskUsageInBytes:                    45600,
+						TimeSpentInCPU:                      112 * time.Second,
+						MemoryLimitInBytes:                  megsToBytes(6780),
+						DiskLimitInBytes:                    2048,
+						ContainerAgeInNanoseconds:           1011,
+						AbsoluteCPUEntitlementInNanoseconds: 2011,
+					},
+				},
+			}
+
+			fakeExecutorClient.GetBulkMetricsReturnsOnCall(0, metricsMap1, nil)
+			fakeExecutorClient.GetBulkMetricsReturnsOnCall(1, metricsMap2, nil)
+			fakeExecutorClient.GetBulkMetricsReturnsOnCall(2, metricsMap3, nil)
 		})
 
 		It("emits memory and disk usage for each container, but no CPU", func() {
 			Eventually(sentMetrics).Should(ConsistOf([]logging.ContainerMetric{
-				createEventContainerMetric(executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(123),
-						DiskUsageInBytes:                    megsToBytes(456),
-						MemoryLimitInBytes:                  megsToBytes(789),
-						DiskLimitInBytes:                    megsToBytes(1024),
-						TimeSpentInCPU:                      100000000000,
-						AbsoluteCPUEntitlementInNanoseconds: 2001,
-						ContainerAgeInNanoseconds:           1001,
+				{
+					CpuPercentage:          0.0,
+					MemoryBytes:            metricsMap1["container-guid-without-index"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap1["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap1["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap1["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap1["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap1["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-without-index",
+						"instance_id": "0",
 					},
 				},
-					0.0),
-				createEventContainerMetric(executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(321),
-						DiskUsageInBytes:                    megsToBytes(654),
-						MemoryLimitInBytes:                  megsToBytes(987),
-						DiskLimitInBytes:                    megsToBytes(2048),
-						TimeSpentInCPU:                      100000000000,
-						AbsoluteCPUEntitlementInNanoseconds: 2002,
-						ContainerAgeInNanoseconds:           1002,
+				{
+					CpuPercentage:          0.0,
+					MemoryBytes:            metricsMap1["container-guid-with-index"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap1["container-guid-with-index"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap1["container-guid-with-index"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap1["container-guid-with-index"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-with-index"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap1["container-guid-with-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap1["container-guid-with-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-with-index",
+						"instance_id": "1",
 					},
 				},
-					0.0),
-				createEventContainerMetric(executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(345),
-						DiskUsageInBytes:                    megsToBytes(456),
-						MemoryLimitInBytes:                  megsToBytes(678),
-						DiskLimitInBytes:                    megsToBytes(2048),
-						TimeSpentInCPU:                      100000000000,
-						AbsoluteCPUEntitlementInNanoseconds: 2003,
-						ContainerAgeInNanoseconds:           1003,
+				{
+					CpuPercentage:          0.0,
+					MemoryBytes:            metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-without-preloaded-rootfs",
+						"instance_id": "0",
 					},
 				},
-					0.0),
 			}))
 		})
 
 		It("emits container cpu usage for each container", func() {
 			Eventually(sentCPUUsage).Should(ConsistOf(
-				cpuUsage{applicationID: "metrics-guid-without-index", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2001, containerAge: 1001},
-				cpuUsage{applicationID: "metrics-guid-with-index", instanceIndex: 1, absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2002, containerAge: 1002},
-				cpuUsage{applicationID: "metrics-guid-without-preloaded-rootfs", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2003, containerAge: 1003},
+				cpuUsage{applicationID: "source-id-without-index", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2001, containerAge: 1001},
+				cpuUsage{applicationID: "source-id-with-index", instanceIndex: 1, absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2002, containerAge: 1002},
+				cpuUsage{applicationID: "source-id-without-preloaded-rootfs", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2003, containerAge: 1003},
 			))
 		})
 
-		Context("when containers EnableContainerProxy is true", func() {
+		Context("when contianers EnableContainerProxy is set", func() {
 			BeforeEach(func() {
-
-				listContainersChan <- []executor.Container{
+				containers := []executor.Container{
 					{
 						Guid:        "container-guid-without-index",
 						MemoryLimit: megsToBytes(200 + proxyMemoryAllocationMB),
 						RunInfo: executor.RunInfo{
 							EnableContainerProxy: true,
-							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-without-index"},
+							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
 						},
 					},
 					{
@@ -388,7 +351,7 @@ var _ = Describe("StatsReporter", func() {
 						MemoryLimit: megsToBytes(400 + proxyMemoryAllocationMB),
 						RunInfo: executor.RunInfo{
 							EnableContainerProxy: true,
-							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
+							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
 						},
 					},
 					{
@@ -396,32 +359,34 @@ var _ = Describe("StatsReporter", func() {
 						MemoryLimit: megsToBytes(200),
 						RunInfo: executor.RunInfo{
 							EnableContainerProxy: false,
-							MetricsConfig:        executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
+							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
 						},
 					},
 				}
+				fakeExecutorClient.ListContainersReturnsOnCall(0, containers, nil)
 			})
 
-			It("does not change the memory usage reported by garden", func() {
-				appMemory := megsToBytes(123)
-
-				expectedMemoryUsageWithoutIndex := float64(appMemory)
-
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes:                  uint64(expectedMemoryUsageWithoutIndex),
-							DiskUsageInBytes:                    megsToBytes(456),
-							MemoryLimitInBytes:                  megsToBytes(789),
-							DiskLimitInBytes:                    megsToBytes(1024),
-							TimeSpentInCPU:                      100000000000,
-							AbsoluteCPUEntitlementInNanoseconds: 2001,
-							ContainerAgeInNanoseconds:           1001,
+			Context("when enableContainerProxy not set", func() {
+				It("does not change the memory usage reported by garden", func() {
+					appMemory := megsToBytes(123)
+					expectedMemoryUsageWithoutIndex := float64(appMemory)
+					Eventually(sentMetrics).Should(ContainElement(
+						logging.ContainerMetric{
+							CpuPercentage:          0.0,
+							MemoryBytes:            uint64(expectedMemoryUsageWithoutIndex),
+							DiskBytes:              metricsMap1["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+							MemoryBytesQuota:       metricsMap1["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes,
+							DiskBytesQuota:         metricsMap1["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+							AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+							AbsoluteCPUEntitlement: metricsMap1["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+							ContainerAge:           metricsMap1["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+							Tags: map[string]string{
+								"source_id":   "source-id-without-index",
+								"instance_id": "0",
+							},
 						},
-					},
-						0.0),
-				))
+					))
+				})
 			})
 
 			Context("when enableContainerProxy is set", func() {
@@ -431,42 +396,43 @@ var _ = Describe("StatsReporter", func() {
 
 				It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
 					appMemory := megsToBytes(123)
-
 					expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
-
+					expectedMemoryLimitWithoutIndex := float64(metricsMap1["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes) - float64(megsToBytes(proxyMemoryAllocationMB))
 					Eventually(sentMetrics).Should(ContainElement(
-						createEventContainerMetric(executor.Metrics{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes:                  uint64(expectedMemoryUsageWithoutIndex),
-								DiskUsageInBytes:                    megsToBytes(456),
-								MemoryLimitInBytes:                  megsToBytes(784),
-								DiskLimitInBytes:                    megsToBytes(1024),
-								TimeSpentInCPU:                      100000000000,
-								AbsoluteCPUEntitlementInNanoseconds: 2001,
-								ContainerAgeInNanoseconds:           1001,
+						logging.ContainerMetric{
+							CpuPercentage:          0.0,
+							MemoryBytes:            uint64(expectedMemoryUsageWithoutIndex),
+							DiskBytes:              metricsMap1["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+							MemoryBytesQuota:       uint64(expectedMemoryLimitWithoutIndex),
+							DiskBytesQuota:         metricsMap1["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+							AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+							AbsoluteCPUEntitlement: metricsMap1["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+							ContainerAge:           metricsMap1["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+							Tags: map[string]string{
+								"source_id":   "source-id-without-index",
+								"instance_id": "0",
 							},
 						},
-							0.0),
 					))
 				})
 
 				Context("when there is a container without preloaded rootfs", func() {
 					It("should emit memory usage that is not rescaled", func() {
 						Eventually(sentMetrics).Should(ContainElement(
-							createEventContainerMetric(executor.Metrics{
-								MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-preloaded-rootfs"},
-								ContainerMetrics: executor.ContainerMetrics{
-									MemoryUsageInBytes:                  megsToBytes(345),
-									DiskUsageInBytes:                    megsToBytes(456),
-									MemoryLimitInBytes:                  megsToBytes(678),
-									DiskLimitInBytes:                    megsToBytes(2048),
-									TimeSpentInCPU:                      100000000000,
-									AbsoluteCPUEntitlementInNanoseconds: 2003,
-									ContainerAgeInNanoseconds:           1003,
+							logging.ContainerMetric{
+								CpuPercentage:          0.0,
+								MemoryBytes:            metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
+								DiskBytes:              metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
+								MemoryBytesQuota:       metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
+								DiskBytesQuota:         metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
+								AbsoluteCPUUsage:       uint64(metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
+								AbsoluteCPUEntitlement: metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+								ContainerAge:           metricsMap1["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
+								Tags: map[string]string{
+									"source_id":   "source-id-without-preloaded-rootfs",
+									"instance_id": "0",
 								},
 							},
-								0.0),
 						))
 					})
 				})
@@ -475,7 +441,7 @@ var _ = Describe("StatsReporter", func() {
 
 		It("does not emit anything for containers with no metrics guid", func() {
 			Consistently(sentMetrics).ShouldNot(ContainElement(WithTransform(func(m logging.ContainerMetric) string {
-				return m.ApplicationId
+				return m.Tags["source_id"]
 			}, BeEmpty())))
 			Consistently(sentCPUUsage).ShouldNot(ContainElement(WithTransform(func(m cpuUsage) string {
 				return m.applicationID
@@ -483,39 +449,60 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		Context("and the interval elapses again", func() {
+
 			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
 				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 			})
 
 			It("emits the new memory and disk usage, and the computed CPU percent", func() {
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes:                  megsToBytes(1230),
-							DiskUsageInBytes:                    4560,
-							MemoryLimitInBytes:                  megsToBytes(7890),
-							DiskLimitInBytes:                    4096,
-							TimeSpentInCPU:                      105000000000,
-							AbsoluteCPUEntitlementInNanoseconds: 2005,
-							ContainerAgeInNanoseconds:           1005,
-						},
-					}, 50.0)))
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes:                  megsToBytes(3210),
-							DiskUsageInBytes:                    6540,
-							MemoryLimitInBytes:                  megsToBytes(9870),
-							DiskLimitInBytes:                    512,
-							TimeSpentInCPU:                      110000000000,
-							AbsoluteCPUEntitlementInNanoseconds: 2006,
-							ContainerAgeInNanoseconds:           1006,
-						},
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+
+				Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+					CpuPercentage:          50.0,
+					MemoryBytes:            metricsMap2["container-guid-without-index"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap2["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap2["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap2["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap2["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap2["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap2["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-without-index",
+						"instance_id": "0",
 					},
-						100.0)))
+				}))
+
+				Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+					CpuPercentage:          100.0,
+					MemoryBytes:            metricsMap2["container-guid-with-index"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap2["container-guid-with-index"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap2["container-guid-with-index"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap2["container-guid-with-index"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap2["container-guid-with-index"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap2["container-guid-with-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap2["container-guid-with-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-with-index",
+						"instance_id": "1",
+					},
+				}))
+
+				Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+					CpuPercentage:          100.0,
+					MemoryBytes:            metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
+					DiskBytes:              metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
+					DiskBytesQuota:         metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsMap2["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
+					Tags: map[string]string{
+						"source_id":   "source-id-without-preloaded-rootfs",
+						"instance_id": "0",
+					},
+				}))
 			})
 
 			Context("Metrics", func() {
@@ -523,7 +510,7 @@ var _ = Describe("StatsReporter", func() {
 					containerMetrics := reporter.Metrics()
 					Expect(containerMetrics).To(HaveLen(4))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-index", &containermetrics.CachedContainerMetrics{
-						MetricGUID:       "metrics-guid-without-index",
+						MetricGUID:       "source-id-without-index",
 						CPUUsageFraction: 0.5,
 						MemoryUsageBytes: megsToBytes(1230),
 						DiskUsageBytes:   4560,
@@ -531,14 +518,14 @@ var _ = Describe("StatsReporter", func() {
 						DiskQuotaBytes:   4096,
 					}))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-with-index", &containermetrics.CachedContainerMetrics{
-						MetricGUID:       "metrics-guid-with-index",
+						MetricGUID:       "source-id-with-index",
 						CPUUsageFraction: 1.0,
 						MemoryUsageBytes: megsToBytes(3210),
 						DiskUsageBytes:   6540,
 						MemoryQuotaBytes: megsToBytes(9870),
 						DiskQuotaBytes:   512,
 					}))
-					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-metrics-guid", &containermetrics.CachedContainerMetrics{
+					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-source-id", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "",
 						CPUUsageFraction: 0.1,
 						MemoryUsageBytes: megsToBytes(123),
@@ -547,7 +534,7 @@ var _ = Describe("StatsReporter", func() {
 						DiskQuotaBytes:   megsToBytes(1024),
 					}))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-preloaded-rootfs", &containermetrics.CachedContainerMetrics{
-						MetricGUID:       "metrics-guid-without-preloaded-rootfs",
+						MetricGUID:       "source-id-without-preloaded-rootfs",
 						CPUUsageFraction: 1.0,
 						MemoryUsageBytes: megsToBytes(3450),
 						DiskUsageBytes:   4560,
@@ -564,143 +551,202 @@ var _ = Describe("StatsReporter", func() {
 				})
 
 				It("emits the new memory and disk usage, and the computed CPU percent", func() {
-					Eventually(sentMetrics).Should(ContainElement(
-						createEventContainerMetric(executor.Metrics{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index"},
-							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes:                  megsToBytes(12300),
-								DiskUsageInBytes:                    45600,
-								MemoryLimitInBytes:                  megsToBytes(7890),
-								DiskLimitInBytes:                    234,
-								TimeSpentInCPU:                      107000000000,
-								AbsoluteCPUEntitlementInNanoseconds: 2009,
-								ContainerAgeInNanoseconds:           1009,
-							}},
-							20.0),
-					))
-					Eventually(sentMetrics).Should(ContainElement(
-						createEventContainerMetric(executor.Metrics{
-							MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-with-index", Index: 1},
-							ContainerMetrics: executor.ContainerMetrics{
-								MemoryUsageInBytes:                  megsToBytes(32100),
-								DiskUsageInBytes:                    65400,
-								MemoryLimitInBytes:                  megsToBytes(98700),
-								DiskLimitInBytes:                    43200,
-								TimeSpentInCPU:                      112000000000,
-								AbsoluteCPUEntitlementInNanoseconds: 2010,
-								ContainerAgeInNanoseconds:           1010,
-							},
+					Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+						CpuPercentage:          20.0,
+						MemoryBytes:            metricsMap3["container-guid-without-index"].ContainerMetrics.MemoryUsageInBytes,
+						DiskBytes:              metricsMap3["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+						MemoryBytesQuota:       metricsMap3["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes,
+						DiskBytesQuota:         metricsMap3["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+						AbsoluteCPUUsage:       uint64(metricsMap3["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+						AbsoluteCPUEntitlement: metricsMap3["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+						ContainerAge:           metricsMap3["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+						Tags: map[string]string{
+							"source_id":   "source-id-without-index",
+							"instance_id": "0",
 						},
-							20.0)))
+					}))
+
+					Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+						CpuPercentage:          20.0,
+						MemoryBytes:            metricsMap3["container-guid-with-index"].ContainerMetrics.MemoryUsageInBytes,
+						DiskBytes:              metricsMap3["container-guid-with-index"].ContainerMetrics.DiskUsageInBytes,
+						MemoryBytesQuota:       metricsMap3["container-guid-with-index"].ContainerMetrics.MemoryLimitInBytes,
+						DiskBytesQuota:         metricsMap3["container-guid-with-index"].ContainerMetrics.DiskLimitInBytes,
+						AbsoluteCPUUsage:       uint64(metricsMap3["container-guid-with-index"].ContainerMetrics.TimeSpentInCPU),
+						AbsoluteCPUEntitlement: metricsMap3["container-guid-with-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+						ContainerAge:           metricsMap3["container-guid-with-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+						Tags: map[string]string{
+							"source_id":   "source-id-with-index",
+							"instance_id": "1",
+						},
+					}))
+
+					Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
+						CpuPercentage:          20.0,
+						MemoryBytes:            metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
+						DiskBytes:              metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
+						MemoryBytesQuota:       metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
+						DiskBytesQuota:         metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
+						AbsoluteCPUUsage:       uint64(metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
+						AbsoluteCPUEntitlement: metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+						ContainerAge:           metricsMap3["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
+						Tags: map[string]string{
+							"source_id":   "source-id-without-preloaded-rootfs",
+							"instance_id": "0",
+						},
+					}))
 				})
 			})
 		})
 	})
 
-	Context("when get all metrics fails", func() {
-		JustBeforeEach(func() {
-			metricsResultsChan <- nil
-
-			fakeClock.Increment(interval)
-			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+	Context("when the metric tags are provided", func() {
+		BeforeEach(func() {
+			containers := []executor.Container{
+				{Guid: "container-0"},
+			}
+			fakeExecutorClient.ListContainersReturnsOnCall(0, containers, nil)
 		})
 
-		It("does not blow up", func() {
-			Consistently(process.Wait()).ShouldNot(Receive())
-		})
-
-		Context("and the interval elapses again, and it works that time", func() {
-			JustBeforeEach(func() {
-				sendContainers()
-				sendResults()
-				fakeClock.Increment(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+		Context("when the source_id tag is set in metrics config for a container", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Guid: "some-metric-guid"},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
 			})
 
-			It("processes the containers happily", func() {
-				Eventually(sentMetrics).Should(ContainElement(
-					createEventContainerMetric(executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: "metrics-guid-without-index", Index: 0},
-						ContainerMetrics: executor.ContainerMetrics{
-							MemoryUsageInBytes:                  megsToBytes(123),
-							DiskUsageInBytes:                    megsToBytes(456),
-							MemoryLimitInBytes:                  megsToBytes(789),
-							DiskLimitInBytes:                    megsToBytes(1024),
-							TimeSpentInCPU:                      100 * time.Second,
-							AbsoluteCPUEntitlementInNanoseconds: 2001,
-							ContainerAgeInNanoseconds:           1001,
-						}},
-						0.0),
-				))
+			It("sends a container metric with the correct application id value", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("source_id", "some-source-id"))
+			})
+		})
+
+		Context("when there is no source_id tag set in metrics config for a container", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Tags: map[string]string{"some-key": "some-value"}, Guid: "some-metric-guid"},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
+
+			It("will not emit any metrics", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Consistently(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(0))
+			})
+		})
+
+		Context("when instance id tag set in metrics config for container", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "99"}, Index: 1},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
+
+			It("sends a container metric with the correct instance id value", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "99"))
+			})
+		})
+
+		Context("when instance id tag not set in metrics config for container", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Index: 1},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
+
+			It("sends a container metric with the correct instance id value", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "1"))
+			})
+		})
+
+		Context("when instance id tag set to non-integer value in metrics config for container", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "some-instance-id"}, Index: 1},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
+
+			It("uses metrics index and logs the error", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "1"))
+				Expect(logger).To(gbytes.Say("failed-to-retrieve-instance-id"))
 			})
 		})
 	})
 
-	Context("when a container is no longer present", func() {
-		metrics := func(metricsGuid string, index int, cpuTime time.Duration) executor.Metrics {
-			return executor.Metrics{
-				MetricsConfig: executor.MetricsConfig{
-					Guid:  metricsGuid,
-					Index: index,
-				},
-				ContainerMetrics: executor.ContainerMetrics{
-					TimeSpentInCPU: cpuTime,
-				},
+	Context("when metric tags are not provided", func() {
+		BeforeEach(func() {
+			containers := []executor.Container{
+				{Guid: "container-0"},
 			}
-		}
+			fakeExecutorClient.ListContainersReturnsOnCall(0, containers, nil)
+		})
 
-		waitForMetrics := func(id string, idx int, instance int32, cpu float64, cpuTime time.Duration) {
-			EventuallyWithOffset(1, fakeMetronClient.SendAppMetricsCallCount).Should(Equal(idx + 1))
-			ExpectWithOffset(1, fakeMetronClient.SendAppMetricsArgsForCall(idx)).To(Equal(
-				createEventContainerMetric(
-					executor.Metrics{
-						MetricsConfig: executor.MetricsConfig{Guid: id, Index: int(instance)},
-						ContainerMetrics: executor.ContainerMetrics{
-							TimeSpentInCPU: cpuTime,
-						},
+		Context("when the metrics guid is provided", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Guid: "some-metric-guid"},
+						executor.ContainerMetrics{},
 					},
-					cpu,
-				),
-			))
-		}
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
 
-		It("only remembers the previous metrics", func() {
-			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}}
-			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 10*time.Second),
-			}
+			It("sends a container metric with the correct application id value", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("source_id", "some-metric-guid"))
+			})
+		})
 
-			fakeClock.WaitForWatcherAndIncrement(interval)
+		Context("when the metrics guid is not provided", func() {
+			BeforeEach(func() {
+				metricsMap := map[string]executor.Metrics{
+					"container-0": {
+						executor.MetricsConfig{Guid: ""},
+						executor.ContainerMetrics{},
+					},
+				}
+				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
+			})
 
-			// previousCPUInfos is empty so we emit 0.0
-			waitForMetrics("metrics-guid-0", 0, 0, 0, 10*time.Second)
-
-			By("getting more metrics from garden")
-			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}}
-			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 20*time.Second),
-			}
-
-			fakeClock.WaitForWatcherAndIncrement(interval)
-
-			waitForMetrics("metrics-guid-0", 1, 0, 100, 20*time.Second)
-
-			By("losing a container")
-			listContainersChan <- []executor.Container{}
-			metricsResultsChan <- map[string]executor.Metrics{}
-
-			fakeClock.WaitForWatcherAndIncrement(interval)
-
-			By("finding the container again")
-			listContainersChan <- []executor.Container{{Guid: "container-guid-0"}, {Guid: "container-guid-1"}}
-			metricsResultsChan <- map[string]executor.Metrics{
-				"container-guid-0": metrics("metrics-guid-0", 0, 40*time.Second),
-			}
-
-			fakeClock.WaitForWatcherAndIncrement(interval)
-
-			// previousCPUInfos is empty so we emit 0.0
-			waitForMetrics("metrics-guid-0", 2, 0, 0, 40*time.Second)
+			It("will not emit any metrics", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Consistently(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(0))
+			})
 		})
 	})
 })

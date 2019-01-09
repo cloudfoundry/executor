@@ -2,6 +2,7 @@ package containermetrics
 
 import (
 	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -145,11 +146,33 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 ) (*CachedContainerMetrics, *cpuInfo) {
 	currentInfo, cpuPercent := calculateInfo(containerMetrics, previousInfo, now)
 
-	if metricsConfig.Guid != "" {
-		instanceIndex := int32(metricsConfig.Index)
+	if len(metricsConfig.Tags) == 0 {
+		metricsConfig.Tags = map[string]string{}
+	}
+
+	applicationId := metricsConfig.Guid
+	if len(metricsConfig.Tags) > 0 {
+		applicationId = metricsConfig.Tags["source_id"]
+	} else {
+		metricsConfig.Tags["source_id"] = applicationId
+	}
+
+	if metricsConfig.Tags["instance_id"] == "" {
+		metricsConfig.Tags["instance_id"] = strconv.Itoa(metricsConfig.Index)
+	}
+
+	_, err := strconv.Atoi(metricsConfig.Tags["instance_id"])
+	if err != nil {
+		logger.Error("failed-to-retrieve-instance-id", err, lager.Data{
+			"metrics_guid":  applicationId,
+			"metrics_index": metricsConfig.Index,
+			"tags":          metricsConfig.Tags,
+		})
+		metricsConfig.Tags["instance_id"] = strconv.Itoa(metricsConfig.Index)
+	}
+
+	if applicationId != "" {
 		err := reporter.metronClient.SendAppMetrics(loggingclient.ContainerMetric{
-			ApplicationId:          metricsConfig.Guid,
-			InstanceIndex:          instanceIndex,
 			CpuPercentage:          cpuPercent,
 			MemoryBytes:            containerMetrics.MemoryUsageInBytes,
 			DiskBytes:              containerMetrics.DiskUsageInBytes,
@@ -158,18 +181,20 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 			AbsoluteCPUUsage:       uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
 			AbsoluteCPUEntitlement: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
 			ContainerAge:           containerMetrics.ContainerAgeInNanoseconds,
+			Tags:                   metricsConfig.Tags,
 		})
 
 		if err != nil {
 			logger.Error("failed-to-send-container-metrics", err, lager.Data{
-				"metrics_guid":  metricsConfig.Guid,
+				"metrics_guid":  applicationId,
 				"metrics_index": metricsConfig.Index,
+				"tags":          metricsConfig.Tags,
 			})
 		}
 	}
 
 	return &CachedContainerMetrics{
-		MetricGUID:       metricsConfig.Guid,
+		MetricGUID:       applicationId,
 		CPUUsageFraction: cpuPercent / 100,
 		DiskUsageBytes:   containerMetrics.DiskUsageInBytes,
 		DiskQuotaBytes:   containerMetrics.DiskLimitInBytes,

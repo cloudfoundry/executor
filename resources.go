@@ -223,8 +223,9 @@ type ContainerMetrics struct {
 }
 
 type MetricsConfig struct {
-	Guid  string `json:"guid"`
-	Index int    `json:"index"`
+	Guid  string            `json:"guid"`
+	Index int               `json:"index"`
+	Tags  map[string]string `json:"tags"`
 }
 
 type Metrics struct {
