@@ -627,11 +627,11 @@ var _ = Describe("StatsReporter", func() {
 			})
 		})
 
-		Context("when there is no source_id tag set in metrics config for a container", func() {
+		Context("when there is no source_id tag set in metrics config for a container and the metricGuid is not set", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"some-key": "some-value"}, Guid: "some-metric-guid"},
+						executor.MetricsConfig{Tags: map[string]string{"some-key": "some-value"}},
 						executor.ContainerMetrics{},
 					},
 				}

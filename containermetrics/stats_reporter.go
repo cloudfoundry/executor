@@ -151,24 +151,25 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	}
 
 	applicationId := metricsConfig.Guid
-	if len(metricsConfig.Tags) > 0 {
-		applicationId = metricsConfig.Tags["source_id"]
+	if sourceID, ok := metricsConfig.Tags["source_id"]; ok {
+		applicationId = sourceID
 	} else {
 		metricsConfig.Tags["source_id"] = applicationId
 	}
 
-	if metricsConfig.Tags["instance_id"] == "" {
-		metricsConfig.Tags["instance_id"] = strconv.Itoa(metricsConfig.Index)
-	}
-
-	_, err := strconv.Atoi(metricsConfig.Tags["instance_id"])
-	if err != nil {
-		logger.Error("failed-to-retrieve-instance-id", err, lager.Data{
-			"metrics_guid":  applicationId,
-			"metrics_index": metricsConfig.Index,
-			"tags":          metricsConfig.Tags,
-		})
-		metricsConfig.Tags["instance_id"] = strconv.Itoa(metricsConfig.Index)
+	index := strconv.Itoa(metricsConfig.Index)
+	if _, ok := metricsConfig.Tags["instance_id"]; !ok {
+		metricsConfig.Tags["instance_id"] = index
+	} else {
+		_, err := strconv.Atoi(metricsConfig.Tags["instance_id"]) // Atoi will error on empty string
+		if err != nil {
+			logger.Error("failed-to-retrieve-instance-id", err, lager.Data{
+				"metrics_guid":  applicationId,
+				"metrics_index": metricsConfig.Index,
+				"tags":          metricsConfig.Tags,
+			})
+			metricsConfig.Tags["instance_id"] = index
+		}
 	}
 
 	if applicationId != "" {
