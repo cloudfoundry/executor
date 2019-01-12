@@ -160,16 +160,6 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	index := strconv.Itoa(metricsConfig.Index)
 	if _, ok := metricsConfig.Tags["instance_id"]; !ok {
 		metricsConfig.Tags["instance_id"] = index
-	} else {
-		_, err := strconv.Atoi(metricsConfig.Tags["instance_id"]) // Atoi will error on empty string
-		if err != nil {
-			logger.Error("failed-to-retrieve-instance-id", err, lager.Data{
-				"metrics_guid":  applicationId,
-				"metrics_index": metricsConfig.Index,
-				"tags":          metricsConfig.Tags,
-			})
-			metricsConfig.Tags["instance_id"] = index
-		}
 	}
 
 	if applicationId != "" {

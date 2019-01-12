@@ -13,7 +13,6 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -449,7 +448,6 @@ var _ = Describe("StatsReporter", func() {
 		})
 
 		Context("and the interval elapses again", func() {
-
 			JustBeforeEach(func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
 				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
@@ -694,12 +692,11 @@ var _ = Describe("StatsReporter", func() {
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
 			})
 
-			It("uses metrics index and logs the error", func() {
+			It("keeps the metrics tag value of instance id", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
-				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
-				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "1"))
-				Expect(logger).To(gbytes.Say("failed-to-retrieve-instance-id"))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(BeNumerically(">=", 1))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(BeNumerically(">=", 1))
+				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "some-instance-id"))
 			})
 		})
 	})
