@@ -17,9 +17,6 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/tedsuo/ifrit"
-
 	envoy_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	envoy_v2_auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	envoy_v2_cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2/cluster"
@@ -28,9 +25,11 @@ import (
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
+	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	proto_types "github.com/gogo/protobuf/types"
+	"github.com/tedsuo/ifrit"
 )
 
 const (
@@ -538,7 +537,13 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(outPath, yamlStr, 0666)
+
+	tmpPath := outPath + ".tmp"
+	if err := ioutil.WriteFile(tmpPath, yamlStr, 0666); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpPath, outPath)
 }
 
 func pemConcatenate(certs []string) (string, error) {

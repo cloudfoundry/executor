@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -19,16 +20,6 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/lagertest"
-
-	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/gogo/protobuf/proto"
-	uuid "github.com/nu7hatch/gouuid"
-	yaml "gopkg.in/yaml.v2"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	envoy_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	envoy_v2_auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
 	envoy_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -36,7 +27,15 @@ import (
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
+	"github.com/fsnotify/fsnotify"
+	ghodss_yaml "github.com/ghodss/yaml"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/gogo/protobuf/proto"
 	proto_types "github.com/gogo/protobuf/types"
+	uuid "github.com/nu7hatch/gouuid"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var _ = Describe("ProxyConfigHandler", func() {
@@ -420,6 +419,65 @@ var _ = Describe("ProxyConfigHandler", func() {
 					},
 				},
 			}))
+		})
+
+		Context("when configuration files already exist", func() {
+			var (
+				fileWatcher *fsnotify.Watcher
+				events      chan fsnotify.Event
+			)
+
+			BeforeEach(func() {
+				if runtime.GOOS == "windows" {
+					Skip("windows only generates a WRITE event regardless of just a write or rename")
+				}
+
+				var err error
+				fileWatcher, err = fsnotify.NewWatcher()
+				Expect(err).NotTo(HaveOccurred())
+
+				events = make(chan fsnotify.Event, 1)
+				go func() {
+					defer GinkgoRecover()
+					for {
+						select {
+						case event, ok := <-fileWatcher.Events:
+							if !ok {
+								return
+							}
+							events <- event
+						case err, ok := <-fileWatcher.Errors:
+							if !ok {
+								return
+							}
+							Expect(err).ToNot(HaveOccurred())
+						}
+					}
+				}()
+			})
+
+			AfterEach(func() {
+				Expect(fileWatcher.Close()).To(Succeed())
+				close(events)
+			})
+
+			It("should ensure the sds-server-cert-and-key.yaml file is recreated when updating the config", func() {
+				Expect(ioutil.WriteFile(sdsServerCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(fileWatcher.Add(sdsServerCertAndKeyFile)).To(Succeed())
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerCertAndKeyFile, Op: fsnotify.Remove})))
+			})
+
+			It("should ensure the sds-server-validation-context.yaml file is recreated when updating the config", func() {
+				Expect(ioutil.WriteFile(sdsServerValidationContextFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(fileWatcher.Add(sdsServerValidationContextFile)).To(Succeed())
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerValidationContextFile, Op: fsnotify.Remove})))
+			})
 		})
 
 		Context("with container proxy trusted certs set", func() {
