@@ -422,10 +422,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		Context("when configuration files already exist", func() {
-			var (
-				fileWatcher *fsnotify.Watcher
-				events      chan fsnotify.Event
-			)
+			var fileWatcher *fsnotify.Watcher
 
 			BeforeEach(func() {
 				if runtime.GOOS == "windows" {
@@ -435,30 +432,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 				var err error
 				fileWatcher, err = fsnotify.NewWatcher()
 				Expect(err).NotTo(HaveOccurred())
-
-				events = make(chan fsnotify.Event, 1)
-				go func() {
-					defer GinkgoRecover()
-					for {
-						select {
-						case event, ok := <-fileWatcher.Events:
-							if !ok {
-								return
-							}
-							events <- event
-						case err, ok := <-fileWatcher.Errors:
-							if !ok {
-								return
-							}
-							Expect(err).ToNot(HaveOccurred())
-						}
-					}
-				}()
 			})
 
 			AfterEach(func() {
 				Expect(fileWatcher.Close()).To(Succeed())
-				close(events)
 			})
 
 			It("should ensure the sds-server-cert-and-key.yaml file is recreated when updating the config", func() {
@@ -467,7 +444,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerCertAndKeyFile, Op: fsnotify.Remove})))
+				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerCertAndKeyFile, Op: fsnotify.Remove})))
 			})
 
 			It("should ensure the sds-server-validation-context.yaml file is recreated when updating the config", func() {
@@ -476,7 +453,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerValidationContextFile, Op: fsnotify.Remove})))
+				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerValidationContextFile, Op: fsnotify.Remove})))
 			})
 		})
 
