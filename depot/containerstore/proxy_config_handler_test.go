@@ -363,6 +363,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
 
+				Expect(proxyConfig.Node.Id).To(Equal("sidecar~10.0.0.1~container-guid-1~x"))
+				Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
+
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 				expectedCluster{
 					name:           "0-service-cluster",
@@ -532,6 +535,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 			Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
 
+			Expect(proxyConfig.Node.Id).To(Equal("sidecar~10.0.0.1~container-guid-1~x"))
+			Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
+
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			expectedCluster{
 				name:           "0-service-cluster",
@@ -653,6 +659,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61003)))
+
+				Expect(proxyConfig.Node.Id).To(Equal("sidecar~10.0.0.1~container-guid-1~x"))
+				Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
 

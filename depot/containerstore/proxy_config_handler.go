@@ -325,6 +325,10 @@ func generateProxyConfig(
 			AccessLogPath: AdminAccessLog,
 			Address:       envoyAddr("127.0.0.1", adminPort),
 		},
+		Node: &envoy_v2_core.Node{
+			Id:      fmt.Sprintf("sidecar~%s~%s~x", container.InternalIP, container.Guid),
+			Cluster: "proxy-cluster",
+		},
 		StaticResources: &envoy_v2_bootstrap.Bootstrap_StaticResources{
 			Listeners: listeners,
 		},
