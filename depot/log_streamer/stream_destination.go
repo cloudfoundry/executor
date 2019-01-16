@@ -5,21 +5,20 @@ import (
 	"unicode/utf8"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
-
-	"github.com/cloudfoundry/sonde-go/events"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 )
 
 type streamDestination struct {
 	guid         string
 	sourceName   string
 	sourceId     string
-	messageType  events.LogMessage_MessageType
+	messageType  loggregator_v2.Log_Type
 	buffer       []byte
 	processLock  sync.Mutex
 	metronClient loggingclient.IngressClient
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType events.LogMessage_MessageType, metronClient loggingclient.IngressClient) *streamDestination {
+func newStreamDestination(guid, sourceName, sourceId string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
 	return &streamDestination{
 		guid:         guid,
 		sourceName:   sourceName,
@@ -46,9 +45,9 @@ func (destination *streamDestination) flush() {
 
 	if len(msg) > 0 {
 		switch destination.messageType {
-		case events.LogMessage_OUT:
+		case loggregator_v2.Log_OUT:
 			destination.metronClient.SendAppLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
-		case events.LogMessage_ERR:
+		case loggregator_v2.Log_ERR:
 			destination.metronClient.SendAppErrorLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
 		}
 	}

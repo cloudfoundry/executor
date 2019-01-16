@@ -5,8 +5,7 @@ import (
 	"strconv"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
-
-	"github.com/cloudfoundry/sonde-go/events"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 )
 
 const (
@@ -47,7 +46,7 @@ func New(guid string, sourceName string, index int, metronClient loggingclient.I
 			guid,
 			sourceName,
 			sourceIndex,
-			events.LogMessage_OUT,
+			loggregator_v2.Log_OUT,
 			metronClient,
 		),
 
@@ -55,7 +54,7 @@ func New(guid string, sourceName string, index int, metronClient loggingclient.I
 			guid,
 			sourceName,
 			sourceIndex,
-			events.LogMessage_ERR,
+			loggregator_v2.Log_ERR,
 			metronClient,
 		),
 	}

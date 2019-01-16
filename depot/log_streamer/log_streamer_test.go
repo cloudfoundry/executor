@@ -9,8 +9,6 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/cloudfoundry/sonde-go/events"
 )
 
 var _ = Describe("LogStreamer", func() {
@@ -342,34 +340,3 @@ var _ = Describe("LogStreamer", func() {
 		})
 	})
 })
-
-type FakeLoggregatorEmitter struct {
-	emissions []*events.LogMessage
-	sync.Mutex
-}
-
-func NewFakeLoggregatorEmmitter() *FakeLoggregatorEmitter {
-	return &FakeLoggregatorEmitter{}
-}
-
-func (e *FakeLoggregatorEmitter) Emit(appid, message string) {
-	panic("no no no no")
-}
-
-func (e *FakeLoggregatorEmitter) EmitError(appid, message string) {
-	panic("no no no no")
-}
-
-func (e *FakeLoggregatorEmitter) EmitLogMessage(msg *events.LogMessage) {
-	e.Lock()
-	defer e.Unlock()
-	e.emissions = append(e.emissions, msg)
-}
-
-func (e *FakeLoggregatorEmitter) Emissions() []*events.LogMessage {
-	e.Lock()
-	defer e.Unlock()
-	emissionsCopy := make([]*events.LogMessage, len(e.emissions))
-	copy(emissionsCopy, e.emissions)
-	return emissionsCopy
-}
