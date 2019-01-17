@@ -455,7 +455,7 @@ var _ = Describe("StatsReporter", func() {
 
 			It("emits the new memory and disk usage, and the computed CPU percent", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
 
 				Eventually(sentMetrics).Should(ContainElement(logging.ContainerMetric{
 					CpuPercentage:          50.0,
@@ -675,7 +675,7 @@ var _ = Describe("StatsReporter", func() {
 
 			It("sends a container metric with the correct instance id value", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
 				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "1"))
 			})
@@ -694,8 +694,8 @@ var _ = Describe("StatsReporter", func() {
 
 			It("keeps the metrics tag value of instance id", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(BeNumerically(">=", 1))
-				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(BeNumerically(">=", 1))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
 				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("instance_id", "some-instance-id"))
 			})
 		})
@@ -722,7 +722,7 @@ var _ = Describe("StatsReporter", func() {
 
 			It("sends a container metric with the correct application id value", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 				Eventually(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(1))
 				Expect(fakeMetronClient.SendAppMetricsArgsForCall(0).Tags).To(HaveKeyWithValue("source_id", "some-metric-guid"))
 			})
@@ -741,7 +741,7 @@ var _ = Describe("StatsReporter", func() {
 
 			It("will not emit any metrics", func() {
 				fakeClock.WaitForWatcherAndIncrement(interval)
-				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(1))
+				Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
 				Consistently(fakeMetronClient.SendAppMetricsCallCount).Should(Equal(0))
 			})
 		})
