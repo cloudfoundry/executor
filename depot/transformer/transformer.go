@@ -722,8 +722,6 @@ func (t *transformer) transformContainerProxyStep(
 	envoyArgs := []string{
 		"-c", "/etc/cf-assets/envoy_config/envoy.yaml",
 		"--v2-config-only",
-		"--service-cluster", "proxy-cluster",
-		"--service-node", fmt.Sprintf("sidecar~%s~x~x", execContainer.InternalIP),
 		"--drain-time-s", strconv.Itoa(int(t.drainWait.Seconds())),
 		"--log-level", "critical",
 	}
