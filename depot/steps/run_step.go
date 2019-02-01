@@ -120,7 +120,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 
 	var nofile *uint64
 	if step.model.ResourceLimits != nil {
-		nofile = step.model.ResourceLimits.Nofile
+		nofile = step.model.ResourceLimits.GetNofilePtr()
 	}
 
 	var processIO garden.ProcessIO
