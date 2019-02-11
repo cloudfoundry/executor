@@ -342,7 +342,7 @@ var _ = Describe("Transformer", func() {
 					specs = append(specs, spec)
 				}
 
-				envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --drain-time-s 1 --log-level critical"
+				envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --drain-time-s 1 --log-level critical"
 
 				path := "sh"
 				args := []string{
@@ -422,7 +422,7 @@ var _ = Describe("Transformer", func() {
 						specs = append(specs, spec)
 					}
 
-					envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --v2-config-only --drain-time-s 1 --log-level critical"
+					envoyArgs := "-c /etc/cf-assets/envoy_config/envoy.yaml --drain-time-s 1 --log-level critical"
 
 					path := "sh"
 					args := []string{
