@@ -556,9 +556,11 @@ func (t *transformer) createCheck(
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
 	}
 
+	rl := models.ResourceLimits{}
+	rl.SetNofile(nofiles)
 	runAction := models.RunAction{
 		LogSource:      sourceName,
-		ResourceLimits: &models.ResourceLimits{Nofile: &nofiles},
+		ResourceLimits: &rl,
 		Path:           filepath.Join(HealthCheckDstPath, "healthcheck"),
 		Args:           args,
 	}

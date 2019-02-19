@@ -52,6 +52,10 @@ var _ = Describe("RunAction", func() {
 		testLogSource = "testlogsource"
 		sidecar = steps.Sidecar{}
 
+		rl := models.ResourceLimits{}
+		rl.SetNofile(fileDescriptorLimit)
+		rl.SetNproc(processesLimit)
+
 		runAction = models.RunAction{
 			Path: "sudo",
 			Args: []string{"reboot"},
@@ -60,11 +64,8 @@ var _ = Describe("RunAction", func() {
 				{Name: "A", Value: "1"},
 				{Name: "B", Value: "2"},
 			},
-			ResourceLimits: &models.ResourceLimits{
-				Nofile: &fileDescriptorLimit,
-				Nproc:  &processesLimit,
-			},
-			User: "notroot",
+			ResourceLimits: &rl,
+			User:           "notroot",
 		}
 
 		fakeStreamer = new(fake_log_streamer.FakeLogStreamer)
