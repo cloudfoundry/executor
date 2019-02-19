@@ -488,7 +488,6 @@ var _ = Describe("Initializer", func() {
 			Expect(tlsConfig.InsecureSkipVerify).To(Equal(config.SkipCertVerify))
 			Expect(tlsConfig.Certificates).To(ContainElement(tlsClientCert))
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
-			Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 		})
 
 		It("adds any system certs to the CA pools", func() {
@@ -509,7 +508,6 @@ var _ = Describe("Initializer", func() {
 
 			Expect(fakeCertPoolRetriever.SystemCertsCallCount()).To(Equal(1))
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
-			Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 		})
 
 		It("does not restrict the cipher suites", func() {
@@ -535,7 +533,6 @@ var _ = Describe("Initializer", func() {
 				Expect(err).To(Succeed())
 				Expect(tlsConfig).NotTo(BeNil())
 				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
-				Expect(tlsConfig.ClientCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 			})
 		})
 
@@ -551,7 +548,6 @@ var _ = Describe("Initializer", func() {
 				Expect(err).To(Succeed())
 				Expect(tlsConfig).NotTo(BeNil())
 				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
-				Expect(tlsConfig.ClientCAs).To(BeNil())
 			})
 		})
 	})

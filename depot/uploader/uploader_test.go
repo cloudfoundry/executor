@@ -18,6 +18,7 @@ import (
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/tlsconfig"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -241,12 +242,12 @@ var _ = Describe("Uploader", func() {
 					fmt.Fprintln(w, "Hello, client")
 				}))
 
-				fileserverTLSConfig, err = cfhttp.NewTLSConfig(
-					"fixtures/correct/server.crt",
-					"fixtures/correct/server.key",
-					"fixtures/correct/server-ca.crt",
+				fileserverTLSConfig, err = tlsconfig.Build(
+					tlsconfig.WithInternalServiceDefaults(),
+					tlsconfig.WithIdentityFromFile("fixtures/correct/server.crt", "fixtures/correct/server.key"),
+				).Server(
+					tlsconfig.WithClientAuthenticationFromFile("fixtures/correct/server-ca.crt"),
 				)
-
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -260,10 +261,11 @@ var _ = Describe("Uploader", func() {
 
 			Context("when the client has the correct credentials", func() {
 				BeforeEach(func() {
-					tlsConfig, err = cfhttp.NewTLSConfig(
-						"fixtures/correct/client.crt",
-						"fixtures/correct/client.key",
-						"fixtures/correct/server-ca.crt",
+					tlsConfig, err = tlsconfig.Build(
+						tlsconfig.WithInternalServiceDefaults(),
+						tlsconfig.WithIdentityFromFile("fixtures/correct/client.crt", "fixtures/correct/client.key"),
+					).Client(
+						tlsconfig.WithAuthorityFromFile("fixtures/correct/server-ca.crt"),
 					)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -330,10 +332,11 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("fails when wrong cert/keypair is provided", func() {
-					tlsConfig, err := cfhttp.NewTLSConfig(
-						"fixtures/incorrect/client.crt",
-						"fixtures/incorrect/client.key",
-						"fixtures/correct/server-ca.crt",
+					tlsConfig, err = tlsconfig.Build(
+						tlsconfig.WithInternalServiceDefaults(),
+						tlsconfig.WithIdentityFromFile("fixtures/incorrect/client.crt", "fixtures/incorrect/client.key"),
+					).Client(
+						tlsconfig.WithAuthorityFromFile("fixtures/correct/server-ca.crt"),
 					)
 					Expect(err).NotTo(HaveOccurred())
 					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
@@ -342,10 +345,11 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("fails when ca cert is wrong", func() {
-					tlsConfig, err := cfhttp.NewTLSConfig(
-						"fixtures/correct/client.crt",
-						"fixtures/correct/client.key",
-						"fixtures/incorrect/server-ca.crt",
+					tlsConfig, err = tlsconfig.Build(
+						tlsconfig.WithInternalServiceDefaults(),
+						tlsconfig.WithIdentityFromFile("fixtures/incorrect/client.crt", "fixtures/incorrect/client.key"),
+					).Client(
+						tlsconfig.WithAuthorityFromFile("fixtures/incorrect/server-ca.crt"),
 					)
 					Expect(err).NotTo(HaveOccurred())
 					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)

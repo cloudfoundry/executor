@@ -16,7 +16,6 @@ import (
 
 	"code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/cacheddownloader"
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
@@ -36,6 +35,7 @@ import (
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/systemcerts"
+	"code.cloudfoundry.org/tlsconfig"
 	"code.cloudfoundry.org/volman/vollocal"
 	"code.cloudfoundry.org/workpool"
 	"github.com/google/shlex"
@@ -586,10 +586,11 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	}
 
 	if config.PathToTLSKey != "" && config.PathToTLSCert != "" {
-		tlsConfig, err = cfhttp.NewTLSConfigWithCertPool(
-			config.PathToTLSCert,
-			config.PathToTLSKey,
-			caCertPool,
+		tlsConfig, err = tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(config.PathToTLSCert, config.PathToTLSKey),
+		).Client(
+			tlsconfig.WithAuthority(caCertPool),
 		)
 		if err != nil {
 			logger.Error("failed-to-configure-tls", err)
