@@ -3,7 +3,6 @@ package uploader_test
 import (
 	"crypto/md5"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -15,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/tlsconfig"
@@ -300,21 +298,12 @@ var _ = Describe("Uploader", func() {
 				BeforeEach(func() {
 					fileserverTLSConfig.ClientAuth = tls.NoClientCert
 
-					tlsConfig = &tls.Config{
-						Certificates:       []tls.Certificate{},
-						InsecureSkipVerify: false,
-						CipherSuites:       cfhttp.SUPPORTED_CIPHER_SUITES,
-						MinVersion:         tls.VersionTLS12,
-					}
-
-					certBytes, err := ioutil.ReadFile("fixtures/correct/server-ca.crt")
+					tlsConfig, err = tlsconfig.Build(
+						tlsconfig.WithInternalServiceDefaults(),
+					).Client(
+						tlsconfig.WithAuthorityFromFile("fixtures/correct/server-ca.crt"),
+					)
 					Expect(err).NotTo(HaveOccurred())
-
-					caCertPool := x509.NewCertPool()
-					ok := caCertPool.AppendCertsFromPEM(certBytes)
-					Expect(ok).To(BeTrue())
-
-					tlsConfig.RootCAs = caCertPool
 				})
 
 				It("can communicate with the fileserver via one-sided TLS", func() {
