@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"time"
 
@@ -30,6 +31,7 @@ var _ = Describe("CredManager", func() {
 	var (
 		credManager      containerstore.CredManager
 		validityPeriod   time.Duration
+		addSpiffeURI     bool
 		CaCert           *x509.Certificate
 		privateKey       *rsa.PrivateKey
 		reader           io.Reader
@@ -44,6 +46,7 @@ var _ = Describe("CredManager", func() {
 		SetDefaultEventuallyTimeout(10 * time.Second)
 
 		validityPeriod = time.Minute
+		addSpiffeURI = false
 		fakeMetronClient = &mfakes.FakeIngressClient{}
 
 		fakeCredHandler = &containerstorefakes.FakeCredentialHandler{}
@@ -68,6 +71,7 @@ var _ = Describe("CredManager", func() {
 			logger,
 			fakeMetronClient,
 			validityPeriod,
+			addSpiffeURI,
 			reader,
 			clock,
 			CaCert,
@@ -108,6 +112,7 @@ var _ = Describe("CredManager", func() {
 				logger,
 				fakeMetronClient,
 				validityPeriod,
+				addSpiffeURI,
 				reader,
 				clock,
 				CaCert,
@@ -157,6 +162,7 @@ var _ = Describe("CredManager", func() {
 				logger,
 				fakeMetronClient,
 				validityPeriod,
+				addSpiffeURI,
 				reader,
 				clock,
 				CaCert,
@@ -477,6 +483,22 @@ var _ = Describe("CredManager", func() {
 
 					It("DNS SAN should be set to the container guid", func() {
 						Expect(cert.DNSNames).To(ContainElement(container.Guid))
+					})
+
+					It("does not have a Spiffe URI set", func() {
+						Expect(cert.URIs).To(BeEmpty())
+					})
+
+					Context("when the add spiffe uri param is true", func() {
+						BeforeEach(func() {
+							addSpiffeURI = true
+						})
+
+						It("adds the default SPIFFE URI", func() {
+							spiffeURI, err := url.Parse("spiffe://cluster.local/ns/default/sa/default")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(cert.URIs).To(ContainElement(spiffeURI))
+						})
 					})
 
 					It("expires in after the configured validity period", func() {

@@ -594,6 +594,7 @@ var _ = Describe("Initializer", func() {
 				config.InstanceIdentityCAPath = "fixtures/instance-id/ca.crt"
 				config.InstanceIdentityPrivateKeyPath = "fixtures/instance-id/ca.key"
 				config.InstanceIdentityValidityPeriod = durationjson.Duration(1 * time.Minute)
+				config.InstanceIdentityAddSpiffeURI = true
 			})
 
 			It("returns a credential manager", func() {

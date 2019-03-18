@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"time"
 
@@ -67,6 +68,7 @@ type credManager struct {
 	logger         lager.Logger
 	metronClient   loggingclient.IngressClient
 	validityPeriod time.Duration
+	addSpiffeURI   bool
 	entropyReader  io.Reader
 	clock          clock.Clock
 	CaCert         *x509.Certificate
@@ -97,6 +99,7 @@ func NewCredManager(
 	logger lager.Logger,
 	metronClient loggingclient.IngressClient,
 	validityPeriod time.Duration,
+	addSpiffeURI bool,
 	entropyReader io.Reader,
 	clock clock.Clock,
 	CaCert *x509.Certificate,
@@ -107,6 +110,7 @@ func NewCredManager(
 		logger:         logger,
 		metronClient:   metronClient,
 		validityPeriod: validityPeriod,
+		addSpiffeURI:   addSpiffeURI,
 		entropyReader:  entropyReader,
 		clock:          clock,
 		CaCert:         CaCert,
@@ -259,8 +263,19 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 
 	startValidity := c.clock.Now()
 
+	uris := []*url.URL{}
+	if c.addSpiffeURI {
+		spiffeDefaultURI, err := url.Parse("spiffe://cluster.local/ns/default/sa/default")
+		if err != nil {
+			logger.Error("failed to parse spiffe uri", err)
+			return Credential{}, err
+		}
+		uris = append(uris, spiffeDefaultURI)
+	}
+
 	template := createCertificateTemplate(ipForCert,
 		certGUID,
+		uris,
 		startValidity,
 		startValidity.Add(c.validityPeriod),
 		container.CertificateProperties.OrganizationalUnit,
@@ -319,7 +334,7 @@ func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 	return pem.Encode(writer, block)
 }
 
-func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.Time, organizationalUnits []string) *x509.Certificate {
+func createCertificateTemplate(ipaddress, guid string, uris []*url.URL, notBefore, notAfter time.Time, organizationalUnits []string) *x509.Certificate {
 	var ipaddr []net.IP
 	if len(ipaddress) == 0 {
 		ipaddr = []net.IP{}
@@ -338,5 +353,6 @@ func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.
 		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		URIs:        uris,
 	}
 }
