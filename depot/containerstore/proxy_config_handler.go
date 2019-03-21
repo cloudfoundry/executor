@@ -24,6 +24,7 @@ import (
 	envoy_v2_listener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
+	envoy_v2_metrics "github.com/envoyproxy/go-control-plane/envoy/config/metrics/v2"
 	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/jsonpb"
@@ -324,6 +325,13 @@ func generateProxyConfig(
 		Admin: &envoy_v2_bootstrap.Admin{
 			AccessLogPath: AdminAccessLog,
 			Address:       envoyAddr("127.0.0.1", adminPort),
+		},
+		StatsConfig: &envoy_v2_metrics.StatsConfig{
+			StatsMatcher: &envoy_v2_metrics.StatsMatcher{
+				StatsMatcher: &envoy_v2_metrics.StatsMatcher_RejectAll{
+					RejectAll: true,
+				},
+			},
 		},
 		Node: &envoy_v2_core.Node{
 			Id:      fmt.Sprintf("sidecar~%s~%s~x", container.InternalIP, container.Guid),
