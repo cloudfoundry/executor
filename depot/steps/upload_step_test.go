@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"testing/iotest"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -143,6 +144,24 @@ var _ = Describe("UploadStep", func() {
 		Context("when streaming out works", func() {
 			var buffer *gbytes.Buffer
 
+			writeTarContents := func(w io.Writer) {
+				tarWriter := tar.NewWriter(w)
+
+				dropletContents := "expected-contents"
+
+				err := tarWriter.WriteHeader(&tar.Header{
+					Name: "./expected-src.txt",
+					Size: int64(len(dropletContents)),
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = tarWriter.Write([]byte(dropletContents))
+				Expect(err).NotTo(HaveOccurred())
+
+				err = tarWriter.Flush()
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			BeforeEach(func() {
 				buffer = gbytes.NewBuffer()
 
@@ -151,21 +170,7 @@ var _ = Describe("UploadStep", func() {
 					Expect(spec.User).To(Equal("notroot"))
 					Expect(handle).To(Equal("some-container-handle"))
 
-					tarWriter := tar.NewWriter(buffer)
-
-					dropletContents := "expected-contents"
-
-					err := tarWriter.WriteHeader(&tar.Header{
-						Name: "./expected-src.txt",
-						Size: int64(len(dropletContents)),
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					_, err = tarWriter.Write([]byte(dropletContents))
-					Expect(err).NotTo(HaveOccurred())
-
-					err = tarWriter.Flush()
-					Expect(err).NotTo(HaveOccurred())
+					writeTarContents(buffer)
 
 					return buffer, nil
 				}
@@ -294,6 +299,49 @@ var _ = Describe("UploadStep", func() {
 
 					stderr := fakeStreamer.Stderr().(*gbytes.Buffer)
 					Expect(stderr.Contents()).To(BeEmpty())
+				})
+			})
+
+			Context("when copying to compressed file fails", func() {
+				var stderr *gbytes.Buffer
+				BeforeEach(func() {
+					buffer = gbytes.NewBuffer()
+					writeTarContents(buffer)
+
+					brokenStream := ioutil.NopCloser(iotest.TimeoutReader(buffer))
+
+					gardenClient.Connection.StreamOutReturns(brokenStream, nil)
+
+					stderr = fakeStreamer.Stderr().(*gbytes.Buffer)
+				})
+
+				It("logs the step", func() {
+					err := <-ifrit.Invoke(step).Wait()
+					Expect(err).To(HaveOccurred())
+					Expect(logger.TestSink.LogMessages()).To(ContainElement("test.upload-step.failed-to-copy-stream"))
+				})
+
+				Context("when there is a named artifact", func() {
+					BeforeEach(func() {
+						uploadAction.Artifact = "artifact"
+					})
+
+					It("logs the error", func() {
+						err := <-ifrit.Invoke(step).Wait()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("Failed to copy stream contents into temp file for artifact"))
+						Expect(stderr).To(gbytes.Say("Failed to copy stream contents into temp file for artifact\n"))
+					})
+				})
+
+				It("clears out the temporary file", func() {
+					err := <-ifrit.Invoke(step).Wait()
+					Expect(err).To(HaveOccurred())
+					files, err := ioutil.ReadDir(tempDir)
+					Expect(err).NotTo(HaveOccurred())
+					for _, f := range files {
+						Expect(f.Name()).NotTo(HavePrefix("compressed"))
+					}
 				})
 			})
 

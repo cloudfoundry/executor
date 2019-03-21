@@ -123,7 +123,11 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
-	defer tempFile.Close()
+	finalFileLocation := tempFile.Name()
+	defer func() {
+		tempFile.Close()
+		os.Remove(finalFileLocation)
+	}()
 
 	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
@@ -132,9 +136,6 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.emitError(errString)
 		return NewEmittableError(err, errString)
 	}
-	finalFileLocation := tempFile.Name()
-
-	defer os.RemoveAll(finalFileLocation)
 
 	finished := make(chan struct{})
 	defer close(finished)
