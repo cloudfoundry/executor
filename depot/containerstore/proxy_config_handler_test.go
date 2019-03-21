@@ -362,6 +362,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
+				statsMatcher := proxyConfig.StatsConfig
+				Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
 				Expect(proxyConfig.Node.Id).To(Equal(fmt.Sprintf("sidecar~10.0.0.1~%s~x", container.Guid)))
 				Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
@@ -511,6 +513,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 			admin := proxyConfig.Admin
 			Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 			Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
+			statsMatcher := proxyConfig.StatsConfig
+			Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
 			Expect(proxyConfig.Node.Id).To(Equal(fmt.Sprintf("sidecar~10.0.0.1~%s~x", container.Guid)))
 			Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
@@ -636,6 +640,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 				admin := proxyConfig.Admin
 				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
 				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61003)))
+				statsMatcher := proxyConfig.StatsConfig
+				Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
 				Expect(proxyConfig.Node.Id).To(Equal(fmt.Sprintf("sidecar~10.0.0.1~%s~x", container.Guid)))
 				Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
