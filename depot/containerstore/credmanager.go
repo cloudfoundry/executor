@@ -154,9 +154,11 @@ func (c *credManager) RemoveCredDir(logger lager.Logger, container executor.Cont
 
 	for _, h := range c.handlers {
 		handlerErr := h.RemoveDir(logger, container)
-		err = multierror.Append(err, handlerErr)
+		if handlerErr != nil {
+			err = multierror.Append(err, handlerErr)
+		}
 	}
-	return err
+	return err.ErrorOrNil()
 }
 
 func (c *credManager) Runner(logger lager.Logger, container executor.Container) ifrit.Runner {

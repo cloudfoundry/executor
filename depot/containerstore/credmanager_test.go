@@ -142,6 +142,13 @@ var _ = Describe("CredManager", func() {
 
 			Expect(err.Error()).To(Equal("boooom!"))
 		})
+
+		It("returns nil if there are no errors", func() {
+			fakeCredHandler2.RemoveDirReturns(nil)
+			err := credManager.RemoveCredDir(logger, executor.Container{Guid: "guid"})
+
+			Expect(err).To(BeNil())
+		})
 	})
 
 	Context("CreateCredDir", func() {
