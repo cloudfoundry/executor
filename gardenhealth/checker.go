@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	HealthcheckPrefix          = "executor-healthcheck-"
+	HealthcheckPrefix          = "check-"
 	HealthcheckTag             = "tag:healthcheck-tag"
 	HealthcheckTagValue        = "healthcheck"
 	HealthcheckNetworkProperty = "network.healthcheck"
