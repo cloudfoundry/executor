@@ -37,7 +37,7 @@ var _ = Describe("Runner", func() {
 		m                               sync.RWMutex
 	)
 
-	const UnhealthyCell = "UnhealthyCell"
+	const GardenHealthCheckFailed = "GardenHealthCheckFailed"
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -97,7 +97,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
-					Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+					Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 				})
 			})
 
@@ -130,7 +130,7 @@ var _ = Describe("Runner", func() {
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
-					Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+					Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 				})
 
 				It("cancels the existing health check", func() {
@@ -168,7 +168,7 @@ var _ = Describe("Runner", func() {
 
 			It("emits a metric for healthy cell", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(0)))
 			})
 		})
 
@@ -199,7 +199,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(1))
 				_, healthy := executorClient.SetHealthyArgsForCall(0)
 				Expect(healthy).Should(Equal(true))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(0)))
 
 				Expect(healthyValues).To(BeSent(false))
 				checkValues <- errors.New("boom")
@@ -208,7 +208,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy = executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 
 				Expect(healthyValues).To(BeSent(true))
 				checkValues <- nil
@@ -217,7 +217,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(3))
 				_, healthy = executorClient.SetHealthyArgsForCall(2)
 				Expect(healthy).Should(Equal(true))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(0)))
 			})
 		})
 
@@ -252,7 +252,7 @@ var _ = Describe("Runner", func() {
 				Eventually(executorClient.SetHealthyCallCount).Should(Equal(2))
 				_, healthy := executorClient.SetHealthyArgsForCall(1)
 				Expect(healthy).Should(Equal(false))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 			})
 
 			It("cancels the existing health check", func() {
@@ -291,22 +291,22 @@ var _ = Describe("Runner", func() {
 			})
 		})
 
-		Context("UnhealthyCell metric emission", func() {
-			It("emits the UnhealthyCell every emitInterval", func() {
+		Context("GardenHealthCheckFailed metric emission", func() {
+			It("emits the GardenHealthCheckFailed metric every emitInterval", func() {
 				Eventually(executorClient.HealthyCallCount).Should(Equal(1))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 
 				executorClient.HealthyReturns(true)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(2))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(0)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(0)))
 
 				executorClient.HealthyReturns(false)
 				fakeClock.WaitForWatcherAndIncrement(emissionInterval)
 
 				Eventually(executorClient.HealthyCallCount).Should(Equal(3))
-				Eventually(getMetrics).Should(HaveKeyWithValue(UnhealthyCell, float64(1)))
+				Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
 			})
 		})
 	})
