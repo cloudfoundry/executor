@@ -79,7 +79,7 @@ var _ = Describe("Transformer", func() {
 			}
 
 			options = []transformer.Option{
-				transformer.WithSidecarRootfs("preloaded:cflinuxfs2"),
+				transformer.WithSidecarRootfs("preloaded:cflinuxfs3"),
 			}
 
 			container = executor.Container{
@@ -367,7 +367,7 @@ var _ = Describe("Transformer", func() {
 						"CF_INSTANCE_ADDR=10.0.0.1:61001",
 						"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
 					},
-					Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+					Image: garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 					BindMounts: []garden.BindMount{
 						{
 							SrcPath: "/some/source",
@@ -447,7 +447,7 @@ var _ = Describe("Transformer", func() {
 							"CF_INSTANCE_ADDR=10.0.0.1:61001",
 							"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
 						},
-						Image: garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+						Image: garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 						BindMounts: []garden.BindMount{
 							{
 								SrcPath: "/some/source",
@@ -658,7 +658,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -724,7 +724,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -764,7 +764,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
@@ -808,7 +808,7 @@ var _ = Describe("Transformer", func() {
 									Nofile: proto.Uint64(1024),
 								},
 								OverrideContainerLimits: &garden.ProcessLimits{},
-								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+								Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 								BindMounts: []garden.BindMount{
 									{
 										SrcPath: "/some/source",
@@ -1368,7 +1368,7 @@ var _ = Describe("Transformer", func() {
 								Nofile: proto.Uint64(1024),
 							},
 							OverrideContainerLimits: &garden.ProcessLimits{},
-							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs2"},
+							Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
 							BindMounts: []garden.BindMount{
 								{
 									SrcPath: "/some/source",
