@@ -67,8 +67,8 @@ func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct
 			logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return nil
 
-		case now := <-ticker.C():
-			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos, now)
+		case <-ticker.C():
+			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos)
 		}
 	}
 }
@@ -80,7 +80,7 @@ func (reporter *StatsReporter) Metrics() map[string]*CachedContainerMetrics {
 	return nil
 }
 
-func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCPUInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
+func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCPUInfos map[string]*cpuInfo) map[string]*cpuInfo {
 	logger = logger.Session("tick")
 
 	startTime := reporter.clock.Now()
@@ -123,7 +123,7 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}
 
-		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, now)
+		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo)
 		if cpu != nil {
 			newCPUInfos[guid] = cpu
 		}
@@ -142,9 +142,8 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	metricsConfig executor.MetricsConfig,
 	containerMetrics executor.ContainerMetrics,
 	previousInfo *cpuInfo,
-	now time.Time,
 ) (*CachedContainerMetrics, *cpuInfo) {
-	currentInfo, cpuPercent := calculateInfo(containerMetrics, previousInfo, now)
+	currentInfo, cpuPercent := calculateInfo(containerMetrics, previousInfo)
 
 	if len(metricsConfig.Tags) == 0 {
 		metricsConfig.Tags = map[string]string{}
@@ -194,14 +193,10 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	}, &currentInfo
 }
 
-func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64) {
-	timeOfSample := now
-	if containerMetrics.ContainerAgeInNanoseconds != 0 {
-		timeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
-	}
+func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo) (cpuInfo, float64) {
 	currentInfo := cpuInfo{
 		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
-		timeOfSample:   timeOfSample,
+		timeOfSample:   time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds)),
 	}
 
 	var cpuPercent float64

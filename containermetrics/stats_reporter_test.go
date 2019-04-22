@@ -102,21 +102,18 @@ var _ = Describe("StatsReporter", func() {
 				{Guid: "container-guid-with-index"},
 				{Guid: "container-guid-without-preloaded-rootfs"},
 				{Guid: "container-guid-without-source-id"},
-				{Guid: "container-guid-without-age"},
 			}
 			containers2 := []executor.Container{
 				{Guid: "container-guid-without-index"},
 				{Guid: "container-guid-with-index"},
 				{Guid: "container-guid-without-preloaded-rootfs"},
 				{Guid: "container-guid-without-source-id"},
-				{Guid: "container-guid-without-age"},
 			}
 			containers3 := []executor.Container{
 				{Guid: "container-guid-without-index"},
 				{Guid: "container-guid-with-index"},
 				{Guid: "container-guid-without-preloaded-rootfs"},
 				{Guid: "container-guid-without-source-id"},
-				{Guid: "container-guid-without-age"},
 			}
 
 			fakeExecutorClient.ListContainersReturnsOnCall(0, containers1, nil)
@@ -172,18 +169,6 @@ var _ = Describe("StatsReporter", func() {
 						AbsoluteCPUEntitlementInNanoseconds: 2003,
 					},
 				},
-				"container-guid-without-age": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-age"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(123),
-						DiskUsageInBytes:                    megsToBytes(456),
-						TimeSpentInCPU:                      100 * time.Second,
-						MemoryLimitInBytes:                  megsToBytes(789),
-						DiskLimitInBytes:                    megsToBytes(1024),
-						ContainerAgeInNanoseconds:           0,
-						AbsoluteCPUEntitlementInNanoseconds: 2004,
-					},
-				},
 			}
 
 			metricsAtT10 = map[string]executor.Metrics{
@@ -233,18 +218,6 @@ var _ = Describe("StatsReporter", func() {
 						DiskLimitInBytes:                    2048,
 						ContainerAgeInNanoseconds:           1003 + uint64(10*time.Second),
 						AbsoluteCPUEntitlementInNanoseconds: 2003,
-					},
-				},
-				"container-guid-without-age": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-age"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(123),
-						DiskUsageInBytes:                    megsToBytes(456),
-						TimeSpentInCPU:                      105 * time.Second,
-						MemoryLimitInBytes:                  megsToBytes(789),
-						DiskLimitInBytes:                    megsToBytes(1024),
-						ContainerAgeInNanoseconds:           0,
-						AbsoluteCPUEntitlementInNanoseconds: 2004,
 					},
 				},
 			}
@@ -299,18 +272,6 @@ var _ = Describe("StatsReporter", func() {
 						AbsoluteCPUEntitlementInNanoseconds: 2003,
 					},
 				},
-				"container-guid-without-age": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-age"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						MemoryUsageInBytes:                  megsToBytes(123),
-						DiskUsageInBytes:                    megsToBytes(456),
-						TimeSpentInCPU:                      112 * time.Second,
-						MemoryLimitInBytes:                  megsToBytes(789),
-						DiskLimitInBytes:                    megsToBytes(1024),
-						ContainerAgeInNanoseconds:           0,
-						AbsoluteCPUEntitlementInNanoseconds: 2004,
-					},
-				},
 			}
 
 			fakeExecutorClient.GetBulkMetricsReturnsOnCall(0, metricsAtT0, nil)
@@ -362,20 +323,6 @@ var _ = Describe("StatsReporter", func() {
 						"instance_id": "0",
 					},
 				},
-				{
-					CpuPercentage:          0.0,
-					MemoryBytes:            metricsAtT0["container-guid-without-age"].ContainerMetrics.MemoryUsageInBytes,
-					DiskBytes:              metricsAtT0["container-guid-without-age"].ContainerMetrics.DiskUsageInBytes,
-					MemoryBytesQuota:       metricsAtT0["container-guid-without-age"].ContainerMetrics.MemoryLimitInBytes,
-					DiskBytesQuota:         metricsAtT0["container-guid-without-age"].ContainerMetrics.DiskLimitInBytes,
-					AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-age"].ContainerMetrics.TimeSpentInCPU),
-					AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-age"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-					ContainerAge:           metricsAtT0["container-guid-without-age"].ContainerMetrics.ContainerAgeInNanoseconds,
-					Tags: map[string]string{
-						"source_id":   "source-id-without-age",
-						"instance_id": "0",
-					},
-				},
 			}))
 		})
 
@@ -384,7 +331,6 @@ var _ = Describe("StatsReporter", func() {
 				cpuUsage{applicationID: "source-id-without-index", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2001, containerAge: 1001},
 				cpuUsage{applicationID: "source-id-with-index", instanceIndex: 1, absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2002, containerAge: 1002},
 				cpuUsage{applicationID: "source-id-without-preloaded-rootfs", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2003, containerAge: 1003},
-				cpuUsage{applicationID: "source-id-without-age", absoluteUsage: uint64((100 * time.Second).Nanoseconds()), absoluteEntitlement: 2004, containerAge: 0},
 			))
 		})
 
@@ -560,7 +506,7 @@ var _ = Describe("StatsReporter", func() {
 			Context("Metrics", func() {
 				It("returns the cached metrics last emitted", func() {
 					containerMetrics := reporter.Metrics()
-					Expect(containerMetrics).To(HaveLen(5))
+					Expect(containerMetrics).To(HaveLen(4))
 					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-index", &containermetrics.CachedContainerMetrics{
 						MetricGUID:       "source-id-without-index",
 						CPUUsageFraction: 0.5,
@@ -592,14 +538,6 @@ var _ = Describe("StatsReporter", func() {
 						DiskUsageBytes:   4560,
 						MemoryQuotaBytes: megsToBytes(6780),
 						DiskQuotaBytes:   2048,
-					}))
-					Expect(containerMetrics).To(HaveKeyWithValue("container-guid-without-age", &containermetrics.CachedContainerMetrics{
-						MetricGUID:       "source-id-without-age",
-						CPUUsageFraction: 0.5,
-						MemoryUsageBytes: megsToBytes(123),
-						DiskUsageBytes:   megsToBytes(456),
-						MemoryQuotaBytes: megsToBytes(789),
-						DiskQuotaBytes:   megsToBytes(1024),
 					}))
 				})
 			})
