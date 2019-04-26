@@ -698,7 +698,7 @@ func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason str
 func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container) {
 	err := n.credManager.RemoveCredDir(logger, info)
 	if err != nil {
-		logger.Info("failed-to-delete-container-proxy-config-dir", lager.Data{"error": err.Error()})
+		logger.Error("failed-to-delete-container-proxy-config-dir", err)
 	}
 }
 
