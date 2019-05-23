@@ -82,7 +82,8 @@ type containerStore struct {
 
 	cellID string
 
-	enableUnproxiedPortMappings bool
+	enableUnproxiedPortMappings           bool
+	advertisePreferenceForInstanceAddress bool
 }
 
 func New(
@@ -102,6 +103,7 @@ func New(
 	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
+	advertisePreferenceForInstanceAddress bool,
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -121,7 +123,8 @@ func New(
 
 		cellID: cellID,
 
-		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
+		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
+		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 	}
 }
 
@@ -153,6 +156,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.proxyConfigHandler,
 			cs.cellID,
 			cs.enableUnproxiedPortMappings,
+			cs.advertisePreferenceForInstanceAddress,
 		))
 
 	if err != nil {
