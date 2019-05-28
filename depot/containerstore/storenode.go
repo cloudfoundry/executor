@@ -61,23 +61,24 @@ type storeNode struct {
 	clock clock.Clock
 
 	// opLock serializes public methods that involve garden interactions
-	opLock                      *sync.Mutex
-	gardenClient                garden.Client
-	dependencyManager           DependencyManager
-	volumeManager               volman.Manager
-	credManager                 CredManager
-	instanceIdentityHandler     *InstanceIdentityHandler
-	eventEmitter                event.Hub
-	transformer                 transformer.Transformer
-	process                     ifrit.Process
-	config                      *ContainerConfig
-	useDeclarativeHealthCheck   bool
-	declarativeHealthcheckPath  string
-	useContainerProxy           bool
-	proxyConfigHandler          ProxyManager
-	bindMounts                  []garden.BindMount
-	cellID                      string
-	enableUnproxiedPortMappings bool
+	opLock                                *sync.Mutex
+	gardenClient                          garden.Client
+	dependencyManager                     DependencyManager
+	volumeManager                         volman.Manager
+	credManager                           CredManager
+	instanceIdentityHandler               *InstanceIdentityHandler
+	eventEmitter                          event.Hub
+	transformer                           transformer.Transformer
+	process                               ifrit.Process
+	config                                *ContainerConfig
+	useDeclarativeHealthCheck             bool
+	declarativeHealthcheckPath            string
+	useContainerProxy                     bool
+	proxyConfigHandler                    ProxyManager
+	bindMounts                            []garden.BindMount
+	cellID                                string
+	enableUnproxiedPortMappings           bool
+	advertisePreferenceForInstanceAddress bool
 
 	destroying, stopping int32
 
@@ -101,27 +102,29 @@ func newStoreNode(
 	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
+	advertisePreferenceForInstanceAddress bool,
 ) *storeNode {
 	return &storeNode{
-		config:                      config,
-		info:                        container,
-		infoLock:                    &sync.Mutex{},
-		opLock:                      &sync.Mutex{},
-		gardenClient:                gardenClient,
-		clock:                       clock,
-		dependencyManager:           dependencyManager,
-		volumeManager:               volumeManager,
-		credManager:                 credManager,
-		eventEmitter:                eventEmitter,
-		transformer:                 transformer,
-		modifiedIndex:               0,
-		hostTrustedCertificatesPath: hostTrustedCertificatesPath,
-		metronClient:                metronClient,
-		useDeclarativeHealthCheck:   useDeclarativeHealthCheck,
-		declarativeHealthcheckPath:  declarativeHealthcheckPath,
-		proxyConfigHandler:          proxyConfigHandler,
-		cellID:                      cellID,
-		enableUnproxiedPortMappings: enableUnproxiedPortMappings,
+		config:                                config,
+		info:                                  container,
+		infoLock:                              &sync.Mutex{},
+		opLock:                                &sync.Mutex{},
+		gardenClient:                          gardenClient,
+		clock:                                 clock,
+		dependencyManager:                     dependencyManager,
+		volumeManager:                         volumeManager,
+		credManager:                           credManager,
+		eventEmitter:                          eventEmitter,
+		transformer:                           transformer,
+		modifiedIndex:                         0,
+		hostTrustedCertificatesPath:           hostTrustedCertificatesPath,
+		metronClient:                          metronClient,
+		useDeclarativeHealthCheck:             useDeclarativeHealthCheck,
+		declarativeHealthcheckPath:            declarativeHealthcheckPath,
+		proxyConfigHandler:                    proxyConfigHandler,
+		cellID:                                cellID,
+		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
+		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 	}
 }
 
@@ -391,6 +394,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	info.Ports = n.portMappingFromContainerInfo(containerInfo, info.Ports, proxyPortMapping)
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
+	info.AdvertisePreferenceForInstanceAddress = n.advertisePreferenceForInstanceAddress
 
 	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
 	info.DiskLimit = containerSpec.Limits.Disk.ByteHard

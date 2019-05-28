@@ -42,10 +42,11 @@ var _ = Describe("Container Store", func() {
 		containerConfig containerstore.ContainerConfig
 		containerStore  containerstore.ContainerStore
 
-		iNodeLimit    uint64
-		maxCPUShares  uint64
-		ownerName     string
-		totalCapacity executor.ExecutorResources
+		iNodeLimit                            uint64
+		maxCPUShares                          uint64
+		ownerName                             string
+		totalCapacity                         executor.ExecutorResources
+		advertisePreferenceForInstanceAddress bool
 
 		containerGuid string
 
@@ -108,6 +109,7 @@ var _ = Describe("Container Store", func() {
 		maxCPUShares = 100
 		ownerName = "test-owner"
 		totalCapacity = executor.NewExecutorResources(1024*10, 1024*10, 10)
+		advertisePreferenceForInstanceAddress = false
 
 		containerGuid = "container-guid"
 
@@ -140,6 +142,7 @@ var _ = Describe("Container Store", func() {
 			proxyManager,
 			cellID,
 			true,
+			advertisePreferenceForInstanceAddress,
 		)
 
 		fakeMetronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
@@ -182,6 +185,7 @@ var _ = Describe("Container Store", func() {
 			Expect(container.Resource).To(Equal(containerResource))
 			Expect(container.State).To(Equal(executor.StateReserved))
 			Expect(container.AllocatedAt).To(Equal(clock.Now().UnixNano()))
+			Expect(container.AdvertisePreferenceForInstanceAddress).To(Equal(advertisePreferenceForInstanceAddress))
 		})
 
 		It("tracks the container", func() {
@@ -458,6 +462,7 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
+						advertisePreferenceForInstanceAddress,
 					)
 				})
 
@@ -638,6 +643,7 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
+						advertisePreferenceForInstanceAddress,
 					)
 				})
 
@@ -1118,6 +1124,7 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
+						advertisePreferenceForInstanceAddress,
 					)
 
 					portMapping := []executor.PortMapping{
@@ -1199,6 +1206,7 @@ var _ = Describe("Container Store", func() {
 							proxyManager,
 							cellID,
 							false,
+							advertisePreferenceForInstanceAddress,
 						)
 					})
 
@@ -2353,6 +2361,7 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
+						advertisePreferenceForInstanceAddress,
 					)
 
 					signalled := credManagerRunnerSignalled
