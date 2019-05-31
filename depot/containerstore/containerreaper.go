@@ -56,7 +56,7 @@ func (r *containerReaper) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 
 func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 	logger.Info("starting")
-	defer logger.Info("finished")
+	defer logger.Info("complete")
 
 	handles, err := r.fetchGardenContainerHandles(logger)
 	if err != nil {
@@ -77,7 +77,7 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 
 func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error {
 	logger.Info("starting")
-	defer logger.Info("finished")
+	defer logger.Info("complete")
 
 	snapshotGuids := r.containers.containerGuids(logger)
 	handles, err := r.fetchGardenContainerHandles(logger)

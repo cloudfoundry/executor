@@ -165,16 +165,17 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
-		defer logger.Info("finished")
+		defer logger.Info("complete")
 
 		start := c.clock.Now()
 		creds, err := c.generateCreds(logger, container, container.Guid)
-		duration := c.clock.Since(start)
 		if err != nil {
 			logger.Error("failed-to-generate-credentials", err)
 			c.metronClient.IncrementCounter(CredCreationFailedCount)
 			return err
 		}
+
+		duration := c.clock.Since(start)
 
 		for _, h := range c.handlers {
 			err := h.Update(creds, container)
@@ -190,7 +191,6 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		regenCertTimer := c.clock.NewTimer(rotationDuration)
 
 		close(ready)
-		logger.Info("started")
 
 		regenLogger := logger.Session("regenerating-cert-and-key")
 		for {
@@ -244,8 +244,8 @@ const (
 
 func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certGUID string) (Credential, error) {
 	logger = logger.Session("generating-credentials")
-	logger.Info("starting")
-	defer logger.Info("complete")
+	logger.Debug("starting")
+	defer logger.Debug("complete")
 
 	logger.Debug("generating-private-key")
 	privateKey, err := rsa.GenerateKey(c.entropyReader, 2048)

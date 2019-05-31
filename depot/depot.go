@@ -125,9 +125,7 @@ func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() 
 			logger.Error("failed-creating-container", err)
 			return
 		}
-		logger.Info("succeeded-creating-container-in-garden")
 
-		logger.Info("running-container-in-garden")
 		err = c.containerStore.Run(logger, guid)
 		if err != nil {
 			logger.Error("failed-running-container-in-garden", err)

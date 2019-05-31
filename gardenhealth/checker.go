@@ -90,7 +90,7 @@ func (c *checker) Cancel(logger lager.Logger) {
 func (c *checker) list(logger lager.Logger) ([]garden.Container, error) {
 	logger = logger.Session("list")
 	logger.Debug("starting")
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	var containers []garden.Container
 	err := retryOnFail(c.retryInterval, func(attempt uint) (listErr error) {
@@ -112,7 +112,7 @@ func (c *checker) list(logger lager.Logger) ([]garden.Container, error) {
 func (c *checker) destroyContainers(logger lager.Logger, containers []garden.Container) error {
 	logger = logger.Session("destroy-containers")
 	logger.Debug("starting", lager.Data{"numContainers": len(containers)})
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	for i := range containers {
 		err := retryOnFail(c.retryInterval, func(attempt uint) (destroyErr error) {
@@ -145,7 +145,7 @@ func (c *checker) destroyContainers(logger lager.Logger, containers []garden.Con
 func (c *checker) create(logger lager.Logger) (string, garden.Container, error) {
 	logger = logger.Session("create")
 	logger.Debug("starting")
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	guid := HealthcheckPrefix + c.guidGenerator.Guid(logger)
 	var container garden.Container
@@ -174,7 +174,7 @@ func (c *checker) create(logger lager.Logger) (string, garden.Container, error) 
 func (c *checker) cleanupDestroy(logger lager.Logger, guid string) error {
 	logger = logger.Session("cleanup-destroy")
 	logger.Debug("starting")
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	err := retryOnFail(c.retryInterval, func(attempt uint) (destroyErr error) {
 		destroyErr = c.destroyContainer(guid)
@@ -205,7 +205,7 @@ func (c *checker) run(logger lager.Logger, container garden.Container) (garden.P
 		"processDir":  c.healthcheckSpec.Dir,
 	})
 	logger.Debug("starting")
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	var proc garden.Process
 	err := retryOnFail(c.retryInterval, func(attempt uint) (runErr error) {
@@ -225,7 +225,7 @@ func (c *checker) run(logger lager.Logger, container garden.Container) (garden.P
 func (c *checker) wait(logger lager.Logger, proc garden.Process) (int, error) {
 	logger = logger.Session("wait")
 	logger.Debug("starting")
-	defer logger.Debug("finished")
+	defer logger.Debug("complete")
 
 	var exitCode int
 	err := retryOnFail(c.retryInterval, func(attempt uint) (waitErr error) {
