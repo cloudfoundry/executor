@@ -38,7 +38,8 @@ func (fake *FakeGenerator) Guid(arg1 lager.Logger) string {
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.guidReturns.result1
+	fakeReturns := fake.guidReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeGenerator) GuidCallCount() int {
@@ -47,13 +48,22 @@ func (fake *FakeGenerator) GuidCallCount() int {
 	return len(fake.guidArgsForCall)
 }
 
+func (fake *FakeGenerator) GuidCalls(stub func(lager.Logger) string) {
+	fake.guidMutex.Lock()
+	defer fake.guidMutex.Unlock()
+	fake.GuidStub = stub
+}
+
 func (fake *FakeGenerator) GuidArgsForCall(i int) lager.Logger {
 	fake.guidMutex.RLock()
 	defer fake.guidMutex.RUnlock()
-	return fake.guidArgsForCall[i].arg1
+	argsForCall := fake.guidArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeGenerator) GuidReturns(result1 string) {
+	fake.guidMutex.Lock()
+	defer fake.guidMutex.Unlock()
 	fake.GuidStub = nil
 	fake.guidReturns = struct {
 		result1 string
@@ -61,6 +71,8 @@ func (fake *FakeGenerator) GuidReturns(result1 string) {
 }
 
 func (fake *FakeGenerator) GuidReturnsOnCall(i int, result1 string) {
+	fake.guidMutex.Lock()
+	defer fake.guidMutex.Unlock()
 	fake.GuidStub = nil
 	if fake.guidReturnsOnCall == nil {
 		fake.guidReturnsOnCall = make(map[int]struct {

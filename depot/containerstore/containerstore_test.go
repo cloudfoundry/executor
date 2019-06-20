@@ -596,7 +596,7 @@ var _ = Describe("Container Store", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(fakeMetronClient.SendAppLogCallCount()).Should(Equal(2))
 				Eventually(func() string {
-					_, msg, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+					msg, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
 					return msg
 				}).Should(ContainSubstring(fmt.Sprintf("Cell %s successfully created container for instance %s", cellID, containerGuid)))
 			})
@@ -1345,11 +1345,11 @@ var _ = Describe("Container Store", func() {
 					Expect(err).To(HaveOccurred())
 
 					Expect(fakeMetronClient.SendAppErrorLogCallCount()).To(Equal(1))
-					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+					msg, sourceType, tags := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s failed to create container for instance %s: boom!", cellID, containerGuid)))
-					Expect(appId).To(Equal(logGuid))
+					Expect(tags["source_id"]).To(Equal(logGuid))
 					Expect(sourceType).To(Equal("test-source"))
-					Expect(sourceInstance).To(Equal("1"))
+					Expect(tags["instance_id"]).To(Equal("1"))
 				})
 
 				It("logs the total time it took to create the container before it failed", func() {
@@ -1944,11 +1944,11 @@ var _ = Describe("Container Store", func() {
 				err := containerStore.Stop(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
-				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
-				Expect(appId).To(Equal(containerGuid))
+				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
-				Expect(sourceInstance).To(Equal("1"))
+				Expect(tags["instance_id"]).To(Equal("1"))
 			})
 		})
 
@@ -2161,17 +2161,17 @@ var _ = Describe("Container Store", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(4))
-					appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
-					Expect(appId).To(Equal(containerGuid))
+					msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+					Expect(tags["source_id"]).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s destroying container for instance %s", cellID, containerGuid)))
-					Expect(sourceInstance).To(Equal("1"))
+					Expect(tags["instance_id"]).To(Equal("1"))
 
-					appId, msg, sourceType, sourceInstance = fakeMetronClient.SendAppLogArgsForCall(3)
-					Expect(appId).To(Equal(containerGuid))
+					msg, sourceType, tags = fakeMetronClient.SendAppLogArgsForCall(3)
+					Expect(tags["source_id"]).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", cellID, containerGuid)))
-					Expect(sourceInstance).To(Equal("1"))
+					Expect(tags["instance_id"]).To(Equal("1"))
 				})
 			})
 
@@ -2267,11 +2267,11 @@ var _ = Describe("Container Store", func() {
 				Eventually(destroyed).Should(BeClosed())
 
 				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(5))
-				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
-				Expect(appId).To(Equal(containerGuid))
+				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
-				Expect(sourceInstance).To(Equal("1"))
+				Expect(tags["instance_id"]).To(Equal("1"))
 			})
 		})
 
@@ -2329,11 +2329,11 @@ var _ = Describe("Container Store", func() {
 				close(finishRun)
 				Eventually(destroyed).Should(BeClosed())
 				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(5))
-				appId, msg, sourceType, sourceInstance := fakeMetronClient.SendAppLogArgsForCall(2)
-				Expect(appId).To(Equal(containerGuid))
+				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
-				Expect(sourceInstance).To(Equal("1"))
+				Expect(tags["instance_id"]).To(Equal("1"))
 			})
 
 			Context("when the container credManager config process is running in the container", func() {

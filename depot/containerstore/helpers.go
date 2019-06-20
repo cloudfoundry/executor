@@ -20,6 +20,7 @@ func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclien
 		conf.Guid,
 		conf.SourceName,
 		conf.Index,
+		conf.Tags,
 		metronClient,
 	)
 }

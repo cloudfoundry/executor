@@ -9,6 +9,16 @@ import (
 )
 
 type FakeHub struct {
+	CloseStub        func() error
+	closeMutex       sync.RWMutex
+	closeArgsForCall []struct {
+	}
+	closeReturns struct {
+		result1 error
+	}
+	closeReturnsOnCall map[int]struct {
+		result1 error
+	}
 	EmitStub        func(executor.Event)
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
@@ -16,8 +26,9 @@ type FakeHub struct {
 	}
 	SubscribeStub        func() (executor.EventSource, error)
 	subscribeMutex       sync.RWMutex
-	subscribeArgsForCall []struct{}
-	subscribeReturns     struct {
+	subscribeArgsForCall []struct {
+	}
+	subscribeReturns struct {
 		result1 executor.EventSource
 		result2 error
 	}
@@ -25,17 +36,60 @@ type FakeHub struct {
 		result1 executor.EventSource
 		result2 error
 	}
-	CloseStub        func() error
-	closeMutex       sync.RWMutex
-	closeArgsForCall []struct{}
-	closeReturns     struct {
-		result1 error
-	}
-	closeReturnsOnCall map[int]struct {
-		result1 error
-	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeHub) Close() error {
+	fake.closeMutex.Lock()
+	ret, specificReturn := fake.closeReturnsOnCall[len(fake.closeArgsForCall)]
+	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
+	}{})
+	fake.recordInvocation("Close", []interface{}{})
+	fake.closeMutex.Unlock()
+	if fake.CloseStub != nil {
+		return fake.CloseStub()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.closeReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeHub) CloseCallCount() int {
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
+	return len(fake.closeArgsForCall)
+}
+
+func (fake *FakeHub) CloseCalls(stub func() error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = stub
+}
+
+func (fake *FakeHub) CloseReturns(result1 error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = nil
+	fake.closeReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeHub) CloseReturnsOnCall(i int, result1 error) {
+	fake.closeMutex.Lock()
+	defer fake.closeMutex.Unlock()
+	fake.CloseStub = nil
+	if fake.closeReturnsOnCall == nil {
+		fake.closeReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.closeReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeHub) Emit(arg1 executor.Event) {
@@ -56,16 +110,24 @@ func (fake *FakeHub) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
+func (fake *FakeHub) EmitCalls(stub func(executor.Event)) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
+	fake.EmitStub = stub
+}
+
 func (fake *FakeHub) EmitArgsForCall(i int) executor.Event {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
-	return fake.emitArgsForCall[i].arg1
+	argsForCall := fake.emitArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	fake.subscribeMutex.Lock()
 	ret, specificReturn := fake.subscribeReturnsOnCall[len(fake.subscribeArgsForCall)]
-	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct{}{})
+	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct {
+	}{})
 	fake.recordInvocation("Subscribe", []interface{}{})
 	fake.subscribeMutex.Unlock()
 	if fake.SubscribeStub != nil {
@@ -74,7 +136,8 @@ func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.subscribeReturns.result1, fake.subscribeReturns.result2
+	fakeReturns := fake.subscribeReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakeHub) SubscribeCallCount() int {
@@ -83,7 +146,15 @@ func (fake *FakeHub) SubscribeCallCount() int {
 	return len(fake.subscribeArgsForCall)
 }
 
+func (fake *FakeHub) SubscribeCalls(stub func() (executor.EventSource, error)) {
+	fake.subscribeMutex.Lock()
+	defer fake.subscribeMutex.Unlock()
+	fake.SubscribeStub = stub
+}
+
 func (fake *FakeHub) SubscribeReturns(result1 executor.EventSource, result2 error) {
+	fake.subscribeMutex.Lock()
+	defer fake.subscribeMutex.Unlock()
 	fake.SubscribeStub = nil
 	fake.subscribeReturns = struct {
 		result1 executor.EventSource
@@ -92,6 +163,8 @@ func (fake *FakeHub) SubscribeReturns(result1 executor.EventSource, result2 erro
 }
 
 func (fake *FakeHub) SubscribeReturnsOnCall(i int, result1 executor.EventSource, result2 error) {
+	fake.subscribeMutex.Lock()
+	defer fake.subscribeMutex.Unlock()
 	fake.SubscribeStub = nil
 	if fake.subscribeReturnsOnCall == nil {
 		fake.subscribeReturnsOnCall = make(map[int]struct {
@@ -105,55 +178,15 @@ func (fake *FakeHub) SubscribeReturnsOnCall(i int, result1 executor.EventSource,
 	}{result1, result2}
 }
 
-func (fake *FakeHub) Close() error {
-	fake.closeMutex.Lock()
-	ret, specificReturn := fake.closeReturnsOnCall[len(fake.closeArgsForCall)]
-	fake.closeArgsForCall = append(fake.closeArgsForCall, struct{}{})
-	fake.recordInvocation("Close", []interface{}{})
-	fake.closeMutex.Unlock()
-	if fake.CloseStub != nil {
-		return fake.CloseStub()
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.closeReturns.result1
-}
-
-func (fake *FakeHub) CloseCallCount() int {
-	fake.closeMutex.RLock()
-	defer fake.closeMutex.RUnlock()
-	return len(fake.closeArgsForCall)
-}
-
-func (fake *FakeHub) CloseReturns(result1 error) {
-	fake.CloseStub = nil
-	fake.closeReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeHub) CloseReturnsOnCall(i int, result1 error) {
-	fake.CloseStub = nil
-	if fake.closeReturnsOnCall == nil {
-		fake.closeReturnsOnCall = make(map[int]struct {
-			result1 error
-		})
-	}
-	fake.closeReturnsOnCall[i] = struct {
-		result1 error
-	}{result1}
-}
-
 func (fake *FakeHub) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.closeMutex.RLock()
+	defer fake.closeMutex.RUnlock()
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	fake.subscribeMutex.RLock()
 	defer fake.subscribeMutex.RUnlock()
-	fake.closeMutex.RLock()
-	defer fake.closeMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

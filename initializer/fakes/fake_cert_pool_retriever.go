@@ -11,8 +11,9 @@ import (
 type FakeCertPoolRetriever struct {
 	SystemCertsStub        func() *x509.CertPool
 	systemCertsMutex       sync.RWMutex
-	systemCertsArgsForCall []struct{}
-	systemCertsReturns     struct {
+	systemCertsArgsForCall []struct {
+	}
+	systemCertsReturns struct {
 		result1 *x509.CertPool
 	}
 	systemCertsReturnsOnCall map[int]struct {
@@ -25,7 +26,8 @@ type FakeCertPoolRetriever struct {
 func (fake *FakeCertPoolRetriever) SystemCerts() *x509.CertPool {
 	fake.systemCertsMutex.Lock()
 	ret, specificReturn := fake.systemCertsReturnsOnCall[len(fake.systemCertsArgsForCall)]
-	fake.systemCertsArgsForCall = append(fake.systemCertsArgsForCall, struct{}{})
+	fake.systemCertsArgsForCall = append(fake.systemCertsArgsForCall, struct {
+	}{})
 	fake.recordInvocation("SystemCerts", []interface{}{})
 	fake.systemCertsMutex.Unlock()
 	if fake.SystemCertsStub != nil {
@@ -34,7 +36,8 @@ func (fake *FakeCertPoolRetriever) SystemCerts() *x509.CertPool {
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.systemCertsReturns.result1
+	fakeReturns := fake.systemCertsReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeCertPoolRetriever) SystemCertsCallCount() int {
@@ -43,7 +46,15 @@ func (fake *FakeCertPoolRetriever) SystemCertsCallCount() int {
 	return len(fake.systemCertsArgsForCall)
 }
 
+func (fake *FakeCertPoolRetriever) SystemCertsCalls(stub func() *x509.CertPool) {
+	fake.systemCertsMutex.Lock()
+	defer fake.systemCertsMutex.Unlock()
+	fake.SystemCertsStub = stub
+}
+
 func (fake *FakeCertPoolRetriever) SystemCertsReturns(result1 *x509.CertPool) {
+	fake.systemCertsMutex.Lock()
+	defer fake.systemCertsMutex.Unlock()
 	fake.SystemCertsStub = nil
 	fake.systemCertsReturns = struct {
 		result1 *x509.CertPool
@@ -51,6 +62,8 @@ func (fake *FakeCertPoolRetriever) SystemCertsReturns(result1 *x509.CertPool) {
 }
 
 func (fake *FakeCertPoolRetriever) SystemCertsReturnsOnCall(i int, result1 *x509.CertPool) {
+	fake.systemCertsMutex.Lock()
+	defer fake.systemCertsMutex.Unlock()
 	fake.SystemCertsStub = nil
 	if fake.systemCertsReturnsOnCall == nil {
 		fake.systemCertsReturnsOnCall = make(map[int]struct {

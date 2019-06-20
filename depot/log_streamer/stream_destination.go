@@ -9,20 +9,18 @@ import (
 )
 
 type streamDestination struct {
-	guid         string
 	sourceName   string
-	sourceId     string
+	tags         map[string]string
 	messageType  loggregator_v2.Log_Type
 	buffer       []byte
 	processLock  sync.Mutex
 	metronClient loggingclient.IngressClient
 }
 
-func newStreamDestination(guid, sourceName, sourceId string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
+func newStreamDestination(sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
 	return &streamDestination{
-		guid:         guid,
 		sourceName:   sourceName,
-		sourceId:     sourceId,
+		tags:         tags,
 		messageType:  messageType,
 		buffer:       make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient: metronClient,
@@ -46,9 +44,9 @@ func (destination *streamDestination) flush() {
 	if len(msg) > 0 {
 		switch destination.messageType {
 		case loggregator_v2.Log_OUT:
-			destination.metronClient.SendAppLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+			destination.metronClient.SendAppLog(string(msg), destination.sourceName, destination.tags)
 		case loggregator_v2.Log_ERR:
-			destination.metronClient.SendAppErrorLog(destination.guid, string(msg), destination.sourceName, destination.sourceId)
+			destination.metronClient.SendAppErrorLog(string(msg), destination.sourceName, destination.tags)
 		}
 	}
 }
@@ -128,5 +126,5 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 }
 
 func (d *streamDestination) withSource(sourceName string) *streamDestination {
-	return newStreamDestination(d.guid, sourceName, d.sourceId, d.messageType, d.metronClient)
+	return newStreamDestination(sourceName, d.tags, d.messageType, d.metronClient)
 }

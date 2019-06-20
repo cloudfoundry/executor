@@ -30,7 +30,7 @@ type logStreamer struct {
 	stderr *streamDestination
 }
 
-func New(guid string, sourceName string, index int, metronClient loggingclient.IngressClient) LogStreamer {
+func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -39,21 +39,30 @@ func New(guid string, sourceName string, index int, metronClient loggingclient.I
 		sourceName = DefaultLogSource
 	}
 
+	tags := map[string]string{}
+	for k, v := range originalTags {
+		tags[k] = v
+	}
+
+	if _, ok := tags["source_id"]; !ok {
+		tags["source_id"] = guid
+	}
 	sourceIndex := strconv.Itoa(index)
+	if _, ok := tags["instance_id"]; !ok {
+		tags["instance_id"] = sourceIndex
+	}
 
 	return &logStreamer{
 		stdout: newStreamDestination(
-			guid,
 			sourceName,
-			sourceIndex,
+			tags,
 			loggregator_v2.Log_OUT,
 			metronClient,
 		),
 
 		stderr: newStreamDestination(
-			guid,
 			sourceName,
-			sourceIndex,
+			tags,
 			loggregator_v2.Log_ERR,
 			metronClient,
 		),

@@ -235,9 +235,10 @@ type Metrics struct {
 }
 
 type LogConfig struct {
-	Guid       string `json:"guid"`
-	Index      int    `json:"index"`
-	SourceName string `json:"source_name"`
+	Guid       string            `json:"guid"`
+	Index      int               `json:"index"`
+	SourceName string            `json:"source_name"`
+	Tags       map[string]string `json:"tags"`
 }
 
 type PortMapping struct {

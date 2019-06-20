@@ -9,6 +9,11 @@ import (
 )
 
 type FakeChecker struct {
+	CancelStub        func(lager.Logger)
+	cancelMutex       sync.RWMutex
+	cancelArgsForCall []struct {
+		arg1 lager.Logger
+	}
 	HealthcheckStub        func(lager.Logger) error
 	healthcheckMutex       sync.RWMutex
 	healthcheckArgsForCall []struct {
@@ -20,61 +25,8 @@ type FakeChecker struct {
 	healthcheckReturnsOnCall map[int]struct {
 		result1 error
 	}
-	CancelStub        func(lager.Logger)
-	cancelMutex       sync.RWMutex
-	cancelArgsForCall []struct {
-		arg1 lager.Logger
-	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
-}
-
-func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
-	fake.healthcheckMutex.Lock()
-	ret, specificReturn := fake.healthcheckReturnsOnCall[len(fake.healthcheckArgsForCall)]
-	fake.healthcheckArgsForCall = append(fake.healthcheckArgsForCall, struct {
-		arg1 lager.Logger
-	}{arg1})
-	fake.recordInvocation("Healthcheck", []interface{}{arg1})
-	fake.healthcheckMutex.Unlock()
-	if fake.HealthcheckStub != nil {
-		return fake.HealthcheckStub(arg1)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.healthcheckReturns.result1
-}
-
-func (fake *FakeChecker) HealthcheckCallCount() int {
-	fake.healthcheckMutex.RLock()
-	defer fake.healthcheckMutex.RUnlock()
-	return len(fake.healthcheckArgsForCall)
-}
-
-func (fake *FakeChecker) HealthcheckArgsForCall(i int) lager.Logger {
-	fake.healthcheckMutex.RLock()
-	defer fake.healthcheckMutex.RUnlock()
-	return fake.healthcheckArgsForCall[i].arg1
-}
-
-func (fake *FakeChecker) HealthcheckReturns(result1 error) {
-	fake.HealthcheckStub = nil
-	fake.healthcheckReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeChecker) HealthcheckReturnsOnCall(i int, result1 error) {
-	fake.HealthcheckStub = nil
-	if fake.healthcheckReturnsOnCall == nil {
-		fake.healthcheckReturnsOnCall = make(map[int]struct {
-			result1 error
-		})
-	}
-	fake.healthcheckReturnsOnCall[i] = struct {
-		result1 error
-	}{result1}
 }
 
 func (fake *FakeChecker) Cancel(arg1 lager.Logger) {
@@ -95,19 +47,86 @@ func (fake *FakeChecker) CancelCallCount() int {
 	return len(fake.cancelArgsForCall)
 }
 
+func (fake *FakeChecker) CancelCalls(stub func(lager.Logger)) {
+	fake.cancelMutex.Lock()
+	defer fake.cancelMutex.Unlock()
+	fake.CancelStub = stub
+}
+
 func (fake *FakeChecker) CancelArgsForCall(i int) lager.Logger {
 	fake.cancelMutex.RLock()
 	defer fake.cancelMutex.RUnlock()
-	return fake.cancelArgsForCall[i].arg1
+	argsForCall := fake.cancelArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
+	fake.healthcheckMutex.Lock()
+	ret, specificReturn := fake.healthcheckReturnsOnCall[len(fake.healthcheckArgsForCall)]
+	fake.healthcheckArgsForCall = append(fake.healthcheckArgsForCall, struct {
+		arg1 lager.Logger
+	}{arg1})
+	fake.recordInvocation("Healthcheck", []interface{}{arg1})
+	fake.healthcheckMutex.Unlock()
+	if fake.HealthcheckStub != nil {
+		return fake.HealthcheckStub(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.healthcheckReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeChecker) HealthcheckCallCount() int {
+	fake.healthcheckMutex.RLock()
+	defer fake.healthcheckMutex.RUnlock()
+	return len(fake.healthcheckArgsForCall)
+}
+
+func (fake *FakeChecker) HealthcheckCalls(stub func(lager.Logger) error) {
+	fake.healthcheckMutex.Lock()
+	defer fake.healthcheckMutex.Unlock()
+	fake.HealthcheckStub = stub
+}
+
+func (fake *FakeChecker) HealthcheckArgsForCall(i int) lager.Logger {
+	fake.healthcheckMutex.RLock()
+	defer fake.healthcheckMutex.RUnlock()
+	argsForCall := fake.healthcheckArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeChecker) HealthcheckReturns(result1 error) {
+	fake.healthcheckMutex.Lock()
+	defer fake.healthcheckMutex.Unlock()
+	fake.HealthcheckStub = nil
+	fake.healthcheckReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeChecker) HealthcheckReturnsOnCall(i int, result1 error) {
+	fake.healthcheckMutex.Lock()
+	defer fake.healthcheckMutex.Unlock()
+	fake.HealthcheckStub = nil
+	if fake.healthcheckReturnsOnCall == nil {
+		fake.healthcheckReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.healthcheckReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeChecker) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.healthcheckMutex.RLock()
-	defer fake.healthcheckMutex.RUnlock()
 	fake.cancelMutex.RLock()
 	defer fake.cancelMutex.RUnlock()
+	fake.healthcheckMutex.RLock()
+	defer fake.healthcheckMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

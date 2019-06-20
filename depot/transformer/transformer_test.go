@@ -54,7 +54,7 @@ var _ = Describe("Transformer", func() {
 			fakeMetronClient = &mfakes.FakeIngressClient{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			logStreamer = log_streamer.New("test", "test", 1, fakeMetronClient)
+			logStreamer = log_streamer.New("test", "test", 1, map[string]string{}, fakeMetronClient)
 
 			healthyMonitoringInterval = 1 * time.Second
 			unhealthyMonitoringInterval = 1 * time.Millisecond
@@ -398,8 +398,8 @@ var _ = Describe("Transformer", func() {
 
 				It("logs the exit status", func() {
 					Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
-					_, msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
-					_, msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+					msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+					msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
 					Expect([]string{msg0, msg1}).To(ContainElement("Exit status 134"))
 				})
 
@@ -926,17 +926,17 @@ var _ = Describe("Transformer", func() {
 						It("suppress the readiness check log", func() {
 							Eventually(process.Wait()).Should(Receive(HaveOccurred()))
 							Consistently(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
-							_, msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
-							_, msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+							msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+							msg1, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
 							Expect([]string{msg0, msg1}).To(ConsistOf("Starting health monitoring of container", "Exit status 2"))
 						})
 
 						It("logs the readiness check output on stderr", func() {
 							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
 							logLines := map[string]string{}
-							_, msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+							msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 							logLines[source] = msg
-							_, msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
+							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
 							logLines[source] = msg
 							Expect(logLines).To(Equal(map[string]string{
 								"HEALTH": "readiness check failed",
@@ -999,7 +999,7 @@ var _ = Describe("Transformer", func() {
 							It("logs the liveness check output on stderr", func() {
 								Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
 								logLines := map[string]string{}
-								_, msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+								msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 								logLines[source] = msg
 								Expect(logLines).To(Equal(map[string]string{
 									"HEALTH": "liveness check failed",
@@ -1129,7 +1129,7 @@ var _ = Describe("Transformer", func() {
 					JustBeforeEach(func() {
 						Eventually(fakeMetronClient.SendAppLogCallCount, 5).Should(BeNumerically(">=", 1))
 
-						_, message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+						message, sourceName, _ := fakeMetronClient.SendAppLogArgsForCall(0)
 						Expect(message).To(Equal("Starting health monitoring of container"))
 						Expect(sourceName).To(Equal("test"))
 
@@ -1142,7 +1142,7 @@ var _ = Describe("Transformer", func() {
 
 					It("should default to HEALTH for log source", func() {
 						Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
-						_, _, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+						_, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 						Expect(sourceName).To(Equal("HEALTH"))
 					})
 
@@ -1153,7 +1153,7 @@ var _ = Describe("Transformer", func() {
 
 						It("logs healthcheck errors with log source from check defintion", func() {
 							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(BeNumerically(">=", 1))
-							_, _, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+							_, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 							Expect(sourceName).To(Equal("healthcheck"))
 						})
 					})
@@ -1629,18 +1629,18 @@ var _ = Describe("Transformer", func() {
 
 				It("logs healthcheck error with the same source in a readable way", func() {
 					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
-					_, message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+					message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
 					Expect(message).To(ContainSubstring("healthcheck failed; healthcheck failed"))
 				})
 
 				It("logs the container lifecycle", func() {
 					Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
-					_, message, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
+					message, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
 					Expect(message).To(Equal("Starting health monitoring of container"))
-					_, message, _, _ = fakeMetronClient.SendAppLogArgsForCall(1)
+					message, _, _ = fakeMetronClient.SendAppLogArgsForCall(1)
 					Expect(message).To(Equal("Container became healthy"))
-					_, message, _, _ = fakeMetronClient.SendAppLogArgsForCall(2)
+					message, _, _ = fakeMetronClient.SendAppLogArgsForCall(2)
 					Expect(message).To(Equal("Container became unhealthy"))
 				})
 			})

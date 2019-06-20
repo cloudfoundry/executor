@@ -14,16 +14,20 @@ import (
 var _ = Describe("LogStreamer", func() {
 	var (
 		streamer   log_streamer.LogStreamer
-		fakeClient *mfakes.FakeLogSender
+		fakeClient *mfakes.FakeIngressClient
 	)
 
 	guid := "the-guid"
 	sourceName := "the-source-name"
 	index := 11
+	tags := map[string]string{
+		"foo": "bar",
+		"biz": "baz",
+	}
 
 	BeforeEach(func() {
-		fakeClient = mfakes.NewFakeLogSender()
-		streamer = log_streamer.New(guid, sourceName, index, fakeClient)
+		fakeClient = &mfakes.FakeIngressClient{}
+		streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient)
 	})
 
 	Context("when told to emit", func() {
@@ -34,23 +38,23 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should emit that message", func() {
-				logs := fakeClient.Logs()
+				Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
-				Expect(logs).To(HaveLen(2))
+				message, sn, tags := fakeClient.SendAppLogArgsForCall(0)
+				Expect(tags["source_id"]).To(Equal(guid))
+				Expect(sn).To(Equal(sourceName))
+				Expect(message).To(Equal("this is a log"))
+				Expect(tags["instance_id"]).To(Equal("11"))
+				Expect(tags["foo"]).To(Equal("bar"))
+				Expect(tags["biz"]).To(Equal("baz"))
 
-				emission := logs[0]
-				Expect(emission.AppId).To(Equal(guid))
-				Expect(emission.SourceType).To(Equal(sourceName))
-				Expect(string(emission.Message)).To(Equal("this is a log"))
-				Expect(emission.MessageType).To(Equal(mfakes.OUT))
-				Expect(emission.SourceInstance).To(Equal("11"))
-
-				emission = logs[1]
-				Expect(emission.AppId).To(Equal(guid))
-				Expect(emission.SourceType).To(Equal(sourceName))
-				Expect(emission.SourceInstance).To(Equal("11"))
-				Expect(string(emission.Message)).To(Equal("this is another log"))
-				Expect(emission.MessageType).To(Equal(mfakes.OUT))
+				message, sn, tags = fakeClient.SendAppLogArgsForCall(1)
+				Expect(tags["source_id"]).To(Equal(guid))
+				Expect(sn).To(Equal(sourceName))
+				Expect(message).To(Equal("this is another log"))
+				Expect(tags["instance_id"]).To(Equal("11"))
+				Expect(tags["foo"]).To(Equal("bar"))
+				Expect(tags["biz"]).To(Equal("baz"))
 			})
 		})
 
@@ -60,12 +64,11 @@ var _ = Describe("LogStreamer", func() {
 					newSourceName := "new-source-name"
 					streamer = streamer.WithSource(newSourceName)
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 
-					logs := fakeClient.Logs()
-					Expect(logs).To(HaveLen(1))
+					_, sn, _ := fakeClient.SendAppLogArgsForCall(0)
 
-					emission := logs[0]
-					Expect(emission.SourceType).To(Equal(newSourceName))
+					Expect(sn).To(Equal(newSourceName))
 				})
 			})
 
@@ -74,11 +77,11 @@ var _ = Describe("LogStreamer", func() {
 					streamer = streamer.WithSource("")
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
 
-					logs := fakeClient.Logs()
-					Expect(logs).To(HaveLen(1))
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 
-					emission := logs[0]
-					Expect(emission.SourceType).To(Equal(sourceName))
+					_, sn, _ := fakeClient.SendAppLogArgsForCall(0)
+
+					Expect(sn).To(Equal(sourceName))
 				})
 			})
 		})
@@ -88,16 +91,17 @@ var _ = Describe("LogStreamer", func() {
 				Expect(streamer.SourceName()).To(Equal(sourceName))
 			})
 		})
+
 		Context("when given a message with all sorts of fun newline characters", func() {
 			BeforeEach(func() {
 				fmt.Fprintf(streamer.Stdout(), "A\nB\rC\n\rD\r\nE\n\n\nF\r\r\rG\n\r\r\n\n\n\r")
 			})
 
 			It("should do the right thing", func() {
-				logs := fakeClient.Logs()
-				Expect(logs).To(HaveLen(7))
+				Expect(fakeClient.SendAppLogCallCount()).To(Equal(7))
 				for i, expectedString := range []string{"A", "B", "C", "D", "E", "F", "G"} {
-					Expect(string(logs[i].Message)).To(Equal(expectedString))
+					message, _, _ := fakeClient.SendAppLogArgsForCall(i)
+					Expect(message).To(Equal(expectedString))
 				}
 			})
 		})
@@ -111,10 +115,9 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("concatenates them, until a new-line is received, and then emits that", func() {
-				logs := fakeClient.Logs()
-				Expect(logs).To(HaveLen(1))
-				emission := fakeClient.Logs()[0]
-				Expect(string(emission.Message)).To(Equal("this is a log it is made of wood - and it is longerthan it seems"))
+				Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+				message, _, _ := fakeClient.SendAppLogArgsForCall(0)
+				Expect(message).To(Equal("this is a log it is made of wood - and it is longerthan it seems"))
 			})
 		})
 
@@ -124,13 +127,13 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("should break the message up into multiple loggings", func() {
-				Expect(fakeClient.Logs()).To(HaveLen(2))
+				Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
-				emission := fakeClient.Logs()[0]
-				Expect(string(emission.Message)).To(Equal("this is a log"))
+				message, _, _ := fakeClient.SendAppLogArgsForCall(0)
+				Expect(message).To(Equal("this is a log"))
 
-				emission = fakeClient.Logs()[1]
-				Expect(string(emission.Message)).To(Equal("and this is another"))
+				message, _, _ = fakeClient.SendAppLogArgsForCall(1)
+				Expect(message).To(Equal("and this is another"))
 			})
 		})
 
@@ -144,10 +147,10 @@ var _ = Describe("LogStreamer", func() {
 					fmt.Fprintf(streamer.Stdout(), message+"\n")
 				})
 
-				It("should break the message up and send multiple messages", func() {
-					Expect(fakeClient.Logs()).To(HaveLen(1))
-					emission := fakeClient.Logs()[0]
-					Expect(string(emission.Message)).To(Equal(message))
+				It("should not break the message up and send a single messages", func() {
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+					ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+					Expect(ms).To(Equal(message))
 				})
 			})
 
@@ -161,11 +164,16 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Expect(fakeClient.Logs()).To(HaveLen(4))
-					Expect(string(fakeClient.Logs()[0].Message)).To(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
-					Expect(string(fakeClient.Logs()[1].Message)).To(Equal(strings.Repeat("8", log_streamer.MAX_MESSAGE_SIZE)))
-					Expect(string(fakeClient.Logs()[2].Message)).To(Equal(strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE)))
-					Expect(string(fakeClient.Logs()[3].Message)).To(Equal("hello"))
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(4))
+
+					ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+					Expect(ms).To(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
+					ms, _, _ = fakeClient.SendAppLogArgsForCall(1)
+					Expect(ms).To(Equal(strings.Repeat("8", log_streamer.MAX_MESSAGE_SIZE)))
+					ms, _, _ = fakeClient.SendAppLogArgsForCall(2)
+					Expect(ms).To(Equal(strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE)))
+					ms, _, _ = fakeClient.SendAppLogArgsForCall(3)
+					Expect(ms).To(Equal("hello"))
 				})
 			})
 
@@ -177,10 +185,12 @@ var _ = Describe("LogStreamer", func() {
 
 				It("should break the message up and send multiple messages without sending error runes", func() {
 					fmt.Fprintf(streamer.Stdout(), message)
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
-					Expect(fakeClient.Logs()).To(HaveLen(2))
-					Expect(string(fakeClient.Logs()[0].Message)).To(Equal(strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)))
-					Expect(string(fakeClient.Logs()[1].Message)).To(Equal("\U0001F428"))
+					ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+					Expect(ms).To(Equal(strings.Repeat("a", log_streamer.MAX_MESSAGE_SIZE-3)))
+					ms, _, _ = fakeClient.SendAppLogArgsForCall(1)
+					Expect(ms).To(Equal("\U0001F428"))
 				})
 
 				Context("with an invalid utf8 character in the message", func() {
@@ -195,12 +205,13 @@ var _ = Describe("LogStreamer", func() {
 						fmt.Fprintf(streamer.Stdout(), message+utfChar[0:2])
 						fmt.Fprintf(streamer.Stdout(), utfChar+"\n")
 
-						Expect(fakeClient.Logs()).To(HaveLen(2))
-						emission := fakeClient.Logs()[0]
-						Expect(string(emission.Message)).To(Equal(message + utfChar[0:2]))
+						Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
-						emission = fakeClient.Logs()[1]
-						Expect(string(emission.Message)).To(Equal(utfChar))
+						ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+						Expect(ms).To(Equal(message + utfChar[0:2]))
+
+						ms, _, _ = fakeClient.SendAppLogArgsForCall(1)
+						Expect(ms).To(Equal(utfChar))
 					})
 				})
 
@@ -216,9 +227,10 @@ var _ = Describe("LogStreamer", func() {
 					It("drops the last 3 bytes", func() {
 						fmt.Fprintf(streamer.Stdout(), message)
 
-						Expect(fakeClient.Logs()).To(HaveLen(1))
-						emission := fakeClient.Logs()[0]
-						Expect(string(emission.Message)).To(Equal(message[0 : len(message)-3]))
+						Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+
+						ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+						Expect(ms).To(Equal(message[0 : len(message)-3]))
 					})
 				})
 			})
@@ -231,9 +243,12 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages", func() {
-					Expect(fakeClient.Logs()).To(HaveLen(2))
-					Expect(string(fakeClient.Logs()[0].Message)).To(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
-					Expect(string(fakeClient.Logs()[1].Message)).To(Equal("8888"))
+					Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
+
+					ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
+					Expect(ms).To(Equal(strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)))
+					ms, _, _ = fakeClient.SendAppLogArgsForCall(1)
+					Expect(ms).To(Equal("8888"))
 				})
 			})
 		})
@@ -242,26 +257,26 @@ var _ = Describe("LogStreamer", func() {
 	Context("when told to emit stderr", func() {
 		It("should handle short messages", func() {
 			fmt.Fprintf(streamer.Stderr(), "this is a log\nand this is another\nand this one isn't done yet...")
-			Expect(fakeClient.Logs()).To(HaveLen(2))
+			Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(2))
 
-			emission := fakeClient.Logs()[0]
-			Expect(string(emission.Message)).To(Equal("this is a log"))
-			Expect(emission.SourceType).To(Equal(sourceName))
-			Expect(emission.MessageType).To(Equal(mfakes.ERR))
+			msg, sn, _ := fakeClient.SendAppErrorLogArgsForCall(0)
+			Expect(msg).To(Equal("this is a log"))
+			Expect(sn).To(Equal(sourceName))
 
-			emission = fakeClient.Logs()[1]
-			Expect(string(emission.Message)).To(Equal("and this is another"))
+			msg, sn, _ = fakeClient.SendAppErrorLogArgsForCall(1)
+			Expect(msg).To(Equal("and this is another"))
+			Expect(sn).To(Equal(sourceName))
 		})
 
 		It("should handle long messages", func() {
 			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE+1)+"\n")
-			Expect(fakeClient.Logs()).To(HaveLen(2))
+			Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(2))
 
-			emission := fakeClient.Logs()[0]
-			Expect(string(emission.Message)).To(Equal(strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE)))
+			msg, _, _ := fakeClient.SendAppErrorLogArgsForCall(0)
+			Expect(msg).To(Equal(strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE)))
 
-			emission = fakeClient.Logs()[1]
-			Expect(string(emission.Message)).To(Equal("e"))
+			msg, _, _ = fakeClient.SendAppErrorLogArgsForCall(1)
+			Expect(msg).To(Equal("e"))
 		})
 	})
 
@@ -270,48 +285,51 @@ var _ = Describe("LogStreamer", func() {
 			fmt.Fprintf(streamer.Stdout(), "this is a stdout")
 			fmt.Fprintf(streamer.Stderr(), "this is a stderr")
 
-			Expect(fakeClient.Logs()).To(HaveLen(0))
+			Expect(fakeClient.SendAppLogCallCount()).To(Equal(0))
+			Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(0))
 
 			streamer.Flush()
 
-			Expect(fakeClient.Logs()).To(HaveLen(2))
-			Expect(fakeClient.Logs()[0].MessageType).To(Equal(mfakes.OUT))
-			Expect(fakeClient.Logs()[1].MessageType).To(Equal(mfakes.ERR))
+			Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+			Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(1))
 		})
 	})
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = log_streamer.New("", sourceName, index, fakeClient)
+			streamer = log_streamer.New("", sourceName, index, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
 			streamer.Flush()
 
-			Expect(fakeClient.Logs()).To(BeEmpty())
+			Expect(fakeClient.SendAppLogCallCount()).To(Equal(0))
 		})
 	})
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = log_streamer.New(guid, "", -1, fakeClient)
+			streamer = log_streamer.New(guid, "", -1, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Expect(fakeClient.Logs()[0].SourceType).To(Equal(log_streamer.DefaultLogSource))
-
+			Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+			_, sn, _ := fakeClient.SendAppLogArgsForCall(0)
+			Expect(sn).To(Equal(log_streamer.DefaultLogSource))
 		})
 	})
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = log_streamer.New(guid, sourceName, -1, fakeClient)
+			streamer = log_streamer.New(guid, sourceName, -1, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
 
-			Expect(fakeClient.Logs()[0].SourceInstance).To(Equal("-1"))
+			Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+			_, _, tags := fakeClient.SendAppLogArgsForCall(0)
+			Expect(tags["instance_id"]).To(Equal("-1"))
 		})
 	})
 
@@ -336,7 +354,7 @@ var _ = Describe("LogStreamer", func() {
 		})
 
 		It("does not trigger data races", func() {
-			Eventually(fakeClient.Logs).Should(HaveLen(2))
+			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
 		})
 	})
 })
