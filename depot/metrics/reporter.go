@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 )
 
@@ -42,6 +43,7 @@ type Reporter struct {
 	Clock          clock.Clock
 	Logger         lager.Logger
 	MetronClient   loggingclient.IngressClient
+	Tags           map[string]string
 }
 
 func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -108,56 +110,58 @@ func (reporter *Reporter) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				}
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(totalMemoryMetric, totalCapacity.MemoryMB)
+			tagOption := loggregator.WithEnvelopeTags(reporter.Tags)
+
+			err = reporter.MetronClient.SendMebiBytes(totalMemoryMetric, totalCapacity.MemoryMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-total-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(totalDiskMetric, totalCapacity.DiskMB)
+			err = reporter.MetronClient.SendMebiBytes(totalDiskMetric, totalCapacity.DiskMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-total-disk-metric", err)
 			}
-			err = reporter.MetronClient.SendMetric(totalContainersMetric, totalCapacity.Containers)
+			err = reporter.MetronClient.SendMetric(totalContainersMetric, totalCapacity.Containers, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-total-container-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(remainingMemoryMetric, remainingCapacity.MemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(remainingMemoryMetric, remainingCapacity.MemoryMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(remainingDiskMetric, remainingCapacity.DiskMB)
+			err = reporter.MetronClient.SendMebiBytes(remainingDiskMetric, remainingCapacity.DiskMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-disk-metric", err)
 			}
-			err = reporter.MetronClient.SendMetric(remainingContainersMetric, remainingCapacity.Containers)
+			err = reporter.MetronClient.SendMetric(remainingContainersMetric, remainingCapacity.Containers, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-remaining-containers-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(allocatedMemoryMetric, allocatedMemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(allocatedMemoryMetric, allocatedMemoryMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-allocated-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(allocatedDiskMetric, allocatedDiskMB)
+			err = reporter.MetronClient.SendMebiBytes(allocatedDiskMetric, allocatedDiskMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-allocated-disk-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMebiBytes(containerUsageMemoryMetric, containerUsageMemoryMB)
+			err = reporter.MetronClient.SendMebiBytes(containerUsageMemoryMetric, containerUsageMemoryMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-container-memory-metric", err)
 			}
-			err = reporter.MetronClient.SendMebiBytes(containerUsageDiskMetric, containerUsageDiskMB)
+			err = reporter.MetronClient.SendMebiBytes(containerUsageDiskMetric, containerUsageDiskMB, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-container-disk-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMetric(containerCount, nContainers)
+			err = reporter.MetronClient.SendMetric(containerCount, nContainers, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-container-count-metric", err)
 			}
 
-			err = reporter.MetronClient.SendMetric(startingContainerCount, startingCount)
+			err = reporter.MetronClient.SendMetric(startingContainerCount, startingCount, tagOption)
 			if err != nil {
 				logger.Error("failed-to-send-starting-container-count-metric", err)
 			}

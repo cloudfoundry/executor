@@ -15,9 +15,15 @@ import (
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
 	loggregator "code.cloudfoundry.org/go-loggregator"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 )
+
+type metricEnvelope struct {
+	value int
+	tags  map[string]string
+}
 
 var _ = Describe("Reporter", func() {
 	var (
@@ -28,7 +34,7 @@ var _ = Describe("Reporter", func() {
 
 		reporter  ifrit.Process
 		logger    *lagertest.TestLogger
-		metricMap map[string]int
+		metricMap map[string]metricEnvelope
 		m         sync.RWMutex
 	)
 
@@ -81,19 +87,22 @@ var _ = Describe("Reporter", func() {
 	})
 
 	JustBeforeEach(func() {
-		metricMap = make(map[string]int)
-		fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
+		metricMap = make(map[string]metricEnvelope)
+
+		sendStub := func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 			m.Lock()
-			metricMap[name] = value
+			envelope := metricEnvelope{value: value, tags: map[string]string{}}
+			e := &loggregator_v2.Envelope{Tags: map[string]string{}}
+			for _, opt := range opts {
+				opt(e)
+			}
+			envelope.tags = e.Tags
+			metricMap[name] = envelope
 			m.Unlock()
 			return nil
 		}
-		fakeMetronClient.SendMebiBytesStub = func(name string, value int) error {
-			m.Lock()
-			metricMap[name] = value
-			m.Unlock()
-			return nil
-		}
+		fakeMetronClient.SendMetricStub = sendStub
+		fakeMetronClient.SendMebiBytesStub = sendStub
 
 		reporter = ifrit.Invoke(&metrics.Reporter{
 			ExecutorSource: executorClient,
@@ -101,6 +110,7 @@ var _ = Describe("Reporter", func() {
 			Clock:          fakeClock,
 			Logger:         logger,
 			MetronClient:   fakeMetronClient,
+			Tags:           map[string]string{"foo": "bar"},
 		})
 		fakeClock.WaitForWatcherAndIncrement(reportInterval)
 
@@ -121,22 +131,36 @@ var _ = Describe("Reporter", func() {
 		remainingDisk := metricMap["CapacityRemainingDisk"]
 		totalDisk := metricMap["CapacityTotalDisk"]
 
-		Eventually(totalMemory).Should(Equal(1024))
-		Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(4096))
-		Eventually(totalDisk).Should(Equal(2048))
+		expectedTags := map[string]string{"foo": "bar"}
 
-		Eventually(remainingMemory).Should(Equal(128))
-		Eventually(remainingDisk).Should(Equal(256))
-		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(512))
+		Eventually(totalMemory.value).Should(Equal(1024))
+		Eventually(totalMemory.tags).Should(Equal(expectedTags))
+		Eventually(metricMap["CapacityTotalContainers"].value).Should(Equal(4096))
+		Eventually(metricMap["CapacityTotalContainers"].tags).Should(Equal(expectedTags))
+		Eventually(totalDisk.value).Should(Equal(2048))
+		Eventually(totalDisk.tags).Should(Equal(expectedTags))
 
-		Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(totalMemory - remainingMemory))
-		Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(totalDisk - remainingDisk))
+		Eventually(remainingMemory.value).Should(Equal(128))
+		Eventually(remainingMemory.tags).Should(Equal(expectedTags))
+		Eventually(remainingDisk.value).Should(Equal(256))
+		Eventually(remainingDisk.tags).Should(Equal(expectedTags))
+		Eventually(metricMap["CapacityRemainingContainers"].value).Should(Equal(512))
+		Eventually(metricMap["CapacityRemainingContainers"].tags).Should(Equal(expectedTags))
 
-		Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(556))
-		Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(1312))
+		Eventually(metricMap["CapacityAllocatedMemory"].value).Should(Equal(totalMemory.value - remainingMemory.value))
+		Eventually(metricMap["CapacityAllocatedMemory"].tags).Should(Equal(expectedTags))
+		Eventually(metricMap["CapacityAllocatedDisk"].value).Should(Equal(totalDisk.value - remainingDisk.value))
+		Eventually(metricMap["CapacityAllocatedDisk"].tags).Should(Equal(expectedTags))
 
-		Eventually(metricMap["ContainerCount"]).Should(Equal(5))
-		Eventually(metricMap["StartingContainerCount"]).Should(Equal(3))
+		Eventually(metricMap["ContainerUsageMemory"].value).Should(Equal(556))
+		Eventually(metricMap["ContainerUsageMemory"].tags).Should(Equal(expectedTags))
+		Eventually(metricMap["ContainerUsageDisk"].value).Should(Equal(1312))
+		Eventually(metricMap["ContainerUsageDisk"].tags).Should(Equal(expectedTags))
+
+		Eventually(metricMap["ContainerCount"].value).Should(Equal(5))
+		Eventually(metricMap["ContainerCount"].tags).Should(Equal(expectedTags))
+		Eventually(metricMap["StartingContainerCount"].value).Should(Equal(3))
+		Eventually(metricMap["StartingContainerCount"].tags).Should(Equal(expectedTags))
 
 		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
 			"container-1": executor.Metrics{
@@ -178,17 +202,17 @@ var _ = Describe("Reporter", func() {
 		remainingMemory = metricMap["CapacityRemainingMemory"]
 		remainingDisk = metricMap["CapacityRemainingDisk"]
 
-		Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(129))
-		Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(257))
-		Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(513))
-		Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(totalMemory - remainingMemory))
-		Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(totalDisk - remainingDisk))
+		Eventually(metricMap["CapacityRemainingMemory"].value).Should(Equal(129))
+		Eventually(metricMap["CapacityRemainingDisk"].value).Should(Equal(257))
+		Eventually(metricMap["CapacityRemainingContainers"].value).Should(Equal(513))
+		Eventually(metricMap["CapacityAllocatedMemory"].value).Should(Equal(totalMemory.value - remainingMemory.value))
+		Eventually(metricMap["CapacityAllocatedDisk"].value).Should(Equal(totalDisk.value - remainingDisk.value))
 
-		Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(500))
-		Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(700))
+		Eventually(metricMap["ContainerUsageMemory"].value).Should(Equal(500))
+		Eventually(metricMap["ContainerUsageDisk"].value).Should(Equal(700))
 
-		Eventually(metricMap["ContainerCount"]).Should(Equal(2))
-		Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
+		Eventually(metricMap["ContainerCount"].value).Should(Equal(2))
+		Eventually(metricMap["StartingContainerCount"].value).Should(Equal(0))
 
 		m.RUnlock()
 	})
@@ -202,9 +226,9 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
-			Eventually(metricMap["CapacityRemainingMemory"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityRemainingDisk"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityRemainingContainers"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityRemainingMemory"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityRemainingDisk"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityRemainingContainers"].value).Should(Equal(-1))
 			m.RUnlock()
 		})
 
@@ -212,8 +236,8 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
-			Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedMemory"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedDisk"].value).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})
@@ -227,9 +251,9 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
-			Eventually(metricMap["CapacityTotalMemory"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityTotalContainers"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityTotalDisk"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityTotalMemory"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityTotalContainers"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityTotalDisk"].value).Should(Equal(-1))
 			m.RUnlock()
 		})
 
@@ -237,8 +261,8 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
-			Eventually(metricMap["CapacityAllocatedMemory"]).Should(Equal(-1))
-			Eventually(metricMap["CapacityAllocatedDisk"]).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedMemory"].value).Should(Equal(-1))
+			Eventually(metricMap["CapacityAllocatedDisk"].value).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})
@@ -252,8 +276,8 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMetricCallCount).Should(Equal(4))
 
 			m.RLock()
-			Eventually(metricMap["ContainerCount"]).Should(Equal(-1))
-			Eventually(metricMap["StartingContainerCount"]).Should(Equal(0))
+			Eventually(metricMap["ContainerCount"].value).Should(Equal(-1))
+			Eventually(metricMap["StartingContainerCount"].value).Should(Equal(0))
 			m.RUnlock()
 		})
 	})
@@ -267,8 +291,8 @@ var _ = Describe("Reporter", func() {
 			Eventually(fakeMetronClient.SendMebiBytesCallCount).Should(Equal(8))
 
 			m.RLock()
-			Eventually(metricMap["ContainerUsageDisk"]).Should(Equal(-1))
-			Eventually(metricMap["ContainerUsageMemory"]).Should(Equal(-1))
+			Eventually(metricMap["ContainerUsageDisk"].value).Should(Equal(-1))
+			Eventually(metricMap["ContainerUsageMemory"].value).Should(Equal(-1))
 			m.RUnlock()
 		})
 	})

@@ -150,7 +150,7 @@ var (
 	metricsWorkPool, readWorkPool      *workpool.WorkPool
 )
 
-func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
+func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
 	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
 
@@ -357,6 +357,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID string,
 				Clock:          clock,
 				Logger:         logger,
 				MetronClient:   metronClient,
+				Tags:           map[string]string{"zone": zone},
 			}},
 			{"hub-closer", closeHub(logger, hub)},
 			{"container-metrics-reporter", statsReporter},
