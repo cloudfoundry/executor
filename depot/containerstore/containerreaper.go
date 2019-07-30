@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
@@ -92,7 +93,7 @@ func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error
 
 func (r *containerReaper) fetchGardenContainerHandles(logger lager.Logger) (map[string]struct{}, error) {
 	properties := garden.Properties{
-		ContainerOwnerProperty: r.config.OwnerName,
+		executor.ContainerOwnerProperty: r.config.OwnerName,
 	}
 
 	gardenContainers, err := r.gardenClient.Containers(properties)

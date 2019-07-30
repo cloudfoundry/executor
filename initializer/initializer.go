@@ -58,7 +58,7 @@ type executorContainers struct {
 
 func (containers *executorContainers) Containers() ([]garden.Container, error) {
 	return containers.gardenClient.Containers(garden.Properties{
-		containerstore.ContainerOwnerProperty: containers.owner,
+		executor.ContainerOwnerProperty: containers.owner,
 	})
 }
 
@@ -151,8 +151,14 @@ var (
 )
 
 func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
-	gardenHealthcheckRootFS string, metronClient loggingclient.IngressClient,
+	rootFSes map[string]string, metronClient loggingclient.IngressClient,
 	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
+
+	var gardenHealthcheckRootFS string
+	for _, rootFSPath := range rootFSes {
+		gardenHealthcheckRootFS = rootFSPath
+		break
+	}
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
@@ -246,6 +252,10 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	if err != nil {
 		return nil, nil, grouper.Members{}, err
 	}
+	rootFSSizer, err := configuration.GetRootFSSizes(logger, gardenClient, guidgen.DefaultGenerator, config.ContainerOwnerName, rootFSes)
+	if err != nil {
+		return nil, nil, grouper.Members{}, err
+	}
 
 	containerConfig := containerstore.ContainerConfig{
 		OwnerName:              config.ContainerOwnerName,
@@ -301,6 +311,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		transformer,
 		config.TrustedSystemCertificatesPath,
 		metronClient,
+		rootFSSizer,
 		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
 		proxyConfigHandler,

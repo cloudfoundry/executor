@@ -58,6 +58,8 @@ var _ = Describe("Initializer", func() {
 
 		fakeGarden.RouteToHandler("GET", "/ping", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
 		fakeGarden.RouteToHandler("GET", "/containers", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
+		fakeGarden.RouteToHandler("GET", "/containers/bulk_metrics", ghttp.RespondWithJSONEncoded(http.StatusOK,
+			garden.ContainerMetricsEntry{}))
 		fakeGarden.RouteToHandler("GET", "/capacity", ghttp.RespondWithJSONEncoded(http.StatusOK,
 			garden.Capacity{MemoryInBytes: 1024 * 1024 * 1024, DiskInBytes: 20 * 1048 * 1024 * 1024, MaxContainers: 4}))
 		fakeGarden.RouteToHandler("GET", "/containers/bulk_info", ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{}))
@@ -124,7 +126,8 @@ var _ = Describe("Initializer", func() {
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
-			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "some-zone", "fake-rootfs", fakeMetronClient, fakeClock)
+			rootFSes := map[string]string{}
+			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "some-zone", rootFSes, fakeMetronClient, fakeClock)
 			errCh <- err
 			close(done)
 		}()

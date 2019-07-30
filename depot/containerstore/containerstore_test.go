@@ -20,6 +20,7 @@ import (
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
+	"code.cloudfoundry.org/executor/initializer/configuration/configurationfakes"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/garden/server"
@@ -64,6 +65,7 @@ var _ = Describe("Container Store", func() {
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
 		fakeMetronClient *mfakes.FakeIngressClient
+		fakeRootFSSizer  *configurationfakes.FakeRootFSSizer
 	)
 
 	var containerState = func(guid string) func() executor.State {
@@ -98,6 +100,7 @@ var _ = Describe("Container Store", func() {
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
+		fakeRootFSSizer = new(configurationfakes.FakeRootFSSizer)
 
 		credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 			close(ready)
@@ -137,6 +140,7 @@ var _ = Describe("Container Store", func() {
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
 			fakeMetronClient,
+			fakeRootFSSizer,
 			false,
 			"/var/vcap/packages/healthcheck",
 			proxyManager,
@@ -393,6 +397,8 @@ var _ = Describe("Container Store", func() {
 
 				gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: externalIP, ContainerIP: internalIP}, nil)
 				gardenClient.CreateReturns(gardenContainer, nil)
+
+				fakeRootFSSizer.RootFSSizeFromPathReturns(1000)
 			})
 
 			JustBeforeEach(func() {
@@ -457,6 +463,7 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						fakeRootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -474,8 +481,8 @@ var _ = Describe("Container Store", func() {
 					containerSpec := gardenClient.CreateArgsForCall(0)
 					Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
 
-					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeExclusive))
-					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(resource.DiskMB * 1024 * 1024))
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB + 1000) * 1024 * 1024))
 					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
 
 					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
@@ -496,8 +503,8 @@ var _ = Describe("Container Store", func() {
 				containerSpec := gardenClient.CreateArgsForCall(0)
 				Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
 
-				Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeExclusive))
-				Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(resource.DiskMB * 1024 * 1024))
+				Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+				Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB + 1000) * 1024 * 1024))
 				Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
 
 				Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
@@ -515,7 +522,7 @@ var _ = Describe("Container Store", func() {
 				Expect(mounts).To(Equal(runReq.CachedDependencies))
 			})
 
-			It("creates the container in garden with the correct limits", func() {
+			It("creates the container in garden with the correct bind mounts", func() {
 				expectedMount := garden.BindMount{
 					SrcPath: "foo",
 					DstPath: "/etc/foo",
@@ -542,9 +549,9 @@ var _ = Describe("Container Store", func() {
 				containerSpec := gardenClient.CreateArgsForCall(0)
 
 				Expect(containerSpec.Properties).To(Equal(garden.Properties{
-					containerstore.ContainerOwnerProperty: ownerName,
-					"network.some-key":                    "some-value",
-					"network.some-other-key":              "some-other-value",
+					executor.ContainerOwnerProperty: ownerName,
+					"network.some-key":              "some-value",
+					"network.some-other-key":        "some-other-value",
 				}))
 			})
 
@@ -559,8 +566,26 @@ var _ = Describe("Container Store", func() {
 					containerSpec := gardenClient.CreateArgsForCall(0)
 
 					Expect(containerSpec.Properties).To(Equal(garden.Properties{
-						containerstore.ContainerOwnerProperty: ownerName,
+						executor.ContainerOwnerProperty: ownerName,
 					}))
+				})
+			})
+
+			Context("if the RootFSPath is not a known preloaded rootfs", func() {
+				BeforeEach(func() {
+					runReq.RunInfo.RootFSPath = "docker://some/repo"
+					fakeRootFSSizer.RootFSSizeFromPathReturns(0)
+				})
+
+				It("sets the correct disk limit", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(resource.DiskMB * 1024 * 1024))
 				})
 			})
 
@@ -638,6 +663,7 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						fakeRootFSSizer,
 						true,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -1119,6 +1145,7 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						fakeRootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -1201,6 +1228,7 @@ var _ = Describe("Container Store", func() {
 							megatron,
 							"/var/vcap/data/cf-system-trusted-certs",
 							fakeMetronClient,
+							fakeRootFSSizer,
 							false,
 							"/var/vcap/packages/healthcheck",
 							proxyManager,
@@ -1290,21 +1318,6 @@ var _ = Describe("Container Store", func() {
 						Mode:    garden.BindMountModeRO,
 						Origin:  garden.BindMountOriginHost,
 					}))
-				})
-			})
-
-			Context("when a total disk scope is request", func() {
-				BeforeEach(func() {
-					runReq.DiskScope = executor.TotalDiskLimit
-				})
-
-				It("creates the container with the correct disk scope", func() {
-					_, err := containerStore.Create(logger, containerGuid)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(gardenClient.CreateCallCount()).To(Equal(1))
-					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
 				})
 			})
 
@@ -2356,6 +2369,7 @@ var _ = Describe("Container Store", func() {
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
 						fakeMetronClient,
+						fakeRootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -2448,9 +2462,9 @@ var _ = Describe("Container Store", func() {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	initializeContainer := func(guid string, diskScope executor.DiskLimitScope) {
+	initializeContainer := func(guid string, rootFSPath string) {
 		runInfo := executor.RunInfo{
-			RootFSPath:         "/foo/bar",
+			RootFSPath:         rootFSPath,
 			CPUWeight:          2,
 			StartTimeoutMs:     50000,
 			Privileged:         true,
@@ -2469,7 +2483,6 @@ var _ = Describe("Container Store", func() {
 			Network: &executor.Network{
 				Properties: map[string]string{},
 			},
-			DiskScope: diskScope,
 		}
 
 		req := &executor.RunRequest{
@@ -2503,10 +2516,10 @@ var _ = Describe("Container Store", func() {
 			reserveContainer(containerGuid5)
 			reserveContainer(containerGuid6)
 
-			initializeContainer(containerGuid1, executor.ExclusiveDiskLimit)
-			initializeContainer(containerGuid2, executor.TotalDiskLimit)
-			initializeContainer(containerGuid3, executor.ExclusiveDiskLimit)
-			initializeContainer(containerGuid4, executor.ExclusiveDiskLimit)
+			initializeContainer(containerGuid1, "/foo/bar")
+			initializeContainer(containerGuid2, "docker://repo")
+			initializeContainer(containerGuid3, "/foo/bar")
+			initializeContainer(containerGuid4, "/foo/bar")
 
 			gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: "6.6.6.6"}, nil)
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -2526,7 +2539,7 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 1024,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							ExclusiveBytesUsed: 2048,
+							TotalBytesUsed: uint64(1000*1024*1024) + 2048,
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 5000000000,
@@ -2541,8 +2554,7 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 512,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							TotalBytesUsed:     256,
-							ExclusiveBytesUsed: 128, // should not be reported back. TotalBytesUsed should be used instead
+							TotalBytesUsed: 256,
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
@@ -2558,7 +2570,7 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 512,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							ExclusiveBytesUsed: 128,
+							TotalBytesUsed: uint64(1000*1024*1024) + 128,
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
@@ -2570,6 +2582,15 @@ var _ = Describe("Container Store", func() {
 				"BOGUS-GUID": garden.ContainerMetricsEntry{},
 			}
 			gardenClient.BulkMetricsReturns(bulkMetrics, nil)
+
+			fakeRootFSSizer.RootFSSizeFromPathStub = func(path string) uint64 {
+				switch path {
+				case "/foo/bar":
+					return 1000
+				default:
+					return 0
+				}
+			}
 		})
 
 		It("returns metrics for all known containers in the running and created state", func() {
@@ -2850,9 +2871,9 @@ var _ = Describe("Container Store", func() {
 			Expect(gardenClient.ContainersCallCount()).To(Equal(2))
 
 			properties := gardenClient.ContainersArgsForCall(0)
-			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
+			Expect(properties[executor.ContainerOwnerProperty]).To(Equal(ownerName))
 			properties = gardenClient.ContainersArgsForCall(1)
-			Expect(properties[containerstore.ContainerOwnerProperty]).To(Equal(ownerName))
+			Expect(properties[executor.ContainerOwnerProperty]).To(Equal(ownerName))
 
 			clock.WaitForWatcherAndIncrement(30 * time.Millisecond)
 

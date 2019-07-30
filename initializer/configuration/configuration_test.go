@@ -2,13 +2,18 @@ package configuration_test
 
 import (
 	"errors"
+	"strings"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/fakes"
+	"code.cloudfoundry.org/executor/guidgen/fakeguidgen"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("configuration", func() {
@@ -194,6 +199,158 @@ var _ = Describe("configuration", func() {
 				It("uses the garden server's max containers", func() {
 					Expect(capacity.Containers).To(Equal(4))
 				})
+			})
+		})
+	})
+
+	Describe("GetRootFSSizes", func() {
+		var (
+			logger   lager.Logger
+			rootFSes map[string]string
+
+			fakeGuidGen  *fakeguidgen.FakeGenerator
+			guidToRootFS map[string]string
+
+			rootFSSizes  configuration.RootFSSizer
+			getRootFSErr error
+		)
+
+		BeforeEach(func() {
+			logger = lagertest.NewTestLogger("configuration")
+			rootFSes = map[string]string{
+				"rootFS1": "/rootFS1/path",
+				"rootFS2": "/rootFS2/path",
+			}
+
+			fakeGuidGen = new(fakeguidgen.FakeGenerator)
+			fakeGuidGen.GuidReturnsOnCall(0, "g1")
+			fakeGuidGen.GuidReturnsOnCall(1, "g2")
+			guidToRootFS = make(map[string]string)
+		})
+
+		JustBeforeEach(func() {
+			rootFSSizes, getRootFSErr = configuration.GetRootFSSizes(logger, gardenClient, fakeGuidGen, "some-owner-name", rootFSes)
+		})
+
+		Context("when container with provided rootFS is created", func() {
+			BeforeEach(func() {
+				expectedMetrics := map[string]garden.ContainerMetricsEntry{
+					"rootfs-c-g1": garden.ContainerMetricsEntry{Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(150 * 1024 * 1024), ExclusiveBytesUsed: uint64(50 * 1024 * 1024)}}},
+					"rootfs-c-g2": garden.ContainerMetricsEntry{Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(32 * 1024 * 1024), ExclusiveBytesUsed: uint64(8*1024*1024 - 5)}}},
+				}
+				gardenClient.Connection.BulkMetricsReturnsOnCall(0, expectedMetrics, nil)
+			})
+
+			It("creates containers in garden with provided rootFSes and the returned sizer lets us query their size", func() {
+				Expect(getRootFSErr).NotTo(HaveOccurred())
+
+				Expect(gardenClient.Connection.CreateCallCount()).To(Equal(2))
+				spec1 := gardenClient.Connection.CreateArgsForCall(0)
+				spec2 := gardenClient.Connection.CreateArgsForCall(1)
+				Expect([]string{spec1.Image.URI, spec2.Image.URI}).To(ConsistOf("/rootFS1/path", "/rootFS2/path"))
+				guidToRootFS[spec1.Handle] = spec1.Image.URI
+				guidToRootFS[spec2.Handle] = spec2.Image.URI
+
+				if strings.Contains(guidToRootFS["rootfs-c-g1"], "rootFS1") {
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(100))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(25))
+				}
+				if strings.Contains(guidToRootFS["rootfs-c-g1"], "rootFS2") {
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(25))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(100))
+				}
+
+				Expect(gardenClient.Connection.BulkMetricsCallCount()).To(Equal(1))
+				Expect(gardenClient.Connection.BulkMetricsArgsForCall(0)).To(ConsistOf("rootfs-c-g1", "rootfs-c-g2"))
+
+				Expect(gardenClient.Connection.DestroyCallCount()).To(Equal(2))
+				c1 := gardenClient.Connection.DestroyArgsForCall(0)
+				c2 := gardenClient.Connection.DestroyArgsForCall(1)
+				Expect([]string{c1, c2}).To(ConsistOf("rootfs-c-g1", "rootfs-c-g2"))
+			})
+
+			Context("when attempting to retrieve the size of a non-preloaded rootfs", func() {
+				It("returns a size of 0", func() {
+					Expect(getRootFSErr).NotTo(HaveOccurred())
+					Expect(rootFSSizes.RootFSSizeFromPath("/some/path/that/wasnt/preloaded")).To(BeEquivalentTo(0))
+				})
+			})
+
+			Context("when the rootfs URI query string has been augmented with a query/scheme/host/etc.", func() {
+				It("correctly returns the size of the preloaded rootfs in question", func() {
+					Expect(getRootFSErr).NotTo(HaveOccurred())
+					Expect(rootFSSizes.RootFSSizeFromPath("preloaded+layer:/rootFS1/path?query=something")).To(BeEquivalentTo(100))
+				})
+			})
+
+			Context("when attempting to retrieve the size from an invalid URI", func() {
+				It("returns a size of 0", func() {
+					Expect(getRootFSErr).NotTo(HaveOccurred())
+					Expect(rootFSSizes.RootFSSizeFromPath("/some/path/that/is/%invalid")).To(BeEquivalentTo(0))
+				})
+			})
+
+			Context("when a preloaded rootfs URI is not just a simple path", func() {
+				BeforeEach(func() {
+					rootFSes = map[string]string{
+						"rootFS1": "somescheme:///rootFS1/path",
+					}
+				})
+
+				It("querying the size of the rootfs succeeds as expected", func() {
+					Expect(getRootFSErr).NotTo(HaveOccurred())
+					Expect(rootFSSizes.RootFSSizeFromPath("somescheme:///rootFS1/path")).To(BeEquivalentTo(100))
+				})
+			})
+
+			Context("when a preloaded rootfs URI is an invalid URI", func() {
+				BeforeEach(func() {
+					rootFSes = map[string]string{
+						"rootFS1": "/some/path/that/is/%invalid",
+					}
+				})
+
+				It("errors", func() {
+					Expect(getRootFSErr).To(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when creating the rootFS container(s) fail", func() {
+			var expectedErr error
+			BeforeEach(func() {
+				expectedErr = errors.New("create-error")
+				gardenClient.Connection.CreateReturns("", expectedErr)
+			})
+
+			It("returns the error", func() {
+				Expect(getRootFSErr).To(Equal(expectedErr))
+			})
+		})
+
+		Context("when deletion of the rootFS container(s) fail", func() {
+			var expectedErr error
+			BeforeEach(func() {
+				expectedErr = errors.New("destroy-error")
+				gardenClient.Connection.DestroyReturns(expectedErr)
+			})
+
+			It("logs the error", func() {
+				Expect(getRootFSErr).To(Succeed())
+				testLogger, _ := logger.(*lagertest.TestLogger)
+				Eventually(testLogger.Buffer).Should(gbytes.Say("failed to delete container 'rootfs-c-g1'.*destroy-error"))
+			})
+		})
+
+		Context("when bulkMetrics fail", func() {
+			var expectedErr error
+			BeforeEach(func() {
+				expectedErr = errors.New("bulkmetrics-error")
+				gardenClient.Connection.BulkMetricsReturns(nil, expectedErr)
+			})
+
+			It("returns the error", func() {
+				Expect(getRootFSErr).To(Equal(expectedErr))
 			})
 		})
 	})

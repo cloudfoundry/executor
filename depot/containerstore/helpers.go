@@ -34,13 +34,6 @@ func newBindMount(src, dst string) garden.BindMount {
 	}
 }
 
-func convertDiskScope(scope executor.DiskLimitScope) garden.DiskLimitScope {
-	if scope == executor.TotalDiskLimit {
-		return garden.DiskLimitScopeTotal
-	}
-	return garden.DiskLimitScopeExclusive
-}
-
 func convertEnvVars(execEnv []executor.EnvironmentVariable) []string {
 	env := make([]string, len(execEnv))
 	for i := range execEnv {

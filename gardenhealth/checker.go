@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/guidgen"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
@@ -154,9 +153,9 @@ func (c *checker) create(logger lager.Logger) (string, garden.Container, error) 
 			Handle:     guid,
 			RootFSPath: c.rootFSPath,
 			Properties: garden.Properties{
-				containerstore.ContainerOwnerProperty: c.containerOwnerName,
-				HealthcheckTag:                        HealthcheckTagValue,
-				HealthcheckNetworkProperty:            "true",
+				executor.ContainerOwnerProperty: c.containerOwnerName,
+				HealthcheckTag:                  HealthcheckTagValue,
+				HealthcheckNetworkProperty:      "true",
 			},
 		})
 		if createErr != nil {

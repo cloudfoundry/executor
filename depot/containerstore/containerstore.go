@@ -10,13 +10,12 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
+	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
 )
-
-const ContainerOwnerProperty = "executor:owner"
 
 var (
 	ErrFailedToCAS = errors.New("failed-to-cas")
@@ -71,6 +70,7 @@ type containerStore struct {
 	eventEmitter      event.Hub
 	clock             clock.Clock
 	metronClient      loggingclient.IngressClient
+	rootFSSizer       configuration.RootFSSizer
 
 	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
@@ -98,6 +98,7 @@ func New(
 	transformer transformer.Transformer,
 	trustedSystemCertificatesPath string,
 	metronClient loggingclient.IngressClient,
+	rootFSSizer configuration.RootFSSizer,
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	proxyConfigHandler ProxyManager,
@@ -116,6 +117,7 @@ func New(
 		transformer:                   transformer,
 		clock:                         clock,
 		metronClient:                  metronClient,
+		rootFSSizer:                   rootFSSizer,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
 		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
@@ -154,6 +156,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.trustedSystemCertificatesPath,
 			cs.metronClient,
 			cs.proxyConfigHandler,
+			cs.rootFSSizer,
 			cs.cellID,
 			cs.enableUnproxiedPortMappings,
 			cs.advertisePreferenceForInstanceAddress,
@@ -326,12 +329,8 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 			continue
 		}
 		gardenMetric := metricEntry.Metrics
-		var diskUsage uint64
-		if nodeInfo.DiskScope == executor.ExclusiveDiskLimit {
-			diskUsage = gardenMetric.DiskStat.ExclusiveBytesUsed
-		} else {
-			diskUsage = gardenMetric.DiskStat.TotalBytesUsed
-		}
+
+		diskUsage := gardenMetric.DiskStat.TotalBytesUsed - uint64(cs.rootFSSizer.RootFSSizeFromPath(nodeInfo.RootFSPath)*1024*1024)
 		containerMetrics[guid] = executor.ContainerMetrics{
 			MemoryUsageInBytes:                  gardenMetric.MemoryStat.TotalUsageTowardLimit,
 			DiskUsageInBytes:                    diskUsage,

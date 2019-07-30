@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
+	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
 	"code.cloudfoundry.org/lager"
@@ -71,6 +72,7 @@ type storeNode struct {
 	transformer                           transformer.Transformer
 	process                               ifrit.Process
 	config                                *ContainerConfig
+	rootFSSizer                           configuration.RootFSSizer
 	useDeclarativeHealthCheck             bool
 	declarativeHealthcheckPath            string
 	useContainerProxy                     bool
@@ -100,6 +102,7 @@ func newStoreNode(
 	hostTrustedCertificatesPath string,
 	metronClient loggingclient.IngressClient,
 	proxyConfigHandler ProxyManager,
+	rootFSSizer configuration.RootFSSizer,
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
@@ -122,6 +125,7 @@ func newStoreNode(
 		useDeclarativeHealthCheck:             useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:            declarativeHealthcheckPath,
 		proxyConfigHandler:                    proxyConfigHandler,
+		rootFSSizer:                           rootFSSizer,
 		cellID:                                cellID,
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
@@ -292,7 +296,7 @@ func (n *storeNode) gardenProperties(container *executor.Container) garden.Prope
 			properties["network."+key] = value
 		}
 	}
-	properties[ContainerOwnerProperty] = n.config.OwnerName
+	properties[executor.ContainerOwnerProperty] = n.config.OwnerName
 
 	return properties
 }
@@ -358,9 +362,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 				LimitInBytes: uint64(info.MemoryMB * 1024 * 1024),
 			},
 			Disk: garden.DiskLimits{
-				ByteHard:  uint64(info.DiskMB * 1024 * 1024),
+				ByteHard:  (uint64(info.DiskMB) + uint64(n.rootFSSizer.RootFSSizeFromPath(info.RootFSPath))) * 1024 * 1024,
 				InodeHard: n.config.INodeLimit,
-				Scope:     convertDiskScope(info.DiskScope),
+				Scope:     garden.DiskLimitScopeTotal,
 			},
 			Pid: garden.PidLimits{
 				Max: uint64(info.MaxPids),

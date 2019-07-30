@@ -2,11 +2,15 @@ package configuration
 
 import (
 	"fmt"
+	"math"
+	"net/url"
 	"strconv"
 
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/guidgen"
 	"code.cloudfoundry.org/garden"
 	garden_client "code.cloudfoundry.org/garden/client"
+	"code.cloudfoundry.org/lager"
 )
 
 const Automatic = "auto"
@@ -46,6 +50,64 @@ func ConfigureCapacity(
 	}, nil
 }
 
+//go:generate counterfeiter -o configurationfakes/fake_rootfssizer.go . RootFSSizer
+type RootFSSizer interface {
+	RootFSSizeFromPath(path string) uint64
+}
+
+func GetRootFSSizes(
+	logger lager.Logger,
+	gardenClient garden_client.Client,
+	guidGenerator guidgen.Generator,
+	containerOwnerName string,
+	rootFSes map[string]string,
+) (RootFSSizer, error) {
+	rootFSSizesInMB := make(map[string]uint64)
+
+	handles := []string{}
+	guidToRootFSPath := make(map[string]string)
+	for _, rootFSURI := range rootFSes {
+		guid := fmt.Sprintf("rootfs-c-%s", guidGenerator.Guid(logger))
+		_, err := gardenClient.Create(garden.ContainerSpec{
+			Handle: guid,
+			Image:  garden.ImageRef{URI: rootFSURI},
+			Properties: garden.Properties{
+				executor.ContainerOwnerProperty: containerOwnerName,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		uri, err := url.Parse(rootFSURI)
+		if err != nil {
+			return nil, err
+		}
+		guidToRootFSPath[guid] = uri.Path
+		handles = append(handles, guid)
+
+		defer func(handle string) {
+			destroyErr := gardenClient.Destroy(handle)
+			if destroyErr != nil {
+				logger.Error(fmt.Sprintf("failed to delete container '%s'", handle), destroyErr)
+			}
+		}(guid)
+	}
+
+	metrics, err := gardenClient.BulkMetrics(handles)
+	if err != nil {
+		return nil, err
+	}
+
+	for guid, metric := range metrics {
+		rootFSSizeInMB := uint64(math.Ceil(float64(metric.Metrics.DiskStat.TotalBytesUsed-metric.Metrics.DiskStat.ExclusiveBytesUsed) / 1024 / 1024))
+		rootFSSizesInMB[guidToRootFSPath[guid]] = rootFSSizeInMB
+	}
+
+	return &rootFSSizeMap{
+		rootFSSizes: rootFSSizesInMB,
+	}, nil
+}
+
 func memoryInMB(capacity garden.Capacity, memoryMBFlag string) (int, error) {
 	if memoryMBFlag == Automatic {
 		return int(capacity.MemoryInBytes / (1024 * 1024)), nil
@@ -72,4 +134,16 @@ func diskInMB(capacity garden.Capacity, diskMBFlag string, maxCacheSizeInBytes u
 		}
 		return diskMB, nil
 	}
+}
+
+type rootFSSizeMap struct {
+	rootFSSizes map[string]uint64
+}
+
+func (r *rootFSSizeMap) RootFSSizeFromPath(path string) uint64 {
+	url, err := url.Parse(path)
+	if err != nil {
+		return 0
+	}
+	return r.rootFSSizes[url.Path]
 }

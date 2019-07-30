@@ -7,8 +7,9 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 )
 
+const ContainerOwnerProperty = "executor:owner"
+
 type State string
-type DiskLimitScope uint8
 
 const (
 	StateInvalid      State = ""
@@ -17,11 +18,6 @@ const (
 	StateCreated      State = "created"
 	StateRunning      State = "running"
 	StateCompleted    State = "completed"
-)
-
-const (
-	ExclusiveDiskLimit DiskLimitScope = iota
-	TotalDiskLimit     DiskLimitScope = iota
 )
 
 const (
@@ -165,7 +161,6 @@ type CertificateProperties struct {
 type RunInfo struct {
 	RootFSPath                    string                      `json:"rootfs"`
 	CPUWeight                     uint                        `json:"cpu_weight"`
-	DiskScope                     DiskLimitScope              `json:"disk_scope,omitempty"`
 	Ports                         []PortMapping               `json:"ports"`
 	LogConfig                     LogConfig                   `json:"log_config"`
 	MetricsConfig                 MetricsConfig               `json:"metrics_config"`

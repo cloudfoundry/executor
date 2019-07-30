@@ -3,7 +3,7 @@ package gardenhealth_test
 import (
 	"errors"
 
-	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/guidgen/fakeguidgen"
 	"code.cloudfoundry.org/garden"
@@ -80,9 +80,9 @@ var _ = Describe("Checker", func() {
 					Handle:     "check-abc-123",
 					RootFSPath: rootfsPath,
 					Properties: garden.Properties{
-						containerstore.ContainerOwnerProperty: containerOwnerName,
-						gardenhealth.HealthcheckTag:           gardenhealth.HealthcheckTagValue,
-						"network.healthcheck":                 "true",
+						executor.ContainerOwnerProperty: containerOwnerName,
+						gardenhealth.HealthcheckTag:     gardenhealth.HealthcheckTagValue,
+						"network.healthcheck":           "true",
 					},
 				}))
 
