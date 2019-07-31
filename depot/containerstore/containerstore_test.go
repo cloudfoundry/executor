@@ -514,6 +514,24 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Limits.CPU.Weight).To(BeZero())
 			})
 
+			Context("when the requested disk limit is 0", func() {
+				BeforeEach(func() {
+					allocationReq.Resource.DiskMB = 0
+				})
+
+				It("creates the container in garden with a 0 disk limit", func() {
+					_, err := containerStore.Create(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo(0))
+					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
+				})
+			})
+
 			It("downloads the correct cache dependencies", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
