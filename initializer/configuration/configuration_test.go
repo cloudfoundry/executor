@@ -277,6 +277,12 @@ var _ = Describe("configuration", func() {
 			})
 
 			Context("when the rootfs URI query string has been augmented with a query/scheme/host/etc.", func() {
+				BeforeEach(func() {
+					rootFSes = map[string]string{
+						"rootFS1": "/rootFS1/path",
+					}
+				})
+
 				It("correctly returns the size of the preloaded rootfs in question", func() {
 					Expect(getRootFSErr).NotTo(HaveOccurred())
 					Expect(rootFSSizes.RootFSSizeFromPath("preloaded+layer:/rootFS1/path?query=something")).To(BeEquivalentTo(100))
