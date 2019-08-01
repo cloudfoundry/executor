@@ -252,12 +252,12 @@ var _ = Describe("configuration", func() {
 				guidToRootFS[spec2.Handle] = spec2.Image.URI
 
 				if strings.Contains(guidToRootFS["rootfs-c-g1"], "rootFS1") {
-					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(100))
-					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(25))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(100 * 1024 * 1024))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(24*1024*1024 + 5))
 				}
 				if strings.Contains(guidToRootFS["rootfs-c-g1"], "rootFS2") {
-					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(25))
-					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(100))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS1/path")).To(BeEquivalentTo(24*1024*1024 + 5))
+					Expect(rootFSSizes.RootFSSizeFromPath("/rootFS2/path")).To(BeEquivalentTo(100 * 1024 * 1024))
 				}
 
 				Expect(gardenClient.Connection.BulkMetricsCallCount()).To(Equal(1))
@@ -285,7 +285,7 @@ var _ = Describe("configuration", func() {
 
 				It("correctly returns the size of the preloaded rootfs in question", func() {
 					Expect(getRootFSErr).NotTo(HaveOccurred())
-					Expect(rootFSSizes.RootFSSizeFromPath("preloaded+layer:/rootFS1/path?query=something")).To(BeEquivalentTo(100))
+					Expect(rootFSSizes.RootFSSizeFromPath("preloaded+layer:/rootFS1/path?query=something")).To(BeEquivalentTo(100 * 1024 * 1024))
 				})
 			})
 
@@ -305,7 +305,7 @@ var _ = Describe("configuration", func() {
 
 				It("querying the size of the rootfs succeeds as expected", func() {
 					Expect(getRootFSErr).NotTo(HaveOccurred())
-					Expect(rootFSSizes.RootFSSizeFromPath("somescheme:///rootFS1/path")).To(BeEquivalentTo(100))
+					Expect(rootFSSizes.RootFSSizeFromPath("somescheme:///rootFS1/path")).To(BeEquivalentTo(100 * 1024 * 1024))
 				})
 			})
 

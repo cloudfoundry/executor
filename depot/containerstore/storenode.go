@@ -349,7 +349,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	diskLimitBytesHard := uint64(info.DiskMB) * 1024 * 1024
 	if diskLimitBytesHard != 0 {
-		diskLimitBytesHard += uint64(n.rootFSSizer.RootFSSizeFromPath(info.RootFSPath)) * 1024 * 1024
+		diskLimitBytesHard += n.rootFSSizer.RootFSSizeFromPath(info.RootFSPath)
 	}
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
