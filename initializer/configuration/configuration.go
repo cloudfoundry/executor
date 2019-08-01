@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"math"
 	"net/url"
 	"strconv"
 
@@ -62,7 +61,7 @@ func GetRootFSSizes(
 	containerOwnerName string,
 	rootFSes map[string]string,
 ) (RootFSSizer, error) {
-	rootFSSizesInMB := make(map[string]uint64)
+	rootFSSizes := make(map[string]uint64)
 
 	handles := []string{}
 	guidToRootFSPath := make(map[string]string)
@@ -99,12 +98,12 @@ func GetRootFSSizes(
 	}
 
 	for guid, metric := range metrics {
-		rootFSSizeInMB := uint64(math.Ceil(float64(metric.Metrics.DiskStat.TotalBytesUsed-metric.Metrics.DiskStat.ExclusiveBytesUsed) / 1024 / 1024))
-		rootFSSizesInMB[guidToRootFSPath[guid]] = rootFSSizeInMB
+		rootFSSize := uint64(metric.Metrics.DiskStat.TotalBytesUsed - metric.Metrics.DiskStat.ExclusiveBytesUsed)
+		rootFSSizes[guidToRootFSPath[guid]] = rootFSSize
 	}
 
 	return &rootFSSizeMap{
-		rootFSSizes: rootFSSizesInMB,
+		rootFSSizes: rootFSSizes,
 	}, nil
 }
 

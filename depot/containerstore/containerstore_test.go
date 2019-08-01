@@ -482,7 +482,7 @@ var _ = Describe("Container Store", func() {
 					Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
 
 					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
-					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB + 1000) * 1024 * 1024))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB * 1024 * 1024) + 1000))
 					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
 
 					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
@@ -504,7 +504,7 @@ var _ = Describe("Container Store", func() {
 				Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
 
 				Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
-				Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB + 1000) * 1024 * 1024))
+				Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB * 1024 * 1024) + 1000))
 				Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
 
 				Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
@@ -2557,7 +2557,7 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 1024,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							TotalBytesUsed: uint64(1000*1024*1024) + 2048,
+							TotalBytesUsed: uint64(1000 + 2048),
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 5000000000,
@@ -2588,7 +2588,7 @@ var _ = Describe("Container Store", func() {
 							TotalUsageTowardLimit: 512,
 						},
 						DiskStat: garden.ContainerDiskStat{
-							TotalBytesUsed: uint64(1000*1024*1024) + 128,
+							TotalBytesUsed: uint64(1000 + 128),
 						},
 						CPUStat: garden.ContainerCPUStat{
 							Usage: 1000000,
