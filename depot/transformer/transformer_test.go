@@ -127,7 +127,7 @@ var _ = Describe("Transformer", func() {
 			})
 		})
 
-		Context("when there is a specified setup, post-setup, action, and monitor", func() {
+		Context("when there is a specified setup, post-setup, action, sidecars and monitor", func() {
 			BeforeEach(func() {
 				options = []transformer.Option{
 					transformer.WithPostSetupHook(
@@ -135,9 +135,25 @@ var _ = Describe("Transformer", func() {
 						[]string{"/post-setup/path", "-x", "argument"},
 					),
 				}
+				container.Sidecars = []executor.Sidecar{
+					{
+						Action: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/sidecar-action-1",
+							},
+						},
+					},
+					{
+						Action: &models.Action{
+							RunAction: &models.RunAction{
+								Path: "/sidecar-action-2",
+							},
+						},
+					},
+				}
 			})
 
-			It("returns a step encapsulating setup, post-setup, action, and monitor", func() {
+			It("returns a step encapsulating setup, post-setup, action, sidecars and monitor", func() {
 				setupReceived := make(chan struct{})
 				postSetupReceived := make(chan struct{})
 				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
@@ -170,14 +186,20 @@ var _ = Describe("Transformer", func() {
 
 				<-postSetupReceived
 
-				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-				processSpec, _ = gardenContainer.RunArgsForCall(2)
-				Expect(processSpec.Path).To(Equal("/action/path"))
-				Consistently(gardenContainer.RunCallCount).Should(Equal(3))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+
+				processPaths := []string{}
+				for i := 2; i < 5; i++ {
+					processSpec, _ = gardenContainer.RunArgsForCall(i)
+					processPaths = append(processPaths, processSpec.Path)
+				}
+				Expect(processPaths).To(ConsistOf("/action/path", "/sidecar-action-1", "/sidecar-action-2"))
+
+				Consistently(gardenContainer.RunCallCount).Should(Equal(5))
 
 				clock.Increment(1 * time.Second)
-				Eventually(gardenContainer.RunCallCount).Should(Equal(4))
-				processSpec, processIO := gardenContainer.RunArgsForCall(3)
+				Eventually(gardenContainer.RunCallCount).Should(Equal(6))
+				processSpec, processIO := gardenContainer.RunArgsForCall(5)
 				Expect(processSpec.Path).To(Equal("/monitor/path"))
 				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))

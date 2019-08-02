@@ -423,6 +423,19 @@ func (t *transformer) StepsRunner(
 
 	substeps = append(substeps, action)
 
+	for _, sidecar := range container.Sidecars {
+		substeps = append(substeps, t.stepFor(logStreamer,
+			sidecar.Action,
+			gardenContainer,
+			container.ExternalIP,
+			container.InternalIP,
+			container.Ports,
+			false,
+			false,
+			logger.Session("sidecar"),
+		))
+	}
+
 	var proxyReadinessChecks []ifrit.Runner
 
 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
