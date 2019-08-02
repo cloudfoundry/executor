@@ -158,6 +158,12 @@ type CertificateProperties struct {
 	OrganizationalUnit []string `json:"organizational_unit"`
 }
 
+type Sidecar struct {
+	Action   *models.Action `json:"run"`
+	DiskMB   int32          `json:"disk_mb"`
+	MemoryMB int32          `json:"memory_mb"`
+}
+
 type RunInfo struct {
 	RootFSPath                    string                      `json:"rootfs"`
 	CPUWeight                     uint                        `json:"cpu_weight"`
@@ -180,6 +186,7 @@ type RunInfo struct {
 	ImageUsername                 string                      `json:"image_username"`
 	ImagePassword                 string                      `json:"image_password"`
 	EnableContainerProxy          bool                        `json:"enable_container_proxy"`
+	Sidecars                      []Sidecar                   `json:"sidecars"`
 }
 
 type BindMountMode uint8
