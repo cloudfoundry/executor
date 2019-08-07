@@ -219,6 +219,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				regenCertTimer.Reset(rotationDuration)
 				regenLogger.Debug("completed")
 			case signal := <-signals:
+				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				cred, err := c.generateCreds(logger, container, "")
 				if err != nil {
 					regenLogger.Error("failed-to-generate-credentials", err)
@@ -228,7 +229,6 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				for _, h := range c.handlers {
 					h.Close(cred, container)
 				}
-				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				return nil
 			}
 		}
