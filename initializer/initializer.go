@@ -80,8 +80,6 @@ func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
 type ExecutorConfig struct {
 	AdvertisePreferenceForInstanceAddress bool                  `json:"advertise_preference_for_instance_address"`
 	AutoDiskOverheadMB                    int                   `json:"auto_disk_capacity_overhead_mb"`
-	CSIMountRootDir                       string                `json:"csi_mount_root_dir"`
-	CSIPaths                              []string              `json:"csi_paths"`
 	CachePath                             string                `json:"cache_path,omitempty"`
 	ContainerInodeLimit                   uint64                `json:"container_inode_limit,omitempty"`
 	ContainerMaxCpuShares                 uint64                `json:"container_max_cpu_shares,omitempty"`
@@ -269,8 +267,6 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 
 	driverConfig := vollocal.NewDriverConfig()
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
-	driverConfig.CSIPaths = config.CSIPaths
-	driverConfig.CSIMountRootDir = config.CSIMountRootDir
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
 	var proxyConfigHandler containerstore.ProxyManager
