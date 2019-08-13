@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -49,6 +50,7 @@ const (
 	StalledGardenDuration          = "StalledGardenDuration"
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
+	megabytesToBytes               = 1024 * 1024
 )
 
 type executorContainers struct {
@@ -349,14 +351,21 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		guidgen.DefaultGenerator,
 	)
 
+	metricsCache := &atomic.Value{}
+	containerMetricsHandler := containermetrics.NewStatsHandler(
+		metronClient,
+		config.EnableContainerProxy,
+		float64(config.ProxyMemoryAllocationMB*megabytesToBytes),
+		metricsCache,
+	)
+
 	statsReporter := containermetrics.NewStatsReporter(
 		logger,
 		time.Duration(config.ContainerMetricsReportInterval),
 		clock,
-		config.EnableContainerProxy,
-		config.ProxyMemoryAllocationMB,
 		depotClient,
-		metronClient,
+		metricsCache,
+		containerMetricsHandler,
 	)
 
 	return depotClient, statsReporter,
