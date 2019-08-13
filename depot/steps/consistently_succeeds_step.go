@@ -31,7 +31,7 @@ func (step *consistentlySucceedsStep) Run(signals <-chan os.Signal, ready chan<-
 	for {
 		select {
 		case <-signals:
-			return ErrCancelled
+			return new(CancelledError)
 		case <-t.C():
 		}
 

@@ -145,7 +145,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 	if err != nil {
 		select {
 		case <-step.cancelUpload:
-			return ErrCancelled
+			return new(CancelledError)
 
 		default:
 			step.logger.Error("failed-to-upload", err)

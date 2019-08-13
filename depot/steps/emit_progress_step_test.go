@@ -199,7 +199,7 @@ var _ = Describe("EmitProgressStep", func() {
 			subStep.RunStub = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 				<-signals
 				close(finished)
-				return steps.ErrCancelled
+				return new(steps.CancelledError)
 			}
 		})
 

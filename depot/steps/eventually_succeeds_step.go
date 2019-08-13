@@ -36,7 +36,7 @@ func (step *eventuallySucceedsStep) Run(signals <-chan os.Signal, ready chan<- s
 		select {
 		case <-t.C():
 		case <-signals:
-			return ErrCancelled
+			return new(CancelledError)
 		}
 
 		subProcess := ifrit.Background(step.create())

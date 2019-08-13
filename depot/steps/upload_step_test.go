@@ -231,7 +231,7 @@ var _ = Describe("UploadStep", func() {
 
 					Eventually(cancelled).Should(BeClosed())
 
-					Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(p.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 				})
 			})
 

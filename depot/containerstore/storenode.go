@@ -13,12 +13,14 @@ import (
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
+	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
+	"github.com/hashicorp/errwrap"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 )
@@ -30,6 +32,9 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
+
+const ContainerCompletedCount = "ContainerCompletedCount"
+const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
 
 const maxErrorMsgLength = 1024
 
@@ -521,6 +526,9 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 	var errorStr string
 	if err != nil {
 		errorStr = err.Error()
+		if errwrap.ContainsType(err, new(steps.ExceededGracefulShutdownIntervalError)) || errwrap.ContainsType(err, new(steps.ExitTimeoutError)) {
+			n.metronClient.IncrementCounter(ContainerExitedOnTimeoutCount)
+		}
 	}
 
 	if errorStr != "" {
@@ -533,6 +541,7 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 func (n *storeNode) run(logger lager.Logger) {
 	// wait for container runner to start
 	logger.Debug("execute-process")
+	defer n.metronClient.IncrementCounter(ContainerCompletedCount)
 	select {
 	case err := <-n.process.Wait():
 		n.completeWithError(logger, err)

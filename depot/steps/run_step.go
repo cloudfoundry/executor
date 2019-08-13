@@ -18,8 +18,6 @@ import (
 
 const ExitTimeout = 1 * time.Second
 
-var ErrExitTimeout = errors.New("process did not exit")
-
 type runStep struct {
 	container                garden.Container
 	model                    models.RunAction
@@ -109,7 +107,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	select {
 	case <-signals:
 		step.logger.Info("cancelled-before-creating-process")
-		return ErrCancelled
+		return new(CancelledError)
 	default:
 	}
 
@@ -172,7 +170,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	case process = <-processChan:
 	case <-signals:
 		step.logger.Info("cancelled-before-process-creation-completed")
-		return ErrCancelled
+		return new(CancelledError)
 	}
 
 	logger := step.logger.WithData(lager.Data{"process": process.ID()})
@@ -234,8 +232,12 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				step.streamer.Flush()
 			}
 
+			if killed {
+				return new(ExceededGracefulShutdownIntervalError)
+			}
+
 			if cancelled {
-				return ErrCancelled
+				return new(CancelledError)
 			}
 
 			if exitStatus != 0 {
@@ -286,7 +288,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				"timeout": ExitTimeout,
 			})
 
-			return ErrExitTimeout
+			return new(ExitTimeoutError)
 		}
 	}
 }

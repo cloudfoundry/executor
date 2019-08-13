@@ -178,7 +178,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 				process.Signal(os.Interrupt)
 				Eventually(readinessCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
 				readinessCheck.TriggerExit(nil)
-				Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 
@@ -193,7 +193,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 					Eventually(livenessCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
 					livenessCheck.TriggerExit(nil)
 					livenessCheck = nil
-					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 				})
 			})
 		})

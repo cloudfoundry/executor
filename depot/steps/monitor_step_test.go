@@ -303,7 +303,7 @@ var _ = Describe("MonitorStep", func() {
 		It("interrupts the monitoring", func() {
 			process = ifrit.Background(step)
 			process.Signal(os.Interrupt)
-			Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+			Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 		})
 
 		Context("while checking", func() {
@@ -316,9 +316,9 @@ var _ = Describe("MonitorStep", func() {
 
 				process.Signal(os.Interrupt)
 
-				fakeStep1.TriggerExit(steps.ErrCancelled)
+				fakeStep1.TriggerExit(new(steps.CancelledError))
 
-				Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 	})

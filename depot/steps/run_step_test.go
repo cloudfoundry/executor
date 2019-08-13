@@ -715,7 +715,7 @@ var _ = Describe("RunAction", func() {
 
 					waitExited <- (128 + 15)
 
-					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 
 					Expect(spawnedProcess.SignalCallCount()).To(Equal(1))
 					Expect(spawnedProcess.SignalArgsForCall(0)).To(Equal(garden.SignalTerminate))
@@ -736,7 +736,7 @@ var _ = Describe("RunAction", func() {
 
 					waitExited <- (128 + 9)
 
-					Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+					Eventually(process.Wait()).Should(Receive(Equal(new(steps.ExceededGracefulShutdownIntervalError))))
 
 					Expect(logger.TestSink.LogMessages()).To(ContainElement(
 						ContainSubstring("graceful-shutdown-timeout-exceeded"),
@@ -757,7 +757,7 @@ var _ = Describe("RunAction", func() {
 
 						fakeClock.WaitForWatcherAndIncrement(steps.ExitTimeout / 2)
 
-						Eventually(process.Wait()).Should(Receive(Equal(steps.ErrExitTimeout)))
+						Eventually(process.Wait()).Should(Receive(Equal(new(steps.ExitTimeoutError))))
 
 						Expect(logger.TestSink.LogMessages()).To(ContainElement(
 							ContainSubstring("process-did-not-exit"),
@@ -794,7 +794,7 @@ var _ = Describe("RunAction", func() {
 			})
 
 			It("finishes running with failure", func() {
-				Eventually(process.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 
@@ -808,7 +808,7 @@ var _ = Describe("RunAction", func() {
 					runErr <- step.Run(signals, ready)
 				}()
 
-				Eventually(runErr).Should(Receive(MatchError(steps.ErrCancelled)))
+				Eventually(runErr).Should(Receive(MatchError(new(steps.CancelledError))))
 				Expect(gardenClient.Connection.RunCallCount()).To(Equal(0))
 				Consistently(ready).ShouldNot(BeClosed())
 			})

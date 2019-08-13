@@ -53,3 +53,8 @@ var _ = AfterEach(func() {
 		Fail(err.Error())
 	}
 })
+
+type NonDisplayableError struct{}
+
+func (e NonDisplayableError) Error() string       { return "some-non-displaybale-error" }
+func (e NonDisplayableError) IsDisplayable() bool { return false }

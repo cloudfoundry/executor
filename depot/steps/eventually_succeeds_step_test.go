@@ -81,8 +81,8 @@ var _ = Describe("EventuallySucceedsStep", func() {
 			process.Signal(os.Interrupt)
 		})
 
-		It("returns ErrCancelled", func() {
-			Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
+		It("returns CancelledError", func() {
+			Eventually(process.Wait()).Should(Receive(MatchError(new(steps.CancelledError))))
 		})
 	})
 

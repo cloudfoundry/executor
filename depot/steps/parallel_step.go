@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/hashicorp/go-multierror"
@@ -31,11 +30,11 @@ func (step *parallelStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 	go waitForSignal(done, signals, subProcesses)
 
 	aggregate := &multierror.Error{}
-	aggregate.ErrorFormat = step.errorFormat
+	aggregate.ErrorFormat = multiErrorFormat
 
 	for _, subProcess := range subProcesses {
 		err := <-subProcess.Wait()
-		if err != nil && err != ErrCancelled {
+		if err != nil {
 			aggregate = multierror.Append(aggregate, err)
 		}
 	}
@@ -68,16 +67,4 @@ func waitForChildrenToBeReady(done <-chan struct{}, ps []ifrit.Process, ready ch
 		}
 	}
 	close(ready)
-}
-
-func (step *parallelStep) errorFormat(errs []error) string {
-	var err string
-	for _, e := range errs {
-		if err == "" {
-			err = e.Error()
-		} else {
-			err = fmt.Sprintf("%s; %s", err, e)
-		}
-	}
-	return err
 }

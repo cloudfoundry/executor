@@ -64,9 +64,10 @@ var _ = Describe("ParallelStep", func() {
 			Expect(errMsg).To(MatchRegexp(`\w+; \w+`))
 		})
 
-		Context("when step is cancelled", func() {
-			It("does not add cancelled error to message", func() {
-				subStep1.TriggerExit(steps.ErrCancelled)
+		Context("when step fails with a non displayable error", func() {
+			It("does not add non displayable error to message", func() {
+				nonDisplayableErr := new(NonDisplayableError)
+				subStep1.TriggerExit(nonDisplayableErr)
 				subStep2.TriggerExit(disaster2)
 
 				var err error
@@ -75,7 +76,7 @@ var _ = Describe("ParallelStep", func() {
 				errMsg := err.Error()
 				Expect(errMsg).NotTo(HavePrefix(";"))
 				Expect(errMsg).To(ContainSubstring("oh my"))
-				Expect(errMsg).NotTo(ContainSubstring(steps.ErrCancelled.Error()))
+				Expect(errMsg).NotTo(ContainSubstring("some-non-displaybale-error"))
 			})
 		})
 	})

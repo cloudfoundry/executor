@@ -69,7 +69,7 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	case s := <-signals:
 		readinessProcess.Signal(s)
 		<-readinessProcess.Wait()
-		return ErrCancelled
+		return new(CancelledError)
 	}
 
 	step.logger.Info("transitioned-to-healthy")
@@ -87,6 +87,6 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	case s := <-signals:
 		livenessProcess.Signal(s)
 		<-livenessProcess.Wait()
-		return ErrCancelled
+		return new(CancelledError)
 	}
 }

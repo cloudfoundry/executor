@@ -78,12 +78,12 @@ var _ = Describe("OutputWrapperStep", func() {
 
 		Context("when the substep is cancelled", func() {
 			BeforeEach(func() {
-				go subStep.TriggerExit(steps.ErrCancelled)
+				go subStep.TriggerExit(new(steps.CancelledError))
 			})
 
-			It("returns the ErrCancelled error", func() {
+			It("returns the CancelledError error", func() {
 				p := ifrit.Background(step)
-				Eventually(p.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(MatchError(new(steps.CancelledError))))
 			})
 
 			Context("and the buffer has data", func() {

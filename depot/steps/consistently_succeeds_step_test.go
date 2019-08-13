@@ -59,7 +59,7 @@ var _ = Describe("ConsistentlySucceedsStep", func() {
 		})
 
 		It("cancels the substep", func() {
-			Eventually(process.Wait()).Should(Receive(MatchError(steps.ErrCancelled)))
+			Eventually(process.Wait()).Should(Receive(MatchError(new(steps.CancelledError))))
 		})
 	})
 

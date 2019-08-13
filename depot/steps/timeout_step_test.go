@@ -96,7 +96,7 @@ var _ = Describe("TimeoutStep", func() {
 
 		Context("When the timeout expires before the substep finishes", func() {
 			BeforeEach(func() {
-				substepErr = steps.ErrCancelled
+				substepErr = new(steps.CancelledError)
 			})
 
 			JustBeforeEach(func() {

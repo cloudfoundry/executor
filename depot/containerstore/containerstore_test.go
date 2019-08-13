@@ -28,12 +28,14 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
+	multierror "github.com/hashicorp/go-multierror"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/fake_runner"
 	"github.com/tedsuo/ifrit/ginkgomon"
+	"github.com/tedsuo/ifrit/grouper"
 )
 
 var _ = Describe("Container Store", func() {
@@ -1786,6 +1788,18 @@ var _ = Describe("Container Store", func() {
 							Expect(container.RunResult.Stopped).To(Equal(false))
 							Expect(container.RunResult.Retryable).To(BeFalse())
 						})
+
+						It("increments the ContainerCompletedCount metric", func() {
+							err := containerStore.Run(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							close(completeChan)
+
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+
+							Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
+						})
 					})
 
 					Context("unsuccessfully", func() {
@@ -1811,6 +1825,113 @@ var _ = Describe("Container Store", func() {
 							Expect(container.RunResult.FailureReason).To(MatchRegexp("BOOOOM!!!!$"))
 							Expect(container.RunResult.Stopped).To(Equal(false))
 							Expect(container.RunResult.Retryable).To(BeFalse())
+						})
+
+						It("increments the ContainerCompletedCount metric", func() {
+							err := containerStore.Run(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+
+							Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
+						})
+
+						Context("when run fails with ErrExceededGracefulShutdownInterval", func() {
+							BeforeEach(func() {
+								var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+									close(ready)
+									return new(steps.ExceededGracefulShutdownIntervalError)
+								}
+								megatron.StepsRunnerReturns(testRunner, nil)
+							})
+
+							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+							})
+						})
+
+						Context("when run fails with ErrExitTimeout", func() {
+							BeforeEach(func() {
+								var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+									close(ready)
+									return new(steps.ExitTimeoutError)
+								}
+								megatron.StepsRunnerReturns(testRunner, nil)
+							})
+
+							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+							})
+						})
+
+						Context("when run fails with a complex error that contains a graceful shutdown error", func() {
+							BeforeEach(func() {
+								aggregate := &multierror.Error{}
+								aggregate = multierror.Append(aggregate, errors.New("some-other-error"))
+								aggregate = multierror.Append(aggregate, &steps.ExceededGracefulShutdownIntervalError{})
+								var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+									close(ready)
+									return grouper.ErrorTrace{
+										{
+											Member: grouper.Member{Name: "foo"}, Err: errors.New("foo"),
+										},
+										{
+											Member: grouper.Member{Name: "runner"}, Err: aggregate,
+										},
+									}
+								}
+								megatron.StepsRunnerReturns(testRunner, nil)
+							})
+
+							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+							})
+
+							Context("when there are multiple graceful shutdown exceeded errors", func() {
+								BeforeEach(func() {
+									var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+										close(ready)
+										return grouper.ErrorTrace{
+											{
+												Member: grouper.Member{Name: "runner"}, Err: &multierror.Error{
+													Errors: []error{errors.New("some-other-error"), new(steps.ExitTimeoutError), new(steps.ExceededGracefulShutdownIntervalError)},
+												},
+											},
+										}
+									}
+									megatron.StepsRunnerReturns(testRunner, nil)
+								})
+
+								It("only increments the graceful shutdown exceeded metric once", func() {
+									err := containerStore.Run(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+
+									Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+									Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								})
+							})
 						})
 					})
 				})

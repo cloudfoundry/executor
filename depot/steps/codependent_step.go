@@ -2,7 +2,6 @@ package steps
 
 import (
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/hashicorp/go-multierror"
@@ -45,7 +44,7 @@ func (step *codependentStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	go waitForChildrenToBeReady(done, subProcesses, ready)
 
 	aggregate := &multierror.Error{}
-	aggregate.ErrorFormat = step.errorFormat
+	aggregate.ErrorFormat = multiErrorFormat
 
 	var cancelled bool
 
@@ -62,7 +61,7 @@ func (step *codependentStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 			}
 		}
 
-		if err != nil && err != ErrCancelled {
+		if err != nil {
 			aggregate = multierror.Append(aggregate, err)
 
 			if !cancelled {
@@ -73,16 +72,4 @@ func (step *codependentStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	}
 
 	return aggregate.ErrorOrNil()
-}
-
-func (step *codependentStep) errorFormat(errs []error) string {
-	var err string
-	for _, e := range errs {
-		if err == "" {
-			err = e.Error()
-		} else {
-			err = fmt.Sprintf("%s; %s", err, e)
-		}
-	}
-	return err
 }

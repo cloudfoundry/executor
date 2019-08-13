@@ -61,16 +61,18 @@ var _ = Describe("CodependentStep", func() {
 				stepErrorsWhenSignalled(subStep2)
 				var err *multierror.Error
 				Eventually(process.Wait()).Should(Receive(&err))
-				Expect(err.WrappedErrors()).To(ConsistOf(disaster))
+				Expect(err.WrappedErrors()).To(ConsistOf(disaster, new(steps.CancelledError)))
 			})
 		})
 
-		Context("when step is cancelled", func() {
-			It("does not add cancelled error to message", func() {
+		Context("when step fails with a non displayable error", func() {
+			It("does not add non displayable error to message", func() {
 				disaster := errors.New("oh no!")
 
 				subStep1.TriggerExit(disaster)
-				subStep2.TriggerExit(steps.ErrCancelled)
+
+				nonDisplayableErr := new(NonDisplayableError)
+				subStep2.TriggerExit(nonDisplayableErr)
 
 				var err *multierror.Error
 				Eventually(process.Wait()).Should(Receive(&err))
@@ -108,7 +110,7 @@ var _ = Describe("CodependentStep", func() {
 
 					var err *multierror.Error
 					Eventually(process.Wait()).Should(Receive(&err))
-					Expect(err.WrappedErrors()).To(ConsistOf(steps.CodependentStepExitedError))
+					Expect(err.WrappedErrors()).To(ConsistOf(steps.CodependentStepExitedError, new(steps.CancelledError)))
 				})
 
 				It("should cancel all other steps regardless of the step that failed", func() {
@@ -164,5 +166,5 @@ var _ = Describe("CodependentStep", func() {
 
 func stepErrorsWhenSignalled(step *fake_runner.TestRunner) {
 	Eventually(step.WaitForCall()).Should(Receive())
-	step.TriggerExit(steps.ErrCancelled)
+	step.TriggerExit(new(steps.CancelledError))
 }

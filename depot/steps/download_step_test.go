@@ -401,12 +401,12 @@ var _ = Describe("DownloadAction", func() {
 
 			It("cancels the wait", func() {
 				p.Signal(os.Interrupt)
-				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 
 			It("does not fetch the download artifact", func() {
 				p.Signal(os.Interrupt)
-				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 				Expect(cache.FetchCallCount()).To(Equal(0))
 			})
 		})
@@ -438,7 +438,7 @@ var _ = Describe("DownloadAction", func() {
 				Eventually(calledChan).Should(BeClosed())
 				p.Signal(os.Interrupt)
 
-				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 
@@ -476,7 +476,7 @@ var _ = Describe("DownloadAction", func() {
 				Eventually(calledChan).Should(BeClosed())
 				p.Signal(os.Interrupt)
 
-				Eventually(p.Wait()).Should(Receive(Equal(steps.ErrCancelled)))
+				Eventually(p.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 	})

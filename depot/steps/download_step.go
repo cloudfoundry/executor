@@ -58,7 +58,7 @@ func (step *downloadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 	select {
 	case step.rateLimiter <- struct{}{}:
 	case <-signals:
-		return ErrCancelled
+		return new(CancelledError)
 	}
 	defer func() {
 		<-step.rateLimiter
@@ -75,7 +75,7 @@ func (step *downloadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 		return err
 	case <-signals:
 		close(step.cancelDownload)
-		return ErrCancelled
+		return new(CancelledError)
 	}
 }
 
