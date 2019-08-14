@@ -26,6 +26,7 @@ func ConfigureCapacity(
 	diskMBFlag string,
 	maxCacheSizeInBytes uint64,
 	autoDiskMBOverhead int,
+	useSchedulableDiskSize bool,
 ) (executor.ExecutorResources, error) {
 	gardenCapacity, err := gardenClient.Capacity()
 	if err != nil {
@@ -37,7 +38,7 @@ func ConfigureCapacity(
 		return executor.ExecutorResources{}, err
 	}
 
-	disk, err := diskInMB(gardenCapacity, diskMBFlag, maxCacheSizeInBytes, autoDiskMBOverhead)
+	disk, err := diskInMB(gardenCapacity, diskMBFlag, useSchedulableDiskSize, maxCacheSizeInBytes, autoDiskMBOverhead)
 	if err != nil {
 		return executor.ExecutorResources{}, err
 	}
@@ -119,9 +120,14 @@ func memoryInMB(capacity garden.Capacity, memoryMBFlag string) (int, error) {
 	}
 }
 
-func diskInMB(capacity garden.Capacity, diskMBFlag string, maxCacheSizeInBytes uint64, autoDiskMBOverhead int) (int, error) {
+func diskInMB(capacity garden.Capacity, diskMBFlag string, useSchedulableDiskSize bool, maxCacheSizeInBytes uint64, autoDiskMBOverhead int) (int, error) {
 	if diskMBFlag == Automatic {
-		diskMB := ((int(capacity.DiskInBytes) - int(maxCacheSizeInBytes)) / (1024 * 1024)) - autoDiskMBOverhead
+		var diskMB int
+		if useSchedulableDiskSize && capacity.SchedulableDiskInBytes > 0 {
+			diskMB = int(capacity.SchedulableDiskInBytes/(1024*1024)) - autoDiskMBOverhead
+		} else {
+			diskMB = ((int(capacity.DiskInBytes) - int(maxCacheSizeInBytes)) / (1024 * 1024)) - autoDiskMBOverhead
+		}
 		if diskMB <= 0 {
 			return 0, ErrAutoDiskCapacityInvalid
 		}

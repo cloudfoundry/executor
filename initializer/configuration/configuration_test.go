@@ -25,11 +25,12 @@ var _ = Describe("configuration", func() {
 
 	Describe("ConfigureCapacity", func() {
 		var (
-			capacity            executor.ExecutorResources
-			err                 error
-			memLimit, diskLimit string
-			maxCacheSizeInBytes uint64
-			autoDiskMBOverhead  int
+			capacity               executor.ExecutorResources
+			err                    error
+			memLimit, diskLimit    string
+			maxCacheSizeInBytes    uint64
+			autoDiskMBOverhead     int
+			useSchedulableDiskSize bool
 		)
 
 		BeforeEach(func() {
@@ -37,10 +38,11 @@ var _ = Describe("configuration", func() {
 			autoDiskMBOverhead = 0
 			memLimit = ""
 			diskLimit = ""
+			useSchedulableDiskSize = false
 		})
 
 		JustBeforeEach(func() {
-			capacity, err = configuration.ConfigureCapacity(gardenClient, memLimit, diskLimit, maxCacheSizeInBytes, autoDiskMBOverhead)
+			capacity, err = configuration.ConfigureCapacity(gardenClient, memLimit, diskLimit, maxCacheSizeInBytes, autoDiskMBOverhead, useSchedulableDiskSize)
 		})
 
 		Context("when getting the capacity fails", func() {
@@ -123,7 +125,7 @@ var _ = Describe("configuration", func() {
 						diskLimit = "auto"
 					})
 
-					It("uses the garden server's memory capacity", func() {
+					It("uses the garden server's disk capacity", func() {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(capacity.DiskMB).To(Equal(4))
 					})
@@ -133,29 +135,84 @@ var _ = Describe("configuration", func() {
 							maxCacheSizeInBytes = 1024 * 1024 * 2
 						})
 
-						It("subtracts the cache size from the disk capacity", func() {
-							Expect(capacity.DiskMB).To(Equal(2))
+						Context("when useSchedulableDiskSize flag is false", func() {
+							It("subtracts the cache size from the disk capacity", func() {
+								Expect(capacity.DiskMB).To(Equal(2))
+							})
+
+							Context("when the max cache size in bytes is larger than the available disk capacity", func() {
+								BeforeEach(func() {
+									maxCacheSizeInBytes = 1024 * 1024 * 4
+								})
+
+								It("returns an error", func() {
+									Expect(err).To(HaveOccurred())
+								})
+							})
 						})
 
-						Context("when the max cache size in bytes is larger than the available disk capacity", func() {
+						Context("when the auto disk mb overhead property is set", func() {
 							BeforeEach(func() {
-								maxCacheSizeInBytes = 1024 * 1024 * 4
+								autoDiskMBOverhead = 1
 							})
 
-							It("returns an error", func() {
-								Expect(err).To(HaveOccurred())
+							It("subtracts the overhead to the disk capacity", func() {
+								Expect(err).NotTo(HaveOccurred())
+								Expect(capacity.DiskMB).To(Equal(1))
 							})
 						})
-					})
 
-					Context("when the auto disk mb overhead property is set", func() {
-						BeforeEach(func() {
-							autoDiskMBOverhead = 1
-						})
+						Context("when useSchedulableDiskSize flag is true", func() {
+							BeforeEach(func() {
+								useSchedulableDiskSize = true
+							})
 
-						It("subtracts the overhead to the disk capacity", func() {
-							Expect(err).NotTo(HaveOccurred())
-							Expect(capacity.DiskMB).To(Equal(3))
+							Context("when SchedulableDiskInBytes is 0", func() {
+								BeforeEach(func() {
+									gardenClient.Connection.CapacityReturns(
+										garden.Capacity{
+											MemoryInBytes:          1024 * 1024 * 3,
+											DiskInBytes:            1024 * 1024 * 4,
+											SchedulableDiskInBytes: 0,
+											MaxContainers:          5,
+										},
+										nil,
+									)
+								})
+
+								It("falls back to using DiskInBytes for backwards compatibility", func() {
+									Expect(capacity.DiskMB).To(Equal(2))
+								})
+							})
+
+							Context("when SchedulableDiskInBytes is greater than 0", func() {
+								BeforeEach(func() {
+									gardenClient.Connection.CapacityReturns(
+										garden.Capacity{
+											MemoryInBytes:          1024 * 1024 * 3,
+											DiskInBytes:            1024 * 1024 * 4,
+											SchedulableDiskInBytes: 1024 * 1024 * 5,
+											MaxContainers:          5,
+										},
+										nil,
+									)
+								})
+
+								It("uses SchedulableDiskInBytes value", func() {
+									Expect(capacity.DiskMB).To(Equal(5))
+								})
+
+								Context("when the auto disk mb overhead property is set", func() {
+									BeforeEach(func() {
+										autoDiskMBOverhead = 1
+									})
+
+									It("subtracts the overhead to the disk capacity", func() {
+										Expect(err).NotTo(HaveOccurred())
+										Expect(capacity.DiskMB).To(Equal(4))
+									})
+								})
+							})
 						})
 					})
 				})

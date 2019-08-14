@@ -142,6 +142,7 @@ type ExecutorConfig struct {
 	TempDir                               string                `json:"temp_dir,omitempty"`
 	TrustedSystemCertificatesPath         string                `json:"trusted_system_certificates_path"`
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
+	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
 }
 
@@ -437,7 +438,7 @@ func waitForGarden(logger lager.Logger, gardenClient GardenClient.Client, metron
 }
 
 func fetchCapacity(logger lager.Logger, gardenClient GardenClient.Client, config ExecutorConfig) (executor.ExecutorResources, error) {
-	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB, config.MaxCacheSizeInBytes, config.AutoDiskOverheadMB)
+	capacity, err := configuration.ConfigureCapacity(gardenClient, config.MemoryMB, config.DiskMB, config.MaxCacheSizeInBytes, config.AutoDiskOverheadMB, config.UseSchedulableDiskSize)
 	if err != nil {
 		logger.Error("failed-to-configure-capacity", err)
 		return executor.ExecutorResources{}, err
