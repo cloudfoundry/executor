@@ -358,6 +358,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		float64(config.ProxyMemoryAllocationMB*megabytesToBytes),
 		metricsCache,
 	)
+	cpuSpikeHandler := containermetrics.NewCPUSpikeHandler(metronClient)
 
 	statsReporter := containermetrics.NewStatsReporter(
 		logger,
@@ -366,6 +367,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		depotClient,
 		metricsCache,
 		containerMetricsHandler,
+		cpuSpikeHandler,
 	)
 
 	return depotClient, statsReporter,
