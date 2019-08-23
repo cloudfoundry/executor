@@ -195,9 +195,13 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 }
 
 func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64) {
+	timeOfSample := now
+	if containerMetrics.ContainerAgeInNanoseconds != 0 {
+		timeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
+	}
 	currentInfo := cpuInfo{
 		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
-		timeOfSample:   now,
+		timeOfSample:   timeOfSample,
 	}
 
 	var cpuPercent float64
