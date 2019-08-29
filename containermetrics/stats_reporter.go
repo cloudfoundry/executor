@@ -114,7 +114,10 @@ func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previou
 
 	for _, container := range containers {
 		guid := container.Guid
-		metric := metrics[guid]
+		metric, ok := metrics[guid]
+		if !ok {
+			continue
+		}
 
 		previousCPUInfo := previousCPUInfos[guid]
 
