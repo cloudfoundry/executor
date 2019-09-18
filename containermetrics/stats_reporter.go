@@ -1,143 +1,81 @@
 package containermetrics
 
 import (
-	"os"
 	"strconv"
 	"sync/atomic"
 	"time"
 
-	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/lager"
 )
-
-var megabytesToBytes int = 1024 * 1024
-
-type StatsReporter struct {
-	logger lager.Logger
-
-	interval       time.Duration
-	clock          clock.Clock
-	executorClient executor.Client
-	metrics        atomic.Value
-
-	metronClient          loggingclient.IngressClient
-	enableContainerProxy  bool
-	proxyMemoryAllocation float64
-}
 
 type cpuInfo struct {
 	timeSpentInCPU time.Duration
 	timeOfSample   time.Time
 }
 
-func NewStatsReporter(logger lager.Logger,
-	interval time.Duration,
-	clock clock.Clock,
-	enableContainerProxy bool,
-	additionalMemoryMB int,
-	executorClient executor.Client,
-	metronClient loggingclient.IngressClient,
-) *StatsReporter {
-	return &StatsReporter{
-		logger: logger,
 
-		interval:              interval,
-		clock:                 clock,
-		executorClient:        executorClient,
-		metronClient:          metronClient,
-		enableContainerProxy:  enableContainerProxy,
-		proxyMemoryAllocation: float64(additionalMemoryMB * megabytesToBytes),
-	}
+type StatsReporter struct {
+	cpuInfos              map[string]*cpuInfo
+	metronClient          loggingclient.IngressClient
+	enableContainerProxy  bool
+	proxyMemoryAllocation float64
+	metricsCache          *atomic.Value
 }
 
-func (reporter *StatsReporter) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	logger := reporter.logger.Session("container-metrics-reporter")
-
-	ticker := reporter.clock.NewTicker(reporter.interval)
-	defer ticker.Stop()
-
-	close(ready)
-
-	cpuInfos := make(map[string]*cpuInfo)
-	for {
-		select {
-		case signal := <-signals:
-			logger.Info("signalled", lager.Data{"signal": signal.String()})
-			return nil
-
-		case now := <-ticker.C():
-			cpuInfos = reporter.emitContainerMetrics(logger, cpuInfos, now)
-		}
+func NewStatsReporter(metronClient loggingclient.IngressClient, enableContainerProxy bool, proxyMemoryAllocation float64, metricsCache *atomic.Value) *StatsReporter {
+	return &StatsReporter{
+		cpuInfos:              make(map[string]*cpuInfo),
+		enableContainerProxy:  enableContainerProxy,
+		metronClient:          metronClient,
+		proxyMemoryAllocation: proxyMemoryAllocation,
+		metricsCache:          metricsCache,
 	}
 }
 
 func (reporter *StatsReporter) Metrics() map[string]*CachedContainerMetrics {
-	if v := reporter.metrics.Load(); v != nil {
+	if v := reporter.metricsCache.Load(); v != nil {
 		return v.(map[string]*CachedContainerMetrics)
 	}
 	return nil
 }
 
-func (reporter *StatsReporter) emitContainerMetrics(logger lager.Logger, previousCPUInfos map[string]*cpuInfo, now time.Time) map[string]*cpuInfo {
-	logger = logger.Session("tick")
-
-	startTime := reporter.clock.Now()
-
-	logger.Debug("started")
-	defer func() {
-		logger.Debug("done", lager.Data{
-			"took": reporter.clock.Now().Sub(startTime).String(),
-		})
-	}()
-
-	metrics, err := reporter.executorClient.GetBulkMetrics(logger)
-	if err != nil {
-		logger.Error("failed-to-get-all-metrics", err)
-		return previousCPUInfos
-	}
-
-	logger.Debug("emitting", lager.Data{
-		"total-containers": len(metrics),
-		"get-metrics-took": reporter.clock.Now().Sub(startTime).String(),
-	})
-
-	containers, err := reporter.executorClient.ListContainers(logger)
-	if err != nil {
-		logger.Error("failed-to-fetch-containers", err)
-		return previousCPUInfos
-	}
-
-	newCPUInfos := make(map[string]*cpuInfo)
+func (reporter *StatsReporter) Report(logger lager.Logger, containers []executor.Container, metrics map[string]executor.Metrics, timeStamp time.Time) error {
+	cpuInfos := map[string]*cpuInfo{}
 	repMetricsMap := make(map[string]*CachedContainerMetrics)
 
 	for _, container := range containers {
+
 		guid := container.Guid
 		metric, ok := metrics[guid]
 		if !ok {
 			continue
 		}
 
-		previousCPUInfo := previousCPUInfos[guid]
+		cpuInfos[guid] = reporter.cpuInfos[guid]
+
+		previousCPUInfo := cpuInfos[guid]
 
 		if reporter.enableContainerProxy && container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
 			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}
 
-		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, now)
+		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, timeStamp)
 		if cpu != nil {
-			newCPUInfos[guid] = cpu
+			cpuInfos[guid] = cpu
 		}
 
 		if repMetrics != nil {
 			repMetricsMap[guid] = repMetrics
 		}
+
 	}
 
-	reporter.metrics.Store(repMetricsMap)
-	return newCPUInfos
+	reporter.cpuInfos = cpuInfos
+	reporter.metricsCache.Store(repMetricsMap)
+	return nil
 }
 
 func (reporter *StatsReporter) calculateAndSendMetrics(
@@ -202,6 +140,7 @@ func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpu
 	if containerMetrics.ContainerAgeInNanoseconds != 0 {
 		timeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
 	}
+
 	currentInfo := cpuInfo{
 		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
 		timeOfSample:   timeOfSample,
@@ -218,6 +157,7 @@ func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpu
 			currentInfo.timeOfSample,
 		)
 	}
+
 	return currentInfo, cpuPercent
 }
 
