@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/archiver/compressor"
@@ -49,6 +50,7 @@ const (
 	StalledGardenDuration          = "StalledGardenDuration"
 	maxConcurrentUploads           = 5
 	metricsReportInterval          = 1 * time.Minute
+	megabytesToBytes               = 1024 * 1024
 )
 
 type executorContainers struct {
@@ -346,17 +348,25 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		guidgen.DefaultGenerator,
 	)
 
-	statsReporter := containermetrics.NewStatsReporter(
+	metricsCache := &atomic.Value{}
+	containerStatsReporter := containermetrics.NewStatsReporter(
+		metronClient,
+		config.EnableContainerProxy,
+		float64(config.ProxyMemoryAllocationMB*megabytesToBytes),
+		metricsCache,
+	)
+	cpuSpikeReporter := containermetrics.NewCPUSpikeReporter(metronClient)
+
+	reportersRunner := containermetrics.NewReportersRunner(
 		logger,
 		time.Duration(config.ContainerMetricsReportInterval),
 		clock,
-		config.EnableContainerProxy,
-		config.ProxyMemoryAllocationMB,
 		depotClient,
-		metronClient,
+		containerStatsReporter,
+		cpuSpikeReporter,
 	)
 
-	return depotClient, statsReporter,
+	return depotClient, containerStatsReporter,
 		grouper.Members{
 			{"volman-driver-syncer", volmanDriverSyncer},
 			{"metrics-reporter", &metrics.Reporter{
@@ -368,7 +378,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 				Tags:           map[string]string{"zone": zone},
 			}},
 			{"hub-closer", closeHub(logger, hub)},
-			{"container-metrics-reporter", statsReporter},
+			{"container-metrics-reporter", reportersRunner},
 			{"garden_health_checker", gardenhealth.NewRunner(
 				time.Duration(config.GardenHealthcheckInterval),
 				time.Duration(config.GardenHealthcheckEmissionInterval),
