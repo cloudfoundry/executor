@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/fakes"
+	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/guidgen/fakeguidgen"
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
@@ -298,13 +299,23 @@ var _ = Describe("configuration", func() {
 				gardenClient.Connection.BulkMetricsReturnsOnCall(0, expectedMetrics, nil)
 			})
 
-			It("creates containers in garden with provided rootFSes and the returned sizer lets us query their size", func() {
+			It("creates containers with provided rootfses", func() {
 				Expect(getRootFSErr).NotTo(HaveOccurred())
 
 				Expect(gardenClient.Connection.CreateCallCount()).To(Equal(2))
 				spec1 := gardenClient.Connection.CreateArgsForCall(0)
 				spec2 := gardenClient.Connection.CreateArgsForCall(1)
 				Expect([]string{spec1.Image.URI, spec2.Image.URI}).To(ConsistOf("/rootFS1/path", "/rootFS2/path"))
+				Expect([]string{spec1.Properties[gardenhealth.HealthcheckNetworkProperty], spec2.Properties[gardenhealth.HealthcheckNetworkProperty]}).To(ConsistOf("true", "true"))
+			})
+
+			It("returned sizer lets us query their size", func() {
+				Expect(getRootFSErr).NotTo(HaveOccurred())
+
+				Expect(gardenClient.Connection.CreateCallCount()).To(Equal(2))
+				spec1 := gardenClient.Connection.CreateArgsForCall(0)
+				spec2 := gardenClient.Connection.CreateArgsForCall(1)
+
 				guidToRootFS[spec1.Handle] = spec1.Image.URI
 				guidToRootFS[spec2.Handle] = spec2.Image.URI
 

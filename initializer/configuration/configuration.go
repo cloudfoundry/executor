@@ -6,13 +6,16 @@ import (
 	"strconv"
 
 	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/executor/gardenhealth"
 	"code.cloudfoundry.org/executor/guidgen"
 	"code.cloudfoundry.org/garden"
 	garden_client "code.cloudfoundry.org/garden/client"
 	"code.cloudfoundry.org/lager"
 )
 
-const Automatic = "auto"
+const (
+	Automatic = "auto"
+)
 
 var (
 	ErrMemoryFlagInvalid       = fmt.Errorf("memory limit must be a positive number or '%s'", Automatic)
@@ -72,7 +75,8 @@ func GetRootFSSizes(
 			Handle: guid,
 			Image:  garden.ImageRef{URI: rootFSURI},
 			Properties: garden.Properties{
-				executor.ContainerOwnerProperty: containerOwnerName,
+				executor.ContainerOwnerProperty:         containerOwnerName,
+				gardenhealth.HealthcheckNetworkProperty: "true",
 			},
 		})
 		if err != nil {
