@@ -9,21 +9,23 @@ import (
 )
 
 type FakeCertPoolRetriever struct {
-	SystemCertsStub        func() *x509.CertPool
+	SystemCertsStub        func() (*x509.CertPool, error)
 	systemCertsMutex       sync.RWMutex
 	systemCertsArgsForCall []struct {
 	}
 	systemCertsReturns struct {
 		result1 *x509.CertPool
+		result2 error
 	}
 	systemCertsReturnsOnCall map[int]struct {
 		result1 *x509.CertPool
+		result2 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeCertPoolRetriever) SystemCerts() *x509.CertPool {
+func (fake *FakeCertPoolRetriever) SystemCerts() (*x509.CertPool, error) {
 	fake.systemCertsMutex.Lock()
 	ret, specificReturn := fake.systemCertsReturnsOnCall[len(fake.systemCertsArgsForCall)]
 	fake.systemCertsArgsForCall = append(fake.systemCertsArgsForCall, struct {
@@ -34,10 +36,10 @@ func (fake *FakeCertPoolRetriever) SystemCerts() *x509.CertPool {
 		return fake.SystemCertsStub()
 	}
 	if specificReturn {
-		return ret.result1
+		return ret.result1, ret.result2
 	}
 	fakeReturns := fake.systemCertsReturns
-	return fakeReturns.result1
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakeCertPoolRetriever) SystemCertsCallCount() int {
@@ -46,33 +48,36 @@ func (fake *FakeCertPoolRetriever) SystemCertsCallCount() int {
 	return len(fake.systemCertsArgsForCall)
 }
 
-func (fake *FakeCertPoolRetriever) SystemCertsCalls(stub func() *x509.CertPool) {
+func (fake *FakeCertPoolRetriever) SystemCertsCalls(stub func() (*x509.CertPool, error)) {
 	fake.systemCertsMutex.Lock()
 	defer fake.systemCertsMutex.Unlock()
 	fake.SystemCertsStub = stub
 }
 
-func (fake *FakeCertPoolRetriever) SystemCertsReturns(result1 *x509.CertPool) {
+func (fake *FakeCertPoolRetriever) SystemCertsReturns(result1 *x509.CertPool, result2 error) {
 	fake.systemCertsMutex.Lock()
 	defer fake.systemCertsMutex.Unlock()
 	fake.SystemCertsStub = nil
 	fake.systemCertsReturns = struct {
 		result1 *x509.CertPool
-	}{result1}
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeCertPoolRetriever) SystemCertsReturnsOnCall(i int, result1 *x509.CertPool) {
+func (fake *FakeCertPoolRetriever) SystemCertsReturnsOnCall(i int, result1 *x509.CertPool, result2 error) {
 	fake.systemCertsMutex.Lock()
 	defer fake.systemCertsMutex.Unlock()
 	fake.SystemCertsStub = nil
 	if fake.systemCertsReturnsOnCall == nil {
 		fake.systemCertsReturnsOnCall = make(map[int]struct {
 			result1 *x509.CertPool
+			result2 error
 		})
 	}
 	fake.systemCertsReturnsOnCall[i] = struct {
 		result1 *x509.CertPool
-	}{result1}
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeCertPoolRetriever) Invocations() map[string][][]interface{} {

@@ -66,17 +66,20 @@ func (containers *executorContainers) Containers() ([]garden.Container, error) {
 
 //go:generate counterfeiter -o fakes/fake_cert_pool_retriever.go . CertPoolRetriever
 type CertPoolRetriever interface {
-	SystemCerts() *x509.CertPool
+	SystemCerts() (*x509.CertPool, error)
 }
 
 type systemcertsRetriever struct{}
 
-func (s systemcertsRetriever) SystemCerts() *x509.CertPool {
-	caCertPool := systemcerts.SystemRootsPool()
+func (s systemcertsRetriever) SystemCerts() (*x509.CertPool, error) {
+	caCertPool, err := systemcerts.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
 	if caCertPool == nil {
 		caCertPool = systemcerts.NewCertPool()
 	}
-	return caCertPool.AsX509CertPool()
+	return caCertPool.AsX509CertPool(), nil
 }
 
 type ExecutorConfig struct {
@@ -583,7 +586,10 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 	var tlsConfig *tls.Config
 	var err error
 
-	caCertPool := certsRetriever.SystemCerts()
+	caCertPool, err := certsRetriever.SystemCerts()
+	if err != nil {
+		return nil, err
+	}
 	if (config.PathToTLSKey != "" && config.PathToTLSCert == "") || (config.PathToTLSKey == "" && config.PathToTLSCert != "") {
 		return nil, errors.New("The TLS certificate or key is missing")
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -472,7 +473,7 @@ var _ = Describe("Initializer", func() {
 			config.PathToTLSKey = "fixtures/downloader/client.key"
 			config.PathToTLSCACert = "fixtures/downloader/ca.crt"
 
-			fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool())
+			fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool(), nil)
 
 			certBytes, err := ioutil.ReadFile(config.PathToTLSCACert)
 			Expect(err).NotTo(HaveOccurred())
@@ -504,7 +505,7 @@ var _ = Describe("Initializer", func() {
 			systemCAs := x509.NewCertPool()
 			ok := systemCAs.AppendCertsFromPEM(certBytes)
 			Expect(ok).To(BeTrue())
-			fakeCertPoolRetriever.SystemCertsReturns(systemCAs)
+			fakeCertPoolRetriever.SystemCertsReturns(systemCAs, nil)
 
 			tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
 			Expect(err).To(Succeed())
@@ -512,6 +513,18 @@ var _ = Describe("Initializer", func() {
 
 			Expect(fakeCertPoolRetriever.SystemCertsCallCount()).To(Equal(1))
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
+		})
+
+		Context("when the cert pool retriever fails", func() {
+			BeforeEach(func() {
+				fakeCertPoolRetriever.SystemCertsReturns(nil, errors.New("failed retrieving certs"))
+			})
+
+			It("errors", func() {
+				tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+				Expect(err).To(MatchError("failed retrieving certs"))
+				Expect(tlsConfig).To(BeNil())
+			})
 		})
 
 		It("does not restrict the cipher suites", func() {
