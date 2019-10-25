@@ -15,7 +15,6 @@ type cpuInfo struct {
 	timeOfSample   time.Time
 }
 
-
 type StatsReporter struct {
 	cpuInfos              map[string]*cpuInfo
 	metronClient          loggingclient.IngressClient
