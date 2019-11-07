@@ -1,11 +1,14 @@
 package log_streamer
 
 import (
+	"context"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
+	"golang.org/x/time/rate"
 )
 
 type streamDestination struct {
@@ -15,15 +18,19 @@ type streamDestination struct {
 	buffer       []byte
 	processLock  sync.Mutex
 	metronClient loggingclient.IngressClient
+	lim          *rate.Limiter
 }
 
 func newStreamDestination(sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
+	theRate := rate.Every(time.Second)
+	lim := rate.NewLimiter(theRate, 100)
 	return &streamDestination{
 		sourceName:   sourceName,
 		tags:         tags,
 		messageType:  messageType,
 		buffer:       make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient: metronClient,
+		lim:          lim,
 	}
 }
 
@@ -34,6 +41,7 @@ func (destination *streamDestination) lockAndFlush() {
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
+	destination.lim.Wait(context.Background())
 	destination.processMessage(string(data))
 	return len(data), nil
 }
