@@ -109,7 +109,7 @@ var _ = Describe("Initializer", func() {
 	})
 
 	AfterEach(func() {
-		Eventually(done).Should(BeClosed())
+		Eventually(done, 10*time.Second).Should(BeClosed())
 		fakeGarden.Close()
 	})
 
