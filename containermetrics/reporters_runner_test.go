@@ -1,6 +1,7 @@
 package containermetrics_test
 
 import (
+	"errors"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -39,7 +41,8 @@ var _ = Describe("ReportersRunner", func() {
 		fakeExecutorClient *efakes.FakeClient
 		fakeMetronClient   *mfakes.FakeIngressClient
 
-		process ifrit.Process
+		testStart time.Time
+		process   ifrit.Process
 
 		enableContainerProxy    bool
 		proxyMemoryAllocationMB int
@@ -53,7 +56,8 @@ var _ = Describe("ReportersRunner", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		interval = 10 * time.Second
-		fakeClock = fakeclock.NewFakeClock(time.Now())
+		testStart = time.Now()
+		fakeClock = fakeclock.NewFakeClock(testStart)
 		fakeExecutorClient = new(efakes.FakeClient)
 		fakeMetronClient = new(mfakes.FakeIngressClient)
 
@@ -733,137 +737,184 @@ var _ = Describe("ReportersRunner", func() {
 
 	Context("CPU Spikes", func() {
 		var metricsAtT0, metricsAtT10, metricsAtT20 map[string]executor.Metrics
+		createMetrics := func(cpuTime time.Duration, entitlement uint64) executor.Metrics {
+			return executor.Metrics{
+				MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "app", "instance_id": "0"}},
+				ContainerMetrics: executor.ContainerMetrics{
+					TimeSpentInCPU:                      cpuTime,
+					AbsoluteCPUEntitlementInNanoseconds: entitlement,
+				},
+			}
+		}
 
 		BeforeEach(func() {
-			containers1 := []executor.Container{
-				{Guid: "container-guid-with-spike"},
-				{Guid: "container-guid-with-short-spike"},
-				{Guid: "container-guid-without-spike"},
-			}
-			containers2 := []executor.Container{
-				{Guid: "container-guid-with-spike"},
-				{Guid: "container-guid-with-short-spike"},
-				{Guid: "container-guid-without-spike"},
-			}
-			containers3 := []executor.Container{
-				{Guid: "container-guid-with-spike"},
-				{Guid: "container-guid-with-short-spike"},
-				{Guid: "container-guid-without-spike"},
-			}
-
-			fakeExecutorClient.ListContainersReturnsOnCall(0, containers1, nil)
-			fakeExecutorClient.ListContainersReturnsOnCall(1, containers2, nil)
-			fakeExecutorClient.ListContainersReturnsOnCall(2, containers3, nil)
-
-			metricsAtT0 = map[string]executor.Metrics{
-				"container-guid-with-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      2000 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1000,
-					},
-				},
-				"container-guid-with-short-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      1500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1000,
-					},
-				},
-				"container-guid-still-spiking": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      1500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1000,
-					},
-				},
-				"container-guid-without-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "non-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1000,
-					},
-				},
-			}
-
-			metricsAtT10 = map[string]executor.Metrics{
-				"container-guid-with-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      2500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 2000,
-					},
-				},
-				"container-guid-still-spiking": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      2500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 2000,
-					},
-				},
-				"container-guid-with-short-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      1500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 2000,
-					},
-				},
-				"container-guid-without-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "non-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      501 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1001,
-					},
-				},
-			}
-
-			metricsAtT20 = map[string]executor.Metrics{
-				"container-guid-with-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      2600 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 3000,
-					},
-				},
-				"container-guid-still-spiking": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      3500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 3000,
-					},
-				},
-				"container-guid-with-short-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "short-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      1500 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 3000,
-					},
-				},
-				"container-guid-without-spike": executor.Metrics{
-					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "non-spiker-source-id-with-index", "instance_id": "1"}},
-					ContainerMetrics: executor.ContainerMetrics{
-						TimeSpentInCPU:                      502 * time.Nanosecond,
-						AbsoluteCPUEntitlementInNanoseconds: 1002,
-					},
-				},
-			}
-
+			fakeExecutorClient.ListContainersReturns([]executor.Container{{Guid: "container-guid"}}, nil)
+			metricsAtT0 = make(map[string]executor.Metrics)
+			metricsAtT10 = make(map[string]executor.Metrics)
+			metricsAtT20 = make(map[string]executor.Metrics)
 			fakeExecutorClient.GetBulkMetricsReturnsOnCall(0, metricsAtT0, nil)
 			fakeExecutorClient.GetBulkMetricsReturnsOnCall(1, metricsAtT10, nil)
 			fakeExecutorClient.GetBulkMetricsReturnsOnCall(2, metricsAtT20, nil)
 		})
 
-		It("sends a CPU spike metric with the correct source id value", func() {
+		JustBeforeEach(func() {
 			fakeClock.WaitForWatcherAndIncrement(interval)
 			fakeClock.WaitForWatcherAndIncrement(interval)
-			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
-			Consistently(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(2))
-			metricsArgs0 := fakeMetronClient.SendSpikeMetricsArgsForCall(0)
-			metricsArgs1 := fakeMetronClient.SendSpikeMetricsArgsForCall(1)
-			Expect(metricsArgs0.Tags).To(HaveKeyWithValue("source_id", "short-spiker-source-id-with-index"))
-			Expect(metricsArgs0.End.Sub(metricsArgs0.Start)).To(Equal(time.Second * 10))
-			Expect(metricsArgs1.Tags).To(HaveKeyWithValue("source_id", "spiker-source-id-with-index"))
-			Expect(metricsArgs1.End.Sub(metricsArgs1.Start)).To(Equal(time.Second * 20))
+		})
+
+		Context("when there are multiple containers", func() {
+			BeforeEach(func() {
+				fakeExecutorClient.ListContainersReturns([]executor.Container{{Guid: "container-guid-1"}, {Guid: "container-guid-2"}}, nil)
+				metricsAtT0["container-guid-1"] = executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "app", "instance_id": "0"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						TimeSpentInCPU:                      1300 * time.Nanosecond,
+						AbsoluteCPUEntitlementInNanoseconds: 1000,
+					},
+				}
+
+				metricsAtT0["container-guid-2"] = executor.Metrics{
+					MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "app", "instance_id": "1"}},
+					ContainerMetrics: executor.ContainerMetrics{
+						TimeSpentInCPU:                      2300 * time.Nanosecond,
+						AbsoluteCPUEntitlementInNanoseconds: 2000,
+					},
+				}
+			})
+
+			It("sends a metric per container", func() {
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(2))
+
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(0)
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("source_id", "app"))
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("instance_id", "0"))
+
+				spikeMetric = fakeMetronClient.SendSpikeMetricsArgsForCall(1)
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("source_id", "app"))
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("instance_id", "1"))
+			})
+
+			Context("when sending the spike metric for a container fails", func() {
+				BeforeEach(func() {
+					fakeMetronClient.SendSpikeMetricsReturnsOnCall(0, errors.New("send-error-1"))
+				})
+
+				It("reports the error", func() {
+					Eventually(logger.Logs()).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Data": HaveKeyWithValue("error", "send-error-1"),
+					})))
+				})
+
+				It("does not send metrics for the other containers", func() {
+					Expect(fakeMetronClient.SendSpikeMetricsCallCount()).To(Equal(1))
+				})
+			})
+		})
+
+		Context("when the container has never spiked", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(300*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(600*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(1200*time.Nanosecond, 4000)
+			})
+
+			It("never sends a spike metric", func() {
+				Consistently(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(0))
+			})
+		})
+
+		Context("when the container is starting a spike", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(300*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(600*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(5000*time.Nanosecond, 4000)
+			})
+
+			It("sends a spike metric with start and zero end", func() {
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(1))
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(0)
+
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("source_id", "app"))
+				Expect(spikeMetric.Tags).To(HaveKeyWithValue("instance_id", "0"))
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(30 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(time.Time{}))
+			})
+		})
+
+		Context("when the container is finishing a spike", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(700*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(2100*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(3000*time.Nanosecond, 4000)
+			})
+
+			It("sends a spike metric with start as spike start and end as spike end", func() {
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(2))
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(1)
+
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(20 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(testStart.Add(30 * time.Second)))
+			})
+		})
+
+		Context("while the container is spiking", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(1100*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(2200*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(4400*time.Nanosecond, 4000)
+			})
+
+			It("sends spike metric on every iteration", func() {
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(3))
+
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(0)
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(10 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(time.Time{}))
+
+				spikeMetric = fakeMetronClient.SendSpikeMetricsArgsForCall(1)
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(10 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(time.Time{}))
+
+				spikeMetric = fakeMetronClient.SendSpikeMetricsArgsForCall(2)
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(10 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(time.Time{}))
+			})
+		})
+
+		Context("when a non-spiking container has a previous spike", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(1100*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(1800*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(2000*time.Nanosecond, 4000)
+			})
+
+			It("sends spike metric with start and end", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				fakeClock.WaitForWatcherAndIncrement(interval)
+
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(3))
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(2)
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(10 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(testStart.Add(20 * time.Second)))
+			})
+		})
+
+		Context("when the container is starting a subsequent spike", func() {
+			BeforeEach(func() {
+				metricsAtT0["container-guid"] = createMetrics(1100*time.Nanosecond, 1000)
+				metricsAtT10["container-guid"] = createMetrics(1800*time.Nanosecond, 2000)
+				metricsAtT20["container-guid"] = createMetrics(4200*time.Nanosecond, 4000)
+			})
+
+			It("sends a spike metric with start and zero end", func() {
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				fakeClock.WaitForWatcherAndIncrement(interval)
+				Eventually(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(3))
+				spikeMetric := fakeMetronClient.SendSpikeMetricsArgsForCall(2)
+
+				Expect(spikeMetric.Start).To(Equal(testStart.Add(30 * time.Second)))
+				Expect(spikeMetric.End).To(Equal(time.Time{}))
+			})
 		})
 	})
 
@@ -912,11 +963,10 @@ var _ = Describe("ReportersRunner", func() {
 			fakeExecutorClient.GetBulkMetricsReturnsOnCall(2, metricsAtT20, nil)
 		})
 
-		It("should not report spike metric", func() {
+		It("does not send a spike metric when the container is gone", func() {
 			fakeClock.WaitForWatcherAndIncrement(interval)
-			fakeClock.WaitForWatcherAndIncrement(interval)
-			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
-			Consistently(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(0))
+			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+			Consistently(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(1))
 		})
 
 		It("should report 0 CPU", func() {
