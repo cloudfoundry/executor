@@ -25,11 +25,14 @@ import (
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	envoy_v2_metrics "github.com/envoyproxy/go-control-plane/envoy/config/metrics/v2"
-	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
+	"github.com/envoyproxy/go-control-plane/pkg/conversion"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
-	proto_types "github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/any"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -37,7 +40,7 @@ const (
 	StartProxyPort = 61001
 	EndProxyPort   = 65534
 
-	TimeOut = 250 * time.Millisecond
+	TimeOut = 250000000
 
 	IngressListener = "ingress_listener"
 	TcpProxy        = "envoy.tcp_proxy"
@@ -300,18 +303,19 @@ func generateProxyConfig(
 	requireClientCerts bool,
 	adsServers []string,
 ) (*envoy_v2_bootstrap.Bootstrap, error) {
-	clusters := []envoy_v2.Cluster{}
+	clusters := []*envoy_v2.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-		clusters = append(clusters, envoy_v2.Cluster{
-			Name:           clusterName,
-			ConnectTimeout: TimeOut,
+		clusters = append(clusters, &envoy_v2.Cluster{
+			Name:                 clusterName,
+			ClusterDiscoveryType: &envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC},
+			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
 			Hosts: []*envoy_v2_core.Address{
 				envoyAddr(container.InternalIP, portMap.ContainerPort),
 			},
 			CircuitBreakers: &envoy_v2_cluster.CircuitBreakers{
 				Thresholds: []*envoy_v2_cluster.CircuitBreakers_Thresholds{
-					{MaxConnections: &proto_types.UInt32Value{Value: math.MaxUint32}},
+					{MaxConnections: &wrappers.UInt32Value{Value: math.MaxUint32}},
 				}},
 		})
 	}
@@ -352,9 +356,10 @@ func generateProxyConfig(
 			adsHosts = append(adsHosts, envoyAddr(address, port))
 		}
 
-		clusters = append(clusters, envoy_v2.Cluster{
+		clusters = append(clusters, &envoy_v2.Cluster{
 			Name:                 "pilot-ads",
-			ConnectTimeout:       TimeOut,
+			ClusterDiscoveryType: &envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC},
+			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
 			Hosts:                adsHosts,
 			Http2ProtocolOptions: &envoy_v2_core.Http2ProtocolOptions{},
 		})
@@ -415,14 +420,14 @@ func writeProxyConfig(proxyConfig *envoy_v2_bootstrap.Bootstrap, path string) er
 	return ioutil.WriteFile(path, yamlStr, 0666)
 }
 
-func generateListeners(container executor.Container, requireClientCerts bool) ([]envoy_v2.Listener, error) {
-	listeners := []envoy_v2.Listener{}
+func generateListeners(container executor.Container, requireClientCerts bool) ([]*envoy_v2.Listener, error) {
+	listeners := []*envoy_v2.Listener{}
 
 	for index, portMap := range container.Ports {
 		listenerName := TcpProxy
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
-		filterConfig, err := envoy_util.MessageToStruct(&envoy_v2_tcp_proxy_filter.TcpProxy{
+		filterConfig, err := conversion.MessageToStruct(&envoy_v2_tcp_proxy_filter.TcpProxy{
 			StatPrefix: fmt.Sprintf("%d-stats", index),
 			ClusterSpecifier: &envoy_v2_tcp_proxy_filter.TcpProxy_Cluster{
 				Cluster: clusterName,
@@ -433,12 +438,12 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 			return nil, err
 		}
 
-		listener := envoy_v2.Listener{
+		listener := &envoy_v2.Listener{
 			Name:    fmt.Sprintf("listener-%d", portMap.ContainerPort),
-			Address: *envoyAddr("0.0.0.0", portMap.ContainerTLSProxyPort),
-			FilterChains: []envoy_v2_listener.FilterChain{
+			Address: envoyAddr("0.0.0.0", portMap.ContainerTLSProxyPort),
+			FilterChains: []*envoy_v2_listener.FilterChain{
 				{
-					Filters: []envoy_v2_listener.Filter{
+					Filters: []*envoy_v2_listener.Filter{
 						{
 							Name: listenerName,
 							ConfigType: &envoy_v2_listener.Filter_Config{
@@ -447,7 +452,7 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 						},
 					},
 					TlsContext: &envoy_v2_auth.DownstreamTlsContext{
-						RequireClientCertificate: &proto_types.BoolValue{Value: requireClientCerts},
+						RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
 						CommonTlsContext: &envoy_v2_auth.CommonTlsContext{
 							TlsCertificateSdsSecretConfigs: []*envoy_v2_auth.SdsSecretConfig{
 								{
@@ -529,14 +534,14 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 }
 
 func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error {
-	resourceAny, err := proto_types.MarshalAny(resourceMsg)
+	resourceAny, err := ptypes.MarshalAny(resourceMsg)
 	if err != nil {
 		return err
 	}
 	dr := &envoy_v2.DiscoveryResponse{
 		VersionInfo: "0",
-		Resources: []proto_types.Any{
-			*resourceAny,
+		Resources: []*any.Any{
+			resourceAny,
 		},
 	}
 	jsonMarshaler := jsonpb.Marshaler{OrigName: true, EmitDefaults: false}

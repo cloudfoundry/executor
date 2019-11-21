@@ -26,12 +26,13 @@ import (
 	envoy_v2_listener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
 	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
 	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
-	envoy_util "github.com/envoyproxy/go-control-plane/pkg/util"
+	"github.com/envoyproxy/go-control-plane/pkg/conversion"
 	"github.com/fsnotify/fsnotify"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
-	proto_types "github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/duration"
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -407,7 +408,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(sdsCertificateDiscoveryResponse.Resources).To(HaveLen(1))
 
 			var secret envoy_v2_auth.Secret
-			Expect(proto_types.UnmarshalAny(&sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+			Expect(ptypes.UnmarshalAny(sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
 			Expect(secret.Name).To(Equal("server-cert-and-key"))
 			Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_TlsCertificate{
@@ -485,7 +486,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(sdsDiscoveryResponse.Resources).To(HaveLen(1))
 
 				var secret envoy_v2_auth.Secret
-				Expect(proto_types.UnmarshalAny(&sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+				Expect(ptypes.UnmarshalAny(sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
 				Expect(secret.Name).To(Equal("server-validation-context"))
 				Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_ValidationContext{
@@ -650,22 +651,22 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				cluster := proxyConfig.StaticResources.Clusters[0]
 				Expect(cluster.Name).To(Equal("0-service-cluster"))
-				Expect(cluster.ConnectTimeout).To(Equal(250 * time.Millisecond))
-				Expect(cluster.Type).To(Equal(envoy_v2.Cluster_STATIC))
+				Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
 				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
 				Expect(cluster.Hosts).To(ConsistOf(envoyAddr("10.0.0.1", 8080)))
 
 				cluster = proxyConfig.StaticResources.Clusters[1]
 				Expect(cluster.Name).To(Equal("1-service-cluster"))
-				Expect(cluster.ConnectTimeout).To(Equal(250 * time.Millisecond))
-				Expect(cluster.Type).To(Equal(envoy_v2.Cluster_STATIC))
+				Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
 				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
 				Expect(cluster.Hosts).To(ConsistOf(envoyAddr("10.0.0.1", 2222)))
 
 				adsCluster := proxyConfig.StaticResources.Clusters[2]
 				Expect(adsCluster.Name).To(Equal("pilot-ads"))
-				Expect(adsCluster.ConnectTimeout).To(Equal(250 * time.Millisecond))
-				Expect(cluster.Type).To(Equal(envoy_v2.Cluster_STATIC))
+				Expect(adsCluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
 				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
 				Expect(adsCluster.Hosts).To(Equal([]*envoy_v2_core.Address{
 					envoyAddr("10.255.217.2", 15010),
@@ -839,16 +840,16 @@ type expectedListener struct {
 	requireClientCertificate bool
 }
 
-func (l expectedListener) check(listener envoy_v2.Listener) {
+func (l expectedListener) check(listener *envoy_v2.Listener) {
 	Expect(listener.Name).To(Equal(l.name))
-	Expect(listener.Address).To(Equal(*envoyAddr("0.0.0.0", l.listenPort)))
+	Expect(listener.Address).To(Equal(envoyAddr("0.0.0.0", l.listenPort)))
 	Expect(listener.FilterChains).To(HaveLen(1))
 	filterChain := listener.FilterChains[0]
 	Expect(filterChain.Filters).To(HaveLen(1))
 	Expect(filterChain.Filters[0].Name).To(Equal("envoy.tcp_proxy"))
 	filterConfig := filterChain.Filters[0].ConfigType.(*envoy_v2_listener.Filter_Config).Config
 	var tcpProxyFilterConfig envoy_v2_tcp_proxy_filter.TcpProxy
-	Expect(envoy_util.StructToMessage(filterConfig, &tcpProxyFilterConfig)).To(Succeed())
+	Expect(conversion.StructToMessage(filterConfig, &tcpProxyFilterConfig)).To(Succeed())
 	Expect(tcpProxyFilterConfig.StatPrefix).To(Equal(l.statPrefix))
 	Expect(tcpProxyFilterConfig.ClusterSpecifier).To(Equal(
 		&envoy_v2_tcp_proxy_filter.TcpProxy_Cluster{Cluster: l.clusterName},
@@ -891,10 +892,10 @@ type expectedCluster struct {
 	maxConnections uint32
 }
 
-func (c expectedCluster) check(cluster envoy_v2.Cluster) {
+func (c expectedCluster) check(cluster *envoy_v2.Cluster) {
 	Expect(cluster.Name).To(Equal(c.name))
-	Expect(cluster.ConnectTimeout).To(Equal(250 * time.Millisecond))
-	Expect(cluster.Type).To(Equal(envoy_v2.Cluster_STATIC))
+	Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+	Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
 	Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
 	Expect(cluster.Hosts).To(Equal(c.hosts))
 	if c.maxConnections > 0 {
