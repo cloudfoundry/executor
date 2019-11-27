@@ -75,9 +75,10 @@ func (fake *FakeCredentialHandler) Close(arg1 containerstore.Credential, arg2 ex
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("Close", []interface{}{arg1, arg2})
+	closeStubCopy := fake.CloseStub
 	fake.closeMutex.Unlock()
-	if fake.CloseStub != nil {
-		return fake.CloseStub(arg1, arg2)
+	if closeStubCopy != nil {
+		return closeStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -136,9 +137,10 @@ func (fake *FakeCredentialHandler) CreateDir(arg1 lager.Logger, arg2 executor.Co
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("CreateDir", []interface{}{arg1, arg2})
+	createDirStubCopy := fake.CreateDirStub
 	fake.createDirMutex.Unlock()
-	if fake.CreateDirStub != nil {
-		return fake.CreateDirStub(arg1, arg2)
+	if createDirStubCopy != nil {
+		return createDirStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
@@ -203,9 +205,10 @@ func (fake *FakeCredentialHandler) RemoveDir(arg1 lager.Logger, arg2 executor.Co
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("RemoveDir", []interface{}{arg1, arg2})
+	removeDirStubCopy := fake.RemoveDirStub
 	fake.removeDirMutex.Unlock()
-	if fake.RemoveDirStub != nil {
-		return fake.RemoveDirStub(arg1, arg2)
+	if removeDirStubCopy != nil {
+		return removeDirStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -264,9 +267,10 @@ func (fake *FakeCredentialHandler) Update(arg1 containerstore.Credential, arg2 e
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("Update", []interface{}{arg1, arg2})
+	updateStubCopy := fake.UpdateStub
 	fake.updateMutex.Unlock()
-	if fake.UpdateStub != nil {
-		return fake.UpdateStub(arg1, arg2)
+	if updateStubCopy != nil {
+		return updateStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1

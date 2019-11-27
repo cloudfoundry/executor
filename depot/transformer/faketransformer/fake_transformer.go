@@ -45,9 +45,10 @@ func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Contai
 		arg5 transformer.Config
 	}{arg1, arg2, arg3, arg4, arg5})
 	fake.recordInvocation("StepsRunner", []interface{}{arg1, arg2, arg3, arg4, arg5})
+	stepsRunnerStubCopy := fake.StepsRunnerStub
 	fake.stepsRunnerMutex.Unlock()
-	if fake.StepsRunnerStub != nil {
-		return fake.StepsRunnerStub(arg1, arg2, arg3, arg4, arg5)
+	if stepsRunnerStubCopy != nil {
+		return stepsRunnerStubCopy(arg1, arg2, arg3, arg4, arg5)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2

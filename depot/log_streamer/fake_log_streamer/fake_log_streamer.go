@@ -63,9 +63,10 @@ func (fake *FakeLogStreamer) Flush() {
 	fake.flushArgsForCall = append(fake.flushArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Flush", []interface{}{})
+	flushStubCopy := fake.FlushStub
 	fake.flushMutex.Unlock()
-	if fake.FlushStub != nil {
-		fake.FlushStub()
+	if flushStubCopy != nil {
+		flushStubCopy()
 	}
 }
 
@@ -87,9 +88,10 @@ func (fake *FakeLogStreamer) SourceName() string {
 	fake.sourceNameArgsForCall = append(fake.sourceNameArgsForCall, struct {
 	}{})
 	fake.recordInvocation("SourceName", []interface{}{})
+	sourceNameStubCopy := fake.SourceNameStub
 	fake.sourceNameMutex.Unlock()
-	if fake.SourceNameStub != nil {
-		return fake.SourceNameStub()
+	if sourceNameStubCopy != nil {
+		return sourceNameStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
@@ -139,9 +141,10 @@ func (fake *FakeLogStreamer) Stderr() io.Writer {
 	fake.stderrArgsForCall = append(fake.stderrArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Stderr", []interface{}{})
+	stderrStubCopy := fake.StderrStub
 	fake.stderrMutex.Unlock()
-	if fake.StderrStub != nil {
-		return fake.StderrStub()
+	if stderrStubCopy != nil {
+		return stderrStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
@@ -191,9 +194,10 @@ func (fake *FakeLogStreamer) Stdout() io.Writer {
 	fake.stdoutArgsForCall = append(fake.stdoutArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Stdout", []interface{}{})
+	stdoutStubCopy := fake.StdoutStub
 	fake.stdoutMutex.Unlock()
-	if fake.StdoutStub != nil {
-		return fake.StdoutStub()
+	if stdoutStubCopy != nil {
+		return stdoutStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
@@ -244,9 +248,10 @@ func (fake *FakeLogStreamer) WithSource(arg1 string) log_streamer.LogStreamer {
 		arg1 string
 	}{arg1})
 	fake.recordInvocation("WithSource", []interface{}{arg1})
+	withSourceStubCopy := fake.WithSourceStub
 	fake.withSourceMutex.Unlock()
-	if fake.WithSourceStub != nil {
-		return fake.WithSourceStub(arg1)
+	if withSourceStubCopy != nil {
+		return withSourceStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1

@@ -215,9 +215,10 @@ func (fake *FakeClient) AllocateContainers(arg1 lager.Logger, arg2 []executor.Al
 		arg2 []executor.AllocationRequest
 	}{arg1, arg2Copy})
 	fake.recordInvocation("AllocateContainers", []interface{}{arg1, arg2Copy})
+	allocateContainersStubCopy := fake.AllocateContainersStub
 	fake.allocateContainersMutex.Unlock()
-	if fake.AllocateContainersStub != nil {
-		return fake.AllocateContainersStub(arg1, arg2)
+	if allocateContainersStubCopy != nil {
+		return allocateContainersStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -274,9 +275,10 @@ func (fake *FakeClient) Cleanup(arg1 lager.Logger) {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Cleanup", []interface{}{arg1})
+	cleanupStubCopy := fake.CleanupStub
 	fake.cleanupMutex.Unlock()
-	if fake.CleanupStub != nil {
-		fake.CleanupStub(arg1)
+	if cleanupStubCopy != nil {
+		cleanupStubCopy(arg1)
 	}
 }
 
@@ -307,9 +309,10 @@ func (fake *FakeClient) DeleteContainer(arg1 lager.Logger, arg2 string) error {
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("DeleteContainer", []interface{}{arg1, arg2})
+	deleteContainerStubCopy := fake.DeleteContainerStub
 	fake.deleteContainerMutex.Unlock()
-	if fake.DeleteContainerStub != nil {
-		return fake.DeleteContainerStub(arg1, arg2)
+	if deleteContainerStubCopy != nil {
+		return deleteContainerStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -367,9 +370,10 @@ func (fake *FakeClient) GetBulkMetrics(arg1 lager.Logger) (map[string]executor.M
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("GetBulkMetrics", []interface{}{arg1})
+	getBulkMetricsStubCopy := fake.GetBulkMetricsStub
 	fake.getBulkMetricsMutex.Unlock()
-	if fake.GetBulkMetricsStub != nil {
-		return fake.GetBulkMetricsStub(arg1)
+	if getBulkMetricsStubCopy != nil {
+		return getBulkMetricsStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -431,9 +435,10 @@ func (fake *FakeClient) GetContainer(arg1 lager.Logger, arg2 string) (executor.C
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("GetContainer", []interface{}{arg1, arg2})
+	getContainerStubCopy := fake.GetContainerStub
 	fake.getContainerMutex.Unlock()
-	if fake.GetContainerStub != nil {
-		return fake.GetContainerStub(arg1, arg2)
+	if getContainerStubCopy != nil {
+		return getContainerStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -496,9 +501,10 @@ func (fake *FakeClient) GetFiles(arg1 lager.Logger, arg2 string, arg3 string) (i
 		arg3 string
 	}{arg1, arg2, arg3})
 	fake.recordInvocation("GetFiles", []interface{}{arg1, arg2, arg3})
+	getFilesStubCopy := fake.GetFilesStub
 	fake.getFilesMutex.Unlock()
-	if fake.GetFilesStub != nil {
-		return fake.GetFilesStub(arg1, arg2, arg3)
+	if getFilesStubCopy != nil {
+		return getFilesStubCopy(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -559,9 +565,10 @@ func (fake *FakeClient) Healthy(arg1 lager.Logger) bool {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Healthy", []interface{}{arg1})
+	healthyStubCopy := fake.HealthyStub
 	fake.healthyMutex.Unlock()
-	if fake.HealthyStub != nil {
-		return fake.HealthyStub(arg1)
+	if healthyStubCopy != nil {
+		return healthyStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -619,9 +626,10 @@ func (fake *FakeClient) ListContainers(arg1 lager.Logger) ([]executor.Container,
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("ListContainers", []interface{}{arg1})
+	listContainersStubCopy := fake.ListContainersStub
 	fake.listContainersMutex.Unlock()
-	if fake.ListContainersStub != nil {
-		return fake.ListContainersStub(arg1)
+	if listContainersStubCopy != nil {
+		return listContainersStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -682,9 +690,10 @@ func (fake *FakeClient) Ping(arg1 lager.Logger) error {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Ping", []interface{}{arg1})
+	pingStubCopy := fake.PingStub
 	fake.pingMutex.Unlock()
-	if fake.PingStub != nil {
-		return fake.PingStub(arg1)
+	if pingStubCopy != nil {
+		return pingStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -742,9 +751,10 @@ func (fake *FakeClient) RemainingResources(arg1 lager.Logger) (executor.Executor
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("RemainingResources", []interface{}{arg1})
+	remainingResourcesStubCopy := fake.RemainingResourcesStub
 	fake.remainingResourcesMutex.Unlock()
-	if fake.RemainingResourcesStub != nil {
-		return fake.RemainingResourcesStub(arg1)
+	if remainingResourcesStubCopy != nil {
+		return remainingResourcesStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -806,9 +816,10 @@ func (fake *FakeClient) RunContainer(arg1 lager.Logger, arg2 *executor.RunReques
 		arg2 *executor.RunRequest
 	}{arg1, arg2})
 	fake.recordInvocation("RunContainer", []interface{}{arg1, arg2})
+	runContainerStubCopy := fake.RunContainerStub
 	fake.runContainerMutex.Unlock()
-	if fake.RunContainerStub != nil {
-		return fake.RunContainerStub(arg1, arg2)
+	if runContainerStubCopy != nil {
+		return runContainerStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -866,9 +877,10 @@ func (fake *FakeClient) SetHealthy(arg1 lager.Logger, arg2 bool) {
 		arg2 bool
 	}{arg1, arg2})
 	fake.recordInvocation("SetHealthy", []interface{}{arg1, arg2})
+	setHealthyStubCopy := fake.SetHealthyStub
 	fake.setHealthyMutex.Unlock()
-	if fake.SetHealthyStub != nil {
-		fake.SetHealthyStub(arg1, arg2)
+	if setHealthyStubCopy != nil {
+		setHealthyStubCopy(arg1, arg2)
 	}
 }
 
@@ -899,9 +911,10 @@ func (fake *FakeClient) StopContainer(arg1 lager.Logger, arg2 string) error {
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("StopContainer", []interface{}{arg1, arg2})
+	stopContainerStubCopy := fake.StopContainerStub
 	fake.stopContainerMutex.Unlock()
-	if fake.StopContainerStub != nil {
-		return fake.StopContainerStub(arg1, arg2)
+	if stopContainerStubCopy != nil {
+		return stopContainerStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -959,9 +972,10 @@ func (fake *FakeClient) SubscribeToEvents(arg1 lager.Logger) (executor.EventSour
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("SubscribeToEvents", []interface{}{arg1})
+	subscribeToEventsStubCopy := fake.SubscribeToEventsStub
 	fake.subscribeToEventsMutex.Unlock()
-	if fake.SubscribeToEventsStub != nil {
-		return fake.SubscribeToEventsStub(arg1)
+	if subscribeToEventsStubCopy != nil {
+		return subscribeToEventsStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -1022,9 +1036,10 @@ func (fake *FakeClient) TotalResources(arg1 lager.Logger) (executor.ExecutorReso
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("TotalResources", []interface{}{arg1})
+	totalResourcesStubCopy := fake.TotalResourcesStub
 	fake.totalResourcesMutex.Unlock()
-	if fake.TotalResourcesStub != nil {
-		return fake.TotalResourcesStub(arg1)
+	if totalResourcesStubCopy != nil {
+		return totalResourcesStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -1085,9 +1100,10 @@ func (fake *FakeClient) VolumeDrivers(arg1 lager.Logger) ([]string, error) {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("VolumeDrivers", []interface{}{arg1})
+	volumeDriversStubCopy := fake.VolumeDriversStub
 	fake.volumeDriversMutex.Unlock()
-	if fake.VolumeDriversStub != nil {
-		return fake.VolumeDriversStub(arg1)
+	if volumeDriversStubCopy != nil {
+		return volumeDriversStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
