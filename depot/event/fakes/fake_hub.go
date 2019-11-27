@@ -46,9 +46,10 @@ func (fake *FakeHub) Close() error {
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Close", []interface{}{})
+	closeStubCopy := fake.CloseStub
 	fake.closeMutex.Unlock()
-	if fake.CloseStub != nil {
-		return fake.CloseStub()
+	if closeStubCopy != nil {
+		return closeStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
@@ -98,9 +99,10 @@ func (fake *FakeHub) Emit(arg1 executor.Event) {
 		arg1 executor.Event
 	}{arg1})
 	fake.recordInvocation("Emit", []interface{}{arg1})
+	emitStubCopy := fake.EmitStub
 	fake.emitMutex.Unlock()
-	if fake.EmitStub != nil {
-		fake.EmitStub(arg1)
+	if emitStubCopy != nil {
+		emitStubCopy(arg1)
 	}
 }
 
@@ -129,9 +131,10 @@ func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Subscribe", []interface{}{})
+	subscribeStubCopy := fake.SubscribeStub
 	fake.subscribeMutex.Unlock()
-	if fake.SubscribeStub != nil {
-		return fake.SubscribeStub()
+	if subscribeStubCopy != nil {
+		return subscribeStubCopy()
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
