@@ -965,7 +965,8 @@ var _ = Describe("ReportersRunner", func() {
 
 		It("does not send a spike metric when the container is gone", func() {
 			fakeClock.WaitForWatcherAndIncrement(interval)
-			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(2))
+			fakeClock.WaitForWatcherAndIncrement(interval)
+			Eventually(fakeExecutorClient.GetBulkMetricsCallCount).Should(Equal(3))
 			Consistently(fakeMetronClient.SendSpikeMetricsCallCount).Should(Equal(1))
 		})
 
