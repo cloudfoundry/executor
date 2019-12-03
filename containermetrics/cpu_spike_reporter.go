@@ -26,6 +26,8 @@ func NewCPUSpikeReporter(metronClient loggingclient.IngressClient) *CPUSpikeRepo
 }
 
 func (reporter *CPUSpikeReporter) Report(logger lager.Logger, containers []executor.Container, metrics map[string]executor.Metrics, timeStamp time.Time) error {
+	spikeInfos := map[string]*spikeInfo{}
+
 	for _, container := range containers {
 		guid := container.Guid
 		metric, ok := metrics[guid]
@@ -33,7 +35,9 @@ func (reporter *CPUSpikeReporter) Report(logger lager.Logger, containers []execu
 			continue
 		}
 
-		previousSpikeInfo := reporter.spikeInfos[guid]
+		spikeInfos[guid] = reporter.spikeInfos[guid]
+
+		previousSpikeInfo := spikeInfos[guid]
 		currentSpikeInfo := &spikeInfo{}
 
 		if previousSpikeInfo != nil {
@@ -50,7 +54,7 @@ func (reporter *CPUSpikeReporter) Report(logger lager.Logger, containers []execu
 			currentSpikeInfo.end = timeStamp
 		}
 
-		reporter.spikeInfos[guid] = currentSpikeInfo
+		spikeInfos[guid] = currentSpikeInfo
 
 		if !currentSpikeInfo.start.IsZero() {
 			err := reporter.metronClient.SendSpikeMetrics(loggingclient.SpikeMetric{
@@ -64,6 +68,7 @@ func (reporter *CPUSpikeReporter) Report(logger lager.Logger, containers []execu
 		}
 	}
 
+	reporter.spikeInfos = spikeInfos
 	return nil
 }
 
