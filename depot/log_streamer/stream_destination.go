@@ -19,9 +19,10 @@ type streamDestination struct {
 	processLock  sync.Mutex
 	metronClient loggingclient.IngressClient
 	lim          *rate.Limiter
+	ctx          context.Context
 }
 
-func newStreamDestination(sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
+func newStreamDestination(ctx context.Context, sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
 	theRate := rate.Every(time.Second)
 	lim := rate.NewLimiter(theRate, 100)
 	return &streamDestination{
@@ -31,6 +32,7 @@ func newStreamDestination(sourceName string, tags map[string]string, messageType
 		buffer:       make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient: metronClient,
 		lim:          lim,
+		ctx:          ctx,
 	}
 }
 
@@ -41,7 +43,10 @@ func (destination *streamDestination) lockAndFlush() {
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
-	destination.lim.Wait(context.Background())
+	err := destination.lim.Wait(destination.ctx)
+	if err != nil {
+		return 0, err
+	}
 	destination.processMessage(string(data))
 	return len(data), nil
 }

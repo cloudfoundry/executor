@@ -1,6 +1,7 @@
 package log_streamer
 
 import (
+	"context"
 	"io"
 	"strconv"
 
@@ -23,11 +24,13 @@ type LogStreamer interface {
 
 	WithSource(sourceName string) LogStreamer
 	SourceName() string
+	Stop()
 }
 
 type logStreamer struct {
-	stdout *streamDestination
-	stderr *streamDestination
+	stdout     *streamDestination
+	stderr     *streamDestination
+	cancelFunc context.CancelFunc
 }
 
 func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
@@ -52,8 +55,11 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		tags["instance_id"] = sourceIndex
 	}
 
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
 	return &logStreamer{
 		stdout: newStreamDestination(
+			ctx,
 			sourceName,
 			tags,
 			loggregator_v2.Log_OUT,
@@ -61,11 +67,13 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		),
 
 		stderr: newStreamDestination(
+			ctx,
 			sourceName,
 			tags,
 			loggregator_v2.Log_ERR,
 			metronClient,
 		),
+		cancelFunc: cancelFunc,
 	}
 }
 
@@ -95,4 +103,8 @@ func (e *logStreamer) WithSource(sourceName string) LogStreamer {
 
 func (e *logStreamer) SourceName() string {
 	return e.stdout.sourceName
+}
+
+func (e *logStreamer) Stop() {
+	e.cancelFunc()
 }

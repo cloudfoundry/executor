@@ -232,6 +232,8 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				step.streamer.Flush()
 			}
 
+			step.streamer.Stop()
+
 			if killed {
 				return new(ExceededGracefulShutdownIntervalError)
 			}
