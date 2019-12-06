@@ -35,3 +35,5 @@ func (bs *bufferStreamer) WithSource(sourceName string) LogStreamer {
 func (bs *bufferStreamer) SourceName() string {
 	return bs.sourceName
 }
+
+func (bs *bufferStreamer) Stop() {}

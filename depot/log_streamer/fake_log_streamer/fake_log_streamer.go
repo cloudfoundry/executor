@@ -43,6 +43,10 @@ type FakeLogStreamer struct {
 	stdoutReturnsOnCall map[int]struct {
 		result1 io.Writer
 	}
+	StopStub        func()
+	stopMutex       sync.RWMutex
+	stopArgsForCall []struct {
+	}
 	WithSourceStub        func(string) log_streamer.LogStreamer
 	withSourceMutex       sync.RWMutex
 	withSourceArgsForCall []struct {
@@ -63,10 +67,9 @@ func (fake *FakeLogStreamer) Flush() {
 	fake.flushArgsForCall = append(fake.flushArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Flush", []interface{}{})
-	flushStubCopy := fake.FlushStub
 	fake.flushMutex.Unlock()
-	if flushStubCopy != nil {
-		flushStubCopy()
+	if fake.FlushStub != nil {
+		fake.FlushStub()
 	}
 }
 
@@ -88,10 +91,9 @@ func (fake *FakeLogStreamer) SourceName() string {
 	fake.sourceNameArgsForCall = append(fake.sourceNameArgsForCall, struct {
 	}{})
 	fake.recordInvocation("SourceName", []interface{}{})
-	sourceNameStubCopy := fake.SourceNameStub
 	fake.sourceNameMutex.Unlock()
-	if sourceNameStubCopy != nil {
-		return sourceNameStubCopy()
+	if fake.SourceNameStub != nil {
+		return fake.SourceNameStub()
 	}
 	if specificReturn {
 		return ret.result1
@@ -141,10 +143,9 @@ func (fake *FakeLogStreamer) Stderr() io.Writer {
 	fake.stderrArgsForCall = append(fake.stderrArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Stderr", []interface{}{})
-	stderrStubCopy := fake.StderrStub
 	fake.stderrMutex.Unlock()
-	if stderrStubCopy != nil {
-		return stderrStubCopy()
+	if fake.StderrStub != nil {
+		return fake.StderrStub()
 	}
 	if specificReturn {
 		return ret.result1
@@ -194,10 +195,9 @@ func (fake *FakeLogStreamer) Stdout() io.Writer {
 	fake.stdoutArgsForCall = append(fake.stdoutArgsForCall, struct {
 	}{})
 	fake.recordInvocation("Stdout", []interface{}{})
-	stdoutStubCopy := fake.StdoutStub
 	fake.stdoutMutex.Unlock()
-	if stdoutStubCopy != nil {
-		return stdoutStubCopy()
+	if fake.StdoutStub != nil {
+		return fake.StdoutStub()
 	}
 	if specificReturn {
 		return ret.result1
@@ -241,6 +241,29 @@ func (fake *FakeLogStreamer) StdoutReturnsOnCall(i int, result1 io.Writer) {
 	}{result1}
 }
 
+func (fake *FakeLogStreamer) Stop() {
+	fake.stopMutex.Lock()
+	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
+	}{})
+	fake.recordInvocation("Stop", []interface{}{})
+	fake.stopMutex.Unlock()
+	if fake.StopStub != nil {
+		fake.StopStub()
+	}
+}
+
+func (fake *FakeLogStreamer) StopCallCount() int {
+	fake.stopMutex.RLock()
+	defer fake.stopMutex.RUnlock()
+	return len(fake.stopArgsForCall)
+}
+
+func (fake *FakeLogStreamer) StopCalls(stub func()) {
+	fake.stopMutex.Lock()
+	defer fake.stopMutex.Unlock()
+	fake.StopStub = stub
+}
+
 func (fake *FakeLogStreamer) WithSource(arg1 string) log_streamer.LogStreamer {
 	fake.withSourceMutex.Lock()
 	ret, specificReturn := fake.withSourceReturnsOnCall[len(fake.withSourceArgsForCall)]
@@ -248,10 +271,9 @@ func (fake *FakeLogStreamer) WithSource(arg1 string) log_streamer.LogStreamer {
 		arg1 string
 	}{arg1})
 	fake.recordInvocation("WithSource", []interface{}{arg1})
-	withSourceStubCopy := fake.WithSourceStub
 	fake.withSourceMutex.Unlock()
-	if withSourceStubCopy != nil {
-		return withSourceStubCopy(arg1)
+	if fake.WithSourceStub != nil {
+		return fake.WithSourceStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -313,6 +335,8 @@ func (fake *FakeLogStreamer) Invocations() map[string][][]interface{} {
 	defer fake.stderrMutex.RUnlock()
 	fake.stdoutMutex.RLock()
 	defer fake.stdoutMutex.RUnlock()
+	fake.stopMutex.RLock()
+	defer fake.stopMutex.RUnlock()
 	fake.withSourceMutex.RLock()
 	defer fake.withSourceMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

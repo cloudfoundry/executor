@@ -60,9 +60,14 @@ var _ = Describe("LogStreamer", func() {
 
 		Describe("WithSource", func() {
 			Context("when a new log source is provided", func() {
-				It("should emit a message with the new log source", func() {
-					newSourceName := "new-source-name"
+				var newSourceName string
+
+				BeforeEach(func() {
+					newSourceName = "new-source-name"
 					streamer = streamer.WithSource(newSourceName)
+				})
+
+				It("should emit a message with the new log source", func() {
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
 					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 
@@ -73,8 +78,11 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			Context("when no log source is provided", func() {
-				It("should emit a message with the existing log source", func() {
+				BeforeEach(func() {
 					streamer = streamer.WithSource("")
+				})
+
+				It("should emit a message with the existing log source", func() {
 					fmt.Fprintln(streamer.Stdout(), "this is a log")
 
 					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
@@ -355,6 +363,59 @@ var _ = Describe("LogStreamer", func() {
 
 		It("does not trigger data races", func() {
 			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
+		})
+	})
+
+	Describe("Stop", func() {
+		Context("stopping the log streamer", func() {
+			BeforeEach(func() {
+				streamer.Stop()
+			})
+
+			It("writes to stdout and stderr should fail", func() {
+				_, stdOutErr := fmt.Fprintln(streamer.Stdout(), "this is a log")
+				Expect(stdOutErr).To(HaveOccurred())
+				_, stdErrErr := fmt.Fprintln(streamer.Stderr(), "this is another log")
+				Expect(stdErrErr).To(HaveOccurred())
+			})
+
+			Context("when a 'child' log streamer is present", func() {
+				var childStreamer log_streamer.LogStreamer
+
+				BeforeEach(func() {
+					childStreamer = streamer.WithSource("CHILD")
+				})
+
+				It("writes to the child's stdout and stderr should fail", func() {
+					_, stdOutErr := fmt.Fprintln(childStreamer.Stdout(), "this is a log")
+					Expect(stdOutErr).To(HaveOccurred())
+					_, stdErrErr := fmt.Fprintln(childStreamer.Stderr(), "this is another log")
+					Expect(stdErrErr).To(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when a 'child' log streamer is stopped", func() {
+			var childStreamer log_streamer.LogStreamer
+
+			BeforeEach(func() {
+				childStreamer = streamer.WithSource("CHILD")
+				childStreamer.Stop()
+			})
+
+			It("writes to the child's stdout and stderr should fail", func() {
+				_, stdOutErr := fmt.Fprintln(childStreamer.Stdout(), "this is a log")
+				Expect(stdOutErr).To(HaveOccurred())
+				_, stdErrErr := fmt.Fprintln(childStreamer.Stderr(), "this is another log")
+				Expect(stdErrErr).To(HaveOccurred())
+			})
+
+			It("writes to the parent's stdout and stderr should continue to succeed", func() {
+				_, stdOutErr := fmt.Fprintln(streamer.Stdout(), "this is a log")
+				Expect(stdOutErr).NotTo(HaveOccurred())
+				_, stdErrErr := fmt.Fprintln(streamer.Stderr(), "this is another log")
+				Expect(stdErrErr).NotTo(HaveOccurred())
+			})
 		})
 	})
 })

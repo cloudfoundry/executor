@@ -1,6 +1,7 @@
 package log_streamer
 
 import (
+	"context"
 	"io"
 	"strconv"
 
@@ -23,11 +24,15 @@ type LogStreamer interface {
 
 	WithSource(sourceName string) LogStreamer
 	SourceName() string
+
+	Stop()
 }
 
 type logStreamer struct {
-	stdout *streamDestination
-	stderr *streamDestination
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	stdout     *streamDestination
+	stderr     *streamDestination
 }
 
 func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
@@ -52,8 +57,13 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		tags["instance_id"] = sourceIndex
 	}
 
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
 	return &logStreamer{
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
 		stdout: newStreamDestination(
+			ctx,
 			sourceName,
 			tags,
 			loggregator_v2.Log_OUT,
@@ -61,6 +71,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		),
 
 		stderr: newStreamDestination(
+			ctx,
 			sourceName,
 			tags,
 			loggregator_v2.Log_ERR,
@@ -84,15 +95,23 @@ func (e *logStreamer) Flush() {
 
 func (e *logStreamer) WithSource(sourceName string) LogStreamer {
 	if sourceName == "" {
-		return e
+		sourceName = e.SourceName()
 	}
 
+	ctx, cancelFunc := context.WithCancel(e.ctx)
+
 	return &logStreamer{
-		stdout: e.stdout.withSource(sourceName),
-		stderr: e.stderr.withSource(sourceName),
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
+		stdout:     e.stdout.withSource(ctx, sourceName),
+		stderr:     e.stderr.withSource(ctx, sourceName),
 	}
 }
 
 func (e *logStreamer) SourceName() string {
 	return e.stdout.sourceName
+}
+
+func (e *logStreamer) Stop() {
+	e.cancelFunc()
 }

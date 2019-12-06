@@ -18,7 +18,9 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
+	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/executor/initializer/configuration/configurationfakes"
 	"code.cloudfoundry.org/garden"
@@ -1482,6 +1484,9 @@ var _ = Describe("Container Store", func() {
 					Guid: containerGuid,
 					RunInfo: executor.RunInfo{
 						Action: runAction,
+						LogConfig: executor.LogConfig{
+							Guid: containerGuid,
+						},
 					},
 				}
 
@@ -1723,14 +1728,59 @@ var _ = Describe("Container Store", func() {
 				})
 
 				Context("when the action exits", func() {
+					var (
+						completeChan chan struct{}
+					)
+
+					BeforeEach(func() {
+						completeChan = make(chan struct{})
+					})
+
+					testStoppingContainerLogs := func(runErr error) {
+						Context("stopping container logs", func() {
+							var blockSendAppLog chan struct{}
+
+							BeforeEach(func() {
+								megatron.StepsRunnerStub = func(logger lager.Logger, c executor.Container, gc garden.Container, logStreamer log_streamer.LogStreamer, t transformer.Config) (ifrit.Runner, error) {
+									var rf ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+										close(ready)
+
+										go func() {
+											logStreamer.Stdout().Write([]byte("this should block\n"))
+											logStreamer.Stdout().Write([]byte("bar\n"))
+										}()
+
+										<-completeChan
+										return runErr
+									}
+
+									return rf, nil
+								}
+
+								blockSendAppLog = make(chan struct{})
+								fakeMetronClient.SendAppLogStub = func(message string, sourceType string, tags map[string]string) error {
+									if message == "this should block" {
+										<-blockSendAppLog
+									}
+									return nil
+								}
+							})
+
+							It("ensures logs written after the action exits are dropped", func() {
+								err := containerStore.Run(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+								close(completeChan)
+								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
+
+								Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
+								close(blockSendAppLog)
+								Consistently(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
+							})
+						})
+					}
+
 					Context("successfully", func() {
-						var (
-							completeChan chan struct{}
-						)
-
 						BeforeEach(func() {
-							completeChan = make(chan struct{})
-
 							var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 								close(ready)
 								<-completeChan
@@ -1800,6 +1850,8 @@ var _ = Describe("Container Store", func() {
 
 							Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
 						})
+
+						testStoppingContainerLogs(nil)
 					})
 
 					Context("unsuccessfully", func() {
@@ -1933,6 +1985,8 @@ var _ = Describe("Container Store", func() {
 								})
 							})
 						})
+
+						testStoppingContainerLogs(errors.New("BOOOOM!!!!"))
 					})
 				})
 

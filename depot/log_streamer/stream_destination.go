@@ -1,6 +1,7 @@
 package log_streamer
 
 import (
+	"context"
 	"sync"
 	"unicode/utf8"
 
@@ -9,6 +10,7 @@ import (
 )
 
 type streamDestination struct {
+	ctx          context.Context
 	sourceName   string
 	tags         map[string]string
 	messageType  loggregator_v2.Log_Type
@@ -17,8 +19,9 @@ type streamDestination struct {
 	metronClient loggingclient.IngressClient
 }
 
-func newStreamDestination(sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
+func newStreamDestination(ctx context.Context, sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient) *streamDestination {
 	return &streamDestination{
+		ctx:          ctx,
 		sourceName:   sourceName,
 		tags:         tags,
 		messageType:  messageType,
@@ -34,6 +37,11 @@ func (destination *streamDestination) lockAndFlush() {
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
+	select {
+	case <-destination.ctx.Done():
+		return 0, destination.ctx.Err()
+	default:
+	}
 	destination.processMessage(string(data))
 	return len(data), nil
 }
@@ -125,6 +133,6 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 	return ""
 }
 
-func (d *streamDestination) withSource(sourceName string) *streamDestination {
-	return newStreamDestination(sourceName, d.tags, d.messageType, d.metronClient)
+func (d *streamDestination) withSource(ctx context.Context, sourceName string) *streamDestination {
+	return newStreamDestination(ctx, sourceName, d.tags, d.messageType, d.metronClient)
 }

@@ -13,6 +13,7 @@ import (
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/event"
+	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
@@ -500,7 +501,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		{"runner", runner},
 	})
 	n.process = ifrit.Background(group)
-	go n.run(logger)
+	go n.run(logger, logStreamer)
 	return nil
 }
 
@@ -538,7 +539,8 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 	n.complete(logger, false, "", false)
 }
 
-func (n *storeNode) run(logger lager.Logger) {
+func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreamer) {
+	defer logStreamer.Stop()
 	// wait for container runner to start
 	logger.Debug("execute-process")
 	defer n.metronClient.IncrementCounter(ContainerCompletedCount)
