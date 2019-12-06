@@ -64,10 +64,9 @@ func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Cont
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("CreateCredDir", []interface{}{arg1, arg2})
-	createCredDirStubCopy := fake.CreateCredDirStub
 	fake.createCredDirMutex.Unlock()
-	if createCredDirStubCopy != nil {
-		return createCredDirStubCopy(arg1, arg2)
+	if fake.CreateCredDirStub != nil {
+		return fake.CreateCredDirStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
@@ -132,10 +131,9 @@ func (fake *FakeCredManager) RemoveCredDir(arg1 lager.Logger, arg2 executor.Cont
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("RemoveCredDir", []interface{}{arg1, arg2})
-	removeCredDirStubCopy := fake.RemoveCredDirStub
 	fake.removeCredDirMutex.Unlock()
-	if removeCredDirStubCopy != nil {
-		return removeCredDirStubCopy(arg1, arg2)
+	if fake.RemoveCredDirStub != nil {
+		return fake.RemoveCredDirStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -194,10 +192,9 @@ func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) 
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("Runner", []interface{}{arg1, arg2})
-	runnerStubCopy := fake.RunnerStub
 	fake.runnerMutex.Unlock()
-	if runnerStubCopy != nil {
-		return runnerStubCopy(arg1, arg2)
+	if fake.RunnerStub != nil {
+		return fake.RunnerStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1

@@ -35,10 +35,9 @@ func (fake *FakeChecker) Cancel(arg1 lager.Logger) {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Cancel", []interface{}{arg1})
-	cancelStubCopy := fake.CancelStub
 	fake.cancelMutex.Unlock()
-	if cancelStubCopy != nil {
-		cancelStubCopy(arg1)
+	if fake.CancelStub != nil {
+		fake.CancelStub(arg1)
 	}
 }
 
@@ -68,10 +67,9 @@ func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Healthcheck", []interface{}{arg1})
-	healthcheckStubCopy := fake.HealthcheckStub
 	fake.healthcheckMutex.Unlock()
-	if healthcheckStubCopy != nil {
-		return healthcheckStubCopy(arg1)
+	if fake.HealthcheckStub != nil {
+		return fake.HealthcheckStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1

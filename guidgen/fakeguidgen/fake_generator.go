@@ -31,10 +31,9 @@ func (fake *FakeGenerator) Guid(arg1 lager.Logger) string {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Guid", []interface{}{arg1})
-	guidStubCopy := fake.GuidStub
 	fake.guidMutex.Unlock()
-	if guidStubCopy != nil {
-		return guidStubCopy(arg1)
+	if fake.GuidStub != nil {
+		return fake.GuidStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
