@@ -43,6 +43,11 @@ func (destination *streamDestination) lockAndFlush() {
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
+	// select {
+	// case <-destination.ctx.Done():
+	// 	return 0, destination.ctx.Err()
+	// default:
+	// }
 	err := destination.lim.Wait(destination.ctx)
 	if err != nil {
 		destination.processMessage("streamDestination.Write() context cancelled")

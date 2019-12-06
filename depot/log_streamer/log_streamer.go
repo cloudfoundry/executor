@@ -32,7 +32,7 @@ type logStreamer struct {
 	ctx    context.Context
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, ctx context.Context) LogStreamer {
+func New(ctx context.Context, guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}

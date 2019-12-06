@@ -18,12 +18,12 @@ var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip
 
 func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient, ctx context.Context) log_streamer.LogStreamer {
 	return log_streamer.New(
+		ctx,
 		conf.Guid,
 		conf.SourceName,
 		conf.Index,
 		conf.Tags,
 		metronClient,
-		ctx,
 	)
 }
 

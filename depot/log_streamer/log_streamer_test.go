@@ -1,6 +1,7 @@
 package log_streamer_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,6 +16,8 @@ var _ = Describe("LogStreamer", func() {
 	var (
 		streamer   log_streamer.LogStreamer
 		fakeClient *mfakes.FakeIngressClient
+		ctx        context.Context
+		cancelFunc context.CancelFunc
 	)
 
 	guid := "the-guid"
@@ -26,8 +29,9 @@ var _ = Describe("LogStreamer", func() {
 	}
 
 	BeforeEach(func() {
+		ctx, cancelFunc = context.WithCancel(context.Background())
 		fakeClient = &mfakes.FakeIngressClient{}
-		streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient)
+		streamer = log_streamer.New(ctx, guid, sourceName, index, tags, fakeClient)
 	})
 
 	Context("when told to emit", func() {
@@ -297,7 +301,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = log_streamer.New("", sourceName, index, tags, fakeClient)
+			streamer = log_streamer.New(ctx, "", sourceName, index, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
@@ -309,7 +313,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = log_streamer.New(guid, "", -1, tags, fakeClient)
+			streamer = log_streamer.New(ctx, guid, "", -1, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
@@ -322,7 +326,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = log_streamer.New(guid, sourceName, -1, tags, fakeClient)
+			streamer = log_streamer.New(ctx, guid, sourceName, -1, tags, fakeClient)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
@@ -355,6 +359,19 @@ var _ = Describe("LogStreamer", func() {
 
 		It("does not trigger data races", func() {
 			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
+		})
+	})
+
+	Context("when the log streamer context is cancelled", func() {
+		BeforeEach(func() {
+			cancelFunc()
+		})
+
+		It("writes to stdout and stderr should fail", func() {
+			_, stdOutErr := fmt.Fprintln(streamer.Stdout(), "this is a log")
+			Expect(stdOutErr).To(HaveOccurred())
+			_, stdErrErr := fmt.Fprintln(streamer.Stderr(), "this is another log")
+			Expect(stdErrErr).To(HaveOccurred())
 		})
 	})
 })
