@@ -1,6 +1,7 @@
 package containerstore
 
 import (
+	"context"
 	"errors"
 	"net"
 	"strings"
@@ -15,13 +16,14 @@ import (
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
 
-func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient) log_streamer.LogStreamer {
+func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient, ctx context.Context) log_streamer.LogStreamer {
 	return log_streamer.New(
 		conf.Guid,
 		conf.SourceName,
 		conf.Index,
 		conf.Tags,
 		metronClient,
+		ctx,
 	)
 }
 

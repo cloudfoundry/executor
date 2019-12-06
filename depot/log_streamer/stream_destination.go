@@ -45,6 +45,7 @@ func (destination *streamDestination) lockAndFlush() {
 func (destination *streamDestination) Write(data []byte) (int, error) {
 	err := destination.lim.Wait(destination.ctx)
 	if err != nil {
+		destination.processMessage("streamDestination.Write() context cancelled")
 		return 0, err
 	}
 	destination.processMessage(string(data))
@@ -139,5 +140,5 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 }
 
 func (d *streamDestination) withSource(sourceName string) *streamDestination {
-	return newStreamDestination(sourceName, d.tags, d.messageType, d.metronClient)
+	return newStreamDestination(d.ctx, sourceName, d.tags, d.messageType, d.metronClient)
 }

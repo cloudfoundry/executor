@@ -189,10 +189,9 @@ func (fake *FakeContainerStore) Cleanup(arg1 lager.Logger) {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Cleanup", []interface{}{arg1})
-	cleanupStubCopy := fake.CleanupStub
 	fake.cleanupMutex.Unlock()
-	if cleanupStubCopy != nil {
-		cleanupStubCopy(arg1)
+	if fake.CleanupStub != nil {
+		fake.CleanupStub(arg1)
 	}
 }
 
@@ -223,10 +222,9 @@ func (fake *FakeContainerStore) Create(arg1 lager.Logger, arg2 string) (executor
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("Create", []interface{}{arg1, arg2})
-	createStubCopy := fake.CreateStub
 	fake.createMutex.Unlock()
-	if createStubCopy != nil {
-		return createStubCopy(arg1, arg2)
+	if fake.CreateStub != nil {
+		return fake.CreateStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -288,10 +286,9 @@ func (fake *FakeContainerStore) Destroy(arg1 lager.Logger, arg2 string) error {
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("Destroy", []interface{}{arg1, arg2})
-	destroyStubCopy := fake.DestroyStub
 	fake.destroyMutex.Unlock()
-	if destroyStubCopy != nil {
-		return destroyStubCopy(arg1, arg2)
+	if fake.DestroyStub != nil {
+		return fake.DestroyStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -350,10 +347,9 @@ func (fake *FakeContainerStore) Get(arg1 lager.Logger, arg2 string) (executor.Co
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("Get", []interface{}{arg1, arg2})
-	getStubCopy := fake.GetStub
 	fake.getMutex.Unlock()
-	if getStubCopy != nil {
-		return getStubCopy(arg1, arg2)
+	if fake.GetStub != nil {
+		return fake.GetStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -416,10 +412,9 @@ func (fake *FakeContainerStore) GetFiles(arg1 lager.Logger, arg2 string, arg3 st
 		arg3 string
 	}{arg1, arg2, arg3})
 	fake.recordInvocation("GetFiles", []interface{}{arg1, arg2, arg3})
-	getFilesStubCopy := fake.GetFilesStub
 	fake.getFilesMutex.Unlock()
-	if getFilesStubCopy != nil {
-		return getFilesStubCopy(arg1, arg2, arg3)
+	if fake.GetFilesStub != nil {
+		return fake.GetFilesStub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -481,10 +476,9 @@ func (fake *FakeContainerStore) Initialize(arg1 lager.Logger, arg2 *executor.Run
 		arg2 *executor.RunRequest
 	}{arg1, arg2})
 	fake.recordInvocation("Initialize", []interface{}{arg1, arg2})
-	initializeStubCopy := fake.InitializeStub
 	fake.initializeMutex.Unlock()
-	if initializeStubCopy != nil {
-		return initializeStubCopy(arg1, arg2)
+	if fake.InitializeStub != nil {
+		return fake.InitializeStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -542,10 +536,9 @@ func (fake *FakeContainerStore) List(arg1 lager.Logger) []executor.Container {
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("List", []interface{}{arg1})
-	listStubCopy := fake.ListStub
 	fake.listMutex.Unlock()
-	if listStubCopy != nil {
-		return listStubCopy(arg1)
+	if fake.ListStub != nil {
+		return fake.ListStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -603,10 +596,9 @@ func (fake *FakeContainerStore) Metrics(arg1 lager.Logger) (map[string]executor.
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("Metrics", []interface{}{arg1})
-	metricsStubCopy := fake.MetricsStub
 	fake.metricsMutex.Unlock()
-	if metricsStubCopy != nil {
-		return metricsStubCopy(arg1)
+	if fake.MetricsStub != nil {
+		return fake.MetricsStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -667,10 +659,9 @@ func (fake *FakeContainerStore) NewContainerReaper(arg1 lager.Logger) ifrit.Runn
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("NewContainerReaper", []interface{}{arg1})
-	newContainerReaperStubCopy := fake.NewContainerReaperStub
 	fake.newContainerReaperMutex.Unlock()
-	if newContainerReaperStubCopy != nil {
-		return newContainerReaperStubCopy(arg1)
+	if fake.NewContainerReaperStub != nil {
+		return fake.NewContainerReaperStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -728,10 +719,9 @@ func (fake *FakeContainerStore) NewRegistryPruner(arg1 lager.Logger) ifrit.Runne
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("NewRegistryPruner", []interface{}{arg1})
-	newRegistryPrunerStubCopy := fake.NewRegistryPrunerStub
 	fake.newRegistryPrunerMutex.Unlock()
-	if newRegistryPrunerStubCopy != nil {
-		return newRegistryPrunerStubCopy(arg1)
+	if fake.NewRegistryPrunerStub != nil {
+		return fake.NewRegistryPrunerStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -789,10 +779,9 @@ func (fake *FakeContainerStore) RemainingResources(arg1 lager.Logger) executor.E
 		arg1 lager.Logger
 	}{arg1})
 	fake.recordInvocation("RemainingResources", []interface{}{arg1})
-	remainingResourcesStubCopy := fake.RemainingResourcesStub
 	fake.remainingResourcesMutex.Unlock()
-	if remainingResourcesStubCopy != nil {
-		return remainingResourcesStubCopy(arg1)
+	if fake.RemainingResourcesStub != nil {
+		return fake.RemainingResourcesStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
@@ -851,10 +840,9 @@ func (fake *FakeContainerStore) Reserve(arg1 lager.Logger, arg2 *executor.Alloca
 		arg2 *executor.AllocationRequest
 	}{arg1, arg2})
 	fake.recordInvocation("Reserve", []interface{}{arg1, arg2})
-	reserveStubCopy := fake.ReserveStub
 	fake.reserveMutex.Unlock()
-	if reserveStubCopy != nil {
-		return reserveStubCopy(arg1, arg2)
+	if fake.ReserveStub != nil {
+		return fake.ReserveStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -916,10 +904,9 @@ func (fake *FakeContainerStore) Run(arg1 lager.Logger, arg2 string) error {
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("Run", []interface{}{arg1, arg2})
-	runStubCopy := fake.RunStub
 	fake.runMutex.Unlock()
-	if runStubCopy != nil {
-		return runStubCopy(arg1, arg2)
+	if fake.RunStub != nil {
+		return fake.RunStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -978,10 +965,9 @@ func (fake *FakeContainerStore) Stop(arg1 lager.Logger, arg2 string) error {
 		arg2 string
 	}{arg1, arg2})
 	fake.recordInvocation("Stop", []interface{}{arg1, arg2})
-	stopStubCopy := fake.StopStub
 	fake.stopMutex.Unlock()
-	if stopStubCopy != nil {
-		return stopStubCopy(arg1, arg2)
+	if fake.StopStub != nil {
+		return fake.StopStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1

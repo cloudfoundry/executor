@@ -227,12 +227,12 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				}
 			}
 
+			step.streamer.Stdout().Write([]byte(fmt.Sprintf("got exit status: %d, %s", exitStatus, step.streamer.SourceName())))
+
 			if !step.model.SuppressLogOutput {
 				step.streamer.Stdout().Write([]byte(exitErrorMessage))
 				step.streamer.Flush()
 			}
-
-			step.streamer.Stop()
 
 			if killed {
 				return new(ExceededGracefulShutdownIntervalError)

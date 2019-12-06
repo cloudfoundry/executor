@@ -30,10 +30,9 @@ func (fake *FakeRootFSSizer) RootFSSizeFromPath(arg1 string) uint64 {
 		arg1 string
 	}{arg1})
 	fake.recordInvocation("RootFSSizeFromPath", []interface{}{arg1})
-	rootFSSizeFromPathStubCopy := fake.RootFSSizeFromPathStub
 	fake.rootFSSizeFromPathMutex.Unlock()
-	if rootFSSizeFromPathStubCopy != nil {
-		return rootFSSizeFromPathStubCopy(arg1)
+	if fake.RootFSSizeFromPathStub != nil {
+		return fake.RootFSSizeFromPathStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1

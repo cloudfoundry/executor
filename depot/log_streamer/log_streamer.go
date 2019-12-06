@@ -24,16 +24,15 @@ type LogStreamer interface {
 
 	WithSource(sourceName string) LogStreamer
 	SourceName() string
-	Stop()
 }
 
 type logStreamer struct {
-	stdout     *streamDestination
-	stderr     *streamDestination
-	cancelFunc context.CancelFunc
+	stdout *streamDestination
+	stderr *streamDestination
+	ctx    context.Context
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
+func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, ctx context.Context) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -55,8 +54,6 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		tags["instance_id"] = sourceIndex
 	}
 
-	ctx, cancelFunc := context.WithCancel(context.Background())
-
 	return &logStreamer{
 		stdout: newStreamDestination(
 			ctx,
@@ -73,7 +70,6 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			loggregator_v2.Log_ERR,
 			metronClient,
 		),
-		cancelFunc: cancelFunc,
 	}
 }
 
@@ -98,13 +94,10 @@ func (e *logStreamer) WithSource(sourceName string) LogStreamer {
 	return &logStreamer{
 		stdout: e.stdout.withSource(sourceName),
 		stderr: e.stderr.withSource(sourceName),
+		ctx:    e.ctx,
 	}
 }
 
 func (e *logStreamer) SourceName() string {
 	return e.stdout.sourceName
-}
-
-func (e *logStreamer) Stop() {
-	e.cancelFunc()
 }

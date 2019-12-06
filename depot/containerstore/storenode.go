@@ -1,6 +1,7 @@
 package containerstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -89,7 +90,9 @@ type storeNode struct {
 
 	destroying, stopping int32
 
-	startTime time.Time
+	startTime  time.Time
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 }
 
 func newStoreNode(
@@ -112,6 +115,8 @@ func newStoreNode(
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
 ) *storeNode {
+
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	return &storeNode{
 		config:                                config,
 		info:                                  container,
@@ -134,6 +139,8 @@ func newStoreNode(
 		cellID:                                cellID,
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
+		ctx:                                   ctx,
+		cancelFunc:                            cancelFunc,
 	}
 }
 
@@ -193,7 +200,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 
 	createContainer := func() error {
-		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
+		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.ctx)
 
 		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
 		if err != nil {
@@ -476,7 +483,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.ctx)
 
 	credManagerRunner := n.credManager.Runner(logger, n.info)
 
@@ -581,7 +588,7 @@ func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Unlock()
 	if n.process != nil {
 		if !stopped {
-			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient)
+			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.ctx)
 			fmt.Fprintf(logStreamer.Stdout(), "Cell %s stopping instance %s\n", n.cellID, n.Info().Guid)
 		}
 
@@ -612,20 +619,21 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 
-	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient)
+	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.ctx)
 
 	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, info.Guid)
 
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
+	defer n.cancelFunc()
 
 	err := n.destroyContainer(logger)
 	if err != nil {
 		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, info.Guid)
 		return err
 	}
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, info.Guid)
+	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s %s\n", n.cellID, info.Guid, time.Now().Format(time.RFC3339))
 
 	cacheKeys := n.bindMountCacheKeys
 

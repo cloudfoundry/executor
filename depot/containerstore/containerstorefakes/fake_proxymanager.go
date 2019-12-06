@@ -89,10 +89,9 @@ func (fake *FakeProxyManager) Close(arg1 containerstore.Credential, arg2 executo
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("Close", []interface{}{arg1, arg2})
-	closeStubCopy := fake.CloseStub
 	fake.closeMutex.Unlock()
-	if closeStubCopy != nil {
-		return closeStubCopy(arg1, arg2)
+	if fake.CloseStub != nil {
+		return fake.CloseStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -151,10 +150,9 @@ func (fake *FakeProxyManager) CreateDir(arg1 lager.Logger, arg2 executor.Contain
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("CreateDir", []interface{}{arg1, arg2})
-	createDirStubCopy := fake.CreateDirStub
 	fake.createDirMutex.Unlock()
-	if createDirStubCopy != nil {
-		return createDirStubCopy(arg1, arg2)
+	if fake.CreateDirStub != nil {
+		return fake.CreateDirStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
@@ -219,10 +217,9 @@ func (fake *FakeProxyManager) ProxyPorts(arg1 lager.Logger, arg2 *executor.Conta
 		arg2 *executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("ProxyPorts", []interface{}{arg1, arg2})
-	proxyPortsStubCopy := fake.ProxyPortsStub
 	fake.proxyPortsMutex.Unlock()
-	if proxyPortsStubCopy != nil {
-		return proxyPortsStubCopy(arg1, arg2)
+	if fake.ProxyPortsStub != nil {
+		return fake.ProxyPortsStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -284,10 +281,9 @@ func (fake *FakeProxyManager) RemoveDir(arg1 lager.Logger, arg2 executor.Contain
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("RemoveDir", []interface{}{arg1, arg2})
-	removeDirStubCopy := fake.RemoveDirStub
 	fake.removeDirMutex.Unlock()
-	if removeDirStubCopy != nil {
-		return removeDirStubCopy(arg1, arg2)
+	if fake.RemoveDirStub != nil {
+		return fake.RemoveDirStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
@@ -346,10 +342,9 @@ func (fake *FakeProxyManager) Update(arg1 containerstore.Credential, arg2 execut
 		arg2 executor.Container
 	}{arg1, arg2})
 	fake.recordInvocation("Update", []interface{}{arg1, arg2})
-	updateStubCopy := fake.UpdateStub
 	fake.updateMutex.Unlock()
-	if updateStubCopy != nil {
-		return updateStubCopy(arg1, arg2)
+	if fake.UpdateStub != nil {
+		return fake.UpdateStub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1

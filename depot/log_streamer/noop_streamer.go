@@ -18,4 +18,3 @@ func (noopStreamer) WithSource(sourceName string) LogStreamer {
 	return noopStreamer{}
 }
 func (noopStreamer) SourceName() string { return DefaultLogSource }
-func (noopStreamer) Stop()              {}
