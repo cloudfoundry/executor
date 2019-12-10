@@ -83,13 +83,13 @@ var _ = Describe("LogStreamer", func() {
 					maxLogLinesPerSecond = 0
 					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond)
 
-					for i := 0; i < maxLogLinesPerSecond*3; i++ {
+					for i := 0; i < 20; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
 					}
 				})
 
 				It("should rate limit the messages", func() {
-					Eventually(fakeClient.SendAppLogCallCount, time.Second).Should(Equal(maxLogLinesPerSecond * 3))
+					Eventually(fakeClient.SendAppLogCallCount, time.Second).Should(Equal(20))
 				})
 			})
 			Context("rate limit is bigger than number of log lines", func() {
