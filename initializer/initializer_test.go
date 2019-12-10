@@ -93,6 +93,7 @@ var _ = Describe("Initializer", func() {
 			HealthyMonitoringInterval:             durationjson.Duration(30 * time.Second),
 			MaxCacheSizeInBytes:                   10 * 1024 * 1024 * 1024,
 			MaxConcurrentDownloads:                5,
+			MaxLogLinesPerSecond:                  200,
 			MemoryMB:                              configuration.Automatic,
 			MetricsWorkPoolSize:                   8,
 			ReadWorkPoolSize:                      64,

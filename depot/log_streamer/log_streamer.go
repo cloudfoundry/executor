@@ -35,7 +35,7 @@ type logStreamer struct {
 	stderr     *streamDestination
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient) LogStreamer {
+func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -68,6 +68,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_OUT,
 			metronClient,
+			maxLogLinesPerSecond,
 		),
 
 		stderr: newStreamDestination(
@@ -76,6 +77,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_ERR,
 			metronClient,
+			maxLogLinesPerSecond,
 		),
 	}
 }

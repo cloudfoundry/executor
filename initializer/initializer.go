@@ -129,6 +129,7 @@ type ExecutorConfig struct {
 	InstanceIdentityValidityPeriod        durationjson.Duration `json:"instance_identity_validity_period,omitempty"`
 	MaxCacheSizeInBytes                   uint64                `json:"max_cache_size_in_bytes,omitempty"`
 	MaxConcurrentDownloads                int                   `json:"max_concurrent_downloads,omitempty"`
+	MaxLogLinesPerSecond                  int                   `json:"max_log_lines_per_second"`
 	MemoryMB                              string                `json:"memory_mb,omitempty"`
 	MetricsWorkPoolSize                   int                   `json:"metrics_work_pool_size,omitempty"`
 	PathToCACertsForDownloads             string                `json:"path_to_ca_certs_for_downloads"`
@@ -268,6 +269,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		SetCPUWeight:           config.SetCPUWeight,
 		ReservedExpirationTime: time.Duration(config.ReservedExpirationTime),
 		ReapInterval:           time.Duration(config.ContainerReapInterval),
+		MaxLogLinesPerSecond:   config.MaxLogLinesPerSecond,
 	}
 
 	driverConfig := vollocal.NewDriverConfig()
