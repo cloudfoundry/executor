@@ -127,6 +127,7 @@ type ExecutorConfig struct {
 	InstanceIdentityCredDir               string                `json:"instance_identity_cred_dir,omitempty"`
 	InstanceIdentityPrivateKeyPath        string                `json:"instance_identity_private_key_path,omitempty"`
 	InstanceIdentityValidityPeriod        durationjson.Duration `json:"instance_identity_validity_period,omitempty"`
+	LogRateLimitExceededReportInterval    durationjson.Duration `json:"log_rate_limit_exceeded_report_interval,omitempty"`
 	MaxCacheSizeInBytes                   uint64                `json:"max_cache_size_in_bytes,omitempty"`
 	MaxConcurrentDownloads                int                   `json:"max_concurrent_downloads,omitempty"`
 	MaxLogLinesPerSecond                  int                   `json:"max_log_lines_per_second"`
@@ -263,13 +264,14 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	}
 
 	containerConfig := containerstore.ContainerConfig{
-		OwnerName:              config.ContainerOwnerName,
-		INodeLimit:             config.ContainerInodeLimit,
-		MaxCPUShares:           config.ContainerMaxCpuShares,
-		SetCPUWeight:           config.SetCPUWeight,
-		ReservedExpirationTime: time.Duration(config.ReservedExpirationTime),
-		ReapInterval:           time.Duration(config.ContainerReapInterval),
-		MaxLogLinesPerSecond:   config.MaxLogLinesPerSecond,
+		OwnerName:                          config.ContainerOwnerName,
+		INodeLimit:                         config.ContainerInodeLimit,
+		MaxCPUShares:                       config.ContainerMaxCpuShares,
+		SetCPUWeight:                       config.SetCPUWeight,
+		ReservedExpirationTime:             time.Duration(config.ReservedExpirationTime),
+		ReapInterval:                       time.Duration(config.ContainerReapInterval),
+		MaxLogLinesPerSecond:               config.MaxLogLinesPerSecond,
+		LogRateLimitExceededReportInterval: time.Duration(config.LogRateLimitExceededReportInterval),
 	}
 
 	driverConfig := vollocal.NewDriverConfig()

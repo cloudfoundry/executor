@@ -8,34 +8,38 @@ import (
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
-	"golang.org/x/time/rate"
+	"code.cloudfoundry.org/lager"
 )
 
 type streamDestination struct {
-	ctx                         context.Context
-	sourceName                  string
-	tags                        map[string]string
-	messageType                 loggregator_v2.Log_Type
-	buffer                      []byte
-	processLock                 sync.Mutex
-	metronClient                loggingclient.IngressClient
-	maxLogLinesPerSecond        int
-	maxLogLinesPerSecondLimiter *rate.Limiter
+	ctx                  context.Context
+	sourceName           string
+	tags                 map[string]string
+	messageType          loggregator_v2.Log_Type
+	buffer               []byte
+	processLock          sync.Mutex
+	metronClient         loggingclient.IngressClient
+	logRateLimitReporter *logRateLimitReporter
+	logger               lager.Logger
 }
 
-func newStreamDestination(ctx context.Context, sourceName string, tags map[string]string, messageType loggregator_v2.Log_Type, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int) *streamDestination {
-	perSec := rate.Every(time.Second)
-	lim := rate.NewLimiter(perSec, maxLogLinesPerSecond)
-
+func newStreamDestination(
+	ctx context.Context,
+	sourceName string,
+	tags map[string]string,
+	messageType loggregator_v2.Log_Type,
+	metronClient loggingclient.IngressClient,
+	maxLogLinesPerSecond int,
+	logRateLimitExceededReportInterval time.Duration,
+) *streamDestination {
 	return &streamDestination{
-		ctx:                         ctx,
-		sourceName:                  sourceName,
-		tags:                        tags,
-		messageType:                 messageType,
-		buffer:                      make([]byte, 0, MAX_MESSAGE_SIZE),
-		metronClient:                metronClient,
-		maxLogLinesPerSecond:        maxLogLinesPerSecond,
-		maxLogLinesPerSecondLimiter: lim,
+		ctx:                  ctx,
+		sourceName:           sourceName,
+		tags:                 tags,
+		messageType:          messageType,
+		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
+		metronClient:         metronClient,
+		logRateLimitReporter: newLogRateLimitReporter(ctx, metronClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval),
 	}
 }
 
@@ -56,11 +60,9 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 }
 
 func (destination *streamDestination) flush() {
-	if destination.maxLogLinesPerSecond != 0 {
-		err := destination.maxLogLinesPerSecondLimiter.Wait(destination.ctx)
-		if err != nil {
-			return
-		}
+	err := destination.logRateLimitReporter.Report()
+	if err != nil {
+		return
 	}
 
 	msg := destination.copyAndResetBuffer()
@@ -150,5 +152,13 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 }
 
 func (d *streamDestination) withSource(ctx context.Context, sourceName string) *streamDestination {
-	return newStreamDestination(ctx, sourceName, d.tags, d.messageType, d.metronClient, d.maxLogLinesPerSecond)
+	return &streamDestination{
+		ctx:                  ctx,
+		sourceName:           sourceName,
+		tags:                 d.tags,
+		messageType:          d.messageType,
+		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
+		metronClient:         d.metronClient,
+		logRateLimitReporter: d.logRateLimitReporter,
+	}
 }
