@@ -50,22 +50,17 @@ func (destination *streamDestination) lockAndFlush() {
 }
 
 func (destination *streamDestination) Write(data []byte) (int, error) {
-	select {
-	case <-destination.ctx.Done():
-		return 0, destination.ctx.Err()
-	default:
-	}
 	destination.processMessage(string(data))
 	return len(data), nil
 }
 
 func (destination *streamDestination) flush() {
+	msg := destination.copyAndResetBuffer()
+
 	err := destination.logRateLimitReporter.Report()
 	if err != nil {
 		return
 	}
-
-	msg := destination.copyAndResetBuffer()
 
 	if len(msg) > 0 {
 		switch destination.messageType {

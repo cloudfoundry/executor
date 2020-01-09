@@ -531,11 +531,11 @@ var _ = Describe("LogStreamer", func() {
 				streamer.Stop()
 			})
 
-			It("writes to stdout and stderr should fail", func() {
+			It("writes to stdout and stderr should not fail", func() {
 				_, stdOutErr := fmt.Fprintln(streamer.Stdout(), "this is a log")
-				Expect(stdOutErr).To(HaveOccurred())
+				Expect(stdOutErr).NotTo(HaveOccurred())
 				_, stdErrErr := fmt.Fprintln(streamer.Stderr(), "this is another log")
-				Expect(stdErrErr).To(HaveOccurred())
+				Expect(stdErrErr).NotTo(HaveOccurred())
 
 			})
 
@@ -546,11 +546,11 @@ var _ = Describe("LogStreamer", func() {
 					childStreamer = streamer.WithSource("CHILD")
 				})
 
-				It("writes to the child's stdout and stderr should fail", func() {
+				It("writes to the child's stdout and stderr should not fail", func() {
 					_, stdOutErr := fmt.Fprintln(childStreamer.Stdout(), "this is a log")
-					Expect(stdOutErr).To(HaveOccurred())
+					Expect(stdOutErr).NotTo(HaveOccurred())
 					_, stdErrErr := fmt.Fprintln(childStreamer.Stderr(), "this is another log")
-					Expect(stdErrErr).To(HaveOccurred())
+					Expect(stdErrErr).NotTo(HaveOccurred())
 				})
 			})
 		})
@@ -563,11 +563,11 @@ var _ = Describe("LogStreamer", func() {
 				childStreamer.Stop()
 			})
 
-			It("writes to the child's stdout and stderr should fail", func() {
+			It("writes to the child's stdout and stderr should not fail", func() {
 				_, stdOutErr := fmt.Fprintln(childStreamer.Stdout(), "this is a log")
-				Expect(stdOutErr).To(HaveOccurred())
+				Expect(stdOutErr).NotTo(HaveOccurred())
 				_, stdErrErr := fmt.Fprintln(childStreamer.Stderr(), "this is another log")
-				Expect(stdErrErr).To(HaveOccurred())
+				Expect(stdErrErr).NotTo(HaveOccurred())
 			})
 
 			It("writes to the parent's stdout and stderr should continue to succeed", func() {

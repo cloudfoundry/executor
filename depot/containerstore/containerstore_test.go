@@ -1766,7 +1766,7 @@ var _ = Describe("Container Store", func() {
 								}
 							})
 
-							It("ensures logs written after the action exits are dropped", func() {
+							It("ensures logs written after the action exits are not dropped", func() {
 								err := containerStore.Run(logger, containerGuid)
 								Expect(err).NotTo(HaveOccurred())
 								close(completeChan)
@@ -1774,7 +1774,7 @@ var _ = Describe("Container Store", func() {
 
 								Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
 								close(blockSendAppLog)
-								Consistently(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
+								Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(4))
 							})
 						})
 					}
