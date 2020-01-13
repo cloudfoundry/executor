@@ -10,6 +10,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 )
 
 var _ = Describe("LogStreamer", func() {
@@ -75,20 +76,33 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should rate limit the messages", func() {
-					Eventually(fakeClient.SendAppLogCallCount, time.Second).Should(Equal(1))
-					msg, _, _ := fakeClient.SendAppLogArgsForCall(0)
-					Expect(msg).To(ContainSubstring("this is log"))
-					Eventually(fakeClient.SendAppLogCallCount, time.Second+100*time.Millisecond).Should(Equal(3))
-					msg1, _, _ := fakeClient.SendAppLogArgsForCall(1)
-					msg2, _, _ := fakeClient.SendAppLogArgsForCall(2)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
+					Eventually(func() int {
+						printedMsgs := 0
+						for i := 0; i < fakeClient.SendAppLogCallCount(); i++ {
+							msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
+							if strings.Contains(msg, "this is log") {
+								printedMsgs++
+							}
+						}
+						return printedMsgs
+					}, 10*time.Second).Should(Equal(3))
 
-					Eventually(fakeClient.SendAppLogCallCount, time.Second+100*time.Millisecond).Should(Equal(5))
-					msg1, _, _ = fakeClient.SendAppLogArgsForCall(3)
-					msg2, _, _ = fakeClient.SendAppLogArgsForCall(4)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
+					calls := fakeClient.SendAppLogCallCount()
+					args := []string{}
+					for i := 0; i < calls; i++ {
+						msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
+						args = append(args, msg)
+					}
+
+					expectedArgs := []types.GomegaMatcher{}
+					for i := 0; i < 3; i++ {
+						expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
+					}
+					for i := 0; i < calls-3; i++ {
+						expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
+					}
+
+					Expect(args).To(ConsistOf(expectedArgs))
 				})
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric", func() {
@@ -99,7 +113,7 @@ var _ = Describe("LogStreamer", func() {
 
 				Context("when metric was already incremented in the past metric report interval", func() {
 					It("does not increment an AppInstanceExceededLogRateLimitCount metric during report interval", func() {
-						Eventually(fakeClient.SendAppLogCallCount, 4*time.Second).Should(Equal(5))
+						Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
 						Consistently(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(1))
 					})
 				})
@@ -118,7 +132,7 @@ var _ = Describe("LogStreamer", func() {
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric during report interval", func() {
 					Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
-					Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 2))
+					Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(2))
 				})
 			})
 
@@ -204,41 +218,33 @@ var _ = Describe("LogStreamer", func() {
 						go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 					}
 
-					// prints first line right away, second will be delayed
-					Eventually(fakeClient.SendAppLogCallCount, 100*time.Millisecond).Should(Equal(1))
-					msg, _, _ := fakeClient.SendAppLogArgsForCall(0)
-					Expect(msg).To(ContainSubstring("this is log"))
+					Eventually(func() int {
+						printedMsgs := 0
+						for i := 0; i < fakeClient.SendAppLogCallCount(); i++ {
+							msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
+							if strings.Contains(msg, "this is log") {
+								printedMsgs++
+							}
+						}
+						return printedMsgs
+					}, 10*time.Second).Should(Equal(6))
 
-					waitTime := 1200 * time.Millisecond
-					Eventually(fakeClient.SendAppLogCallCount, waitTime).Should(Equal(3))
-					msg1, _, _ := fakeClient.SendAppLogArgsForCall(1)
-					msg2, _, _ := fakeClient.SendAppLogArgsForCall(2)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
+					calls := fakeClient.SendAppLogCallCount()
+					args := []string{}
+					for i := 0; i < calls; i++ {
+						msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
+						args = append(args, msg)
+					}
 
-					Eventually(fakeClient.SendAppLogCallCount, waitTime).Should(Equal(5))
-					msg1, _, _ = fakeClient.SendAppLogArgsForCall(3)
-					msg2, _, _ = fakeClient.SendAppLogArgsForCall(4)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
+					expectedArgs := []types.GomegaMatcher{}
+					for i := 0; i < 6; i++ {
+						expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
+					}
+					for i := 0; i < calls-6; i++ {
+						expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
+					}
 
-					Eventually(fakeClient.SendAppLogCallCount, waitTime).Should(Equal(7))
-					msg1, _, _ = fakeClient.SendAppLogArgsForCall(5)
-					msg2, _, _ = fakeClient.SendAppLogArgsForCall(6)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
-
-					Eventually(fakeClient.SendAppLogCallCount, waitTime).Should(Equal(9))
-					msg1, _, _ = fakeClient.SendAppLogArgsForCall(7)
-					msg2, _, _ = fakeClient.SendAppLogArgsForCall(8)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
-
-					Eventually(fakeClient.SendAppLogCallCount, waitTime).Should(Equal(11))
-					msg1, _, _ = fakeClient.SendAppLogArgsForCall(9)
-					msg2, _, _ = fakeClient.SendAppLogArgsForCall(10)
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("this is log")))
-					Expect([]string{msg1, msg2}).To(ContainElement(ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator")))
+					Expect(args).To(ConsistOf(expectedArgs))
 				})
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric once per interval for both streamers", func() {
@@ -281,12 +287,12 @@ var _ = Describe("LogStreamer", func() {
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
 							go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
 						}
-						Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 2))
+						Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 1))
 
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
 							go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 						}
-						Eventually(fakeClient.SendAppLogCallCount, 7*time.Second).Should(Equal(11))
+						Eventually(fakeClient.SendAppLogCallCount, 10*time.Second).Should(BeNumerically(">=", 5))
 						Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 3))
 					})
 				})
