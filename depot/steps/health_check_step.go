@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	timeoutMessage          = "Timed out after %s: health check never passed.\n"
+	readinessFailureMessage = "Failed after %s: readiness health check never passed.\n"
 	timeoutCrashReason      = "Instance never healthy after %s: %s"
 	healthcheckNowUnhealthy = "Instance became unhealthy: %s"
 )
@@ -56,15 +56,18 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 
 	readinessProcess := ifrit.Background(step.readinessCheck)
 
+	healthCheckStartedTime := time.Now()
+
 	select {
 	case err := <-readinessProcess.Wait():
 		if err != nil {
+			healthCheckFailedTime := time.Since(healthCheckStartedTime).Round(time.Millisecond)
 			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
-			fmt.Fprintf(step.logStreamer.Stderr(), timeoutMessage, step.startTimeout)
+			fmt.Fprintf(step.logStreamer.Stderr(), readinessFailureMessage, healthCheckFailedTime)
 			step.logger.Info("timed-out-before-healthy", lager.Data{
 				"step-error": err.Error(),
 			})
-			return NewEmittableError(err, timeoutCrashReason, step.startTimeout, err.Error())
+			return NewEmittableError(err, timeoutCrashReason, healthCheckFailedTime, err.Error())
 		}
 	case s := <-signals:
 		readinessProcess.Signal(s)

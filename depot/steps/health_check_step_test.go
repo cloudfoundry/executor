@@ -104,7 +104,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 
 			It("emits a log message explaining the timeout", func() {
 				Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
-					fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
+					"Failed after 0s: readiness health check never passed.\n",
 				))
 			})
 		})

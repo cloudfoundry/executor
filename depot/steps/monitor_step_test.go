@@ -2,7 +2,6 @@ package steps_test
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -256,11 +255,11 @@ var _ = Describe("MonitorStep", func() {
 					)
 				})
 
-				It("emits a log message explaining the timeout", func() {
+				It("emits a log message explaining the failure", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
-						fmt.Sprintf("Timed out after %s: health check never passed.\n", startTimeout),
+						"Failed after .*: readiness health check never passed.\n",
 					))
 				})
 			})

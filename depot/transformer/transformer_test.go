@@ -960,10 +960,8 @@ var _ = Describe("Transformer", func() {
 							logLines[source] = msg
 							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
 							logLines[source] = msg
-							Expect(logLines).To(Equal(map[string]string{
-								"HEALTH": "readiness check failed",
-								"test":   "Timed out after 1s: health check never passed.",
-							}))
+							Expect(logLines["HEALTH"]).To(Equal("readiness check failed"))
+							Expect(logLines["test"]).To(MatchRegexp("Failed after 1\\d\\dms: readiness health check never passed."))
 						})
 
 						It("returns the readiness check output in the error", func() {
@@ -971,7 +969,7 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("returns the readiness check output in the error", func() {
-							Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance never healthy after 1s: readiness check failed"))))
+							Eventually(process.Wait()).Should(Receive(MatchError(MatchRegexp("Instance never healthy after 1\\d\\dms: readiness check failed"))))
 						})
 					})
 
