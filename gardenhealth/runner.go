@@ -11,6 +11,7 @@ import (
 )
 
 const GardenHealthCheckFailedMetric = "GardenHealthCheckFailed"
+const CellUnhealthyMetric = "CellUnhealthy"
 
 type HealthcheckTimeoutError struct{}
 
@@ -121,6 +122,7 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 		case <-healthcheckTimeout.C():
 			r.setUnhealthy(logger)
 			r.checker.Cancel(logger)
+			r.metronClient.SendMetric(CellUnhealthyMetric, 1)
 
 		case <-emitInterval.C():
 			r.emitUnhealthyCellMetric(logger)

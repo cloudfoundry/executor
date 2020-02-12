@@ -38,6 +38,7 @@ var _ = Describe("Runner", func() {
 	)
 
 	const GardenHealthCheckFailed = "GardenHealthCheckFailed"
+	const CellUnhealthyMetric = "CellUnhealthy"
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -257,6 +258,10 @@ var _ = Describe("Runner", func() {
 
 			It("cancels the existing health check", func() {
 				Eventually(checker.CancelCallCount).Should(Equal(1))
+			})
+
+			It("emits the CellUnhealthy metric", func() {
+				Eventually(getMetrics).Should(HaveKeyWithValue(CellUnhealthyMetric, float64(1)))
 			})
 		})
 
