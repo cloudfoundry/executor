@@ -125,14 +125,15 @@ var _ = Describe("LogStreamer", func() {
 					logRateLimitExceededReportInterval = time.Second
 					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval)
 
-					for i := 0; i < maxLogLinesPerSecond*3; i++ {
+					for i := 0; i < 3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
 					}
 				})
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric during report interval", func() {
-					Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
-					Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(2))
+					Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<", 4))
+					Eventually(fakeClient.SendAppLogCallCount, 5*time.Second).Should(BeNumerically(">=", 4))
+					Eventually(fakeClient.IncrementCounterCallCount, 5*time.Second).Should(Equal(2))
 				})
 			})
 
