@@ -2695,6 +2695,15 @@ var _ = Describe("Container Store", func() {
 		)
 
 		BeforeEach(func() {
+			fakeRootFSSizer.RootFSSizeFromPathStub = func(path string) uint64 {
+				switch path {
+				case "/foo/bar":
+					return 1000
+				default:
+					return 0
+				}
+			}
+
 			containerGuid1 = "container-guid-1"
 			containerGuid2 = "container-guid-2"
 			containerGuid3 = "container-guid-3"
@@ -2775,15 +2784,6 @@ var _ = Describe("Container Store", func() {
 				"BOGUS-GUID": garden.ContainerMetricsEntry{},
 			}
 			gardenClient.BulkMetricsReturns(bulkMetrics, nil)
-
-			fakeRootFSSizer.RootFSSizeFromPathStub = func(path string) uint64 {
-				switch path {
-				case "/foo/bar":
-					return 1000
-				default:
-					return 0
-				}
-			}
 		})
 
 		It("returns metrics for all known containers in the running and created state", func() {
@@ -2804,7 +2804,7 @@ var _ = Describe("Container Store", func() {
 			Expect(container1Metrics.MemoryUsageInBytes).To(BeEquivalentTo(1024))
 			Expect(container1Metrics.DiskUsageInBytes).To(BeEquivalentTo(2048))
 			Expect(container1Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Memory.LimitInBytes))
-			Expect(container1Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec1.Limits.Disk.ByteHard))
+			Expect(container1Metrics.DiskLimitInBytes).To(BeEquivalentTo(10 * 1024 * 1024))
 			Expect(container1Metrics.TimeSpentInCPU).To(Equal(5 * time.Second))
 			Expect(container1Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(1000000000)))
 			Expect(container1Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(100)))
@@ -2814,7 +2814,7 @@ var _ = Describe("Container Store", func() {
 			Expect(container2Metrics.MemoryUsageInBytes).To(BeEquivalentTo(512))
 			Expect(container2Metrics.DiskUsageInBytes).To(BeEquivalentTo(256))
 			Expect(container2Metrics.MemoryLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Memory.LimitInBytes))
-			Expect(container2Metrics.DiskLimitInBytes).To(BeEquivalentTo(containerSpec2.Limits.Disk.ByteHard))
+			Expect(container2Metrics.DiskLimitInBytes).To(BeEquivalentTo(10 * 1024 * 1024))
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))
 			Expect(container2Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(2000000000)))
 			Expect(container2Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(200)))
