@@ -20,13 +20,15 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/lagertest"
-	envoy_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoy_v2_auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
-	envoy_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoy_v2_listener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
-	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/conversion"
+	envoy_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
+	envoy_cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoy_endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	envoy_listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoy_tcp_proxy "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
+	envoy_tls "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	envoy_discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/fsnotify/fsnotify"
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/proto"
@@ -357,7 +359,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				var proxyConfig envoy_v2_bootstrap.Bootstrap
+				var proxyConfig envoy_bootstrap.Bootstrap
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				admin := proxyConfig.Admin
@@ -372,18 +374,18 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 				expectedCluster{
 					name:           "0-service-cluster",
-					hosts:          []*envoy_v2_core.Address{envoyAddr("10.0.0.1", 8080)},
+					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
 				}.check(proxyConfig.StaticResources.Clusters[0])
 
 				adsCluster := proxyConfig.StaticResources.Clusters[1]
 				expectedCluster{
 					name: "pilot-ads",
-					hosts: []*envoy_v2_core.Address{
+					hosts: []*envoy_core.Address{
 						envoyAddr("10.255.217.2", 15010),
 						envoyAddr("10.255.217.3", 15010),
 					}}.check(adsCluster)
-				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_v2_core.Http2ProtocolOptions{}))
+				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
 				expectedListener{
@@ -401,25 +403,25 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(sdsServerCertAndKeyFile).Should(BeAnExistingFile())
 
-			var sdsCertificateDiscoveryResponse envoy_v2.DiscoveryResponse
+			var sdsCertificateDiscoveryResponse envoy_discovery.DiscoveryResponse
 			Expect(yamlFileToProto(sdsServerCertAndKeyFile, &sdsCertificateDiscoveryResponse)).To(Succeed())
 
 			Expect(sdsCertificateDiscoveryResponse.VersionInfo).To(Equal("0"))
 			Expect(sdsCertificateDiscoveryResponse.Resources).To(HaveLen(1))
 
-			var secret envoy_v2_auth.Secret
+			var secret envoy_tls.Secret
 			Expect(ptypes.UnmarshalAny(sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
 			Expect(secret.Name).To(Equal("server-cert-and-key"))
-			Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_TlsCertificate{
-				TlsCertificate: &envoy_v2_auth.TlsCertificate{
-					CertificateChain: &envoy_v2_core.DataSource{
-						Specifier: &envoy_v2_core.DataSource_InlineString{
+			Expect(secret.Type).To(Equal(&envoy_tls.Secret_TlsCertificate{
+				TlsCertificate: &envoy_tls.TlsCertificate{
+					CertificateChain: &envoy_core.DataSource{
+						Specifier: &envoy_core.DataSource_InlineString{
 							InlineString: "cert",
 						},
 					},
-					PrivateKey: &envoy_v2_core.DataSource{
-						Specifier: &envoy_v2_core.DataSource_InlineString{
+					PrivateKey: &envoy_core.DataSource{
+						Specifier: &envoy_core.DataSource_InlineString{
 							InlineString: "key",
 						},
 					},
@@ -479,24 +481,27 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(sdsServerValidationContextFile).Should(BeAnExistingFile())
 
-				var sdsDiscoveryResponse envoy_v2.DiscoveryResponse
+				var sdsDiscoveryResponse envoy_discovery.DiscoveryResponse
 				Expect(yamlFileToProto(sdsServerValidationContextFile, &sdsDiscoveryResponse)).To(Succeed())
 
 				Expect(sdsDiscoveryResponse.VersionInfo).To(Equal("0"))
 				Expect(sdsDiscoveryResponse.Resources).To(HaveLen(1))
 
-				var secret envoy_v2_auth.Secret
+				var secret envoy_tls.Secret
 				Expect(ptypes.UnmarshalAny(sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
 				Expect(secret.Name).To(Equal("server-validation-context"))
-				Expect(secret.Type).To(Equal(&envoy_v2_auth.Secret_ValidationContext{
-					ValidationContext: &envoy_v2_auth.CertificateValidationContext{
-						TrustedCa: &envoy_v2_core.DataSource{
-							Specifier: &envoy_v2_core.DataSource_InlineString{
+				Expect(secret.Type).To(Equal(&envoy_tls.Secret_ValidationContext{
+					ValidationContext: &envoy_tls.CertificateValidationContext{
+						TrustedCa: &envoy_core.DataSource{
+							Specifier: &envoy_core.DataSource_InlineString{
 								InlineString: inlinedCert,
 							},
 						},
-						VerifySubjectAltName: []string{"valid-alt-name-1", "valid-alt-name-2"},
+						MatchSubjectAltNames: []*envoy_matcher.StringMatcher{
+							{MatchPattern: &envoy_matcher.StringMatcher_Exact{Exact: "valid-alt-name-1"}},
+							{MatchPattern: &envoy_matcher.StringMatcher_Exact{Exact: "valid-alt-name-2"}},
+						},
 					},
 				}))
 			})
@@ -508,7 +513,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-			var proxyConfig envoy_v2_bootstrap.Bootstrap
+			var proxyConfig envoy_bootstrap.Bootstrap
 			Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 			admin := proxyConfig.Admin
@@ -523,18 +528,18 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			expectedCluster{
 				name:           "0-service-cluster",
-				hosts:          []*envoy_v2_core.Address{envoyAddr("10.0.0.1", 8080)},
+				hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 				maxConnections: math.MaxUint32,
 			}.check(proxyConfig.StaticResources.Clusters[0])
 
 			adsCluster := proxyConfig.StaticResources.Clusters[1]
 			expectedCluster{
 				name: "pilot-ads",
-				hosts: []*envoy_v2_core.Address{
+				hosts: []*envoy_core.Address{
 					envoyAddr("10.255.217.2", 15010),
 					envoyAddr("10.255.217.3", 15010),
 				}}.check(adsCluster)
-			Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_v2_core.Http2ProtocolOptions{}))
+			Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
 			Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
 			expectedListener{
@@ -545,21 +550,21 @@ var _ = Describe("ProxyConfigHandler", func() {
 				requireClientCertificate: true,
 			}.check(proxyConfig.StaticResources.Listeners[0])
 
-			adsConfigSource := &envoy_v2_core.ConfigSource{
-				ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Ads{
-					Ads: &envoy_v2_core.AggregatedConfigSource{},
+			adsConfigSource := &envoy_core.ConfigSource{
+				ConfigSourceSpecifier: &envoy_core.ConfigSource_Ads{
+					Ads: &envoy_core.AggregatedConfigSource{},
 				},
 			}
 
-			Expect(proxyConfig.DynamicResources).To(Equal(&envoy_v2_bootstrap.Bootstrap_DynamicResources{
+			Expect(proxyConfig.DynamicResources).To(Equal(&envoy_bootstrap.Bootstrap_DynamicResources{
 				LdsConfig: adsConfigSource,
 				CdsConfig: adsConfigSource,
-				AdsConfig: &envoy_v2_core.ApiConfigSource{
-					ApiType: envoy_v2_core.ApiConfigSource_GRPC,
-					GrpcServices: []*envoy_v2_core.GrpcService{
+				AdsConfig: &envoy_core.ApiConfigSource{
+					ApiType: envoy_core.ApiConfigSource_GRPC,
+					GrpcServices: []*envoy_core.GrpcService{
 						{
-							TargetSpecifier: &envoy_v2_core.GrpcService_EnvoyGrpc_{
-								EnvoyGrpc: &envoy_v2_core.GrpcService_EnvoyGrpc{
+							TargetSpecifier: &envoy_core.GrpcService_EnvoyGrpc_{
+								EnvoyGrpc: &envoy_core.GrpcService_EnvoyGrpc{
 									ClusterName: "pilot-ads",
 								},
 							},
@@ -579,7 +584,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				var proxyConfig envoy_v2_bootstrap.Bootstrap
+				var proxyConfig envoy_bootstrap.Bootstrap
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
@@ -635,7 +640,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
-				var proxyConfig envoy_v2_bootstrap.Bootstrap
+				var proxyConfig envoy_bootstrap.Bootstrap
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				admin := proxyConfig.Admin
@@ -649,30 +654,27 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
 
-				cluster := proxyConfig.StaticResources.Clusters[0]
-				Expect(cluster.Name).To(Equal("0-service-cluster"))
-				Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
-				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
-				Expect(cluster.Hosts).To(ConsistOf(envoyAddr("10.0.0.1", 8080)))
+				expectedCluster{
+					name:           "0-service-cluster",
+					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
+					maxConnections: math.MaxUint32,
+				}.check(proxyConfig.StaticResources.Clusters[0])
 
-				cluster = proxyConfig.StaticResources.Clusters[1]
-				Expect(cluster.Name).To(Equal("1-service-cluster"))
-				Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
-				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
-				Expect(cluster.Hosts).To(ConsistOf(envoyAddr("10.0.0.1", 2222)))
+				expectedCluster{
+					name:           "1-service-cluster",
+					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 2222)},
+					maxConnections: math.MaxUint32,
+				}.check(proxyConfig.StaticResources.Clusters[1])
 
 				adsCluster := proxyConfig.StaticResources.Clusters[2]
-				Expect(adsCluster.Name).To(Equal("pilot-ads"))
-				Expect(adsCluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-				Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
-				Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
-				Expect(adsCluster.Hosts).To(Equal([]*envoy_v2_core.Address{
-					envoyAddr("10.255.217.2", 15010),
-					envoyAddr("10.255.217.3", 15010),
-				}))
-				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_v2_core.Http2ProtocolOptions{}))
+				expectedCluster{
+					name: "pilot-ads",
+					hosts: []*envoy_core.Address{
+						envoyAddr("10.255.217.2", 15010),
+						envoyAddr("10.255.217.3", 15010),
+					},
+				}.check(adsCluster)
+				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				expectedListener{
@@ -816,15 +818,21 @@ func yamlFileToProto(path string, outputProto proto.Message) error {
 		return err
 	}
 
-	return jsonpb.UnmarshalString(string(jsonBytes), outputProto)
+	err = jsonpb.UnmarshalString(string(jsonBytes), outputProto)
+	if err != nil {
+		return err
+	}
+
+	// Check if unmarshalled proto follows validation rules
+	return outputProto.(interface{ Validate() error }).Validate()
 }
 
-func envoyAddr(ip string, port int) *envoy_v2_core.Address {
-	return &envoy_v2_core.Address{
-		Address: &envoy_v2_core.Address_SocketAddress{
-			SocketAddress: &envoy_v2_core.SocketAddress{
+func envoyAddr(ip string, port int) *envoy_core.Address {
+	return &envoy_core.Address{
+		Address: &envoy_core.Address_SocketAddress{
+			SocketAddress: &envoy_core.SocketAddress{
 				Address: ip,
-				PortSpecifier: &envoy_v2_core.SocketAddress_PortValue{
+				PortSpecifier: &envoy_core.SocketAddress_PortValue{
 					PortValue: uint32(port),
 				},
 			},
@@ -840,64 +848,84 @@ type expectedListener struct {
 	requireClientCertificate bool
 }
 
-func (l expectedListener) check(listener *envoy_v2.Listener) {
+func (l expectedListener) check(listener *envoy_listener.Listener) {
 	Expect(listener.Name).To(Equal(l.name))
 	Expect(listener.Address).To(Equal(envoyAddr("0.0.0.0", l.listenPort)))
 	Expect(listener.FilterChains).To(HaveLen(1))
 	filterChain := listener.FilterChains[0]
 	Expect(filterChain.Filters).To(HaveLen(1))
 	Expect(filterChain.Filters[0].Name).To(Equal("envoy.tcp_proxy"))
-	filterConfig := filterChain.Filters[0].ConfigType.(*envoy_v2_listener.Filter_Config).Config
-	var tcpProxyFilterConfig envoy_v2_tcp_proxy_filter.TcpProxy
-	Expect(conversion.StructToMessage(filterConfig, &tcpProxyFilterConfig)).To(Succeed())
-	Expect(tcpProxyFilterConfig.StatPrefix).To(Equal(l.statPrefix))
-	Expect(tcpProxyFilterConfig.ClusterSpecifier).To(Equal(
-		&envoy_v2_tcp_proxy_filter.TcpProxy_Cluster{Cluster: l.clusterName},
-	))
+	filterConfig := filterChain.Filters[0].GetTypedConfig()
 
-	Expect(filterChain.TlsContext.RequireClientCertificate.Value).To(Equal(l.requireClientCertificate))
-	Expect(filterChain.TlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs).To(ConsistOf(
-		&envoy_v2_auth.SdsSecretConfig{
+	var tcpProxyFilterConfig envoy_tcp_proxy.TcpProxy
+	Expect(ptypes.UnmarshalAny(filterConfig, &tcpProxyFilterConfig)).To(Succeed())
+	Expect(tcpProxyFilterConfig.StatPrefix).To(Equal(l.statPrefix))
+	Expect(tcpProxyFilterConfig.ClusterSpecifier).To(Equal(&envoy_tcp_proxy.TcpProxy_Cluster{
+		Cluster: l.clusterName,
+	}))
+
+	var downstreamTlsContext envoy_tls.DownstreamTlsContext
+	Expect(ptypes.UnmarshalAny(filterChain.TransportSocket.GetTypedConfig(), &downstreamTlsContext)).To(Succeed())
+	Expect(filterChain.TransportSocket.Name).To(Equal(l.name))
+
+	Expect(downstreamTlsContext.RequireClientCertificate.Value).To(Equal(l.requireClientCertificate))
+	Expect(downstreamTlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs).To(ConsistOf(
+		&envoy_tls.SdsSecretConfig{
 			Name: "server-cert-and-key",
-			SdsConfig: &envoy_v2_core.ConfigSource{
-				ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Path{
+			SdsConfig: &envoy_core.ConfigSource{
+				ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
 					Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
 				},
 			},
 		},
 	))
-	Expect(filterChain.TlsContext.CommonTlsContext.TlsParams).To(Equal(&envoy_v2_auth.TlsParameters{
+	Expect(downstreamTlsContext.CommonTlsContext.TlsParams).To(Equal(&envoy_tls.TlsParameters{
 		CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
 	}))
 
 	if l.requireClientCertificate {
-		Expect(filterChain.TlsContext.CommonTlsContext.ValidationContextType).To(Equal(&envoy_v2_auth.CommonTlsContext_ValidationContextSdsSecretConfig{
-			ValidationContextSdsSecretConfig: &envoy_v2_auth.SdsSecretConfig{
+		Expect(downstreamTlsContext.CommonTlsContext.ValidationContextType).To(Equal(&envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
+			ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 				Name: "server-validation-context",
-				SdsConfig: &envoy_v2_core.ConfigSource{
-					ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Path{
+				SdsConfig: &envoy_core.ConfigSource{
+					ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
 						Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml",
 					},
 				},
 			},
 		}))
 	} else {
-		Expect(filterChain.TlsContext.CommonTlsContext.ValidationContextType).To(BeNil())
+		Expect(downstreamTlsContext.CommonTlsContext.ValidationContextType).To(BeNil())
 	}
 }
 
 type expectedCluster struct {
 	name           string
-	hosts          []*envoy_v2_core.Address
+	hosts          []*envoy_core.Address
 	maxConnections uint32
 }
 
-func (c expectedCluster) check(cluster *envoy_v2.Cluster) {
+func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
 	Expect(cluster.Name).To(Equal(c.name))
 	Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-	Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC}))
-	Expect(cluster.LbPolicy).To(Equal(envoy_v2.Cluster_ROUND_ROBIN))
-	Expect(cluster.Hosts).To(Equal(c.hosts))
+	Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
+	Expect(cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
+	var expectedLbEndpoints []*envoy_endpoint.LbEndpoint
+	for _, h := range c.hosts {
+		expectedLbEndpoints = append(expectedLbEndpoints, &envoy_endpoint.LbEndpoint{
+			HostIdentifier: &envoy_endpoint.LbEndpoint_Endpoint{
+				Endpoint: &envoy_endpoint.Endpoint{
+					Address: h,
+				},
+			},
+		})
+	}
+	Expect(cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
+		ClusterName: c.name,
+		Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
+			LbEndpoints: expectedLbEndpoints,
+		}},
+	}))
 	if c.maxConnections > 0 {
 		Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(1))
 		Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))

@@ -17,15 +17,16 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
-	envoy_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoy_v2_auth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
-	envoy_v2_cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2/cluster"
-	envoy_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoy_v2_listener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	envoy_v2_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
-	envoy_v2_tcp_proxy_filter "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
-	envoy_v2_metrics "github.com/envoyproxy/go-control-plane/envoy/config/metrics/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/conversion"
+	envoy_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
+	envoy_cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoy_endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	envoy_listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoy_metrics "github.com/envoyproxy/go-control-plane/envoy/config/metrics/v3"
+	envoy_tcp_proxy "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
+	envoy_tls "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	envoy_discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/protobuf/jsonpb"
@@ -44,6 +45,7 @@ const (
 
 	IngressListener = "ingress_listener"
 	TcpProxy        = "envoy.tcp_proxy"
+	AdsClusterName  = "pilot-ads"
 
 	AdminAccessLog = os.DevNull
 )
@@ -284,12 +286,12 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 	return nil
 }
 
-func envoyAddr(ip string, port uint16) *envoy_v2_core.Address {
-	return &envoy_v2_core.Address{
-		Address: &envoy_v2_core.Address_SocketAddress{
-			SocketAddress: &envoy_v2_core.SocketAddress{
+func envoyAddr(ip string, port uint16) *envoy_core.Address {
+	return &envoy_core.Address{
+		Address: &envoy_core.Address_SocketAddress{
+			SocketAddress: &envoy_core.SocketAddress{
 				Address: ip,
-				PortSpecifier: &envoy_v2_core.SocketAddress_PortValue{
+				PortSpecifier: &envoy_core.SocketAddress_PortValue{
 					PortValue: uint32(port),
 				},
 			},
@@ -302,19 +304,28 @@ func generateProxyConfig(
 	adminPort uint16,
 	requireClientCerts bool,
 	adsServers []string,
-) (*envoy_v2_bootstrap.Bootstrap, error) {
-	clusters := []*envoy_v2.Cluster{}
+) (*envoy_bootstrap.Bootstrap, error) {
+	clusters := []*envoy_cluster.Cluster{}
 	for index, portMap := range container.Ports {
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
-		clusters = append(clusters, &envoy_v2.Cluster{
+		clusters = append(clusters, &envoy_cluster.Cluster{
 			Name:                 clusterName,
-			ClusterDiscoveryType: &envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC},
+			ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
 			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
-			Hosts: []*envoy_v2_core.Address{
-				envoyAddr(container.InternalIP, portMap.ContainerPort),
+			LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
+				ClusterName: clusterName,
+				Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
+					LbEndpoints: []*envoy_endpoint.LbEndpoint{{
+						HostIdentifier: &envoy_endpoint.LbEndpoint_Endpoint{
+							Endpoint: &envoy_endpoint.Endpoint{
+								Address: envoyAddr(container.InternalIP, portMap.ContainerPort),
+							},
+						},
+					}},
+				}},
 			},
-			CircuitBreakers: &envoy_v2_cluster.CircuitBreakers{
-				Thresholds: []*envoy_v2_cluster.CircuitBreakers_Thresholds{
+			CircuitBreakers: &envoy_cluster.CircuitBreakers{
+				Thresholds: []*envoy_cluster.CircuitBreakers_Thresholds{
 					{MaxConnections: &wrappers.UInt32Value{Value: math.MaxUint32}},
 				}},
 		})
@@ -325,54 +336,65 @@ func generateProxyConfig(
 		return nil, fmt.Errorf("generating listeners: %s", err)
 	}
 
-	config := &envoy_v2_bootstrap.Bootstrap{
-		Admin: &envoy_v2_bootstrap.Admin{
+	config := &envoy_bootstrap.Bootstrap{
+		Admin: &envoy_bootstrap.Admin{
 			AccessLogPath: AdminAccessLog,
 			Address:       envoyAddr("127.0.0.1", adminPort),
 		},
-		StatsConfig: &envoy_v2_metrics.StatsConfig{
-			StatsMatcher: &envoy_v2_metrics.StatsMatcher{
-				StatsMatcher: &envoy_v2_metrics.StatsMatcher_RejectAll{
+		StatsConfig: &envoy_metrics.StatsConfig{
+			StatsMatcher: &envoy_metrics.StatsMatcher{
+				StatsMatcher: &envoy_metrics.StatsMatcher_RejectAll{
 					RejectAll: true,
 				},
 			},
 		},
-		Node: &envoy_v2_core.Node{
+		Node: &envoy_core.Node{
 			Id:      fmt.Sprintf("sidecar~%s~%s~x", container.InternalIP, container.Guid),
 			Cluster: "proxy-cluster",
 		},
-		StaticResources: &envoy_v2_bootstrap.Bootstrap_StaticResources{
+		StaticResources: &envoy_bootstrap.Bootstrap_StaticResources{
 			Listeners: listeners,
 		},
 	}
 
 	if len(adsServers) > 0 {
-		adsHosts := []*envoy_v2_core.Address{}
+		var adsEndpoints []*envoy_endpoint.LbEndpoint
 		for _, a := range adsServers {
 			address, port, err := splitHost(a)
 			if err != nil {
 				return nil, err
 			}
-			adsHosts = append(adsHosts, envoyAddr(address, port))
+			adsEndpoints = append(adsEndpoints, &envoy_endpoint.LbEndpoint{
+				HostIdentifier: &envoy_endpoint.LbEndpoint_Endpoint{
+					Endpoint: &envoy_endpoint.Endpoint{
+						Address: envoyAddr(address, port),
+					},
+				},
+			})
 		}
 
-		clusters = append(clusters, &envoy_v2.Cluster{
-			Name:                 "pilot-ads",
-			ClusterDiscoveryType: &envoy_v2.Cluster_Type{Type: envoy_v2.Cluster_STATIC},
+		clusters = append(clusters, &envoy_cluster.Cluster{
+			Name:                 AdsClusterName,
+			ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
 			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
-			Hosts:                adsHosts,
-			Http2ProtocolOptions: &envoy_v2_core.Http2ProtocolOptions{},
+			LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
+				ClusterName: AdsClusterName,
+				Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
+					LbEndpoints: adsEndpoints,
+				}},
+			},
+			Http2ProtocolOptions: &envoy_core.Http2ProtocolOptions{},
 		})
 
-		dynamicResources := &envoy_v2_bootstrap.Bootstrap_DynamicResources{
+		dynamicResources := &envoy_bootstrap.Bootstrap_DynamicResources{
 			LdsConfig: adsConfigSource,
 			CdsConfig: adsConfigSource,
-			AdsConfig: &envoy_v2_core.ApiConfigSource{
-				ApiType: envoy_v2_core.ApiConfigSource_GRPC,
-				GrpcServices: []*envoy_v2_core.GrpcService{
+			AdsConfig: &envoy_core.ApiConfigSource{
+				ApiType: envoy_core.ApiConfigSource_GRPC,
+				GrpcServices: []*envoy_core.GrpcService{
 					{
-						TargetSpecifier: &envoy_v2_core.GrpcService_EnvoyGrpc_{
-							EnvoyGrpc: &envoy_v2_core.GrpcService_EnvoyGrpc{
+						TargetSpecifier: &envoy_core.GrpcService_EnvoyGrpc_{
+							EnvoyGrpc: &envoy_core.GrpcService_EnvoyGrpc{
 								ClusterName: "pilot-ads",
 							},
 						},
@@ -388,9 +410,9 @@ func generateProxyConfig(
 	return config, nil
 }
 
-var adsConfigSource = &envoy_v2_core.ConfigSource{
-	ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Ads{
-		Ads: &envoy_v2_core.AggregatedConfigSource{},
+var adsConfigSource = &envoy_core.ConfigSource{
+	ConfigSourceSpecifier: &envoy_core.ConfigSource_Ads{
+		Ads: &envoy_core.AggregatedConfigSource{},
 	},
 }
 
@@ -407,7 +429,7 @@ func splitHost(host string) (string, uint16, error) {
 	return parts[0], uint16(port), nil
 }
 
-func writeProxyConfig(proxyConfig *envoy_v2_bootstrap.Bootstrap, path string) error {
+func writeProxyConfig(proxyConfig *envoy_bootstrap.Bootstrap, path string) error {
 	jsonMarshaler := jsonpb.Marshaler{OrigName: true, EmitDefaults: false}
 	jsonStr, err := jsonMarshaler.MarshalToString(proxyConfig)
 	if err != nil {
@@ -420,70 +442,81 @@ func writeProxyConfig(proxyConfig *envoy_v2_bootstrap.Bootstrap, path string) er
 	return ioutil.WriteFile(path, yamlStr, 0666)
 }
 
-func generateListeners(container executor.Container, requireClientCerts bool) ([]*envoy_v2.Listener, error) {
-	listeners := []*envoy_v2.Listener{}
+func generateListeners(container executor.Container, requireClientCerts bool) ([]*envoy_listener.Listener, error) {
+	listeners := []*envoy_listener.Listener{}
 
 	for index, portMap := range container.Ports {
-		listenerName := TcpProxy
+		filterName := TcpProxy
 		clusterName := fmt.Sprintf("%d-service-cluster", index)
 
-		filterConfig, err := conversion.MessageToStruct(&envoy_v2_tcp_proxy_filter.TcpProxy{
+		filterConfig, err := ptypes.MarshalAny(&envoy_tcp_proxy.TcpProxy{
 			StatPrefix: fmt.Sprintf("%d-stats", index),
-			ClusterSpecifier: &envoy_v2_tcp_proxy_filter.TcpProxy_Cluster{
+			ClusterSpecifier: &envoy_tcp_proxy.TcpProxy_Cluster{
 				Cluster: clusterName,
 			},
 		})
-
 		if err != nil {
 			return nil, err
 		}
 
-		listener := &envoy_v2.Listener{
-			Name:    fmt.Sprintf("listener-%d", portMap.ContainerPort),
-			Address: envoyAddr("0.0.0.0", portMap.ContainerTLSProxyPort),
-			FilterChains: []*envoy_v2_listener.FilterChain{
-				{
-					Filters: []*envoy_v2_listener.Filter{
-						{
-							Name: listenerName,
-							ConfigType: &envoy_v2_listener.Filter_Config{
-								Config: filterConfig,
+		tlsContext := &envoy_tls.DownstreamTlsContext{
+			RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
+			CommonTlsContext: &envoy_tls.CommonTlsContext{
+				TlsCertificateSdsSecretConfigs: []*envoy_tls.SdsSecretConfig{
+					{
+						Name: "server-cert-and-key",
+						SdsConfig: &envoy_core.ConfigSource{
+							ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
+								Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
 							},
 						},
 					},
-					TlsContext: &envoy_v2_auth.DownstreamTlsContext{
-						RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
-						CommonTlsContext: &envoy_v2_auth.CommonTlsContext{
-							TlsCertificateSdsSecretConfigs: []*envoy_v2_auth.SdsSecretConfig{
-								{
-									Name: "server-cert-and-key",
-									SdsConfig: &envoy_v2_core.ConfigSource{
-										ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Path{
-											Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
-										},
-									},
-								},
-							},
-							TlsParams: &envoy_v2_auth.TlsParameters{
-								CipherSuites: SupportedCipherSuites,
-							},
-						},
-					},
+				},
+				TlsParams: &envoy_tls.TlsParameters{
+					CipherSuites: SupportedCipherSuites,
 				},
 			},
 		}
 
 		if requireClientCerts {
-			listener.FilterChains[0].TlsContext.CommonTlsContext.ValidationContextType = &envoy_v2_auth.CommonTlsContext_ValidationContextSdsSecretConfig{
-				ValidationContextSdsSecretConfig: &envoy_v2_auth.SdsSecretConfig{
+			tlsContext.CommonTlsContext.ValidationContextType = &envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
+				ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 					Name: "server-validation-context",
-					SdsConfig: &envoy_v2_core.ConfigSource{
-						ConfigSourceSpecifier: &envoy_v2_core.ConfigSource_Path{
+					SdsConfig: &envoy_core.ConfigSource{
+						ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
 							Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml",
 						},
 					},
 				},
 			}
+		}
+
+		tlsContextAny, err := ptypes.MarshalAny(tlsContext)
+		if err != nil {
+			return nil, err
+		}
+
+		listenerName := fmt.Sprintf("listener-%d", portMap.ContainerPort)
+		listener := &envoy_listener.Listener{
+			Name:    listenerName,
+			Address: envoyAddr("0.0.0.0", portMap.ContainerTLSProxyPort),
+			FilterChains: []*envoy_listener.FilterChain{{
+				Filters: []*envoy_listener.Filter{
+					{
+						Name: filterName,
+						ConfigType: &envoy_listener.Filter_TypedConfig{
+							TypedConfig: filterConfig,
+						},
+					},
+				},
+				TransportSocket: &envoy_core.TransportSocket{
+					Name: listenerName,
+					ConfigType: &envoy_core.TransportSocket_TypedConfig{
+						TypedConfig: tlsContextAny,
+					},
+				},
+			},
+			},
 		}
 
 		listeners = append(listeners, listener)
@@ -493,17 +526,17 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 }
 
 func generateSDSCertAndKey(container executor.Container, creds Credential) proto.Message {
-	return &envoy_v2_auth.Secret{
+	return &envoy_tls.Secret{
 		Name: "server-cert-and-key",
-		Type: &envoy_v2_auth.Secret_TlsCertificate{
-			TlsCertificate: &envoy_v2_auth.TlsCertificate{
-				CertificateChain: &envoy_v2_core.DataSource{
-					Specifier: &envoy_v2_core.DataSource_InlineString{
+		Type: &envoy_tls.Secret_TlsCertificate{
+			TlsCertificate: &envoy_tls.TlsCertificate{
+				CertificateChain: &envoy_core.DataSource{
+					Specifier: &envoy_core.DataSource_InlineString{
 						InlineString: creds.Cert,
 					},
 				},
-				PrivateKey: &envoy_v2_core.DataSource{
-					Specifier: &envoy_v2_core.DataSource_InlineString{
+				PrivateKey: &envoy_core.DataSource{
+					Specifier: &envoy_core.DataSource_InlineString{
 						InlineString: creds.Key,
 					},
 				},
@@ -518,16 +551,23 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 		return nil, err
 	}
 
-	return &envoy_v2_auth.Secret{
+	var matchers []*envoy_matcher.StringMatcher
+	for _, s := range subjectAltNames {
+		matchers = append(matchers, &envoy_matcher.StringMatcher{
+			MatchPattern: &envoy_matcher.StringMatcher_Exact{Exact: s},
+		})
+	}
+
+	return &envoy_tls.Secret{
 		Name: "server-validation-context",
-		Type: &envoy_v2_auth.Secret_ValidationContext{
-			ValidationContext: &envoy_v2_auth.CertificateValidationContext{
-				TrustedCa: &envoy_v2_core.DataSource{
-					Specifier: &envoy_v2_core.DataSource_InlineString{
+		Type: &envoy_tls.Secret_ValidationContext{
+			ValidationContext: &envoy_tls.CertificateValidationContext{
+				TrustedCa: &envoy_core.DataSource{
+					Specifier: &envoy_core.DataSource_InlineString{
 						InlineString: certs,
 					},
 				},
-				VerifySubjectAltName: subjectAltNames,
+				MatchSubjectAltNames: matchers,
 			},
 		},
 	}, nil
@@ -538,7 +578,7 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 	if err != nil {
 		return err
 	}
-	dr := &envoy_v2.DiscoveryResponse{
+	dr := &envoy_discovery.DiscoveryResponse{
 		VersionInfo: "0",
 		Resources: []*any.Any{
 			resourceAny,
