@@ -16,8 +16,9 @@ import (
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
 
-func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, logRateLimitExceededReportInterval time.Duration) log_streamer.LogStreamer {
+func logStreamerFromLogConfig(logger lager.Logger, conf executor.LogConfig, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, logRateLimitExceededReportInterval time.Duration) log_streamer.LogStreamer {
 	return log_streamer.New(
+		logger,
 		conf.Guid,
 		conf.SourceName,
 		conf.Index,

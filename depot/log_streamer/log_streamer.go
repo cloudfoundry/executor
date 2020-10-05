@@ -8,6 +8,7 @@ import (
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
+	"code.cloudfoundry.org/lager"
 )
 
 const (
@@ -36,7 +37,7 @@ type logStreamer struct {
 	stderr     *streamDestination
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, logRateLimitExceededReportInterval time.Duration) LogStreamer {
+func New(logger lager.Logger, guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, logRateLimitExceededReportInterval time.Duration) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -64,6 +65,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		stdout: newStreamDestination(
+			logger,
 			ctx,
 			sourceName,
 			tags,
@@ -74,6 +76,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 		),
 
 		stderr: newStreamDestination(
+			logger,
 			ctx,
 			sourceName,
 			tags,

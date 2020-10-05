@@ -24,6 +24,7 @@ type streamDestination struct {
 }
 
 func newStreamDestination(
+	logger lager.Logger,
 	ctx context.Context,
 	sourceName string,
 	tags map[string]string,
@@ -33,13 +34,14 @@ func newStreamDestination(
 	logRateLimitExceededReportInterval time.Duration,
 ) *streamDestination {
 	return &streamDestination{
+		logger:               logger,
 		ctx:                  ctx,
 		sourceName:           sourceName,
 		tags:                 tags,
 		messageType:          messageType,
 		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient:         metronClient,
-		logRateLimitReporter: newLogRateLimitReporter(ctx, metronClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval),
+		logRateLimitReporter: newLogRateLimitReporter(logger, ctx, metronClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval),
 	}
 }
 

@@ -477,7 +477,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
+	logStreamer := logStreamerFromLogConfig(logger, n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
 
 	credManagerRunner := n.credManager.Runner(logger, n.info)
 

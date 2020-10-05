@@ -6,6 +6,7 @@ import (
 	"time"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
+	"code.cloudfoundry.org/lager"
 	"golang.org/x/time/rate"
 )
 
@@ -17,6 +18,7 @@ const (
 
 type logRateLimitReporter struct {
 	ctx          context.Context
+	logger       lager.Logger
 	metronClient loggingclient.IngressClient
 
 	maxLogLinesPerSecond        int
@@ -26,12 +28,14 @@ type logRateLimitReporter struct {
 }
 
 func newLogRateLimitReporter(
+	logger lager.Logger,
 	ctx context.Context,
 	metronClient loggingclient.IngressClient,
 	maxLogLinesPerSecond int,
 	logRateLimitExceededReportInterval time.Duration,
 ) *logRateLimitReporter {
 	reporter := &logRateLimitReporter{
+		logger:               logger,
 		ctx:                  ctx,
 		metronClient:         metronClient,
 		maxLogLinesPerSecond: maxLogLinesPerSecond,
@@ -93,6 +97,7 @@ func (r *logRateLimitReporter) Report(sourceName string, tags map[string]string)
 	logReportDelay := logReporterReservation.DelayFrom(now)
 	if logReportDelay < LogRateLimitAllowDelta {
 		msg := fmt.Sprintf("app instance exceeded log rate limit (%d log-lines/sec) set by platform operator", r.maxLogLinesPerSecond)
+		r.logger.Info("log-rate-limit-exceeded", lager.Data{"log-lines-per-second": r.maxLogLinesPerSecond, "source-name": sourceName, "tags": tags})
 		r.metronClient.SendAppLog(string(msg), sourceName, tags)
 	} else {
 		logReporterReservation.CancelAt(now)
