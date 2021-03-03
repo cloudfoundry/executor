@@ -462,6 +462,7 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 		tlsContext := &envoy_tls.DownstreamTlsContext{
 			RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
 			CommonTlsContext: &envoy_tls.CommonTlsContext{
+				AlpnProtocols: []string{"h2,http/1.1"},
 				TlsCertificateSdsSecretConfigs: []*envoy_tls.SdsSecretConfig{
 					{
 						Name: "server-cert-and-key",
