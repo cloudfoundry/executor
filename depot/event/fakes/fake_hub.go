@@ -45,15 +45,16 @@ func (fake *FakeHub) Close() error {
 	ret, specificReturn := fake.closeReturnsOnCall[len(fake.closeArgsForCall)]
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {
 	}{})
+	stub := fake.CloseStub
+	fakeReturns := fake.closeReturns
 	fake.recordInvocation("Close", []interface{}{})
 	fake.closeMutex.Unlock()
-	if fake.CloseStub != nil {
-		return fake.CloseStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.closeReturns
 	return fakeReturns.result1
 }
 
@@ -97,9 +98,10 @@ func (fake *FakeHub) Emit(arg1 executor.Event) {
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
 		arg1 executor.Event
 	}{arg1})
+	stub := fake.EmitStub
 	fake.recordInvocation("Emit", []interface{}{arg1})
 	fake.emitMutex.Unlock()
-	if fake.EmitStub != nil {
+	if stub != nil {
 		fake.EmitStub(arg1)
 	}
 }
@@ -128,15 +130,16 @@ func (fake *FakeHub) Subscribe() (executor.EventSource, error) {
 	ret, specificReturn := fake.subscribeReturnsOnCall[len(fake.subscribeArgsForCall)]
 	fake.subscribeArgsForCall = append(fake.subscribeArgsForCall, struct {
 	}{})
+	stub := fake.SubscribeStub
+	fakeReturns := fake.subscribeReturns
 	fake.recordInvocation("Subscribe", []interface{}{})
 	fake.subscribeMutex.Unlock()
-	if fake.SubscribeStub != nil {
-		return fake.SubscribeStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.subscribeReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 

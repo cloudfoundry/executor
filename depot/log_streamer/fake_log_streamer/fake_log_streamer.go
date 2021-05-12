@@ -66,9 +66,10 @@ func (fake *FakeLogStreamer) Flush() {
 	fake.flushMutex.Lock()
 	fake.flushArgsForCall = append(fake.flushArgsForCall, struct {
 	}{})
+	stub := fake.FlushStub
 	fake.recordInvocation("Flush", []interface{}{})
 	fake.flushMutex.Unlock()
-	if fake.FlushStub != nil {
+	if stub != nil {
 		fake.FlushStub()
 	}
 }
@@ -90,15 +91,16 @@ func (fake *FakeLogStreamer) SourceName() string {
 	ret, specificReturn := fake.sourceNameReturnsOnCall[len(fake.sourceNameArgsForCall)]
 	fake.sourceNameArgsForCall = append(fake.sourceNameArgsForCall, struct {
 	}{})
+	stub := fake.SourceNameStub
+	fakeReturns := fake.sourceNameReturns
 	fake.recordInvocation("SourceName", []interface{}{})
 	fake.sourceNameMutex.Unlock()
-	if fake.SourceNameStub != nil {
-		return fake.SourceNameStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.sourceNameReturns
 	return fakeReturns.result1
 }
 
@@ -142,15 +144,16 @@ func (fake *FakeLogStreamer) Stderr() io.Writer {
 	ret, specificReturn := fake.stderrReturnsOnCall[len(fake.stderrArgsForCall)]
 	fake.stderrArgsForCall = append(fake.stderrArgsForCall, struct {
 	}{})
+	stub := fake.StderrStub
+	fakeReturns := fake.stderrReturns
 	fake.recordInvocation("Stderr", []interface{}{})
 	fake.stderrMutex.Unlock()
-	if fake.StderrStub != nil {
-		return fake.StderrStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.stderrReturns
 	return fakeReturns.result1
 }
 
@@ -194,15 +197,16 @@ func (fake *FakeLogStreamer) Stdout() io.Writer {
 	ret, specificReturn := fake.stdoutReturnsOnCall[len(fake.stdoutArgsForCall)]
 	fake.stdoutArgsForCall = append(fake.stdoutArgsForCall, struct {
 	}{})
+	stub := fake.StdoutStub
+	fakeReturns := fake.stdoutReturns
 	fake.recordInvocation("Stdout", []interface{}{})
 	fake.stdoutMutex.Unlock()
-	if fake.StdoutStub != nil {
-		return fake.StdoutStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.stdoutReturns
 	return fakeReturns.result1
 }
 
@@ -245,9 +249,10 @@ func (fake *FakeLogStreamer) Stop() {
 	fake.stopMutex.Lock()
 	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
 	}{})
+	stub := fake.StopStub
 	fake.recordInvocation("Stop", []interface{}{})
 	fake.stopMutex.Unlock()
-	if fake.StopStub != nil {
+	if stub != nil {
 		fake.StopStub()
 	}
 }
@@ -270,15 +275,16 @@ func (fake *FakeLogStreamer) WithSource(arg1 string) log_streamer.LogStreamer {
 	fake.withSourceArgsForCall = append(fake.withSourceArgsForCall, struct {
 		arg1 string
 	}{arg1})
+	stub := fake.WithSourceStub
+	fakeReturns := fake.withSourceReturns
 	fake.recordInvocation("WithSource", []interface{}{arg1})
 	fake.withSourceMutex.Unlock()
-	if fake.WithSourceStub != nil {
-		return fake.WithSourceStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.withSourceReturns
 	return fakeReturns.result1
 }
 

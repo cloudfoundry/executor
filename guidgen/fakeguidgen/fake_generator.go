@@ -30,15 +30,16 @@ func (fake *FakeGenerator) Guid(arg1 lager.Logger) string {
 	fake.guidArgsForCall = append(fake.guidArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.GuidStub
+	fakeReturns := fake.guidReturns
 	fake.recordInvocation("Guid", []interface{}{arg1})
 	fake.guidMutex.Unlock()
-	if fake.GuidStub != nil {
-		return fake.GuidStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.guidReturns
 	return fakeReturns.result1
 }
 

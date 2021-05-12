@@ -34,9 +34,10 @@ func (fake *FakeChecker) Cancel(arg1 lager.Logger) {
 	fake.cancelArgsForCall = append(fake.cancelArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.CancelStub
 	fake.recordInvocation("Cancel", []interface{}{arg1})
 	fake.cancelMutex.Unlock()
-	if fake.CancelStub != nil {
+	if stub != nil {
 		fake.CancelStub(arg1)
 	}
 }
@@ -66,15 +67,16 @@ func (fake *FakeChecker) Healthcheck(arg1 lager.Logger) error {
 	fake.healthcheckArgsForCall = append(fake.healthcheckArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.HealthcheckStub
+	fakeReturns := fake.healthcheckReturns
 	fake.recordInvocation("Healthcheck", []interface{}{arg1})
 	fake.healthcheckMutex.Unlock()
-	if fake.HealthcheckStub != nil {
-		return fake.HealthcheckStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.healthcheckReturns
 	return fakeReturns.result1
 }
 

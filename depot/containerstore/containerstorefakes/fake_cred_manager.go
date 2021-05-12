@@ -63,15 +63,16 @@ func (fake *FakeCredManager) CreateCredDir(arg1 lager.Logger, arg2 executor.Cont
 		arg1 lager.Logger
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.CreateCredDirStub
+	fakeReturns := fake.createCredDirReturns
 	fake.recordInvocation("CreateCredDir", []interface{}{arg1, arg2})
 	fake.createCredDirMutex.Unlock()
-	if fake.CreateCredDirStub != nil {
-		return fake.CreateCredDirStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
 	}
-	fakeReturns := fake.createCredDirReturns
 	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
 }
 
@@ -130,15 +131,16 @@ func (fake *FakeCredManager) RemoveCredDir(arg1 lager.Logger, arg2 executor.Cont
 		arg1 lager.Logger
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.RemoveCredDirStub
+	fakeReturns := fake.removeCredDirReturns
 	fake.recordInvocation("RemoveCredDir", []interface{}{arg1, arg2})
 	fake.removeCredDirMutex.Unlock()
-	if fake.RemoveCredDirStub != nil {
-		return fake.RemoveCredDirStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.removeCredDirReturns
 	return fakeReturns.result1
 }
 
@@ -191,15 +193,16 @@ func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) 
 		arg1 lager.Logger
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.RunnerStub
+	fakeReturns := fake.runnerReturns
 	fake.recordInvocation("Runner", []interface{}{arg1, arg2})
 	fake.runnerMutex.Unlock()
-	if fake.RunnerStub != nil {
-		return fake.RunnerStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.runnerReturns
 	return fakeReturns.result1
 }
 

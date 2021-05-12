@@ -74,15 +74,16 @@ func (fake *FakeCredentialHandler) Close(arg1 containerstore.Credential, arg2 ex
 		arg1 containerstore.Credential
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.CloseStub
+	fakeReturns := fake.closeReturns
 	fake.recordInvocation("Close", []interface{}{arg1, arg2})
 	fake.closeMutex.Unlock()
-	if fake.CloseStub != nil {
-		return fake.CloseStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.closeReturns
 	return fakeReturns.result1
 }
 
@@ -135,15 +136,16 @@ func (fake *FakeCredentialHandler) CreateDir(arg1 lager.Logger, arg2 executor.Co
 		arg1 lager.Logger
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.CreateDirStub
+	fakeReturns := fake.createDirReturns
 	fake.recordInvocation("CreateDir", []interface{}{arg1, arg2})
 	fake.createDirMutex.Unlock()
-	if fake.CreateDirStub != nil {
-		return fake.CreateDirStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2, ret.result3
 	}
-	fakeReturns := fake.createDirReturns
 	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
 }
 
@@ -202,15 +204,16 @@ func (fake *FakeCredentialHandler) RemoveDir(arg1 lager.Logger, arg2 executor.Co
 		arg1 lager.Logger
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.RemoveDirStub
+	fakeReturns := fake.removeDirReturns
 	fake.recordInvocation("RemoveDir", []interface{}{arg1, arg2})
 	fake.removeDirMutex.Unlock()
-	if fake.RemoveDirStub != nil {
-		return fake.RemoveDirStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.removeDirReturns
 	return fakeReturns.result1
 }
 
@@ -263,15 +266,16 @@ func (fake *FakeCredentialHandler) Update(arg1 containerstore.Credential, arg2 e
 		arg1 containerstore.Credential
 		arg2 executor.Container
 	}{arg1, arg2})
+	stub := fake.UpdateStub
+	fakeReturns := fake.updateReturns
 	fake.recordInvocation("Update", []interface{}{arg1, arg2})
 	fake.updateMutex.Unlock()
-	if fake.UpdateStub != nil {
-		return fake.UpdateStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.updateReturns
 	return fakeReturns.result1
 }
 

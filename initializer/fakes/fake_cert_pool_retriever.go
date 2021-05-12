@@ -30,15 +30,16 @@ func (fake *FakeCertPoolRetriever) SystemCerts() (*x509.CertPool, error) {
 	ret, specificReturn := fake.systemCertsReturnsOnCall[len(fake.systemCertsArgsForCall)]
 	fake.systemCertsArgsForCall = append(fake.systemCertsArgsForCall, struct {
 	}{})
+	stub := fake.SystemCertsStub
+	fakeReturns := fake.systemCertsReturns
 	fake.recordInvocation("SystemCerts", []interface{}{})
 	fake.systemCertsMutex.Unlock()
-	if fake.SystemCertsStub != nil {
-		return fake.SystemCertsStub()
+	if stub != nil {
+		return stub()
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.systemCertsReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 

@@ -188,9 +188,10 @@ func (fake *FakeContainerStore) Cleanup(arg1 lager.Logger) {
 	fake.cleanupArgsForCall = append(fake.cleanupArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.CleanupStub
 	fake.recordInvocation("Cleanup", []interface{}{arg1})
 	fake.cleanupMutex.Unlock()
-	if fake.CleanupStub != nil {
+	if stub != nil {
 		fake.CleanupStub(arg1)
 	}
 }
@@ -221,15 +222,16 @@ func (fake *FakeContainerStore) Create(arg1 lager.Logger, arg2 string) (executor
 		arg1 lager.Logger
 		arg2 string
 	}{arg1, arg2})
+	stub := fake.CreateStub
+	fakeReturns := fake.createReturns
 	fake.recordInvocation("Create", []interface{}{arg1, arg2})
 	fake.createMutex.Unlock()
-	if fake.CreateStub != nil {
-		return fake.CreateStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.createReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -285,15 +287,16 @@ func (fake *FakeContainerStore) Destroy(arg1 lager.Logger, arg2 string) error {
 		arg1 lager.Logger
 		arg2 string
 	}{arg1, arg2})
+	stub := fake.DestroyStub
+	fakeReturns := fake.destroyReturns
 	fake.recordInvocation("Destroy", []interface{}{arg1, arg2})
 	fake.destroyMutex.Unlock()
-	if fake.DestroyStub != nil {
-		return fake.DestroyStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.destroyReturns
 	return fakeReturns.result1
 }
 
@@ -346,15 +349,16 @@ func (fake *FakeContainerStore) Get(arg1 lager.Logger, arg2 string) (executor.Co
 		arg1 lager.Logger
 		arg2 string
 	}{arg1, arg2})
+	stub := fake.GetStub
+	fakeReturns := fake.getReturns
 	fake.recordInvocation("Get", []interface{}{arg1, arg2})
 	fake.getMutex.Unlock()
-	if fake.GetStub != nil {
-		return fake.GetStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.getReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -411,15 +415,16 @@ func (fake *FakeContainerStore) GetFiles(arg1 lager.Logger, arg2 string, arg3 st
 		arg2 string
 		arg3 string
 	}{arg1, arg2, arg3})
+	stub := fake.GetFilesStub
+	fakeReturns := fake.getFilesReturns
 	fake.recordInvocation("GetFiles", []interface{}{arg1, arg2, arg3})
 	fake.getFilesMutex.Unlock()
-	if fake.GetFilesStub != nil {
-		return fake.GetFilesStub(arg1, arg2, arg3)
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.getFilesReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -475,15 +480,16 @@ func (fake *FakeContainerStore) Initialize(arg1 lager.Logger, arg2 *executor.Run
 		arg1 lager.Logger
 		arg2 *executor.RunRequest
 	}{arg1, arg2})
+	stub := fake.InitializeStub
+	fakeReturns := fake.initializeReturns
 	fake.recordInvocation("Initialize", []interface{}{arg1, arg2})
 	fake.initializeMutex.Unlock()
-	if fake.InitializeStub != nil {
-		return fake.InitializeStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.initializeReturns
 	return fakeReturns.result1
 }
 
@@ -535,15 +541,16 @@ func (fake *FakeContainerStore) List(arg1 lager.Logger) []executor.Container {
 	fake.listArgsForCall = append(fake.listArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.ListStub
+	fakeReturns := fake.listReturns
 	fake.recordInvocation("List", []interface{}{arg1})
 	fake.listMutex.Unlock()
-	if fake.ListStub != nil {
-		return fake.ListStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.listReturns
 	return fakeReturns.result1
 }
 
@@ -595,15 +602,16 @@ func (fake *FakeContainerStore) Metrics(arg1 lager.Logger) (map[string]executor.
 	fake.metricsArgsForCall = append(fake.metricsArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.MetricsStub
+	fakeReturns := fake.metricsReturns
 	fake.recordInvocation("Metrics", []interface{}{arg1})
 	fake.metricsMutex.Unlock()
-	if fake.MetricsStub != nil {
-		return fake.MetricsStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.metricsReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -658,15 +666,16 @@ func (fake *FakeContainerStore) NewContainerReaper(arg1 lager.Logger) ifrit.Runn
 	fake.newContainerReaperArgsForCall = append(fake.newContainerReaperArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.NewContainerReaperStub
+	fakeReturns := fake.newContainerReaperReturns
 	fake.recordInvocation("NewContainerReaper", []interface{}{arg1})
 	fake.newContainerReaperMutex.Unlock()
-	if fake.NewContainerReaperStub != nil {
-		return fake.NewContainerReaperStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.newContainerReaperReturns
 	return fakeReturns.result1
 }
 
@@ -718,15 +727,16 @@ func (fake *FakeContainerStore) NewRegistryPruner(arg1 lager.Logger) ifrit.Runne
 	fake.newRegistryPrunerArgsForCall = append(fake.newRegistryPrunerArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.NewRegistryPrunerStub
+	fakeReturns := fake.newRegistryPrunerReturns
 	fake.recordInvocation("NewRegistryPruner", []interface{}{arg1})
 	fake.newRegistryPrunerMutex.Unlock()
-	if fake.NewRegistryPrunerStub != nil {
-		return fake.NewRegistryPrunerStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.newRegistryPrunerReturns
 	return fakeReturns.result1
 }
 
@@ -778,15 +788,16 @@ func (fake *FakeContainerStore) RemainingResources(arg1 lager.Logger) executor.E
 	fake.remainingResourcesArgsForCall = append(fake.remainingResourcesArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.RemainingResourcesStub
+	fakeReturns := fake.remainingResourcesReturns
 	fake.recordInvocation("RemainingResources", []interface{}{arg1})
 	fake.remainingResourcesMutex.Unlock()
-	if fake.RemainingResourcesStub != nil {
-		return fake.RemainingResourcesStub(arg1)
+	if stub != nil {
+		return stub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.remainingResourcesReturns
 	return fakeReturns.result1
 }
 
@@ -839,15 +850,16 @@ func (fake *FakeContainerStore) Reserve(arg1 lager.Logger, arg2 *executor.Alloca
 		arg1 lager.Logger
 		arg2 *executor.AllocationRequest
 	}{arg1, arg2})
+	stub := fake.ReserveStub
+	fakeReturns := fake.reserveReturns
 	fake.recordInvocation("Reserve", []interface{}{arg1, arg2})
 	fake.reserveMutex.Unlock()
-	if fake.ReserveStub != nil {
-		return fake.ReserveStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.reserveReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -903,15 +915,16 @@ func (fake *FakeContainerStore) Run(arg1 lager.Logger, arg2 string) error {
 		arg1 lager.Logger
 		arg2 string
 	}{arg1, arg2})
+	stub := fake.RunStub
+	fakeReturns := fake.runReturns
 	fake.recordInvocation("Run", []interface{}{arg1, arg2})
 	fake.runMutex.Unlock()
-	if fake.RunStub != nil {
-		return fake.RunStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.runReturns
 	return fakeReturns.result1
 }
 
@@ -964,15 +977,16 @@ func (fake *FakeContainerStore) Stop(arg1 lager.Logger, arg2 string) error {
 		arg1 lager.Logger
 		arg2 string
 	}{arg1, arg2})
+	stub := fake.StopStub
+	fakeReturns := fake.stopReturns
 	fake.recordInvocation("Stop", []interface{}{arg1, arg2})
 	fake.stopMutex.Unlock()
-	if fake.StopStub != nil {
-		return fake.StopStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.stopReturns
 	return fakeReturns.result1
 }
 

@@ -60,15 +60,16 @@ func (fake *FakeDependencyManager) DownloadCachedDependencies(arg1 lager.Logger,
 		arg2 []executor.CachedDependency
 		arg3 log_streamer.LogStreamer
 	}{arg1, arg2Copy, arg3})
+	stub := fake.DownloadCachedDependenciesStub
+	fakeReturns := fake.downloadCachedDependenciesReturns
 	fake.recordInvocation("DownloadCachedDependencies", []interface{}{arg1, arg2Copy, arg3})
 	fake.downloadCachedDependenciesMutex.Unlock()
-	if fake.DownloadCachedDependenciesStub != nil {
-		return fake.DownloadCachedDependenciesStub(arg1, arg2, arg3)
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.downloadCachedDependenciesReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
@@ -129,15 +130,16 @@ func (fake *FakeDependencyManager) ReleaseCachedDependencies(arg1 lager.Logger, 
 		arg1 lager.Logger
 		arg2 []containerstore.BindMountCacheKey
 	}{arg1, arg2Copy})
+	stub := fake.ReleaseCachedDependenciesStub
+	fakeReturns := fake.releaseCachedDependenciesReturns
 	fake.recordInvocation("ReleaseCachedDependencies", []interface{}{arg1, arg2Copy})
 	fake.releaseCachedDependenciesMutex.Unlock()
-	if fake.ReleaseCachedDependenciesStub != nil {
-		return fake.ReleaseCachedDependenciesStub(arg1, arg2)
+	if stub != nil {
+		return stub(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	fakeReturns := fake.releaseCachedDependenciesReturns
 	return fakeReturns.result1
 }
 
@@ -188,9 +190,10 @@ func (fake *FakeDependencyManager) Stop(arg1 lager.Logger) {
 	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
 		arg1 lager.Logger
 	}{arg1})
+	stub := fake.StopStub
 	fake.recordInvocation("Stop", []interface{}{arg1})
 	fake.stopMutex.Unlock()
-	if fake.StopStub != nil {
+	if stub != nil {
 		fake.StopStub(arg1)
 	}
 }

@@ -44,15 +44,16 @@ func (fake *FakeTransformer) StepsRunner(arg1 lager.Logger, arg2 executor.Contai
 		arg4 log_streamer.LogStreamer
 		arg5 transformer.Config
 	}{arg1, arg2, arg3, arg4, arg5})
+	stub := fake.StepsRunnerStub
+	fakeReturns := fake.stepsRunnerReturns
 	fake.recordInvocation("StepsRunner", []interface{}{arg1, arg2, arg3, arg4, arg5})
 	fake.stepsRunnerMutex.Unlock()
-	if fake.StepsRunnerStub != nil {
-		return fake.StepsRunnerStub(arg1, arg2, arg3, arg4, arg5)
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4, arg5)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	fakeReturns := fake.stepsRunnerReturns
 	return fakeReturns.result1, fakeReturns.result2
 }
 
