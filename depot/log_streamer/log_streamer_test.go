@@ -2,6 +2,7 @@ package log_streamer_test
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -121,6 +122,9 @@ var _ = Describe("LogStreamer", func() {
 
 			Context("when metric was incremented and report interval passed", func() {
 				BeforeEach(func() {
+					if runtime.GOOS == "windows" {
+						Skip("Go 1.16 bug, waiting for a fix https://github.com/golang/go/issues/44343")
+					}
 					maxLogLinesPerSecond = 1
 					logRateLimitExceededReportInterval = time.Second
 					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval)
