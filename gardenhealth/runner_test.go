@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/executor/gardenhealth"
-	loggregator "code.cloudfoundry.org/go-loggregator"
+	loggregator "code.cloudfoundry.org/go-loggregator/v8"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
