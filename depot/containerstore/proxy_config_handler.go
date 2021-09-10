@@ -83,6 +83,8 @@ type ProxyConfigHandler struct {
 	reloadClock    clock.Clock
 
 	adsServers []string
+
+	http2Enabled bool
 }
 
 type NoopProxyConfigHandler struct{}
@@ -126,6 +128,7 @@ func NewProxyConfigHandler(
 	reloadDuration time.Duration,
 	reloadClock clock.Clock,
 	adsServers []string,
+	http2Enabled bool,
 ) *ProxyConfigHandler {
 	return &ProxyConfigHandler{
 		logger:                             logger.Session("proxy-manager"),
@@ -137,6 +140,7 @@ func NewProxyConfigHandler(
 		reloadDuration:                     reloadDuration,
 		reloadClock:                        reloadClock,
 		adsServers:                         adsServers,
+		http2Enabled:                       http2Enabled,
 	}
 }
 
@@ -254,6 +258,7 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		adminPort,
 		p.containerProxyRequireClientCerts,
 		p.adsServers,
+		p.http2Enabled,
 	)
 	if err != nil {
 		return err
@@ -305,6 +310,7 @@ func generateProxyConfig(
 	adminPort uint16,
 	requireClientCerts bool,
 	adsServers []string,
+	http2Enabled bool,
 ) (*envoy_bootstrap.Bootstrap, error) {
 	clusters := []*envoy_cluster.Cluster{}
 	for index, portMap := range container.Ports {
@@ -332,7 +338,7 @@ func generateProxyConfig(
 		})
 	}
 
-	listeners, err := generateListeners(container, requireClientCerts)
+	listeners, err := generateListeners(container, requireClientCerts, http2Enabled)
 	if err != nil {
 		return nil, fmt.Errorf("generating listeners: %s", err)
 	}
@@ -443,7 +449,7 @@ func writeProxyConfig(proxyConfig *envoy_bootstrap.Bootstrap, path string) error
 	return ioutil.WriteFile(path, yamlStr, 0666)
 }
 
-func generateListeners(container executor.Container, requireClientCerts bool) ([]*envoy_listener.Listener, error) {
+func generateListeners(container executor.Container, requireClientCerts, http2Enabled bool) ([]*envoy_listener.Listener, error) {
 	listeners := []*envoy_listener.Listener{}
 
 	for index, portMap := range container.Ports {
@@ -463,7 +469,6 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 		tlsContext := &envoy_tls.DownstreamTlsContext{
 			RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
 			CommonTlsContext: &envoy_tls.CommonTlsContext{
-				AlpnProtocols: AlpnProtocols,
 				TlsCertificateSdsSecretConfigs: []*envoy_tls.SdsSecretConfig{
 					{
 						Name: "server-cert-and-key",
@@ -478,6 +483,10 @@ func generateListeners(container executor.Container, requireClientCerts bool) ([
 					CipherSuites: SupportedCipherSuites,
 				},
 			},
+		}
+
+		if http2Enabled {
+			tlsContext.CommonTlsContext.AlpnProtocols = AlpnProtocols
 		}
 
 		if requireClientCerts {

@@ -60,6 +60,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		containerProxyVerifySubjectAltName []string
 		containerProxyRequireClientCerts   bool
 		adsServers                         []string
+		http2Enabled                       bool
 	)
 
 	BeforeEach(func() {
@@ -101,6 +102,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			"10.255.217.2:15010",
 			"10.255.217.3:15010",
 		}
+		http2Enabled = true
 	})
 
 	JustBeforeEach(func() {
@@ -114,6 +116,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			reloadDuration,
 			reloadClock,
 			adsServers,
+			http2Enabled,
 		)
 		Eventually(rotatingCredChan).Should(BeSent(containerstore.Credential{
 			Cert: "some-cert",
@@ -394,6 +397,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 					statPrefix:               "0-stats",
 					clusterName:              "0-service-cluster",
 					requireClientCertificate: false,
+					alpnProtocols:            []string{"h2,http/1.1"},
 				}.check(proxyConfig.StaticResources.Listeners[0])
 			})
 		})
@@ -548,6 +552,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				statPrefix:               "0-stats",
 				clusterName:              "0-service-cluster",
 				requireClientCertificate: true,
+				alpnProtocols:            []string{"h2,http/1.1"},
 			}.check(proxyConfig.StaticResources.Listeners[0])
 
 			adsConfigSource := &envoy_core.ConfigSource{
@@ -621,6 +626,31 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 		})
 
+		Context("when HTTP/2 is disabled", func() {
+			BeforeEach(func() {
+				http2Enabled = false
+			})
+
+			It("creates a proxy config without ALPN for listeners", func() {
+				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(proxyConfigFile).Should(BeAnExistingFile())
+
+				var proxyConfig envoy_bootstrap.Bootstrap
+				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
+
+				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
+				expectedListener{
+					name:                     "listener-8080",
+					listenPort:               61001,
+					statPrefix:               "0-stats",
+					clusterName:              "0-service-cluster",
+					requireClientCertificate: true,
+					alpnProtocols:            nil,
+				}.check(proxyConfig.StaticResources.Listeners[0])
+			})
+		})
+
 		Context("with multiple port mappings", func() {
 			BeforeEach(func() {
 				container.Ports = []executor.PortMapping{
@@ -683,6 +713,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 					statPrefix:               "0-stats",
 					clusterName:              "0-service-cluster",
 					requireClientCertificate: true,
+					alpnProtocols:            []string{"h2,http/1.1"},
 				}.check(proxyConfig.StaticResources.Listeners[0])
 
 				expectedListener{
@@ -691,6 +722,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 					statPrefix:               "1-stats",
 					clusterName:              "1-service-cluster",
 					requireClientCertificate: true,
+					alpnProtocols:            []string{"h2,http/1.1"},
 				}.check(proxyConfig.StaticResources.Listeners[1])
 			})
 
@@ -846,6 +878,7 @@ type expectedListener struct {
 	statPrefix               string
 	clusterName              string
 	requireClientCertificate bool
+	alpnProtocols            []string
 }
 
 func (l expectedListener) check(listener *envoy_listener.Listener) {
@@ -869,7 +902,7 @@ func (l expectedListener) check(listener *envoy_listener.Listener) {
 	Expect(filterChain.TransportSocket.Name).To(Equal(l.name))
 
 	Expect(downstreamTlsContext.RequireClientCertificate.Value).To(Equal(l.requireClientCertificate))
-	Expect(downstreamTlsContext.CommonTlsContext.AlpnProtocols).To(Equal([]string{"h2,http/1.1"}))
+	Expect(downstreamTlsContext.CommonTlsContext.AlpnProtocols).To(Equal(l.alpnProtocols))
 	Expect(downstreamTlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs).To(ConsistOf(
 		&envoy_tls.SdsSecretConfig{
 			Name: "server-cert-and-key",

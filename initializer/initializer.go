@@ -139,6 +139,7 @@ type ExecutorConfig struct {
 	PathToTLSKey                          string                `json:"path_to_tls_key"`
 	PostSetupHook                         string                `json:"post_setup_hook"`
 	PostSetupUser                         string                `json:"post_setup_user"`
+	ProxyEnableHttp2                      bool                  `json:"proxy_enable_http2"`
 	ProxyMemoryAllocationMB               int                   `json:"proxy_memory_allocation_mb,omitempty"`
 	ReadWorkPoolSize                      int                   `json:"read_work_pool_size,omitempty"`
 	ReservedExpirationTime                durationjson.Duration `json:"reserved_expiration_time,omitempty"`
@@ -290,6 +291,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 			time.Duration(config.EnvoyConfigReloadDuration),
 			clock,
 			config.ContainerProxyADSServers,
+			config.ProxyEnableHttp2,
 		)
 	} else {
 		proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
