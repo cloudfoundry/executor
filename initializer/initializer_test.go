@@ -677,7 +677,7 @@ var _ = Describe("Initializer", func() {
 				})
 
 				It("fails", func() {
-					Eventually(err).Should(BeAssignableToTypeOf(asn1.StructuralError{}))
+					Eventually(err).Should(MatchError("x509: malformed tbs certificate"))
 				})
 			})
 
