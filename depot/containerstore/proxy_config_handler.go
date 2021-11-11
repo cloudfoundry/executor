@@ -40,6 +40,7 @@ import (
 const (
 	StartProxyPort = 61001
 	EndProxyPort   = 65534
+	C2CTLSPort     = 61443
 
 	TimeOut = 250000000
 
@@ -51,8 +52,9 @@ const (
 )
 
 var (
-	ErrNoPortsAvailable   = errors.New("no ports available")
-	ErrInvalidCertificate = errors.New("cannot parse invalid certificate")
+	ErrNoPortsAvailable     = errors.New("no ports available")
+	ErrInvalidCertificate   = errors.New("cannot parse invalid certificate")
+	ErrC2CTLSPortIsReserved = fmt.Errorf("port %d is reserved for container networking", C2CTLSPort)
 
 	AlpnProtocols         = []string{"h2,http/1.1"}
 	SupportedCipherSuites = []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"}
@@ -106,8 +108,8 @@ func (p *NoopProxyConfigHandler) RemoveProxyConfigDir(logger lager.Logger, conta
 	return nil
 }
 
-func (p *NoopProxyConfigHandler) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
-	return nil, nil
+func (p *NoopProxyConfigHandler) ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16, error) {
+	return nil, nil, nil
 }
 
 func (p *NoopProxyConfigHandler) Runner(logger lager.Logger, container executor.Container, credRotatedChan <-chan Credential) (ifrit.Runner, error) {
@@ -145,9 +147,9 @@ func NewProxyConfigHandler(
 }
 
 // This modifies the container pointer in order to create garden NetIn rules in the storenode.Create
-func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16, error) {
 	if !container.EnableContainerProxy {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	proxyPortMapping := []executor.ProxyPortMapping{}
@@ -155,6 +157,9 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 	existingPorts := make(map[uint16]interface{})
 	containerPorts := make([]uint16, len(container.Ports))
 	for i, portMap := range container.Ports {
+		if portMap.ContainerPort == C2CTLSPort {
+			return nil, nil, ErrC2CTLSPortIsReserved
+		}
 		existingPorts[portMap.ContainerPort] = struct{}{}
 		containerPorts[i] = portMap.ContainerPort
 	}
@@ -171,6 +176,10 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 			continue
 		}
 
+		if port == C2CTLSPort {
+			continue
+		}
+
 		extraPorts = append(extraPorts, port)
 		proxyPortMapping = append(proxyPortMapping, executor.ProxyPortMapping{
 			AppPort:   containerPorts[portCount],
@@ -180,7 +189,7 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 		portCount++
 	}
 
-	return proxyPortMapping, extraPorts
+	return proxyPortMapping, extraPorts, nil
 }
 
 func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {

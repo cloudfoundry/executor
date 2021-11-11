@@ -1153,7 +1153,7 @@ var _ = Describe("Container Store", func() {
 					}, []uint16{
 						61001,
 						61002,
-					})
+					}, nil)
 
 					containerStore = containerstore.New(
 						containerConfig,

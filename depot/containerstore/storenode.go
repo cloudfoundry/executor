@@ -51,7 +51,7 @@ const (
 //go:generate counterfeiter -o containerstorefakes/fake_proxymanager.go . ProxyManager
 type ProxyManager interface {
 	CredentialHandler
-	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
+	ProxyPorts(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16, error)
 }
 
 type storeNode struct {
@@ -328,7 +328,10 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 
 	info.Ports = dedupPorts(info.Ports)
 
-	proxyPortMapping, extraPorts := n.proxyConfigHandler.ProxyPorts(logger, info)
+	proxyPortMapping, extraPorts, err := n.proxyConfigHandler.ProxyPorts(logger, info)
+	if err != nil {
+		return nil, err
+	}
 	for _, port := range extraPorts {
 		info.Ports = append(info.Ports, executor.PortMapping{
 			ContainerPort: port,

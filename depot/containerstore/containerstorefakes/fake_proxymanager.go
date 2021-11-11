@@ -39,7 +39,7 @@ type FakeProxyManager struct {
 		result2 []executor.EnvironmentVariable
 		result3 error
 	}
-	ProxyPortsStub        func(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)
+	ProxyPortsStub        func(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16, error)
 	proxyPortsMutex       sync.RWMutex
 	proxyPortsArgsForCall []struct {
 		arg1 lager.Logger
@@ -48,10 +48,12 @@ type FakeProxyManager struct {
 	proxyPortsReturns struct {
 		result1 []executor.ProxyPortMapping
 		result2 []uint16
+		result3 error
 	}
 	proxyPortsReturnsOnCall map[int]struct {
 		result1 []executor.ProxyPortMapping
 		result2 []uint16
+		result3 error
 	}
 	RemoveDirStub        func(lager.Logger, executor.Container) error
 	removeDirMutex       sync.RWMutex
@@ -211,7 +213,7 @@ func (fake *FakeProxyManager) CreateDirReturnsOnCall(i int, result1 []garden.Bin
 	}{result1, result2, result3}
 }
 
-func (fake *FakeProxyManager) ProxyPorts(arg1 lager.Logger, arg2 *executor.Container) ([]executor.ProxyPortMapping, []uint16) {
+func (fake *FakeProxyManager) ProxyPorts(arg1 lager.Logger, arg2 *executor.Container) ([]executor.ProxyPortMapping, []uint16, error) {
 	fake.proxyPortsMutex.Lock()
 	ret, specificReturn := fake.proxyPortsReturnsOnCall[len(fake.proxyPortsArgsForCall)]
 	fake.proxyPortsArgsForCall = append(fake.proxyPortsArgsForCall, struct {
@@ -226,9 +228,9 @@ func (fake *FakeProxyManager) ProxyPorts(arg1 lager.Logger, arg2 *executor.Conta
 		return stub(arg1, arg2)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2
+		return ret.result1, ret.result2, ret.result3
 	}
-	return fakeReturns.result1, fakeReturns.result2
+	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
 }
 
 func (fake *FakeProxyManager) ProxyPortsCallCount() int {
@@ -237,7 +239,7 @@ func (fake *FakeProxyManager) ProxyPortsCallCount() int {
 	return len(fake.proxyPortsArgsForCall)
 }
 
-func (fake *FakeProxyManager) ProxyPortsCalls(stub func(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16)) {
+func (fake *FakeProxyManager) ProxyPortsCalls(stub func(lager.Logger, *executor.Container) ([]executor.ProxyPortMapping, []uint16, error)) {
 	fake.proxyPortsMutex.Lock()
 	defer fake.proxyPortsMutex.Unlock()
 	fake.ProxyPortsStub = stub
@@ -250,17 +252,18 @@ func (fake *FakeProxyManager) ProxyPortsArgsForCall(i int) (lager.Logger, *execu
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeProxyManager) ProxyPortsReturns(result1 []executor.ProxyPortMapping, result2 []uint16) {
+func (fake *FakeProxyManager) ProxyPortsReturns(result1 []executor.ProxyPortMapping, result2 []uint16, result3 error) {
 	fake.proxyPortsMutex.Lock()
 	defer fake.proxyPortsMutex.Unlock()
 	fake.ProxyPortsStub = nil
 	fake.proxyPortsReturns = struct {
 		result1 []executor.ProxyPortMapping
 		result2 []uint16
-	}{result1, result2}
+		result3 error
+	}{result1, result2, result3}
 }
 
-func (fake *FakeProxyManager) ProxyPortsReturnsOnCall(i int, result1 []executor.ProxyPortMapping, result2 []uint16) {
+func (fake *FakeProxyManager) ProxyPortsReturnsOnCall(i int, result1 []executor.ProxyPortMapping, result2 []uint16, result3 error) {
 	fake.proxyPortsMutex.Lock()
 	defer fake.proxyPortsMutex.Unlock()
 	fake.ProxyPortsStub = nil
@@ -268,12 +271,14 @@ func (fake *FakeProxyManager) ProxyPortsReturnsOnCall(i int, result1 []executor.
 		fake.proxyPortsReturnsOnCall = make(map[int]struct {
 			result1 []executor.ProxyPortMapping
 			result2 []uint16
+			result3 error
 		})
 	}
 	fake.proxyPortsReturnsOnCall[i] = struct {
 		result1 []executor.ProxyPortMapping
 		result2 []uint16
-	}{result1, result2}
+		result3 error
+	}{result1, result2, result3}
 }
 
 func (fake *FakeProxyManager) RemoveDir(arg1 lager.Logger, arg2 executor.Container) error {

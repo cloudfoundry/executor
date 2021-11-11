@@ -177,7 +177,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		It("returns an empty proxy port mapping", func() {
-			ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
+			ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(ports).To(BeEmpty())
 			Expect(extraPorts).To(BeEmpty())
 		})
@@ -274,14 +275,16 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("returns an empty proxy port mapping", func() {
-				ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
+				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(ports).To(BeEmpty())
 				Expect(extraPorts).To(BeEmpty())
 			})
 		})
 
 		It("each port gets an equivalent extra proxy port", func() {
-			ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
+			ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
 				{
 					AppPort:   8080,
@@ -298,7 +301,6 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 		Context("when the requested ports are in the 6100n range", func() {
 			BeforeEach(func() {
-
 				container.Ports = []executor.PortMapping{
 					{ContainerPort: 61001},
 					{ContainerPort: 9090},
@@ -306,7 +308,8 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("the additional proxy ports don't collide with requested ports", func() {
-				ports, extraPorts := proxyConfigHandler.ProxyPorts(logger, &container)
+				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
 					{
 						AppPort:   61001,
@@ -319,6 +322,43 @@ var _ = Describe("ProxyConfigHandler", func() {
 				}))
 
 				Expect(extraPorts).To(ConsistOf([]uint16{61002, 61003}))
+			})
+		})
+
+		Context("when the requested port is 61443", func() {
+			BeforeEach(func() {
+				container.Ports = []executor.PortMapping{
+					{ContainerPort: 61443},
+				}
+			})
+
+			It("returns an error that 61443 is a reserved port", func() {
+				_, _, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("port 61443 is reserved for container networking"))
+			})
+		})
+
+		Context("when there are more than 443 ports", func() {
+			BeforeEach(func() {
+				container.Ports = []executor.PortMapping{}
+				for i := 1; i < 445; i++ {
+					container.Ports = append(container.Ports, executor.PortMapping{ContainerPort: uint16(i)})
+				}
+			})
+
+			It("does not reserve port 61443", func() {
+				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ports[441]).To(Equal(executor.ProxyPortMapping{
+					AppPort:   442,
+					ProxyPort: 61442,
+				}))
+				Expect(ports[442]).To(Equal(executor.ProxyPortMapping{
+					AppPort:   443,
+					ProxyPort: 61444,
+				}))
+				Expect(extraPorts).NotTo(ContainElement(61443))
 			})
 		})
 	})
