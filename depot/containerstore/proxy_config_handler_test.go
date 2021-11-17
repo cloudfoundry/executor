@@ -529,6 +529,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.Node.Id).To(Equal(fmt.Sprintf("sidecar~10.0.0.1~%s~x", container.Guid)))
 			Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
 
+			Expect(proxyConfig.LayeredRuntime).NotTo(BeNil())
+			Expect(proxyConfig.LayeredRuntime.Layers).To(HaveLen(1))
+			Expect(proxyConfig.LayeredRuntime.Layers[0].LayerSpecifier).To(BeAssignableToTypeOf(&envoy_bootstrap.RuntimeLayer_StaticLayer{}))
+			Expect(proxyConfig.LayeredRuntime.Layers[0].GetStaticLayer().String()).To(Equal(`fields:<key:"envoy" value:<struct_value:<fields:<key:"reloadable_features" value:<struct_value:<fields:<key:"new_tcp_connection_pool" value:<bool_value:false > > > > > > > > `))
+
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			expectedCluster{
 				name:           "0-service-cluster",

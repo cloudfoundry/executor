@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/golang/protobuf/ptypes/duration"
+	pstruct "github.com/golang/protobuf/ptypes/struct"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/tedsuo/ifrit"
 )
@@ -361,6 +362,40 @@ func generateProxyConfig(
 		},
 		StaticResources: &envoy_bootstrap.Bootstrap_StaticResources{
 			Listeners: listeners,
+		},
+		LayeredRuntime: &envoy_bootstrap.LayeredRuntime{
+			Layers: []*envoy_bootstrap.RuntimeLayer{
+				{
+					Name: "static-layer",
+					LayerSpecifier: &envoy_bootstrap.RuntimeLayer_StaticLayer{
+						StaticLayer: &pstruct.Struct{
+							Fields: map[string]*pstruct.Value{
+								"envoy": &pstruct.Value{
+									Kind: &pstruct.Value_StructValue{
+										StructValue: &pstruct.Struct{
+											Fields: map[string]*pstruct.Value{
+												"reloadable_features": &pstruct.Value{
+													Kind: &pstruct.Value_StructValue{
+														StructValue: &pstruct.Struct{
+															Fields: map[string]*pstruct.Value{
+																"new_tcp_connection_pool": &pstruct.Value{
+																	Kind: &pstruct.Value_BoolValue{
+																		BoolValue: false,
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
