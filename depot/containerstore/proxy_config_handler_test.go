@@ -1006,8 +1006,10 @@ func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
 		}},
 	}))
 	if c.maxConnections > 0 {
-		Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(1))
+		Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
 		Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
+		Expect(cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
+		Expect(cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
 	} else {
 		Expect(cluster.CircuitBreakers).To(BeNil())
 	}
