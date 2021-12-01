@@ -49,7 +49,7 @@ func (h *InstanceIdentityHandler) RemoveDir(logger lager.Logger, container execu
 	return os.RemoveAll(filepath.Join(h.credDir, container.Guid))
 }
 
-func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Container) error {
+func (h *InstanceIdentityHandler) Update(creds Credentials, container executor.Container) error {
 	instanceKeyPath := filepath.Join(h.credDir, container.Guid, "instance.key")
 	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
 	certificatePath := filepath.Join(h.credDir, container.Guid, "instance.crt")
@@ -67,12 +67,12 @@ func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Con
 	}
 	defer certificate.Close()
 
-	_, err = certificate.Write([]byte(cred.Cert))
+	_, err = certificate.Write([]byte(creds.InstanceIdentityCredential.Cert))
 	if err != nil {
 		return err
 	}
 
-	_, err = instanceKey.Write([]byte(cred.Key))
+	_, err = instanceKey.Write([]byte(creds.InstanceIdentityCredential.Key))
 	if err != nil {
 		return err
 	}
@@ -100,6 +100,6 @@ func (h *InstanceIdentityHandler) Update(cred Credential, container executor.Con
 	return nil
 }
 
-func (h *InstanceIdentityHandler) Close(cred Credential, container executor.Container) error {
+func (h *InstanceIdentityHandler) Close(creds Credentials, container executor.Container) error {
 	return nil
 }

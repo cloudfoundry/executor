@@ -50,8 +50,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 		configPath                         string
 		rotatingCredChan                   chan containerstore.Credential
 		container                          executor.Container
-		sdsServerCertAndKeyFile            string
-		sdsServerValidationContextFile     string
+		sdsIDCertAndKeyFile                string
+		sdsC2CCertAndKeyFile               string
+		sdsIDValidationContextFile         string
 		proxyConfigFile                    string
 		proxyConfigHandler                 *containerstore.ProxyConfigHandler
 		reloadDuration                     time.Duration
@@ -61,6 +62,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		containerProxyRequireClientCerts   bool
 		adsServers                         []string
 		http2Enabled                       bool
+		credentials                        containerstore.Credentials
 	)
 
 	BeforeEach(func() {
@@ -85,8 +87,9 @@ var _ = Describe("ProxyConfigHandler", func() {
 		configPath = filepath.Join(proxyConfigDir, container.Guid)
 
 		proxyConfigFile = filepath.Join(configPath, "envoy.yaml")
-		sdsServerCertAndKeyFile = filepath.Join(configPath, "sds-server-cert-and-key.yaml")
-		sdsServerValidationContextFile = filepath.Join(configPath, "sds-server-validation-context.yaml")
+		sdsIDCertAndKeyFile = filepath.Join(configPath, "sds-id-cert-and-key.yaml")
+		sdsIDValidationContextFile = filepath.Join(configPath, "sds-id-validation-context.yaml")
+		sdsC2CCertAndKeyFile = filepath.Join(configPath, "sds-c2c-cert-and-key.yaml")
 
 		logger = lagertest.NewTestLogger("proxymanager")
 
@@ -103,6 +106,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 			"10.255.217.3:15010",
 		}
 		http2Enabled = true
+		cert, key, _ := generateCertAndKey()
+		credentials = containerstore.Credentials{
+			InstanceIdentityCredential: containerstore.Credential{
+				Cert: cert,
+				Key:  key,
+			},
+			C2CCredential: containerstore.Credential{
+				Cert: cert,
+				Key:  key,
+			},
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -155,7 +169,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		Describe("Close", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -167,7 +181,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		Describe("Update", func() {
 			JustBeforeEach(func() {
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -260,12 +274,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 	Describe("ProxyPorts", func() {
 		BeforeEach(func() {
 			container.Ports = []executor.PortMapping{
-				{
-					ContainerPort: 8080,
-				},
-				{
-					ContainerPort: 9090,
-				},
+				{ContainerPort: 8080},
 			}
 		})
 
@@ -282,21 +291,60 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 		})
 
-		It("each port gets an equivalent extra proxy port", func() {
-			ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
-				{
-					AppPort:   8080,
-					ProxyPort: 61001,
-				},
-				{
-					AppPort:   9090,
-					ProxyPort: 61002,
-				},
-			}))
+		Context("when there is a default HTTP port (8080)", func() {
+			BeforeEach(func() {
+				container.Ports = []executor.PortMapping{
+					{ContainerPort: 8080},
+					{ContainerPort: 9090},
+				}
+			})
 
-			Expect(extraPorts).To(ConsistOf([]uint16{61001, 61002}))
+			It("each port gets an equivalent extra proxy port and additional 61443 port for 8080", func() {
+				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
+					{
+						AppPort:   8080,
+						ProxyPort: 61001,
+					},
+					{
+						AppPort:   8080,
+						ProxyPort: 61443,
+					},
+					{
+						AppPort:   9090,
+						ProxyPort: 61002,
+					},
+				}))
+
+				Expect(extraPorts).To(ConsistOf([]uint16{61001, 61002, 61443}))
+			})
+		})
+
+		Context("when there is no default HTTP port (8080)", func() {
+			BeforeEach(func() {
+				container.Ports = []executor.PortMapping{
+					{ContainerPort: 7070},
+					{ContainerPort: 9090},
+				}
+			})
+
+			It("each port gets an equivalent extra proxy port", func() {
+				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ports).To(ConsistOf([]executor.ProxyPortMapping{
+					{
+						AppPort:   7070,
+						ProxyPort: 61001,
+					},
+					{
+						AppPort:   9090,
+						ProxyPort: 61002,
+					},
+				}))
+
+				Expect(extraPorts).To(ConsistOf([]uint16{61001, 61002}))
+			})
 		})
 
 		Context("when the requested ports are in the 6100n range", func() {
@@ -373,6 +421,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 					ContainerPort:         8080,
 					ContainerTLSProxyPort: 61001,
 				},
+				{
+					ContainerPort:         8080,
+					ContainerTLSProxyPort: 61443,
+				},
 			}
 
 			containerProxyRequireClientCerts = true
@@ -384,7 +436,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("does not write a envoy config file", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "", Key: ""}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
@@ -397,7 +449,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("creates a proxy config without tls_context", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
@@ -416,7 +468,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 				expectedCluster{
-					name:           "0-service-cluster",
+					name:           "service-cluster-8080",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
 				}.check(proxyConfig.StaticResources.Clusters[0])
@@ -430,25 +482,40 @@ var _ = Describe("ProxyConfigHandler", func() {
 					}}.check(adsCluster)
 				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
-				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
+				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				expectedListener{
-					name:                     "listener-8080",
+					name:                     "listener-8080-61001",
 					listenPort:               61001,
-					statPrefix:               "0-stats",
-					clusterName:              "0-service-cluster",
+					statPrefix:               "stats-8080-61001",
+					clusterName:              "service-cluster-8080",
 					requireClientCertificate: false,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[0])
+				}.check(proxyConfig.StaticResources.Listeners[0],
+					"id-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				)
+				expectedListener{
+					name:                     "listener-8080-61443",
+					listenPort:               61443,
+					statPrefix:               "stats-8080-61443",
+					clusterName:              "service-cluster-8080",
+					requireClientCertificate: false,
+					alpnProtocols:            []string{"h2,http/1.1"},
+				}.check(proxyConfig.StaticResources.Listeners[1],
+					"c2c-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+				)
 			})
 		})
 
-		It("creates appropriate sds-server-cert-and-key.yaml configuration file", func() {
-			err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+		It("creates appropriate sds-id-validation-context.yaml configuration file", func() {
+			err := proxyConfigHandler.Update(credentials, container)
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(sdsServerCertAndKeyFile).Should(BeAnExistingFile())
+			Eventually(sdsIDCertAndKeyFile).Should(BeAnExistingFile())
+			Eventually(sdsC2CCertAndKeyFile).Should(BeAnExistingFile())
 
 			var sdsCertificateDiscoveryResponse envoy_discovery.DiscoveryResponse
-			Expect(yamlFileToProto(sdsServerCertAndKeyFile, &sdsCertificateDiscoveryResponse)).To(Succeed())
+			Expect(yamlFileToProto(sdsIDCertAndKeyFile, &sdsCertificateDiscoveryResponse)).To(Succeed())
 
 			Expect(sdsCertificateDiscoveryResponse.VersionInfo).To(Equal("0"))
 			Expect(sdsCertificateDiscoveryResponse.Resources).To(HaveLen(1))
@@ -456,17 +523,17 @@ var _ = Describe("ProxyConfigHandler", func() {
 			var secret envoy_tls.Secret
 			Expect(ptypes.UnmarshalAny(sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
-			Expect(secret.Name).To(Equal("server-cert-and-key"))
+			Expect(secret.Name).To(Equal("id-cert-and-key"))
 			Expect(secret.Type).To(Equal(&envoy_tls.Secret_TlsCertificate{
 				TlsCertificate: &envoy_tls.TlsCertificate{
 					CertificateChain: &envoy_core.DataSource{
 						Specifier: &envoy_core.DataSource_InlineString{
-							InlineString: "cert",
+							InlineString: credentials.InstanceIdentityCredential.Cert,
 						},
 					},
 					PrivateKey: &envoy_core.DataSource{
 						Specifier: &envoy_core.DataSource_InlineString{
-							InlineString: "key",
+							InlineString: credentials.InstanceIdentityCredential.Key,
 						},
 					},
 				},
@@ -490,22 +557,31 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(fileWatcher.Close()).To(Succeed())
 			})
 
-			It("should ensure the sds-server-cert-and-key.yaml file is recreated when updating the config", func() {
-				Expect(ioutil.WriteFile(sdsServerCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
-				Expect(fileWatcher.Add(sdsServerCertAndKeyFile)).To(Succeed())
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			It("should ensure the sds-id-cert-and-key.yaml file is recreated when updating the config", func() {
+				Expect(ioutil.WriteFile(sdsIDCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(fileWatcher.Add(sdsIDCertAndKeyFile)).To(Succeed())
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerCertAndKeyFile, Op: fsnotify.Remove})))
+				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsIDCertAndKeyFile, Op: fsnotify.Remove})))
 			})
 
-			It("should ensure the sds-server-validation-context.yaml file is recreated when updating the config", func() {
-				Expect(ioutil.WriteFile(sdsServerValidationContextFile, []byte("old-content"), 0666)).To(Succeed())
-				Expect(fileWatcher.Add(sdsServerValidationContextFile)).To(Succeed())
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			It("should ensure the sds-c2c-cert-and-key.yaml file is recreated when updating the config", func() {
+				Expect(ioutil.WriteFile(sdsC2CCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(fileWatcher.Add(sdsC2CCertAndKeyFile)).To(Succeed())
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsServerValidationContextFile, Op: fsnotify.Remove})))
+				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsC2CCertAndKeyFile, Op: fsnotify.Remove})))
+			})
+
+			It("should ensure the sds-id-validation-context.yaml file is recreated when updating the config", func() {
+				Expect(ioutil.WriteFile(sdsIDValidationContextFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(fileWatcher.Add(sdsIDValidationContextFile)).To(Succeed())
+				err := proxyConfigHandler.Update(credentials, container)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(fileWatcher.Events).Should(Receive(Equal(fsnotify.Event{Name: sdsIDValidationContextFile, Op: fsnotify.Remove})))
 			})
 		})
 
@@ -520,13 +596,13 @@ var _ = Describe("ProxyConfigHandler", func() {
 				containerProxyVerifySubjectAltName = []string{"valid-alt-name-1", "valid-alt-name-2"}
 			})
 
-			It("creates appropriate sds-server-validation-context.yaml configuration file", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			It("creates appropriate sds-id-validation-context.yaml configuration file", func() {
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(sdsServerValidationContextFile).Should(BeAnExistingFile())
+				Eventually(sdsIDValidationContextFile).Should(BeAnExistingFile())
 
 				var sdsDiscoveryResponse envoy_discovery.DiscoveryResponse
-				Expect(yamlFileToProto(sdsServerValidationContextFile, &sdsDiscoveryResponse)).To(Succeed())
+				Expect(yamlFileToProto(sdsIDValidationContextFile, &sdsDiscoveryResponse)).To(Succeed())
 
 				Expect(sdsDiscoveryResponse.VersionInfo).To(Equal("0"))
 				Expect(sdsDiscoveryResponse.Resources).To(HaveLen(1))
@@ -534,7 +610,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				var secret envoy_tls.Secret
 				Expect(ptypes.UnmarshalAny(sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
 
-				Expect(secret.Name).To(Equal("server-validation-context"))
+				Expect(secret.Name).To(Equal("id-validation-context"))
 				Expect(secret.Type).To(Equal(&envoy_tls.Secret_ValidationContext{
 					ValidationContext: &envoy_tls.CertificateValidationContext{
 						TrustedCa: &envoy_core.DataSource{
@@ -552,7 +628,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 
 		It("creates the appropriate proxy config at start", func() {
-			err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			err := proxyConfigHandler.Update(credentials, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(proxyConfigFile).Should(BeAnExistingFile())
@@ -571,7 +647,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			expectedCluster{
-				name:           "0-service-cluster",
+				name:           "service-cluster-8080",
 				hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 				maxConnections: math.MaxUint32,
 			}.check(proxyConfig.StaticResources.Clusters[0])
@@ -585,15 +661,29 @@ var _ = Describe("ProxyConfigHandler", func() {
 				}}.check(adsCluster)
 			Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
-			Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
+			Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 			expectedListener{
-				name:                     "listener-8080",
+				name:                     "listener-8080-61001",
 				listenPort:               61001,
-				statPrefix:               "0-stats",
-				clusterName:              "0-service-cluster",
+				statPrefix:               "stats-8080-61001",
+				clusterName:              "service-cluster-8080",
 				requireClientCertificate: true,
 				alpnProtocols:            []string{"h2,http/1.1"},
-			}.check(proxyConfig.StaticResources.Listeners[0])
+			}.check(proxyConfig.StaticResources.Listeners[0],
+				"id-cert-and-key",
+				"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+			)
+			expectedListener{
+				name:                     "listener-8080-61443",
+				listenPort:               61443,
+				statPrefix:               "stats-8080-61443",
+				clusterName:              "service-cluster-8080",
+				requireClientCertificate: false,
+				alpnProtocols:            []string{"h2,http/1.1"},
+			}.check(proxyConfig.StaticResources.Listeners[1],
+				"c2c-cert-and-key",
+				"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+			)
 
 			adsConfigSource := &envoy_core.ConfigSource{
 				ConfigSourceSpecifier: &envoy_core.ConfigSource_Ads{
@@ -625,7 +715,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("creates a proxy config without the ads config", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -634,7 +724,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(1))
 				cluster := proxyConfig.StaticResources.Clusters[0]
-				Expect(cluster.Name).To(Equal("0-service-cluster"))
+				Expect(cluster.Name).To(Equal("service-cluster-8080"))
 
 				Expect(proxyConfig.DynamicResources).To(BeNil())
 			})
@@ -648,7 +738,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("returns an error", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).To(MatchError("ads server address is invalid: malformed"))
 			})
 		})
@@ -661,7 +751,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("returns an error", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).To(MatchError("ads server address is invalid: 0.0.0.0:mal"))
 			})
 		})
@@ -672,22 +762,36 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("creates a proxy config without ALPN for listeners", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
 				var proxyConfig envoy_bootstrap.Bootstrap
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
-				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(1))
+				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				expectedListener{
-					name:                     "listener-8080",
+					name:                     "listener-8080-61001",
 					listenPort:               61001,
-					statPrefix:               "0-stats",
-					clusterName:              "0-service-cluster",
+					statPrefix:               "stats-8080-61001",
+					clusterName:              "service-cluster-8080",
 					requireClientCertificate: true,
 					alpnProtocols:            nil,
-				}.check(proxyConfig.StaticResources.Listeners[0])
+				}.check(proxyConfig.StaticResources.Listeners[0],
+					"id-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				)
+				expectedListener{
+					name:                     "listener-8080-61443",
+					listenPort:               61443,
+					statPrefix:               "stats-8080-61443",
+					clusterName:              "service-cluster-8080",
+					requireClientCertificate: false,
+					alpnProtocols:            nil,
+				}.check(proxyConfig.StaticResources.Listeners[1],
+					"c2c-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+				)
 			})
 		})
 
@@ -706,7 +810,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("creates the appropriate proxy config file", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(proxyConfigFile).Should(BeAnExistingFile())
 
@@ -725,13 +829,13 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
 
 				expectedCluster{
-					name:           "0-service-cluster",
+					name:           "service-cluster-8080",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
 				}.check(proxyConfig.StaticResources.Clusters[0])
 
 				expectedCluster{
-					name:           "1-service-cluster",
+					name:           "service-cluster-2222",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 2222)},
 					maxConnections: math.MaxUint32,
 				}.check(proxyConfig.StaticResources.Clusters[1])
@@ -748,22 +852,28 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				expectedListener{
-					name:                     "listener-8080",
+					name:                     "listener-8080-61001",
 					listenPort:               61001,
-					statPrefix:               "0-stats",
-					clusterName:              "0-service-cluster",
+					statPrefix:               "stats-8080-61001",
+					clusterName:              "service-cluster-8080",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[0])
+				}.check(proxyConfig.StaticResources.Listeners[0],
+					"id-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				)
 
 				expectedListener{
-					name:                     "listener-2222",
+					name:                     "listener-2222-61002",
 					listenPort:               61002,
-					statPrefix:               "1-stats",
-					clusterName:              "1-service-cluster",
+					statPrefix:               "stats-2222-61002",
+					clusterName:              "service-cluster-2222",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[1])
+				}.check(proxyConfig.StaticResources.Listeners[1],
+					"id-cert-and-key",
+					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				)
 			})
 
 			Context("when no ports are left", func() {
@@ -780,7 +890,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				})
 
 				It("returns an error", func() {
-					err := proxyConfigHandler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+					err := proxyConfigHandler.Update(credentials, container)
 					Expect(err).To(Equal(containerstore.ErrNoPortsAvailable))
 				})
 			})
@@ -788,10 +898,6 @@ var _ = Describe("ProxyConfigHandler", func() {
 	})
 
 	Describe("Close", func() {
-		var (
-			cert, key string
-		)
-
 		BeforeEach(func() {
 			container.Ports = []executor.PortMapping{
 				{
@@ -799,8 +905,6 @@ var _ = Describe("ProxyConfigHandler", func() {
 					ContainerTLSProxyPort: 61001,
 				},
 			}
-
-			cert, key, _ = generateCertAndKey()
 		})
 
 		JustBeforeEach(func() {
@@ -811,7 +915,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		It("returns after the configured reload duration", func() {
 			ch := make(chan struct{})
 			go func() {
-				proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+				proxyConfigHandler.Close(credentials, container)
 				close(ch)
 			}()
 
@@ -826,7 +930,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("does not write a envoy config file", func() {
-				err := proxyConfigHandler.Update(containerstore.Credential{Cert: "", Key: ""}, container)
+				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
@@ -836,7 +940,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				ch := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
-					proxyConfigHandler.Close(containerstore.Credential{Cert: cert, Key: key}, container)
+					proxyConfigHandler.Close(credentials, container)
 					close(ch)
 				}()
 
@@ -921,7 +1025,7 @@ type expectedListener struct {
 	alpnProtocols            []string
 }
 
-func (l expectedListener) check(listener *envoy_listener.Listener) {
+func (l expectedListener) check(listener *envoy_listener.Listener, sdsSecretName string, sdsFileName string) {
 	Expect(listener.Name).To(Equal(l.name))
 	Expect(listener.Address).To(Equal(envoyAddr("0.0.0.0", l.listenPort)))
 	Expect(listener.FilterChains).To(HaveLen(1))
@@ -941,14 +1045,13 @@ func (l expectedListener) check(listener *envoy_listener.Listener) {
 	Expect(ptypes.UnmarshalAny(filterChain.TransportSocket.GetTypedConfig(), &downstreamTlsContext)).To(Succeed())
 	Expect(filterChain.TransportSocket.Name).To(Equal(l.name))
 
-	Expect(downstreamTlsContext.RequireClientCertificate.Value).To(Equal(l.requireClientCertificate))
 	Expect(downstreamTlsContext.CommonTlsContext.AlpnProtocols).To(Equal(l.alpnProtocols))
 	Expect(downstreamTlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs).To(ConsistOf(
 		&envoy_tls.SdsSecretConfig{
-			Name: "server-cert-and-key",
+			Name: sdsSecretName,
 			SdsConfig: &envoy_core.ConfigSource{
 				ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-					Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
+					Path: sdsFileName,
 				},
 			},
 		},
@@ -958,12 +1061,13 @@ func (l expectedListener) check(listener *envoy_listener.Listener) {
 	}))
 
 	if l.requireClientCertificate {
+		Expect(downstreamTlsContext.RequireClientCertificate.Value).To(BeTrue())
 		Expect(downstreamTlsContext.CommonTlsContext.ValidationContextType).To(Equal(&envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
 			ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
-				Name: "server-validation-context",
+				Name: "id-validation-context",
 				SdsConfig: &envoy_core.ConfigSource{
 					ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-						Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml",
+						Path: "/etc/cf-assets/envoy_config/sds-id-validation-context.yaml",
 					},
 				},
 			},

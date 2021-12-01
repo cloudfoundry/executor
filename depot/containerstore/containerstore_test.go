@@ -1147,12 +1147,17 @@ var _ = Describe("Container Store", func() {
 							ProxyPort: 61001,
 						},
 						{
+							AppPort:   8080,
+							ProxyPort: 61443,
+						},
+						{
 							AppPort:   9090,
 							ProxyPort: 61002,
 						},
 					}, []uint16{
 						61001,
 						61002,
+						61443,
 					}, nil)
 
 					containerStore = containerstore.New(
@@ -1198,6 +1203,8 @@ var _ = Describe("Container Store", func() {
 									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16002, ContainerPort: 61002})
 								case 61003:
 									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16003, ContainerPort: 61003})
+								case 61443:
+									info.MappedPorts = append(info.MappedPorts, garden.PortMapping{HostPort: 16004, ContainerPort: 61443})
 								default:
 									return info, errors.New("failed-net-in")
 								}
@@ -1221,7 +1228,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.NetIn).To(HaveLen(4))
+					Expect(containerSpec.NetIn).To(HaveLen(5))
 					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 						HostPort: 0, ContainerPort: 8080,
 					}))
@@ -1233,6 +1240,9 @@ var _ = Describe("Container Store", func() {
 					}))
 					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 						HostPort: 0, ContainerPort: 61002,
+					}))
+					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						HostPort: 0, ContainerPort: 61443,
 					}))
 				})
 
@@ -1265,12 +1275,15 @@ var _ = Describe("Container Store", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetIn).To(HaveLen(2))
+						Expect(containerSpec.NetIn).To(HaveLen(3))
 						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 							HostPort: 0, ContainerPort: 61001,
 						}))
 						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 							HostPort: 0, ContainerPort: 61002,
+						}))
+						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+							HostPort: 0, ContainerPort: 61443,
 						}))
 					})
 
@@ -1283,6 +1296,11 @@ var _ = Describe("Container Store", func() {
 							HostPort:              0,
 							ContainerTLSProxyPort: 61001,
 							HostTLSProxyPort:      16001,
+						}, executor.PortMapping{
+							ContainerPort:         8080,
+							HostPort:              0,
+							ContainerTLSProxyPort: 61443,
+							HostTLSProxyPort:      16004,
 						}, executor.PortMapping{
 							ContainerPort:         9090,
 							HostPort:              0,
@@ -1302,6 +1320,11 @@ var _ = Describe("Container Store", func() {
 						ContainerTLSProxyPort: 61001,
 						HostTLSProxyPort:      16001,
 					}, executor.PortMapping{
+						ContainerPort:         8080,
+						HostPort:              16000,
+						ContainerTLSProxyPort: 61443,
+						HostTLSProxyPort:      16004,
+					}, executor.PortMapping{
 						ContainerPort:         9090,
 						HostPort:              16004,
 						ContainerTLSProxyPort: 61002,
@@ -1318,7 +1341,7 @@ var _ = Describe("Container Store", func() {
 					Expect(containerStore.Run(logger, containerGuid)).NotTo(HaveOccurred())
 					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
 					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
-					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002)))
+					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002), uint16(61443)))
 				})
 
 				It("bind mounts envoy", func() {

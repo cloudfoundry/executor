@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 const ContainerOwnerProperty = "executor:owner"
@@ -165,28 +166,29 @@ type Sidecar struct {
 }
 
 type RunInfo struct {
-	RootFSPath                    string                      `json:"rootfs"`
-	CPUWeight                     uint                        `json:"cpu_weight"`
-	Ports                         []PortMapping               `json:"ports"`
-	LogConfig                     LogConfig                   `json:"log_config"`
-	MetricsConfig                 MetricsConfig               `json:"metrics_config"`
-	StartTimeoutMs                uint                        `json:"start_timeout_ms"`
-	Privileged                    bool                        `json:"privileged"`
-	CachedDependencies            []CachedDependency          `json:"cached_dependencies"`
-	Setup                         *models.Action              `json:"setup"`
-	Action                        *models.Action              `json:"run"`
-	Monitor                       *models.Action              `json:"monitor"`
-	CheckDefinition               *models.CheckDefinition     `json:"check_definition"`
-	EgressRules                   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
-	Env                           []EnvironmentVariable       `json:"env,omitempty"`
-	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
-	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
-	Network                       *Network                    `json:"network,omitempty"`
-	CertificateProperties         CertificateProperties       `json:"certificate_properties"`
-	ImageUsername                 string                      `json:"image_username"`
-	ImagePassword                 string                      `json:"image_password"`
-	EnableContainerProxy          bool                        `json:"enable_container_proxy"`
-	Sidecars                      []Sidecar                   `json:"sidecars"`
+	RootFSPath                    string                        `json:"rootfs"`
+	CPUWeight                     uint                          `json:"cpu_weight"`
+	Ports                         []PortMapping                 `json:"ports"`
+	InternalRoutes                internalroutes.InternalRoutes `json:"internal_routes"`
+	LogConfig                     LogConfig                     `json:"log_config"`
+	MetricsConfig                 MetricsConfig                 `json:"metrics_config"`
+	StartTimeoutMs                uint                          `json:"start_timeout_ms"`
+	Privileged                    bool                          `json:"privileged"`
+	CachedDependencies            []CachedDependency            `json:"cached_dependencies"`
+	Setup                         *models.Action                `json:"setup"`
+	Action                        *models.Action                `json:"run"`
+	Monitor                       *models.Action                `json:"monitor"`
+	CheckDefinition               *models.CheckDefinition       `json:"check_definition"`
+	EgressRules                   []*models.SecurityGroupRule   `json:"egress_rules,omitempty"`
+	Env                           []EnvironmentVariable         `json:"env,omitempty"`
+	TrustedSystemCertificatesPath string                        `json:"trusted_system_certificates_path,omitempty"`
+	VolumeMounts                  []VolumeMount                 `json:"volume_mounts"`
+	Network                       *Network                      `json:"network,omitempty"`
+	CertificateProperties         CertificateProperties         `json:"certificate_properties"`
+	ImageUsername                 string                        `json:"image_username"`
+	ImagePassword                 string                        `json:"image_password"`
+	EnableContainerProxy          bool                          `json:"enable_container_proxy"`
+	Sidecars                      []Sidecar                     `json:"sidecars"`
 }
 
 type BindMountMode uint8
