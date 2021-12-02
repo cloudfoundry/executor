@@ -21,6 +21,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 const (
@@ -28,6 +29,11 @@ const (
 	CredCreationSucceededDuration = "CredCreationSucceededDuration"
 	CredCreationFailedCount       = "CredCreationFailedCount"
 )
+
+type Credentials struct {
+	InstanceIdentityCredential Credential
+	C2CCredential              Credential
+}
 
 type Credential struct {
 	Cert string
@@ -85,12 +91,12 @@ type CredentialHandler interface {
 	RemoveDir(logger lager.Logger, container executor.Container) error
 
 	// Called periodically as new valid certificate/key pair are generated
-	Update(credentials Credential, container executor.Container) error
+	Update(credentials Credentials, container executor.Container) error
 
 	// Called when the CredManager is preparing to exit. This is mainly to update
 	// the EnvoyProxy with invalid certificates and prevent it from accepting
 	// more incoming traffic from the gorouter
-	Close(invalidCredentials Credential, container executor.Container) error
+	Close(invalidCredentials Credentials, container executor.Container) error
 }
 
 func NewCredManager(
@@ -242,11 +248,41 @@ const (
 	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
-func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certGUID string) (Credential, error) {
+func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certGUID string) (Credentials, error) {
 	logger = logger.Session("generating-credentials")
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
+	ipForCert := container.InternalIP
+	if len(ipForCert) == 0 {
+		ipForCert = container.ExternalIP
+	}
+
+	logger.Debug("generating-credentials-for-instance-identity")
+	idCred, err := c.generateCredForSAN(logger,
+		certificateSAN{IPAddress: ipForCert, OrganizationalUnits: container.CertificateProperties.OrganizationalUnit},
+		certGUID,
+	)
+	if err != nil {
+		return Credentials{}, err
+	}
+
+	logger.Debug("generating-credentials-for-c2c")
+	c2cCred, err := c.generateCredForSAN(logger,
+		certificateSAN{InternalRoutes: container.InternalRoutes, OrganizationalUnits: container.CertificateProperties.OrganizationalUnit},
+		certGUID,
+	)
+	if err != nil {
+		return Credentials{}, err
+	}
+
+	return Credentials{
+		InstanceIdentityCredential: idCred,
+		C2CCredential:              c2cCred,
+	}, nil
+}
+
+func (c *credManager) generateCredForSAN(logger lager.Logger, certSAN certificateSAN, certGUID string) (Credential, error) {
 	logger.Debug("generating-private-key")
 	privateKey, err := rsa.GenerateKey(c.entropyReader, 2048)
 	if err != nil {
@@ -254,18 +290,12 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 	}
 	logger.Debug("generated-private-key")
 
-	ipForCert := container.InternalIP
-	if len(ipForCert) == 0 {
-		ipForCert = container.ExternalIP
-	}
-
 	startValidity := c.clock.Now()
 
-	template := createCertificateTemplate(ipForCert,
-		certGUID,
+	template := createCertificateTemplate(certGUID,
+		certSAN,
 		startValidity,
 		startValidity.Add(c.validityPeriod),
-		container.CertificateProperties.OrganizationalUnit,
 	)
 
 	logger.Debug("generating-serial-number")
@@ -306,11 +336,10 @@ func (c *credManager) generateCreds(logger lager.Logger, container executor.Cont
 		return Credential{}, err
 	}
 
-	creds := Credential{
+	return Credential{
 		Cert: certificateBuf.String(),
 		Key:  keyBuf.String(),
-	}
-	return creds, nil
+	}, nil
 }
 
 func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
@@ -321,21 +350,32 @@ func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 	return pem.Encode(writer, block)
 }
 
-func createCertificateTemplate(ipaddress, guid string, notBefore, notAfter time.Time, organizationalUnits []string) *x509.Certificate {
+type certificateSAN struct {
+	IPAddress           string
+	InternalRoutes      internalroutes.InternalRoutes
+	OrganizationalUnits []string
+}
+
+func createCertificateTemplate(guid string, certSAN certificateSAN, notBefore, notAfter time.Time) *x509.Certificate {
 	var ipaddr []net.IP
-	if len(ipaddress) == 0 {
+	if len(certSAN.IPAddress) == 0 {
 		ipaddr = []net.IP{}
 	} else {
-		ipaddr = []net.IP{net.ParseIP(ipaddress)}
+		ipaddr = []net.IP{net.ParseIP(certSAN.IPAddress)}
 	}
+	dnsNames := []string{guid}
+	for _, route := range certSAN.InternalRoutes {
+		dnsNames = append(dnsNames, route.Hostname)
+	}
+
 	return &x509.Certificate{
 		SerialNumber: big.NewInt(0),
 		Subject: pkix.Name{
 			CommonName:         guid,
-			OrganizationalUnit: organizationalUnits,
+			OrganizationalUnit: certSAN.OrganizationalUnits,
 		},
 		IPAddresses: ipaddr,
-		DNSNames:    []string{guid},
+		DNSNames:    dnsNames,
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement,

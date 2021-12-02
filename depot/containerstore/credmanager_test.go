@@ -21,6 +21,7 @@ import (
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
@@ -229,8 +230,14 @@ var _ = Describe("CredManager", func() {
 			container = executor.Container{
 				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
 				InternalIP: "127.0.0.1",
-				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-					OrganizationalUnit: []string{"app:iamthelizardking"}},
+				RunInfo: executor.RunInfo{
+					InternalRoutes: internalroutes.InternalRoutes{
+						{Hostname: "a.apps.internal"},
+						{Hostname: "b.apps.internal"},
+					},
+					CertificateProperties: executor.CertificateProperties{
+						OrganizationalUnit: []string{"app:iamthelizardking"},
+					},
 				},
 			}
 		})
@@ -311,26 +318,28 @@ var _ = Describe("CredManager", func() {
 
 				Context("when the certificate is about to expire", func() {
 					var (
-						credBefore containerstore.Credential
+						credsBefore containerstore.Credentials
 					)
 
 					JustBeforeEach(func() {
 						Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
 
 						Eventually(containerProcess.Ready()).Should(BeClosed())
-						credBefore, _ = fakeCredHandler.UpdateArgsForCall(0)
+						credsBefore, _ = fakeCredHandler.UpdateArgsForCall(0)
 					})
 
 					testCredentialRotation := func(dur time.Duration) {
 						callCount := fakeCredHandler.UpdateCallCount()
 
 						var actualContainer executor.Container
-						credBefore, actualContainer = fakeCredHandler.UpdateArgsForCall(callCount - 1)
+						credsBefore, actualContainer = fakeCredHandler.UpdateArgsForCall(callCount - 1)
 
 						Expect(actualContainer).To(Equal(container))
 
-						certBefore, _ := parseCert(credBefore)
-						increment := certBefore.NotAfter.Add(-dur).Sub(clock.Now())
+						idCertBefore, _ := parseCert(credsBefore.InstanceIdentityCredential)
+						c2cCertBefore, _ := parseCert(credsBefore.C2CCredential)
+						Expect(idCertBefore.NotAfter).To(Equal(c2cCertBefore.NotAfter))
+						increment := idCertBefore.NotAfter.Add(-dur).Sub(clock.Now())
 						Expect(increment).To(BeNumerically(">", 0))
 						clock.WaitForWatcherAndIncrement(increment)
 
@@ -339,19 +348,27 @@ var _ = Describe("CredManager", func() {
 						cred, actualContainer := fakeCredHandler.UpdateArgsForCall(callCount)
 						Expect(actualContainer).To(Equal(container))
 
-						Expect(cred.Cert).NotTo(Equal(credBefore.Cert))
-						Expect(cred.Key).NotTo(Equal(credBefore.Key))
+						Expect(cred.InstanceIdentityCredential.Cert).NotTo(Equal(credsBefore.InstanceIdentityCredential.Cert))
+						Expect(cred.InstanceIdentityCredential.Key).NotTo(Equal(credsBefore.InstanceIdentityCredential.Key))
 
-						cert, _ := parseCert(cred)
-						Expect(cert.SerialNumber).NotTo(Equal(certBefore.SerialNumber))
+						Expect(cred.C2CCredential.Cert).NotTo(Equal(credsBefore.C2CCredential.Cert))
+						Expect(cred.C2CCredential.Key).NotTo(Equal(credsBefore.C2CCredential.Key))
+
+						idCert, _ := parseCert(cred.InstanceIdentityCredential)
+						Expect(idCert.SerialNumber).NotTo(Equal(idCertBefore.SerialNumber))
+
+						c2cCert, _ := parseCert(cred.InstanceIdentityCredential)
+						Expect(c2cCert.SerialNumber).NotTo(Equal(c2cCertBefore.SerialNumber))
 					}
 
 					testNoCredentialRotation := func(dur time.Duration) {
 						callCount := fakeCredHandler.UpdateCallCount()
-						credBefore, _ = fakeCredHandler.UpdateArgsForCall(callCount - 1)
+						credsBefore, _ = fakeCredHandler.UpdateArgsForCall(callCount - 1)
 
-						cert, _ := parseCert(credBefore)
-						increment := cert.NotAfter.Add(-dur).Sub(clock.Now())
+						idCertBefore, _ := parseCert(credsBefore.InstanceIdentityCredential)
+						c2cCertBefore, _ := parseCert(credsBefore.C2CCredential)
+						Expect(idCertBefore.NotAfter).To(Equal(c2cCertBefore.NotAfter))
+						increment := idCertBefore.NotAfter.Add(-dur).Sub(clock.Now())
 						Expect(increment).To(BeNumerically(">", 0))
 						clock.WaitForWatcherAndIncrement(increment)
 
@@ -361,8 +378,8 @@ var _ = Describe("CredManager", func() {
 					Context("when the handler returns an error", func() {
 						JustBeforeEach(func() {
 							fakeCredHandler.UpdateReturnsOnCall(1, errors.New("boooom!"))
-							certBefore, _ := parseCert(credBefore)
-							increment := certBefore.NotAfter.Sub(clock.Now())
+							idCertBefore, _ := parseCert(credsBefore.InstanceIdentityCredential)
+							increment := idCertBefore.NotAfter.Sub(clock.Now())
 							clock.WaitForWatcherAndIncrement(increment)
 						})
 
@@ -388,7 +405,7 @@ var _ = Describe("CredManager", func() {
 							})
 
 							It("emits metrics on successful creation", func() {
-								cert, _ := parseCert(credBefore)
+								cert, _ := parseCert(credsBefore.InstanceIdentityCredential)
 								increment := cert.NotAfter.Add(-5 * time.Second).Sub(clock.Now())
 								Expect(increment).To(BeNumerically(">", 0))
 								clock.WaitForWatcherAndIncrement(increment)
@@ -449,52 +466,33 @@ var _ = Describe("CredManager", func() {
 						rest []byte
 					)
 
-					JustBeforeEach(func() {
-						Eventually(containerProcess.Ready()).Should(BeClosed())
-
-						Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
-						cred, actualContainer := fakeCredHandler.UpdateArgsForCall(0)
-						Expect(actualContainer).To(Equal(container))
-						cert, rest = parseCert(cred)
-					})
-
-					It("has the container ip", func() {
-						ip := net.ParseIP(container.InternalIP)
-						Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
-					})
-
-					It("has all required usages in the KU & EKU fields", func() {
+					testCertificateFields := func() {
+						By("has all required usages in the KU & EKU fields")
 						Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageClientAuth))
 						Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth))
 						Expect(cert.KeyUsage).To(Equal(x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement))
-					})
 
-					It("signed by the rep intermediate CA", func() {
+						By("signed by the rep intermediate CA")
 						CaCertPool := x509.NewCertPool()
 						CaCertPool.AddCert(CaCert)
 						verifyOpts := x509.VerifyOptions{Roots: CaCertPool}
 						Expect(cert.CheckSignatureFrom(CaCert)).To(Succeed())
 						_, err := cert.Verify(verifyOpts)
 						Expect(err).NotTo(HaveOccurred())
-					})
 
-					It("common name should be set to the container guid", func() {
+						By("common name should be set to the container guid")
 						Expect(cert.Subject.CommonName).To(Equal(container.Guid))
-					})
 
-					It("DNS SAN should be set to the container guid", func() {
+						By("DNS SAN should be set to the container guid")
 						Expect(cert.DNSNames).To(ContainElement(container.Guid))
-					})
 
-					It("expires in after the configured validity period", func() {
+						By("expires in after the configured validity period")
 						Expect(cert.NotAfter).To(Equal(clock.Now().Add(validityPeriod)))
-					})
 
-					It("not before is set to current timestamp", func() {
+						By("not before is set to current timestamp")
 						Expect(cert.NotBefore).To(Equal(clock.Now()))
-					})
 
-					It("has the rep intermediate CA", func() {
+						By("has the rep intermediate CA")
 						block, rest := pem.Decode(rest)
 						Expect(block).NotTo(BeNil())
 						Expect(rest).To(BeEmpty())
@@ -502,53 +500,91 @@ var _ = Describe("CredManager", func() {
 						certs, err := x509.ParseCertificates(block.Bytes)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(certs).To(HaveLen(1))
-						cert = certs[0]
-						Expect(cert).To(Equal(CaCert))
-					})
+						Expect(certs[0]).To(Equal(CaCert))
 
-					It("has the app guid in the subject's organizational units", func() {
+						By("has the app guid in the subject's organizational units")
 						Expect(cert.Subject.OrganizationalUnit).To(ContainElement("app:iamthelizardking"))
-					})
+					}
 
-					Context("when the container doesn't have an internal ip", func() {
-						Context("when the container has an external IP", func() {
-							BeforeEach(func() {
-								container = executor.Container{
-									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
-									InternalIP: "",
-									ExternalIP: "54.23.123.234",
-									RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-										OrganizationalUnit: []string{"app:iamthelizardking"}},
-									},
-								}
+					Describe("Instance identity certificate", func() {
+						JustBeforeEach(func() {
+							Eventually(containerProcess.Ready()).Should(BeClosed())
+
+							Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
+							creds, actualContainer := fakeCredHandler.UpdateArgsForCall(0)
+							Expect(actualContainer).To(Equal(container))
+							cert, rest = parseCert(creds.InstanceIdentityCredential)
+						})
+
+						Context("when the container doesn't have an internal ip", func() {
+							Context("when the container has an external IP", func() {
+								BeforeEach(func() {
+									container = executor.Container{
+										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+										InternalIP: "",
+										ExternalIP: "54.23.123.234",
+										RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+											OrganizationalUnit: []string{"app:iamthelizardking"}},
+										},
+									}
+								})
+
+								It("has the external ip", func() {
+									ip := net.ParseIP(container.ExternalIP)
+									Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+								})
+
+								It("does not have the empty internal ip", func() {
+									ip := net.ParseIP(container.InternalIP)
+									Expect(cert.IPAddresses).NotTo(ContainElement(ip.To4()))
+								})
 							})
 
-							It("has the external ip", func() {
-								ip := net.ParseIP(container.ExternalIP)
-								Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
-							})
+							Context("when the container doesn't have an external ip", func() {
+								BeforeEach(func() {
+									container = executor.Container{
+										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+										InternalIP: "",
+										ExternalIP: "",
+										RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
+											OrganizationalUnit: []string{"app:iamthelizardking"}},
+										},
+									}
+								})
 
-							It("does not have the empty internal ip", func() {
-								ip := net.ParseIP(container.InternalIP)
-								Expect(cert.IPAddresses).NotTo(ContainElement(ip.To4()))
+								It("has no SubjectAltName", func() {
+									Expect(cert.IPAddresses).To(BeEmpty())
+								})
+
 							})
 						})
-						Context("when the container doesn't have an external ip", func() {
-							BeforeEach(func() {
-								container = executor.Container{
-									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
-									InternalIP: "",
-									ExternalIP: "",
-									RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
-										OrganizationalUnit: []string{"app:iamthelizardking"}},
-									},
-								}
-							})
 
-							It("has no SubjectAltName", func() {
-								Expect(cert.IPAddresses).To(BeEmpty())
-							})
+						It("has the container ip", func() {
+							ip := net.ParseIP(container.InternalIP)
+							Expect(cert.IPAddresses).To(ContainElement(ip.To4()))
+						})
 
+						It("has the correct fields", func() {
+							testCertificateFields()
+						})
+					})
+
+					Describe("C2C certificate", func() {
+						JustBeforeEach(func() {
+							Eventually(containerProcess.Ready()).Should(BeClosed())
+
+							Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(1))
+							creds, actualContainer := fakeCredHandler.UpdateArgsForCall(0)
+							Expect(actualContainer).To(Equal(container))
+							cert, rest = parseCert(creds.C2CCredential)
+						})
+
+						It("has the internal routes in SAN", func() {
+							Expect(cert.DNSNames).To(ConsistOf(container.Guid, "a.apps.internal", "b.apps.internal"))
+						})
+
+						It("has the correct fields", func() {
+							testCertificateFields()
 						})
 					})
 				})
@@ -568,14 +604,22 @@ var _ = Describe("CredManager", func() {
 				It("Generates an invalid cert and sends the invalid cert on the cred channel", func() {
 					Eventually(fakeCredHandler.CloseCallCount).Should(Equal(1))
 
-					cred, actualContainer := fakeCredHandler.CloseArgsForCall(0)
+					creds, actualContainer := fakeCredHandler.CloseArgsForCall(0)
 					Expect(actualContainer).To(Equal(container))
 
-					block, _ := pem.Decode([]byte(cred.Cert))
+					block, _ := pem.Decode([]byte(creds.InstanceIdentityCredential.Cert))
 					Expect(block).NotTo(BeNil())
 					certs, err := x509.ParseCertificates(block.Bytes)
 					Expect(err).NotTo(HaveOccurred())
 					cert := certs[0]
+
+					Expect(cert.Subject.CommonName).To(BeEmpty())
+
+					block, _ = pem.Decode([]byte(creds.C2CCredential.Cert))
+					Expect(block).NotTo(BeNil())
+					certs, err = x509.ParseCertificates(block.Bytes)
+					Expect(err).NotTo(HaveOccurred())
+					cert = certs[0]
 
 					Expect(cert.Subject.CommonName).To(BeEmpty())
 				})

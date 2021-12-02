@@ -427,9 +427,9 @@ func (n *storeNode) portMappingFromContainerInfo(
 	proxyPorts := make(map[uint16]struct{})
 
 	// construct a map from unproxied to proxied port
-	appToProxyPortMappings := make(map[uint16]uint16)
+	appToProxyPortMappings := make(map[uint16][]uint16)
 	for _, mapping := range proxyToAppPort {
-		appToProxyPortMappings[mapping.AppPort] = mapping.ProxyPort
+		appToProxyPortMappings[mapping.AppPort] = append(appToProxyPortMappings[mapping.AppPort], mapping.ProxyPort)
 		proxyPorts[mapping.ProxyPort] = struct{}{}
 	}
 
@@ -456,14 +456,23 @@ func (n *storeNode) portMappingFromContainerInfo(
 		}
 
 		hostPort := containerToHostPortMappings[appPort]
-		proxyContainerPort := appToProxyPortMappings[appPort]
-		proxyHostPort := containerToHostPortMappings[proxyContainerPort]
-		ports = append(ports, executor.PortMapping{
-			HostPort:              hostPort,
-			ContainerPort:         appPort,
-			ContainerTLSProxyPort: proxyContainerPort,
-			HostTLSProxyPort:      proxyHostPort,
-		})
+		proxyContainerPorts := appToProxyPortMappings[appPort]
+		if len(proxyContainerPorts) > 0 {
+			for _, proxyContainerPort := range proxyContainerPorts {
+				proxyHostPort := containerToHostPortMappings[proxyContainerPort]
+				ports = append(ports, executor.PortMapping{
+					HostPort:              hostPort,
+					ContainerPort:         appPort,
+					ContainerTLSProxyPort: proxyContainerPort,
+					HostTLSProxyPort:      proxyHostPort,
+				})
+			}
+		} else {
+			ports = append(ports, executor.PortMapping{
+				HostPort:      hostPort,
+				ContainerPort: appPort,
+			})
+		}
 	}
 
 	return ports

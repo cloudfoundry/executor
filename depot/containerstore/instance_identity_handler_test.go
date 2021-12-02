@@ -83,7 +83,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		})
 
 		It("puts private key into container directory", func() {
-			err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			err := handler.Update(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "cert", Key: "key"}}, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			certPath := filepath.Join(tmpdir, "some-guid")
@@ -97,7 +97,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		})
 
 		It("puts the certificate into container directory", func() {
-			err := handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			err := handler.Update(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "cert", Key: "key"}}, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			certPath := filepath.Join(tmpdir, "some-guid")
@@ -115,12 +115,12 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		BeforeEach(func() {
 			_, _, err := handler.CreateDir(logger, container)
 			Expect(err).To(BeNil())
-			err = handler.Update(containerstore.Credential{Cert: "cert", Key: "key"}, container)
+			err = handler.Update(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "cert", Key: "key"}}, container)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("does not put private key into container directory", func() {
-			err := handler.Close(containerstore.Credential{Cert: "invalid-cert", Key: "invalid-key"}, container)
+			err := handler.Close(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "invalid-cert", Key: "invalid-key"}}, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			certPath := filepath.Join(tmpdir, "some-guid")
@@ -134,7 +134,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 		})
 
 		It("does not put the certificate into container directory", func() {
-			err := handler.Close(containerstore.Credential{Cert: "invalid-cert", Key: "invalid-key"}, container)
+			err := handler.Close(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "invalid-cert", Key: "invalid-key"}}, container)
 			Expect(err).NotTo(HaveOccurred())
 
 			certPath := filepath.Join(tmpdir, "some-guid")

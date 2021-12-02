@@ -39,9 +39,10 @@ import (
 )
 
 const (
-	StartProxyPort = 61001
-	EndProxyPort   = 65534
-	C2CTLSPort     = 61443
+	StartProxyPort  = 61001
+	EndProxyPort    = 65534
+	DefaultHTTPPort = 8080
+	C2CTLSPort      = 61443
 
 	TimeOut = 250000000
 
@@ -50,6 +51,11 @@ const (
 	AdsClusterName  = "pilot-ads"
 
 	AdminAccessLog = os.DevNull
+
+	InstanceIdentityCertAndKeyFilename        = "sds-id-cert-and-key.yaml"
+	InstanceIdentityValidationContextFilename = "sds-id-validation-context.yaml"
+	C2CCertAndKeyFilename                     = "sds-c2c-cert-and-key.yaml"
+	ContainerEnvoyConfigDir                   = "/etc/cf-assets/envoy_config"
 )
 
 var (
@@ -98,10 +104,10 @@ func (p *NoopProxyConfigHandler) CreateDir(logger lager.Logger, container execut
 func (p *NoopProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
 	return nil
 }
-func (p *NoopProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+func (p *NoopProxyConfigHandler) Update(credentials Credentials, container executor.Container) error {
 	return nil
 }
-func (p *NoopProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+func (p *NoopProxyConfigHandler) Close(invalidCredentials Credentials, container executor.Container) error {
 	return nil
 }
 
@@ -187,6 +193,14 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 			ProxyPort: port,
 		})
 
+		if containerPorts[portCount] == DefaultHTTPPort {
+			proxyPortMapping = append(proxyPortMapping, executor.ProxyPortMapping{
+				AppPort:   containerPorts[portCount],
+				ProxyPort: C2CTLSPort,
+			})
+			extraPorts = append(extraPorts, C2CTLSPort)
+		}
+
 		portCount++
 	}
 
@@ -209,7 +223,7 @@ func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 		{
 			Origin:  garden.BindMountOriginHost,
 			SrcPath: proxyConfigDir,
-			DstPath: "/etc/cf-assets/envoy_config",
+			DstPath: ContainerEnvoyConfigDir,
 		},
 	}
 
@@ -231,7 +245,7 @@ func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.C
 	return os.RemoveAll(proxyConfigDir)
 }
 
-func (p *ProxyConfigHandler) Update(credentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) Update(credentials Credentials, container executor.Container) error {
 	if !container.EnableContainerProxy {
 		return nil
 	}
@@ -239,7 +253,7 @@ func (p *ProxyConfigHandler) Update(credentials Credential, container executor.C
 	return p.writeConfig(credentials, container)
 }
 
-func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) Close(invalidCredentials Credentials, container executor.Container) error {
 	if !container.EnableContainerProxy {
 		return nil
 	}
@@ -253,10 +267,11 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credential, container exec
 	return nil
 }
 
-func (p *ProxyConfigHandler) writeConfig(credentials Credential, container executor.Container) error {
+func (p *ProxyConfigHandler) writeConfig(credentials Credentials, container executor.Container) error {
 	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
-	sdsServerCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-server-cert-and-key.yaml")
-	sdsServerValidationContextPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-server-validation-context.yaml")
+	sdsIDCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, InstanceIdentityCertAndKeyFilename)
+	sdsC2CCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, C2CCertAndKeyFilename)
+	sdsIDValidationContextPath := filepath.Join(p.containerProxyConfigPath, container.Guid, InstanceIdentityValidationContextFilename)
 
 	adminPort, err := getAvailablePort(container.Ports)
 	if err != nil {
@@ -279,22 +294,28 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credential, container execu
 		return err
 	}
 
-	sdsServerCertAndKey := generateSDSCertAndKey(container, credentials)
-	err = writeDiscoveryResponseYAML(sdsServerCertAndKey, sdsServerCertAndKeyPath)
+	sdsIDCertAndKey := generateSDSCertAndKey("id-cert-and-key", credentials.InstanceIdentityCredential)
+	err = writeDiscoveryResponseYAML(sdsIDCertAndKey, sdsIDCertAndKeyPath)
 	if err != nil {
 		return err
 	}
 
-	sdsServerValidationContext, err := generateSDSCAResource(
+	sdsC2CCertAndKey := generateSDSCertAndKey("c2c-cert-and-key", credentials.C2CCredential)
+	err = writeDiscoveryResponseYAML(sdsC2CCertAndKey, sdsC2CCertAndKeyPath)
+	if err != nil {
+		return err
+	}
+
+	sdsIDValidationContext, err := generateSDSCAResource(
 		container,
-		credentials,
+		credentials.InstanceIdentityCredential,
 		p.containerProxyTrustedCACerts,
 		p.containerProxyVerifySubjectAltName,
 	)
 	if err != nil {
 		return err
 	}
-	err = writeDiscoveryResponseYAML(sdsServerValidationContext, sdsServerValidationContextPath)
+	err = writeDiscoveryResponseYAML(sdsIDValidationContext, sdsIDValidationContextPath)
 	if err != nil {
 		return err
 	}
@@ -323,8 +344,14 @@ func generateProxyConfig(
 	http2Enabled bool,
 ) (*envoy_bootstrap.Bootstrap, error) {
 	clusters := []*envoy_cluster.Cluster{}
-	for index, portMap := range container.Ports {
-		clusterName := fmt.Sprintf("%d-service-cluster", index)
+
+	uniqueContainerPorts := map[uint16]struct{}{}
+	for _, portMap := range container.Ports {
+		uniqueContainerPorts[portMap.ContainerPort] = struct{}{}
+	}
+
+	for containerPort := range uniqueContainerPorts {
+		clusterName := fmt.Sprintf("service-cluster-%d", containerPort)
 		clusters = append(clusters, &envoy_cluster.Cluster{
 			Name:                 clusterName,
 			ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
@@ -335,7 +362,7 @@ func generateProxyConfig(
 					LbEndpoints: []*envoy_endpoint.LbEndpoint{{
 						HostIdentifier: &envoy_endpoint.LbEndpoint_Endpoint{
 							Endpoint: &envoy_endpoint.Endpoint{
-								Address: envoyAddr(container.InternalIP, portMap.ContainerPort),
+								Address: envoyAddr(container.InternalIP, containerPort),
 							},
 						},
 					}},
@@ -498,12 +525,12 @@ func writeProxyConfig(proxyConfig *envoy_bootstrap.Bootstrap, path string) error
 func generateListeners(container executor.Container, requireClientCerts, http2Enabled bool) ([]*envoy_listener.Listener, error) {
 	listeners := []*envoy_listener.Listener{}
 
-	for index, portMap := range container.Ports {
+	for _, portMap := range container.Ports {
 		filterName := TcpProxy
-		clusterName := fmt.Sprintf("%d-service-cluster", index)
+		clusterName := fmt.Sprintf("service-cluster-%d", portMap.ContainerPort)
 
 		filterConfig, err := ptypes.MarshalAny(&envoy_tcp_proxy.TcpProxy{
-			StatPrefix: fmt.Sprintf("%d-stats", index),
+			StatPrefix: fmt.Sprintf("stats-%d-%d", portMap.ContainerPort, portMap.ContainerTLSProxyPort),
 			ClusterSpecifier: &envoy_tcp_proxy.TcpProxy_Cluster{
 				Cluster: clusterName,
 			},
@@ -512,15 +539,21 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			return nil, err
 		}
 
+		sdsServerCertAndKeyFile := InstanceIdentityCertAndKeyFilename
+		sdsServerSecretName := "id-cert-and-key"
+		if portMap.ContainerTLSProxyPort == C2CTLSPort {
+			sdsServerCertAndKeyFile = C2CCertAndKeyFilename
+			sdsServerSecretName = "c2c-cert-and-key"
+		}
+
 		tlsContext := &envoy_tls.DownstreamTlsContext{
-			RequireClientCertificate: &wrappers.BoolValue{Value: requireClientCerts},
 			CommonTlsContext: &envoy_tls.CommonTlsContext{
 				TlsCertificateSdsSecretConfigs: []*envoy_tls.SdsSecretConfig{
 					{
-						Name: "server-cert-and-key",
+						Name: sdsServerSecretName,
 						SdsConfig: &envoy_core.ConfigSource{
 							ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-								Path: "/etc/cf-assets/envoy_config/sds-server-cert-and-key.yaml",
+								Path: filepath.Join(ContainerEnvoyConfigDir, sdsServerCertAndKeyFile),
 							},
 						},
 					},
@@ -535,13 +568,14 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			tlsContext.CommonTlsContext.AlpnProtocols = AlpnProtocols
 		}
 
-		if requireClientCerts {
+		if requireClientCerts && portMap.ContainerTLSProxyPort != C2CTLSPort {
+			tlsContext.RequireClientCertificate = &wrappers.BoolValue{Value: requireClientCerts}
 			tlsContext.CommonTlsContext.ValidationContextType = &envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
 				ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
-					Name: "server-validation-context",
+					Name: "id-validation-context",
 					SdsConfig: &envoy_core.ConfigSource{
 						ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-							Path: "/etc/cf-assets/envoy_config/sds-server-validation-context.yaml",
+							Path: filepath.Join(ContainerEnvoyConfigDir, InstanceIdentityValidationContextFilename),
 						},
 					},
 				},
@@ -553,7 +587,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			return nil, err
 		}
 
-		listenerName := fmt.Sprintf("listener-%d", portMap.ContainerPort)
+		listenerName := fmt.Sprintf("listener-%d-%d", portMap.ContainerPort, portMap.ContainerTLSProxyPort)
 		listener := &envoy_listener.Listener{
 			Name:    listenerName,
 			Address: envoyAddr("0.0.0.0", portMap.ContainerTLSProxyPort),
@@ -582,9 +616,9 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 	return listeners, nil
 }
 
-func generateSDSCertAndKey(container executor.Container, creds Credential) proto.Message {
+func generateSDSCertAndKey(name string, creds Credential) proto.Message {
 	return &envoy_tls.Secret{
-		Name: "server-cert-and-key",
+		Name: name,
 		Type: &envoy_tls.Secret_TlsCertificate{
 			TlsCertificate: &envoy_tls.TlsCertificate{
 				CertificateChain: &envoy_core.DataSource{
@@ -616,7 +650,7 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 	}
 
 	return &envoy_tls.Secret{
-		Name: "server-validation-context",
+		Name: "id-validation-context",
 		Type: &envoy_tls.Secret_ValidationContext{
 			ValidationContext: &envoy_tls.CertificateValidationContext{
 				TrustedCa: &envoy_core.DataSource{
