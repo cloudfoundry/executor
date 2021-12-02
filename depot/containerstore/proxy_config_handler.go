@@ -51,11 +51,6 @@ const (
 	AdsClusterName  = "pilot-ads"
 
 	AdminAccessLog = os.DevNull
-
-	InstanceIdentityCertAndKeyFilename        = "sds-id-cert-and-key.yaml"
-	InstanceIdentityValidationContextFilename = "sds-id-validation-context.yaml"
-	C2CCertAndKeyFilename                     = "sds-c2c-cert-and-key.yaml"
-	ContainerEnvoyConfigDir                   = "/etc/cf-assets/envoy_config"
 )
 
 var (
@@ -223,7 +218,7 @@ func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 		{
 			Origin:  garden.BindMountOriginHost,
 			SrcPath: proxyConfigDir,
-			DstPath: ContainerEnvoyConfigDir,
+			DstPath: "/etc/cf-assets/envoy_config",
 		},
 	}
 
@@ -269,9 +264,9 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credentials, container exe
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credentials, container executor.Container) error {
 	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
-	sdsIDCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, InstanceIdentityCertAndKeyFilename)
-	sdsC2CCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, C2CCertAndKeyFilename)
-	sdsIDValidationContextPath := filepath.Join(p.containerProxyConfigPath, container.Guid, InstanceIdentityValidationContextFilename)
+	sdsIDCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-id-cert-and-key.yaml")
+	sdsC2CCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-c2c-cert-and-key.yaml")
+	sdsIDValidationContextPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-id-validation-context.yaml")
 
 	adminPort, err := getAvailablePort(container.Ports)
 	if err != nil {
@@ -539,10 +534,10 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			return nil, err
 		}
 
-		sdsServerCertAndKeyFile := InstanceIdentityCertAndKeyFilename
+		sdsServerCertAndKeyFile := "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml"
 		sdsServerSecretName := "id-cert-and-key"
 		if portMap.ContainerTLSProxyPort == C2CTLSPort {
-			sdsServerCertAndKeyFile = C2CCertAndKeyFilename
+			sdsServerCertAndKeyFile = "/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml"
 			sdsServerSecretName = "c2c-cert-and-key"
 		}
 
@@ -553,7 +548,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 						Name: sdsServerSecretName,
 						SdsConfig: &envoy_core.ConfigSource{
 							ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-								Path: filepath.Join(ContainerEnvoyConfigDir, sdsServerCertAndKeyFile),
+								Path: sdsServerCertAndKeyFile,
 							},
 						},
 					},
@@ -575,7 +570,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 					Name: "id-validation-context",
 					SdsConfig: &envoy_core.ConfigSource{
 						ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-							Path: filepath.Join(ContainerEnvoyConfigDir, InstanceIdentityValidationContextFilename),
+							Path: "/etc/cf-assets/envoy_config/sds-id-validation-context.yaml",
 						},
 					},
 				},
