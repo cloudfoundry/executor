@@ -833,28 +833,36 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(3))
 
+				clusterMap := map[string]*envoy_cluster.Cluster{}
+				for _, cluster := range proxyConfig.StaticResources.Clusters {
+					clusterMap[cluster.Name] = cluster
+				}
+
 				expectedCluster{
 					name:           "service-cluster-8080",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
-				}.check(proxyConfig.StaticResources.Clusters[0])
+				}.check(clusterMap["service-cluster-8080"])
 
 				expectedCluster{
 					name:           "service-cluster-2222",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 2222)},
 					maxConnections: math.MaxUint32,
-				}.check(proxyConfig.StaticResources.Clusters[1])
+				}.check(clusterMap["service-cluster-2222"])
 
-				adsCluster := proxyConfig.StaticResources.Clusters[2]
 				expectedCluster{
 					name: "pilot-ads",
 					hosts: []*envoy_core.Address{
 						envoyAddr("10.255.217.2", 15010),
 						envoyAddr("10.255.217.3", 15010),
 					},
-				}.check(adsCluster)
-				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
+				}.check(clusterMap["pilot-ads"])
+				Expect(clusterMap["pilot-ads"].Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
 
+				listenersMap := map[string]*envoy_listener.Listener{}
+				for _, listener := range proxyConfig.StaticResources.Listeners {
+					listenersMap[listener.Name] = listener
+				}
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
 				expectedListener{
 					name:                     "listener-8080-61001",
@@ -863,7 +871,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[0],
+				}.check(listenersMap["listener-8080-61001"],
 					"id-cert-and-key",
 					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
 				)
@@ -875,7 +883,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 					clusterName:              "service-cluster-2222",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[1],
+				}.check(listenersMap["listener-2222-61002"],
 					"id-cert-and-key",
 					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
 				)
