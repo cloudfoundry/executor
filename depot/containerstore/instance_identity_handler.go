@@ -50,6 +50,10 @@ func (h *InstanceIdentityHandler) RemoveDir(logger lager.Logger, container execu
 }
 
 func (h *InstanceIdentityHandler) Update(creds Credentials, container executor.Container) error {
+	if creds.InstanceIdentityCredential.IsEmpty() {
+		return nil
+	}
+
 	instanceKeyPath := filepath.Join(h.credDir, container.Guid, "instance.key")
 	tmpInstanceKeyPath := instanceKeyPath + ".tmp"
 	certificatePath := filepath.Join(h.credDir, container.Guid, "instance.crt")

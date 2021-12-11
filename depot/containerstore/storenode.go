@@ -90,7 +90,8 @@ type storeNode struct {
 
 	destroying, stopping int32
 
-	startTime time.Time
+	startTime         time.Time
+	regenerateCertsCh chan struct{}
 }
 
 func newStoreNode(
@@ -135,6 +136,7 @@ func newStoreNode(
 		cellID:                                cellID,
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
+		regenerateCertsCh:                     make(chan struct{}, 1),
 	}
 }
 
@@ -491,7 +493,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
 
-	credManagerRunner := n.credManager.Runner(logger, n.info)
+	credManagerRunner := n.credManager.Runner(logger, n, n.regenerateCertsCh)
 
 	proxyTLSPorts := make([]uint16, len(n.info.Ports))
 	for i, p := range n.info.Ports {
@@ -573,6 +575,13 @@ func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreame
 
 	err := <-n.process.Wait()
 	n.completeWithError(logger, err)
+}
+
+func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) {
+	n.infoLock.Lock()
+	n.info.InternalRoutes = req.InternalRoutes
+	n.infoLock.Unlock()
+	n.regenerateCertsCh <- struct{}{}
 }
 
 func (n *storeNode) Stop(logger lager.Logger) {

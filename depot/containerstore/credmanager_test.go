@@ -29,15 +29,16 @@ import (
 
 var _ = Describe("CredManager", func() {
 	var (
-		credManager      containerstore.CredManager
-		validityPeriod   time.Duration
-		CaCert           *x509.Certificate
-		privateKey       *rsa.PrivateKey
-		reader           io.Reader
-		logger           lager.Logger
-		clock            *fakeclock.FakeClock
-		fakeMetronClient *mfakes.FakeIngressClient
-		fakeCredHandler  *containerstorefakes.FakeCredentialHandler
+		credManager           containerstore.CredManager
+		validityPeriod        time.Duration
+		CaCert                *x509.Certificate
+		privateKey            *rsa.PrivateKey
+		reader                io.Reader
+		logger                lager.Logger
+		clock                 *fakeclock.FakeClock
+		fakeMetronClient      *mfakes.FakeIngressClient
+		fakeCredHandler       *containerstorefakes.FakeCredentialHandler
+		containerInfoProvider *containerstorefakes.FakeContainerInfoProvider
 	)
 
 	BeforeEach(func() {
@@ -62,6 +63,7 @@ var _ = Describe("CredManager", func() {
 		clock = fakeclock.NewFakeClock(time.Now().UTC().Truncate(time.Second))
 
 		CaCert, privateKey = createIntermediateCert()
+		containerInfoProvider = &containerstorefakes.FakeContainerInfoProvider{}
 	})
 
 	JustBeforeEach(func() {
@@ -86,8 +88,9 @@ var _ = Describe("CredManager", func() {
 					OrganizationalUnit: []string{"app:iamthelizardking"}},
 				},
 			}
+			containerInfoProvider.InfoReturns(container)
 
-			runner := containerstore.NewNoopCredManager().Runner(logger, container)
+			runner := containerstore.NewNoopCredManager().Runner(logger, containerInfoProvider, make(<-chan struct{}, 1))
 			process := ifrit.Background(runner)
 			Eventually(process.Ready()).Should(BeClosed())
 			Consistently(process.Wait()).ShouldNot(Receive())
@@ -244,12 +247,15 @@ var _ = Describe("CredManager", func() {
 
 		Context("Runner", func() {
 			var (
-				containerProcess ifrit.Process
+				containerProcess  ifrit.Process
+				regenerateCertsCh chan struct{}
 			)
 
 			JustBeforeEach(func() {
 				var runner ifrit.Runner
-				runner = credManager.Runner(logger, container)
+				regenerateCertsCh = make(chan struct{}, 1)
+				containerInfoProvider.InfoReturns(container)
+				runner = credManager.Runner(logger, containerInfoProvider, regenerateCertsCh)
 				containerProcess = ifrit.Background(runner)
 			})
 
@@ -302,13 +308,18 @@ var _ = Describe("CredManager", func() {
 				})
 
 				It("emits metrics on successful creation", func() {
-					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+					Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
 					metric := fakeMetronClient.IncrementCounterArgsForCall(0)
 					Expect(metric).To(Equal("CredCreationSucceededCount"))
+					metric = fakeMetronClient.IncrementCounterArgsForCall(1)
+					Expect(metric).To(Equal("C2CCredCreationSucceededCount"))
 
-					Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(1))
+					Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
 					metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
 					Expect(metric).To(Equal("CredCreationSucceededDuration"))
+					Expect(value).To(BeNumerically(">=", 0))
+					metric, value, _ = fakeMetronClient.SendDurationArgsForCall(1)
+					Expect(metric).To(Equal("C2CCredCreationSucceededDuration"))
 					Expect(value).To(BeNumerically(">=", 0))
 				})
 
@@ -357,7 +368,7 @@ var _ = Describe("CredManager", func() {
 						idCert, _ := parseCert(cred.InstanceIdentityCredential)
 						Expect(idCert.SerialNumber).NotTo(Equal(idCertBefore.SerialNumber))
 
-						c2cCert, _ := parseCert(cred.InstanceIdentityCredential)
+						c2cCert, _ := parseCert(cred.C2CCredential)
 						Expect(c2cCert.SerialNumber).NotTo(Equal(c2cCertBefore.SerialNumber))
 					}
 
@@ -388,6 +399,67 @@ var _ = Describe("CredManager", func() {
 						})
 					})
 
+					Context("when it recieves a message on the regenerateCertsCh", func() {
+						It("regenerates a c2c certificate", func() {
+							Expect(fakeCredHandler.UpdateCallCount()).To(Equal(1))
+							cred, _ := fakeCredHandler.UpdateArgsForCall(0)
+							initC2cCert, _ := parseCert(cred.C2CCredential)
+
+							regenerateCertsCh <- struct{}{}
+
+							Eventually(fakeCredHandler.UpdateCallCount).Should(Equal(2))
+							cred, _ = fakeCredHandler.UpdateArgsForCall(1)
+
+							By("regenerating c2c certificate")
+							finalC2cCert, _ := parseCert(cred.C2CCredential)
+							Expect(initC2cCert.SerialNumber).ToNot(Equal(finalC2cCert.SerialNumber))
+
+							By("not regenerating instance identity certificate")
+							Expect(cred.InstanceIdentityCredential.IsEmpty()).To(BeTrue())
+						})
+
+						Context("when internal routes were updated", func() {
+							BeforeEach(func() {
+								container = executor.Container{
+									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+									InternalIP: "127.0.0.1",
+									RunInfo: executor.RunInfo{
+										InternalRoutes: internalroutes.InternalRoutes{
+											{Hostname: "a.apps.internal"},
+											{Hostname: "b.apps.internal"},
+										},
+										CertificateProperties: executor.CertificateProperties{
+											OrganizationalUnit: []string{"app:iamthelizardking"},
+										},
+									},
+								}
+							})
+
+							It("regenerates a c2c certificate", func() {
+								Expect(fakeCredHandler.UpdateCallCount()).To(Equal(1))
+								cred, _ := fakeCredHandler.UpdateArgsForCall(0)
+								c2cCert, _ := parseCert(cred.C2CCredential)
+								Expect(c2cCert.DNSNames).To(ConsistOf("container-guid-1", "a.apps.internal", "b.apps.internal"))
+
+								container.RunInfo.InternalRoutes = internalroutes.InternalRoutes{
+									{Hostname: "a.apps.internal"},
+									{Hostname: "c.apps.internal"},
+								}
+								containerInfoProvider.InfoReturns(container)
+
+								regenerateCertsCh <- struct{}{}
+
+								getDNSNames := func() []string {
+									cred, _ = fakeCredHandler.UpdateArgsForCall(fakeCredHandler.UpdateCallCount() - 1)
+									c2cCert, _ = parseCert(cred.C2CCredential)
+									return c2cCert.DNSNames
+								}
+
+								Eventually(getDNSNames).Should(ConsistOf("container-guid-1", "a.apps.internal", "c.apps.internal"))
+							})
+						})
+					})
+
 					Context("when the certificate validity is less than 4 hours", func() {
 						BeforeEach(func() {
 							validityPeriod = time.Minute
@@ -410,13 +482,18 @@ var _ = Describe("CredManager", func() {
 								Expect(increment).To(BeNumerically(">", 0))
 								clock.WaitForWatcherAndIncrement(increment)
 
-								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(2))
-								metric := fakeMetronClient.IncrementCounterArgsForCall(1)
+								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(4))
+								metric := fakeMetronClient.IncrementCounterArgsForCall(2)
 								Expect(metric).To(Equal("CredCreationSucceededCount"))
+								metric = fakeMetronClient.IncrementCounterArgsForCall(3)
+								Expect(metric).To(Equal("C2CCredCreationSucceededCount"))
 
-								Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(2))
-								metric, value, _ := fakeMetronClient.SendDurationArgsForCall(1)
+								Expect(fakeMetronClient.SendDurationCallCount()).To(Equal(4))
+								metric, value, _ := fakeMetronClient.SendDurationArgsForCall(2)
 								Expect(metric).To(Equal("CredCreationSucceededDuration"))
+								Expect(value).To(BeNumerically(">=", 0))
+								metric, value, _ = fakeMetronClient.SendDurationArgsForCall(3)
+								Expect(metric).To(Equal("C2CCredCreationSucceededDuration"))
 								Expect(value).To(BeNumerically(">=", 0))
 							})
 						})

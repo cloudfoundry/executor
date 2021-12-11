@@ -12,6 +12,7 @@ import (
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 	"code.cloudfoundry.org/workpool"
@@ -586,6 +587,39 @@ var _ = Describe("Depot", func() {
 		})
 	})
 
+	Describe("UpdateContainer", func() {
+		var updateError error
+		var updateRequest *executor.UpdateRequest
+
+		BeforeEach(func() {
+			updateRequest = newUpdateRequest("a-guid", internalroutes.InternalRoutes{
+				{Hostname: "a.apps.internal"},
+				{Hostname: "b.apps.internal"},
+			})
+		})
+
+		JustBeforeEach(func() {
+			updateError = depotClient.UpdateContainer(logger, updateRequest)
+		})
+
+		It("updates the container in the container store", func() {
+			Expect(updateError).NotTo(HaveOccurred())
+			Expect(containerStore.UpdateCallCount()).To(Equal(1))
+			_, ur := containerStore.UpdateArgsForCall(0)
+			Expect(ur).To(Equal(updateRequest))
+		})
+
+		Context("when the container store fails to update the container", func() {
+			BeforeEach(func() {
+				containerStore.UpdateReturns(errors.New("boom!"))
+			})
+
+			It("returns the error", func() {
+				Expect(updateError).To(Equal(errors.New("boom!")))
+			})
+		})
+	})
+
 	Describe("StopContainer", func() {
 		var stopError error
 		var stopGuid string
@@ -720,6 +754,11 @@ func newAllocationRequest(guid string, tagses ...executor.Tags) executor.Allocat
 func newRunRequest(guid string) *executor.RunRequest {
 	runInfo := executor.RunInfo{}
 	r := executor.NewRunRequest(guid, &runInfo, nil)
+	return &r
+}
+
+func newUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes) *executor.UpdateRequest {
+	r := executor.NewUpdateRequest(guid, internalRoutes)
 	return &r
 }
 

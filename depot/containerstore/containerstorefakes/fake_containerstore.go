@@ -179,6 +179,18 @@ type FakeContainerStore struct {
 	stopReturnsOnCall map[int]struct {
 		result1 error
 	}
+	UpdateStub        func(lager.Logger, *executor.UpdateRequest) error
+	updateMutex       sync.RWMutex
+	updateArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 *executor.UpdateRequest
+	}
+	updateReturns struct {
+		result1 error
+	}
+	updateReturnsOnCall map[int]struct {
+		result1 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
@@ -1032,6 +1044,68 @@ func (fake *FakeContainerStore) StopReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
+func (fake *FakeContainerStore) Update(arg1 lager.Logger, arg2 *executor.UpdateRequest) error {
+	fake.updateMutex.Lock()
+	ret, specificReturn := fake.updateReturnsOnCall[len(fake.updateArgsForCall)]
+	fake.updateArgsForCall = append(fake.updateArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 *executor.UpdateRequest
+	}{arg1, arg2})
+	stub := fake.UpdateStub
+	fakeReturns := fake.updateReturns
+	fake.recordInvocation("Update", []interface{}{arg1, arg2})
+	fake.updateMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeContainerStore) UpdateCallCount() int {
+	fake.updateMutex.RLock()
+	defer fake.updateMutex.RUnlock()
+	return len(fake.updateArgsForCall)
+}
+
+func (fake *FakeContainerStore) UpdateCalls(stub func(lager.Logger, *executor.UpdateRequest) error) {
+	fake.updateMutex.Lock()
+	defer fake.updateMutex.Unlock()
+	fake.UpdateStub = stub
+}
+
+func (fake *FakeContainerStore) UpdateArgsForCall(i int) (lager.Logger, *executor.UpdateRequest) {
+	fake.updateMutex.RLock()
+	defer fake.updateMutex.RUnlock()
+	argsForCall := fake.updateArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeContainerStore) UpdateReturns(result1 error) {
+	fake.updateMutex.Lock()
+	defer fake.updateMutex.Unlock()
+	fake.UpdateStub = nil
+	fake.updateReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeContainerStore) UpdateReturnsOnCall(i int, result1 error) {
+	fake.updateMutex.Lock()
+	defer fake.updateMutex.Unlock()
+	fake.UpdateStub = nil
+	if fake.updateReturnsOnCall == nil {
+		fake.updateReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.updateReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeContainerStore) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
@@ -1063,6 +1137,8 @@ func (fake *FakeContainerStore) Invocations() map[string][][]interface{} {
 	defer fake.runMutex.RUnlock()
 	fake.stopMutex.RLock()
 	defer fake.stopMutex.RUnlock()
+	fake.updateMutex.RLock()
+	defer fake.updateMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

@@ -40,11 +40,12 @@ type FakeCredManager struct {
 	removeCredDirReturnsOnCall map[int]struct {
 		result1 error
 	}
-	RunnerStub        func(lager.Logger, executor.Container) ifrit.Runner
+	RunnerStub        func(lager.Logger, containerstore.ContainerInfoProvider, <-chan struct{}) ifrit.Runner
 	runnerMutex       sync.RWMutex
 	runnerArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 executor.Container
+		arg2 containerstore.ContainerInfoProvider
+		arg3 <-chan struct{}
 	}
 	runnerReturns struct {
 		result1 ifrit.Runner
@@ -186,19 +187,20 @@ func (fake *FakeCredManager) RemoveCredDirReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 executor.Container) ifrit.Runner {
+func (fake *FakeCredManager) Runner(arg1 lager.Logger, arg2 containerstore.ContainerInfoProvider, arg3 <-chan struct{}) ifrit.Runner {
 	fake.runnerMutex.Lock()
 	ret, specificReturn := fake.runnerReturnsOnCall[len(fake.runnerArgsForCall)]
 	fake.runnerArgsForCall = append(fake.runnerArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 executor.Container
-	}{arg1, arg2})
+		arg2 containerstore.ContainerInfoProvider
+		arg3 <-chan struct{}
+	}{arg1, arg2, arg3})
 	stub := fake.RunnerStub
 	fakeReturns := fake.runnerReturns
-	fake.recordInvocation("Runner", []interface{}{arg1, arg2})
+	fake.recordInvocation("Runner", []interface{}{arg1, arg2, arg3})
 	fake.runnerMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -212,17 +214,17 @@ func (fake *FakeCredManager) RunnerCallCount() int {
 	return len(fake.runnerArgsForCall)
 }
 
-func (fake *FakeCredManager) RunnerCalls(stub func(lager.Logger, executor.Container) ifrit.Runner) {
+func (fake *FakeCredManager) RunnerCalls(stub func(lager.Logger, containerstore.ContainerInfoProvider, <-chan struct{}) ifrit.Runner) {
 	fake.runnerMutex.Lock()
 	defer fake.runnerMutex.Unlock()
 	fake.RunnerStub = stub
 }
 
-func (fake *FakeCredManager) RunnerArgsForCall(i int) (lager.Logger, executor.Container) {
+func (fake *FakeCredManager) RunnerArgsForCall(i int) (lager.Logger, containerstore.ContainerInfoProvider, <-chan struct{}) {
 	fake.runnerMutex.RLock()
 	defer fake.runnerMutex.RUnlock()
 	argsForCall := fake.runnerArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeCredManager) RunnerReturns(result1 ifrit.Runner) {

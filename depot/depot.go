@@ -188,6 +188,14 @@ func (c *client) GetBulkMetrics(logger lager.Logger) (map[string]executor.Metric
 	return metrics, err
 }
 
+func (c *client) UpdateContainer(logger lager.Logger, ur *executor.UpdateRequest) error {
+	logger = logger.Session("update-container")
+	logger.Info("starting")
+	defer logger.Info("complete")
+
+	return c.containerStore.Update(logger, ur)
+}
+
 func (c *client) StopContainer(logger lager.Logger, guid string) error {
 	logger = logger.Session("stop-container")
 	logger.Info("starting")

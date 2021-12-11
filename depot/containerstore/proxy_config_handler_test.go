@@ -448,6 +448,27 @@ var _ = Describe("ProxyConfigHandler", func() {
 				containerProxyRequireClientCerts = false
 			})
 
+			Context("when the instance identity credentials are empty", func() {
+				It("does not update the instance identity credentials", func() {
+					By("adding known credentials")
+					err := proxyConfigHandler.Update(credentials, container)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(proxyConfigFile).Should(BeAnExistingFile())
+					initFileContents, err := os.ReadFile(sdsIDCertAndKeyFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					By("updating with empty credentials")
+					err = proxyConfigHandler.Update(containerstore.Credentials{C2CCredential: credentials.C2CCredential}, container)
+					Expect(err).NotTo(HaveOccurred())
+
+					By("testing that the credentials don't change")
+					finalFileContents, err := os.ReadFile(sdsIDCertAndKeyFile)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(initFileContents).To(Equal(finalFileContents))
+				})
+			})
+
 			It("creates a proxy config without tls_context", func() {
 				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())

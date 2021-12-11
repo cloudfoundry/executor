@@ -32,6 +32,7 @@ type ContainerStore interface {
 	Initialize(logger lager.Logger, req *executor.RunRequest) error
 	Create(logger lager.Logger, guid string) (executor.Container, error)
 	Run(logger lager.Logger, guid string) error
+	Update(logger lager.Logger, req *executor.UpdateRequest) error
 	Stop(logger lager.Logger, guid string) error
 
 	// Getters
@@ -230,6 +231,23 @@ func (cs *containerStore) Run(logger lager.Logger, guid string) error {
 		logger.Error("failed-to-run-container", err)
 		return err
 	}
+
+	return nil
+}
+
+func (cs *containerStore) Update(logger lager.Logger, req *executor.UpdateRequest) error {
+	logger = logger.Session("containerstore-stop", lager.Data{"Guid": req.Guid})
+
+	logger.Info("starting")
+	defer logger.Info("complete")
+
+	node, err := cs.containers.Get(req.Guid)
+	if err != nil {
+		logger.Error("failed-to-get-container", err)
+		return err
+	}
+
+	node.Update(logger, req)
 
 	return nil
 }

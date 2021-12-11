@@ -25,9 +25,12 @@ import (
 )
 
 const (
-	CredCreationSucceededCount    = "CredCreationSucceededCount"
-	CredCreationSucceededDuration = "CredCreationSucceededDuration"
-	CredCreationFailedCount       = "CredCreationFailedCount"
+	CredCreationSucceededCount       = "CredCreationSucceededCount"
+	CredCreationSucceededDuration    = "CredCreationSucceededDuration"
+	CredCreationFailedCount          = "CredCreationFailedCount"
+	C2CCredCreationSucceededCount    = "C2CCredCreationSucceededCount"
+	C2CCredCreationSucceededDuration = "C2CCredCreationSucceededDuration"
+	C2CCredCreationFailedCount       = "C2CCredCreationFailedCount"
 )
 
 type Credentials struct {
@@ -40,11 +43,20 @@ type Credential struct {
 	Key  string
 }
 
+func (c Credential) IsEmpty() bool {
+	return c.Cert == "" && c.Key == ""
+}
+
+//go:generate counterfeiter -o containerstorefakes/fake_container_info_provider.go . ContainerInfoProvider
+type ContainerInfoProvider interface {
+	Info() executor.Container
+}
+
 //go:generate counterfeiter -o containerstorefakes/fake_cred_manager.go . CredManager
 type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	RemoveCredDir(lager.Logger, executor.Container) error
-	Runner(lager.Logger, executor.Container) ifrit.Runner
+	Runner(lager.Logger, ContainerInfoProvider, <-chan struct{}) ifrit.Runner
 }
 
 type noopManager struct{}
@@ -61,7 +73,7 @@ func (c *noopManager) RemoveCredDir(logger lager.Logger, container executor.Cont
 	return nil
 }
 
-func (c *noopManager) Runner(lager.Logger, executor.Container) ifrit.Runner {
+func (c *noopManager) Runner(lager.Logger, ContainerInfoProvider, <-chan struct{}) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		<-signals
@@ -167,31 +179,30 @@ func (c *credManager) RemoveCredDir(logger lager.Logger, container executor.Cont
 	return err.ErrorOrNil()
 }
 
-func (c *credManager) Runner(logger lager.Logger, container executor.Container) ifrit.Runner {
+func (c *credManager) Runner(logger lager.Logger, containerInfoProvider ContainerInfoProvider, regenerateCertsCh <-chan struct{}) ifrit.Runner {
 	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
 		defer logger.Info("complete")
 
-		start := c.clock.Now()
-		creds, err := c.generateCreds(logger, container, container.Guid)
+		initialContainer := containerInfoProvider.Info()
+		idCred, err := c.generateInstanceIdentityCred(logger, initialContainer, initialContainer.Guid)
 		if err != nil {
-			logger.Error("failed-to-generate-credentials", err)
-			c.metronClient.IncrementCounter(CredCreationFailedCount)
 			return err
 		}
 
-		duration := c.clock.Since(start)
+		c2cCred, err := c.generateC2cCred(logger, initialContainer, initialContainer.Guid)
+		if err != nil {
+			return err
+		}
 
+		creds := Credentials{InstanceIdentityCredential: idCred, C2CCredential: c2cCred}
 		for _, h := range c.handlers {
-			err := h.Update(creds, container)
+			err := h.Update(creds, initialContainer)
 			if err != nil {
 				return err
 			}
 		}
-
-		c.metronClient.IncrementCounter(CredCreationSucceededCount)
-		c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
 
 		rotationDuration := calculateCredentialRotationPeriod(c.validityPeriod)
 		regenCertTimer := c.clock.NewTimer(rotationDuration)
@@ -202,17 +213,37 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		for {
 			select {
 			case <-regenCertTimer.C():
-				regenLogger.Debug("started")
-				start := c.clock.Now()
-				creds, err := c.generateCreds(logger, container, container.Guid)
-				duration := c.clock.Since(start)
+				regenLogger.Debug("on-timer")
+				container := containerInfoProvider.Info()
+				idCred, err := c.generateInstanceIdentityCred(logger, container, container.Guid)
 				if err != nil {
-					regenLogger.Error("failed-to-generate-credentials", err)
-					c.metronClient.IncrementCounter(CredCreationFailedCount)
 					return err
 				}
-				c.metronClient.IncrementCounter(CredCreationSucceededCount)
-				c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
+
+				c2cCred, err := c.generateC2cCred(logger, container, container.Guid)
+				if err != nil {
+					return err
+				}
+
+				creds := Credentials{InstanceIdentityCredential: idCred, C2CCredential: c2cCred}
+				for _, h := range c.handlers {
+					err := h.Update(creds, container)
+					if err != nil {
+						return err
+					}
+				}
+				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
+				regenCertTimer.Reset(rotationDuration)
+				regenLogger.Debug("completed")
+			case <-regenerateCertsCh:
+				regenLogger.Debug("on-update")
+				container := containerInfoProvider.Info()
+				cred, err := c.generateC2cCred(logger, container, container.Guid)
+				if err != nil {
+					return err
+				}
+
+				creds := Credentials{C2CCredential: cred}
 
 				for _, h := range c.handlers {
 					err := h.Update(creds, container)
@@ -220,20 +251,23 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 						return err
 					}
 				}
-
-				rotationDuration = calculateCredentialRotationPeriod(c.validityPeriod)
-				regenCertTimer.Reset(rotationDuration)
 				regenLogger.Debug("completed")
 			case signal := <-signals:
-				logger.Info("signalled", lager.Data{"signal": signal.String()})
-				cred, err := c.generateCreds(logger, container, "")
+				logger.Info("on-signal", lager.Data{"signal": signal.String()})
+				container := containerInfoProvider.Info()
+				idCred, err := c.generateInstanceIdentityCred(logger, container, "")
 				if err != nil {
-					regenLogger.Error("failed-to-generate-credentials", err)
-					c.metronClient.IncrementCounter(CredCreationFailedCount)
 					return err
 				}
+
+				c2cCred, err := c.generateC2cCred(logger, container, "")
+				if err != nil {
+					return err
+				}
+
+				creds := Credentials{InstanceIdentityCredential: idCred, C2CCredential: c2cCred}
 				for _, h := range c.handlers {
-					h.Close(cred, container)
+					h.Close(creds, container)
 				}
 				return nil
 			}
@@ -248,38 +282,51 @@ const (
 	privateKeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
-func (c *credManager) generateCreds(logger lager.Logger, container executor.Container, certGUID string) (Credentials, error) {
-	logger = logger.Session("generating-credentials")
+func (c *credManager) generateInstanceIdentityCred(logger lager.Logger, container executor.Container, certGUID string) (Credential, error) {
+	logger = logger.Session("generating-instance-identity-credentials")
 	logger.Debug("starting")
 	defer logger.Debug("complete")
-
 	ipForCert := container.InternalIP
 	if len(ipForCert) == 0 {
 		ipForCert = container.ExternalIP
 	}
 
-	logger.Debug("generating-credentials-for-instance-identity")
+	start := c.clock.Now()
 	idCred, err := c.generateCredForSAN(logger,
 		certificateSAN{IPAddress: ipForCert, OrganizationalUnits: container.CertificateProperties.OrganizationalUnit},
 		certGUID,
 	)
+	duration := c.clock.Since(start)
 	if err != nil {
-		return Credentials{}, err
+		logger.Error("failed-to-generate-instance-identity-credentials", err)
+		c.metronClient.IncrementCounter(CredCreationFailedCount)
+		return Credential{}, err
 	}
+	c.metronClient.IncrementCounter(CredCreationSucceededCount)
+	c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
 
-	logger.Debug("generating-credentials-for-c2c")
+	return idCred, nil
+}
+
+func (c *credManager) generateC2cCred(logger lager.Logger, container executor.Container, certGUID string) (Credential, error) {
+	logger = logger.Session("generating-c2c-credentials")
+	logger.Debug("starting")
+	defer logger.Debug("complete")
+	start := c.clock.Now()
 	c2cCred, err := c.generateCredForSAN(logger,
 		certificateSAN{InternalRoutes: container.InternalRoutes, OrganizationalUnits: container.CertificateProperties.OrganizationalUnit},
 		certGUID,
 	)
+	duration := c.clock.Since(start)
 	if err != nil {
-		return Credentials{}, err
+		logger.Error("failed-to-generate-c2c-credentials", err)
+		c.metronClient.IncrementCounter(C2CCredCreationFailedCount)
+		return Credential{}, err
 	}
+	c.metronClient.IncrementCounter(C2CCredCreationSucceededCount)
+	c.metronClient.SendDuration(C2CCredCreationSucceededDuration, duration)
 
-	return Credentials{
-		InstanceIdentityCredential: idCred,
-		C2CCredential:              c2cCred,
-	}, nil
+	return c2cCred, nil
 }
 
 func (c *credManager) generateCredForSAN(logger lager.Logger, certSAN certificateSAN, certGUID string) (Credential, error) {
