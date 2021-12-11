@@ -491,7 +491,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
 
-	credManagerRunner := n.credManager.Runner(logger, n.info)
+	credManagerRunner := n.credManager.Runner(logger, n)
 
 	proxyTLSPorts := make([]uint16, len(n.info.Ports))
 	for i, p := range n.info.Ports {

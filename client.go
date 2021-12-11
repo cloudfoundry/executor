@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 //go:generate counterfeiter -o fakes/fake_client.go . Client
@@ -13,6 +14,7 @@ type Client interface {
 	AllocateContainers(logger lager.Logger, requests []AllocationRequest) []AllocationFailure
 	GetContainer(logger lager.Logger, guid string) (Container, error)
 	RunContainer(lager.Logger, *RunRequest) error
+	UpdateContainer(lager.Logger, UpdateRequest) error
 	StopContainer(logger lager.Logger, guid string) error
 	DeleteContainer(logger lager.Logger, guid string) error
 	ListContainers(lager.Logger) ([]Container, error)
@@ -82,5 +84,17 @@ func NewRunRequest(guid string, runInfo *RunInfo, tags Tags) RunRequest {
 		Guid:    guid,
 		RunInfo: *runInfo,
 		Tags:    tags,
+	}
+}
+
+type UpdateRequest struct {
+	Guid           string
+	InternalRoutes internalroutes.InternalRoutes `json:"internal_routes"`
+}
+
+func NewUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes) UpdateRequest {
+	return UpdateRequest{
+		Guid:           guid,
+		InternalRoutes: internalRoutes,
 	}
 }

@@ -167,14 +167,15 @@ func (c *credManager) RemoveCredDir(logger lager.Logger, container executor.Cont
 	return err.ErrorOrNil()
 }
 
-func (c *credManager) Runner(logger lager.Logger, container executor.Container) ifrit.Runner {
+func (c *credManager) Runner(logger lager.Logger, node *storeNode) ifrit.Runner {
 	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		logger = logger.Session("cred-manager-runner")
 		logger.Info("starting")
 		defer logger.Info("complete")
 
+		initialContainer := node.Info()
 		start := c.clock.Now()
-		creds, err := c.generateCreds(logger, container, container.Guid)
+		creds, err := c.generateCreds(logger, initialContainer, initialContainer.Guid)
 		if err != nil {
 			logger.Error("failed-to-generate-credentials", err)
 			c.metronClient.IncrementCounter(CredCreationFailedCount)
@@ -184,7 +185,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 		duration := c.clock.Since(start)
 
 		for _, h := range c.handlers {
-			err := h.Update(creds, container)
+			err := h.Update(creds, initialContainer)
 			if err != nil {
 				return err
 			}
@@ -203,6 +204,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 			select {
 			case <-regenCertTimer.C():
 				regenLogger.Debug("started")
+				container := node.Info()
 				start := c.clock.Now()
 				creds, err := c.generateCreds(logger, container, container.Guid)
 				duration := c.clock.Since(start)
@@ -225,6 +227,7 @@ func (c *credManager) Runner(logger lager.Logger, container executor.Container) 
 				regenCertTimer.Reset(rotationDuration)
 				regenLogger.Debug("completed")
 			case signal := <-signals:
+				container := node.Info()
 				logger.Info("signalled", lager.Data{"signal": signal.String()})
 				cred, err := c.generateCreds(logger, container, "")
 				if err != nil {
