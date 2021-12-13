@@ -457,6 +457,9 @@ var _ = Describe("Transformer", func() {
 
 					if runtime.GOOS == "windows" {
 						path = "/etc/cf-assets/envoy/envoy"
+						envoyArgs += " --id-creds C:\\etc\\cf-assets\\envoy_config\\sds-id-cert-and-key.yaml"
+						envoyArgs += " --c2c-creds C:\\etc\\cf-assets\\envoy_config\\sds-c2c-cert-and-key.yaml"
+						envoyArgs += " --id-validation C:\\etc\\cf-assets\\envoy_config\\sds-id-validation-context.yaml"
 						args = strings.Split(envoyArgs, " ")
 					}
 
