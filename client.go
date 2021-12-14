@@ -14,7 +14,7 @@ type Client interface {
 	AllocateContainers(logger lager.Logger, requests []AllocationRequest) []AllocationFailure
 	GetContainer(logger lager.Logger, guid string) (Container, error)
 	RunContainer(lager.Logger, *RunRequest) error
-	UpdateContainer(lager.Logger, UpdateRequest) error
+	UpdateContainer(lager.Logger, *UpdateRequest) error
 	StopContainer(logger lager.Logger, guid string) error
 	DeleteContainer(logger lager.Logger, guid string) error
 	ListContainers(lager.Logger) ([]Container, error)

@@ -28,6 +28,7 @@ import (
 	"code.cloudfoundry.org/garden/server"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 	multierror "github.com/hashicorp/go-multierror"
@@ -2116,6 +2117,81 @@ var _ = Describe("Container Store", func() {
 					errCh <- containerStore.Stop(logger, containerGuid)
 				}()
 				Eventually(errCh).Should(Receive(BeNil()))
+			})
+		})
+	})
+
+	Describe("Update", func() {
+		var (
+			runReq         *executor.RunRequest
+			updateReq      *executor.UpdateRequest
+			internalRoutes internalroutes.InternalRoutes
+		)
+
+		BeforeEach(func() {
+			var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
+				<-signals
+				return nil
+			}
+			runInfo := executor.RunInfo{
+				LogConfig: executor.LogConfig{
+					Guid:       containerGuid,
+					Index:      1,
+					SourceName: "test-source",
+				},
+			}
+			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
+			gardenClient.CreateReturns(gardenContainer, nil)
+			megatron.StepsRunnerReturns(testRunner, nil)
+			internalRoutes = internalroutes.InternalRoutes{
+				{Hostname: "a.apps.internal"},
+				{Hostname: "b.apps.internal"},
+			}
+			updateReq = &executor.UpdateRequest{Guid: containerGuid, InternalRoutes: internalRoutes}
+		})
+
+		JustBeforeEach(func() {
+			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = containerStore.Initialize(logger, runReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = containerStore.Create(logger, containerGuid)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when the container exists", func() {
+			JustBeforeEach(func() {
+				err := containerStore.Run(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("updates container internal routes", func() {
+				err := containerStore.Update(logger, updateReq)
+				Expect(err).NotTo(HaveOccurred())
+
+				container, err := containerStore.Get(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.InternalRoutes).To(Equal(internalRoutes))
+			})
+
+			It("sends a signal to the credmanager to regenerate certs", func() {
+				_, _, regenerateCertsCh := credManager.RunnerArgsForCall(0)
+
+				go func() {
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).NotTo(HaveOccurred())
+				}()
+				Eventually(regenerateCertsCh).Should(Receive(Equal(struct{}{})))
+			})
+		})
+
+		Context("when the container does not exist", func() {
+			It("returns an ErrContainerNotFound", func() {
+				updateReq.Guid = "unknown-guid"
+				err := containerStore.Update(logger, updateReq)
+				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 	})

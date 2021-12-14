@@ -185,6 +185,18 @@ type FakeClient struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
+	UpdateContainerStub        func(lager.Logger, *executor.UpdateRequest) error
+	updateContainerMutex       sync.RWMutex
+	updateContainerArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 *executor.UpdateRequest
+	}
+	updateContainerReturns struct {
+		result1 error
+	}
+	updateContainerReturnsOnCall map[int]struct {
+		result1 error
+	}
 	VolumeDriversStub        func(lager.Logger) ([]string, error)
 	volumeDriversMutex       sync.RWMutex
 	volumeDriversArgsForCall []struct {
@@ -1093,6 +1105,68 @@ func (fake *FakeClient) TotalResourcesReturnsOnCall(i int, result1 executor.Exec
 	}{result1, result2}
 }
 
+func (fake *FakeClient) UpdateContainer(arg1 lager.Logger, arg2 *executor.UpdateRequest) error {
+	fake.updateContainerMutex.Lock()
+	ret, specificReturn := fake.updateContainerReturnsOnCall[len(fake.updateContainerArgsForCall)]
+	fake.updateContainerArgsForCall = append(fake.updateContainerArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 *executor.UpdateRequest
+	}{arg1, arg2})
+	stub := fake.UpdateContainerStub
+	fakeReturns := fake.updateContainerReturns
+	fake.recordInvocation("UpdateContainer", []interface{}{arg1, arg2})
+	fake.updateContainerMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeClient) UpdateContainerCallCount() int {
+	fake.updateContainerMutex.RLock()
+	defer fake.updateContainerMutex.RUnlock()
+	return len(fake.updateContainerArgsForCall)
+}
+
+func (fake *FakeClient) UpdateContainerCalls(stub func(lager.Logger, *executor.UpdateRequest) error) {
+	fake.updateContainerMutex.Lock()
+	defer fake.updateContainerMutex.Unlock()
+	fake.UpdateContainerStub = stub
+}
+
+func (fake *FakeClient) UpdateContainerArgsForCall(i int) (lager.Logger, *executor.UpdateRequest) {
+	fake.updateContainerMutex.RLock()
+	defer fake.updateContainerMutex.RUnlock()
+	argsForCall := fake.updateContainerArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeClient) UpdateContainerReturns(result1 error) {
+	fake.updateContainerMutex.Lock()
+	defer fake.updateContainerMutex.Unlock()
+	fake.UpdateContainerStub = nil
+	fake.updateContainerReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeClient) UpdateContainerReturnsOnCall(i int, result1 error) {
+	fake.updateContainerMutex.Lock()
+	defer fake.updateContainerMutex.Unlock()
+	fake.UpdateContainerStub = nil
+	if fake.updateContainerReturnsOnCall == nil {
+		fake.updateContainerReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.updateContainerReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeClient) VolumeDrivers(arg1 lager.Logger) ([]string, error) {
 	fake.volumeDriversMutex.Lock()
 	ret, specificReturn := fake.volumeDriversReturnsOnCall[len(fake.volumeDriversArgsForCall)]
@@ -1190,6 +1264,8 @@ func (fake *FakeClient) Invocations() map[string][][]interface{} {
 	defer fake.subscribeToEventsMutex.RUnlock()
 	fake.totalResourcesMutex.RLock()
 	defer fake.totalResourcesMutex.RUnlock()
+	fake.updateContainerMutex.RLock()
+	defer fake.updateContainerMutex.RUnlock()
 	fake.volumeDriversMutex.RLock()
 	defer fake.volumeDriversMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

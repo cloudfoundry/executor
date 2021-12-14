@@ -82,6 +82,41 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			Expect(err).To(BeNil())
 		})
 
+		It("noops if no Credential is passed", func() {
+			By("updating the Credential with a known value")
+			err := handler.Update(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "cert", Key: "key"}}, container)
+			Expect(err).NotTo(HaveOccurred())
+
+			certPath := filepath.Join(tmpdir, "some-guid")
+			certFile := filepath.Join(certPath, "instance.crt")
+			Expect(certFile).To(BeARegularFile())
+
+			data, err := ioutil.ReadFile(certFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(string(data)).To(Equal("cert"))
+
+			keyFile := filepath.Join(certPath, "instance.key")
+			Expect(keyFile).To(BeARegularFile())
+
+			data, err = ioutil.ReadFile(keyFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(Equal("key"))
+
+			By("calling update with with an empty Credential")
+			err = handler.Update(containerstore.Credentials{}, container)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking that the old Credential is still there")
+			data, err = ioutil.ReadFile(certFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(Equal("cert"))
+
+			data, err = ioutil.ReadFile(keyFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(Equal("key"))
+		})
+
 		It("puts private key into container directory", func() {
 			err := handler.Update(containerstore.Credentials{InstanceIdentityCredential: containerstore.Credential{Cert: "cert", Key: "key"}}, container)
 			Expect(err).NotTo(HaveOccurred())

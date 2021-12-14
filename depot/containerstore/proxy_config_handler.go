@@ -263,6 +263,7 @@ func (p *ProxyConfigHandler) Close(invalidCredentials Credentials, container exe
 }
 
 func (p *ProxyConfigHandler) writeConfig(credentials Credentials, container executor.Container) error {
+
 	proxyConfigPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "envoy.yaml")
 	sdsIDCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-id-cert-and-key.yaml")
 	sdsC2CCertAndKeyPath := filepath.Join(p.containerProxyConfigPath, container.Guid, "sds-c2c-cert-and-key.yaml")
@@ -289,10 +290,14 @@ func (p *ProxyConfigHandler) writeConfig(credentials Credentials, container exec
 		return err
 	}
 
-	sdsIDCertAndKey := generateSDSCertAndKey("id-cert-and-key", credentials.InstanceIdentityCredential)
-	err = writeDiscoveryResponseYAML(sdsIDCertAndKey, sdsIDCertAndKeyPath)
-	if err != nil {
-		return err
+	// The c2c cert gets updated when internal routes change. In that case, the
+	// instance identity cert will not be rotated and will remain unchanged.
+	if !credentials.InstanceIdentityCredential.IsEmpty() {
+		sdsIDCertAndKey := generateSDSCertAndKey("id-cert-and-key", credentials.InstanceIdentityCredential)
+		err = writeDiscoveryResponseYAML(sdsIDCertAndKey, sdsIDCertAndKeyPath)
+		if err != nil {
+			return err
+		}
 	}
 
 	sdsC2CCertAndKey := generateSDSCertAndKey("c2c-cert-and-key", credentials.C2CCredential)
