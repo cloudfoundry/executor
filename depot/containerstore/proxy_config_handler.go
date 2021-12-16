@@ -564,7 +564,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			},
 		}
 
-		if http2Enabled {
+		if http2Enabled && portMap.ContainerTLSProxyPort != C2CTLSPort {
 			tlsContext.CommonTlsContext.AlpnProtocols = AlpnProtocols
 		}
 
