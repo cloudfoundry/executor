@@ -439,7 +439,7 @@ var _ = Describe("CredManager", func() {
 								Expect(fakeCredHandler.UpdateCallCount()).To(Equal(1))
 								cred, _ := fakeCredHandler.UpdateArgsForCall(0)
 								c2cCert, _ := parseCert(cred.C2CCredential)
-								Expect(c2cCert.DNSNames).To(ConsistOf("container-guid-1", "a.apps.internal", "b.apps.internal"))
+								Expect(c2cCert.DNSNames).To(ConsistOf(fmt.Sprintf("container-guid-%d", GinkgoParallelNode()), "a.apps.internal", "b.apps.internal"))
 
 								container.RunInfo.InternalRoutes = internalroutes.InternalRoutes{
 									{Hostname: "a.apps.internal"},
