@@ -387,5 +387,7 @@ func truncateString(s string, length int) string {
 		return s
 	}
 
-	return fmt.Sprintf("%s (truncated)", s[:length])
+	delimeter := "\n... (truncated)\n"
+	last := len(s) - length/2 + len(delimeter)/2
+	return fmt.Sprintf("%s%s%s", s[:((length/2-1)-len(delimeter)/2)], delimeter, s[last:])
 }

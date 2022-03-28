@@ -97,12 +97,12 @@ var _ = Describe("Container", func() {
 
 		When("failure reason is longer than 10000 characters", func() {
 			BeforeEach(func() {
-				failureReason = strings.Repeat("a", 10001)
+				failureReason = strings.Repeat("a", 6000) + strings.Repeat("b", 6000)
 			})
 
 			It("is truncated", func() {
-				Expect(container.RunResult.FailureReason).To(HaveLen(10000 + len(" (truncated)")))
-				Expect(container.RunResult.FailureReason).To(HaveSuffix(" (truncated)"))
+				Expect(container.RunResult.FailureReason).To(HaveLen(10000))
+				Expect(container.RunResult.FailureReason[4991:5008]).To(Equal("\n... (truncated)\n"))
 			})
 		})
 	})
