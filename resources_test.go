@@ -1,9 +1,12 @@
 package executor_test
 
 import (
-	"code.cloudfoundry.org/executor"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"code.cloudfoundry.org/executor"
 )
 
 var _ = Describe("Container", func() {
@@ -70,6 +73,37 @@ var _ = Describe("Container", func() {
 			resources := executor.NewExecutorResources(10, defaultDiskMB, defaultContainers)
 			resourceToSubtract := executor.NewResource(20, defaultDiskMB-1, -1)
 			Expect(resources.Subtract(&resourceToSubtract)).To(BeFalse())
+		})
+	})
+
+	Describe("TransitionToComplete", func() {
+		var (
+			container     *executor.Container
+			failureReason string
+		)
+
+		BeforeEach(func() {
+			container = &executor.Container{}
+			failureReason = "foo"
+		})
+
+		JustBeforeEach(func() {
+			container.TransitionToComplete(true, failureReason, false)
+		})
+
+		It("does not truncate short failure reasons", func() {
+			Expect(container.RunResult.FailureReason).To(Equal("foo"))
+		})
+
+		When("failure reason is longer than 10000 characters", func() {
+			BeforeEach(func() {
+				failureReason = strings.Repeat("a", 6000) + strings.Repeat("b", 6000)
+			})
+
+			It("is truncated", func() {
+				Expect(container.RunResult.FailureReason).To(HaveLen(10000))
+				Expect(container.RunResult.FailureReason[4991:5008]).To(Equal("\n... (truncated)\n"))
+			})
 		})
 	})
 })
