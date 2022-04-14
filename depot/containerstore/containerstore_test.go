@@ -575,6 +575,7 @@ var _ = Describe("Container Store", func() {
 					executor.ContainerOwnerProperty: ownerName,
 					"network.some-key":              "some-value",
 					"network.some-other-key":        "some-other-value",
+					"log_config":                    "{\"guid\":\"log-guid-foo\",\"index\":1,\"source_name\":\"test-source\",\"tags\":null}",
 				}))
 			})
 
@@ -590,6 +591,7 @@ var _ = Describe("Container Store", func() {
 
 					Expect(containerSpec.Properties).To(Equal(garden.Properties{
 						executor.ContainerOwnerProperty: ownerName,
+						"log_config":                    "{\"guid\":\"log-guid-foo\",\"index\":1,\"source_name\":\"test-source\",\"tags\":null}",
 					}))
 				})
 			})

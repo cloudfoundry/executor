@@ -1,6 +1,7 @@
 package containerstore
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -297,7 +298,7 @@ func (n *storeNode) mountVolumes(logger lager.Logger, info executor.Container) (
 	return gardenMounts, nil
 }
 
-func (n *storeNode) gardenProperties(container *executor.Container) garden.Properties {
+func (n *storeNode) gardenProperties(container *executor.Container) (garden.Properties, error) {
 	properties := garden.Properties{}
 	if container.Network != nil {
 		for key, value := range container.Network.Properties {
@@ -305,8 +306,13 @@ func (n *storeNode) gardenProperties(container *executor.Container) garden.Prope
 		}
 	}
 	properties[executor.ContainerOwnerProperty] = n.config.OwnerName
+	logConfig, err := json.Marshal(container.LogConfig)
+	if err != nil {
+		return nil, err
+	}
+	properties["log_config"] = string(logConfig)
 
-	return properties
+	return properties, nil
 }
 
 func dedupPorts(ports []executor.PortMapping) []executor.PortMapping {
@@ -362,6 +368,13 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 	if diskLimitBytesHard != 0 {
 		diskLimitBytesHard += n.rootFSSizer.RootFSSizeFromPath(info.RootFSPath)
 	}
+
+	gardenProperties, err := n.gardenProperties(info)
+	if err != nil {
+		logger.Error("failed-computing-garden-properties", err)
+		return nil, err
+	}
+
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
@@ -388,7 +401,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(info.CPUWeight) / 100.0),
 			},
 		},
-		Properties: n.gardenProperties(info),
+		Properties: gardenProperties,
 		NetIn:      netInRules,
 		NetOut:     netOutRules,
 	}
