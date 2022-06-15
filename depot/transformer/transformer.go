@@ -579,7 +579,7 @@ func (t *transformer) createCheck(
 	}
 
 	buffer := bytes.NewBuffer(nil)
-	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 	sidecar := steps.Sidecar{
 		Name:                    sidecarName,
 		Image:                   garden.ImageRef{URI: t.sidecarRootFS},
