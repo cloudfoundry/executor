@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -39,18 +40,18 @@ func (step *outputWrapperStep) Run(signals <-chan os.Signal, ready chan<- struct
 
 	bytes, err := ioutil.ReadAll(step.reader)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error reading from process output buffer: %s", err)
 	}
+
+	msg := fmt.Sprintf("Failed to invoke process: %s", subStepErr)
 
 	readerErr := string(bytes)
 	if readerErr != "" {
-		msg := strings.TrimSpace(readerErr)
-		if step.prefix != "" {
-			msg = step.prefix + ": " + msg
-		}
-		return NewEmittableError(nil, msg)
+		msg = strings.TrimSpace(readerErr)
 	}
 
-	return subStepErr
-
+	if step.prefix != "" {
+		msg = step.prefix + ": " + msg
+	}
+	return NewEmittableError(subStepErr, msg)
 }
