@@ -6,7 +6,7 @@ import (
 )
 
 type ConcurrentBuffer struct {
-	*bytes.Buffer
+	Buffer *bytes.Buffer
 	*sync.Mutex
 }
 

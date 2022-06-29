@@ -14,7 +14,9 @@ var _ = Describe("concurrent buffer", func() {
 	Describe("NewConcurrentBuffer", func() {
 		It("creates a new concurrent buffer out of the given payload", func() {
 			payload := bytes.NewBuffer([]byte{3, 4, 5})
-			Expect(log_streamer.NewConcurrentBuffer(payload).String()).To(BeEquivalentTo(payload.String()))
+			content, err := io.ReadAll(log_streamer.NewConcurrentBuffer(payload))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(content).To(Equal([]byte{3, 4, 5}))
 		})
 
 		It("return nil if the payload is nil", func() {
