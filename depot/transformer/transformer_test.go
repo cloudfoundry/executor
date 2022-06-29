@@ -1023,12 +1023,18 @@ var _ = Describe("Transformer", func() {
 							})
 
 							It("logs the liveness check output on stderr", func() {
-								Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
+								Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
 								logLines := map[string]string{}
 								msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 								logLines[source] = msg
 								Expect(logLines).To(Equal(map[string]string{
 									"HEALTH": "liveness check failed",
+								}))
+								msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
+								logLines[source] = msg
+								Expect(logLines).To(Equal(map[string]string{
+									"HEALTH": "liveness check failed",
+									"test":   "Container became unhealthy",
 								}))
 							})
 
@@ -1654,19 +1660,20 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("logs healthcheck error with the same source in a readable way", func() {
-					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(1))
+					Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
 					message, sourceName, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 					Expect(sourceName).To(Equal("test"))
 					Expect(message).To(ContainSubstring("healthcheck failed; healthcheck failed"))
 				})
 
 				It("logs the container lifecycle", func() {
-					Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
+					Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
 					message, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
 					Expect(message).To(Equal("Starting health monitoring of container"))
 					message, _, _ = fakeMetronClient.SendAppLogArgsForCall(1)
 					Expect(message).To(Equal("Container became healthy"))
-					message, _, _ = fakeMetronClient.SendAppLogArgsForCall(2)
+					Eventually(fakeMetronClient.SendAppErrorLogCallCount()).Should(Equal(2))
+					message, _, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
 					Expect(message).To(Equal("Container became unhealthy"))
 				})
 			})

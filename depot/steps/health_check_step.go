@@ -85,7 +85,7 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	case err := <-livenessProcess.Wait():
 		step.logger.Info("transitioned-to-unhealthy")
 		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
-		fmt.Fprint(step.logStreamer.Stdout(), "Container became unhealthy\n")
+		fmt.Fprint(step.logStreamer.Stderr(), "Container became unhealthy\n")
 		return NewEmittableError(err, healthcheckNowUnhealthy, err.Error())
 	case s := <-signals:
 		livenessProcess.Signal(s)

@@ -194,8 +194,8 @@ var _ = Describe("MonitorStep", func() {
 							}))
 						})
 
-						It("emits a log message for the success", func() {
-							Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+						It("emits a log message for the failure", func() {
+							Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
 								gbytes.Say("Container became unhealthy\n"),
 							)
 						})
