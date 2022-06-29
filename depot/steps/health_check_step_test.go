@@ -146,7 +146,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 				})
 
 				It("emits a log message for the failure", func() {
-					Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(
 						gbytes.Say("Container became unhealthy\n"),
 					)
 				})
