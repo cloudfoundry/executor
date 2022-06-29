@@ -203,6 +203,7 @@ var _ = Describe("Transformer", func() {
 				Expect(processSpec.Path).To(Equal("/monitor/path"))
 				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+				Expect(processIO.Stderr).ShouldNot(Equal(ioutil.Discard))
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
@@ -939,7 +940,8 @@ var _ = Describe("Transformer", func() {
 							By("waiting for the action and readiness check processes to start")
 							var io garden.ProcessIO
 							Eventually(readinessIO).Should(Receive(&io))
-							_, err := io.Stdout.Write([]byte("readiness check failed"))
+							_, err := io.Stdout.Write([]byte("readiness check starting\n"))
+							_, err = io.Stderr.Write([]byte("readiness check failed\n"))
 							Expect(err).NotTo(HaveOccurred())
 
 							By("timing out the readiness check")
@@ -960,13 +962,16 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("logs the readiness check output on stderr", func() {
-							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(2))
+							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(3))
 							logLines := map[string]string{}
 							msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 							logLines[source] = msg
+							Expect(logLines["HEALTH"]).To(Equal("readiness check starting"))
 							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
 							logLines[source] = msg
 							Expect(logLines["HEALTH"]).To(Equal("readiness check failed"))
+							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(2)
+							logLines[source] = msg
 							Expect(logLines["test"]).To(MatchRegexp("Failed after 1\\d\\dms: readiness health check never passed."))
 						})
 
@@ -975,7 +980,7 @@ var _ = Describe("Transformer", func() {
 						})
 
 						It("returns the readiness check output in the error", func() {
-							Eventually(process.Wait()).Should(Receive(MatchError(MatchRegexp("Instance never healthy after 1\\d\\dms: readiness check failed"))))
+							Eventually(process.Wait()).Should(Receive(MatchError(MatchRegexp("Instance never healthy after 1\\d\\dms: readiness check starting\nreadiness check failed"))))
 						})
 					})
 
@@ -1577,6 +1582,7 @@ var _ = Describe("Transformer", func() {
 					Expect(processSpec.Path).To(Equal("/monitor/path"))
 					Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 					Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
+					Expect(processIO.Stderr).ShouldNot(Equal(ioutil.Discard))
 					monitorCh <- 0
 					monitorCh <- 0
 					Eventually(process.Ready()).Should(BeClosed())

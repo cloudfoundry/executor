@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -244,7 +243,7 @@ func (t *transformer) stepFor(
 			var subStep ifrit.Runner
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
-				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 				subStep = steps.NewOutputWrapper(t.stepFor(
 					bufferedLogStreamer,
 					action,
@@ -281,7 +280,7 @@ func (t *transformer) stepFor(
 			var subStep ifrit.Runner
 			if monitorOutputWrapper {
 				buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
-				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+				bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 				subStep = steps.NewOutputWrapper(t.stepFor(
 					bufferedLogStreamer,
 					action,
@@ -578,8 +577,8 @@ func (t *transformer) createCheck(
 		Args:           args,
 	}
 
-	buffer := bytes.NewBuffer(nil)
-	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, ioutil.Discard)
+	buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
+	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 	sidecar := steps.Sidecar{
 		Name:                    sidecarName,
 		Image:                   garden.ImageRef{URI: t.sidecarRootFS},
