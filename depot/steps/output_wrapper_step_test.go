@@ -83,7 +83,7 @@ var _ = Describe("OutputWrapperStep", func() {
 
 			It("returns the CancelledError error", func() {
 				p := ifrit.Background(step)
-				Eventually(p.Wait()).Should(Receive(MatchError(new(steps.CancelledError))))
+				Eventually(p.Wait()).Should(Receive(MatchError(steps.NewEmittableError(new(steps.CancelledError), "Failed to invoke process: cancelled"))))
 			})
 
 			Context("and the buffer has data", func() {
