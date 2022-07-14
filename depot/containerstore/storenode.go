@@ -197,6 +197,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 
 	createContainer := func() error {
+		logger.Info("can-access-log-rate-limit", lager.Data{"log-rate-limit-per-second": info.LogRateLimitBytesPerSecond})
 		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
 
 		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
@@ -504,6 +505,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
+	logger.Info("can-access-log-rate-limit", lager.Data{"log-rate-limit-per-second": n.info.LogRateLimitBytesPerSecond})
 	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
 
 	credManagerRunner := n.credManager.Runner(logger, n, n.regenerateCertsCh)
