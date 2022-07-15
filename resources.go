@@ -193,6 +193,7 @@ type RunInfo struct {
 	ImagePassword                 string                        `json:"image_password"`
 	EnableContainerProxy          bool                          `json:"enable_container_proxy"`
 	Sidecars                      []Sidecar                     `json:"sidecars"`
+	LogRateLimitBytesPerSecond    int64                         `json:"log_rate_limit_bytes_per_second"`
 }
 
 type BindMountMode uint8
