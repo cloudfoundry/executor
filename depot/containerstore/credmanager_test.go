@@ -82,7 +82,7 @@ var _ = Describe("CredManager", func() {
 	Context("NoopCredManager", func() {
 		It("returns a dummy runner", func() {
 			container := executor.Container{
-				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 				InternalIP: "127.0.0.1",
 				RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
 					OrganizationalUnit: []string{"app:iamthelizardking"}},
@@ -231,7 +231,7 @@ var _ = Describe("CredManager", func() {
 
 		BeforeEach(func() {
 			container = executor.Container{
-				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 				InternalIP: "127.0.0.1",
 				RunInfo: executor.RunInfo{
 					InternalRoutes: internalroutes.InternalRoutes{
@@ -421,7 +421,7 @@ var _ = Describe("CredManager", func() {
 						Context("when internal routes were updated", func() {
 							BeforeEach(func() {
 								container = executor.Container{
-									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 									InternalIP: "127.0.0.1",
 									RunInfo: executor.RunInfo{
 										InternalRoutes: internalroutes.InternalRoutes{
@@ -439,7 +439,7 @@ var _ = Describe("CredManager", func() {
 								Expect(fakeCredHandler.UpdateCallCount()).To(Equal(1))
 								cred, _ := fakeCredHandler.UpdateArgsForCall(0)
 								c2cCert, _ := parseCert(cred.C2CCredential)
-								containerGuid := fmt.Sprintf("container-guid-%d", GinkgoParallelNode())
+								containerGuid := fmt.Sprintf("container-guid-%d", GinkgoParallelProcess())
 								Expect(c2cCert.DNSNames).To(ConsistOf(containerGuid, "a.apps.internal", "b.apps.internal"))
 
 								container.RunInfo.InternalRoutes = internalroutes.InternalRoutes{
@@ -598,7 +598,7 @@ var _ = Describe("CredManager", func() {
 							Context("when the container has an external IP", func() {
 								BeforeEach(func() {
 									container = executor.Container{
-										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 										InternalIP: "",
 										ExternalIP: "54.23.123.234",
 										RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{
@@ -621,7 +621,7 @@ var _ = Describe("CredManager", func() {
 							Context("when the container doesn't have an external ip", func() {
 								BeforeEach(func() {
 									container = executor.Container{
-										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+										Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 										InternalIP: "",
 										ExternalIP: "",
 										RunInfo: executor.RunInfo{CertificateProperties: executor.CertificateProperties{

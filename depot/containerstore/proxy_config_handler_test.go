@@ -71,7 +71,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		SetDefaultEventuallyTimeout(10 * time.Second)
 
 		container = executor.Container{
-			Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelNode()),
+			Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 			InternalIP: "10.0.0.1",
 			RunInfo: executor.RunInfo{
 				EnableContainerProxy: true,

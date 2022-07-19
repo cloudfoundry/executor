@@ -67,7 +67,7 @@ var _ = Describe("Initializer", func() {
 		config = initializer.ExecutorConfig{
 			AdvertisePreferenceForInstanceAddress: false,
 			AutoDiskOverheadMB:                    1,
-			CachePath:                             fmt.Sprintf("%s-%d", "/tmp/cache", GinkgoParallelNode()),
+			CachePath:                             fmt.Sprintf("%s-%d", "/tmp/cache", GinkgoParallelProcess()),
 			ContainerInodeLimit:                   200000,
 			ContainerMaxCpuShares:                 0,
 			ContainerMetricsReportInterval:        durationjson.Duration(15 * time.Second),
