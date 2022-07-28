@@ -19,7 +19,7 @@ type streamDestination struct {
 	buffer               []byte
 	processLock          sync.Mutex
 	metronClient         loggingclient.IngressClient
-	logRateLimitReporter *logRateLimitReporter
+	logRateLimitReporter *logRateLimiter
 	logger               lager.Logger
 }
 
@@ -30,6 +30,7 @@ func newStreamDestination(
 	messageType loggregator_v2.Log_Type,
 	metronClient loggingclient.IngressClient,
 	maxLogLinesPerSecond int,
+	maxLogBytesPerSecond int64,
 	logRateLimitExceededReportInterval time.Duration,
 ) *streamDestination {
 	return &streamDestination{
@@ -39,7 +40,7 @@ func newStreamDestination(
 		messageType:          messageType,
 		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient:         metronClient,
-		logRateLimitReporter: newLogRateLimitReporter(ctx, metronClient, maxLogLinesPerSecond, logRateLimitExceededReportInterval),
+		logRateLimitReporter: newLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval),
 	}
 }
 
@@ -57,7 +58,7 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	err := destination.logRateLimitReporter.Report(destination.sourceName, destination.tags)
+	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, len(msg)+tagLen(destination.tags)+len(destination.sourceName))
 	if err != nil {
 		return
 	}
@@ -70,6 +71,14 @@ func (destination *streamDestination) flush() {
 			destination.metronClient.SendAppErrorLog(string(msg), destination.sourceName, destination.tags)
 		}
 	}
+}
+
+func tagLen(m map[string]string) int {
+	length := 0
+	for i, j := range m {
+		length = length + len(i) + len(j)
+	}
+	return length
 }
 
 // Not thread safe.  should only be called when holding the processLock
