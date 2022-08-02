@@ -19,6 +19,7 @@ var _ = Describe("LogStreamer", func() {
 		streamer                           log_streamer.LogStreamer
 		fakeClient                         *mfakes.FakeIngressClient
 		maxLogLinesPerSecond               int
+		maxLogBytesPerSecond               int64
 		logRateLimitExceededReportInterval time.Duration
 	)
 
@@ -31,20 +32,20 @@ var _ = Describe("LogStreamer", func() {
 	}
 
 	BeforeEach(func() {
-		maxLogLinesPerSecond = 9999
+		maxLogLinesPerSecond, maxLogBytesPerSecond = 9999, -1
 		logRateLimitExceededReportInterval = 5 * time.Minute
 		fakeClient = &mfakes.FakeIngressClient{}
-		streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+		streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 	})
 
 	Context("when told to emit", func() {
 		Context("when given a message that corresponds to one line", func() {
 			BeforeEach(func() {
-				fmt.Fprintln(streamer.Stdout(), "this is a log")
-				fmt.Fprintln(streamer.Stdout(), "this is another log")
+				_, _ = fmt.Fprintln(streamer.Stdout(), "this is a log")
+				_, _ = fmt.Fprintln(streamer.Stdout(), "this is another log")
 			})
 
-			It("should emit that message", func() {
+			It("should emit that messages", func() {
 				Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
 				message, sn, tags := fakeClient.SendAppLogArgsForCall(0)
@@ -67,11 +68,10 @@ var _ = Describe("LogStreamer", func() {
 
 		Context("when given a log byte size arrival rate exceeds the maximum allowed", func() {
 			Context("rate limit is applied at a lower threshold", func() {
-				var maxLogBytesPerSecond int64
 				var logLine string
 				BeforeEach(func() {
 					maxLogBytesPerSecond = 1000
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, 9999, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					logLine := strings.Repeat("a", int(maxLogBytesPerSecond/2))
 					for i := 0; i < 3; i++ {
@@ -89,23 +89,19 @@ var _ = Describe("LogStreamer", func() {
 							}
 						}
 						return printedMsgs
-					}, 10*time.Second).Should(Equal(3))
+					}, 1*time.Second).Should(Equal(2))
 
+					Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 2))
 					calls := fakeClient.SendAppLogCallCount()
-					Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
-					args := []string{}
+					var args []string
 					for i := 0; i < calls; i++ {
 						msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
 						args = append(args, msg)
 					}
 
-					expectedArgs := []types.GomegaMatcher{}
-					for i := 0; i < 3; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring(logLine))
-					}
-					for i := 0; i < calls-3; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring(fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", maxLogBytesPerSecond)))
-					}
+					var expectedArgs []types.GomegaMatcher
+					expectedArgs = append(expectedArgs, ContainSubstring(logLine))
+					expectedArgs = append(expectedArgs, ContainSubstring(fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", maxLogBytesPerSecond)))
 
 					Expect(args).To(ConsistOf(expectedArgs))
 				})
@@ -114,37 +110,42 @@ var _ = Describe("LogStreamer", func() {
 
 		Context("Max bytes per second is zero", func() {
 			BeforeEach(func() {
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, 9999, 0, logRateLimitExceededReportInterval)
+				maxLogBytesPerSecond = 0
+				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
-				logLine := strings.Repeat("a", int(20))
+				logLine := strings.Repeat("a", 20)
 				for i := 0; i < 3; i++ {
 					go fmt.Fprintf(streamer.Stdout(), logLine+"\n", i)
 				}
 			})
 
 			It("should not log", func() {
-				Consistently(fakeClient.SendAppLogCallCount, 3*time.Second).Should(Equal(0))
+				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(0))
 			})
 		})
 
 		Context("Byte limit is low", func() {
 			BeforeEach(func() {
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, 1, 100, logRateLimitExceededReportInterval)
+				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
+				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 				go fmt.Fprintf(streamer.Stdout(), strings.Repeat("a", 1000)+"\n")
 				go fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
 			})
 
 			It("skips logs which exceed the burst capacity", func() {
-				Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(Equal(1))
+				Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(2))
 				msg, _, _ := fakeClient.SendAppLogArgsForCall(0)
-				Expect(msg).To(MatchRegexp("b+"))
+				Expect(msg).To(MatchRegexp("^b+$"))
+				msg, _, _ = fakeClient.SendAppLogArgsForCall(1)
+				Expect(msg).To(Equal("app instance exceeded log rate limit (100 bytes/sec)"))
 			})
 		})
 
 		Context("Log rate limit is low", func() {
 			BeforeEach(func() {
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, 1, 100, logRateLimitExceededReportInterval)
+				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
+				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 				for i := 0; i < 10000; i++ {
 					go fmt.Fprintf(streamer.Stdout(), "a\n")
@@ -152,9 +153,9 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("skips logs when streamer is stopped", func() {
-				Consistently(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically("<", 10))
+				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<=", 2))
 				streamer.Stop()
-				Consistently(fakeClient.SendAppLogCallCount, 10*time.Second).Should(BeNumerically("<", 10))
+				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<=", 2))
 			})
 		})
 
@@ -162,7 +163,7 @@ var _ = Describe("LogStreamer", func() {
 			Context("rate limit is applied at a lower threshold", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 1
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					for i := 0; i < maxLogLinesPerSecond*3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d\n", i)
@@ -179,7 +180,7 @@ var _ = Describe("LogStreamer", func() {
 							}
 						}
 						return printedMsgs
-					}, 10*time.Second).Should(Equal(3))
+					}, 1*time.Second).Should(BeNumerically("==", 1))
 
 					calls := fakeClient.SendAppLogCallCount()
 					args := []string{}
@@ -189,26 +190,22 @@ var _ = Describe("LogStreamer", func() {
 					}
 
 					expectedArgs := []types.GomegaMatcher{}
-					for i := 0; i < 3; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
-					}
-					for i := 0; i < calls-3; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
-					}
+					expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
+					expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
 
 					Expect(args).To(ConsistOf(expectedArgs))
 				})
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric", func() {
-					Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(1))
+					Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 					metricName := fakeClient.IncrementCounterArgsForCall(0)
 					Expect(metricName).To(Equal("AppInstanceExceededLogRateLimitCount"))
 				})
 
 				Context("when metric was already incremented in the past metric report interval", func() {
 					It("does not increment an AppInstanceExceededLogRateLimitCount metric during report interval", func() {
-						Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
-						Consistently(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(1))
+						Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 2))
+						Consistently(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 					})
 				})
 			})
@@ -220,7 +217,7 @@ var _ = Describe("LogStreamer", func() {
 					}
 					maxLogLinesPerSecond = 1
 					logRateLimitExceededReportInterval = time.Second
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					for i := 0; i < 3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -229,15 +226,15 @@ var _ = Describe("LogStreamer", func() {
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric during report interval", func() {
 					Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<", 4))
-					Eventually(fakeClient.SendAppLogCallCount, 5*time.Second).Should(BeNumerically(">=", 4))
-					Eventually(fakeClient.IncrementCounterCallCount, 5*time.Second).Should(Equal(2))
+					Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 2))
+					Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 				})
 			})
 
 			Context("rate limit is not applied", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 0
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					for i := 0; i < 20; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -252,7 +249,7 @@ var _ = Describe("LogStreamer", func() {
 			Context("rate limit is bigger than number of log lines", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 6
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					for i := 0; i < 3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -305,7 +302,7 @@ var _ = Describe("LogStreamer", func() {
 
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 1
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 					newStreamer = streamer.WithSource("new-source-name")
 				})
@@ -325,7 +322,7 @@ var _ = Describe("LogStreamer", func() {
 							}
 						}
 						return printedMsgs
-					}, 10*time.Second).Should(Equal(6))
+					}, 1*time.Second).Should(Equal(1))
 
 					calls := fakeClient.SendAppLogCallCount()
 					args := []string{}
@@ -335,12 +332,8 @@ var _ = Describe("LogStreamer", func() {
 					}
 
 					expectedArgs := []types.GomegaMatcher{}
-					for i := 0; i < 6; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
-					}
-					for i := 0; i < calls-6; i++ {
-						expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
-					}
+					expectedArgs = append(expectedArgs, ContainSubstring("this is log"))
+					expectedArgs = append(expectedArgs, ContainSubstring("app instance exceeded log rate limit (1 log-lines/sec) set by platform operator"))
 
 					Expect(args).To(ConsistOf(expectedArgs))
 				})
@@ -351,7 +344,7 @@ var _ = Describe("LogStreamer", func() {
 						go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 					}
 
-					Eventually(fakeClient.IncrementCounterCallCount, 2*time.Second).Should(Equal(1))
+					Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 					metricName := fakeClient.IncrementCounterArgsForCall(0)
 					Expect(metricName).To(Equal("AppInstanceExceededLogRateLimitCount"))
 				})
@@ -362,14 +355,14 @@ var _ = Describe("LogStreamer", func() {
 							go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
 						}
 						// can either print the last warning or not if not fast
-						Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 4))
-						Consistently(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(1))
+						Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 2))
+						Consistently(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
 							go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 						}
-						Eventually(fakeClient.SendAppLogCallCount, 3*time.Second).Should(BeNumerically(">=", 7))
-						Consistently(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(Equal(1))
+						Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 4))
+						Consistently(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 					})
 				})
 
@@ -377,7 +370,7 @@ var _ = Describe("LogStreamer", func() {
 					BeforeEach(func() {
 						maxLogLinesPerSecond = 1
 						logRateLimitExceededReportInterval = time.Second
-						streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+						streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 						newStreamer = streamer.WithSource("new-source-name")
 					})
 
@@ -385,13 +378,13 @@ var _ = Describe("LogStreamer", func() {
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
 							go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
 						}
-						Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 1))
+						Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
 							go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 						}
-						Eventually(fakeClient.SendAppLogCallCount, 10*time.Second).Should(BeNumerically(">=", 5))
-						Eventually(fakeClient.IncrementCounterCallCount, 3*time.Second).Should(BeNumerically(">=", 3))
+						Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(BeNumerically(">=", 1))
+						Expect(fakeClient.SendAppLogCallCount()).To(BeNumerically(">=", 2))
 					})
 				})
 			})
@@ -608,7 +601,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = log_streamer.New("", sourceName, index, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+			streamer = log_streamer.New("", sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
@@ -620,7 +613,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = log_streamer.New(guid, "", -1, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+			streamer = log_streamer.New(guid, "", -1, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
@@ -633,7 +626,7 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = log_streamer.New(guid, sourceName, -1, tags, fakeClient, maxLogLinesPerSecond, -1, logRateLimitExceededReportInterval)
+			streamer = log_streamer.New(guid, sourceName, -1, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()

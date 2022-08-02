@@ -58,7 +58,8 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, len(msg)+tagLen(destination.tags)+len(destination.sourceName))
+	calculatedLength := len(msg) + tagLen(destination.tags) + len(destination.sourceName)
+	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, calculatedLength)
 	if err != nil {
 		return
 	}
@@ -66,9 +67,9 @@ func (destination *streamDestination) flush() {
 	if len(msg) > 0 {
 		switch destination.messageType {
 		case loggregator_v2.Log_OUT:
-			destination.metronClient.SendAppLog(string(msg), destination.sourceName, destination.tags)
+			_ = destination.metronClient.SendAppLog(string(msg), destination.sourceName, destination.tags)
 		case loggregator_v2.Log_ERR:
-			destination.metronClient.SendAppErrorLog(string(msg), destination.sourceName, destination.tags)
+			_ = destination.metronClient.SendAppErrorLog(string(msg), destination.sourceName, destination.tags)
 		}
 	}
 }
@@ -96,8 +97,8 @@ func (destination *streamDestination) copyAndResetBuffer() []byte {
 
 func (destination *streamDestination) processMessage(message string) {
 	start := 0
-	for i, rune := range message {
-		if rune == '\n' || rune == '\r' {
+	for i, ch := range message {
+		if ch == '\n' || ch == '\r' {
 			destination.processString(message[start:i], true)
 			start = i + 1
 		}

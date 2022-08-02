@@ -43,6 +43,7 @@ import (
 
 var _ = Describe("Container Store", func() {
 	const cellID = "93ae1d34-4f95-4fb1-a283-4bbccac4d0f2"
+	const logRateUnlimitedBytesPerSecond = -1
 
 	var (
 		containerConfig containerstore.ContainerConfig
@@ -392,7 +393,8 @@ var _ = Describe("Container Store", func() {
 							"some-other-key": "some-other-value",
 						},
 					},
-					EnableContainerProxy: true,
+					EnableContainerProxy:       true,
+					LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 				}
 
 				runReq = &executor.RunRequest{
@@ -1513,6 +1515,7 @@ var _ = Describe("Container Store", func() {
 						LogConfig: executor.LogConfig{
 							Guid: containerGuid,
 						},
+						LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 					},
 				}
 
@@ -2073,6 +2076,7 @@ var _ = Describe("Container Store", func() {
 					Index:      1,
 					SourceName: "test-source",
 				},
+				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 			}
 			runReq := &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			err = containerStore.Initialize(logger, runReq)
@@ -2141,6 +2145,7 @@ var _ = Describe("Container Store", func() {
 					Index:      1,
 					SourceName: "test-source",
 				},
+				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -2214,6 +2219,7 @@ var _ = Describe("Container Store", func() {
 					Index:      1,
 					SourceName: "test-source",
 				},
+				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -2293,6 +2299,7 @@ var _ = Describe("Container Store", func() {
 					Index:      1,
 					SourceName: "test-source",
 				},
+				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
