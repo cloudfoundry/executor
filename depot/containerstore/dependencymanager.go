@@ -40,7 +40,7 @@ func (bm *dependencyManager) Stop(logger lager.Logger) {
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
-	logger.Debug("downloading-cached-dependencies")
+	logger.Debug("downloading-cached-dependencies", lager.Data{"mounts": mounts, "streamer": streamer})
 	defer logger.Debug("downloading-cached-dependencies-complete")
 
 	total := len(mounts)
@@ -76,6 +76,8 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	for {
 		select {
 		case err := <-errChan:
+			// What about the other goroutines in flight? Do they complete their downloads only to orphan the downloaded dependencies?
+			logger.Debug("download-error", lager.Data{"error": err.Error(), "bind-mounts": bindMounts})
 			return bindMounts, err
 		case cachedMount := <-mountChan:
 			bindMounts.AddBindMount(cachedMount.CacheKey, cachedMount.BindMount)
