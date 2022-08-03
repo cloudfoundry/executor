@@ -39,13 +39,13 @@ var _ = Describe("LogStreamer", func() {
 	})
 
 	Context("when told to emit", func() {
-		Context("when given a message that corresponds to one line", func() {
+		Context("when given two messages under the line limit", func() {
 			BeforeEach(func() {
 				_, _ = fmt.Fprintln(streamer.Stdout(), "this is a log")
 				_, _ = fmt.Fprintln(streamer.Stdout(), "this is another log")
 			})
 
-			It("should emit that messages", func() {
+			It("should emit both messages", func() {
 				Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
 				message, sn, tags := fakeClient.SendAppLogArgsForCall(0)
@@ -135,10 +135,17 @@ var _ = Describe("LogStreamer", func() {
 
 			It("skips logs which exceed the burst capacity", func() {
 				Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(2))
-				msg, _, _ := fakeClient.SendAppLogArgsForCall(0)
-				Expect(msg).To(MatchRegexp("^b+$"))
-				msg, _, _ = fakeClient.SendAppLogArgsForCall(1)
-				Expect(msg).To(Equal("app instance exceeded log rate limit (100 bytes/sec)"))
+
+				var messages []string
+				for i := 0; i < fakeClient.SendAppLogCallCount(); i++ {
+					msg, _, _ := fakeClient.SendAppLogArgsForCall(i)
+					messages = append(messages, msg)
+				}
+
+				Expect(messages).To(ConsistOf(
+					MatchRegexp("^b+$"),
+					Equal("app instance exceeded log rate limit (100 bytes/sec)"),
+				))
 			})
 		})
 
