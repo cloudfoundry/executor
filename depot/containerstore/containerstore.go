@@ -59,7 +59,7 @@ type ContainerConfig struct {
 	ReservedExpirationTime             time.Duration
 	ReapInterval                       time.Duration
 	MaxLogLinesPerSecond               int
-	LogRateLimitExceededReportInterval time.Duration
+	MetricReportInterval time.Duration
 }
 
 type containerStore struct {
