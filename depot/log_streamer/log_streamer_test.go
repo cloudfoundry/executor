@@ -189,6 +189,7 @@ var _ = Describe("LogStreamer", func() {
 						return printedMsgs
 					}, 1*time.Second).Should(BeNumerically("==", 1))
 
+					Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
 					calls := fakeClient.SendAppLogCallCount()
 					args := []string{}
 					for i := 0; i < calls; i++ {
