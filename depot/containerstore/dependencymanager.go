@@ -40,7 +40,8 @@ func (bm *dependencyManager) Stop(logger lager.Logger) {
 }
 
 func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
-	logger.Debug("downloading-cached-dependencies", lager.Data{"mounts": mounts, "streamer": streamer})
+	logger = logger.Session("download-cached-dependencies", lager.Data{"mounts": mounts})
+	logger.Debug("downloading-cached-dependencies-started")
 	defer logger.Debug("downloading-cached-dependencies-complete")
 
 	total := len(mounts)
@@ -50,11 +51,13 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	bindMounts := NewBindMounts(total)
 
 	if total == 0 {
+		logger.Debug("no-mounts-detected")
 		return bindMounts, nil
 	}
 
 	for i := range mounts {
 		go func(mount *executor.CachedDependency) {
+			logger.Debug("download-goroutine", lager.Data{"mount": mount})
 			limiterStart := time.Now()
 			bm.downloadRateLimiter <- struct{}{}
 			limiterTime := time.Now().Sub(limiterStart)
@@ -66,8 +69,10 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 			cachedMount, err := bm.downloadCachedDependency(logger, mount, streamer)
 			if err != nil {
+				logger.Error("downloading-dependency-failed", err, lager.Data{"cache-key": mount.CacheKey})
 				errChan <- err
 			} else {
+				logger.Debug("downloading-dependency-succeeded", lager.Data{"cache-key": mount.CacheKey, "cached-mount": cachedMount})
 				mountChan <- cachedMount
 			}
 		}(&mounts[i])
@@ -76,13 +81,14 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	for {
 		select {
 		case err := <-errChan:
-			// What about the other goroutines in flight? Do they complete their downloads only to orphan the downloaded dependencies?
-			logger.Debug("download-error", lager.Data{"error": err.Error(), "bind-mounts": bindMounts})
+			logger.Error("download-error", err, lager.Data{"bind-mounts": bindMounts, "download-expected-total": total, "download-completed": completed})
 			return bindMounts, err
 		case cachedMount := <-mountChan:
 			bindMounts.AddBindMount(cachedMount.CacheKey, cachedMount.BindMount)
 			completed++
+			logger.Debug("download-success", lager.Data{"cache-key": cachedMount.CacheKey, "download-expected-total": total, "download-completed": completed})
 			if total == completed {
+				logger.Debug("downloaded-all", lager.Data{"bind-mounts": bindMounts})
 				return bindMounts, nil
 			}
 		}
@@ -90,6 +96,10 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 }
 
 func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, streamer log_streamer.LogStreamer) (*cachedBindMount, error) {
+	logger = logger.Session("download-cached-depdency", lager.Data{"mount": mount})
+	logger.Debug("start")
+	defer logger.Debug("complete")
+
 	streamer = streamer.WithSource(mount.LogSource)
 	emit(streamer, mount, "Downloading %s...", mount.Name)
 
