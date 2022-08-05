@@ -59,6 +59,8 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
+	//TODO: Decide whether or not to multiply maxLogLinesPerSecond times 2
+	logRateLimiter := NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, time.Second*15)
 
 	return &logStreamer{
 		ctx:        ctx,
@@ -69,8 +71,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_OUT,
 			metronClient,
-			maxLogLinesPerSecond,
-			maxLogBytesPerSecond,
+			logRateLimiter,
 		),
 
 		stderr: newStreamDestination(
@@ -79,8 +80,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_ERR,
 			metronClient,
-			maxLogLinesPerSecond,
-			maxLogBytesPerSecond,
+			logRateLimiter,
 		),
 	}
 }

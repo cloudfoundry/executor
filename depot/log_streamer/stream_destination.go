@@ -3,7 +3,6 @@ package log_streamer
 import (
 	"context"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -29,8 +28,7 @@ func newStreamDestination(
 	tags map[string]string,
 	messageType loggregator_v2.Log_Type,
 	metronClient loggingclient.IngressClient,
-	maxLogLinesPerSecond int,
-	maxLogBytesPerSecond int64,
+	limiter *logRateLimiter,
 ) *streamDestination {
 	return &streamDestination{
 		ctx:                  ctx,
@@ -39,7 +37,7 @@ func newStreamDestination(
 		messageType:          messageType,
 		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient:         metronClient,
-		logRateLimitReporter: NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, time.Second*15),
+		logRateLimitReporter: limiter,
 	}
 }
 
