@@ -66,11 +66,13 @@ var _ = Describe("LogRateLimiter", func() {
 		logRateLimiter := log_streamer.NewLogRateLimiter(ctx, fakeClient, 2, 100, time.Hour)
 
 		Expect(logRateLimiter.Limit("test", map[string]string{}, 5)).ToNot(HaveOccurred())
+		Expect(fakeClient.SendAppLogCallCount()).To(Equal(0))
 		Expect(logRateLimiter.Limit("test", map[string]string{}, 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", map[string]string{}, 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", map[string]string{}, 5)).ToNot(HaveOccurred())
+		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", map[string]string{}, 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 	})
