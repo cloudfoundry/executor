@@ -3,6 +3,7 @@ package log_streamer
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -21,28 +22,32 @@ type logRateLimiter struct {
 	ctx          context.Context
 	metronClient loggingclient.IngressClient
 
-	maxLogLinesPerSecond        int
-	maxLogBytesPerSecond        int64
-	maxLogLinesPerSecondLimiter *rate.Limiter
-	maxLogBytesPerSecondLimiter *rate.Limiter
-	metricReportLimiter         *rate.Limiter
-	logReportLimiter            *rate.Limiter
+	maxLogLinesPerSecond         int
+	maxLogBytesPerSecond         int64
+	maxLogLinesPerSecondLimiter  *rate.Limiter
+	maxLogBytesPerSecondLimiter  *rate.Limiter
+	metricReportLimiter          *rate.Limiter
+	logReportLimiter             *rate.Limiter
+	logMetricsEmitInterval       time.Duration
+	bytesEmittedLastInterval     uint64
+	needToReportOverLimitMessage bool
 }
 
-func newLogRateLimiter(
+func NewLogRateLimiter(
 	ctx context.Context,
 	metronClient loggingclient.IngressClient,
 	maxLogLinesPerSecond int,
 	maxLogBytesPerSecond int64,
-	logRateLimitExceededReportInterval time.Duration,
+	logMetricsEmitInterval time.Duration,
 ) *logRateLimiter {
 	limiter := &logRateLimiter{
-		ctx:                  ctx,
-		metronClient:         metronClient,
-		maxLogLinesPerSecond: maxLogLinesPerSecond,
-		maxLogBytesPerSecond: maxLogBytesPerSecond,
-		metricReportLimiter:  rate.NewLimiter(rate.Every(logRateLimitExceededReportInterval), 1),
-		logReportLimiter:     rate.NewLimiter(rate.Every(LogRateLimitExceededLogInterval), 1),
+		ctx:                          ctx,
+		metronClient:                 metronClient,
+		maxLogLinesPerSecond:         maxLogLinesPerSecond,
+		maxLogBytesPerSecond:         maxLogBytesPerSecond,
+		logMetricsEmitInterval:       logMetricsEmitInterval,
+		bytesEmittedLastInterval:     0,
+		needToReportOverLimitMessage: true,
 	}
 
 	if maxLogLinesPerSecond > 0 {
@@ -55,7 +60,7 @@ func newLogRateLimiter(
 	} else {
 		limiter.maxLogBytesPerSecondLimiter = rate.NewLimiter(rate.Inf, 0)
 	}
-
+	go limiter.emitMetrics()
 	return limiter
 }
 
@@ -65,7 +70,8 @@ func (r *logRateLimiter) Limit(sourceName string, tags map[string]string, logLen
 		return fmt.Errorf("Not allowed to log")
 	}
 
-	if !r.maxLogBytesPerSecondLimiter.AllowN(time.Now(), logLength) {
+	calculatedLength := logLength + tagLen(tags) + len(sourceName)
+	if !r.maxLogBytesPerSecondLimiter.AllowN(time.Now(), calculatedLength) {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", r.maxLogBytesPerSecond)
 		r.reportOverlimit(sourceName, tags, reportMessage)
 		return fmt.Errorf(reportMessage)
@@ -77,22 +83,48 @@ func (r *logRateLimiter) Limit(sourceName string, tags map[string]string, logLen
 		return fmt.Errorf(reportMessage)
 	}
 
+	atomic.AddUint64(&r.bytesEmittedLastInterval, uint64(calculatedLength))
+	r.needToReportOverLimitMessage = true
 	return nil
 }
 
+func (r *logRateLimiter) emitMetrics() {
+	t := time.NewTicker(r.logMetricsEmitInterval)
+	defer t.Stop()
+	intervalDivider := r.logMetricsEmitInterval.Seconds()
+	for {
+		select {
+		case <-t.C:
+			lastIntervalEmitted := atomic.SwapUint64(&r.bytesEmittedLastInterval, 0)
+			perSecondValue := float64(lastIntervalEmitted) / intervalDivider
+			r.metronClient.SendBytesPerSecond("log_rate_limit", float64(r.maxLogBytesPerSecond))
+			r.metronClient.SendBytesPerSecond("log_rate", perSecondValue)
+		case <-r.ctx.Done():
+			return
+		}
+	}
+}
+
 func (r *logRateLimiter) reportOverlimit(sourceName string, tags map[string]string, reportMessage string) {
-	r.reportLogRateLimitExceededMetric()
-	r.reportLogRateLimitExceededLog(sourceName, tags, reportMessage)
+	if r.needToReportOverLimitMessage {
+		r.needToReportOverLimitMessage = false
+		r.reportLogRateLimitExceededMetric()
+		r.reportLogRateLimitExceededLog(sourceName, tags, reportMessage)
+	}
 }
 
 func (r *logRateLimiter) reportLogRateLimitExceededMetric() {
-	if r.metricReportLimiter.Allow() {
-		_ = r.metronClient.IncrementCounter(AppInstanceExceededLogRateLimitCount)
-	}
+	_ = r.metronClient.IncrementCounter(AppInstanceExceededLogRateLimitCount)
 }
 
 func (r *logRateLimiter) reportLogRateLimitExceededLog(sourceName string, tags map[string]string, reportMessage string) {
-	if r.logReportLimiter.Allow() {
-		_ = r.metronClient.SendAppLog(reportMessage, sourceName, tags)
+	_ = r.metronClient.SendAppLog(reportMessage, sourceName, tags)
+}
+
+func tagLen(m map[string]string) int {
+	length := 0
+	for i, j := range m {
+		length = length + len(i) + len(j)
 	}
+	return length
 }

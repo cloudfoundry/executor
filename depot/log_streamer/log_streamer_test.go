@@ -356,23 +356,6 @@ var _ = Describe("LogStreamer", func() {
 					Expect(metricName).To(Equal("AppInstanceExceededLogRateLimitCount"))
 				})
 
-				Context("when metric was already incremented in the past metric report interval", func() {
-					It("does not increment an AppInstanceExceededLogRateLimitCount metric", func() {
-						for i := 0; i < maxLogLinesPerSecond*3; i++ {
-							go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
-						}
-						// can either print the last warning or not if not fast
-						Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 2))
-						Consistently(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
-
-						for i := 0; i < maxLogLinesPerSecond*3; i++ {
-							go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
-						}
-						Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">=", 4))
-						Consistently(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
-					})
-				})
-
 				Context("when metric was incremented and report interval passed", func() {
 					BeforeEach(func() {
 						maxLogLinesPerSecond = 1

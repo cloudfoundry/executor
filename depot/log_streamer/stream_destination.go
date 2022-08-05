@@ -31,7 +31,6 @@ func newStreamDestination(
 	metronClient loggingclient.IngressClient,
 	maxLogLinesPerSecond int,
 	maxLogBytesPerSecond int64,
-	logRateLimitExceededReportInterval time.Duration,
 ) *streamDestination {
 	return &streamDestination{
 		ctx:                  ctx,
@@ -40,7 +39,7 @@ func newStreamDestination(
 		messageType:          messageType,
 		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient:         metronClient,
-		logRateLimitReporter: newLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, logRateLimitExceededReportInterval),
+		logRateLimitReporter: NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, time.Second*15),
 	}
 }
 
@@ -58,8 +57,7 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	calculatedLength := len(msg) + tagLen(destination.tags) + len(destination.sourceName)
-	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, calculatedLength)
+	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, len(msg))
 	if err != nil {
 		return
 	}
@@ -72,14 +70,6 @@ func (destination *streamDestination) flush() {
 			_ = destination.metronClient.SendAppErrorLog(string(msg), destination.sourceName, destination.tags)
 		}
 	}
-}
-
-func tagLen(m map[string]string) int {
-	length := 0
-	for i, j := range m {
-		length = length + len(i) + len(j)
-	}
-	return length
 }
 
 // Not thread safe.  should only be called when holding the processLock

@@ -71,7 +71,6 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			metronClient,
 			maxLogLinesPerSecond,
 			maxLogBytesPerSecond,
-			logRateLimitExceededReportInterval,
 		),
 
 		stderr: newStreamDestination(
@@ -82,7 +81,6 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			metronClient,
 			maxLogLinesPerSecond,
 			maxLogBytesPerSecond,
-			logRateLimitExceededReportInterval,
 		),
 	}
 }
