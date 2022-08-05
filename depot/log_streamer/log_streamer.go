@@ -36,7 +36,7 @@ type logStreamer struct {
 	stderr     *streamDestination
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, maxLogBytesPerSecond int64, logRateLimitExceededReportInterval time.Duration) LogStreamer {
+func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, maxLogBytesPerSecond int64, metricReportInterval time.Duration) LogStreamer {
 	if guid == "" {
 		return noopStreamer{}
 	}
@@ -59,8 +59,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 	}
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	//TODO: Decide whether or not to multiply maxLogLinesPerSecond times 2
-	logRateLimiter := NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, time.Second*15)
+	logRateLimiter := NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 	return &logStreamer{
 		ctx:        ctx,
