@@ -104,4 +104,14 @@ var _ = Describe("LogRateLimiter", func() {
 
 		Consistently(fakeClient.SendBytesPerSecondCallCount).Should(Equal(0))
 	})
+
+	It("does not emit metrics if the rate is zero", func() {
+		ctx := context.Background()
+		fakeClient := &mfakes.FakeIngressClient{}
+		logRateLimiter := log_streamer.NewLogRateLimiter(ctx, fakeClient, 2, 15, 0)
+
+		Expect(logRateLimiter.Limit("test", map[string]string{}, 5)).ToNot(HaveOccurred())
+
+		Consistently(fakeClient.SendBytesPerSecondCallCount).Should(Equal(0))
+	})
 })

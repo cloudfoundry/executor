@@ -90,6 +90,9 @@ func (r *logRateLimiter) Limit(sourceName string, tags map[string]string, logLen
 }
 
 func (r *logRateLimiter) emitMetrics() {
+	if r.logMetricsEmitInterval <= 0 {
+		return
+	}
 	t := time.NewTicker(r.logMetricsEmitInterval)
 	defer t.Stop()
 	intervalDivider := r.logMetricsEmitInterval.Seconds()
