@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -251,7 +250,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			})
 		}
 
-		sourceName, tags := updateSourceIdAndTags(n.info.LogConfig)
+		sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		gardenContainer, err := n.createGardenContainer(logger, &info)
 		if err != nil {
@@ -619,7 +618,7 @@ func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Unlock()
 	if n.process != nil {
 		if !stopped {
-			sourceName, tags := updateSourceIdAndTags(n.info.LogConfig)
+			sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
 			n.metronClient.SendAppLog(fmt.Sprintf("Cell %s stopping instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		}
 
@@ -650,7 +649,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 
-	sourceName, tags := updateSourceIdAndTags(n.info.LogConfig)
+	sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
 
 	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s destroying container for instance %s", n.cellID, info.Guid), sourceName, tags)
 	// ensure these directories are removed even if the container fails to destroy
@@ -789,25 +788,4 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationSucceededDuration})
 	}
 	return container, nil
-}
-
-func updateSourceIdAndTags(logConfig executor.LogConfig) (string, map[string]string) {
-	sourceName := logConfig.SourceName
-	if sourceName == "" {
-		sourceName = "LOG"
-	}
-
-	tags := map[string]string{}
-	for k, v := range logConfig.Tags {
-		tags[k] = v
-	}
-
-	if _, ok := tags["source_id"]; !ok {
-		tags["source_id"] = logConfig.Guid
-	}
-	sourceIndex := strconv.Itoa(logConfig.Index)
-	if _, ok := tags["instance_id"]; !ok {
-		tags["instance_id"] = sourceIndex
-	}
-	return sourceName, tags
 }
