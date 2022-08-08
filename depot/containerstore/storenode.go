@@ -250,7 +250,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			})
 		}
 
-		sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
+		sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		gardenContainer, err := n.createGardenContainer(logger, &info)
 		if err != nil {
@@ -618,7 +618,7 @@ func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Unlock()
 	if n.process != nil {
 		if !stopped {
-			sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
+			sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 			n.metronClient.SendAppLog(fmt.Sprintf("Cell %s stopping instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		}
 
@@ -649,7 +649,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 
-	sourceName, tags := n.info.LogConfig.GetSourceIdAndTagsForLogging()
+	sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 
 	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s destroying container for instance %s", n.cellID, info.Guid), sourceName, tags)
 	// ensure these directories are removed even if the container fails to destroy

@@ -251,7 +251,7 @@ type LogConfig struct {
 	Tags       map[string]string `json:"tags"`
 }
 
-func (l *LogConfig) GetSourceIdAndTagsForLogging() (string, map[string]string) {
+func (l LogConfig) GetSourceNameAndTagsForLogging() (string, map[string]string) {
 	sourceName := l.SourceName
 	if sourceName == "" {
 		sourceName = "LOG"
