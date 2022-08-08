@@ -255,7 +255,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		gardenContainer, err := n.createGardenContainer(logger, &info)
 		if err != nil {
-			n.metronClient.SendAppLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
+			n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
 			n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
 			return err
 		}
