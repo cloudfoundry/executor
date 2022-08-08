@@ -52,6 +52,7 @@ func NewHealthCheckStep(
 }
 
 func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 	fmt.Fprint(step.logStreamer.Stdout(), "Starting health monitoring of container\n")
 
 	readinessProcess := ifrit.Background(step.readinessCheck)
@@ -62,6 +63,7 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	case err := <-readinessProcess.Wait():
 		if err != nil {
 			healthCheckFailedTime := time.Since(healthCheckStartedTime).Round(time.Millisecond)
+			//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
 			fmt.Fprintf(step.logStreamer.Stderr(), readinessFailureMessage, healthCheckFailedTime)
 			step.logger.Info("timed-out-before-healthy", lager.Data{
@@ -76,6 +78,7 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	}
 
 	step.logger.Info("transitioned-to-healthy")
+	//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 	fmt.Fprint(step.logStreamer.Stdout(), "Container became healthy\n")
 	close(ready)
 
@@ -84,6 +87,7 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	select {
 	case err := <-livenessProcess.Wait():
 		step.logger.Info("transitioned-to-unhealthy")
+		//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 		fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
 		fmt.Fprint(step.logStreamer.Stderr(), "Container became unhealthy\n")
 		return NewEmittableError(err, healthcheckNowUnhealthy, err.Error())
