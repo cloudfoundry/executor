@@ -4,19 +4,20 @@ package containerstorefakes
 import (
 	"sync"
 
+	diego_logging_client "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/lager"
 )
 
 type FakeDependencyManager struct {
-	DownloadCachedDependenciesStub        func(lager.Logger, []executor.CachedDependency, log_streamer.LogStreamer) (containerstore.BindMounts, error)
+	DownloadCachedDependenciesStub        func(lager.Logger, []executor.CachedDependency, executor.LogConfig, diego_logging_client.IngressClient) (containerstore.BindMounts, error)
 	downloadCachedDependenciesMutex       sync.RWMutex
 	downloadCachedDependenciesArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 []executor.CachedDependency
-		arg3 log_streamer.LogStreamer
+		arg3 executor.LogConfig
+		arg4 diego_logging_client.IngressClient
 	}
 	downloadCachedDependenciesReturns struct {
 		result1 containerstore.BindMounts
@@ -47,7 +48,7 @@ type FakeDependencyManager struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeDependencyManager) DownloadCachedDependencies(arg1 lager.Logger, arg2 []executor.CachedDependency, arg3 log_streamer.LogStreamer) (containerstore.BindMounts, error) {
+func (fake *FakeDependencyManager) DownloadCachedDependencies(arg1 lager.Logger, arg2 []executor.CachedDependency, arg3 executor.LogConfig, arg4 diego_logging_client.IngressClient) (containerstore.BindMounts, error) {
 	var arg2Copy []executor.CachedDependency
 	if arg2 != nil {
 		arg2Copy = make([]executor.CachedDependency, len(arg2))
@@ -58,14 +59,15 @@ func (fake *FakeDependencyManager) DownloadCachedDependencies(arg1 lager.Logger,
 	fake.downloadCachedDependenciesArgsForCall = append(fake.downloadCachedDependenciesArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 []executor.CachedDependency
-		arg3 log_streamer.LogStreamer
-	}{arg1, arg2Copy, arg3})
+		arg3 executor.LogConfig
+		arg4 diego_logging_client.IngressClient
+	}{arg1, arg2Copy, arg3, arg4})
 	stub := fake.DownloadCachedDependenciesStub
 	fakeReturns := fake.downloadCachedDependenciesReturns
-	fake.recordInvocation("DownloadCachedDependencies", []interface{}{arg1, arg2Copy, arg3})
+	fake.recordInvocation("DownloadCachedDependencies", []interface{}{arg1, arg2Copy, arg3, arg4})
 	fake.downloadCachedDependenciesMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2, arg3)
+		return stub(arg1, arg2, arg3, arg4)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -79,17 +81,17 @@ func (fake *FakeDependencyManager) DownloadCachedDependenciesCallCount() int {
 	return len(fake.downloadCachedDependenciesArgsForCall)
 }
 
-func (fake *FakeDependencyManager) DownloadCachedDependenciesCalls(stub func(lager.Logger, []executor.CachedDependency, log_streamer.LogStreamer) (containerstore.BindMounts, error)) {
+func (fake *FakeDependencyManager) DownloadCachedDependenciesCalls(stub func(lager.Logger, []executor.CachedDependency, executor.LogConfig, diego_logging_client.IngressClient) (containerstore.BindMounts, error)) {
 	fake.downloadCachedDependenciesMutex.Lock()
 	defer fake.downloadCachedDependenciesMutex.Unlock()
 	fake.DownloadCachedDependenciesStub = stub
 }
 
-func (fake *FakeDependencyManager) DownloadCachedDependenciesArgsForCall(i int) (lager.Logger, []executor.CachedDependency, log_streamer.LogStreamer) {
+func (fake *FakeDependencyManager) DownloadCachedDependenciesArgsForCall(i int) (lager.Logger, []executor.CachedDependency, executor.LogConfig, diego_logging_client.IngressClient) {
 	fake.downloadCachedDependenciesMutex.RLock()
 	defer fake.downloadCachedDependenciesMutex.RUnlock()
 	argsForCall := fake.downloadCachedDependenciesArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
 }
 
 func (fake *FakeDependencyManager) DownloadCachedDependenciesReturns(result1 containerstore.BindMounts, result2 error) {

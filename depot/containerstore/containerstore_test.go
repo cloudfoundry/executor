@@ -543,7 +543,7 @@ var _ = Describe("Container Store", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dependencyManager.DownloadCachedDependenciesCallCount()).To(Equal(1))
-				_, mounts, _ := dependencyManager.DownloadCachedDependenciesArgsForCall(0)
+				_, mounts, _, _ := dependencyManager.DownloadCachedDependenciesArgsForCall(0)
 				Expect(mounts).To(Equal(runReq.CachedDependencies))
 			})
 

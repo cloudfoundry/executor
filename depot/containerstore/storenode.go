@@ -197,9 +197,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 
 	createContainer := func() error {
-		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, info.LogRateLimitBytesPerSecond, n.config.MetricReportInterval)
-
-		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
+		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, info.LogConfig, n.metronClient)
 		if err != nil {
 			n.complete(logger, true, DownloadCachedDependenciesFailed, true)
 			return err
