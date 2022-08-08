@@ -11,15 +11,15 @@ import (
 )
 
 type streamDestination struct {
-	ctx                  context.Context
-	sourceName           string
-	tags                 map[string]string
-	messageType          loggregator_v2.Log_Type
-	buffer               []byte
-	processLock          sync.Mutex
-	metronClient         loggingclient.IngressClient
-	logRateLimitReporter *logRateLimiter
-	logger               lager.Logger
+	ctx            context.Context
+	sourceName     string
+	tags           map[string]string
+	messageType    loggregator_v2.Log_Type
+	buffer         []byte
+	processLock    sync.Mutex
+	metronClient   loggingclient.IngressClient
+	logRateLimiter *logRateLimiter
+	logger         lager.Logger
 }
 
 func newStreamDestination(
@@ -31,13 +31,13 @@ func newStreamDestination(
 	limiter *logRateLimiter,
 ) *streamDestination {
 	return &streamDestination{
-		ctx:                  ctx,
-		sourceName:           sourceName,
-		tags:                 tags,
-		messageType:          messageType,
-		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
-		metronClient:         metronClient,
-		logRateLimitReporter: limiter,
+		ctx:            ctx,
+		sourceName:     sourceName,
+		tags:           tags,
+		messageType:    messageType,
+		buffer:         make([]byte, 0, MAX_MESSAGE_SIZE),
+		metronClient:   metronClient,
+		logRateLimiter: limiter,
 	}
 }
 
@@ -55,7 +55,7 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	err := destination.logRateLimitReporter.Limit(destination.sourceName, destination.tags, len(msg))
+	err := destination.logRateLimiter.Limit(destination.sourceName, destination.tags, len(msg))
 	if err != nil {
 		return
 	}
@@ -146,12 +146,12 @@ func (destination *streamDestination) appendToBuffer(message string) string {
 
 func (d *streamDestination) withSource(ctx context.Context, sourceName string) *streamDestination {
 	return &streamDestination{
-		ctx:                  ctx,
-		sourceName:           sourceName,
-		tags:                 d.tags,
-		messageType:          d.messageType,
-		buffer:               make([]byte, 0, MAX_MESSAGE_SIZE),
-		metronClient:         d.metronClient,
-		logRateLimitReporter: d.logRateLimitReporter,
+		ctx:            ctx,
+		sourceName:     sourceName,
+		tags:           d.tags,
+		messageType:    d.messageType,
+		buffer:         make([]byte, 0, MAX_MESSAGE_SIZE),
+		metronClient:   d.metronClient,
+		logRateLimiter: d.logRateLimiter,
 	}
 }
