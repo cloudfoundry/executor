@@ -8,6 +8,7 @@ import (
 	"time"
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,10 +17,11 @@ import (
 
 var _ = Describe("LogStreamer", func() {
 	var (
-		streamer                           log_streamer.LogStreamer
-		fakeClient                         *mfakes.FakeIngressClient
-		maxLogLinesPerSecond               int
-		maxLogBytesPerSecond               int64
+		streamer             log_streamer.LogStreamer
+		fakeClient           *mfakes.FakeIngressClient
+		logConfig            executor.LogConfig
+		maxLogLinesPerSecond int
+		maxLogBytesPerSecond int64
 		metricReportInterval time.Duration
 	)
 
@@ -35,7 +37,8 @@ var _ = Describe("LogStreamer", func() {
 		maxLogLinesPerSecond, maxLogBytesPerSecond = 9999, -1
 		metricReportInterval = 5 * time.Minute
 		fakeClient = &mfakes.FakeIngressClient{}
-		streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+		logConfig = executor.LogConfig{Guid: guid, SourceName: sourceName, Index: index, Tags: tags}
+		streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 	})
 
 	Context("when told to emit", func() {
@@ -71,7 +74,7 @@ var _ = Describe("LogStreamer", func() {
 				var logLine string
 				BeforeEach(func() {
 					maxLogBytesPerSecond = 1000
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					logLine := strings.Repeat("a", int(maxLogBytesPerSecond/2))
 					for i := 0; i < 3; i++ {
@@ -111,7 +114,7 @@ var _ = Describe("LogStreamer", func() {
 		Context("Max bytes per second is zero", func() {
 			BeforeEach(func() {
 				maxLogBytesPerSecond = 0
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 				logLine := strings.Repeat("a", 20)
 				for i := 0; i < 3; i++ {
@@ -127,7 +130,7 @@ var _ = Describe("LogStreamer", func() {
 		Context("Byte limit is low", func() {
 			BeforeEach(func() {
 				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 				go fmt.Fprintf(streamer.Stdout(), strings.Repeat("a", 1000)+"\n")
 				go fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
@@ -152,7 +155,7 @@ var _ = Describe("LogStreamer", func() {
 		Context("Log rate limit is low", func() {
 			BeforeEach(func() {
 				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
-				streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 				for i := 0; i < 10000; i++ {
 					go fmt.Fprintf(streamer.Stdout(), "a\n")
@@ -170,7 +173,7 @@ var _ = Describe("LogStreamer", func() {
 			Context("rate limit is applied at a lower threshold", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 1
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < maxLogLinesPerSecond*3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d\n", i)
@@ -225,7 +228,7 @@ var _ = Describe("LogStreamer", func() {
 					}
 					maxLogLinesPerSecond = 1
 					metricReportInterval = time.Second
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -242,7 +245,7 @@ var _ = Describe("LogStreamer", func() {
 			Context("rate limit is not applied", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 0
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 20; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -257,7 +260,7 @@ var _ = Describe("LogStreamer", func() {
 			Context("rate limit is bigger than number of log lines", func() {
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 6
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 3; i++ {
 						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
@@ -310,7 +313,7 @@ var _ = Describe("LogStreamer", func() {
 
 				BeforeEach(func() {
 					maxLogLinesPerSecond = 1
-					streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					newStreamer = streamer.WithSource("new-source-name")
 				})
@@ -361,7 +364,7 @@ var _ = Describe("LogStreamer", func() {
 					BeforeEach(func() {
 						maxLogLinesPerSecond = 1
 						metricReportInterval = time.Second
-						streamer = log_streamer.New(guid, sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+						streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 						newStreamer = streamer.WithSource("new-source-name")
 					})
 
@@ -592,7 +595,8 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no app guid", func() {
 		It("does nothing when told to emit or flush", func() {
-			streamer = log_streamer.New("", sourceName, index, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+			logConfig = executor.LogConfig{Guid: "", SourceName: sourceName, Index: index, Tags: tags}
+			streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Stderr().Write([]byte("hi"))
@@ -604,7 +608,8 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no log source", func() {
 		It("defaults to LOG", func() {
-			streamer = log_streamer.New(guid, "", -1, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+			logConfig = executor.LogConfig{Guid: guid, SourceName: "", Index: index, Tags: tags}
+			streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()
@@ -617,7 +622,8 @@ var _ = Describe("LogStreamer", func() {
 
 	Context("when there is no source index", func() {
 		It("defaults to 0", func() {
-			streamer = log_streamer.New(guid, sourceName, -1, tags, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+			logConfig = executor.LogConfig{Guid: guid, SourceName: sourceName, Index: -1, Tags: tags}
+			streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 			streamer.Stdout().Write([]byte("hi"))
 			streamer.Flush()

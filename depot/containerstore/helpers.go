@@ -18,10 +18,7 @@ var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip
 
 func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, maxLogBytesPerSecond int64, metricReportInterval time.Duration) log_streamer.LogStreamer {
 	return log_streamer.New(
-		conf.Guid,
-		conf.SourceName,
-		conf.Index,
-		conf.Tags,
+		conf,
 		metronClient,
 		maxLogLinesPerSecond,
 		maxLogBytesPerSecond,
