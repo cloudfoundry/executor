@@ -55,7 +55,7 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	err := destination.logRateLimiter.Limit(destination.sourceName, destination.tags, len(msg))
+	err := destination.logRateLimiter.Limit(destination.sourceName, len(msg))
 	if err != nil {
 		return
 	}

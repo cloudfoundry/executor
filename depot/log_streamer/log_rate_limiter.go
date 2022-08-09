@@ -31,11 +31,13 @@ type logRateLimiter struct {
 	logMetricsEmitInterval       time.Duration
 	bytesEmittedLastInterval     uint64
 	needToReportOverlimitMessage atomic.Value
+	tags                         map[string]string
 }
 
 func NewLogRateLimiter(
 	ctx context.Context,
 	metronClient loggingclient.IngressClient,
+	tags map[string]string,
 	maxLogLinesPerSecond int,
 	maxLogBytesPerSecond int64,
 	logMetricsEmitInterval time.Duration,
@@ -49,6 +51,7 @@ func NewLogRateLimiter(
 		maxLogBytesPerSecond:         maxLogBytesPerSecond,
 		logMetricsEmitInterval:       logMetricsEmitInterval,
 		bytesEmittedLastInterval:     0,
+		tags:                         tags,
 		needToReportOverlimitMessage: needToReportOverlimitMessage,
 	}
 
@@ -67,20 +70,20 @@ func NewLogRateLimiter(
 }
 
 // Limit is called before logging to determine if the log should be dropped (returns err) or logged (returns nil).
-func (r *logRateLimiter) Limit(sourceName string, tags map[string]string, logLength int) error {
+func (r *logRateLimiter) Limit(sourceName string, logLength int) error {
 	if r.maxLogBytesPerSecond == 0 {
 		return fmt.Errorf("Not allowed to log")
 	}
 
 	if !r.maxLogBytesPerSecondLimiter.AllowN(time.Now(), logLength) {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", r.maxLogBytesPerSecond)
-		r.reportOverlimit(sourceName, tags, reportMessage)
+		r.reportOverlimit(sourceName, reportMessage)
 		return fmt.Errorf(reportMessage)
 	}
 
 	if !r.maxLogLinesPerSecondLimiter.Allow() {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d log-lines/sec) set by platform operator", r.maxLogLinesPerSecond)
-		r.reportOverlimit(sourceName, tags, reportMessage)
+		r.reportOverlimit(sourceName, reportMessage)
 		return fmt.Errorf(reportMessage)
 	}
 
@@ -101,18 +104,17 @@ func (r *logRateLimiter) emitMetrics() {
 		case <-t.C:
 			lastIntervalEmitted := atomic.SwapUint64(&r.bytesEmittedLastInterval, 0)
 			perSecondValue := float64(lastIntervalEmitted) / intervalDivider
-			r.metronClient.SendBytesPerSecond("log_rate_limit", float64(r.maxLogBytesPerSecond))
-			r.metronClient.SendBytesPerSecond("log_rate", perSecondValue)
+			r.metronClient.SendAppLogRate(perSecondValue, float64(r.maxLogBytesPerSecond), r.tags)
 		case <-r.ctx.Done():
 			return
 		}
 	}
 }
 
-func (r *logRateLimiter) reportOverlimit(sourceName string, tags map[string]string, reportMessage string) {
+func (r *logRateLimiter) reportOverlimit(sourceName string, reportMessage string) {
 	if r.needToReportOverlimitMessage.CompareAndSwap(true, false) {
 		r.reportLogRateLimitExceededMetric()
-		r.reportLogRateLimitExceededLog(sourceName, tags, reportMessage)
+		r.reportLogRateLimitExceededLog(sourceName, reportMessage)
 	}
 }
 
@@ -120,6 +122,6 @@ func (r *logRateLimiter) reportLogRateLimitExceededMetric() {
 	_ = r.metronClient.IncrementCounter(AppInstanceExceededLogRateLimitCount)
 }
 
-func (r *logRateLimiter) reportLogRateLimitExceededLog(sourceName string, tags map[string]string, reportMessage string) {
-	_ = r.metronClient.SendAppLog(reportMessage, sourceName, tags)
+func (r *logRateLimiter) reportLogRateLimitExceededLog(sourceName string, reportMessage string) {
+	_ = r.metronClient.SendAppLog(reportMessage, sourceName, r.tags)
 }

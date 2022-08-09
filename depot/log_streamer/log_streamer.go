@@ -44,7 +44,7 @@ func New(config executor.LogConfig, metronClient loggingclient.IngressClient, ma
 	sourceName, tags := config.GetSourceNameAndTagsForLogging()
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	logRateLimiter := NewLogRateLimiter(ctx, metronClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
+	logRateLimiter := NewLogRateLimiter(ctx, metronClient, tags, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 	return &logStreamer{
 		ctx:        ctx,
