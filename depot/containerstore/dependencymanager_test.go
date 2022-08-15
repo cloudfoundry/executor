@@ -3,6 +3,7 @@ package containerstore_test
 import (
 	"errors"
 	"net/url"
+	"time"
 
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
@@ -35,6 +36,45 @@ var _ = Describe("DependencyManager", func() {
 			{Name: "name-1", CacheKey: "cache-key-1", LogSource: "log-source-1", From: "https://user:pass@example.com:8080/download-1", To: "/var/data/buildpack-1"},
 			{CacheKey: "cache-key-2", LogSource: "log-source-2", From: "http://example.com:1515/download-2", To: "/var/data/buildpack-2"},
 		}
+	})
+
+	Context("when fetching one of the dependencies fails", func() {
+		var dependency2ReceivedCancel, dependency3ReceivedCancel bool
+
+		BeforeEach(func() {
+			dependencies = append(dependencies,
+				executor.CachedDependency{CacheKey: "cache-key-3", LogSource: "log-source-3", From: "https://example.com:8080/download-3", To: "/var/data/buildpack-3"},
+			)
+
+			cache.FetchAsDirectoryStub = func(logger lager.Logger, urlToFetch *url.URL, cacheKey string, checksum cacheddownloader.ChecksumInfoType, cancelChan <-chan struct{}) (dirPath string, size int64, err error) {
+				switch cacheKey {
+				case "cache-key-1":
+					time.Sleep(1 * time.Second)
+					return "", 0, errors.New("failed-to-fetch")
+				case "cache-key-2":
+					select {
+					case <-cancelChan:
+						dependency2ReceivedCancel = true
+						return "", 0, errors.New("canceled")
+					}
+				case "cache-key-3":
+					select {
+					case <-cancelChan:
+						dependency3ReceivedCancel = true
+						return "", 0, errors.New("canceled")
+					}
+				}
+				return "", 0, errors.New("unknown-cache-key")
+			}
+		})
+
+		It("stops downloading the rest of the dependencies", func() {
+			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError("failed-to-fetch"))
+			Expect(dependency2ReceivedCancel).To(BeTrue())
+			Expect(dependency3ReceivedCancel).To(BeTrue())
+		})
 	})
 
 	Context("when fetching all of the dependencies succeeds", func() {
