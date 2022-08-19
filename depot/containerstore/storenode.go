@@ -197,9 +197,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	}
 
 	createContainer := func() error {
-		logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
-
-		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, logStreamer)
+		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, info.LogConfig, n.metronClient)
 		if err != nil {
 			n.complete(logger, true, DownloadCachedDependenciesFailed, true)
 			return err
@@ -250,14 +248,15 @@ func (n *storeNode) Create(logger lager.Logger) error {
 			})
 		}
 
-		fmt.Fprintf(logStreamer.Stdout(), "Cell %s creating container for instance %s\n", n.cellID, n.Info().Guid)
+		sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
+		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		gardenContainer, err := n.createGardenContainer(logger, &info)
 		if err != nil {
-			fmt.Fprintf(logStreamer.Stderr(), "Cell %s failed to create container for instance %s: %s\n", n.cellID, n.Info().Guid, err.Error())
+			n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
 			n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
 			return err
 		}
-		fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully created container for instance %s\n", n.cellID, n.Info().Guid)
+		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully created container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 
 		n.infoLock.Lock()
 		n.gardenContainer = gardenContainer
@@ -504,7 +503,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
+	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.info.LogRateLimitBytesPerSecond, n.config.MetricReportInterval)
 
 	credManagerRunner := n.credManager.Runner(logger, n, n.regenerateCertsCh)
 
@@ -617,8 +616,8 @@ func (n *storeNode) stop(logger lager.Logger) {
 	n.infoLock.Unlock()
 	if n.process != nil {
 		if !stopped {
-			logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
-			fmt.Fprintf(logStreamer.Stdout(), "Cell %s stopping instance %s\n", n.cellID, n.Info().Guid)
+			sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
+			n.metronClient.SendAppLog(fmt.Sprintf("Cell %s stopping instance %s", n.cellID, n.Info().Guid), sourceName, tags)
 		}
 
 		n.process.Signal(os.Interrupt)
@@ -648,20 +647,19 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 
-	logStreamer := logStreamerFromLogConfig(info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.config.LogRateLimitExceededReportInterval)
+	sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s destroying container for instance %s\n", n.cellID, info.Guid)
-
+	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s destroying container for instance %s", n.cellID, info.Guid), sourceName, tags)
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
 
 	err := n.destroyContainer(logger)
 	if err != nil {
-		fmt.Fprintf(logStreamer.Stdout(), "Cell %s failed to destroy container for instance %s\n", n.cellID, info.Guid)
+		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s failed to destroy container for instance %s", n.cellID, info.Guid), sourceName, tags)
 		return err
 	}
-	fmt.Fprintf(logStreamer.Stdout(), "Cell %s successfully destroyed container for instance %s\n", n.cellID, info.Guid)
+	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", n.cellID, info.Guid), sourceName, tags)
 
 	cacheKeys := n.bindMountCacheKeys
 

@@ -54,7 +54,9 @@ var _ = Describe("Transformer", func() {
 			fakeMetronClient = &mfakes.FakeIngressClient{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
-			logStreamer = log_streamer.New("test", "test", 1, map[string]string{}, fakeMetronClient, 100, 5*time.Minute)
+
+			logConfig = executor.LogConfig{Guid: "test", SourceName: "test", Index: 1, Tags: map[string]string{}}
+			logStreamer = log_streamer.New(logConfig, fakeMetronClient, 100, 100000, 5*time.Minute)
 
 			healthyMonitoringInterval = 1 * time.Second
 			unhealthyMonitoringInterval = 1 * time.Millisecond

@@ -3,10 +3,10 @@ package log_streamer
 import (
 	"context"
 	"io"
-	"strconv"
 	"time"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
+	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
 )
 
@@ -36,29 +36,15 @@ type logStreamer struct {
 	stderr     *streamDestination
 }
 
-func New(guid string, sourceName string, index int, originalTags map[string]string, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, logRateLimitExceededReportInterval time.Duration) LogStreamer {
-	if guid == "" {
+func New(config executor.LogConfig, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, maxLogBytesPerSecond int64, metricReportInterval time.Duration) LogStreamer {
+	if config.Guid == "" {
 		return noopStreamer{}
 	}
 
-	if sourceName == "" {
-		sourceName = DefaultLogSource
-	}
-
-	tags := map[string]string{}
-	for k, v := range originalTags {
-		tags[k] = v
-	}
-
-	if _, ok := tags["source_id"]; !ok {
-		tags["source_id"] = guid
-	}
-	sourceIndex := strconv.Itoa(index)
-	if _, ok := tags["instance_id"]; !ok {
-		tags["instance_id"] = sourceIndex
-	}
+	sourceName, tags := config.GetSourceNameAndTagsForLogging()
 
 	ctx, cancelFunc := context.WithCancel(context.Background())
+	logRateLimiter := NewLogRateLimiter(ctx, metronClient, tags, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 	return &logStreamer{
 		ctx:        ctx,
@@ -69,8 +55,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_OUT,
 			metronClient,
-			maxLogLinesPerSecond,
-			logRateLimitExceededReportInterval,
+			logRateLimiter,
 		),
 
 		stderr: newStreamDestination(
@@ -79,8 +64,7 @@ func New(guid string, sourceName string, index int, originalTags map[string]stri
 			tags,
 			loggregator_v2.Log_ERR,
 			metronClient,
-			maxLogLinesPerSecond,
-			logRateLimitExceededReportInterval,
+			logRateLimiter,
 		),
 	}
 }

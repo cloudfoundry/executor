@@ -6,14 +6,13 @@ import (
 
 	"code.cloudfoundry.org/cacheddownloader"
 	"code.cloudfoundry.org/cacheddownloader/cacheddownloaderfakes"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("DependencyManager", func() {
@@ -21,13 +20,15 @@ var _ = Describe("DependencyManager", func() {
 		dependencyManager   containerstore.DependencyManager
 		cache               *cacheddownloaderfakes.FakeCachedDownloader
 		dependencies        []executor.CachedDependency
-		logStreamer         *fake_log_streamer.FakeLogStreamer
+		fakeClient          *mfakes.FakeIngressClient
+		logConfig           executor.LogConfig
 		downloadRateLimiter chan struct{}
 	)
 
 	BeforeEach(func() {
 		cache = &cacheddownloaderfakes.FakeCachedDownloader{}
-		logStreamer = fake_log_streamer.NewFakeLogStreamer()
+		fakeClient = &mfakes.FakeIngressClient{}
+		logConfig = executor.LogConfig{Guid: "test", SourceName: "test", Index: 0, Tags: map[string]string{}}
 		downloadRateLimiter = make(chan struct{}, 2)
 		dependencyManager = containerstore.NewDependencyManager(cache, downloadRateLimiter)
 		dependencies = []executor.CachedDependency{
@@ -42,28 +43,18 @@ var _ = Describe("DependencyManager", func() {
 		BeforeEach(func() {
 			cache.FetchAsDirectoryReturns("/tmp/download/dependencies", 123, nil)
 			var err error
-			bindMounts, err = dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
+			bindMounts, err = dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("uses the log source of the cached dependency", func() {
-			Expect(logStreamer.WithSourceCallCount()).To(Equal(2))
-			expectedSources := []string{
-				"log-source-1",
-				"log-source-2",
-			}
-
-			Expect(expectedSources).To(ContainElement(logStreamer.WithSourceArgsForCall(0)))
-			Expect(expectedSources).To(ContainElement(logStreamer.WithSourceArgsForCall(1)))
-		})
-
 		It("emits the download log messages for downloads with names", func() {
-			stdout := logStreamer.Stdout().(*gbytes.Buffer)
-			Expect(stdout.Contents()).To(ContainSubstring("Downloading name-1..."))
-			Expect(stdout.Contents()).To(ContainSubstring("Downloaded name-1 (123B)"))
-
-			Expect(stdout.Contents()).ToNot(ContainSubstring("Downloading ..."))
-			Expect(stdout.Contents()).ToNot(ContainSubstring("Downloaded  (123B)"))
+			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
+			msg, logSource, _ := fakeClient.SendAppLogArgsForCall(0)
+			Expect(msg).To(Equal("Downloading name-1..."))
+			Expect(logSource).To(Equal("log-source-1"))
+			msg, logSource, _ = fakeClient.SendAppLogArgsForCall(1)
+			Expect(msg).To(Equal("Downloaded name-1 (123B)"))
+			Expect(logSource).To(Equal("log-source-1"))
 		})
 
 		It("returns the expected mount information", func() {
@@ -114,7 +105,7 @@ var _ = Describe("DependencyManager", func() {
 		})
 
 		It("returns the error", func() {
-			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
+			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -125,22 +116,25 @@ var _ = Describe("DependencyManager", func() {
 		})
 
 		It("emits the download events", func() {
-			_, _ = dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
-			Eventually(func() []byte {
-				stdout := logStreamer.Stdout().(*gbytes.Buffer)
-				return stdout.Contents()
-			}).Should(And(ContainSubstring("Downloading name-1..."), ContainSubstring("Downloading name-1 failed\n")))
+			_, _ = dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
+			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
+			msg, logSource, _ := fakeClient.SendAppLogArgsForCall(0)
+			Expect(msg).To(Equal("Downloading name-1..."))
+			Expect(logSource).To(Equal("log-source-1"))
+			msg, logSource, _ = fakeClient.SendAppLogArgsForCall(1)
+			Expect(msg).To(Equal("Downloading name-1 failed"))
+			Expect(logSource).To(Equal("log-source-1"))
 		})
 
 		It("returns the error", func() {
-			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
+			_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
 	Context("When there are no cached dependencies ", func() {
 		It("returns an empty list of bindmounts", func() {
-			bindMounts, err := dependencyManager.DownloadCachedDependencies(logger, nil, logStreamer)
+			bindMounts, err := dependencyManager.DownloadCachedDependencies(logger, nil, logConfig, fakeClient)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(bindMounts.CacheKeys).To(HaveLen(0))
 			Expect(bindMounts.GardenBindMounts).To(HaveLen(0))
@@ -170,7 +164,7 @@ var _ = Describe("DependencyManager", func() {
 			done := make(chan struct{})
 
 			go func() {
-				_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logStreamer)
+				_, err := dependencyManager.DownloadCachedDependencies(logger, dependencies, logConfig, fakeClient)
 				Expect(err).NotTo(HaveOccurred())
 				close(done)
 			}()

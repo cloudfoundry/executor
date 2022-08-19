@@ -7,8 +7,8 @@ import (
 
 	"code.cloudfoundry.org/bytefmt"
 	"code.cloudfoundry.org/cacheddownloader"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
@@ -16,7 +16,7 @@ import (
 //go:generate counterfeiter -o containerstorefakes/fake_bindmounter.go . DependencyManager
 
 type DependencyManager interface {
-	DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logStreamer log_streamer.LogStreamer) (BindMounts, error)
+	DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logconfig executor.LogConfig, metronClient loggingclient.IngressClient) (BindMounts, error)
 	ReleaseCachedDependencies(logger lager.Logger, keys []BindMountCacheKey) error
 	Stop(logger lager.Logger)
 }
@@ -39,7 +39,7 @@ func (bm *dependencyManager) Stop(logger lager.Logger) {
 	}
 }
 
-func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, streamer log_streamer.LogStreamer) (BindMounts, error) {
+func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mounts []executor.CachedDependency, logConfig executor.LogConfig, metronClient loggingclient.IngressClient) (BindMounts, error) {
 	logger.Debug("downloading-cached-dependencies")
 	defer logger.Debug("downloading-cached-dependencies-complete")
 
@@ -64,7 +64,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 				<-bm.downloadRateLimiter
 			}()
 
-			cachedMount, err := bm.downloadCachedDependency(logger, mount, streamer)
+			cachedMount, err := bm.downloadCachedDependency(logger, mount, logConfig, metronClient)
 			if err != nil {
 				errChan <- err
 			} else {
@@ -87,14 +87,21 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	}
 }
 
-func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, streamer log_streamer.LogStreamer) (*cachedBindMount, error) {
-	streamer = streamer.WithSource(mount.LogSource)
-	emit(streamer, mount, "Downloading %s...", mount.Name)
+func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, logConfig executor.LogConfig, metronClient loggingclient.IngressClient) (*cachedBindMount, error) {
+	sourceName, tags := logConfig.GetSourceNameAndTagsForLogging()
+	if mount.LogSource != "" {
+		sourceName = mount.LogSource
+	}
+	if mount.Name != "" {
+		metronClient.SendAppLog(fmt.Sprintf("Downloading %s...", mount.Name), sourceName, tags)
+	}
 
 	downloadURL, err := url.Parse(mount.From)
 	if err != nil {
 		logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
-		emit(streamer, mount, "Downloading %s failed", mount.Name)
+		if mount.Name != "" {
+			metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+		}
 		return nil, err
 	}
 
@@ -111,15 +118,21 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 	)
 	if err != nil {
 		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
-		emit(streamer, mount, "Downloading %s failed", mount.Name)
+		if mount.Name != "" {
+			metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+		}
 		return nil, err
 	}
 	logger.Debug("fetched-cache-dependency", lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey, "size": downloadedSize})
 
 	if downloadedSize != 0 {
-		emit(streamer, mount, "Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize)))
+		if mount.Name != "" {
+			metronClient.SendAppLog(fmt.Sprintf("Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize))), sourceName, tags)
+		}
 	} else {
-		emit(streamer, mount, "Downloaded %s", mount.Name)
+		if mount.Name != "" {
+			metronClient.SendAppLog(fmt.Sprintf("Downloaded %s", mount.Name), sourceName, tags)
+		}
 	}
 	return newCachedBindMount(mount.CacheKey, newBindMount(dirPath, mount.To)), nil
 }
@@ -135,12 +148,6 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 		}
 	}
 	return nil
-}
-
-func emit(streamer log_streamer.LogStreamer, mount *executor.CachedDependency, format string, a ...interface{}) {
-	if mount.Name != "" {
-		fmt.Fprintf(streamer.Stdout(), format+"\n", a...)
-	}
 }
 
 type cachedBindMount struct {
