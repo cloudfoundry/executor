@@ -78,7 +78,7 @@ var _ = Describe("LogStreamer", func() {
 
 					logLine := strings.Repeat("a", int(maxLogBytesPerSecond/2))
 					for i := 0; i < 3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), logLine+"\n", i)
+						go fmt.Fprintf(streamer.Stdout(), logLine+"\n\n\n\n", i)
 					}
 				})
 

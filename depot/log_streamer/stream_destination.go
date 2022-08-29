@@ -55,12 +55,10 @@ func (destination *streamDestination) Write(data []byte) (int, error) {
 func (destination *streamDestination) flush() {
 	msg := destination.copyAndResetBuffer()
 
-	err := destination.logRateLimiter.Limit(destination.sourceName, len(msg))
-	if err != nil {
-		return
-	}
-
 	if len(msg) > 0 {
+		if destination.logRateLimiter.Limit(destination.sourceName, len(msg)) != nil {
+			return
+		}
 		switch destination.messageType {
 		case loggregator_v2.Log_OUT:
 			_ = destination.metronClient.SendAppLog(string(msg), destination.sourceName, destination.tags)
