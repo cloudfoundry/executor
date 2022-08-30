@@ -3,6 +3,7 @@ package containerstore
 import (
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bytefmt"
@@ -47,14 +48,20 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	completed := 0
 	mountChan := make(chan *cachedBindMount, total)
 	errChan := make(chan error, total)
+	cancelChan := make(chan struct{}, 0)
 	bindMounts := NewBindMounts(total)
 
 	if total == 0 {
 		return bindMounts, nil
 	}
 
+	var wg sync.WaitGroup
+
 	for i := range mounts {
+		wg.Add(1)
 		go func(mount *executor.CachedDependency) {
+			defer wg.Done()
+
 			limiterStart := time.Now()
 			bm.downloadRateLimiter <- struct{}{}
 			limiterTime := time.Now().Sub(limiterStart)
@@ -64,7 +71,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 				<-bm.downloadRateLimiter
 			}()
 
-			cachedMount, err := bm.downloadCachedDependency(logger, mount, logConfig, metronClient)
+			cachedMount, err := bm.downloadCachedDependency(logger, mount, logConfig, metronClient, cancelChan)
 			if err != nil {
 				errChan <- err
 			} else {
@@ -76,6 +83,8 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	for {
 		select {
 		case err := <-errChan:
+			close(cancelChan)
+			wg.Wait()
 			return bindMounts, err
 		case cachedMount := <-mountChan:
 			bindMounts.AddBindMount(cachedMount.CacheKey, cachedMount.BindMount)
@@ -87,7 +96,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	}
 }
 
-func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, logConfig executor.LogConfig, metronClient loggingclient.IngressClient) (*cachedBindMount, error) {
+func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount *executor.CachedDependency, logConfig executor.LogConfig, metronClient loggingclient.IngressClient, cancelChan <-chan struct{}) (*cachedBindMount, error) {
 	sourceName, tags := logConfig.GetSourceNameAndTagsForLogging()
 	if mount.LogSource != "" {
 		sourceName = mount.LogSource
@@ -114,7 +123,7 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 			Algorithm: mount.ChecksumAlgorithm,
 			Value:     mount.ChecksumValue,
 		},
-		nil,
+		cancelChan,
 	)
 	if err != nil {
 		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
