@@ -269,7 +269,7 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("uploads the file to the url", func() {
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					upldr = uploader.New(logger, 1*time.Second, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).NotTo(HaveOccurred())
 
