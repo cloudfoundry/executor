@@ -163,9 +163,10 @@ var _ = Describe("LogStreamer", func() {
 			})
 
 			It("skips logs when streamer is stopped", func() {
-				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<=", 2))
+				Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically(">", 0))
 				streamer.Stop()
-				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(BeNumerically("<=", 2))
+				callCount := fakeClient.SendAppLogCallCount()
+				Consistently(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(callCount))
 			})
 		})
 
