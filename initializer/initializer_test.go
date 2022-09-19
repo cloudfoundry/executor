@@ -442,7 +442,7 @@ var _ = Describe("Initializer", func() {
 			})
 
 			It("fails", func() {
-				Eventually(errCh).Should(Receive(MatchError("unable to load CA certificate")))
+				Eventually(errCh, 2*time.Second).Should(Receive(MatchError("unable to load CA certificate")))
 			})
 		})
 
