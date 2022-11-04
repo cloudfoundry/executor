@@ -87,6 +87,7 @@ type storeNode struct {
 	bindMounts                            []garden.BindMount
 	cellID                                string
 	enableUnproxiedPortMappings           bool
+	exposeC2CTlsPortOnHost                bool
 	advertisePreferenceForInstanceAddress bool
 
 	destroying, stopping int32
@@ -113,6 +114,7 @@ func newStoreNode(
 	rootFSSizer configuration.RootFSSizer,
 	cellID string,
 	enableUnproxiedPortMappings bool,
+	exposeC2CTlsPortOnHost bool,
 	advertisePreferenceForInstanceAddress bool,
 ) *storeNode {
 	return &storeNode{
@@ -136,6 +138,7 @@ func newStoreNode(
 		rootFSSizer:                           rootFSSizer,
 		cellID:                                cellID,
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
+		exposeC2CTlsPortOnHost:                exposeC2CTlsPortOnHost,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
 	}
@@ -355,11 +358,13 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		}
 	}
 
-	netInRules := make([]garden.NetIn, len(netInPorts))
-	for i, portMapping := range netInPorts {
-		netInRules[i] = garden.NetIn{
-			HostPort:      uint32(portMapping.HostPort),
-			ContainerPort: uint32(portMapping.ContainerPort),
+	netInRules := make([]garden.NetIn, 0, len(netInPorts))
+	for _, portMapping := range netInPorts {
+		if n.exposeC2CTlsPortOnHost || portMapping.ContainerPort != C2CTLSPort {
+			netInRules = append(netInRules, garden.NetIn{
+				HostPort:      uint32(portMapping.HostPort),
+				ContainerPort: uint32(portMapping.ContainerPort),
+			})
 		}
 	}
 
