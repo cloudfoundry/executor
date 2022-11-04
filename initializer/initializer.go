@@ -108,6 +108,7 @@ type ExecutorConfig struct {
 	EnvoyConfigReloadDuration             durationjson.Duration `json:"envoy_config_reload_duration"`
 	EnvoyDrainTimeout                     durationjson.Duration `json:"envoy_drain_timeout,omitempty"`
 	ExportNetworkEnvVars                  bool                  `json:"export_network_env_vars,omitempty"` // DEPRECATED. Kept around for dusts compatability
+	ExposeC2CTlsPortOnHost                bool                  `json:"exposeC2CPortOnHost,omitempty"`
 	GardenAddr                            string                `json:"garden_addr,omitempty"`
 	GardenHealthcheckCommandRetryPause    durationjson.Duration `json:"garden_healthcheck_command_retry_pause,omitempty"`
 	GardenHealthcheckEmissionInterval     durationjson.Duration `json:"garden_healthcheck_emission_interval,omitempty"`
@@ -324,6 +325,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		proxyConfigHandler,
 		cellID,
 		config.EnableUnproxiedPortMappings,
+		config.ExposeC2CTlsPortOnHost,
 		config.AdvertisePreferenceForInstanceAddress,
 	)
 

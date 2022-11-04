@@ -56,10 +56,10 @@ type ContainerConfig struct {
 	MaxCPUShares uint64
 	SetCPUWeight bool
 
-	ReservedExpirationTime             time.Duration
-	ReapInterval                       time.Duration
-	MaxLogLinesPerSecond               int
-	MetricReportInterval time.Duration
+	ReservedExpirationTime time.Duration
+	ReapInterval           time.Duration
+	MaxLogLinesPerSecond   int
+	MetricReportInterval   time.Duration
 }
 
 type containerStore struct {
@@ -87,6 +87,7 @@ type containerStore struct {
 
 	enableUnproxiedPortMappings           bool
 	advertisePreferenceForInstanceAddress bool
+	exposeC2CTlsPortOnHost                bool
 }
 
 func New(
@@ -107,6 +108,7 @@ func New(
 	proxyConfigHandler ProxyManager,
 	cellID string,
 	enableUnproxiedPortMappings bool,
+	exposeC2CTlsPortOnHost bool,
 	advertisePreferenceForInstanceAddress bool,
 ) ContainerStore {
 	return &containerStore{
@@ -129,6 +131,7 @@ func New(
 		cellID: cellID,
 
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
+		exposeC2CTlsPortOnHost:                exposeC2CTlsPortOnHost,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 	}
 }
@@ -162,6 +165,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.rootFSSizer,
 			cs.cellID,
 			cs.enableUnproxiedPortMappings,
+			cs.exposeC2CTlsPortOnHost,
 			cs.advertisePreferenceForInstanceAddress,
 		))
 
