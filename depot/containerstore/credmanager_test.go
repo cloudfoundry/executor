@@ -463,27 +463,33 @@ var _ = Describe("CredManager", func() {
 
 					Context("when the certificate validity is less than 4 hours", func() {
 						BeforeEach(func() {
+
+							By("Starting #1")
 							validityPeriod = time.Minute
 						})
 
 						Context("when 15 seconds prior to expiry", func() {
 							It("does not rotate the credentials", func() {
+								By("Starting #2")
 								testNoCredentialRotation(15 * time.Second)
 							})
 						})
 
 						Context("when 5 seconds prior to expiry", func() {
 							It("rotates the certificates", func() {
+								By("Starting #3")
 								testCredentialRotation(5 * time.Second)
 							})
 
 							It("emits metrics on successful creation", func() {
+								By("Starting #4")
 								cert, _ := parseCert(credsBefore.InstanceIdentityCredential)
 								increment := cert.NotAfter.Add(-5 * time.Second).Sub(clock.Now())
 								Expect(increment).To(BeNumerically(">", 0))
 								clock.WaitForWatcherAndIncrement(increment)
 
 								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(4))
+								By("Starting #5")
 								metric := fakeMetronClient.IncrementCounterArgsForCall(2)
 								Expect(metric).To(Equal("CredCreationSucceededCount"))
 								metric = fakeMetronClient.IncrementCounterArgsForCall(3)

@@ -16,6 +16,7 @@ func TestContainerstore(t *testing.T) {
 	SetDefaultConsistentlyDuration(5 * time.Second)
 	SetDefaultEventuallyTimeout(5 * time.Second)
 	RegisterFailHandler(Fail)
+
 	RunSpecs(t, "Containerstore Suite")
 }
 

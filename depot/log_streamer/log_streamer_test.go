@@ -78,7 +78,7 @@ var _ = Describe("LogStreamer", func() {
 
 					logLine := strings.Repeat("a", int(maxLogBytesPerSecond/2))
 					for i := 0; i < 3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), logLine+"\n\n\n\n", i)
+						fmt.Fprintf(streamer.Stdout(), logLine+"\n\n\n\n", i)
 					}
 				})
 
@@ -118,7 +118,7 @@ var _ = Describe("LogStreamer", func() {
 
 				logLine := strings.Repeat("a", 20)
 				for i := 0; i < 3; i++ {
-					go fmt.Fprintf(streamer.Stdout(), logLine+"\n", i)
+					fmt.Fprintf(streamer.Stdout(), logLine+"\n", i)
 				}
 			})
 
@@ -132,8 +132,8 @@ var _ = Describe("LogStreamer", func() {
 				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
 				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
-				go fmt.Fprintf(streamer.Stdout(), strings.Repeat("a", 1000)+"\n")
-				go fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
+				fmt.Fprintf(streamer.Stdout(), strings.Repeat("a", 1000)+"\n")
+				fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
 			})
 
 			It("skips logs which exceed the burst capacity", func() {
@@ -158,7 +158,7 @@ var _ = Describe("LogStreamer", func() {
 				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 				for i := 0; i < 10000; i++ {
-					go fmt.Fprintf(streamer.Stdout(), "a\n")
+					fmt.Fprintf(streamer.Stdout(), "a\n")
 				}
 			})
 
@@ -177,7 +177,7 @@ var _ = Describe("LogStreamer", func() {
 					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < maxLogLinesPerSecond*3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "this is log # %d\n", i)
+						fmt.Fprintf(streamer.Stdout(), "this is log # %d\n", i)
 					}
 				})
 
@@ -232,7 +232,7 @@ var _ = Describe("LogStreamer", func() {
 					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
+						fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
 					}
 				})
 
@@ -249,7 +249,7 @@ var _ = Describe("LogStreamer", func() {
 					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 20; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
+						fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
 					}
 				})
 
@@ -264,7 +264,7 @@ var _ = Describe("LogStreamer", func() {
 					streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
 					for i := 0; i < 3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
+						fmt.Fprintf(streamer.Stdout(), "this is log # %d \n", i)
 					}
 				})
 
@@ -321,8 +321,8 @@ var _ = Describe("LogStreamer", func() {
 
 				It("should rate limit the messages for original and new log streamers", func() {
 					for i := 0; i < maxLogLinesPerSecond*3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
-						go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
+						fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
+						fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 					}
 
 					Eventually(func() int {
@@ -352,8 +352,8 @@ var _ = Describe("LogStreamer", func() {
 
 				It("increments an AppInstanceExceededLogRateLimitCount metric once per interval for both streamers", func() {
 					for i := 0; i < maxLogLinesPerSecond*3; i++ {
-						go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
-						go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
+						fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
+						fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 					}
 
 					Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
@@ -371,12 +371,12 @@ var _ = Describe("LogStreamer", func() {
 
 					It("increments an AppInstanceExceededLogRateLimitCount metric", func() {
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
-							go fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
+							fmt.Fprintf(streamer.Stdout(), "old streamer: this is log # %d \n", i)
 						}
 						Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(Equal(1))
 
 						for i := 0; i < maxLogLinesPerSecond*3; i++ {
-							go fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
+							fmt.Fprintf(newStreamer.Stdout(), "new streamer: this is log # %d \n", i)
 						}
 						Eventually(fakeClient.IncrementCounterCallCount, 1*time.Second).Should(BeNumerically(">=", 1))
 						Expect(fakeClient.SendAppLogCallCount()).To(BeNumerically(">=", 2))
