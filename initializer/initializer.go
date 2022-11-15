@@ -149,6 +149,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
+	GracefulShutdownIntervalPerOrg		  string[]              `json:"GracefulShutdownIntervalPerOrg,omitempty"`
 }
 
 var (
@@ -250,6 +251,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
+		config.GracefulShutdownIntervalPerOrg
 	)
 
 	hub := event.NewHub()
@@ -544,6 +546,7 @@ func initializeTransformer(
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
 	drainWait time.Duration,
+	gracefulShutDownPerOrg []string,
 ) transformer.Transformer {
 	var options []transformer.Option
 	compressor := compressor.NewTgz()
@@ -571,6 +574,7 @@ func initializeTransformer(
 		healthyMonitoringInterval,
 		unhealthyMonitoringInterval,
 		gracefulShutdownInterval,
+		gracefulShutDownPerOrg,
 		healthCheckWorkPool,
 		options...,
 	)

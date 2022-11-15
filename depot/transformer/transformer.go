@@ -60,6 +60,7 @@ type transformer struct {
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 	gracefulShutdownInterval    time.Duration
+	gracefulShutdownPerOrg      string[]
 	healthCheckWorkPool         *workpool.WorkPool
 
 	useContainerProxy bool
@@ -110,6 +111,7 @@ func NewTransformer(
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
+	gracefulShutdownPerOrg string[],
 	healthCheckWorkPool *workpool.WorkPool,
 	opts ...Option,
 ) *transformer {
@@ -123,6 +125,7 @@ func NewTransformer(
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 		gracefulShutdownInterval:    gracefulShutdownInterval,
+		gracefulShutdownPerOrg:      gracefulShutdownPerOrg,
 		healthCheckWorkPool:         healthCheckWorkPool,
 		clock:                       clock,
 	}
@@ -158,6 +161,7 @@ func (t *transformer) stepFor(
 			ports,
 			t.clock,
 			t.gracefulShutdownInterval,
+			t.gracefulShutDownPerOrg,
 			suppressExitStatusCode,
 		)
 
@@ -398,6 +402,7 @@ func (t *transformer) StepsRunner(
 			container.Ports,
 			t.clock,
 			t.gracefulShutdownInterval,
+			t.gracefulShutdownPerOrg,
 			suppressExitStatusCode,
 		)
 	}

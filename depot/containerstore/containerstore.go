@@ -56,10 +56,10 @@ type ContainerConfig struct {
 	MaxCPUShares uint64
 	SetCPUWeight bool
 
-	ReservedExpirationTime             time.Duration
-	ReapInterval                       time.Duration
-	MaxLogLinesPerSecond               int
-	MetricReportInterval time.Duration
+	ReservedExpirationTime time.Duration
+	ReapInterval           time.Duration
+	MaxLogLinesPerSecond   int
+	MetricReportInterval   time.Duration
 }
 
 type containerStore struct {

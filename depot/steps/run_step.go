@@ -28,6 +28,7 @@ type runStep struct {
 	portMappings             []executor.PortMapping
 	clock                    clock.Clock
 	gracefulShutdownInterval time.Duration
+	gracefulShutDownPerOrg   []string
 	suppressExitStatusCode   bool
 	sidecar                  Sidecar
 }
@@ -49,6 +50,7 @@ func NewRun(
 	portMappings []executor.PortMapping,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
+	gracefulShutDownPerOrg string[],
 	suppressExitStatusCode bool,
 ) *runStep {
 	return NewRunWithSidecar(
@@ -61,6 +63,7 @@ func NewRun(
 		portMappings,
 		clock,
 		gracefulShutdownInterval,
+		gracefulShutDownPerOrg,
 		suppressExitStatusCode,
 		Sidecar{},
 		false,
@@ -77,6 +80,7 @@ func NewRunWithSidecar(
 	portMappings []executor.PortMapping,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
+	gracefulShutDownPerOrg string[],
 	suppressExitStatusCode bool,
 	sidecar Sidecar,
 	privileged bool,
@@ -92,6 +96,7 @@ func NewRunWithSidecar(
 		portMappings:             portMappings,
 		clock:                    clock,
 		gracefulShutdownInterval: gracefulShutdownInterval,
+		gracefulShutDownPerOrg:   gracefulShutDownPerOrg,
 		suppressExitStatusCode:   suppressExitStatusCode,
 		sidecar:                  sidecar,
 	}
@@ -260,8 +265,13 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 
 			logger.Debug("signalling-terminate-success")
 			signals = nil
-
-			killTimer := step.clock.NewTimer(step.gracefulShutdownInterval)
+			
+			grace := step.gracefulShutdownInterval
+			if hasCustomGraceInterval(step.gracefulShutDownPerOrg, step.container.CertificateProperties.OrganizationalUnit) {
+				grace = getCustomGraceInterval(step.gracefulShutDownPerOrg, step.container.CertificateProperties.OrganizationalUnit);
+			}
+			
+			killTimer := step.clock.NewTimer(grace)
 			defer killTimer.Stop()
 
 			killSwitch = killTimer.C()
