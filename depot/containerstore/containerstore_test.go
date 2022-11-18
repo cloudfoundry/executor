@@ -152,7 +152,6 @@ var _ = Describe("Container Store", func() {
 			proxyManager,
 			cellID,
 			true,
-			true,
 			advertisePreferenceForInstanceAddress,
 		)
 
@@ -477,7 +476,6 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
-						true,
 						advertisePreferenceForInstanceAddress,
 					)
 				})
@@ -697,7 +695,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
-						true,
 						true,
 						advertisePreferenceForInstanceAddress,
 					)
@@ -1186,7 +1183,6 @@ var _ = Describe("Container Store", func() {
 						proxyManager,
 						cellID,
 						true,
-						true,
 						advertisePreferenceForInstanceAddress,
 					)
 
@@ -1237,7 +1233,7 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.NetIn).To(HaveLen(5))
+					Expect(containerSpec.NetIn).To(HaveLen(4))
 					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 						HostPort: 0, ContainerPort: 8080,
 					}))
@@ -1250,103 +1246,9 @@ var _ = Describe("Container Store", func() {
 					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 						HostPort: 0, ContainerPort: 61002,
 					}))
-					Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+					Expect(containerSpec.NetIn).ToNot(ContainElement(garden.NetIn{
 						HostPort: 0, ContainerPort: containerstore.C2CTLSPort,
 					}))
-				})
-
-				Context("when disabling disabling unproxied port mappings and exposeC2CTlsPortOnHost mapping", func() {
-					BeforeEach(func() {
-						containerStore = containerstore.New(
-							containerConfig,
-							&totalCapacity,
-							gardenClient,
-							dependencyManager,
-							volumeManager,
-							credManager,
-							clock,
-							eventEmitter,
-							megatron,
-							"/var/vcap/data/cf-system-trusted-certs",
-							fakeMetronClient,
-							fakeRootFSSizer,
-							false,
-							"/var/vcap/packages/healthcheck",
-							proxyManager,
-							cellID,
-							false,
-							false,
-							advertisePreferenceForInstanceAddress,
-						)
-					})
-
-					It("passes only proxied port mappings to NetIn on container creation", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetIn).To(HaveLen(2))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 61001,
-						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 61002,
-						}))
-						Expect(containerSpec.NetIn).NotTo(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: containerstore.C2CTLSPort,
-						}))
-					})
-
-				})
-
-				Context("when disabling disabling exposeC2CTlsPortOnHost mapping", func() {
-					BeforeEach(func() {
-						containerStore = containerstore.New(
-							containerConfig,
-							&totalCapacity,
-							gardenClient,
-							dependencyManager,
-							volumeManager,
-							credManager,
-							clock,
-							eventEmitter,
-							megatron,
-							"/var/vcap/data/cf-system-trusted-certs",
-							fakeMetronClient,
-							fakeRootFSSizer,
-							false,
-							"/var/vcap/packages/healthcheck",
-							proxyManager,
-							cellID,
-							true,
-							false,
-							advertisePreferenceForInstanceAddress,
-						)
-					})
-
-					It("passes all port mappings to NetIn on container creation", func() {
-						_, err := containerStore.Create(logger, containerGuid)
-						Expect(err).NotTo(HaveOccurred())
-
-						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetIn).To(HaveLen(4))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 8080,
-						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 9090,
-						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 61001,
-						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: 61002,
-						}))
-						Expect(containerSpec.NetIn).NotTo(ContainElement(garden.NetIn{
-							HostPort: 0, ContainerPort: containerstore.C2CTLSPort,
-						}))
-					})
-
 				})
 
 				Context("when disabling unproxied port mappings", func() {
@@ -1369,7 +1271,6 @@ var _ = Describe("Container Store", func() {
 							proxyManager,
 							cellID,
 							false,
-							true,
 							advertisePreferenceForInstanceAddress,
 						)
 					})
@@ -1379,14 +1280,14 @@ var _ = Describe("Container Store", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetIn).To(HaveLen(3))
+						Expect(containerSpec.NetIn).To(HaveLen(2))
 						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 							HostPort: 0, ContainerPort: 61001,
 						}))
 						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
 							HostPort: 0, ContainerPort: 61002,
 						}))
-						Expect(containerSpec.NetIn).To(ContainElement(garden.NetIn{
+						Expect(containerSpec.NetIn).ToNot(ContainElement(garden.NetIn{
 							HostPort: 0, ContainerPort: containerstore.C2CTLSPort,
 						}))
 					})
@@ -1404,7 +1305,7 @@ var _ = Describe("Container Store", func() {
 							ContainerPort:         8080,
 							HostPort:              0,
 							ContainerTLSProxyPort: containerstore.C2CTLSPort,
-							HostTLSProxyPort:      16004,
+							HostTLSProxyPort:      0,
 						}, executor.PortMapping{
 							ContainerPort:         9090,
 							HostPort:              0,
@@ -1427,7 +1328,7 @@ var _ = Describe("Container Store", func() {
 						ContainerPort:         8080,
 						HostPort:              16000,
 						ContainerTLSProxyPort: containerstore.C2CTLSPort,
-						HostTLSProxyPort:      16004,
+						HostTLSProxyPort:      0,
 					}, executor.PortMapping{
 						ContainerPort:         9090,
 						HostPort:              16004,
@@ -2774,7 +2675,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
-						true,
 						true,
 						advertisePreferenceForInstanceAddress,
 					)
