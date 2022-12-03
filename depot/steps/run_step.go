@@ -268,7 +268,8 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 			signals = nil
 
 			grace := step.gracefulShutdownInterval
-			if stringInSlice(step.certificateProperties.OrganizationalUnit[0], step.gracefulShutDownPerOrg) {
+			if len(step.certificateProperties.OrganizationalUnit) > 0 &&
+				stringInSlice(step.certificateProperties.OrganizationalUnit[0], step.gracefulShutDownPerOrg) {
 				grace = step.extendedGracefulShutdownInterval
 			}
 

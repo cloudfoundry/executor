@@ -34,19 +34,21 @@ import (
 var _ = Describe("Transformer", func() {
 	Describe("StepsRunner", func() {
 		var (
-			logger                      lager.Logger
-			optimusPrime                transformer.Transformer
-			container                   executor.Container
-			logStreamer                 log_streamer.LogStreamer
-			gardenContainer             *gardenfakes.FakeContainer
-			clock                       *fakeclock.FakeClock
-			fakeMetronClient            *mfakes.FakeIngressClient
-			healthyMonitoringInterval   time.Duration
-			unhealthyMonitoringInterval time.Duration
-			gracefulShutdownInterval    time.Duration
-			healthCheckWorkPool         *workpool.WorkPool
-			cfg                         transformer.Config
-			options                     []transformer.Option
+			logger                           lager.Logger
+			optimusPrime                     transformer.Transformer
+			container                        executor.Container
+			logStreamer                      log_streamer.LogStreamer
+			gardenContainer                  *gardenfakes.FakeContainer
+			clock                            *fakeclock.FakeClock
+			fakeMetronClient                 *mfakes.FakeIngressClient
+			healthyMonitoringInterval        time.Duration
+			unhealthyMonitoringInterval      time.Duration
+			gracefulShutdownInterval         time.Duration
+			extendedGracefulShutdownInterval time.Duration
+			gracefulShutDownPerOrg           []string
+			healthCheckWorkPool              *workpool.WorkPool
+			cfg                              transformer.Config
+			options                          []transformer.Option
 		)
 
 		BeforeEach(func() {
@@ -61,6 +63,8 @@ var _ = Describe("Transformer", func() {
 			healthyMonitoringInterval = 1 * time.Second
 			unhealthyMonitoringInterval = 1 * time.Millisecond
 			gracefulShutdownInterval = 10 * time.Second
+			extendedGracefulShutdownInterval = 20 * time.Second
+			gracefulShutDownPerOrg = []string{"test_org"}
 
 			var err error
 			healthCheckWorkPool, err = workpool.NewWorkPool(10)
@@ -113,6 +117,8 @@ var _ = Describe("Transformer", func() {
 				healthyMonitoringInterval,
 				unhealthyMonitoringInterval,
 				gracefulShutdownInterval,
+				extendedGracefulShutdownInterval,
+				gracefulShutDownPerOrg,
 				healthCheckWorkPool,
 				options...,
 			)
