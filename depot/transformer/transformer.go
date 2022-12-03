@@ -55,13 +55,14 @@ type transformer struct {
 	tempDir          string
 	clock            clock.Clock
 
-	sidecarRootFS               string
-	useDeclarativeHealthCheck   bool
-	healthyMonitoringInterval   time.Duration
-	unhealthyMonitoringInterval time.Duration
-	gracefulShutdownInterval    time.Duration
-	gracefulShutdownPerOrg      string[]
-	healthCheckWorkPool         *workpool.WorkPool
+	sidecarRootFS                    string
+	useDeclarativeHealthCheck        bool
+	healthyMonitoringInterval        time.Duration
+	unhealthyMonitoringInterval      time.Duration
+	gracefulShutdownInterval         time.Duration
+	extendedGracefulShutdownInterval time.Duration
+	gracefulShutDownPerOrg           []string
+	healthCheckWorkPool              *workpool.WorkPool
 
 	useContainerProxy bool
 	drainWait         time.Duration
@@ -111,23 +112,25 @@ func NewTransformer(
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
-	gracefulShutdownPerOrg string[],
+	extendedGracefulShutdownInterval time.Duration,
+	gracefulShutDownPerOrg []string,
 	healthCheckWorkPool *workpool.WorkPool,
 	opts ...Option,
 ) *transformer {
 	t := &transformer{
-		cachedDownloader:            cachedDownloader,
-		uploader:                    uploader,
-		compressor:                  compressor,
-		downloadLimiter:             downloadLimiter,
-		uploadLimiter:               uploadLimiter,
-		tempDir:                     tempDir,
-		healthyMonitoringInterval:   healthyMonitoringInterval,
-		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
-		gracefulShutdownInterval:    gracefulShutdownInterval,
-		gracefulShutdownPerOrg:      gracefulShutdownPerOrg,
-		healthCheckWorkPool:         healthCheckWorkPool,
-		clock:                       clock,
+		cachedDownloader:                 cachedDownloader,
+		uploader:                         uploader,
+		compressor:                       compressor,
+		downloadLimiter:                  downloadLimiter,
+		uploadLimiter:                    uploadLimiter,
+		tempDir:                          tempDir,
+		healthyMonitoringInterval:        healthyMonitoringInterval,
+		unhealthyMonitoringInterval:      unhealthyMonitoringInterval,
+		gracefulShutdownInterval:         gracefulShutdownInterval,
+		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
+		gracefulShutDownPerOrg:           gracefulShutDownPerOrg,
+		healthCheckWorkPool:              healthCheckWorkPool,
+		clock:                            clock,
 	}
 
 	for _, o := range opts {
@@ -141,9 +144,10 @@ func (t *transformer) stepFor(
 	logStreamer log_streamer.LogStreamer,
 	action *models.Action,
 	container garden.Container,
-	externalIP string,
-	internalIP string,
-	ports []executor.PortMapping,
+	executorContainer executor.Container,
+	// externalIP string,
+	// internalIP string,
+	// ports []executor.PortMapping,
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
@@ -156,11 +160,10 @@ func (t *transformer) stepFor(
 			*actionModel,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
-			externalIP,
-			internalIP,
-			ports,
+			executorContainer,
 			t.clock,
 			t.gracefulShutdownInterval,
+			t.extendedGracefulShutdownInterval,
 			t.gracefulShutDownPerOrg,
 			suppressExitStatusCode,
 		)
@@ -193,9 +196,7 @@ func (t *transformer) stepFor(
 				logStreamer,
 				actionModel.Action,
 				container,
-				externalIP,
-				internalIP,
-				ports,
+				executorContainer,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -213,9 +214,7 @@ func (t *transformer) stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
-				externalIP,
-				internalIP,
-				ports,
+				executorContainer,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -231,9 +230,7 @@ func (t *transformer) stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
-				externalIP,
-				internalIP,
-				ports,
+				executorContainer,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -252,9 +249,7 @@ func (t *transformer) stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
-					externalIP,
-					internalIP,
-					ports,
+					executorContainer,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -266,9 +261,7 @@ func (t *transformer) stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
-					externalIP,
-					internalIP,
-					ports,
+					executorContainer,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -289,9 +282,7 @@ func (t *transformer) stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
-					externalIP,
-					internalIP,
-					ports,
+					executorContainer,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -303,9 +294,7 @@ func (t *transformer) stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
-					externalIP,
-					internalIP,
-					ports,
+					executorContainer,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -323,9 +312,7 @@ func (t *transformer) stepFor(
 				logStreamer,
 				action,
 				container,
-				externalIP,
-				internalIP,
-				ports,
+				executorContainer,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
@@ -362,7 +349,7 @@ func overrideSuppressLogOutput(monitorAction *models.Action) {
 }
 func (t *transformer) StepsRunner(
 	logger lager.Logger,
-	container executor.Container,
+	executorContainer executor.Container,
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 	config Config,
@@ -370,14 +357,12 @@ func (t *transformer) StepsRunner(
 	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
-	if container.Setup != nil {
+	if executorContainer.Setup != nil {
 		setup = t.stepFor(
 			logStreamer,
-			container.Setup,
+			executorContainer.Setup,
 			gardenContainer,
-			container.ExternalIP,
-			container.InternalIP,
-			container.Ports,
+			executorContainer,
 			false,
 			false,
 			logger.Session("setup"),
@@ -397,17 +382,16 @@ func (t *transformer) StepsRunner(
 			actionModel,
 			log_streamer.NewNoopStreamer(),
 			logger.Session("post-setup"),
-			container.ExternalIP,
-			container.InternalIP,
-			container.Ports,
+			executorContainer,
 			t.clock,
 			t.gracefulShutdownInterval,
-			t.gracefulShutdownPerOrg,
+			t.extendedGracefulShutdownInterval,
+			t.gracefulShutDownPerOrg,
 			suppressExitStatusCode,
 		)
 	}
 
-	if container.Action == nil {
+	if executorContainer.Action == nil {
 		err := errors.New("container cannot have empty action")
 		logger.Error("steps-runner-empty-action", err)
 		return nil, err
@@ -415,11 +399,9 @@ func (t *transformer) StepsRunner(
 
 	action = t.stepFor(
 		logStreamer,
-		container.Action,
+		executorContainer.Action,
 		gardenContainer,
-		container.ExternalIP,
-		container.InternalIP,
-		container.Ports,
+		executorContainer,
 		false,
 		false,
 		logger.Session("action"),
@@ -427,13 +409,11 @@ func (t *transformer) StepsRunner(
 
 	substeps = append(substeps, action)
 
-	for _, sidecar := range container.Sidecars {
+	for _, sidecar := range executorContainer.Sidecars {
 		substeps = append(substeps, t.stepFor(logStreamer,
 			sidecar.Action,
 			gardenContainer,
-			container.ExternalIP,
-			container.InternalIP,
-			container.Ports,
+			executorContainer,
 			false,
 			false,
 			logger.Session("sidecar"),
@@ -450,7 +430,7 @@ func (t *transformer) StepsRunner(
 			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
 
 			step := t.createCheck(
-				&container,
+				&executorContainer,
 				gardenContainer,
 				config.BindMounts,
 				"",
@@ -467,26 +447,24 @@ func (t *transformer) StepsRunner(
 		}
 	}
 
-	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
+	if executorContainer.CheckDefinition != nil && t.useDeclarativeHealthCheck {
 		monitor = t.transformCheckDefinition(logger,
-			&container,
+			&executorContainer,
 			gardenContainer,
 			logStreamer,
 			config.BindMounts,
 			proxyReadinessChecks,
 		)
 		substeps = append(substeps, monitor)
-	} else if container.Monitor != nil {
-		overrideSuppressLogOutput(container.Monitor)
+	} else if executorContainer.Monitor != nil {
+		overrideSuppressLogOutput(executorContainer.Monitor)
 		monitor = steps.NewMonitor(
 			func() ifrit.Runner {
 				return t.stepFor(
 					logStreamer,
-					container.Monitor,
+					executorContainer.Monitor,
 					gardenContainer,
-					container.ExternalIP,
-					container.InternalIP,
-					container.Ports,
+					executorContainer,
 					true,
 					true,
 					logger.Session("monitor-run"),
@@ -495,7 +473,7 @@ func (t *transformer) StepsRunner(
 			logger.Session("monitor"),
 			t.clock,
 			logStreamer,
-			time.Duration(container.StartTimeoutMs)*time.Millisecond,
+			time.Duration(executorContainer.StartTimeoutMs)*time.Millisecond,
 			t.healthyMonitoringInterval,
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
@@ -510,10 +488,10 @@ func (t *transformer) StepsRunner(
 		longLivedAction = action
 	}
 
-	if t.useContainerProxy && container.EnableContainerProxy {
+	if t.useContainerProxy && executorContainer.EnableContainerProxy {
 		containerProxyStep := t.transformContainerProxyStep(
 			gardenContainer,
-			container,
+			executorContainer,
 			logger,
 			logStreamer,
 			config.BindMounts,
@@ -594,11 +572,11 @@ func (t *transformer) createCheck(
 		runAction,
 		bufferedLogStreamer,
 		logger,
-		container.ExternalIP,
-		container.InternalIP,
-		container.Ports,
+		*container,
 		t.clock,
 		t.gracefulShutdownInterval,
+		t.extendedGracefulShutdownInterval,
+		t.gracefulShutDownPerOrg,
 		true,
 		sidecar,
 		container.Privileged,
@@ -759,11 +737,11 @@ func (t *transformer) transformContainerProxyStep(
 		runAction,
 		streamer.WithSource("PROXY"),
 		proxyLogger,
-		execContainer.ExternalIP,
-		execContainer.InternalIP,
-		execContainer.Ports,
+		execContainer,
 		t.clock,
 		t.gracefulShutdownInterval,
+		t.extendedGracefulShutdownInterval,
+		t.gracefulShutDownPerOrg,
 		false,
 		sidecar,
 		execContainer.Privileged,

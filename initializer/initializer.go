@@ -120,6 +120,7 @@ type ExecutorConfig struct {
 	GardenHealthcheckTimeout              durationjson.Duration `json:"garden_healthcheck_timeout,omitempty"`
 	GardenNetwork                         string                `json:"garden_network,omitempty"`
 	GracefulShutdownInterval              durationjson.Duration `json:"graceful_shutdown_interval,omitempty"`
+	ExtendedGracefulShutdownInterval      durationjson.Duration `json:"extended_graceful_shutdown_interval,omitempty"`
 	HealthCheckContainerOwnerName         string                `json:"healthcheck_container_owner_name,omitempty"`
 	HealthCheckWorkPoolSize               int                   `json:"healthcheck_work_pool_size,omitempty"`
 	HealthyMonitoringInterval             durationjson.Duration `json:"healthy_monitoring_interval,omitempty"`
@@ -149,7 +150,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
-	GracefulShutdownIntervalPerOrg		  string[]              `json:"GracefulShutdownIntervalPerOrg,omitempty"`
+	GracefulShutdownIntervalPerOrg        []string              `json:"extended_graceful_shutdown_orgs,omitempty"`
 }
 
 var (
@@ -243,6 +244,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		time.Duration(config.HealthyMonitoringInterval),
 		time.Duration(config.UnhealthyMonitoringInterval),
 		time.Duration(config.GracefulShutdownInterval),
+		time.Duration(config.ExtendedGracefulShutdownInterval),
 		healthCheckWorkPool,
 		clock,
 		postSetupHook,
@@ -251,7 +253,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
-		config.GracefulShutdownIntervalPerOrg
+		config.GracefulShutdownIntervalPerOrg,
 	)
 
 	hub := event.NewHub()
@@ -538,6 +540,7 @@ func initializeTransformer(
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
+	extendedGracefulShutdownInterval time.Duration,
 	healthCheckWorkPool *workpool.WorkPool,
 	clock clock.Clock,
 	postSetupHook []string,
@@ -574,6 +577,7 @@ func initializeTransformer(
 		healthyMonitoringInterval,
 		unhealthyMonitoringInterval,
 		gracefulShutdownInterval,
+		extendedGracefulShutdownInterval,
 		gracefulShutDownPerOrg,
 		healthCheckWorkPool,
 		options...,

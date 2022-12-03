@@ -19,18 +19,20 @@ import (
 const ExitTimeout = 1 * time.Second
 
 type runStep struct {
-	container                garden.Container
-	model                    models.RunAction
-	streamer                 log_streamer.LogStreamer
-	logger                   lager.Logger
-	externalIP               string
-	internalIP               string
-	portMappings             []executor.PortMapping
-	clock                    clock.Clock
-	gracefulShutdownInterval time.Duration
-	gracefulShutDownPerOrg   []string
-	suppressExitStatusCode   bool
-	sidecar                  Sidecar
+	container                        garden.Container
+	model                            models.RunAction
+	streamer                         log_streamer.LogStreamer
+	logger                           lager.Logger
+	externalIP                       string
+	internalIP                       string
+	portMappings                     []executor.PortMapping
+	certificateProperties            executor.CertificateProperties
+	clock                            clock.Clock
+	gracefulShutdownInterval         time.Duration
+	extendedGracefulShutdownInterval time.Duration
+	gracefulShutDownPerOrg           []string
+	suppressExitStatusCode           bool
+	sidecar                          Sidecar
 }
 
 type Sidecar struct {
@@ -45,12 +47,11 @@ func NewRun(
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
-	externalIP string,
-	internalIP string,
-	portMappings []executor.PortMapping,
+	executorContainer executor.Container,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
-	gracefulShutDownPerOrg string[],
+	extendedGracefulShutdownInterval time.Duration,
+	gracefulShutDownPerOrg []string,
 	suppressExitStatusCode bool,
 ) *runStep {
 	return NewRunWithSidecar(
@@ -58,11 +59,10 @@ func NewRun(
 		model,
 		streamer,
 		logger,
-		externalIP,
-		internalIP,
-		portMappings,
+		executorContainer,
 		clock,
 		gracefulShutdownInterval,
+		extendedGracefulShutdownInterval,
 		gracefulShutDownPerOrg,
 		suppressExitStatusCode,
 		Sidecar{},
@@ -75,30 +75,31 @@ func NewRunWithSidecar(
 	model models.RunAction,
 	streamer log_streamer.LogStreamer,
 	logger lager.Logger,
-	externalIP string,
-	internalIP string,
-	portMappings []executor.PortMapping,
+	executorContainer executor.Container,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
-	gracefulShutDownPerOrg string[],
+	extendedGracefulShutdownInterval time.Duration,
+	gracefulShutDownPerOrg []string,
 	suppressExitStatusCode bool,
 	sidecar Sidecar,
 	privileged bool,
 ) *runStep {
 	logger = logger.Session("run-step")
 	return &runStep{
-		container:                container,
-		model:                    model,
-		streamer:                 streamer,
-		logger:                   logger,
-		externalIP:               externalIP,
-		internalIP:               internalIP,
-		portMappings:             portMappings,
-		clock:                    clock,
-		gracefulShutdownInterval: gracefulShutdownInterval,
-		gracefulShutDownPerOrg:   gracefulShutDownPerOrg,
-		suppressExitStatusCode:   suppressExitStatusCode,
-		sidecar:                  sidecar,
+		container:                        container,
+		model:                            model,
+		streamer:                         streamer,
+		logger:                           logger,
+		externalIP:                       executorContainer.ExternalIP,
+		internalIP:                       executorContainer.InternalIP,
+		portMappings:                     executorContainer.Ports,
+		certificateProperties:            executorContainer.CertificateProperties,
+		clock:                            clock,
+		gracefulShutdownInterval:         gracefulShutdownInterval,
+		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
+		gracefulShutDownPerOrg:           gracefulShutDownPerOrg,
+		suppressExitStatusCode:           suppressExitStatusCode,
+		sidecar:                          sidecar,
 	}
 }
 
@@ -265,12 +266,12 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 
 			logger.Debug("signalling-terminate-success")
 			signals = nil
-			
+
 			grace := step.gracefulShutdownInterval
-			if hasCustomGraceInterval(step.gracefulShutDownPerOrg, step.container.CertificateProperties.OrganizationalUnit) {
-				grace = getCustomGraceInterval(step.gracefulShutDownPerOrg, step.container.CertificateProperties.OrganizationalUnit);
+			if stringInSlice(step.certificateProperties.OrganizationalUnit[0], step.gracefulShutDownPerOrg) {
+				grace = step.extendedGracefulShutdownInterval
 			}
-			
+
 			killTimer := step.clock.NewTimer(grace)
 			defer killTimer.Stop()
 
@@ -358,4 +359,13 @@ func (step *runStep) networkingEnvVars() []string {
 	}
 
 	return envVars
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if ("organization:" + b) == a {
+			return true
+		}
+	}
+	return false
 }
