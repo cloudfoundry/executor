@@ -91,8 +91,9 @@ var _ = Describe("RunAction", func() {
 		}
 		executorContainer.Ports = nil
 		executorContainer.CertificateProperties = executor.CertificateProperties{
-			OrganizationalUnit: []string{"test_org"},
+			OrganizationalUnit: []string{"organization:extended_test_org"},
 		}
+		gracefulShutDownPerOrg = []string{"test_org"}
 		// externalIP = "external-ip"
 		// internalIP = "internal-ip"
 		// portMappings = nil
@@ -757,6 +758,23 @@ var _ = Describe("RunAction", func() {
 					waitExited <- (128 + 9)
 					Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
 					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 5s graceful shutdown interval\\)"))
+				})
+
+				Context("when the org listed as extended shutdown org", func() {
+					BeforeEach(func() {
+						gracefulShutDownPerOrg = []string{"some_org", "extended_test_org"}
+						gracefulShutdownInterval = extendedGracefulShutdownInterval
+					})
+					AfterEach(func() {
+						gracefulShutdownInterval = 5
+						gracefulShutDownPerOrg = []string{"test_org"}
+
+					})
+					It("handles properly extended graceful shutdown", func() {
+						waitExited <- (128 + 9)
+						Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
+						Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 10s graceful shutdown interval\\)"))
+					})
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {
