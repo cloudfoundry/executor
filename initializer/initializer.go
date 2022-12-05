@@ -549,7 +549,7 @@ func initializeTransformer(
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
 	drainWait time.Duration,
-	gracefulShutDownPerOrg []string,
+	extendedGracefulShutDownOrgs []string,
 ) transformer.Transformer {
 	var options []transformer.Option
 	compressor := compressor.NewTgz()
@@ -578,7 +578,7 @@ func initializeTransformer(
 		unhealthyMonitoringInterval,
 		gracefulShutdownInterval,
 		extendedGracefulShutdownInterval,
-		gracefulShutDownPerOrg,
+		extendedGracefulShutDownOrgs,
 		healthCheckWorkPool,
 		options...,
 	)

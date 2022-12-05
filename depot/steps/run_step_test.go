@@ -44,7 +44,7 @@ var _ = Describe("RunAction", func() {
 		privileged                       bool
 		gracefulShutdownInterval         time.Duration = 5 * time.Second
 		extendedGracefulShutdownInterval time.Duration = 10 * time.Second
-		gracefulShutDownPerOrg           []string
+		extendedGracefulShutDownOrgs     []string
 		executorContainer                executor.Container
 	)
 
@@ -93,7 +93,7 @@ var _ = Describe("RunAction", func() {
 		executorContainer.CertificateProperties = executor.CertificateProperties{
 			OrganizationalUnit: []string{"organization:extended_test_org"},
 		}
-		gracefulShutDownPerOrg = []string{"test_org"}
+		extendedGracefulShutDownOrgs = []string{"test_org"}
 		// externalIP = "external-ip"
 		// internalIP = "internal-ip"
 		// portMappings = nil
@@ -117,7 +117,7 @@ var _ = Describe("RunAction", func() {
 			fakeClock,
 			gracefulShutdownInterval,
 			extendedGracefulShutdownInterval,
-			gracefulShutDownPerOrg,
+			extendedGracefulShutDownOrgs,
 			suppressExitStatusCode,
 			sidecar,
 			privileged,
@@ -762,12 +762,12 @@ var _ = Describe("RunAction", func() {
 
 				Context("when the org listed as extended shutdown org", func() {
 					BeforeEach(func() {
-						gracefulShutDownPerOrg = []string{"some_org", "extended_test_org"}
+						extendedGracefulShutDownOrgs = []string{"some_org", "extended_test_org"}
 						gracefulShutdownInterval = extendedGracefulShutdownInterval
 					})
 					AfterEach(func() {
 						gracefulShutdownInterval = 5
-						gracefulShutDownPerOrg = []string{"test_org"}
+						extendedGracefulShutDownOrgs = []string{"test_org"}
 
 					})
 					It("handles properly extended graceful shutdown", func() {

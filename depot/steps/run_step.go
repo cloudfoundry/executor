@@ -30,7 +30,7 @@ type runStep struct {
 	clock                            clock.Clock
 	gracefulShutdownInterval         time.Duration
 	extendedGracefulShutdownInterval time.Duration
-	gracefulShutDownPerOrg           []string
+	extendedGracefulShutDownOrgs     []string
 	suppressExitStatusCode           bool
 	sidecar                          Sidecar
 }
@@ -51,7 +51,7 @@ func NewRun(
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
 	extendedGracefulShutdownInterval time.Duration,
-	gracefulShutDownPerOrg []string,
+	extendedGracefulShutDownOrgs []string,
 	suppressExitStatusCode bool,
 ) *runStep {
 	return NewRunWithSidecar(
@@ -63,7 +63,7 @@ func NewRun(
 		clock,
 		gracefulShutdownInterval,
 		extendedGracefulShutdownInterval,
-		gracefulShutDownPerOrg,
+		extendedGracefulShutDownOrgs,
 		suppressExitStatusCode,
 		Sidecar{},
 		false,
@@ -79,7 +79,7 @@ func NewRunWithSidecar(
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
 	extendedGracefulShutdownInterval time.Duration,
-	gracefulShutDownPerOrg []string,
+	extendedGracefulShutDownOrgs []string,
 	suppressExitStatusCode bool,
 	sidecar Sidecar,
 	privileged bool,
@@ -97,7 +97,7 @@ func NewRunWithSidecar(
 		clock:                            clock,
 		gracefulShutdownInterval:         gracefulShutdownInterval,
 		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
-		gracefulShutDownPerOrg:           gracefulShutDownPerOrg,
+		extendedGracefulShutDownOrgs:     extendedGracefulShutDownOrgs,
 		suppressExitStatusCode:           suppressExitStatusCode,
 		sidecar:                          sidecar,
 	}
@@ -269,7 +269,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 
 			grace := step.gracefulShutdownInterval
 			if len(step.certificateProperties.OrganizationalUnit) > 0 &&
-				stringInSlice(step.certificateProperties.OrganizationalUnit[0], step.gracefulShutDownPerOrg) {
+				stringInSlice(step.certificateProperties.OrganizationalUnit[0], step.extendedGracefulShutDownOrgs) {
 				grace = step.extendedGracefulShutdownInterval
 			}
 

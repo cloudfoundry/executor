@@ -61,7 +61,7 @@ type transformer struct {
 	unhealthyMonitoringInterval      time.Duration
 	gracefulShutdownInterval         time.Duration
 	extendedGracefulShutdownInterval time.Duration
-	gracefulShutDownPerOrg           []string
+	extendedGracefulShutDownOrgs     []string
 	healthCheckWorkPool              *workpool.WorkPool
 
 	useContainerProxy bool
@@ -113,7 +113,7 @@ func NewTransformer(
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
 	extendedGracefulShutdownInterval time.Duration,
-	gracefulShutDownPerOrg []string,
+	extendedGracefulShutDownOrgs []string,
 	healthCheckWorkPool *workpool.WorkPool,
 	opts ...Option,
 ) *transformer {
@@ -128,7 +128,7 @@ func NewTransformer(
 		unhealthyMonitoringInterval:      unhealthyMonitoringInterval,
 		gracefulShutdownInterval:         gracefulShutdownInterval,
 		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
-		gracefulShutDownPerOrg:           gracefulShutDownPerOrg,
+		extendedGracefulShutDownOrgs:     extendedGracefulShutDownOrgs,
 		healthCheckWorkPool:              healthCheckWorkPool,
 		clock:                            clock,
 	}
@@ -164,7 +164,7 @@ func (t *transformer) stepFor(
 			t.clock,
 			t.gracefulShutdownInterval,
 			t.extendedGracefulShutdownInterval,
-			t.gracefulShutDownPerOrg,
+			t.extendedGracefulShutDownOrgs,
 			suppressExitStatusCode,
 		)
 
@@ -386,7 +386,7 @@ func (t *transformer) StepsRunner(
 			t.clock,
 			t.gracefulShutdownInterval,
 			t.extendedGracefulShutdownInterval,
-			t.gracefulShutDownPerOrg,
+			t.extendedGracefulShutDownOrgs,
 			suppressExitStatusCode,
 		)
 	}
@@ -576,7 +576,7 @@ func (t *transformer) createCheck(
 		t.clock,
 		t.gracefulShutdownInterval,
 		t.extendedGracefulShutdownInterval,
-		t.gracefulShutDownPerOrg,
+		t.extendedGracefulShutDownOrgs,
 		true,
 		sidecar,
 		container.Privileged,
@@ -741,7 +741,7 @@ func (t *transformer) transformContainerProxyStep(
 		t.clock,
 		t.gracefulShutdownInterval,
 		t.extendedGracefulShutdownInterval,
-		t.gracefulShutDownPerOrg,
+		t.extendedGracefulShutDownOrgs,
 		false,
 		sidecar,
 		execContainer.Privileged,
