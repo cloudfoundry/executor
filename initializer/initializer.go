@@ -150,7 +150,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
-	GracefulShutdownIntervalPerOrg        []string              `json:"extended_graceful_shutdown_orgs,omitempty"`
+	ExtendedGracefulShutdownOrgs          []string              `json:"extended_graceful_shutdown_orgs,omitempty"`
 }
 
 var (
