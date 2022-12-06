@@ -253,7 +253,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
-		config.GracefulShutdownIntervalPerOrg,
+		config.ExtendedGracefulShutdownOrgs,
 	)
 
 	hub := event.NewHub()
