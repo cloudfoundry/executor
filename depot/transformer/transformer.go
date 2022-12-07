@@ -144,13 +144,13 @@ func (t *transformer) stepFor(
 	logStreamer log_streamer.LogStreamer,
 	action *models.Action,
 	container garden.Container,
-	executorContainer executor.Container,
-	// externalIP string,
-	// internalIP string,
-	// ports []executor.PortMapping,
+	externalIP string,
+	internalIP string,
+	ports []executor.PortMapping,
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
+	grace time.Duration,
 ) ifrit.Runner {
 	a := action.GetValue()
 	switch actionModel := a.(type) {
@@ -160,11 +160,11 @@ func (t *transformer) stepFor(
 			*actionModel,
 			logStreamer.WithSource(actionModel.LogSource),
 			logger,
-			executorContainer,
+			externalIP,
+			internalIP,
+			ports,
 			t.clock,
-			t.gracefulShutdownInterval,
-			t.extendedGracefulShutdownInterval,
-			t.extendedGracefulShutDownOrgs,
+			grace,
 			suppressExitStatusCode,
 		)
 
@@ -196,10 +196,13 @@ func (t *transformer) stepFor(
 				logStreamer,
 				actionModel.Action,
 				container,
-				executorContainer,
+				externalIP,
+				internalIP,
+				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
@@ -214,10 +217,13 @@ func (t *transformer) stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
-				executorContainer,
+				externalIP,
+				internalIP,
+				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
 			t.clock,
@@ -230,10 +236,13 @@ func (t *transformer) stepFor(
 				logStreamer.WithSource(actionModel.LogSource),
 				actionModel.Action,
 				container,
-				executorContainer,
+				externalIP,
+				internalIP,
+				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			logger,
 		)
@@ -249,10 +258,13 @@ func (t *transformer) stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
-					executorContainer,
+					externalIP,
+					internalIP,
+					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				),
 					buffer,
 				)
@@ -261,10 +273,13 @@ func (t *transformer) stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
-					executorContainer,
+					externalIP,
+					internalIP,
+					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				)
 			}
 			subSteps[i] = subStep
@@ -282,7 +297,9 @@ func (t *transformer) stepFor(
 					bufferedLogStreamer,
 					action,
 					container,
-					executorContainer,
+					externalIP,
+					internalIP,
+					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
@@ -294,10 +311,13 @@ func (t *transformer) stepFor(
 					logStreamer.WithSource(actionModel.LogSource),
 					action,
 					container,
-					executorContainer,
+					externalIP,
+					internalIP,
+					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				)
 			}
 			subSteps[i] = subStep
@@ -312,10 +332,13 @@ func (t *transformer) stepFor(
 				logStreamer,
 				action,
 				container,
-				executorContainer,
+				externalIP,
+				internalIP,
+				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			)
 		}
 		return steps.NewSerial(subSteps)
@@ -349,7 +372,7 @@ func overrideSuppressLogOutput(monitorAction *models.Action) {
 }
 func (t *transformer) StepsRunner(
 	logger lager.Logger,
-	executorContainer executor.Container,
+	container executor.Container,
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 	config Config,
@@ -357,15 +380,20 @@ func (t *transformer) StepsRunner(
 	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
-	if executorContainer.Setup != nil {
+	grace := evalGracefulShutdownInterval(container.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
+
+	if container.Setup != nil {
 		setup = t.stepFor(
 			logStreamer,
-			executorContainer.Setup,
+			container.Setup,
 			gardenContainer,
-			executorContainer,
+			container.ExternalIP,
+			container.InternalIP,
+			container.Ports,
 			false,
 			false,
 			logger.Session("setup"),
+			grace,
 		)
 	}
 	setup = steps.NewTimedStep(logger, setup, config.MetronClient, t.clock, config.CreationStartTime)
@@ -382,16 +410,16 @@ func (t *transformer) StepsRunner(
 			actionModel,
 			log_streamer.NewNoopStreamer(),
 			logger.Session("post-setup"),
-			executorContainer,
+			container.ExternalIP,
+			container.InternalIP,
+			container.Ports,
 			t.clock,
-			t.gracefulShutdownInterval,
-			t.extendedGracefulShutdownInterval,
-			t.extendedGracefulShutDownOrgs,
+			grace,
 			suppressExitStatusCode,
 		)
 	}
 
-	if executorContainer.Action == nil {
+	if container.Action == nil {
 		err := errors.New("container cannot have empty action")
 		logger.Error("steps-runner-empty-action", err)
 		return nil, err
@@ -399,21 +427,26 @@ func (t *transformer) StepsRunner(
 
 	action = t.stepFor(
 		logStreamer,
-		executorContainer.Action,
+		container.Action,
 		gardenContainer,
-		executorContainer,
+		container.ExternalIP,
+		container.InternalIP,
+		container.Ports,
 		false,
 		false,
 		logger.Session("action"),
+		grace,
 	)
 
 	substeps = append(substeps, action)
 
-	for _, sidecar := range executorContainer.Sidecars {
+	for _, sidecar := range container.Sidecars {
 		substeps = append(substeps, t.stepFor(logStreamer,
 			sidecar.Action,
 			gardenContainer,
-			executorContainer,
+			container.ExternalIP,
+			container.InternalIP,
+			container.Ports,
 			false,
 			false,
 			logger.Session("sidecar"),
@@ -430,7 +463,7 @@ func (t *transformer) StepsRunner(
 			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
 
 			step := t.createCheck(
-				&executorContainer,
+				&container,
 				gardenContainer,
 				config.BindMounts,
 				"",
@@ -447,33 +480,36 @@ func (t *transformer) StepsRunner(
 		}
 	}
 
-	if executorContainer.CheckDefinition != nil && t.useDeclarativeHealthCheck {
+	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
 		monitor = t.transformCheckDefinition(logger,
-			&executorContainer,
+			&container,
 			gardenContainer,
 			logStreamer,
 			config.BindMounts,
 			proxyReadinessChecks,
 		)
 		substeps = append(substeps, monitor)
-	} else if executorContainer.Monitor != nil {
-		overrideSuppressLogOutput(executorContainer.Monitor)
+	} else if container.Monitor != nil {
+		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
 			func() ifrit.Runner {
 				return t.stepFor(
 					logStreamer,
-					executorContainer.Monitor,
+					container.Monitor,
 					gardenContainer,
-					executorContainer,
+					container.ExternalIP,
+					container.InternalIP,
+					container.Ports,
 					true,
 					true,
 					logger.Session("monitor-run"),
+					grace,
 				)
 			},
 			logger.Session("monitor"),
 			t.clock,
 			logStreamer,
-			time.Duration(executorContainer.StartTimeoutMs)*time.Millisecond,
+			time.Duration(container.StartTimeoutMs)*time.Millisecond,
 			t.healthyMonitoringInterval,
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
@@ -488,10 +524,10 @@ func (t *transformer) StepsRunner(
 		longLivedAction = action
 	}
 
-	if t.useContainerProxy && executorContainer.EnableContainerProxy {
+	if t.useContainerProxy && container.EnableContainerProxy {
 		containerProxyStep := t.transformContainerProxyStep(
 			gardenContainer,
-			executorContainer,
+			container,
 			logger,
 			logStreamer,
 			config.BindMounts,
@@ -560,6 +596,7 @@ func (t *transformer) createCheck(
 		Args:           args,
 	}
 
+	grace := evalGracefulShutdownInterval(container.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
 	buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 	sidecar := steps.Sidecar{
@@ -572,11 +609,11 @@ func (t *transformer) createCheck(
 		runAction,
 		bufferedLogStreamer,
 		logger,
-		*container,
+		container.ExternalIP,
+		container.InternalIP,
+		container.Ports,
 		t.clock,
-		t.gracefulShutdownInterval,
-		t.extendedGracefulShutdownInterval,
-		t.extendedGracefulShutDownOrgs,
+		grace,
 		true,
 		sidecar,
 		container.Privileged,
@@ -730,6 +767,7 @@ func (t *transformer) transformContainerProxyStep(
 		Name:       fmt.Sprintf("%s-envoy", container.Handle()),
 	}
 
+	grace := evalGracefulShutdownInterval(execContainer.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
 	proxyLogger := logger.Session("proxy")
 
 	return steps.NewBackground(steps.NewRunWithSidecar(
@@ -737,13 +775,25 @@ func (t *transformer) transformContainerProxyStep(
 		runAction,
 		streamer.WithSource("PROXY"),
 		proxyLogger,
-		execContainer,
+		execContainer.ExternalIP,
+		execContainer.InternalIP,
+		execContainer.Ports,
 		t.clock,
-		t.gracefulShutdownInterval,
-		t.extendedGracefulShutdownInterval,
-		t.extendedGracefulShutDownOrgs,
+		grace,
 		false,
 		sidecar,
 		execContainer.Privileged,
 	), proxyLogger)
+}
+
+func evalGracefulShutdownInterval(certProps executor.CertificateProperties, ext_orgs []string,
+	std_grace, ext_grace time.Duration) time.Duration {
+	if len(certProps.OrganizationalUnit) > 0 {
+		for _, org := range ext_orgs {
+			if ("organization:" + org) == certProps.OrganizationalUnit[0] {
+				return ext_grace
+			}
+		}
+	}
+	return std_grace
 }
