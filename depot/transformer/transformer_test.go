@@ -17,6 +17,7 @@ import (
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/gardenfakes"
@@ -34,21 +35,21 @@ import (
 var _ = Describe("Transformer", func() {
 	Describe("StepsRunner", func() {
 		var (
-			logger                           lager.Logger
-			optimusPrime                     transformer.Transformer
-			container                        executor.Container
-			logStreamer                      log_streamer.LogStreamer
-			gardenContainer                  *gardenfakes.FakeContainer
-			clock                            *fakeclock.FakeClock
-			fakeMetronClient                 *mfakes.FakeIngressClient
-			healthyMonitoringInterval        time.Duration
-			unhealthyMonitoringInterval      time.Duration
-			gracefulShutdownInterval         time.Duration
+			logger                      lager.Logger
+			optimusPrime                transformer.Transformer
+			container                   executor.Container
+			logStreamer                 log_streamer.LogStreamer
+			gardenContainer             *gardenfakes.FakeContainer
+			clock                       *fakeclock.FakeClock
+			fakeMetronClient            *mfakes.FakeIngressClient
+			healthyMonitoringInterval   time.Duration
+			unhealthyMonitoringInterval time.Duration
+			gracefulShutdownInterval    time.Duration
 			extendedGracefulShutdownInterval time.Duration
-			gracefulShutDownPerOrg           []string
-			healthCheckWorkPool              *workpool.WorkPool
-			cfg                              transformer.Config
-			options                          []transformer.Option
+			extendedGracefulShutDownOrgs     []string
+			healthCheckWorkPool         *workpool.WorkPool
+			cfg                         transformer.Config
+			options                     []transformer.Option
 		)
 
 		BeforeEach(func() {
@@ -64,7 +65,7 @@ var _ = Describe("Transformer", func() {
 			unhealthyMonitoringInterval = 1 * time.Millisecond
 			gracefulShutdownInterval = 10 * time.Second
 			extendedGracefulShutdownInterval = 20 * time.Second
-			gracefulShutDownPerOrg = []string{"test_org"}
+			extendedGracefulShutDownOrgs     = []string{"ext_grace_org"}
 
 			var err error
 			healthCheckWorkPool, err = workpool.NewWorkPool(10)
@@ -118,7 +119,7 @@ var _ = Describe("Transformer", func() {
 				unhealthyMonitoringInterval,
 				gracefulShutdownInterval,
 				extendedGracefulShutdownInterval,
-				gracefulShutDownPerOrg,
+				extendedGracefulShutDownOrgs,
 				healthCheckWorkPool,
 				options...,
 			)
@@ -172,7 +173,7 @@ var _ = Describe("Transformer", func() {
 					}
 					return &gardenfakes.FakeProcess{}, nil
 				}
-
+	
 				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -212,7 +213,7 @@ var _ = Describe("Transformer", func() {
 				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
 				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
 				Expect(processIO.Stderr).ShouldNot(Equal(ioutil.Discard))
-
+				
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
 				Eventually(process.Wait()).Should(Receive(nil))
@@ -1692,5 +1693,64 @@ var _ = Describe("Transformer", func() {
 				})
 			})
 		})
+
+		Describe("when extended graceful interval is desired", func() {
+			var fakeStreamer    *fake_log_streamer.FakeLogStreamer;
+			
+			JustBeforeEach(func() {
+				var spawnedProcess  *gardenfakes.FakeProcess;
+				fakeStreamer   = new(fake_log_streamer.FakeLogStreamer)
+				spawnedProcess = new(gardenfakes.FakeProcess)
+				initializingCh := make(chan struct{})
+				waitExitedCh := make(chan int, 1)
+				fakeStreamer.StdoutReturns(gbytes.NewBuffer())
+				fakeStreamer.StderrReturns(gbytes.NewBuffer())
+				fakeStreamer.SourceNameReturns("testlogsource")
+				fakeStreamer.WithSourceReturns(fakeStreamer);
+				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
+					return spawnedProcess, nil
+				}
+				spawnedProcess.WaitStub = func() (int, error) {
+					close(initializingCh)
+					return <-waitExitedCh, nil
+				}
+				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, fakeStreamer, cfg)
+				Expect(err).NotTo(HaveOccurred())
+				process := ifrit.Background(runner)
+				Eventually(initializingCh).Should(BeClosed())
+				process.Signal(os.Interrupt)
+				Eventually(spawnedProcess.SignalCallCount).Should(Equal(1))
+				Expect(spawnedProcess.SignalArgsForCall(0)).To(Equal(garden.SignalTerminate))
+				clock.WaitForWatcherAndIncrement(100 * time.Second)
+				Eventually(spawnedProcess.SignalCallCount).Should(Equal(2))
+				waitExitedCh <- (128 + 9)
+				Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
+			})
+
+			Context("container is a standard org", func() {
+				BeforeEach(func() {
+					container.RunInfo.CertificateProperties = executor.CertificateProperties{
+						OrganizationalUnit: []string {"organization:std_org"},
+					}
+				})
+
+				It("has standard graceful shutdown interval", func() {
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 10s graceful shutdown interval\\)"))
+				})
+			})
+
+			Context("container is an extended shutdown intervalorg", func() {
+				BeforeEach(func() {
+					container.RunInfo.CertificateProperties = executor.CertificateProperties{
+						OrganizationalUnit: []string {"organization:ext_grace_org"},
+					}
+				})
+
+				It("has standard graceful shutdown interval", func() {
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 20s graceful shutdown interval\\)"))
+				})
+			})
+		})
+
 	})
 })

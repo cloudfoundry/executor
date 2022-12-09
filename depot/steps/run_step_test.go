@@ -32,20 +32,17 @@ var _ = Describe("RunAction", func() {
 		gardenClient                        *fakes.FakeGardenClient
 		logger                              *lagertest.TestLogger
 		fileDescriptorLimit, processesLimit uint64
-		// externalIP, internalIP              string
-		//portMappings           []executor.PortMapping
-		fakeClock              *fakeclock.FakeClock
-		suppressExitStatusCode bool
+		externalIP, internalIP              string
+		portMappings                        []executor.PortMapping
+		fakeClock                           *fakeclock.FakeClock
+		suppressExitStatusCode              bool
 
-		spawnedProcess                   *gardenfakes.FakeProcess
-		runError                         error
-		testLogSource                    string
-		sidecar                          steps.Sidecar
-		privileged                       bool
-		gracefulShutdownInterval         time.Duration = 5 * time.Second
-		extendedGracefulShutdownInterval time.Duration = 10 * time.Second
-		extendedGracefulShutDownOrgs     []string
-		executorContainer                executor.Container
+		spawnedProcess           *gardenfakes.FakeProcess
+		runError                 error
+		testLogSource            string
+		sidecar                  steps.Sidecar
+		privileged               bool
+		gracefulShutdownInterval time.Duration = 5 * time.Second
 	)
 
 	BeforeEach(func() {
@@ -85,18 +82,10 @@ var _ = Describe("RunAction", func() {
 		gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
 			return spawnedProcess, runError
 		}
-		executorContainer = executor.Container{
-			ExternalIP: "external-ip",
-			InternalIP: "internal-ip",
-		}
-		executorContainer.Ports = nil
-		executorContainer.CertificateProperties = executor.CertificateProperties{
-			OrganizationalUnit: []string{"organization:extended_test_org"},
-		}
-		extendedGracefulShutDownOrgs = []string{"test_org"}
-		// externalIP = "external-ip"
-		// internalIP = "internal-ip"
-		// portMappings = nil
+
+		externalIP = "external-ip"
+		internalIP = "internal-ip"
+		portMappings = nil
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
 
@@ -113,11 +102,11 @@ var _ = Describe("RunAction", func() {
 			runAction,
 			fakeStreamer,
 			logger,
-			executorContainer,
+			externalIP,
+			internalIP,
+			portMappings,
 			fakeClock,
 			gracefulShutdownInterval,
-			extendedGracefulShutdownInterval,
-			extendedGracefulShutDownOrgs,
 			suppressExitStatusCode,
 			sidecar,
 			privileged,
@@ -304,7 +293,7 @@ var _ = Describe("RunAction", func() {
 
 			Context("when the container has port mappings configured", func() {
 				BeforeEach(func() {
-					executorContainer.Ports = []executor.PortMapping{
+					portMappings = []executor.PortMapping{
 						{HostPort: 1, ContainerPort: 2},
 						{HostPort: 3, ContainerPort: 4},
 					}
@@ -327,7 +316,7 @@ var _ = Describe("RunAction", func() {
 
 				Context("and a container proxy is enabled", func() {
 					BeforeEach(func() {
-						executorContainer.Ports = []executor.PortMapping{
+						portMappings = []executor.PortMapping{
 							{HostPort: 1, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
 							{HostPort: 3, ContainerPort: 4, ContainerTLSProxyPort: 7, HostTLSProxyPort: 8},
 						}
@@ -367,7 +356,7 @@ var _ = Describe("RunAction", func() {
 
 					Context("and unproxied ports are disabled", func() {
 						BeforeEach(func() {
-							executorContainer.Ports = []executor.PortMapping{
+							portMappings = []executor.PortMapping{
 								{HostPort: 0, ContainerPort: 2, ContainerTLSProxyPort: 5, HostTLSProxyPort: 6},
 							}
 						})
@@ -407,7 +396,7 @@ var _ = Describe("RunAction", func() {
 
 			Context("when the container does not have any port mappings configured", func() {
 				BeforeEach(func() {
-					executorContainer.Ports = []executor.PortMapping{}
+					portMappings = []executor.PortMapping{}
 				})
 
 				It("sets all port-related env vars to the empty string", func() {
@@ -758,23 +747,6 @@ var _ = Describe("RunAction", func() {
 					waitExited <- (128 + 9)
 					Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
 					Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 5s graceful shutdown interval\\)"))
-				})
-
-				Context("when the org listed as extended shutdown org", func() {
-					BeforeEach(func() {
-						extendedGracefulShutDownOrgs = []string{"some_org", "extended_test_org"}
-						gracefulShutdownInterval = extendedGracefulShutdownInterval
-					})
-					AfterEach(func() {
-						gracefulShutdownInterval = 5
-						extendedGracefulShutDownOrgs = []string{"test_org"}
-
-					})
-					It("handles properly extended graceful shutdown", func() {
-						waitExited <- (128 + 9)
-						Eventually(fakeStreamer.StdoutCallCount).Should(Equal(2))
-						Expect(fakeStreamer.Stdout()).To(gbytes.Say("Exit status 137 \\(exceeded 10s graceful shutdown interval\\)"))
-					})
 				})
 
 				Context("when the process *still* does not exit after 1m", func() {

@@ -55,14 +55,14 @@ type transformer struct {
 	tempDir          string
 	clock            clock.Clock
 
-	sidecarRootFS                    string
-	useDeclarativeHealthCheck        bool
-	healthyMonitoringInterval        time.Duration
-	unhealthyMonitoringInterval      time.Duration
-	gracefulShutdownInterval         time.Duration
+	sidecarRootFS               string
+	useDeclarativeHealthCheck   bool
+	healthyMonitoringInterval   time.Duration
+	unhealthyMonitoringInterval time.Duration
+	gracefulShutdownInterval    time.Duration
 	extendedGracefulShutdownInterval time.Duration
 	extendedGracefulShutDownOrgs     []string
-	healthCheckWorkPool              *workpool.WorkPool
+	healthCheckWorkPool         *workpool.WorkPool
 
 	useContainerProxy bool
 	drainWait         time.Duration
@@ -118,19 +118,19 @@ func NewTransformer(
 	opts ...Option,
 ) *transformer {
 	t := &transformer{
-		cachedDownloader:                 cachedDownloader,
-		uploader:                         uploader,
-		compressor:                       compressor,
-		downloadLimiter:                  downloadLimiter,
-		uploadLimiter:                    uploadLimiter,
-		tempDir:                          tempDir,
-		healthyMonitoringInterval:        healthyMonitoringInterval,
-		unhealthyMonitoringInterval:      unhealthyMonitoringInterval,
-		gracefulShutdownInterval:         gracefulShutdownInterval,
+		cachedDownloader:            cachedDownloader,
+		uploader:                    uploader,
+		compressor:                  compressor,
+		downloadLimiter:             downloadLimiter,
+		uploadLimiter:               uploadLimiter,
+		tempDir:                     tempDir,
+		healthyMonitoringInterval:   healthyMonitoringInterval,
+		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
+		gracefulShutdownInterval:    gracefulShutdownInterval,
 		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
 		extendedGracefulShutDownOrgs:     extendedGracefulShutDownOrgs,
-		healthCheckWorkPool:              healthCheckWorkPool,
-		clock:                            clock,
+		healthCheckWorkPool:         healthCheckWorkPool,
+		clock:                       clock,
 	}
 
 	for _, o := range opts {
@@ -303,6 +303,7 @@ func (t *transformer) stepFor(
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				),
 					buffer,
 				)
@@ -380,7 +381,7 @@ func (t *transformer) StepsRunner(
 	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
-	grace := evalGracefulShutdownInterval(container.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
+	grace := t.evalGracefulShutdownInterval(container.CertificateProperties)
 
 	if container.Setup != nil {
 		setup = t.stepFor(
@@ -450,6 +451,7 @@ func (t *transformer) StepsRunner(
 			false,
 			false,
 			logger.Session("sidecar"),
+			grace,
 		))
 	}
 
@@ -596,7 +598,6 @@ func (t *transformer) createCheck(
 		Args:           args,
 	}
 
-	grace := evalGracefulShutdownInterval(container.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
 	buffer := log_streamer.NewConcurrentBuffer(bytes.NewBuffer(nil))
 	bufferedLogStreamer := log_streamer.NewBufferStreamer(buffer, buffer)
 	sidecar := steps.Sidecar{
@@ -613,7 +614,7 @@ func (t *transformer) createCheck(
 		container.InternalIP,
 		container.Ports,
 		t.clock,
-		grace,
+		t.evalGracefulShutdownInterval(container.CertificateProperties),
 		true,
 		sidecar,
 		container.Privileged,
@@ -767,7 +768,6 @@ func (t *transformer) transformContainerProxyStep(
 		Name:       fmt.Sprintf("%s-envoy", container.Handle()),
 	}
 
-	grace := evalGracefulShutdownInterval(execContainer.CertificateProperties, t.extendedGracefulShutDownOrgs, t.gracefulShutdownInterval, t.extendedGracefulShutdownInterval)
 	proxyLogger := logger.Session("proxy")
 
 	return steps.NewBackground(steps.NewRunWithSidecar(
@@ -779,21 +779,20 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.InternalIP,
 		execContainer.Ports,
 		t.clock,
-		grace,
+		t.evalGracefulShutdownInterval(execContainer.CertificateProperties),
 		false,
 		sidecar,
 		execContainer.Privileged,
 	), proxyLogger)
 }
 
-func evalGracefulShutdownInterval(certProps executor.CertificateProperties, ext_orgs []string,
-	std_grace, ext_grace time.Duration) time.Duration {
+func (t *transformer) evalGracefulShutdownInterval(certProps executor.CertificateProperties) time.Duration {
 	if len(certProps.OrganizationalUnit) > 0 {
-		for _, org := range ext_orgs {
+		for _, org := range t.extendedGracefulShutDownOrgs {
 			if ("organization:" + org) == certProps.OrganizationalUnit[0] {
-				return ext_grace
+				return t.extendedGracefulShutdownInterval
 			}
 		}
 	}
-	return std_grace
+	return t.gracefulShutdownInterval
 }
