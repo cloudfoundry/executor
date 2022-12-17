@@ -592,10 +592,12 @@ var _ = Describe("Depot", func() {
 		var updateRequest *executor.UpdateRequest
 
 		BeforeEach(func() {
-			updateRequest = newUpdateRequest("a-guid", internalroutes.InternalRoutes{
+			irs := internalroutes.InternalRoutes{
 				{Hostname: "a.apps.internal"},
 				{Hostname: "b.apps.internal"},
-			})
+			}
+			metricTags := map[string]string{"some-tag": "some-value"}
+			updateRequest = newUpdateRequest("a-guid", irs, metricTags)
 		})
 
 		JustBeforeEach(func() {
@@ -757,8 +759,8 @@ func newRunRequest(guid string) *executor.RunRequest {
 	return &r
 }
 
-func newUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes) *executor.UpdateRequest {
-	r := executor.NewUpdateRequest(guid, internalRoutes)
+func newUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes, metricTags map[string]string) *executor.UpdateRequest {
+	r := executor.NewUpdateRequest(guid, internalRoutes, metricTags)
 	return &r
 }
 

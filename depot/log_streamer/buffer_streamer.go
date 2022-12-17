@@ -24,6 +24,10 @@ func (bs *bufferStreamer) Stderr() io.Writer {
 	return bs.stderr
 }
 
+func (bs *bufferStreamer) UpdateTags(tags map[string]string) {
+
+}
+
 func (bs *bufferStreamer) Flush() {
 }
 

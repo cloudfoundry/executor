@@ -74,6 +74,7 @@ type containerStore struct {
 	clock             clock.Clock
 	metronClient      loggingclient.IngressClient
 	rootFSSizer       configuration.RootFSSizer
+	logManager        LogManager
 
 	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
@@ -96,6 +97,7 @@ func New(
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
 	credManager CredManager,
+	logManager LogManager,
 	clock clock.Clock,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
@@ -115,6 +117,7 @@ func New(
 		dependencyManager:             dependencyManager,
 		volumeManager:                 volumeManager,
 		credManager:                   credManager,
+		logManager:                    logManager,
 		containers:                    newNodeMap(totalCapacity),
 		eventEmitter:                  eventEmitter,
 		transformer:                   transformer,
@@ -154,6 +157,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.dependencyManager,
 			cs.volumeManager,
 			cs.credManager,
+			cs.logManager,
 			cs.eventEmitter,
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,
@@ -236,7 +240,7 @@ func (cs *containerStore) Run(logger lager.Logger, guid string) error {
 }
 
 func (cs *containerStore) Update(logger lager.Logger, req *executor.UpdateRequest) error {
-	logger = logger.Session("containerstore-stop", lager.Data{"Guid": req.Guid})
+	logger = logger.Session("containerstore-update", lager.Data{"Guid": req.Guid})
 
 	logger.Info("starting")
 	defer logger.Info("complete")

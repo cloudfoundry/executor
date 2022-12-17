@@ -277,19 +277,31 @@ var _ = Describe("LogStreamer", func() {
 		Describe("WithSource", func() {
 			Context("when a new log source is provided", func() {
 				var newSourceName string
+				var streamerWithUpdatedSource log_streamer.LogStreamer
 
 				BeforeEach(func() {
 					newSourceName = "new-source-name"
-					streamer = streamer.WithSource(newSourceName)
+					streamerWithUpdatedSource = streamer.WithSource(newSourceName)
 				})
 
 				It("should emit a message with the new log source", func() {
-					fmt.Fprintln(streamer.Stdout(), "this is a log")
+					fmt.Fprintln(streamerWithUpdatedSource.Stdout(), "this is a log")
 					Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 
 					_, sn, _ := fakeClient.SendAppLogArgsForCall(0)
 
 					Expect(sn).To(Equal(newSourceName))
+				})
+
+				Context("when the original streamer is updated with new tags", func() {
+					It("messages are emitted with the new tags", func() {
+						streamer.UpdateTags(map[string]string{"new": "tags"})
+
+						fmt.Fprintln(streamerWithUpdatedSource.Stdout(), "this is a log")
+
+						_, _, tags := fakeClient.SendAppLogArgsForCall(0)
+						Expect(tags).To(Equal(map[string]string{"new": "tags"}))
+					})
 				})
 			})
 
@@ -658,6 +670,71 @@ var _ = Describe("LogStreamer", func() {
 		It("does not trigger data races", func() {
 			Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
 		})
+	})
+
+	Describe("UpdateTags", func() {
+		Context("when updated with new tags", func() {
+			var updatedTags map[string]string
+			BeforeEach(func() {
+				updatedTags = map[string]string{"new-tag": "some-value"}
+				streamer.UpdateTags(updatedTags)
+			})
+
+			It("emits stdout messages with the updated tags", func() {
+				_, err := fmt.Fprintln(streamer.Stdout(), "this is a log")
+				Expect(err).ToNot(HaveOccurred())
+				_, err = fmt.Fprintln(streamer.Stdout(), "this is another log")
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
+
+				_, _, tags := fakeClient.SendAppLogArgsForCall(0)
+				Expect(tags).To(Equal(updatedTags))
+
+				_, _, tags = fakeClient.SendAppLogArgsForCall(1)
+				Expect(tags).To(Equal(updatedTags))
+			})
+
+			It("emits stderr messages with the updated tags", func() {
+				_, err := fmt.Fprintln(streamer.Stderr(), "this is a log")
+				Expect(err).ToNot(HaveOccurred())
+				_, err = fmt.Fprintln(streamer.Stderr(), "this is another log")
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(2))
+
+				_, _, tags := fakeClient.SendAppErrorLogArgsForCall(0)
+				Expect(tags).To(Equal(updatedTags))
+
+				_, _, tags = fakeClient.SendAppErrorLogArgsForCall(1)
+				Expect(tags).To(Equal(updatedTags))
+			})
+		})
+
+		Context("with multiple goroutines emitting simultaneously", func() {
+			var waitGroup *sync.WaitGroup
+			It("does not trigger data races", func() {
+				waitGroup = new(sync.WaitGroup)
+
+				waitGroup.Add(1)
+				go func() {
+					defer waitGroup.Done()
+					streamer.UpdateTags(map[string]string{"some-tag": "some-value"})
+				}()
+
+				for i := 0; i < 2; i++ {
+					waitGroup.Add(1)
+					go func() {
+						defer waitGroup.Done()
+						fmt.Fprintln(streamer.Stdout(), "this is a log")
+					}()
+				}
+				waitGroup.Wait()
+
+				Eventually(fakeClient.SendAppLogCallCount).Should(Equal(2))
+			})
+		})
+
 	})
 
 	Describe("Stop", func() {

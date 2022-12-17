@@ -2,6 +2,7 @@ package log_streamer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"unicode/utf8"
 
@@ -38,6 +39,19 @@ func newStreamDestination(
 		buffer:         make([]byte, 0, MAX_MESSAGE_SIZE),
 		metronClient:   metronClient,
 		logRateLimiter: limiter,
+	}
+}
+
+func (destination *streamDestination) updateTags(tags map[string]string) {
+	destination.processLock.Lock()
+	defer destination.processLock.Unlock()
+
+	for k := range destination.tags {
+		delete(destination.tags, k)
+	}
+
+	for k, v := range tags {
+		destination.tags[k] = v
 	}
 }
 
