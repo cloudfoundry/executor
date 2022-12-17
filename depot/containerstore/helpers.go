@@ -4,27 +4,14 @@ import (
 	"errors"
 	"net"
 	"strings"
-	"time"
 
 	"code.cloudfoundry.org/bbs/models"
-	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager"
 )
 
 var ErrIPRangeConversionFailed = errors.New("failed to convert destination to ip range")
-
-func logStreamerFromLogConfig(conf executor.LogConfig, metronClient loggingclient.IngressClient, maxLogLinesPerSecond int, maxLogBytesPerSecond int64, metricReportInterval time.Duration) log_streamer.LogStreamer {
-	return log_streamer.New(
-		conf,
-		metronClient,
-		maxLogLinesPerSecond,
-		maxLogBytesPerSecond,
-		metricReportInterval,
-	)
-}
 
 func newBindMount(src, dst string) garden.BindMount {
 	return garden.BindMount{

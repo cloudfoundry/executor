@@ -47,6 +47,11 @@ type FakeLogStreamer struct {
 	stopMutex       sync.RWMutex
 	stopArgsForCall []struct {
 	}
+	UpdateTagsStub        func(map[string]string)
+	updateTagsMutex       sync.RWMutex
+	updateTagsArgsForCall []struct {
+		arg1 map[string]string
+	}
 	WithSourceStub        func(string) log_streamer.LogStreamer
 	withSourceMutex       sync.RWMutex
 	withSourceArgsForCall []struct {
@@ -269,6 +274,38 @@ func (fake *FakeLogStreamer) StopCalls(stub func()) {
 	fake.StopStub = stub
 }
 
+func (fake *FakeLogStreamer) UpdateTags(arg1 map[string]string) {
+	fake.updateTagsMutex.Lock()
+	fake.updateTagsArgsForCall = append(fake.updateTagsArgsForCall, struct {
+		arg1 map[string]string
+	}{arg1})
+	stub := fake.UpdateTagsStub
+	fake.recordInvocation("UpdateTags", []interface{}{arg1})
+	fake.updateTagsMutex.Unlock()
+	if stub != nil {
+		fake.UpdateTagsStub(arg1)
+	}
+}
+
+func (fake *FakeLogStreamer) UpdateTagsCallCount() int {
+	fake.updateTagsMutex.RLock()
+	defer fake.updateTagsMutex.RUnlock()
+	return len(fake.updateTagsArgsForCall)
+}
+
+func (fake *FakeLogStreamer) UpdateTagsCalls(stub func(map[string]string)) {
+	fake.updateTagsMutex.Lock()
+	defer fake.updateTagsMutex.Unlock()
+	fake.UpdateTagsStub = stub
+}
+
+func (fake *FakeLogStreamer) UpdateTagsArgsForCall(i int) map[string]string {
+	fake.updateTagsMutex.RLock()
+	defer fake.updateTagsMutex.RUnlock()
+	argsForCall := fake.updateTagsArgsForCall[i]
+	return argsForCall.arg1
+}
+
 func (fake *FakeLogStreamer) WithSource(arg1 string) log_streamer.LogStreamer {
 	fake.withSourceMutex.Lock()
 	ret, specificReturn := fake.withSourceReturnsOnCall[len(fake.withSourceArgsForCall)]
@@ -343,6 +380,8 @@ func (fake *FakeLogStreamer) Invocations() map[string][][]interface{} {
 	defer fake.stdoutMutex.RUnlock()
 	fake.stopMutex.RLock()
 	defer fake.stopMutex.RUnlock()
+	fake.updateTagsMutex.RLock()
+	defer fake.updateTagsMutex.RUnlock()
 	fake.withSourceMutex.RLock()
 	defer fake.withSourceMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}

@@ -74,6 +74,8 @@ type storeNode struct {
 	dependencyManager                     DependencyManager
 	volumeManager                         volman.Manager
 	credManager                           CredManager
+	logManager                            LogManager
+	logStreamer                           log_streamer.LogStreamer
 	instanceIdentityHandler               *InstanceIdentityHandler
 	eventEmitter                          event.Hub
 	transformer                           transformer.Transformer
@@ -105,6 +107,7 @@ func newStoreNode(
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
 	credManager CredManager,
+	logManager LogManager,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
@@ -125,6 +128,7 @@ func newStoreNode(
 		dependencyManager:                     dependencyManager,
 		volumeManager:                         volumeManager,
 		credManager:                           credManager,
+		logManager:                            logManager,
 		eventEmitter:                          eventEmitter,
 		transformer:                           transformer,
 		modifiedIndex:                         0,
@@ -505,7 +509,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		return executor.ErrInvalidTransition
 	}
 
-	logStreamer := logStreamerFromLogConfig(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.info.LogRateLimitBytesPerSecond, n.config.MetricReportInterval)
+	n.logStreamer = n.logManager.NewLogStreamer(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.info.LogRateLimitBytesPerSecond, n.config.MetricReportInterval)
 
 	credManagerRunner := n.credManager.Runner(logger, n, n.regenerateCertsCh)
 
@@ -519,7 +523,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		CreationStartTime: n.startTime,
 		MetronClient:      n.metronClient,
 	}
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, logStreamer, cfg)
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, n.logStreamer, cfg)
 	if err != nil {
 		return err
 	}
@@ -529,7 +533,7 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		{"runner", runner},
 	})
 	n.process = ifrit.Background(group)
-	go n.run(logger, logStreamer)
+	go n.run(logger, n.logStreamer)
 	return nil
 }
 
@@ -593,9 +597,25 @@ func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreame
 
 func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) {
 	n.infoLock.Lock()
-	n.info.InternalRoutes = req.InternalRoutes
+
+	if req.InternalRoutes != nil {
+		n.info.InternalRoutes = req.InternalRoutes
+	}
+
+	if req.MetricTags != nil {
+		n.info.LogConfig.Tags = req.MetricTags
+		n.info.MetricsConfig.Tags = req.MetricTags
+	}
+
 	n.infoLock.Unlock()
-	n.regenerateCertsCh <- struct{}{}
+
+	if req.InternalRoutes != nil {
+		n.regenerateCertsCh <- struct{}{}
+	}
+
+	if req.MetricTags != nil {
+		n.logStreamer.UpdateTags(req.MetricTags)
+	}
 }
 
 func (n *storeNode) Stop(logger lager.Logger) {

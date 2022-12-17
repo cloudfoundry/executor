@@ -21,6 +21,7 @@ type LogStreamer interface {
 	Stdout() io.Writer
 	Stderr() io.Writer
 
+	UpdateTags(map[string]string)
 	Flush()
 
 	WithSource(sourceName string) LogStreamer
@@ -75,6 +76,11 @@ func (e *logStreamer) Stdout() io.Writer {
 
 func (e *logStreamer) Stderr() io.Writer {
 	return e.stderr
+}
+
+func (e *logStreamer) UpdateTags(tags map[string]string) {
+	e.stdout.updateTags(tags)
+	e.stderr.updateTags(tags)
 }
 
 func (e *logStreamer) Flush() {

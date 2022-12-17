@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
@@ -67,6 +68,8 @@ var _ = Describe("Container Store", func() {
 		credManager       *containerstorefakes.FakeCredManager
 		proxyManager      *containerstorefakes.FakeProxyManager
 		volumeManager     *volmanfakes.FakeManager
+		logManager        *containerstorefakes.FakeLogManager
+		logStreamer       *fake_log_streamer.FakeLogStreamer
 
 		clock            *fakeclock.FakeClock
 		eventEmitter     *eventfakes.FakeHub
@@ -102,6 +105,7 @@ var _ = Describe("Container Store", func() {
 		gardenClient = &gardenfakes.FakeClient{}
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		credManager = &containerstorefakes.FakeCredManager{}
+		logManager = &containerstorefakes.FakeLogManager{}
 		proxyManager = &containerstorefakes.FakeProxyManager{}
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -113,6 +117,9 @@ var _ = Describe("Container Store", func() {
 			<-signals
 			return nil
 		}))
+
+		logStreamer = fake_log_streamer.NewFakeLogStreamer()
+		logManager.NewLogStreamerReturns(logStreamer)
 
 		iNodeLimit = 64
 		maxCPUShares = 100
@@ -141,6 +148,7 @@ var _ = Describe("Container Store", func() {
 			dependencyManager,
 			volumeManager,
 			credManager,
+			logManager,
 			clock,
 			eventEmitter,
 			megatron,
@@ -465,6 +473,7 @@ var _ = Describe("Container Store", func() {
 						dependencyManager,
 						volumeManager,
 						credManager,
+						logManager,
 						clock,
 						eventEmitter,
 						megatron,
@@ -685,6 +694,7 @@ var _ = Describe("Container Store", func() {
 						dependencyManager,
 						volumeManager,
 						credManager,
+						logManager,
 						clock,
 						eventEmitter,
 						megatron,
@@ -1172,6 +1182,7 @@ var _ = Describe("Container Store", func() {
 						dependencyManager,
 						volumeManager,
 						credManager,
+						logManager,
 						clock,
 						eventEmitter,
 						megatron,
@@ -1260,6 +1271,7 @@ var _ = Describe("Container Store", func() {
 							dependencyManager,
 							volumeManager,
 							credManager,
+							logManager,
 							clock,
 							eventEmitter,
 							megatron,
@@ -2132,6 +2144,7 @@ var _ = Describe("Container Store", func() {
 			runReq         *executor.RunRequest
 			updateReq      *executor.UpdateRequest
 			internalRoutes internalroutes.InternalRoutes
+			metricTags     map[string]string
 		)
 
 		BeforeEach(func() {
@@ -2144,8 +2157,21 @@ var _ = Describe("Container Store", func() {
 					Guid:       containerGuid,
 					Index:      1,
 					SourceName: "test-source",
+					Tags: map[string]string{
+						"old-log-tag": "old-value",
+					},
+				},
+				MetricsConfig: executor.MetricsConfig{
+					Guid:  containerGuid,
+					Index: 1,
+					Tags: map[string]string{
+						"old-metrics-tag": "old-value",
+					},
 				},
 				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
+				InternalRoutes: internalroutes.InternalRoutes{
+					{Hostname: "old.apps.internal"},
+				},
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
@@ -2154,7 +2180,8 @@ var _ = Describe("Container Store", func() {
 				{Hostname: "a.apps.internal"},
 				{Hostname: "b.apps.internal"},
 			}
-			updateReq = &executor.UpdateRequest{Guid: containerGuid, InternalRoutes: internalRoutes}
+			metricTags = map[string]string{"some-tag": "some-value"}
+			updateReq = &executor.UpdateRequest{Guid: containerGuid, InternalRoutes: internalRoutes, MetricTags: metricTags}
 		})
 
 		JustBeforeEach(func() {
@@ -2170,6 +2197,7 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container exists", func() {
 			JustBeforeEach(func() {
+
 				err := containerStore.Run(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -2192,6 +2220,75 @@ var _ = Describe("Container Store", func() {
 				}()
 				Eventually(regenerateCertsCh).Should(Receive(Equal(struct{}{})))
 			})
+
+			It("updates metric tags", func() {
+				err := containerStore.Update(logger, updateReq)
+				Expect(err).NotTo(HaveOccurred())
+
+				container, err := containerStore.Get(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.MetricsConfig.Tags).To(Equal(metricTags))
+			})
+
+			It("updates log tags and the logStreamer", func() {
+				err := containerStore.Update(logger, updateReq)
+				Expect(err).NotTo(HaveOccurred())
+
+				container, err := containerStore.Get(logger, containerGuid)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(container.LogConfig.Tags).To(Equal(metricTags))
+
+				Expect(logStreamer.UpdateTagsArgsForCall(0)).To(Equal(metricTags))
+			})
+
+			Context("when internal routes are not provided", func() {
+				BeforeEach(func() {
+					updateReq.InternalRoutes = nil
+				})
+				It("does not update container internal routes", func() {
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).NotTo(HaveOccurred())
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.InternalRoutes).To(Equal(internalroutes.InternalRoutes{
+						{Hostname: "old.apps.internal"},
+					}))
+				})
+				It("does not send a signal to the credmanager to regenerate certs", func() {
+					_, _, regenerateCertsCh := credManager.RunnerArgsForCall(0)
+
+					go func() {
+						err := containerStore.Update(logger, updateReq)
+						Expect(err).NotTo(HaveOccurred())
+					}()
+					Consistently(regenerateCertsCh, 100*time.Millisecond).ShouldNot(Receive(Equal(struct{}{})))
+				})
+			})
+
+			Context("when metric tags are not provided", func() {
+				BeforeEach(func() {
+					updateReq.MetricTags = nil
+				})
+
+				It("does not update container metric tags", func() {
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).NotTo(HaveOccurred())
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(container.LogConfig.Tags).To(Equal(map[string]string{
+						"old-log-tag": "old-value",
+					}))
+					Expect(container.MetricsConfig.Tags).To(Equal(map[string]string{
+						"old-metrics-tag": "old-value",
+					}))
+
+					Expect(logStreamer.UpdateTagsCallCount()).To(Equal(0))
+				})
+
+			})
+
 		})
 
 		Context("when the container does not exist", func() {
@@ -2665,6 +2762,7 @@ var _ = Describe("Container Store", func() {
 						dependencyManager,
 						volumeManager,
 						credManager,
+						logManager,
 						clock,
 						eventEmitter,
 						megatron,

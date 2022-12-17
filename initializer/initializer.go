@@ -306,6 +306,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		return nil, nil, grouper.Members{}, err
 	}
 
+	logManager := containerstore.NewLogManager()
+
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
@@ -313,6 +315,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		containerstore.NewDependencyManager(cachedDownloader, downloadRateLimiter),
 		volmanClient,
 		credManager,
+		logManager,
 		clock,
 		hub,
 		transformer,
