@@ -18,10 +18,8 @@ import (
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	eventfakes "code.cloudfoundry.org/executor/depot/event/fakes"
-	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/depot/transformer/faketransformer"
 	"code.cloudfoundry.org/executor/initializer/configuration/configurationfakes"
 	"code.cloudfoundry.org/garden"
@@ -71,10 +69,10 @@ var _ = Describe("Container Store", func() {
 		logManager        *containerstorefakes.FakeLogManager
 		logStreamer       *fake_log_streamer.FakeLogStreamer
 
-		clock            *fakeclock.FakeClock
-		eventEmitter     *eventfakes.FakeHub
-		fakeMetronClient *mfakes.FakeIngressClient
-		fakeRootFSSizer  *configurationfakes.FakeRootFSSizer
+		clock        *fakeclock.FakeClock
+		eventEmitter *eventfakes.FakeHub
+		metronClient *mfakes.FakeIngressClient
+		rootFSSizer  *configurationfakes.FakeRootFSSizer
 	)
 
 	var containerState = func(guid string) func() executor.State {
@@ -110,7 +108,7 @@ var _ = Describe("Container Store", func() {
 		volumeManager = &volmanfakes.FakeManager{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
-		fakeRootFSSizer = new(configurationfakes.FakeRootFSSizer)
+		rootFSSizer = new(configurationfakes.FakeRootFSSizer)
 
 		credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 			close(ready)
@@ -131,7 +129,7 @@ var _ = Describe("Container Store", func() {
 
 		megatron = &faketransformer.FakeTransformer{}
 
-		fakeMetronClient = new(mfakes.FakeIngressClient)
+		metronClient = new(mfakes.FakeIngressClient)
 
 		containerConfig = containerstore.ContainerConfig{
 			OwnerName:              ownerName,
@@ -153,8 +151,8 @@ var _ = Describe("Container Store", func() {
 			eventEmitter,
 			megatron,
 			"/var/vcap/data/cf-system-trusted-certs",
-			fakeMetronClient,
-			fakeRootFSSizer,
+			metronClient,
+			rootFSSizer,
 			false,
 			"/var/vcap/packages/healthcheck",
 			proxyManager,
@@ -163,7 +161,7 @@ var _ = Describe("Container Store", func() {
 			advertisePreferenceForInstanceAddress,
 		)
 
-		fakeMetronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
+		metronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
 			metricMapLock.Lock()
 			defer metricMapLock.Unlock()
 			metricMap[name] = struct{}{}
@@ -413,7 +411,7 @@ var _ = Describe("Container Store", func() {
 				gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: externalIP, ContainerIP: internalIP}, nil)
 				gardenClient.CreateReturns(gardenContainer, nil)
 
-				fakeRootFSSizer.RootFSSizeFromPathReturns(1000)
+				rootFSSizer.RootFSSizeFromPathReturns(1000)
 			})
 
 			JustBeforeEach(func() {
@@ -478,8 +476,8 @@ var _ = Describe("Container Store", func() {
 						eventEmitter,
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
-						fakeMetronClient,
-						fakeRootFSSizer,
+						metronClient,
+						rootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -610,7 +608,7 @@ var _ = Describe("Container Store", func() {
 			Context("if the RootFSPath is not a known preloaded rootfs", func() {
 				BeforeEach(func() {
 					runReq.RunInfo.RootFSPath = "docker://some/repo"
-					fakeRootFSSizer.RootFSSizeFromPathReturns(0)
+					rootFSSizer.RootFSSizeFromPathReturns(0)
 				})
 
 				It("sets the correct disk limit", func() {
@@ -655,9 +653,9 @@ var _ = Describe("Container Store", func() {
 			It("sends a log after creating the container", func() {
 				_, err := containerStore.Create(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Eventually(fakeMetronClient.SendAppLogCallCount()).Should(Equal(2))
+				Eventually(metronClient.SendAppLogCallCount()).Should(Equal(2))
 				Eventually(func() string {
-					msg, _, _ := fakeMetronClient.SendAppLogArgsForCall(1)
+					msg, _, _ := metronClient.SendAppLogArgsForCall(1)
 					return msg
 				}).Should(ContainSubstring(fmt.Sprintf("Cell %s successfully created container for instance %s", cellID, containerGuid)))
 			})
@@ -699,8 +697,8 @@ var _ = Describe("Container Store", func() {
 						eventEmitter,
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
-						fakeMetronClient,
-						fakeRootFSSizer,
+						metronClient,
+						rootFSSizer,
 						true,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -1187,8 +1185,8 @@ var _ = Describe("Container Store", func() {
 						eventEmitter,
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
-						fakeMetronClient,
-						fakeRootFSSizer,
+						metronClient,
+						rootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -1276,8 +1274,8 @@ var _ = Describe("Container Store", func() {
 							eventEmitter,
 							megatron,
 							"/var/vcap/data/cf-system-trusted-certs",
-							fakeMetronClient,
-							fakeRootFSSizer,
+							metronClient,
+							rootFSSizer,
 							false,
 							"/var/vcap/packages/healthcheck",
 							proxyManager,
@@ -1419,8 +1417,8 @@ var _ = Describe("Container Store", func() {
 					_, err := containerStore.Create(logger, containerGuid)
 					Expect(err).To(HaveOccurred())
 
-					Expect(fakeMetronClient.SendAppErrorLogCallCount()).To(Equal(1))
-					msg, sourceType, tags := fakeMetronClient.SendAppErrorLogArgsForCall(0)
+					Expect(metronClient.SendAppErrorLogCallCount()).To(Equal(1))
+					msg, sourceType, tags := metronClient.SendAppErrorLogArgsForCall(0)
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s failed to create container for instance %s: boom!", cellID, containerGuid)))
 					Expect(tags["source_id"]).To(Equal(logGuid))
 					Expect(sourceType).To(Equal("test-source"))
@@ -1777,49 +1775,6 @@ var _ = Describe("Container Store", func() {
 						completeChan = make(chan struct{})
 					})
 
-					testStoppingContainerLogs := func(runErr error) {
-						Context("stopping container logs", func() {
-							var blockSendAppLog chan struct{}
-
-							BeforeEach(func() {
-								megatron.StepsRunnerStub = func(logger lager.Logger, c executor.Container, gc garden.Container, logStreamer log_streamer.LogStreamer, t transformer.Config) (ifrit.Runner, error) {
-									var rf ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
-										close(ready)
-
-										go func() {
-											logStreamer.Stdout().Write([]byte("this should block\n"))
-											logStreamer.Stdout().Write([]byte("bar\n"))
-										}()
-
-										<-completeChan
-										return runErr
-									}
-
-									return rf, nil
-								}
-
-								blockSendAppLog = make(chan struct{})
-								fakeMetronClient.SendAppLogStub = func(message string, sourceType string, tags map[string]string) error {
-									if message == "this should block" {
-										<-blockSendAppLog
-									}
-									return nil
-								}
-							})
-
-							It("ensures logs written after the action exits are not dropped", func() {
-								err := containerStore.Run(logger, containerGuid)
-								Expect(err).NotTo(HaveOccurred())
-								close(completeChan)
-								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-
-								Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(3))
-								close(blockSendAppLog)
-								Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(4))
-							})
-						})
-					}
-
 					Context("successfully", func() {
 						BeforeEach(func() {
 							var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -1887,12 +1842,10 @@ var _ = Describe("Container Store", func() {
 							close(completeChan)
 
 							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+							Expect(metronClient.IncrementCounterCallCount()).To(Equal(1))
 
-							Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
+							Expect(metronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
 						})
-
-						testStoppingContainerLogs(nil)
 					})
 
 					Context("unsuccessfully", func() {
@@ -1925,9 +1878,9 @@ var _ = Describe("Container Store", func() {
 							Expect(err).NotTo(HaveOccurred())
 
 							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-							Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(1))
+							Expect(metronClient.IncrementCounterCallCount()).To(Equal(1))
 
-							Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
+							Expect(metronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerCompletedCount))
 						})
 
 						Context("when run fails with ErrExceededGracefulShutdownInterval", func() {
@@ -1944,10 +1897,10 @@ var _ = Describe("Container Store", func() {
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								Expect(metronClient.IncrementCounterCallCount()).To(Equal(2))
 
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+								Expect(metronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(metronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
 							})
 						})
 
@@ -1965,10 +1918,10 @@ var _ = Describe("Container Store", func() {
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								Expect(metronClient.IncrementCounterCallCount()).To(Equal(2))
 
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+								Expect(metronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(metronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
 							})
 						})
 
@@ -1996,10 +1949,10 @@ var _ = Describe("Container Store", func() {
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-								Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+								Expect(metronClient.IncrementCounterCallCount()).To(Equal(2))
 
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
-								Expect(fakeMetronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
+								Expect(metronClient.IncrementCounterArgsForCall(0)).To(Equal(containerstore.ContainerExitedOnTimeoutCount))
+								Expect(metronClient.IncrementCounterArgsForCall(1)).To(Equal(containerstore.ContainerCompletedCount))
 							})
 
 							Context("when there are multiple graceful shutdown exceeded errors", func() {
@@ -2022,12 +1975,10 @@ var _ = Describe("Container Store", func() {
 									Expect(err).NotTo(HaveOccurred())
 
 									Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
-									Expect(fakeMetronClient.IncrementCounterCallCount()).To(Equal(2))
+									Expect(metronClient.IncrementCounterCallCount()).To(Equal(2))
 								})
 							})
 						})
-
-						testStoppingContainerLogs(errors.New("BOOOOM!!!!"))
 					})
 				})
 
@@ -2353,8 +2304,8 @@ var _ = Describe("Container Store", func() {
 			It("logs that the container is stopping", func() {
 				err := containerStore.Stop(logger, containerGuid)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(3))
-				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(metronClient.SendAppLogCallCount()).To(Equal(3))
+				msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
 				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
@@ -2571,14 +2522,14 @@ var _ = Describe("Container Store", func() {
 				It("logs the container is destroyed", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(4))
-					msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+					Expect(metronClient.SendAppLogCallCount()).To(Equal(4))
+					msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
 					Expect(tags["source_id"]).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s destroying container for instance %s", cellID, containerGuid)))
 					Expect(tags["instance_id"]).To(Equal("1"))
 
-					msg, sourceType, tags = fakeMetronClient.SendAppLogArgsForCall(3)
+					msg, sourceType, tags = metronClient.SendAppLogArgsForCall(3)
 					Expect(tags["source_id"]).To(Equal(containerGuid))
 					Expect(sourceType).To(Equal("test-source"))
 					Expect(msg).To(Equal(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", cellID, containerGuid)))
@@ -2677,8 +2628,8 @@ var _ = Describe("Container Store", func() {
 				close(finishRun)
 				Eventually(destroyed).Should(BeClosed())
 
-				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(5))
-				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(metronClient.SendAppLogCallCount()).To(Equal(5))
+				msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
 				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
@@ -2739,8 +2690,8 @@ var _ = Describe("Container Store", func() {
 			It("logs that the container is stopping", func() {
 				close(finishRun)
 				Eventually(destroyed).Should(BeClosed())
-				Expect(fakeMetronClient.SendAppLogCallCount()).To(Equal(5))
-				msg, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(2)
+				Expect(metronClient.SendAppLogCallCount()).To(Equal(5))
+				msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
 				Expect(tags["source_id"]).To(Equal(containerGuid))
 				Expect(sourceType).To(Equal("test-source"))
 				Expect(msg).To(Equal(fmt.Sprintf("Cell %s stopping instance %s", cellID, containerGuid)))
@@ -2767,8 +2718,8 @@ var _ = Describe("Container Store", func() {
 						eventEmitter,
 						megatron,
 						"/var/vcap/data/cf-system-trusted-certs",
-						fakeMetronClient,
-						fakeRootFSSizer,
+						metronClient,
+						rootFSSizer,
 						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
@@ -2901,7 +2852,7 @@ var _ = Describe("Container Store", func() {
 		)
 
 		BeforeEach(func() {
-			fakeRootFSSizer.RootFSSizeFromPathStub = func(path string) uint64 {
+			rootFSSizer.RootFSSizeFromPathStub = func(path string) uint64 {
 				switch path {
 				case "/foo/bar":
 					return 1000

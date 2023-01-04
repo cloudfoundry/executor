@@ -2,7 +2,6 @@ package log_streamer
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"unicode/utf8"
 
