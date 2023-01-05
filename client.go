@@ -89,8 +89,8 @@ func NewRunRequest(guid string, runInfo *RunInfo, tags Tags) RunRequest {
 
 type UpdateRequest struct {
 	Guid           string
-	InternalRoutes internalroutes.InternalRoutes `json:"internal_routes"`
-	MetricTags     map[string]string             `json:"metric_tags"`
+	InternalRoutes internalroutes.InternalRoutes
+	MetricTags     map[string]string
 }
 
 func NewUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes, metricTags map[string]string) UpdateRequest {
