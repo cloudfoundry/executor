@@ -595,16 +595,29 @@ func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreame
 	n.completeWithError(logger, err)
 }
 
-func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) {
+func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) error {
+	logger = logger.Session("node-update")
+
+	n.acquireOpLock(logger)
+	defer n.releaseOpLock(logger)
+
 	n.infoLock.Lock()
 
 	if req.InternalRoutes != nil {
 		n.info.InternalRoutes = req.InternalRoutes
 	}
 
+	var logConfigJSON []byte
 	if req.MetricTags != nil {
 		n.info.LogConfig.Tags = req.MetricTags
 		n.info.MetricsConfig.Tags = req.MetricTags
+
+		var err error
+		logConfigJSON, err = json.Marshal(n.info.LogConfig)
+		if err != nil {
+			logger.Error("failed-to-serialize-log-config", err, lager.Data{"guid": req.Guid})
+			return err
+		}
 	}
 
 	n.infoLock.Unlock()
@@ -615,7 +628,14 @@ func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) {
 
 	if req.MetricTags != nil {
 		n.logStreamer.UpdateTags(req.MetricTags)
+
+		err := n.gardenContainer.SetProperty("log_config", string(logConfigJSON))
+		if err != nil {
+			logger.Error("failed-to-set-log-config-property", err, lager.Data{"guid": req.Guid})
+			return err
+		}
 	}
+	return nil
 }
 
 func (n *storeNode) Stop(logger lager.Logger) {

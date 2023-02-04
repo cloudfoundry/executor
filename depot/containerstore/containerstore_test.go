@@ -2,6 +2,7 @@ package containerstore_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -2192,6 +2193,59 @@ var _ = Describe("Container Store", func() {
 				Expect(logStreamer.UpdateTagsArgsForCall(0)).To(Equal(metricTags))
 			})
 
+			It("updates the log config property on the container", func() {
+				err := containerStore.Update(logger, updateReq)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(gardenContainer.SetPropertyCallCount()).To(Equal(1))
+				name, value := gardenContainer.SetPropertyArgsForCall(0)
+				Expect(name).To(Equal("log_config"))
+
+				var parsedValue map[string]interface{}
+				err = json.Unmarshal([]byte(value), &parsedValue)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(parsedValue["guid"]).To(Equal("container-guid"))
+				Expect(parsedValue["index"]).To(Equal(1.0))
+				Expect(parsedValue["source_name"]).To(Equal("test-source"))
+				Expect(parsedValue["tags"]).To(Equal(map[string]interface{}{"some-tag": "some-value"}))
+			})
+
+			Context("when Update is called concurrently", func() {
+				JustBeforeEach(func() {
+					updateReq.InternalRoutes = nil
+				})
+				It("locks access to the container info", func() {
+					var wg sync.WaitGroup
+					wg.Add(2)
+					go func() {
+						err := containerStore.Update(logger, updateReq)
+						Expect(err).NotTo(HaveOccurred())
+						wg.Done()
+					}()
+					go func() {
+						err := containerStore.Update(logger, updateReq)
+						Expect(err).NotTo(HaveOccurred())
+						wg.Done()
+					}()
+					wg.Wait()
+				})
+			})
+
+			Context("when there is an error updating the log config property on the container", func() {
+				BeforeEach(func() {
+					gardenContainer.SetPropertyReturns(errors.New("some-error"))
+				})
+				It("logs the error", func() {
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).To(HaveOccurred())
+
+					Expect(gardenContainer.SetPropertyCallCount()).To(Equal(1))
+					Expect(logger).To(gbytes.Say("failed-to-set-log-config-property"))
+					Expect(logger).To(gbytes.Say(updateReq.Guid))
+					Expect(logger).To(gbytes.Say("some-error"))
+				})
+			})
+
 			Context("when internal routes are not provided", func() {
 				BeforeEach(func() {
 					updateReq.InternalRoutes = nil
@@ -2238,6 +2292,12 @@ var _ = Describe("Container Store", func() {
 					Expect(logStreamer.UpdateTagsCallCount()).To(Equal(0))
 				})
 
+				It("does not update the log config property on the container", func() {
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenContainer.SetPropertyCallCount()).To(Equal(0))
+				})
 			})
 
 		})
