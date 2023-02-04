@@ -251,9 +251,7 @@ func (cs *containerStore) Update(logger lager.Logger, req *executor.UpdateReques
 		return err
 	}
 
-	node.Update(logger, req)
-
-	return nil
+	return node.Update(logger, req)
 }
 
 func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
