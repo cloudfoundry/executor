@@ -72,7 +72,7 @@ func (c *Container) ValidateTransitionTo(newState State) bool {
 	}
 }
 
-func (c *Container) TransistionToInitialize(req *RunRequest) error {
+func (c *Container) TransitionToInitialize(req *RunRequest) error {
 	if !c.ValidateTransitionTo(StateInitializing) {
 		return ErrInvalidTransition
 	}

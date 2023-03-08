@@ -178,7 +178,7 @@ func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) er
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
-	err := n.info.TransistionToInitialize(req)
+	err := n.info.TransitionToInitialize(req)
 	if err != nil {
 		logger.Error("failed-to-initialize", err)
 		return err
