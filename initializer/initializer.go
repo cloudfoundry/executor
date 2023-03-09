@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -328,6 +329,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		cellID,
 		config.EnableUnproxiedPortMappings,
 		config.AdvertisePreferenceForInstanceAddress,
+		json.Marshal,
 	)
 
 	depotClient := depot.NewClient(
