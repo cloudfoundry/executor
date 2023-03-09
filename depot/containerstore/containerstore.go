@@ -88,6 +88,8 @@ type containerStore struct {
 
 	enableUnproxiedPortMappings           bool
 	advertisePreferenceForInstanceAddress bool
+
+	jsonMarshaller func(any) ([]byte, error)
 }
 
 func New(
@@ -110,6 +112,7 @@ func New(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
+	jsonMarshaller func(any) ([]byte, error),
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
@@ -133,6 +136,7 @@ func New(
 
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
+		jsonMarshaller:                        jsonMarshaller,
 	}
 }
 
@@ -167,6 +171,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 			cs.cellID,
 			cs.enableUnproxiedPortMappings,
 			cs.advertisePreferenceForInstanceAddress,
+			cs.jsonMarshaller,
 		))
 
 	if err != nil {

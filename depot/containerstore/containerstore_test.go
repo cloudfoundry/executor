@@ -160,6 +160,7 @@ var _ = Describe("Container Store", func() {
 			cellID,
 			true,
 			advertisePreferenceForInstanceAddress,
+			json.Marshal,
 		)
 
 		metronClient.SendDurationStub = func(name string, value time.Duration, opts ...loggregator.EmitGaugeOption) error {
@@ -485,6 +486,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
+						json.Marshal,
 					)
 				})
 
@@ -706,6 +708,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
+						json.Marshal,
 					)
 				})
 
@@ -1194,6 +1197,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
+						json.Marshal,
 					)
 
 					portMapping := []executor.PortMapping{
@@ -1283,6 +1287,7 @@ var _ = Describe("Container Store", func() {
 							cellID,
 							false,
 							advertisePreferenceForInstanceAddress,
+							json.Marshal,
 						)
 					})
 
@@ -2231,6 +2236,45 @@ var _ = Describe("Container Store", func() {
 				})
 			})
 
+			Context("when the log config cannot be serialized", func() {
+				var fm failingMarshaller
+
+				BeforeEach(func() {
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClient,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						logManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						metronClient,
+						rootFSSizer,
+						false,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+						cellID,
+						true,
+						advertisePreferenceForInstanceAddress,
+						fm.Marshal,
+					)
+				})
+
+				It("releases the info lock", func() {
+					fm.fail = true
+					err := containerStore.Update(logger, updateReq)
+					Expect(err).To(HaveOccurred())
+
+					fm.fail = false
+					err = containerStore.Update(logger, updateReq)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			Context("when there is an error updating the log config property on the container", func() {
 				BeforeEach(func() {
 					gardenContainer.SetPropertyReturns(errors.New("some-error"))
@@ -2789,6 +2833,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
+						json.Marshal,
 					)
 
 					signalled := credManagerRunnerSignalled
@@ -3408,3 +3453,14 @@ var _ = Describe("Container Store", func() {
 		})
 	})
 })
+
+type failingMarshaller struct {
+	fail bool
+}
+
+func (m *failingMarshaller) Marshal(v any) ([]byte, error) {
+	if m.fail {
+		return []byte{}, errors.New("marshalling failed")
+	}
+	return json.Marshal(v)
+}

@@ -1,7 +1,6 @@
 package containerstore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -95,6 +94,8 @@ type storeNode struct {
 
 	startTime         time.Time
 	regenerateCertsCh chan struct{}
+
+	jsonMarshaller func(any) ([]byte, error)
 }
 
 func newStoreNode(
@@ -117,6 +118,7 @@ func newStoreNode(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
+	jsonMarshaller func(any) ([]byte, error),
 ) *storeNode {
 	return &storeNode{
 		config:                                config,
@@ -142,6 +144,7 @@ func newStoreNode(
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
+		jsonMarshaller:                        jsonMarshaller,
 	}
 }
 
@@ -309,7 +312,7 @@ func (n *storeNode) gardenProperties(container *executor.Container) (garden.Prop
 		}
 	}
 	properties[executor.ContainerOwnerProperty] = n.config.OwnerName
-	logConfig, err := json.Marshal(container.LogConfig)
+	logConfig, err := n.jsonMarshaller(container.LogConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -613,9 +616,10 @@ func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) err
 		n.info.MetricsConfig.Tags = req.MetricTags
 
 		var err error
-		logConfigJSON, err = json.Marshal(n.info.LogConfig)
+		logConfigJSON, err = n.jsonMarshaller(n.info.LogConfig)
 		if err != nil {
 			logger.Error("failed-to-serialize-log-config", err, lager.Data{"guid": req.Guid})
+			n.infoLock.Unlock()
 			return err
 		}
 	}
