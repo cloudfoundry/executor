@@ -2549,23 +2549,26 @@ var _ = Describe("Container Store", func() {
 					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
-				It("does remove the container from the container store", func() {
+				It("does not remove the container from the container store", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
 
 					Expect(gardenClient.DestroyCallCount()).To(Equal(1))
 					Expect(gardenClient.DestroyArgsForCall(0)).To(Equal(containerGuid))
 
-					_, err = containerStore.Get(logger, containerGuid)
-					Expect(err).To(Equal(executor.ErrContainerNotFound))
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(container.Guid).To(Equal(containerGuid))
 				})
 
-				It("frees the containers resources", func() {
+				It("does not free up the containers resources", func() {
 					err := containerStore.Destroy(logger, containerGuid)
 					Expect(err).To(Equal(destroyErr))
 
-					remainingResources := containerStore.RemainingResources(logger)
-					Expect(remainingResources).To(Equal(totalCapacity))
+					resources := containerStore.RemainingResources(logger)
+					expectedResources := totalCapacity.Copy()
+					expectedResources.Subtract(&resource)
+					Expect(resources).To(Equal(expectedResources))
 				})
 			})
 		})
@@ -2742,6 +2745,46 @@ var _ = Describe("Container Store", func() {
 				It("signals the credManager config runner", func() {
 					close(finishRun)
 					Eventually(credManagerRunnerSignalled).Should(BeClosed())
+				})
+			})
+		})
+
+		Context("when there are no process associated with the container", func() {
+			Context("when container is in completed state", func() {
+				JustBeforeEach(func() {
+					destroyErr := errors.New("failed-to-destroy-container")
+					gardenClient.DestroyReturns(destroyErr)
+					eventEmitter.EmitStub = func(e executor.Event) {
+						// processing completed container
+						defer GinkgoRecover()
+						if e.EventType() == executor.EventTypeContainerComplete {
+							// sleeping to avoid atomic destroying state
+							time.Sleep(time.Second)
+							err := containerStore.Destroy(logger, containerGuid)
+							Expect(err).To(HaveOccurred())
+						}
+					}
+				})
+
+				It("does not emit the completed event", func() {
+					// completed event will trigger Destroy for failed completed container and that will cause an infinite loop
+					Eventually(eventEmitter.EmitCallCount).Should(Equal(1))
+					event1 := eventEmitter.EmitArgsForCall(0)
+					Expect(event1.EventType()).To(Equal(executor.EventTypeContainerReserved))
+
+					err := containerStore.Destroy(logger, containerGuid)
+					Expect(err).To(HaveOccurred())
+
+					container, err := containerStore.Get(logger, containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
+					event2 := eventEmitter.EmitArgsForCall(1)
+					Expect(event2).To(Equal(executor.ContainerCompleteEvent{
+						RawContainer: container,
+					}))
+
+					Consistently(eventEmitter.EmitCallCount).Should(Equal(2))
 				})
 			})
 		})

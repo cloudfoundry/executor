@@ -645,7 +645,9 @@ func (n *storeNode) stop(logger lager.Logger) {
 		n.process.Signal(os.Interrupt)
 		logger.Debug("signalled-process")
 	} else {
-		n.complete(logger, true, "stopped-before-running", false)
+		if n.info.State != executor.StateCompleted {
+			n.complete(logger, true, "stopped-before-running", false)
+		}
 	}
 }
 
