@@ -288,11 +288,12 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 	err = node.Destroy(logger)
 	if err != nil {
 		logger.Error("failed-to-destroy-container", err)
+		return err
 	}
 
 	cs.containers.Remove(guid)
 
-	return err
+	return nil
 }
 
 func (cs *containerStore) Get(logger lager.Logger, guid string) (executor.Container, error) {
