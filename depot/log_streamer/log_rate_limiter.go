@@ -22,16 +22,16 @@ type logRateLimiter struct {
 	ctx          context.Context
 	metronClient loggingclient.IngressClient
 
-	maxLogLinesPerSecond         int
-	maxLogBytesPerSecond         int64
-	maxLogLinesPerSecondLimiter  *rate.Limiter
-	maxLogBytesPerSecondLimiter  *rate.Limiter
-	metricReportLimiter          *rate.Limiter
-	logReportLimiter             *rate.Limiter
-	logMetricsEmitInterval       time.Duration
-	bytesEmittedLastInterval     uint64
-	needToReportOverlimitMessage atomic.Value
-	tags                         map[string]string
+	maxLogLinesPerSecond        int
+	maxLogBytesPerSecond        int64
+	maxLogLinesPerSecondLimiter *rate.Limiter
+	maxLogBytesPerSecondLimiter *rate.Limiter
+	metricReportLimiter         *rate.Limiter
+	logReportLimiter            *rate.Limiter
+	overReportLimiter           *rate.Limiter
+	logMetricsEmitInterval      time.Duration
+	bytesEmittedLastInterval    uint64
+	tags                        map[string]string
 }
 
 func NewLogRateLimiter(
@@ -42,17 +42,15 @@ func NewLogRateLimiter(
 	maxLogBytesPerSecond int64,
 	logMetricsEmitInterval time.Duration,
 ) *logRateLimiter {
-	var needToReportOverlimitMessage atomic.Value
-	needToReportOverlimitMessage.Store(true)
 	limiter := &logRateLimiter{
-		ctx:                          ctx,
-		metronClient:                 metronClient,
-		maxLogLinesPerSecond:         maxLogLinesPerSecond,
-		maxLogBytesPerSecond:         maxLogBytesPerSecond,
-		logMetricsEmitInterval:       logMetricsEmitInterval,
-		bytesEmittedLastInterval:     0,
-		tags:                         tags,
-		needToReportOverlimitMessage: needToReportOverlimitMessage,
+		ctx:                      ctx,
+		metronClient:             metronClient,
+		maxLogLinesPerSecond:     maxLogLinesPerSecond,
+		maxLogBytesPerSecond:     maxLogBytesPerSecond,
+		logMetricsEmitInterval:   logMetricsEmitInterval,
+		bytesEmittedLastInterval: 0,
+		tags:                     tags,
+		overReportLimiter:        rate.NewLimiter(1, 1),
 	}
 
 	if maxLogLinesPerSecond > 0 {
@@ -88,7 +86,6 @@ func (r *logRateLimiter) Limit(sourceName string, logLength int) error {
 	}
 
 	atomic.AddUint64(&r.bytesEmittedLastInterval, uint64(logLength))
-	r.needToReportOverlimitMessage.Store(true)
 	return nil
 }
 
@@ -112,7 +109,7 @@ func (r *logRateLimiter) emitMetrics() {
 }
 
 func (r *logRateLimiter) reportOverlimit(sourceName string, reportMessage string) {
-	if r.needToReportOverlimitMessage.CompareAndSwap(true, false) {
+	if r.overReportLimiter.Allow() {
 		r.reportLogRateLimitExceededMetric()
 		r.reportLogRateLimitExceededLog(sourceName, reportMessage)
 	}
