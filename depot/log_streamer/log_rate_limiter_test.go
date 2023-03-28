@@ -59,7 +59,7 @@ var _ = Describe("LogRateLimiter", func() {
 		Expect(counterName).To(Equal("AppInstanceExceededLogRateLimitCount"))
 	})
 
-	It("does not report over limit message too much", func() {
+	It("blocks messages for an entire second with only one report if limit reached", func() {
 		ctx := context.Background()
 		fakeClient := &mfakes.FakeIngressClient{}
 		logRateLimiter := log_streamer.NewLogRateLimiter(ctx, fakeClient, map[string]string{}, 2, 100, time.Hour)
@@ -70,11 +70,11 @@ var _ = Describe("LogRateLimiter", func() {
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
-		Expect(logRateLimiter.Limit("test", 5)).ToNot(HaveOccurred())
+		Expect(logRateLimiter.Limit("test", 5)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 1100)
 		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 	})

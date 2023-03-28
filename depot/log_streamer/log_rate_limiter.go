@@ -30,6 +30,7 @@ type logRateLimiter struct {
 	logReportLimiter            *rate.Limiter
 	overReportLimiter           *rate.Limiter
 	logMetricsEmitInterval      time.Duration
+	lastOverage                 time.Time
 	bytesEmittedLastInterval    uint64
 	tags                        map[string]string
 }
@@ -50,7 +51,7 @@ func NewLogRateLimiter(
 		logMetricsEmitInterval:   logMetricsEmitInterval,
 		bytesEmittedLastInterval: 0,
 		tags:                     tags,
-		overReportLimiter:        rate.NewLimiter(1, 1),
+		lastOverage:              time.Now().Add(-time.Second),
 	}
 
 	if maxLogLinesPerSecond > 0 {
@@ -72,16 +73,21 @@ func (r *logRateLimiter) Limit(sourceName string, logLength int) error {
 	if r.maxLogBytesPerSecond == 0 {
 		return fmt.Errorf("Not allowed to log")
 	}
+	if r.lastOverage.Add(time.Second).After(time.Now()) {
+		return fmt.Errorf("timeout for overage")
+	}
 
 	if !r.maxLogBytesPerSecondLimiter.AllowN(time.Now(), logLength) {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", r.maxLogBytesPerSecond)
 		r.reportOverlimit(sourceName, reportMessage)
+		r.lastOverage = time.Now()
 		return fmt.Errorf(reportMessage)
 	}
 
 	if !r.maxLogLinesPerSecondLimiter.Allow() {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d log-lines/sec) set by platform operator", r.maxLogLinesPerSecond)
 		r.reportOverlimit(sourceName, reportMessage)
+		r.lastOverage = time.Now()
 		return fmt.Errorf(reportMessage)
 	}
 
@@ -109,10 +115,8 @@ func (r *logRateLimiter) emitMetrics() {
 }
 
 func (r *logRateLimiter) reportOverlimit(sourceName string, reportMessage string) {
-	if r.overReportLimiter.Allow() {
-		r.reportLogRateLimitExceededMetric()
-		r.reportLogRateLimitExceededLog(sourceName, reportMessage)
-	}
+	r.reportLogRateLimitExceededMetric()
+	r.reportLogRateLimitExceededLog(sourceName, reportMessage)
 }
 
 func (r *logRateLimiter) reportLogRateLimitExceededMetric() {
