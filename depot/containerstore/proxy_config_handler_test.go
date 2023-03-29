@@ -1118,10 +1118,10 @@ type expectedCluster struct {
 }
 
 func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
-	Expect(cluster.Name).To(Equal(c.name))
-	Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-	Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
-	Expect(cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
+	ExpectWithOffset(1, cluster.Name).To(Equal(c.name))
+	ExpectWithOffset(1, cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+	ExpectWithOffset(1, cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
+	ExpectWithOffset(1, cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
 	var expectedLbEndpoints []*envoy_endpoint.LbEndpoint
 	for _, h := range c.hosts {
 		expectedLbEndpoints = append(expectedLbEndpoints, &envoy_endpoint.LbEndpoint{
@@ -1132,18 +1132,18 @@ func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
 			},
 		})
 	}
-	Expect(cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
+	ExpectWithOffset(1, cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
 		ClusterName: c.name,
 		Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
 			LbEndpoints: expectedLbEndpoints,
 		}},
 	}))
 	if c.maxConnections > 0 {
-		Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
-		Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
-		Expect(cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
-		Expect(cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
 	} else {
-		Expect(cluster.CircuitBreakers).To(BeNil())
+		ExpectWithOffset(1, cluster.CircuitBreakers).To(BeNil())
 	}
 }
