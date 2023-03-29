@@ -6,7 +6,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/log_streamer"
 	"github.com/tedsuo/ifrit"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type emitProgressStep struct {

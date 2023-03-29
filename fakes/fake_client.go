@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type FakeClient struct {

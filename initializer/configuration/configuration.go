@@ -10,7 +10,7 @@ import (
 	"code.cloudfoundry.org/executor/guidgen"
 	"code.cloudfoundry.org/garden"
 	garden_client "code.cloudfoundry.org/garden/client"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 const (

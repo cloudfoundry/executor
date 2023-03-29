@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/workpool"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/fake_runner"

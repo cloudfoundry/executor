@@ -5,13 +5,13 @@ import (
 	"errors"
 	"os"
 
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 
 	"code.cloudfoundry.org/executor/depot/steps"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/fake_runner"

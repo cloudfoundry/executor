@@ -5,7 +5,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/executor/depot/log_streamer"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/workpool"
 	"github.com/tedsuo/ifrit"
 )

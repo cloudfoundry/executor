@@ -34,7 +34,7 @@ import (
 	"code.cloudfoundry.org/garden"
 	GardenClient "code.cloudfoundry.org/garden/client"
 	GardenConnection "code.cloudfoundry.org/garden/client/connection"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/systemcerts"
 	"code.cloudfoundry.org/tlsconfig"
 	"code.cloudfoundry.org/volman/vollocal"
