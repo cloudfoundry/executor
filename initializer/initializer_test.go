@@ -185,6 +185,9 @@ var _ = Describe("Initializer", func() {
 			fakeGarden.RouteToHandler("GET", "/containers",
 				func(w http.ResponseWriter, r *http.Request) {
 					r.ParseForm()
+					gardenState := r.URL.Query()["garden.state"]
+					Expect(gardenState).To(HaveLen(1))
+					Expect(gardenState[0]).To(Equal("all"))
 					healthcheckTagQueryParam := gardenhealth.HealthcheckTag
 					if r.FormValue(healthcheckTagQueryParam) == gardenhealth.HealthcheckTagValue {
 						ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{})(w, r)
