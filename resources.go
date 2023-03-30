@@ -10,7 +10,10 @@ import (
 	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
-const ContainerOwnerProperty = "executor:owner"
+const (
+	ContainerOwnerProperty = "executor:owner"
+	ContainerStateProperty = "garden.state"
+)
 
 type State string
 
