@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
+	fake_runner "github.com/tedsuo/ifrit/fake_runner_v2"
 
 	"code.cloudfoundry.org/executor/depot/steps"
 )
