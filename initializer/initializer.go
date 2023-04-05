@@ -379,8 +379,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 
 	return depotClient, containerStatsReporter,
 		grouper.Members{
-			{"volman-driver-syncer", volmanDriverSyncer},
-			{"metrics-reporter", &metrics.Reporter{
+			{Name: "volman-driver-syncer", Runner: volmanDriverSyncer},
+			{Name: "metrics-reporter", Runner: &metrics.Reporter{
 				ExecutorSource: depotClient,
 				Interval:       metricsReportInterval,
 				Clock:          clock,
@@ -388,9 +388,9 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 				MetronClient:   metronClient,
 				Tags:           map[string]string{"zone": zone},
 			}},
-			{"hub-closer", closeHub(logger, hub)},
-			{"container-metrics-reporter", reportersRunner},
-			{"garden_health_checker", gardenhealth.NewRunner(
+			{Name: "hub-closer", Runner: closeHub(logger, hub)},
+			{Name: "container-metrics-reporter", Runner: reportersRunner},
+			{Name: "garden_health_checker", Runner: gardenhealth.NewRunner(
 				time.Duration(config.GardenHealthcheckInterval),
 				time.Duration(config.GardenHealthcheckEmissionInterval),
 				time.Duration(config.GardenHealthcheckTimeout),
@@ -400,8 +400,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 				metronClient,
 				clock,
 			)},
-			{"registry-pruner", containerStore.NewRegistryPruner(logger)},
-			{"container-reaper", containerStore.NewContainerReaper(logger)},
+			{Name: "registry-pruner", Runner: containerStore.NewRegistryPruner(logger)},
+			{Name: "container-reaper", Runner: containerStore.NewContainerReaper(logger)},
 		},
 		nil
 }

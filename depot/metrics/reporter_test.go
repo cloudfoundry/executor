@@ -48,15 +48,15 @@ var _ = Describe("Reporter", func() {
 
 		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
 			"container-1": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 256 * 1024 * 1024,
 					DiskUsageInBytes:   800 * 1024 * 1024,
 				},
 			},
 			"container-2": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 300 * 1024 * 1024,
 					DiskUsageInBytes:   512 * 1024 * 1024,
 				},
@@ -164,15 +164,15 @@ var _ = Describe("Reporter", func() {
 
 		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
 			"container-1": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 300 * 1024 * 1024,
 					DiskUsageInBytes:   400 * 1024 * 1024,
 				},
 			},
 			"container-2": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 200 * 1024 * 1024,
 					DiskUsageInBytes:   300 * 1024 * 1024,
 				},

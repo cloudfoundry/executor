@@ -999,8 +999,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Guid: "some-metric-guid"},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Guid: "some-metric-guid"},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1018,8 +1018,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"some-key": "some-value"}},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Tags: map[string]string{"some-key": "some-value"}},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1036,8 +1036,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "99"}, Index: 1},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "99"}, Index: 1},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1055,8 +1055,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Index: 1},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id"}, Index: 1},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1074,8 +1074,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "some-instance-id"}, Index: 1},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Tags: map[string]string{"source_id": "some-source-id", "instance_id": "some-instance-id"}, Index: 1},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1102,8 +1102,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Guid: "some-metric-guid"},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Guid: "some-metric-guid"},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)
@@ -1121,8 +1121,8 @@ var _ = Describe("ReportersRunner", func() {
 			BeforeEach(func() {
 				metricsMap := map[string]executor.Metrics{
 					"container-0": {
-						executor.MetricsConfig{Guid: ""},
-						executor.ContainerMetrics{},
+						MetricsConfig:    executor.MetricsConfig{Guid: ""},
+						ContainerMetrics: executor.ContainerMetrics{},
 					},
 				}
 				fakeExecutorClient.GetBulkMetricsReturns(metricsMap, nil)

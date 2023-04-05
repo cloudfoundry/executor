@@ -529,8 +529,8 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	}
 
 	group := grouper.NewQueueOrdered(os.Interrupt, grouper.Members{
-		{"cred-manager-runner", credManagerRunner},
-		{"runner", runner},
+		{Name: "cred-manager-runner", Runner: credManagerRunner},
+		{Name: "runner", Runner: runner},
 	})
 	n.process = ifrit.Background(group)
 	go n.run(logger, n.logStreamer)
