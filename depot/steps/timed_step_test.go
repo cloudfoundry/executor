@@ -8,12 +8,12 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/lager/lagertest"
-	. "github.com/onsi/ginkgo"
+	"code.cloudfoundry.org/lager/v3/lagertest"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
+	fake_runner "github.com/tedsuo/ifrit/fake_runner_v2"
 )
 
 var _ = Describe("TimedStep", func() {

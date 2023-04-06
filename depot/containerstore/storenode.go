@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/server"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/volman"
 	"github.com/hashicorp/errwrap"
 	"github.com/tedsuo/ifrit"
@@ -532,8 +532,8 @@ func (n *storeNode) Run(logger lager.Logger) error {
 	}
 
 	group := grouper.NewQueueOrdered(os.Interrupt, grouper.Members{
-		{"cred-manager-runner", credManagerRunner},
-		{"runner", runner},
+		{Name: "cred-manager-runner", Runner: credManagerRunner},
+		{Name: "runner", Runner: runner},
 	})
 	n.process = ifrit.Background(group)
 	go n.run(logger, n.logStreamer)

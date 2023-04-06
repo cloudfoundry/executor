@@ -9,16 +9,16 @@ import (
 	"code.cloudfoundry.org/executor/gardenhealth"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	fakeexecutor "code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/executor/gardenhealth/fakegardenhealth"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/executor/depot/steps"
 	"code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/garden"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/workpool"
 	"github.com/tedsuo/ifrit"
 )

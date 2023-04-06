@@ -3,7 +3,7 @@ package executor
 import (
 	"io"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 

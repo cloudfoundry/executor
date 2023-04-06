@@ -7,10 +7,10 @@ import (
 
 	"code.cloudfoundry.org/executor/depot/steps"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
+	fake_runner "github.com/tedsuo/ifrit/fake_runner_v2"
 )
 
 var _ = Describe("OutputWrapperStep", func() {

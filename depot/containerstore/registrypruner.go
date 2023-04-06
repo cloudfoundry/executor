@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type registryPruner struct {

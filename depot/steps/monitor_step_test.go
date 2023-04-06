@@ -8,14 +8,14 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/workpool"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
+	fake_runner "github.com/tedsuo/ifrit/fake_runner_v2"
 )
 
 var _ = Describe("MonitorStep", func() {
@@ -43,9 +43,9 @@ var _ = Describe("MonitorStep", func() {
 		// disable goroutine leak detection for this test suite. It doesn't add much
 		// value since MonitorStep is just a wrapper of EventuallySucceedsStep,
 		// ConsistentlySucceedsStep & HealthCheckStep. It is also proving difficult to
-		// make it pass with all the timer stuff that is going oin and the current
+		// make it pass with all the timer stuff that is going on and the current
 		// Context nesting structure
-		checkGoroutines = nil
+		checkGoroutines = false
 
 		startTimeout = 0
 		healthyInterval = 1 * time.Second

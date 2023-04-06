@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	envoy_bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	envoy_cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -36,7 +36,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
 	uuid "github.com/nu7hatch/gouuid"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -1118,10 +1118,10 @@ type expectedCluster struct {
 }
 
 func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
-	Expect(cluster.Name).To(Equal(c.name))
-	Expect(cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-	Expect(cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
-	Expect(cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
+	ExpectWithOffset(1, cluster.Name).To(Equal(c.name))
+	ExpectWithOffset(1, cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
+	ExpectWithOffset(1, cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
+	ExpectWithOffset(1, cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
 	var expectedLbEndpoints []*envoy_endpoint.LbEndpoint
 	for _, h := range c.hosts {
 		expectedLbEndpoints = append(expectedLbEndpoints, &envoy_endpoint.LbEndpoint{
@@ -1132,18 +1132,18 @@ func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
 			},
 		})
 	}
-	Expect(cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
+	ExpectWithOffset(1, cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
 		ClusterName: c.name,
 		Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
 			LbEndpoints: expectedLbEndpoints,
 		}},
 	}))
 	if c.maxConnections > 0 {
-		Expect(cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
-		Expect(cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
-		Expect(cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
-		Expect(cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
+		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
 	} else {
-		Expect(cluster.CircuitBreakers).To(BeNil())
+		ExpectWithOffset(1, cluster.CircuitBreakers).To(BeNil())
 	}
 }

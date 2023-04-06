@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -16,7 +16,7 @@ import (
 	"code.cloudfoundry.org/executor/fakes"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
 	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -48,15 +48,15 @@ var _ = Describe("Reporter", func() {
 
 		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
 			"container-1": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 256 * 1024 * 1024,
 					DiskUsageInBytes:   800 * 1024 * 1024,
 				},
 			},
 			"container-2": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 300 * 1024 * 1024,
 					DiskUsageInBytes:   512 * 1024 * 1024,
 				},
@@ -164,15 +164,15 @@ var _ = Describe("Reporter", func() {
 
 		executorClient.GetBulkMetricsReturns(map[string]executor.Metrics{
 			"container-1": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 300 * 1024 * 1024,
 					DiskUsageInBytes:   400 * 1024 * 1024,
 				},
 			},
 			"container-2": executor.Metrics{
-				executor.MetricsConfig{},
-				executor.ContainerMetrics{
+				MetricsConfig: executor.MetricsConfig{},
+				ContainerMetrics: executor.ContainerMetrics{
 					MemoryUsageInBytes: 200 * 1024 * 1024,
 					DiskUsageInBytes:   300 * 1024 * 1024,
 				},

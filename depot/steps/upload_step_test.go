@@ -16,7 +16,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/garden"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
@@ -27,7 +27,7 @@ import (
 	Uploader "code.cloudfoundry.org/executor/depot/uploader"
 	"code.cloudfoundry.org/executor/depot/uploader/fake_uploader"
 	"code.cloudfoundry.org/executor/fakes"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 )
 
 type fakeUploader struct {

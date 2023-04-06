@@ -1,7 +1,7 @@
 package guidgen
 
 import (
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"github.com/nu7hatch/gouuid"
 )
 

@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/hashicorp/go-multierror"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/fake_runner"
+	fake_runner "github.com/tedsuo/ifrit/fake_runner_v2"
 
 	"code.cloudfoundry.org/executor/depot/steps"
 )
