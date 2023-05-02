@@ -189,7 +189,7 @@ func (n *storeNode) Initialize(logger lager.Logger, req *executor.RunRequest) er
 	return nil
 }
 
-func (n *storeNode) Create(logger lager.Logger) error {
+func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 	logger = logger.Session("node-create")
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
@@ -206,7 +206,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 	createContainer := func() error {
 		mounts, err := n.dependencyManager.DownloadCachedDependencies(logger, info.CachedDependencies, info.LogConfig, n.metronClient)
 		if err != nil {
-			n.complete(logger, true, DownloadCachedDependenciesFailed, true)
+			n.complete(logger, traceID, true, DownloadCachedDependenciesFailed, true)
 			return err
 		}
 
@@ -233,14 +233,14 @@ func (n *storeNode) Create(logger lager.Logger) error {
 				failMsg = VolmanMountFailed
 			}
 			logger.Error("failed-to-mount-volume", err)
-			n.complete(logger, true, failMsg, true)
+			n.complete(logger, traceID, true, failMsg, true)
 			return err
 		}
 		n.bindMounts = append(n.bindMounts, volumeMounts...)
 
 		credMounts, envs, err := n.credManager.CreateCredDir(logger, n.info)
 		if err != nil {
-			n.complete(logger, true, CredDirFailed, true)
+			n.complete(logger, traceID, true, CredDirFailed, true)
 			return err
 		}
 		n.bindMounts = append(n.bindMounts, credMounts...)
@@ -260,7 +260,7 @@ func (n *storeNode) Create(logger lager.Logger) error {
 		gardenContainer, err := n.createGardenContainer(logger, &info)
 		if err != nil {
 			n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
-			n.complete(logger, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
+			n.complete(logger, traceID, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
 			return err
 		}
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully created container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
@@ -501,7 +501,7 @@ func (n *storeNode) portMappingFromContainerInfo(
 	return ports
 }
 
-func (n *storeNode) Run(logger lager.Logger) error {
+func (n *storeNode) Run(logger lager.Logger, traceID string) error {
 	logger = logger.Session("node-run")
 
 	n.acquireOpLock(logger)
@@ -536,24 +536,24 @@ func (n *storeNode) Run(logger lager.Logger) error {
 		{Name: "runner", Runner: runner},
 	})
 	n.process = ifrit.Background(group)
-	go n.run(logger, n.logStreamer)
+	go n.run(logger, n.logStreamer, traceID)
 	return nil
 }
 
-func (n *storeNode) completeWithError(logger lager.Logger, err error) {
+func (n *storeNode) completeWithError(logger lager.Logger, traceID string, err error) {
 	exitTrace, ok := err.(grouper.ErrorTrace)
 	if ok {
 		for _, event := range exitTrace {
 			err := event.Err
 			errorTrace, ok := err.(grouper.ErrorTrace)
 			if ok {
-				n.completeWithError(logger, errorTrace)
+				n.completeWithError(logger, traceID, errorTrace)
 				return
 			} else if err != nil {
 				if event.Member.Name != "runner" {
 					err = errors.New(event.Member.Name + " exited: " + err.Error())
 				}
-				n.completeWithError(logger, err)
+				n.completeWithError(logger, traceID, err)
 			}
 		}
 		return
@@ -568,20 +568,20 @@ func (n *storeNode) completeWithError(logger lager.Logger, err error) {
 	}
 
 	if errorStr != "" {
-		n.complete(logger, true, errorStr, false)
+		n.complete(logger, traceID, true, errorStr, false)
 		return
 	}
-	n.complete(logger, false, "", false)
+	n.complete(logger, traceID, false, "", false)
 }
 
-func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreamer) {
+func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreamer, traceID string) {
 	defer logStreamer.Stop()
 	// wait for container runner to start
 	logger.Debug("execute-process")
 	defer n.metronClient.IncrementCounter(ContainerCompletedCount)
 	select {
 	case err := <-n.process.Wait():
-		n.completeWithError(logger, err)
+		n.completeWithError(logger, traceID, err)
 		return
 	case <-n.process.Ready():
 		// fallthrough, healthcheck passed
@@ -592,10 +592,10 @@ func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreame
 	n.info.State = executor.StateRunning
 	info := n.info.Copy()
 	n.infoLock.Unlock()
-	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info))
+	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info, traceID))
 
 	err := <-n.process.Wait()
-	n.completeWithError(logger, err)
+	n.completeWithError(logger, traceID, err)
 }
 
 func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) error {
@@ -642,7 +642,7 @@ func (n *storeNode) Update(logger lager.Logger, req *executor.UpdateRequest) err
 	return nil
 }
 
-func (n *storeNode) Stop(logger lager.Logger) {
+func (n *storeNode) Stop(logger lager.Logger, traceID string) {
 	if !atomic.CompareAndSwapInt32(&n.stopping, 0, 1) {
 		return
 	}
@@ -652,10 +652,10 @@ func (n *storeNode) Stop(logger lager.Logger) {
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
-	n.stop(logger)
+	n.stop(logger, traceID)
 }
 
-func (n *storeNode) stop(logger lager.Logger) {
+func (n *storeNode) stop(logger lager.Logger, traceID string) {
 	n.infoLock.Lock()
 	stopped := n.info.RunResult.Stopped
 	n.info.RunResult.Stopped = true
@@ -670,12 +670,12 @@ func (n *storeNode) stop(logger lager.Logger) {
 		logger.Debug("signalled-process")
 	} else {
 		if n.info.State != executor.StateCompleted {
-			n.complete(logger, true, "stopped-before-running", false)
+			n.complete(logger, traceID, true, "stopped-before-running", false)
 		}
 	}
 }
 
-func (n *storeNode) Destroy(logger lager.Logger) error {
+func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	if !atomic.CompareAndSwapInt32(&n.destroying, 0, 1) {
 		return nil
 	}
@@ -685,7 +685,7 @@ func (n *storeNode) Destroy(logger lager.Logger) error {
 	n.acquireOpLock(logger)
 	defer n.releaseOpLock(logger)
 
-	n.stop(logger)
+	n.stop(logger, traceID)
 
 	if n.process != nil {
 		<-n.process.Wait()
@@ -754,7 +754,7 @@ func (n *storeNode) destroyContainer(logger lager.Logger) error {
 	return nil
 }
 
-func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
+func (n *storeNode) Expire(logger lager.Logger, traceID string, now time.Time) bool {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
@@ -765,7 +765,7 @@ func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
 	lifespan := now.Sub(time.Unix(0, n.info.AllocatedAt))
 	if lifespan >= n.config.ReservedExpirationTime {
 		n.info.TransitionToComplete(true, ContainerExpirationMessage, false)
-		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
+		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info, traceID))
 		return true
 	}
 
@@ -774,7 +774,7 @@ func (n *storeNode) Expire(logger lager.Logger, now time.Time) bool {
 
 // returns true if the container was reaped (i.e. a container was previously
 // created in garden but disappeared)
-func (n *storeNode) Reap(logger lager.Logger) bool {
+func (n *storeNode) Reap(logger lager.Logger, traceID string) bool {
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 
@@ -783,19 +783,19 @@ func (n *storeNode) Reap(logger lager.Logger) bool {
 		n.removeCredsDir(logger, n.info.Copy())
 
 		n.info.TransitionToComplete(true, ContainerMissingMessage, false)
-		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
+		go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info, traceID))
 		return true
 	}
 
 	return false
 }
 
-func (n *storeNode) complete(logger lager.Logger, failed bool, failureReason string, retryable bool) {
+func (n *storeNode) complete(logger lager.Logger, traceID string, failed bool, failureReason string, retryable bool) {
 	logger.Debug("node-complete", lager.Data{"failed": failed, "reason": failureReason})
 	n.infoLock.Lock()
 	defer n.infoLock.Unlock()
 	n.info.TransitionToComplete(failed, failureReason, retryable)
-	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info))
+	go n.eventEmitter.Emit(executor.NewContainerCompleteEvent(n.info, traceID))
 }
 
 func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container) {

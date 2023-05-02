@@ -7,7 +7,7 @@ import (
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/lager/v3"
+	lager "code.cloudfoundry.org/lager/v3"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -17,11 +17,12 @@ type FakeContainerStore struct {
 	cleanupArgsForCall []struct {
 		arg1 lager.Logger
 	}
-	CreateStub        func(lager.Logger, string) (executor.Container, error)
+	CreateStub        func(lager.Logger, string, string) (executor.Container, error)
 	createMutex       sync.RWMutex
 	createArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	createReturns struct {
 		result1 executor.Container
@@ -31,11 +32,12 @@ type FakeContainerStore struct {
 		result1 executor.Container
 		result2 error
 	}
-	DestroyStub        func(lager.Logger, string) error
+	DestroyStub        func(lager.Logger, string, string) error
 	destroyMutex       sync.RWMutex
 	destroyArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	destroyReturns struct {
 		result1 error
@@ -141,11 +143,12 @@ type FakeContainerStore struct {
 	remainingResourcesReturnsOnCall map[int]struct {
 		result1 executor.ExecutorResources
 	}
-	ReserveStub        func(lager.Logger, *executor.AllocationRequest) (executor.Container, error)
+	ReserveStub        func(lager.Logger, string, *executor.AllocationRequest) (executor.Container, error)
 	reserveMutex       sync.RWMutex
 	reserveArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 *executor.AllocationRequest
+		arg2 string
+		arg3 *executor.AllocationRequest
 	}
 	reserveReturns struct {
 		result1 executor.Container
@@ -155,11 +158,12 @@ type FakeContainerStore struct {
 		result1 executor.Container
 		result2 error
 	}
-	RunStub        func(lager.Logger, string) error
+	RunStub        func(lager.Logger, string, string) error
 	runMutex       sync.RWMutex
 	runArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	runReturns struct {
 		result1 error
@@ -167,11 +171,12 @@ type FakeContainerStore struct {
 	runReturnsOnCall map[int]struct {
 		result1 error
 	}
-	StopStub        func(lager.Logger, string) error
+	StopStub        func(lager.Logger, string, string) error
 	stopMutex       sync.RWMutex
 	stopArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	stopReturns struct {
 		result1 error
@@ -227,19 +232,20 @@ func (fake *FakeContainerStore) CleanupArgsForCall(i int) lager.Logger {
 	return argsForCall.arg1
 }
 
-func (fake *FakeContainerStore) Create(arg1 lager.Logger, arg2 string) (executor.Container, error) {
+func (fake *FakeContainerStore) Create(arg1 lager.Logger, arg2 string, arg3 string) (executor.Container, error) {
 	fake.createMutex.Lock()
 	ret, specificReturn := fake.createReturnsOnCall[len(fake.createArgsForCall)]
 	fake.createArgsForCall = append(fake.createArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.CreateStub
 	fakeReturns := fake.createReturns
-	fake.recordInvocation("Create", []interface{}{arg1, arg2})
+	fake.recordInvocation("Create", []interface{}{arg1, arg2, arg3})
 	fake.createMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -253,17 +259,17 @@ func (fake *FakeContainerStore) CreateCallCount() int {
 	return len(fake.createArgsForCall)
 }
 
-func (fake *FakeContainerStore) CreateCalls(stub func(lager.Logger, string) (executor.Container, error)) {
+func (fake *FakeContainerStore) CreateCalls(stub func(lager.Logger, string, string) (executor.Container, error)) {
 	fake.createMutex.Lock()
 	defer fake.createMutex.Unlock()
 	fake.CreateStub = stub
 }
 
-func (fake *FakeContainerStore) CreateArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeContainerStore) CreateArgsForCall(i int) (lager.Logger, string, string) {
 	fake.createMutex.RLock()
 	defer fake.createMutex.RUnlock()
 	argsForCall := fake.createArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeContainerStore) CreateReturns(result1 executor.Container, result2 error) {
@@ -292,19 +298,20 @@ func (fake *FakeContainerStore) CreateReturnsOnCall(i int, result1 executor.Cont
 	}{result1, result2}
 }
 
-func (fake *FakeContainerStore) Destroy(arg1 lager.Logger, arg2 string) error {
+func (fake *FakeContainerStore) Destroy(arg1 lager.Logger, arg2 string, arg3 string) error {
 	fake.destroyMutex.Lock()
 	ret, specificReturn := fake.destroyReturnsOnCall[len(fake.destroyArgsForCall)]
 	fake.destroyArgsForCall = append(fake.destroyArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.DestroyStub
 	fakeReturns := fake.destroyReturns
-	fake.recordInvocation("Destroy", []interface{}{arg1, arg2})
+	fake.recordInvocation("Destroy", []interface{}{arg1, arg2, arg3})
 	fake.destroyMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -318,17 +325,17 @@ func (fake *FakeContainerStore) DestroyCallCount() int {
 	return len(fake.destroyArgsForCall)
 }
 
-func (fake *FakeContainerStore) DestroyCalls(stub func(lager.Logger, string) error) {
+func (fake *FakeContainerStore) DestroyCalls(stub func(lager.Logger, string, string) error) {
 	fake.destroyMutex.Lock()
 	defer fake.destroyMutex.Unlock()
 	fake.DestroyStub = stub
 }
 
-func (fake *FakeContainerStore) DestroyArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeContainerStore) DestroyArgsForCall(i int) (lager.Logger, string, string) {
 	fake.destroyMutex.RLock()
 	defer fake.destroyMutex.RUnlock()
 	argsForCall := fake.destroyArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeContainerStore) DestroyReturns(result1 error) {
@@ -855,19 +862,20 @@ func (fake *FakeContainerStore) RemainingResourcesReturnsOnCall(i int, result1 e
 	}{result1}
 }
 
-func (fake *FakeContainerStore) Reserve(arg1 lager.Logger, arg2 *executor.AllocationRequest) (executor.Container, error) {
+func (fake *FakeContainerStore) Reserve(arg1 lager.Logger, arg2 string, arg3 *executor.AllocationRequest) (executor.Container, error) {
 	fake.reserveMutex.Lock()
 	ret, specificReturn := fake.reserveReturnsOnCall[len(fake.reserveArgsForCall)]
 	fake.reserveArgsForCall = append(fake.reserveArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 *executor.AllocationRequest
-	}{arg1, arg2})
+		arg2 string
+		arg3 *executor.AllocationRequest
+	}{arg1, arg2, arg3})
 	stub := fake.ReserveStub
 	fakeReturns := fake.reserveReturns
-	fake.recordInvocation("Reserve", []interface{}{arg1, arg2})
+	fake.recordInvocation("Reserve", []interface{}{arg1, arg2, arg3})
 	fake.reserveMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -881,17 +889,17 @@ func (fake *FakeContainerStore) ReserveCallCount() int {
 	return len(fake.reserveArgsForCall)
 }
 
-func (fake *FakeContainerStore) ReserveCalls(stub func(lager.Logger, *executor.AllocationRequest) (executor.Container, error)) {
+func (fake *FakeContainerStore) ReserveCalls(stub func(lager.Logger, string, *executor.AllocationRequest) (executor.Container, error)) {
 	fake.reserveMutex.Lock()
 	defer fake.reserveMutex.Unlock()
 	fake.ReserveStub = stub
 }
 
-func (fake *FakeContainerStore) ReserveArgsForCall(i int) (lager.Logger, *executor.AllocationRequest) {
+func (fake *FakeContainerStore) ReserveArgsForCall(i int) (lager.Logger, string, *executor.AllocationRequest) {
 	fake.reserveMutex.RLock()
 	defer fake.reserveMutex.RUnlock()
 	argsForCall := fake.reserveArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeContainerStore) ReserveReturns(result1 executor.Container, result2 error) {
@@ -920,19 +928,20 @@ func (fake *FakeContainerStore) ReserveReturnsOnCall(i int, result1 executor.Con
 	}{result1, result2}
 }
 
-func (fake *FakeContainerStore) Run(arg1 lager.Logger, arg2 string) error {
+func (fake *FakeContainerStore) Run(arg1 lager.Logger, arg2 string, arg3 string) error {
 	fake.runMutex.Lock()
 	ret, specificReturn := fake.runReturnsOnCall[len(fake.runArgsForCall)]
 	fake.runArgsForCall = append(fake.runArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.RunStub
 	fakeReturns := fake.runReturns
-	fake.recordInvocation("Run", []interface{}{arg1, arg2})
+	fake.recordInvocation("Run", []interface{}{arg1, arg2, arg3})
 	fake.runMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -946,17 +955,17 @@ func (fake *FakeContainerStore) RunCallCount() int {
 	return len(fake.runArgsForCall)
 }
 
-func (fake *FakeContainerStore) RunCalls(stub func(lager.Logger, string) error) {
+func (fake *FakeContainerStore) RunCalls(stub func(lager.Logger, string, string) error) {
 	fake.runMutex.Lock()
 	defer fake.runMutex.Unlock()
 	fake.RunStub = stub
 }
 
-func (fake *FakeContainerStore) RunArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeContainerStore) RunArgsForCall(i int) (lager.Logger, string, string) {
 	fake.runMutex.RLock()
 	defer fake.runMutex.RUnlock()
 	argsForCall := fake.runArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeContainerStore) RunReturns(result1 error) {
@@ -982,19 +991,20 @@ func (fake *FakeContainerStore) RunReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeContainerStore) Stop(arg1 lager.Logger, arg2 string) error {
+func (fake *FakeContainerStore) Stop(arg1 lager.Logger, arg2 string, arg3 string) error {
 	fake.stopMutex.Lock()
 	ret, specificReturn := fake.stopReturnsOnCall[len(fake.stopArgsForCall)]
 	fake.stopArgsForCall = append(fake.stopArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.StopStub
 	fakeReturns := fake.stopReturns
-	fake.recordInvocation("Stop", []interface{}{arg1, arg2})
+	fake.recordInvocation("Stop", []interface{}{arg1, arg2, arg3})
 	fake.stopMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -1008,17 +1018,17 @@ func (fake *FakeContainerStore) StopCallCount() int {
 	return len(fake.stopArgsForCall)
 }
 
-func (fake *FakeContainerStore) StopCalls(stub func(lager.Logger, string) error) {
+func (fake *FakeContainerStore) StopCalls(stub func(lager.Logger, string, string) error) {
 	fake.stopMutex.Lock()
 	defer fake.stopMutex.Unlock()
 	fake.StopStub = stub
 }
 
-func (fake *FakeContainerStore) StopArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeContainerStore) StopArgsForCall(i int) (lager.Logger, string, string) {
 	fake.stopMutex.RLock()
 	defer fake.stopMutex.RUnlock()
 	argsForCall := fake.stopArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeContainerStore) StopReturns(result1 error) {

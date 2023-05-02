@@ -82,11 +82,12 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate the container", func() {
-				errMessageMap := depotClient.AllocateContainers(logger, requests)
+				errMessageMap := depotClient.AllocateContainers(logger, "some-trace-id", requests)
 				Expect(errMessageMap).To(BeEmpty())
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(1))
-				_, request := containerStore.ReserveArgsForCall(0)
+				_, traceID, request := containerStore.ReserveArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[0]))
 			})
 		})
@@ -103,17 +104,20 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should allocate all the containers", func() {
-				errMessageMap := depotClient.AllocateContainers(logger, requests)
+				errMessageMap := depotClient.AllocateContainers(logger, "some-trace-id", requests)
 				Expect(errMessageMap).To(BeEmpty())
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(3))
-				_, request := containerStore.ReserveArgsForCall(0)
+				_, traceID, request := containerStore.ReserveArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[0]))
 
-				_, request = containerStore.ReserveArgsForCall(1)
+				_, traceID, request = containerStore.ReserveArgsForCall(1)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[1]))
 
-				_, request = containerStore.ReserveArgsForCall(2)
+				_, traceID, request = containerStore.ReserveArgsForCall(2)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[2]))
 			})
 		})
@@ -127,7 +131,7 @@ var _ = Describe("Depot", func() {
 					newAllocationRequest("guid-2"),
 				}
 
-				containerStore.ReserveStub = func(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
+				containerStore.ReserveStub = func(logger lager.Logger, traceID string, req *executor.AllocationRequest) (executor.Container, error) {
 					switch req.Guid {
 					case "guid-1":
 						return executor.Container{}, executor.ErrContainerGuidNotAvailable
@@ -140,7 +144,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with duplicate guid", func() {
-				failures := depotClient.AllocateContainers(logger, requests)
+				failures := depotClient.AllocateContainers(logger, "some-trace-id", requests)
 
 				Expect(failures).To(HaveLen(1))
 				expectedFailure := executor.NewAllocationFailure(&requests[0], executor.ErrContainerGuidNotAvailable.Error())
@@ -148,9 +152,11 @@ var _ = Describe("Depot", func() {
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(2))
 
-				_, request := containerStore.ReserveArgsForCall(0)
+				_, traceID, request := containerStore.ReserveArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[0]))
-				_, request = containerStore.ReserveArgsForCall(1)
+				_, traceID, request = containerStore.ReserveArgsForCall(1)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[1]))
 			})
 		})
@@ -166,14 +172,15 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should not allocate container with empty guid", func() {
-				failures := depotClient.AllocateContainers(logger, requests)
+				failures := depotClient.AllocateContainers(logger, "some-trace-id", requests)
 				Expect(failures).To(HaveLen(1))
 				expectedFailure := executor.NewAllocationFailure(&requests[1], executor.ErrGuidNotSpecified.Error())
 				Expect(failures[0]).To(BeEquivalentTo(expectedFailure))
 
 				Expect(containerStore.ReserveCallCount()).To(Equal(1))
 
-				_, request := containerStore.ReserveArgsForCall(0)
+				_, traceID, request := containerStore.ReserveArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(*request).To(Equal(requests[0]))
 			})
 		})
@@ -196,7 +203,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should move the container state machine from reserved to initialize, create, and run", func() {
-				err := depotClient.RunContainer(logger, runRequest)
+				err := depotClient.RunContainer(logger, "some-trace-id", runRequest)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(containerStore.InitializeCallCount()).To(Equal(1))
@@ -205,10 +212,12 @@ var _ = Describe("Depot", func() {
 
 				Eventually(containerStore.CreateCallCount).Should(Equal(1))
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
-				_, guid := containerStore.CreateArgsForCall(0)
+				_, traceID, guid := containerStore.CreateArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(guid).To(Equal(containerGuid))
 
-				_, guid = containerStore.RunArgsForCall(0)
+				_, traceID, guid = containerStore.RunArgsForCall(0)
+				Expect(traceID).To(Equal("some-trace-id"))
 				Expect(guid).To(Equal(containerGuid))
 			})
 		})
@@ -219,7 +228,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should return error", func() {
-				err := depotClient.RunContainer(logger, newRunRequest("missing-guid"))
+				err := depotClient.RunContainer(logger, "some-trace-id", newRunRequest("missing-guid"))
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
@@ -232,7 +241,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("returns an error", func() {
-				err := depotClient.RunContainer(logger, newRunRequest(containerGuid))
+				err := depotClient.RunContainer(logger, "some-trace-id", newRunRequest(containerGuid))
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -243,7 +252,7 @@ var _ = Describe("Depot", func() {
 			})
 
 			It("should log the error", func() {
-				err := depotClient.RunContainer(logger, newRunRequest(containerGuid))
+				err := depotClient.RunContainer(logger, "some-trace-id", newRunRequest(containerGuid))
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(containerStore.RunCallCount).Should(Equal(1))
@@ -282,7 +291,7 @@ var _ = Describe("Depot", func() {
 				throttleChan = make(chan struct{}, numRequests)
 				doneChan = make(chan struct{})
 
-				containerStore.CreateStub = func(logger lager.Logger, guid string) (executor.Container, error) {
+				containerStore.CreateStub = func(logger lager.Logger, traceID string, guid string) (executor.Container, error) {
 					throttleChan <- struct{}{}
 					<-doneChan
 					return executor.Container{}, nil
@@ -291,7 +300,7 @@ var _ = Describe("Depot", func() {
 
 			It("throttles the requests to Garden", func() {
 				for i := 0; i < numRequests; i++ {
-					go depotClient.RunContainer(logger, newRunRequest(containerGuid))
+					go depotClient.RunContainer(logger, "some-trace-id", newRunRequest(containerGuid))
 				}
 
 				Eventually(containerStore.CreateCallCount).Should(Equal(CreateWorkPoolSize))
@@ -323,12 +332,12 @@ var _ = Describe("Depot", func() {
 			BeforeEach(func() {
 				throttleChan = make(chan struct{}, numRequests)
 				doneChan = make(chan struct{})
-				containerStore.DestroyStub = func(logger lager.Logger, guid string) error {
+				containerStore.DestroyStub = func(logger lager.Logger, traceID string, guid string) error {
 					throttleChan <- struct{}{}
 					<-doneChan
 					return nil
 				}
-				containerStore.StopStub = func(logger lager.Logger, guid string) error {
+				containerStore.StopStub = func(logger lager.Logger, traceID string, guid string) error {
 					throttleChan <- struct{}{}
 					<-doneChan
 					return nil
@@ -339,7 +348,7 @@ var _ = Describe("Depot", func() {
 				deleteContainerCount := 0
 				for i := 0; i < numRequests; i++ {
 					deleteContainerCount++
-					go depotClient.DeleteContainer(logger, containerGuid)
+					go depotClient.DeleteContainer(logger, "some-trace-id", containerGuid)
 				}
 
 				Eventually(func() int {
@@ -566,11 +575,12 @@ var _ = Describe("Depot", func() {
 
 	Describe("DeleteContainer", func() {
 		It("removes the container from the container store", func() {
-			err := depotClient.DeleteContainer(logger, "guid-1")
+			err := depotClient.DeleteContainer(logger, "some-trace-id", "guid-1")
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(containerStore.DestroyCallCount()).To(Equal(1))
-			_, guid := containerStore.DestroyArgsForCall(0)
+			_, traceID, guid := containerStore.DestroyArgsForCall(0)
+			Expect(traceID).To(Equal("some-trace-id"))
 			Expect(guid).To(Equal("guid-1"))
 		})
 
@@ -581,7 +591,7 @@ var _ = Describe("Depot", func() {
 
 			It("should return an error", func() {
 				Expect(containerStore.DestroyCallCount()).To(Equal(0))
-				err := depotClient.DeleteContainer(logger, "guid-1")
+				err := depotClient.DeleteContainer(logger, "some-trace-id", "guid-1")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -631,13 +641,14 @@ var _ = Describe("Depot", func() {
 		})
 
 		JustBeforeEach(func() {
-			stopError = depotClient.StopContainer(logger, stopGuid)
+			stopError = depotClient.StopContainer(logger, "some-trace-id", stopGuid)
 		})
 
 		It("stops the container in the container store", func() {
 			Expect(stopError).NotTo(HaveOccurred())
 			Expect(containerStore.StopCallCount()).To(Equal(1))
-			_, guid := containerStore.StopArgsForCall(0)
+			_, traceID, guid := containerStore.StopArgsForCall(0)
+			Expect(traceID).To(Equal("some-trace-id"))
 			Expect(guid).To(Equal(stopGuid))
 		})
 

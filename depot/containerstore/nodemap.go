@@ -97,7 +97,7 @@ func (n *nodeMap) List() []*storeNode {
 	return list
 }
 
-func (n *nodeMap) CompleteExpired(logger lager.Logger, now time.Time) {
+func (n *nodeMap) CompleteExpired(logger lager.Logger, traceID string, now time.Time) {
 	n.lock.Lock()
 	logger.Debug("lock-acquired")
 	defer n.lock.Unlock()
@@ -105,14 +105,14 @@ func (n *nodeMap) CompleteExpired(logger lager.Logger, now time.Time) {
 
 	for i := range n.nodes {
 		node := n.nodes[i]
-		expired := node.Expire(logger, now)
+		expired := node.Expire(logger, traceID, now)
 		if expired {
 			logger.Info("container-expired", lager.Data{"guid": node.Info().Guid})
 		}
 	}
 }
 
-func (n *nodeMap) CompleteMissing(logger lager.Logger, snapshotGuids map[string]struct{}, existingHandles map[string]struct{}) {
+func (n *nodeMap) CompleteMissing(logger lager.Logger, traceID string, snapshotGuids map[string]struct{}, existingHandles map[string]struct{}) {
 	n.lock.Lock()
 	logger.Debug("lock-acquired")
 	defer n.lock.Unlock()
@@ -122,7 +122,7 @@ func (n *nodeMap) CompleteMissing(logger lager.Logger, snapshotGuids map[string]
 		if _, exist := existingHandles[guid]; !exist {
 			node, ok := n.nodes[guid]
 			if ok {
-				reaped := node.Reap(logger)
+				reaped := node.Reap(logger, traceID)
 				if reaped {
 					logger.Info("reaped-missing-container", lager.Data{"guid": guid})
 				}

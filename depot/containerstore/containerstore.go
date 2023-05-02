@@ -25,15 +25,15 @@ var (
 
 type ContainerStore interface {
 	// Setters
-	Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error)
-	Destroy(logger lager.Logger, guid string) error
+    Reserve(logger lager.Logger, traceID string, req *executor.AllocationRequest) (executor.Container, error)
+	Destroy(logger lager.Logger, traceID string, guid string) error
 
 	// Container Operations
 	Initialize(logger lager.Logger, req *executor.RunRequest) error
-	Create(logger lager.Logger, guid string) (executor.Container, error)
-	Run(logger lager.Logger, guid string) error
+	Create(logger lager.Logger, traceID string, guid string) (executor.Container, error)
+	Run(logger lager.Logger, traceID string, guid string) error
 	Update(logger lager.Logger, req *executor.UpdateRequest) error
-	Stop(logger lager.Logger, guid string) error
+	Stop(logger lager.Logger, traceID string, guid string) error
 
 	// Getters
 	Get(logger lager.Logger, guid string) (executor.Container, error)
@@ -144,7 +144,7 @@ func (cs *containerStore) Cleanup(logger lager.Logger) {
 	cs.dependencyManager.Stop(logger)
 }
 
-func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationRequest) (executor.Container, error) {
+func (cs *containerStore) Reserve(logger lager.Logger, traceID string, req *executor.AllocationRequest) (executor.Container, error) {
 	logger = logger.Session("containerstore-reserve", lager.Data{"guid": req.Guid})
 	logger.Debug("starting")
 	defer logger.Debug("complete")
@@ -179,7 +179,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, req *executor.AllocationR
 		return executor.Container{}, err
 	}
 
-	cs.eventEmitter.Emit(executor.NewContainerReservedEvent(container))
+	cs.eventEmitter.Emit(executor.NewContainerReservedEvent(container, traceID))
 	return container, nil
 }
 
@@ -202,7 +202,7 @@ func (cs *containerStore) Initialize(logger lager.Logger, req *executor.RunReque
 	return nil
 }
 
-func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Container, error) {
+func (cs *containerStore) Create(logger lager.Logger, traceID string, guid string) (executor.Container, error) {
 	logger = logger.Session("containerstore-create", lager.Data{"guid": guid})
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -213,7 +213,7 @@ func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Con
 		return executor.Container{}, err
 	}
 
-	err = node.Create(logger)
+	err = node.Create(logger, traceID)
 	if err != nil {
 		logger.Error("failed-to-create-container", err)
 		return executor.Container{}, err
@@ -222,7 +222,7 @@ func (cs *containerStore) Create(logger lager.Logger, guid string) (executor.Con
 	return node.Info(), nil
 }
 
-func (cs *containerStore) Run(logger lager.Logger, guid string) error {
+func (cs *containerStore) Run(logger lager.Logger, traceID string, guid string) error {
 	logger = logger.Session("containerstore-run")
 
 	logger.Info("starting")
@@ -235,7 +235,7 @@ func (cs *containerStore) Run(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	err = node.Run(logger)
+	err = node.Run(logger, traceID)
 	if err != nil {
 		logger.Error("failed-to-run-container", err)
 		return err
@@ -259,7 +259,7 @@ func (cs *containerStore) Update(logger lager.Logger, req *executor.UpdateReques
 	return node.Update(logger, req)
 }
 
-func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
+func (cs *containerStore) Stop(logger lager.Logger, traceID string, guid string) error {
 	logger = logger.Session("containerstore-stop", lager.Data{"Guid": guid})
 
 	logger.Info("starting")
@@ -271,12 +271,12 @@ func (cs *containerStore) Stop(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	node.Stop(logger)
+	node.Stop(logger, traceID)
 
 	return nil
 }
 
-func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
+func (cs *containerStore) Destroy(logger lager.Logger, traceID string, guid string) error {
 	logger = logger.Session("containerstore.destroy", lager.Data{"Guid": guid})
 
 	logger.Info("starting")
@@ -288,7 +288,7 @@ func (cs *containerStore) Destroy(logger lager.Logger, guid string) error {
 		return err
 	}
 
-	err = node.Destroy(logger)
+	err = node.Destroy(logger, traceID)
 	if err != nil {
 		logger.Error("failed-to-destroy-container", err)
 		return err

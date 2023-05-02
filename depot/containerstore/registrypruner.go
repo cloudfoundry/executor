@@ -26,6 +26,7 @@ func newRegistryPruner(logger lager.Logger, config *ContainerConfig, clock clock
 func (r *registryPruner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	logger := r.logger.Session("registry-pruner")
 	ticker := r.clock.NewTicker(r.config.ReservedExpirationTime / 2)
+	traceID := "" // completing expired containers is not oririnated through API
 
 	close(ready)
 
@@ -35,7 +36,7 @@ func (r *registryPruner) Run(signals <-chan os.Signal, ready chan<- struct{}) er
 		case <-ticker.C():
 
 			now := r.clock.Now()
-			r.containers.CompleteExpired(logger, now)
+			r.containers.CompleteExpired(logger, traceID, now)
 		case signal := <-signals:
 			logger.Info("signalled", lager.Data{"signal": signal.String()})
 			return nil

@@ -11,12 +11,12 @@ import (
 
 type Client interface {
 	Ping(logger lager.Logger) error
-	AllocateContainers(logger lager.Logger, requests []AllocationRequest) []AllocationFailure
+	AllocateContainers(logger lager.Logger, traceID string, requests []AllocationRequest) []AllocationFailure
 	GetContainer(logger lager.Logger, guid string) (Container, error)
-	RunContainer(lager.Logger, *RunRequest) error
+	RunContainer(lager.Logger, string, *RunRequest) error
 	UpdateContainer(lager.Logger, *UpdateRequest) error
-	StopContainer(logger lager.Logger, guid string) error
-	DeleteContainer(logger lager.Logger, guid string) error
+	StopContainer(logger lager.Logger, traceID string, guid string) error
+	DeleteContainer(logger lager.Logger, traceID string, guid string) error
 	ListContainers(lager.Logger) ([]Container, error)
 	GetBulkMetrics(lager.Logger) (map[string]Metrics, error)
 	RemainingResources(lager.Logger) (ExecutorResources, error)

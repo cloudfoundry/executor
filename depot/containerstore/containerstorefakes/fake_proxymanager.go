@@ -7,7 +7,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
 	"code.cloudfoundry.org/garden"
-	"code.cloudfoundry.org/lager/v3"
+	lager "code.cloudfoundry.org/lager/v3"
 )
 
 type FakeProxyManager struct {

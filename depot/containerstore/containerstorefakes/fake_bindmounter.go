@@ -7,7 +7,7 @@ import (
 	diego_logging_client "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
-	"code.cloudfoundry.org/lager/v3"
+	lager "code.cloudfoundry.org/lager/v3"
 )
 
 type FakeDependencyManager struct {
