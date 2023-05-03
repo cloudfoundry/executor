@@ -676,7 +676,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.LayeredRuntime).NotTo(BeNil())
 			Expect(proxyConfig.LayeredRuntime.Layers).To(HaveLen(1))
 			Expect(proxyConfig.LayeredRuntime.Layers[0].LayerSpecifier).To(BeAssignableToTypeOf(&envoy_bootstrap.RuntimeLayer_StaticLayer{}))
-			Expect(proxyConfig.LayeredRuntime.Layers[0].GetStaticLayer().String()).To(Equal(`fields:{key:"envoy" value:{struct_value:{fields:{key:"reloadable_features" value:{struct_value:{fields:{key:"new_tcp_connection_pool" value:{bool_value:false}}}}}}}}`))
+			Expect(proxyConfig.LayeredRuntime.Layers[0].GetStaticLayer().String()).To(MatchRegexp(`fields:{key:"envoy"\s+value:{struct_value:{fields:{key:"reloadable_features"\s+value:{struct_value:{fields:{key:"new_tcp_connection_pool"\s+value:{bool_value:false}}}}}}}}`))
 
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
 			c0 := createCluster(expectedCluster{
