@@ -31,10 +31,11 @@ import (
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/fsnotify/fsnotify"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -479,8 +480,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				admin := proxyConfig.Admin
-				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
-				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
+				Expect(proto.Equal(admin, &envoy_bootstrap.Admin{
+					AccessLogPath: os.DevNull,
+					Address:       envoyAddr("127.0.0.1", 61002),
+				})).To(BeTrue())
 				statsMatcher := proxyConfig.StatsConfig
 				Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
@@ -488,44 +491,46 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(proxyConfig.Node.Cluster).To(Equal("proxy-cluster"))
 
 				Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
-				expectedCluster{
+				c0 := createCluster(expectedCluster{
 					name:           "service-cluster-8080",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
-				}.check(proxyConfig.StaticResources.Clusters[0])
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Clusters[0], c0)).To(BeTrue())
 
-				adsCluster := proxyConfig.StaticResources.Clusters[1]
-				expectedCluster{
+				c1 := createCluster(expectedCluster{
 					name: "pilot-ads",
 					hosts: []*envoy_core.Address{
 						envoyAddr("10.255.217.2", 15010),
 						envoyAddr("10.255.217.3", 15010),
-					}}.check(adsCluster)
-				Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
+					},
+					http2: true,
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Clusters[1], c1)).To(BeTrue())
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
-				expectedListener{
+				l0 := createListener(expectedListener{
 					name:                     "listener-8080-61001",
 					listenPort:               61001,
 					statPrefix:               "stats-8080-61001",
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: false,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(proxyConfig.StaticResources.Listeners[0],
-					"id-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
-				)
-				expectedListener{
+					sdsSecretName:            "id-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Listeners[0], l0)).To(BeTrue())
+				l1 := createListener(expectedListener{
 					name:                     "listener-8080-61443",
 					listenPort:               61443,
 					statPrefix:               "stats-8080-61443",
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: false,
 					alpnProtocols:            nil,
-				}.check(proxyConfig.StaticResources.Listeners[1],
-					"c2c-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
-				)
+					sdsSecretName:            "c2c-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Listeners[1], l1)).To(BeTrue())
 			})
 		})
 
@@ -658,8 +663,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 			admin := proxyConfig.Admin
-			Expect(admin.AccessLogPath).To(Equal(os.DevNull))
-			Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61002)))
+			Expect(proto.Equal(admin, &envoy_bootstrap.Admin{
+				AccessLogPath: os.DevNull,
+				Address:       envoyAddr("127.0.0.1", 61002),
+			})).To(BeTrue())
 			statsMatcher := proxyConfig.StatsConfig
 			Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
@@ -669,47 +676,48 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(proxyConfig.LayeredRuntime).NotTo(BeNil())
 			Expect(proxyConfig.LayeredRuntime.Layers).To(HaveLen(1))
 			Expect(proxyConfig.LayeredRuntime.Layers[0].LayerSpecifier).To(BeAssignableToTypeOf(&envoy_bootstrap.RuntimeLayer_StaticLayer{}))
-			Expect(proxyConfig.LayeredRuntime.Layers[0].GetStaticLayer().String()).To(Equal(`fields:<key:"envoy" value:<struct_value:<fields:<key:"reloadable_features" value:<struct_value:<fields:<key:"new_tcp_connection_pool" value:<bool_value:false > > > > > > > > `))
+			Expect(proxyConfig.LayeredRuntime.Layers[0].GetStaticLayer().String()).To(Equal(`fields:{key:"envoy" value:{struct_value:{fields:{key:"reloadable_features" value:{struct_value:{fields:{key:"new_tcp_connection_pool" value:{bool_value:false}}}}}}}}`))
 
 			Expect(proxyConfig.StaticResources.Clusters).To(HaveLen(2))
-			expectedCluster{
+			c0 := createCluster(expectedCluster{
 				name:           "service-cluster-8080",
 				hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 				maxConnections: math.MaxUint32,
-			}.check(proxyConfig.StaticResources.Clusters[0])
+			})
+			Expect(proto.Equal(proxyConfig.StaticResources.Clusters[0], c0)).To(BeTrue())
 
-			adsCluster := proxyConfig.StaticResources.Clusters[1]
-			expectedCluster{
-				name: "pilot-ads",
+			c1 := createCluster(expectedCluster{
+				name:  "pilot-ads",
+				http2: true,
 				hosts: []*envoy_core.Address{
 					envoyAddr("10.255.217.2", 15010),
 					envoyAddr("10.255.217.3", 15010),
-				}}.check(adsCluster)
-			Expect(adsCluster.Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
+				}})
+			Expect(proto.Equal(proxyConfig.StaticResources.Clusters[1], c1)).To(BeTrue())
 
 			Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
-			expectedListener{
+			l0 := createListener(expectedListener{
 				name:                     "listener-8080-61001",
 				listenPort:               61001,
 				statPrefix:               "stats-8080-61001",
 				clusterName:              "service-cluster-8080",
 				requireClientCertificate: true,
 				alpnProtocols:            []string{"h2,http/1.1"},
-			}.check(proxyConfig.StaticResources.Listeners[0],
-				"id-cert-and-key",
-				"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
-			)
-			expectedListener{
+				sdsSecretName:            "id-cert-and-key",
+				sdsFileName:              "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+			})
+			Expect(proto.Equal(proxyConfig.StaticResources.Listeners[0], l0)).To(BeTrue())
+			l1 := createListener(expectedListener{
 				name:                     "listener-8080-61443",
 				listenPort:               61443,
 				statPrefix:               "stats-8080-61443",
 				clusterName:              "service-cluster-8080",
 				requireClientCertificate: false,
 				alpnProtocols:            nil,
-			}.check(proxyConfig.StaticResources.Listeners[1],
-				"c2c-cert-and-key",
-				"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
-			)
+				sdsSecretName:            "c2c-cert-and-key",
+				sdsFileName:              "/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+			})
+			Expect(proto.Equal(proxyConfig.StaticResources.Listeners[1], l1)).To(BeTrue())
 
 			adsConfigSource := &envoy_core.ConfigSource{
 				ConfigSourceSpecifier: &envoy_core.ConfigSource_Ads{
@@ -717,7 +725,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				},
 			}
 
-			Expect(proxyConfig.DynamicResources).To(Equal(&envoy_bootstrap.Bootstrap_DynamicResources{
+			Expect(proto.Equal(proxyConfig.DynamicResources, &envoy_bootstrap.Bootstrap_DynamicResources{
 				LdsConfig: adsConfigSource,
 				CdsConfig: adsConfigSource,
 				AdsConfig: &envoy_core.ApiConfigSource{
@@ -732,7 +740,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 						},
 					},
 				},
-			}))
+			})).To(BeTrue())
 		})
 
 		Context("when ads server addresses is empty", func() {
@@ -796,28 +804,28 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
-				expectedListener{
+				l0 := createListener(expectedListener{
 					name:                     "listener-8080-61001",
 					listenPort:               61001,
 					statPrefix:               "stats-8080-61001",
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: true,
 					alpnProtocols:            nil,
-				}.check(proxyConfig.StaticResources.Listeners[0],
-					"id-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
-				)
-				expectedListener{
+					sdsSecretName:            "id-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Listeners[0], l0)).To(BeTrue())
+				l1 := createListener(expectedListener{
 					name:                     "listener-8080-61443",
 					listenPort:               61443,
 					statPrefix:               "stats-8080-61443",
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: false,
 					alpnProtocols:            nil,
-				}.check(proxyConfig.StaticResources.Listeners[1],
-					"c2c-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
-				)
+					sdsSecretName:            "c2c-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-c2c-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(proxyConfig.StaticResources.Listeners[1], l1)).To(BeTrue())
 			})
 		})
 
@@ -844,8 +852,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(yamlFileToProto(proxyConfigFile, &proxyConfig)).To(Succeed())
 
 				admin := proxyConfig.Admin
-				Expect(admin.AccessLogPath).To(Equal(os.DevNull))
-				Expect(admin.Address).To(Equal(envoyAddr("127.0.0.1", 61003)))
+				Expect(proto.Equal(admin, &envoy_bootstrap.Admin{
+					AccessLogPath: os.DevNull,
+					Address:       envoyAddr("127.0.0.1", 61003),
+				})).To(BeTrue())
 				statsMatcher := proxyConfig.StatsConfig
 				Expect(fmt.Sprintf("%+v", statsMatcher.StatsMatcher.StatsMatcher)).To(Equal("&{RejectAll:true}"))
 
@@ -859,55 +869,58 @@ var _ = Describe("ProxyConfigHandler", func() {
 					clusterMap[cluster.Name] = cluster
 				}
 
-				expectedCluster{
+				c0 := createCluster(expectedCluster{
 					name:           "service-cluster-8080",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 8080)},
 					maxConnections: math.MaxUint32,
-				}.check(clusterMap["service-cluster-8080"])
+				})
+				Expect(proto.Equal(clusterMap["service-cluster-8080"], c0)).To(BeTrue())
 
-				expectedCluster{
+				c1 := createCluster(expectedCluster{
 					name:           "service-cluster-2222",
 					hosts:          []*envoy_core.Address{envoyAddr("10.0.0.1", 2222)},
 					maxConnections: math.MaxUint32,
-				}.check(clusterMap["service-cluster-2222"])
+				})
+				Expect(proto.Equal(clusterMap["service-cluster-2222"], c1)).To(BeTrue())
 
-				expectedCluster{
-					name: "pilot-ads",
+				c2 := createCluster(expectedCluster{
+					name:  "pilot-ads",
+					http2: true,
 					hosts: []*envoy_core.Address{
 						envoyAddr("10.255.217.2", 15010),
 						envoyAddr("10.255.217.3", 15010),
 					},
-				}.check(clusterMap["pilot-ads"])
-				Expect(clusterMap["pilot-ads"].Http2ProtocolOptions).To(Equal(&envoy_core.Http2ProtocolOptions{}))
+				})
+				Expect(proto.Equal(clusterMap["pilot-ads"], c2)).To(BeTrue())
 
 				listenersMap := map[string]*envoy_listener.Listener{}
 				for _, listener := range proxyConfig.StaticResources.Listeners {
 					listenersMap[listener.Name] = listener
 				}
 				Expect(proxyConfig.StaticResources.Listeners).To(HaveLen(2))
-				expectedListener{
+				l0 := createListener(expectedListener{
 					name:                     "listener-8080-61001",
 					listenPort:               61001,
 					statPrefix:               "stats-8080-61001",
 					clusterName:              "service-cluster-8080",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(listenersMap["listener-8080-61001"],
-					"id-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
-				)
+					sdsSecretName:            "id-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(listenersMap["listener-8080-61001"], l0)).To(BeTrue())
 
-				expectedListener{
+				l1 := createListener(expectedListener{
 					name:                     "listener-2222-61002",
 					listenPort:               61002,
 					statPrefix:               "stats-2222-61002",
 					clusterName:              "service-cluster-2222",
 					requireClientCertificate: true,
 					alpnProtocols:            []string{"h2,http/1.1"},
-				}.check(listenersMap["listener-2222-61002"],
-					"id-cert-and-key",
-					"/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
-				)
+					sdsSecretName:            "id-cert-and-key",
+					sdsFileName:              "/etc/cf-assets/envoy_config/sds-id-cert-and-key.yaml",
+				})
+				Expect(proto.Equal(listenersMap["listener-2222-61002"], l1)).To(BeTrue())
 			})
 
 			Context("when no ports are left", func() {
@@ -1057,46 +1070,38 @@ type expectedListener struct {
 	clusterName              string
 	requireClientCertificate bool
 	alpnProtocols            []string
+	sdsSecretName            string
+	sdsFileName              string
 }
 
-func (l expectedListener) check(listener *envoy_listener.Listener, sdsSecretName string, sdsFileName string) {
-	Expect(listener.Name).To(Equal(l.name))
-	Expect(listener.Address).To(Equal(envoyAddr("0.0.0.0", l.listenPort)))
-	Expect(listener.FilterChains).To(HaveLen(1))
-	filterChain := listener.FilterChains[0]
-	Expect(filterChain.Filters).To(HaveLen(1))
-	Expect(filterChain.Filters[0].Name).To(Equal("envoy.tcp_proxy"))
-	filterConfig := filterChain.Filters[0].GetTypedConfig()
-
-	var tcpProxyFilterConfig envoy_tcp_proxy.TcpProxy
-	Expect(ptypes.UnmarshalAny(filterConfig, &tcpProxyFilterConfig)).To(Succeed())
-	Expect(tcpProxyFilterConfig.StatPrefix).To(Equal(l.statPrefix))
-	Expect(tcpProxyFilterConfig.ClusterSpecifier).To(Equal(&envoy_tcp_proxy.TcpProxy_Cluster{
-		Cluster: l.clusterName,
-	}))
-
-	var downstreamTlsContext envoy_tls.DownstreamTlsContext
-	Expect(ptypes.UnmarshalAny(filterChain.TransportSocket.GetTypedConfig(), &downstreamTlsContext)).To(Succeed())
-	Expect(filterChain.TransportSocket.Name).To(Equal(l.name))
-
-	Expect(downstreamTlsContext.CommonTlsContext.AlpnProtocols).To(Equal(l.alpnProtocols))
-	Expect(downstreamTlsContext.CommonTlsContext.TlsCertificateSdsSecretConfigs).To(ConsistOf(
-		&envoy_tls.SdsSecretConfig{
-			Name: sdsSecretName,
-			SdsConfig: &envoy_core.ConfigSource{
-				ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-					Path: sdsFileName,
+func createListener(config expectedListener) *envoy_listener.Listener {
+	filterConfig, _ := ptypes.MarshalAny(&envoy_tcp_proxy.TcpProxy{
+		StatPrefix: config.statPrefix,
+		ClusterSpecifier: &envoy_tcp_proxy.TcpProxy_Cluster{
+			Cluster: config.clusterName,
+		},
+	})
+	tlsContext := &envoy_tls.DownstreamTlsContext{
+		CommonTlsContext: &envoy_tls.CommonTlsContext{
+			AlpnProtocols: config.alpnProtocols,
+			TlsCertificateSdsSecretConfigs: []*envoy_tls.SdsSecretConfig{
+				{
+					Name: config.sdsSecretName,
+					SdsConfig: &envoy_core.ConfigSource{
+						ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
+							Path: config.sdsFileName,
+						},
+					},
 				},
 			},
+			TlsParams: &envoy_tls.TlsParameters{
+				CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
+			},
 		},
-	))
-	Expect(downstreamTlsContext.CommonTlsContext.TlsParams).To(Equal(&envoy_tls.TlsParameters{
-		CipherSuites: []string{"ECDHE-RSA-AES256-GCM-SHA384", "ECDHE-RSA-AES128-GCM-SHA256"},
-	}))
-
-	if l.requireClientCertificate {
-		Expect(downstreamTlsContext.RequireClientCertificate.Value).To(BeTrue())
-		Expect(downstreamTlsContext.CommonTlsContext.ValidationContextType).To(Equal(&envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
+	}
+	if config.requireClientCertificate {
+		tlsContext.RequireClientCertificate = &wrappers.BoolValue{Value: true}
+		tlsContext.CommonTlsContext.ValidationContextType = &envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
 			ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 				Name: "id-validation-context",
 				SdsConfig: &envoy_core.ConfigSource{
@@ -1105,25 +1110,43 @@ func (l expectedListener) check(listener *envoy_listener.Listener, sdsSecretName
 					},
 				},
 			},
-		}))
-	} else {
-		Expect(downstreamTlsContext.CommonTlsContext.ValidationContextType).To(BeNil())
+		}
 	}
+	tlsContextAny, _ := ptypes.MarshalAny(tlsContext)
+	listener := &envoy_listener.Listener{
+		Name:    config.name,
+		Address: envoyAddr("0.0.0.0", config.listenPort),
+		FilterChains: []*envoy_listener.FilterChain{{
+			Filters: []*envoy_listener.Filter{
+				{
+					Name: "envoy.tcp_proxy",
+					ConfigType: &envoy_listener.Filter_TypedConfig{
+						TypedConfig: filterConfig,
+					},
+				},
+			},
+			TransportSocket: &envoy_core.TransportSocket{
+				Name: config.name,
+				ConfigType: &envoy_core.TransportSocket_TypedConfig{
+					TypedConfig: tlsContextAny,
+				},
+			},
+		},
+		},
+	}
+	return listener
 }
 
 type expectedCluster struct {
 	name           string
 	hosts          []*envoy_core.Address
 	maxConnections uint32
+	http2          bool
 }
 
-func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
-	ExpectWithOffset(1, cluster.Name).To(Equal(c.name))
-	ExpectWithOffset(1, cluster.ConnectTimeout).To(Equal(&duration.Duration{Nanos: 250000000}))
-	ExpectWithOffset(1, cluster.ClusterDiscoveryType).To(Equal(&envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC}))
-	ExpectWithOffset(1, cluster.LbPolicy).To(Equal(envoy_cluster.Cluster_ROUND_ROBIN))
+func createCluster(config expectedCluster) *envoy_cluster.Cluster {
 	var expectedLbEndpoints []*envoy_endpoint.LbEndpoint
-	for _, h := range c.hosts {
+	for _, h := range config.hosts {
 		expectedLbEndpoints = append(expectedLbEndpoints, &envoy_endpoint.LbEndpoint{
 			HostIdentifier: &envoy_endpoint.LbEndpoint_Endpoint{
 				Endpoint: &envoy_endpoint.Endpoint{
@@ -1132,18 +1155,29 @@ func (c expectedCluster) check(cluster *envoy_cluster.Cluster) {
 			},
 		})
 	}
-	ExpectWithOffset(1, cluster.LoadAssignment).To(Equal(&envoy_endpoint.ClusterLoadAssignment{
-		ClusterName: c.name,
-		Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
-			LbEndpoints: expectedLbEndpoints,
-		}},
-	}))
-	if c.maxConnections > 0 {
-		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds).To(HaveLen(3))
-		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[0].MaxConnections.Value).To(BeNumerically("==", c.maxConnections))
-		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[1].MaxPendingRequests.Value).To(BeNumerically("==", c.maxConnections))
-		ExpectWithOffset(1, cluster.CircuitBreakers.Thresholds[2].MaxRequests.Value).To(BeNumerically("==", c.maxConnections))
-	} else {
-		ExpectWithOffset(1, cluster.CircuitBreakers).To(BeNil())
+	cluster := &envoy_cluster.Cluster{
+		Name:                 config.name,
+		ConnectTimeout:       &duration.Duration{Nanos: 250000000},
+		ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
+		LbPolicy:             envoy_cluster.Cluster_ROUND_ROBIN,
+		LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
+			ClusterName: config.name,
+			Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
+				LbEndpoints: expectedLbEndpoints,
+			}},
+		},
+		CircuitBreakers: nil,
 	}
+	if config.maxConnections > 0 {
+		cluster.CircuitBreakers = &envoy_cluster.CircuitBreakers{
+			Thresholds: []*envoy_cluster.CircuitBreakers_Thresholds{
+				{MaxConnections: &wrappers.UInt32Value{Value: math.MaxUint32}},
+				{MaxPendingRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
+				{MaxRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
+			}}
+	}
+	if config.http2 {
+		cluster.Http2ProtocolOptions = &envoy_core.Http2ProtocolOptions{}
+	}
+	return cluster
 }
