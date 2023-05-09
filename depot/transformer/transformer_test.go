@@ -585,7 +585,6 @@ var _ = Describe("Transformer", func() {
 				}
 				container = executor.Container{
 					RunInfo: executor.RunInfo{
-						StartTimeoutMs: 1000,
 						Action: &models.Action{
 							RunAction: &models.RunAction{
 								Path: "/action/path",
@@ -596,17 +595,7 @@ var _ = Describe("Transformer", func() {
 								Path: "/monitor/path",
 							},
 						},
-						CheckDefinition: &models.CheckDefinition{
-							Checks: []*models.Check{
-								&models.Check{
-									HttpCheck: &models.HTTPCheck{
-										Port:             5432,
-										RequestTimeoutMs: 100,
-										Path:             "/some/path",
-									},
-								},
-							},
-						},
+						CheckDefinition: nil, // populated by the other BeforeEaches as necessary
 					},
 				}
 			})
@@ -626,7 +615,7 @@ var _ = Describe("Transformer", func() {
 				ginkgomon.Interrupt(process)
 			})
 
-			Context("when they are enabled", func() {
+			Context("when declarative healthchecks are enabled", func() {
 				BeforeEach(func() {
 					options = append(options, transformer.WithDeclarativeHealthchecks())
 
@@ -638,10 +627,6 @@ var _ = Describe("Transformer", func() {
 				})
 
 				Context("and no check definitions exist", func() {
-					BeforeEach(func() {
-						container.CheckDefinition = nil
-					})
-
 					JustBeforeEach(func() {
 						clock.WaitForWatcherAndIncrement(unhealthyMonitoringInterval)
 					})
@@ -722,6 +707,7 @@ var _ = Describe("Transformer", func() {
 										Port:             5432,
 										RequestTimeoutMs: 100,
 										Path:             "/some/path",
+										IntervalMs:       427,
 									},
 								},
 							},
@@ -817,7 +803,7 @@ var _ = Describe("Transformer", func() {
 							container.Privileged = true
 						})
 
-						It("runs the healthcheck in a sidecar container", func() {
+						It("runs the readiness healthcheck in a sidecar container", func() {
 							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
 								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
@@ -889,7 +875,7 @@ var _ = Describe("Transformer", func() {
 								Checks: []*models.Check{
 									&models.Check{
 										HttpCheck: &models.HTTPCheck{
-											Port: 5432,
+											Port: 6432,
 										},
 									},
 								},
@@ -908,7 +894,7 @@ var _ = Describe("Transformer", func() {
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
-								"-port=5432",
+								"-port=6432",
 								"-timeout=1000ms",
 								"-uri=/",
 								"-readiness-interval=1ms",
@@ -1009,8 +995,45 @@ var _ = Describe("Transformer", func() {
 								"-port=5432",
 								"-timeout=100ms",
 								"-uri=/some/path",
-								"-liveness-interval=1s",
+								"-liveness-interval=427ms",
 							}))
+						})
+
+						Context("when optional values are not provided in liveness check defintion", func() {
+							BeforeEach(func() {
+								container.CheckDefinition = &models.CheckDefinition{
+									Checks: []*models.Check{
+										&models.Check{
+											HttpCheck: &models.HTTPCheck{
+												Port: 6432,
+											},
+										},
+									},
+								}
+							})
+
+							It("starts the liveness check with sane defaults", func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+								ids := []string{}
+								paths := []string{}
+								args := [][]string{}
+								for i := 0; i < gardenContainer.RunCallCount(); i++ {
+									spec, _ := gardenContainer.RunArgsForCall(i)
+									ids = append(ids, spec.ID)
+									paths = append(paths, spec.Path)
+									args = append(args, spec.Args)
+								}
+
+								Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-0")))
+								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+								Expect(args).To(ContainElement([]string{
+									"-port=6432",
+									"-timeout=1000ms",
+									"-uri=/",
+									"-liveness-interval=1s",
+								}))
+							})
+
 						})
 
 						Context("when the liveness check exits", func() {
@@ -1060,6 +1083,7 @@ var _ = Describe("Transformer", func() {
 									TcpCheck: &models.TCPCheck{
 										Port:             5432,
 										ConnectTimeoutMs: 100,
+										IntervalMs:       44,
 									},
 								},
 							},
@@ -1072,7 +1096,7 @@ var _ = Describe("Transformer", func() {
 								Checks: []*models.Check{
 									&models.Check{
 										TcpCheck: &models.TCPCheck{
-											Port: 5432,
+											Port: 6432,
 										},
 									},
 								},
@@ -1091,7 +1115,7 @@ var _ = Describe("Transformer", func() {
 
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
-								"-port=5432",
+								"-port=6432",
 								"-timeout=1000ms",
 								"-readiness-interval=1ms",
 								"-readiness-timeout=1s",
@@ -1143,10 +1167,46 @@ var _ = Describe("Transformer", func() {
 							Expect(args).To(ContainElement([]string{
 								"-port=5432",
 								"-timeout=100ms",
-								"-liveness-interval=1s",
+								"-liveness-interval=44ms",
 							}))
 
 						})
+
+						Context("and optional fields are missing", func() {
+							BeforeEach(func() {
+								container.CheckDefinition = &models.CheckDefinition{
+									Checks: []*models.Check{
+										&models.Check{
+											TcpCheck: &models.TCPCheck{
+												Port: 6432,
+											},
+										},
+									},
+								}
+							})
+
+							It("uses sane defaults", func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+								ids := []string{}
+								paths := []string{}
+								args := [][]string{}
+								for i := 0; i < gardenContainer.RunCallCount(); i++ {
+									spec, _ := gardenContainer.RunArgsForCall(i)
+									ids = append(ids, spec.ID)
+									paths = append(paths, spec.Path)
+									args = append(args, spec.Args)
+								}
+
+								Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "liveness-healthcheck-0")))
+								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+								Expect(args).To(ContainElement([]string{
+									"-port=6432",
+									"-timeout=1000ms",
+									"-liveness-interval=1s",
+								}))
+							})
+						})
+
 					})
 				})
 
@@ -1255,12 +1315,14 @@ var _ = Describe("Transformer", func() {
 									TcpCheck: &models.TCPCheck{
 										Port:             2222,
 										ConnectTimeoutMs: 100,
+										IntervalMs:       50,
 									},
 								},
 								&models.Check{
 									HttpCheck: &models.HTTPCheck{
 										Port:             8080,
 										RequestTimeoutMs: 100,
+										IntervalMs:       50,
 									},
 								},
 							},
@@ -1337,13 +1399,13 @@ var _ = Describe("Transformer", func() {
 								Expect(args).To(ContainElement([]string{
 									"-port=2222",
 									"-timeout=100ms",
-									"-liveness-interval=1s",
+									"-liveness-interval=50ms",
 								}))
 								Expect(args).To(ContainElement([]string{
 									"-port=8080",
 									"-timeout=100ms",
 									"-uri=/",
-									"-liveness-interval=1s",
+									"-liveness-interval=50ms",
 								}))
 							})
 
