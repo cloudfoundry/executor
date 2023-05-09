@@ -26,7 +26,7 @@ import (
 
 const (
 	healthCheckNofiles                          uint64 = 1024
-	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond)
+	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond) // this is just 1000, transformed eventually into a str: "1000ms" or equivalently "1s"
 	HealthLogSource                                    = "HEALTH"
 )
 
@@ -644,6 +644,11 @@ func (t *transformer) transformCheckDefinition(
 			if path == "" {
 				path = "/"
 			}
+			// we can use the fact that time.Duration is an int64 to simplify creating the proper time.Duration object from desired number of Milliseconds
+			interval := time.Duration(check.HttpCheck.IntervalMs) * time.Millisecond
+			if interval == 0 {
+				interval = t.healthyMonitoringInterval
+			}
 
 			readinessChecks = append(readinessChecks, t.createCheck(
 				container,
@@ -669,7 +674,7 @@ func (t *transformer) transformCheckDefinition(
 				timeout,
 				true,
 				false,
-				t.healthyMonitoringInterval,
+				interval,
 				livenessLogger,
 				"",
 			))
@@ -678,6 +683,11 @@ func (t *transformer) transformCheckDefinition(
 			timeout := int(check.TcpCheck.ConnectTimeoutMs)
 			if timeout == 0 {
 				timeout = DefaultDeclarativeHealthcheckRequestTimeout
+			}
+			// we can use the fact that time.Duration is an int64 to simplify creating the proper time.Duration object from desired number of Milliseconds
+			interval := time.Duration(check.TcpCheck.IntervalMs) * time.Millisecond
+			if interval == 0 {
+				interval = t.healthyMonitoringInterval
 			}
 
 			readinessChecks = append(readinessChecks, t.createCheck(
@@ -704,7 +714,7 @@ func (t *transformer) transformCheckDefinition(
 				timeout,
 				false,
 				false,
-				t.healthyMonitoringInterval,
+				interval,
 				livenessLogger,
 				"",
 			))
