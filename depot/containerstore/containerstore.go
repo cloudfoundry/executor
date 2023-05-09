@@ -11,7 +11,6 @@ import (
 	"code.cloudfoundry.org/executor/depot/event"
 	"code.cloudfoundry.org/executor/depot/transformer"
 	"code.cloudfoundry.org/executor/initializer/configuration"
-	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/volman"
 	"github.com/tedsuo/ifrit"
@@ -25,7 +24,7 @@ var (
 
 type ContainerStore interface {
 	// Setters
-    Reserve(logger lager.Logger, traceID string, req *executor.AllocationRequest) (executor.Container, error)
+	Reserve(logger lager.Logger, traceID string, req *executor.AllocationRequest) (executor.Container, error)
 	Destroy(logger lager.Logger, traceID string, guid string) error
 
 	// Container Operations
@@ -63,18 +62,18 @@ type ContainerConfig struct {
 }
 
 type containerStore struct {
-	containerConfig   ContainerConfig
-	gardenClient      garden.Client
-	dependencyManager DependencyManager
-	volumeManager     volman.Manager
-	credManager       CredManager
-	transformer       transformer.Transformer
-	containers        *nodeMap
-	eventEmitter      event.Hub
-	clock             clock.Clock
-	metronClient      loggingclient.IngressClient
-	rootFSSizer       configuration.RootFSSizer
-	logManager        LogManager
+	containerConfig     ContainerConfig
+	gardenClientFactory GardenCLientFactory
+	dependencyManager   DependencyManager
+	volumeManager       volman.Manager
+	credManager         CredManager
+	transformer         transformer.Transformer
+	containers          *nodeMap
+	eventEmitter        event.Hub
+	clock               clock.Clock
+	metronClient        loggingclient.IngressClient
+	rootFSSizer         configuration.RootFSSizer
+	logManager          LogManager
 
 	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
@@ -95,7 +94,7 @@ type containerStore struct {
 func New(
 	containerConfig ContainerConfig,
 	totalCapacity *executor.ExecutorResources,
-	gardenClient garden.Client,
+	gardenClientFactory GardenCLientFactory,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
 	credManager CredManager,
@@ -116,7 +115,7 @@ func New(
 ) ContainerStore {
 	return &containerStore{
 		containerConfig:               containerConfig,
-		gardenClient:                  gardenClient,
+		gardenClientFactory:           gardenClientFactory,
 		dependencyManager:             dependencyManager,
 		volumeManager:                 volumeManager,
 		credManager:                   credManager,
@@ -156,7 +155,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, traceID string, req *exec
 			cs.useDeclarativeHealthCheck,
 			cs.declarativeHealthcheckPath,
 			container,
-			cs.gardenClient,
+			cs.gardenClientFactory,
 			cs.clock,
 			cs.dependencyManager,
 			cs.volumeManager,
@@ -343,7 +342,7 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 	}
 
 	logger.Debug("getting-metrics-in-garden")
-	gardenMetrics, err := cs.gardenClient.BulkMetrics(containerGuids)
+	gardenMetrics, err := cs.gardenClientFactory.NewGardenClient(logger, "").BulkMetrics(containerGuids)
 	if err != nil {
 		logger.Error("getting-metrics-in-garden-failed", err)
 		return nil, err
@@ -397,5 +396,5 @@ func (cs *containerStore) NewRegistryPruner(logger lager.Logger) ifrit.Runner {
 }
 
 func (cs *containerStore) NewContainerReaper(logger lager.Logger) ifrit.Runner {
-	return newContainerReaper(logger, &cs.containerConfig, cs.clock, cs.containers, cs.gardenClient)
+	return newContainerReaper(logger, &cs.containerConfig, cs.clock, cs.containers, cs.gardenClientFactory.NewGardenClient(logger, ""))
 }

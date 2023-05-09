@@ -60,15 +60,16 @@ var _ = Describe("Container Store", func() {
 		metricMap     map[string]struct{}
 		metricMapLock sync.RWMutex
 
-		gardenClient      *gardenfakes.FakeClient
-		gardenContainer   *gardenfakes.FakeContainer
-		megatron          *faketransformer.FakeTransformer
-		dependencyManager *containerstorefakes.FakeDependencyManager
-		credManager       *containerstorefakes.FakeCredManager
-		proxyManager      *containerstorefakes.FakeProxyManager
-		volumeManager     *volmanfakes.FakeManager
-		logManager        *containerstorefakes.FakeLogManager
-		logStreamer       *fake_log_streamer.FakeLogStreamer
+		gardenClient        *gardenfakes.FakeClient
+		gardenClientFactory *containerstorefakes.FakeGardenCLientFactory
+		gardenContainer     *gardenfakes.FakeContainer
+		megatron            *faketransformer.FakeTransformer
+		dependencyManager   *containerstorefakes.FakeDependencyManager
+		credManager         *containerstorefakes.FakeCredManager
+		proxyManager        *containerstorefakes.FakeProxyManager
+		volumeManager       *volmanfakes.FakeManager
+		logManager          *containerstorefakes.FakeLogManager
+		logStreamer         *fake_log_streamer.FakeLogStreamer
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
@@ -101,7 +102,9 @@ var _ = Describe("Container Store", func() {
 		metricMap = map[string]struct{}{}
 
 		gardenContainer = &gardenfakes.FakeContainer{}
+		gardenClientFactory = &containerstorefakes.FakeGardenCLientFactory{}
 		gardenClient = &gardenfakes.FakeClient{}
+		gardenClientFactory.NewGardenClientReturns(gardenClient)
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		credManager = &containerstorefakes.FakeCredManager{}
 		logManager = &containerstorefakes.FakeLogManager{}
@@ -143,7 +146,7 @@ var _ = Describe("Container Store", func() {
 		containerStore = containerstore.New(
 			containerConfig,
 			&totalCapacity,
-			gardenClient,
+			gardenClientFactory,
 			dependencyManager,
 			volumeManager,
 			credManager,
@@ -467,7 +470,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -689,7 +692,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -1178,7 +1181,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -1268,7 +1271,7 @@ var _ = Describe("Container Store", func() {
 						containerStore = containerstore.New(
 							containerConfig,
 							&totalCapacity,
-							gardenClient,
+							gardenClientFactory,
 							dependencyManager,
 							volumeManager,
 							credManager,
@@ -2240,7 +2243,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -2813,7 +2816,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,

@@ -69,7 +69,7 @@ type storeNode struct {
 
 	// opLock serializes public methods that involve garden interactions
 	opLock                                *sync.Mutex
-	gardenClient                          garden.Client
+	gardenClientFactory                   GardenCLientFactory
 	dependencyManager                     DependencyManager
 	volumeManager                         volman.Manager
 	credManager                           CredManager
@@ -103,7 +103,7 @@ func newStoreNode(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	container executor.Container,
-	gardenClient garden.Client,
+	gardenClientFactory GardenCLientFactory,
 	clock clock.Clock,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
@@ -125,7 +125,7 @@ func newStoreNode(
 		info:                                  container,
 		infoLock:                              &sync.Mutex{},
 		opLock:                                &sync.Mutex{},
-		gardenClient:                          gardenClient,
+		gardenClientFactory:                   gardenClientFactory,
 		clock:                                 clock,
 		dependencyManager:                     dependencyManager,
 		volumeManager:                         volumeManager,
@@ -257,7 +257,7 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 
 		sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
-		gardenContainer, err := n.createGardenContainer(logger, &info)
+		gardenContainer, err := n.createGardenContainer(logger, traceID, &info)
 		if err != nil {
 			n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
 			n.complete(logger, traceID, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
@@ -334,7 +334,7 @@ func dedupPorts(ports []executor.PortMapping) []executor.PortMapping {
 	return deduped
 }
 
-func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Container) (garden.Container, error) {
+func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, info *executor.Container) (garden.Container, error) {
 	netOutRules, err := convertEgressToNetOut(logger, info.EgressRules)
 	if err != nil {
 		return nil, err
@@ -418,14 +418,14 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, info *executor.Co
 		containerSpec.Limits.CPU.Weight = uint64(info.MemoryMB)
 	}
 
-	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClient, n.metronClient)
+	gardenContainer, err := createContainer(logger, containerSpec, n.gardenClientFactory.NewGardenClient(logger, traceID), n.metronClient)
 	if err != nil {
 		return nil, err
 	}
 
 	containerInfo, err := gardenContainer.Info()
 	if err != nil {
-		if err := n.destroyContainer(logger); err != nil {
+		if err := n.destroyContainer(logger, traceID); err != nil {
 			logger.Error("failed-to-destroy-container", err)
 		}
 		return nil, err
@@ -702,7 +702,7 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
 
-	err := n.destroyContainer(logger)
+	err := n.destroyContainer(logger, traceID)
 	if err != nil {
 		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s failed to destroy container for instance %s", n.cellID, info.Guid), sourceName, tags)
 		return err
@@ -721,11 +721,11 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	return bindMountCleanupErr
 }
 
-func (n *storeNode) destroyContainer(logger lager.Logger) error {
+func (n *storeNode) destroyContainer(logger lager.Logger, traceID string) error {
 	logger.Debug("destroying-garden-container")
 
 	startTime := time.Now()
-	err := n.gardenClient.Destroy(n.info.Guid)
+	err := n.gardenClientFactory.NewGardenClient(logger, traceID).Destroy(n.info.Guid)
 	destroyDuration := time.Now().Sub(startTime)
 
 	if err != nil {
