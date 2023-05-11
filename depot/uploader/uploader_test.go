@@ -162,7 +162,7 @@ var _ = Describe("Uploader", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					requestInitiated <- struct{}{}
 
-					time.Sleep(300 * time.Millisecond)
+					time.Sleep(3 * defaultTimeout)
 					fmt.Fprintln(w, "Hello, client")
 				}))
 
