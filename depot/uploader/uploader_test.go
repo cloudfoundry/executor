@@ -30,11 +30,12 @@ var _ = Describe("Uploader", func() {
 		serverRequests    []*http.Request
 		serverRequestBody []string
 
-		logger        *lagertest.TestLogger
-		url           *url.URL
-		file          *os.File
-		expectedBytes int
-		expectedMD5   string
+		logger         *lagertest.TestLogger
+		url            *url.URL
+		file           *os.File
+		expectedBytes  int
+		expectedMD5    string
+		defaultTimeout time.Duration
 	)
 
 	BeforeEach(func() {
@@ -49,6 +50,7 @@ var _ = Describe("Uploader", func() {
 		rawMD5 := md5.Sum([]byte(contentString))
 		expectedMD5 = base64.StdEncoding.EncodeToString(rawMD5[:])
 		file.Close()
+		defaultTimeout = 500 * time.Millisecond
 	})
 
 	AfterEach(func() {
@@ -61,7 +63,7 @@ var _ = Describe("Uploader", func() {
 
 	Describe("Insecure Upload", func() {
 		BeforeEach(func() {
-			upldr = uploader.New(logger, 100*time.Millisecond, nil)
+			upldr = uploader.New(logger, defaultTimeout, nil)
 		})
 
 		Context("when the upload is successful", func() {
@@ -269,7 +271,7 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("uploads the file to the url", func() {
-					upldr = uploader.New(logger, 1*time.Second, tlsConfig)
+					upldr = uploader.New(logger, defaultTimeout, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -286,7 +288,7 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("returns the number of bytes written", func() {
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					upldr = uploader.New(logger, defaultTimeout, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -307,7 +309,7 @@ var _ = Describe("Uploader", func() {
 				})
 
 				It("can communicate with the fileserver via one-sided TLS", func() {
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					upldr = uploader.New(logger, defaultTimeout, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -315,7 +317,7 @@ var _ = Describe("Uploader", func() {
 
 			Context("when the client has incorrect certs", func() {
 				It("fails when no certs are provided", func() {
-					upldr = uploader.New(logger, 100*time.Millisecond, nil)
+					upldr = uploader.New(logger, defaultTimeout, nil)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).To(HaveOccurred())
 				})
@@ -328,7 +330,7 @@ var _ = Describe("Uploader", func() {
 						tlsconfig.WithAuthorityFromFile("fixtures/correct/server-ca.crt"),
 					)
 					Expect(err).NotTo(HaveOccurred())
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					upldr = uploader.New(logger, defaultTimeout, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).To(HaveOccurred())
 				})
@@ -341,7 +343,7 @@ var _ = Describe("Uploader", func() {
 						tlsconfig.WithAuthorityFromFile("fixtures/incorrect/server-ca.crt"),
 					)
 					Expect(err).NotTo(HaveOccurred())
-					upldr = uploader.New(logger, 100*time.Millisecond, tlsConfig)
+					upldr = uploader.New(logger, defaultTimeout, tlsConfig)
 					numBytes, err = upldr.Upload(file.Name(), url, nil)
 					Expect(err).To(HaveOccurred())
 				})
