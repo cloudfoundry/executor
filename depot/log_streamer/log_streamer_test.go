@@ -136,8 +136,8 @@ var _ = Describe("LogStreamer", func() {
 				fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
 			})
 
-			It("skips logs which exceed the burst capacity", func() {
-				Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(2))
+			It("causes outages of logs", func() {
+				Eventually(fakeClient.SendAppLogCallCount, 1*time.Second).Should(Equal(1))
 
 				var messages []string
 				for i := 0; i < fakeClient.SendAppLogCallCount(); i++ {
@@ -146,7 +146,6 @@ var _ = Describe("LogStreamer", func() {
 				}
 
 				Expect(messages).To(ConsistOf(
-					MatchRegexp("^b+$"),
 					Equal("app instance exceeded log rate limit (100 bytes/sec)"),
 				))
 			})

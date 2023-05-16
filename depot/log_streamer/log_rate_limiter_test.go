@@ -47,7 +47,6 @@ var _ = Describe("LogRateLimiter", func() {
 		Expect(reportMessage).To(Equal("app instance exceeded log rate limit (1 bytes/sec)"))
 		Expect(tags).To(Equal(map[string]string{"a": "value"}))
 	})
-
 	It("send the over limit counter to loggregator", func() {
 		ctx := context.Background()
 		fakeClient := &mfakes.FakeIngressClient{}
@@ -60,7 +59,7 @@ var _ = Describe("LogRateLimiter", func() {
 		Expect(counterName).To(Equal("AppInstanceExceededLogRateLimitCount"))
 	})
 
-	It("sends the over limit message to once per logging gap", func() {
+	It("blocks messages for an entire second with only one report if limit reached", func() {
 		ctx := context.Background()
 		fakeClient := &mfakes.FakeIngressClient{}
 		logRateLimiter := log_streamer.NewLogRateLimiter(ctx, fakeClient, map[string]string{}, 2, 100, time.Hour)
@@ -71,8 +70,11 @@ var _ = Describe("LogRateLimiter", func() {
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
-		Expect(logRateLimiter.Limit("test", 5)).ToNot(HaveOccurred())
+		Expect(logRateLimiter.Limit("test", 5)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
+		Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
+		time.Sleep(time.Millisecond * 1100)
 		Expect(logRateLimiter.Limit("test", 100000)).To(HaveOccurred())
 		Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 	})
