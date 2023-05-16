@@ -9,7 +9,7 @@ import (
 	lager "code.cloudfoundry.org/lager/v3"
 )
 
-type FakeGardenCLientFactory struct {
+type FakeGardenClientFactory struct {
 	NewGardenClientStub        func(lager.Logger, string) garden.Client
 	newGardenClientMutex       sync.RWMutex
 	newGardenClientArgsForCall []struct {
@@ -26,7 +26,7 @@ type FakeGardenCLientFactory struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClient(arg1 lager.Logger, arg2 string) garden.Client {
+func (fake *FakeGardenClientFactory) NewGardenClient(arg1 lager.Logger, arg2 string) garden.Client {
 	fake.newGardenClientMutex.Lock()
 	ret, specificReturn := fake.newGardenClientReturnsOnCall[len(fake.newGardenClientArgsForCall)]
 	fake.newGardenClientArgsForCall = append(fake.newGardenClientArgsForCall, struct {
@@ -46,26 +46,26 @@ func (fake *FakeGardenCLientFactory) NewGardenClient(arg1 lager.Logger, arg2 str
 	return fakeReturns.result1
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClientCallCount() int {
+func (fake *FakeGardenClientFactory) NewGardenClientCallCount() int {
 	fake.newGardenClientMutex.RLock()
 	defer fake.newGardenClientMutex.RUnlock()
 	return len(fake.newGardenClientArgsForCall)
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClientCalls(stub func(lager.Logger, string) garden.Client) {
+func (fake *FakeGardenClientFactory) NewGardenClientCalls(stub func(lager.Logger, string) garden.Client) {
 	fake.newGardenClientMutex.Lock()
 	defer fake.newGardenClientMutex.Unlock()
 	fake.NewGardenClientStub = stub
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClientArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeGardenClientFactory) NewGardenClientArgsForCall(i int) (lager.Logger, string) {
 	fake.newGardenClientMutex.RLock()
 	defer fake.newGardenClientMutex.RUnlock()
 	argsForCall := fake.newGardenClientArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClientReturns(result1 garden.Client) {
+func (fake *FakeGardenClientFactory) NewGardenClientReturns(result1 garden.Client) {
 	fake.newGardenClientMutex.Lock()
 	defer fake.newGardenClientMutex.Unlock()
 	fake.NewGardenClientStub = nil
@@ -74,7 +74,7 @@ func (fake *FakeGardenCLientFactory) NewGardenClientReturns(result1 garden.Clien
 	}{result1}
 }
 
-func (fake *FakeGardenCLientFactory) NewGardenClientReturnsOnCall(i int, result1 garden.Client) {
+func (fake *FakeGardenClientFactory) NewGardenClientReturnsOnCall(i int, result1 garden.Client) {
 	fake.newGardenClientMutex.Lock()
 	defer fake.newGardenClientMutex.Unlock()
 	fake.NewGardenClientStub = nil
@@ -88,7 +88,7 @@ func (fake *FakeGardenCLientFactory) NewGardenClientReturnsOnCall(i int, result1
 	}{result1}
 }
 
-func (fake *FakeGardenCLientFactory) Invocations() map[string][][]interface{} {
+func (fake *FakeGardenClientFactory) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.newGardenClientMutex.RLock()
@@ -100,7 +100,7 @@ func (fake *FakeGardenCLientFactory) Invocations() map[string][][]interface{} {
 	return copiedInvocations
 }
 
-func (fake *FakeGardenCLientFactory) recordInvocation(key string, args []interface{}) {
+func (fake *FakeGardenClientFactory) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -112,4 +112,4 @@ func (fake *FakeGardenCLientFactory) recordInvocation(key string, args []interfa
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ containerstore.GardenCLientFactory = new(FakeGardenCLientFactory)
+var _ containerstore.GardenClientFactory = new(FakeGardenClientFactory)

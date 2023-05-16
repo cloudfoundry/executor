@@ -9,8 +9,8 @@ import (
 	"code.cloudfoundry.org/lager/v3"
 )
 
-//go:generate counterfeiter -o containerstorefakes/fake_garden_client_factory.go . GardenCLientFactory
-type GardenCLientFactory interface {
+//go:generate counterfeiter -o containerstorefakes/fake_garden_client_factory.go . GardenClientFactory
+type GardenClientFactory interface {
 	NewGardenClient(logger lager.Logger, traceID string) garden.Client
 }
 
@@ -19,7 +19,7 @@ type gardenClientFactory struct {
 	address string
 }
 
-func NewGardenClientFactory(network, address string) GardenCLientFactory {
+func NewGardenClientFactory(network, address string) GardenClientFactory {
 	return &gardenClientFactory{
 		network: network,
 		address: address,

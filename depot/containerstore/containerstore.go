@@ -63,7 +63,7 @@ type ContainerConfig struct {
 
 type containerStore struct {
 	containerConfig     ContainerConfig
-	gardenClientFactory GardenCLientFactory
+	gardenClientFactory GardenClientFactory
 	dependencyManager   DependencyManager
 	volumeManager       volman.Manager
 	credManager         CredManager
@@ -94,7 +94,7 @@ type containerStore struct {
 func New(
 	containerConfig ContainerConfig,
 	totalCapacity *executor.ExecutorResources,
-	gardenClientFactory GardenCLientFactory,
+	gardenClientFactory GardenClientFactory,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,
 	credManager CredManager,

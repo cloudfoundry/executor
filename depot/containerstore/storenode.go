@@ -69,7 +69,7 @@ type storeNode struct {
 
 	// opLock serializes public methods that involve garden interactions
 	opLock                                *sync.Mutex
-	gardenClientFactory                   GardenCLientFactory
+	gardenClientFactory                   GardenClientFactory
 	dependencyManager                     DependencyManager
 	volumeManager                         volman.Manager
 	credManager                           CredManager
@@ -103,7 +103,7 @@ func newStoreNode(
 	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	container executor.Container,
-	gardenClientFactory GardenCLientFactory,
+	gardenClientFactory GardenClientFactory,
 	clock clock.Clock,
 	dependencyManager DependencyManager,
 	volumeManager volman.Manager,

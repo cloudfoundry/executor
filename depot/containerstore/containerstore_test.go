@@ -61,7 +61,7 @@ var _ = Describe("Container Store", func() {
 		metricMapLock sync.RWMutex
 
 		gardenClient        *gardenfakes.FakeClient
-		gardenClientFactory *containerstorefakes.FakeGardenCLientFactory
+		gardenClientFactory *containerstorefakes.FakeGardenClientFactory
 		gardenContainer     *gardenfakes.FakeContainer
 		megatron            *faketransformer.FakeTransformer
 		dependencyManager   *containerstorefakes.FakeDependencyManager
@@ -102,7 +102,7 @@ var _ = Describe("Container Store", func() {
 		metricMap = map[string]struct{}{}
 
 		gardenContainer = &gardenfakes.FakeContainer{}
-		gardenClientFactory = &containerstorefakes.FakeGardenCLientFactory{}
+		gardenClientFactory = &containerstorefakes.FakeGardenClientFactory{}
 		gardenClient = &gardenfakes.FakeClient{}
 		gardenClientFactory.NewGardenClientReturns(gardenClient)
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
