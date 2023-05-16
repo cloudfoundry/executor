@@ -20,10 +20,10 @@ import (
 
 var _ = Describe("NewHealthCheckStep", func() {
 	var (
-		readinessCheck, livenessCheck *fake_runner.TestRunner
-		clock                         *fakeclock.FakeClock
-		fakeStreamer                  *fake_log_streamer.FakeLogStreamer
-		fakeHealthCheckStreamer       *fake_log_streamer.FakeLogStreamer
+		startupCheck, livenessCheck *fake_runner.TestRunner
+		clock                       *fakeclock.FakeClock
+		fakeStreamer                *fake_log_streamer.FakeLogStreamer
+		fakeHealthCheckStreamer     *fake_log_streamer.FakeLogStreamer
 
 		startTimeout time.Duration
 
@@ -35,7 +35,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 	BeforeEach(func() {
 		startTimeout = 1 * time.Second
 
-		readinessCheck = fake_runner.NewTestRunner()
+		startupCheck = fake_runner.NewTestRunner()
 		livenessCheck = fake_runner.NewTestRunner()
 
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -50,7 +50,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 		fakeStreamer.WithSourceReturns(fakeStreamer)
 
 		step = steps.NewHealthCheckStep(
-			readinessCheck,
+			startupCheck,
 			livenessCheck,
 			logger,
 			clock,
@@ -63,8 +63,8 @@ var _ = Describe("NewHealthCheckStep", func() {
 	})
 
 	AfterEach(func() {
-		Eventually(readinessCheck.RunCallCount).Should(Equal(1))
-		readinessCheck.EnsureExit()
+		Eventually(startupCheck.RunCallCount).Should(Equal(1))
+		startupCheck.EnsureExit()
 		if livenessCheck != nil {
 			Eventually(livenessCheck.RunCallCount).Should(Equal(1))
 			livenessCheck.TriggerExit(errors.New("booom!")) // liveness check must exit with non-nil error
@@ -78,9 +78,9 @@ var _ = Describe("NewHealthCheckStep", func() {
 			)
 		})
 
-		Context("when the readiness check fails", func() {
+		Context("when the start upcheck fails", func() {
 			JustBeforeEach(func() {
-				readinessCheck.TriggerExit(errors.New("booom!"))
+				startupCheck.TriggerExit(errors.New("booom!"))
 				livenessCheck = nil
 			})
 
@@ -104,14 +104,14 @@ var _ = Describe("NewHealthCheckStep", func() {
 
 			It("emits a log message explaining the timeout", func() {
 				Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
-					"Failed after .*: readiness health check never passed.\n",
+					"Failed after .*: startup health check never passed.\n",
 				))
 			})
 		})
 
-		Context("when the readiness check passes", func() {
+		Context("when the startup check passes", func() {
 			JustBeforeEach(func() {
-				readinessCheck.TriggerExit(nil)
+				startupCheck.TriggerExit(nil)
 			})
 
 			It("becomes ready", func() {
@@ -167,25 +167,25 @@ var _ = Describe("NewHealthCheckStep", func() {
 	})
 
 	Describe("Signalling", func() {
-		Context("while doing readiness check", func() {
+		Context("while doing startup check", func() {
 			BeforeEach(func() {
 				livenessCheck = nil
 			})
 
 			It("cancels the in-flight check", func() {
-				Eventually(readinessCheck.RunCallCount).Should(Equal(1))
+				Eventually(startupCheck.RunCallCount).Should(Equal(1))
 
 				process.Signal(os.Interrupt)
-				Eventually(readinessCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
-				readinessCheck.TriggerExit(nil)
+				Eventually(startupCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
+				startupCheck.TriggerExit(nil)
 				Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
 
-		Context("when readiness check passes", func() {
+		Context("when startup check passes", func() {
 			Context("and while doing liveness check", func() {
 				It("cancels the in-flight check", func() {
-					readinessCheck.TriggerExit(nil)
+					startupCheck.TriggerExit(nil)
 
 					Eventually(livenessCheck.RunCallCount).Should(Equal(1))
 

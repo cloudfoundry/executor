@@ -12,14 +12,14 @@ import (
 )
 
 const (
-	readinessFailureMessage = "Failed after %s: readiness health check never passed.\n"
+	startupFailureMessage   = "Failed after %s: startup health check never passed.\n"
 	timeoutCrashReason      = "Instance never healthy after %s: %s"
 	healthcheckNowUnhealthy = "Instance became unhealthy: %s"
 )
 
 type healthCheckStep struct {
-	readinessCheck ifrit.Runner
-	livenessCheck  ifrit.Runner
+	startupCheck  ifrit.Runner
+	livenessCheck ifrit.Runner
 
 	logger              lager.Logger
 	clock               clock.Clock
@@ -30,7 +30,7 @@ type healthCheckStep struct {
 }
 
 func NewHealthCheckStep(
-	readinessCheck ifrit.Runner,
+	startupCheck ifrit.Runner,
 	livenessCheck ifrit.Runner,
 	logger lager.Logger,
 	clock clock.Clock,
@@ -41,7 +41,7 @@ func NewHealthCheckStep(
 	logger = logger.Session("health-check-step")
 
 	return &healthCheckStep{
-		readinessCheck:      readinessCheck,
+		startupCheck:        startupCheck,
 		livenessCheck:       livenessCheck,
 		logger:              logger,
 		clock:               clock,
@@ -55,25 +55,25 @@ func (step *healthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}
 	//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 	fmt.Fprint(step.logStreamer.Stdout(), "Starting health monitoring of container\n")
 
-	readinessProcess := ifrit.Background(step.readinessCheck)
+	startupProcess := ifrit.Background(step.startupCheck)
 
 	healthCheckStartedTime := time.Now()
 
 	select {
-	case err := <-readinessProcess.Wait():
+	case err := <-startupProcess.Wait():
 		if err != nil {
 			healthCheckFailedTime := time.Since(healthCheckStartedTime).Round(time.Millisecond)
 			//TODO: make this use metron agent directly, don't use log streamer, shouldn't be rate limited.
 			fmt.Fprintf(step.healthCheckStreamer.Stderr(), "%s\n", err.Error())
-			fmt.Fprintf(step.logStreamer.Stderr(), readinessFailureMessage, healthCheckFailedTime)
+			fmt.Fprintf(step.logStreamer.Stderr(), startupFailureMessage, healthCheckFailedTime)
 			step.logger.Info("timed-out-before-healthy", lager.Data{
 				"step-error": err.Error(),
 			})
 			return NewEmittableError(err, timeoutCrashReason, healthCheckFailedTime, err.Error())
 		}
 	case s := <-signals:
-		readinessProcess.Signal(s)
-		<-readinessProcess.Wait()
+		startupProcess.Signal(s)
+		<-startupProcess.Wait()
 		return new(CancelledError)
 	}
 

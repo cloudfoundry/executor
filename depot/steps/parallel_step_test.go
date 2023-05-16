@@ -106,7 +106,7 @@ var _ = Describe("ParallelStep", func() {
 		})
 	})
 
-	Describe("readiness", func() {
+	Describe("process readiness", func() {
 		It("does not become ready until its subprocesses are", func() {
 			Consistently(process.Ready()).ShouldNot(BeClosed())
 
