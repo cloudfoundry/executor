@@ -512,15 +512,15 @@ var _ = Describe("Transformer", func() {
 		Describe("declarative healthchecks", func() {
 			var (
 				process                       ifrit.Process
-				readinessProcess              *gardenfakes.FakeProcess
-				readinessCh                   chan int
+				startupProcess                *gardenfakes.FakeProcess
+				startupCh                     chan int
 				livenessProcess               *gardenfakes.FakeProcess
 				livenessCh                    chan int
 				actionProcess                 *gardenfakes.FakeProcess
 				actionCh                      chan int
 				monitorProcess                *gardenfakes.FakeProcess
 				monitorCh                     chan int
-				readinessIO                   chan garden.ProcessIO
+				startupIO                     chan garden.ProcessIO
 				livenessIO                    chan garden.ProcessIO
 				processLock                   sync.Mutex
 				specs                         chan garden.ProcessSpec
@@ -532,16 +532,16 @@ var _ = Describe("Transformer", func() {
 				processLock.Lock()
 				defer processLock.Unlock()
 
-				readinessIO = make(chan garden.ProcessIO, 1)
+				startupIO = make(chan garden.ProcessIO, 1)
 				livenessIO = make(chan garden.ProcessIO, 1)
 				specs = make(chan garden.ProcessSpec, 10)
 				// make the race detector happy
-				readinessIOCh := readinessIO
+				startupIOCh := startupIO
 				livenessIOCh := livenessIO
 				specsCh := specs
 
-				readinessCh = make(chan int)
-				readinessProcess = makeProcess(readinessCh)
+				startupCh = make(chan int)
+				startupProcess = makeProcess(startupCh)
 
 				livenessCh = make(chan int, 1)
 				livenessProcess = makeProcess(livenessCh)
@@ -569,8 +569,8 @@ var _ = Describe("Transformer", func() {
 						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 						switch oldCount {
 						case 1:
-							readinessIOCh <- io
-							return readinessProcess, nil
+							startupIOCh <- io
+							return startupProcess, nil
 						case 2:
 							livenessIOCh <- io
 							return livenessProcess, nil
@@ -608,7 +608,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			AfterEach(func() {
-				close(readinessCh)
+				close(startupCh)
 				livenessCh <- 1 // the healthcheck in liveness mode can only exit by failing
 				close(actionCh)
 				close(monitorCh)
@@ -655,13 +655,13 @@ var _ = Describe("Transformer", func() {
 
 						It("runs healthchecks for the envoy proxy ports", func() {
 							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-startup-healthcheck-0"),
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
 									"-port=61001",
 									"-timeout=1000ms",
-									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
-									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+									fmt.Sprintf("-startup-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-startup-timeout=%s", 1000*time.Millisecond),
 								},
 								Env: []string{
 									"CF_INSTANCE_IP=",
@@ -720,15 +720,15 @@ var _ = Describe("Transformer", func() {
 							cfg.ProxyTLSPorts = []uint16{61001}
 						})
 
-						It("runs healthchecks for the envoy proxy ports", func() {
+						It("runs a startup healthcheck for the envoy proxy ports", func() {
 							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-startup-healthcheck-0"),
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
 									"-port=61001",
 									"-timeout=1000ms",
-									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
-									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+									fmt.Sprintf("-startup-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-startup-timeout=%s", 1000*time.Millisecond),
 								},
 								Env: []string{
 									"CF_INSTANCE_IP=",
@@ -759,16 +759,16 @@ var _ = Describe("Transformer", func() {
 						})
 					})
 
-					It("runs the readiness healthcheck in a sidecar container", func() {
+					It("runs the startup healthcheck in a sidecar container", func() {
 						Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "startup-healthcheck-0"),
 							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 							Args: []string{
 								"-port=5432",
 								"-timeout=100ms",
 								"-uri=/some/path",
-								fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
-								fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+								fmt.Sprintf("-startup-interval=%s", unhealthyMonitoringInterval),
+								fmt.Sprintf("-startup-timeout=%s", 1000*time.Millisecond),
 							},
 							Env: []string{
 								"CF_INSTANCE_IP=",
@@ -803,16 +803,16 @@ var _ = Describe("Transformer", func() {
 							container.Privileged = true
 						})
 
-						It("runs the readiness healthcheck in a sidecar container", func() {
+						It("runs the startup healthcheck in a sidecar container", func() {
 							Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+								ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "startup-healthcheck-0"),
 								Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 								Args: []string{
 									"-port=5432",
 									"-timeout=100ms",
 									"-uri=/some/path",
-									fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
-									fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+									fmt.Sprintf("-startup-interval=%s", unhealthyMonitoringInterval),
+									fmt.Sprintf("-startup-timeout=%s", 1000*time.Millisecond),
 								},
 								Env: []string{
 									"CF_INSTANCE_IP=",
@@ -848,7 +848,7 @@ var _ = Describe("Transformer", func() {
 							container.StartTimeoutMs = 0
 						})
 
-						It("runs the healthcheck with readiness timeout set to 0", func() {
+						It("runs the healthcheck with startup timeout set to 0", func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 							paths := []string{}
 							args := [][]string{}
@@ -863,8 +863,8 @@ var _ = Describe("Transformer", func() {
 								"-port=5432",
 								"-timeout=100ms",
 								"-uri=/some/path",
-								"-readiness-interval=1ms",
-								"-readiness-timeout=0s",
+								"-startup-interval=1ms",
+								"-startup-timeout=0s",
 							}))
 						})
 					})
@@ -897,8 +897,8 @@ var _ = Describe("Transformer", func() {
 								"-port=6432",
 								"-timeout=1000ms",
 								"-uri=/",
-								"-readiness-interval=1ms",
-								"-readiness-timeout=1s",
+								"-startup-interval=1ms",
+								"-startup-timeout=1s",
 							}))
 						})
 					})
@@ -918,30 +918,30 @@ var _ = Describe("Transformer", func() {
 							"-port=5432",
 							"-timeout=100ms",
 							"-uri=/some/path",
-							"-readiness-interval=1ms", // 1ms
-							"-readiness-timeout=1s",
+							"-startup-interval=1ms",
+							"-startup-timeout=1s",
 						}))
 					})
 
-					Context("when the readiness check times out", func() {
+					Context("when the startup check times out", func() {
 						JustBeforeEach(func() {
-							By("waiting for the action and readiness check processes to start")
+							By("waiting for the action and startup check processes to start")
 							var io garden.ProcessIO
-							Eventually(readinessIO).Should(Receive(&io))
-							_, err := io.Stdout.Write([]byte("readiness check starting\n"))
-							_, err = io.Stderr.Write([]byte("readiness check failed\n"))
+							Eventually(startupIO).Should(Receive(&io))
+							_, err := io.Stdout.Write([]byte("startup check starting\n"))
+							_, err = io.Stderr.Write([]byte("startup check failed\n"))
 							Expect(err).NotTo(HaveOccurred())
 
-							By("timing out the readiness check")
+							By("timing out the startup check")
 							Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 
-							Consistently(readinessProcess.SignalCallCount).Should(Equal(0))
-							readinessCh <- 1
+							Consistently(startupProcess.SignalCallCount).Should(Equal(0))
+							startupCh <- 1
 							Eventually(actionProcess.SignalCallCount).Should(Equal(1))
 							actionCh <- 2
 						})
 
-						It("suppress the readiness check log", func() {
+						It("suppress the startup check log", func() {
 							Eventually(process.Wait()).Should(Receive(HaveOccurred()))
 							Consistently(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
 							msg0, _, _ := fakeMetronClient.SendAppLogArgsForCall(0)
@@ -949,32 +949,32 @@ var _ = Describe("Transformer", func() {
 							Expect([]string{msg0, msg1}).To(ConsistOf("Starting health monitoring of container", "Exit status 2"))
 						})
 
-						It("logs the readiness check output on stderr", func() {
+						It("logs the startup check output on stderr", func() {
 							Eventually(fakeMetronClient.SendAppErrorLogCallCount).Should(Equal(3))
 							logLines := map[string]string{}
 							msg, source, _ := fakeMetronClient.SendAppErrorLogArgsForCall(0)
 							logLines[source] = msg
-							Expect(logLines["HEALTH"]).To(Equal("readiness check starting"))
+							Expect(logLines["HEALTH"]).To(Equal("startup check starting"))
 							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(1)
 							logLines[source] = msg
-							Expect(logLines["HEALTH"]).To(Equal("readiness check failed"))
+							Expect(logLines["HEALTH"]).To(Equal("startup check failed"))
 							msg, source, _ = fakeMetronClient.SendAppErrorLogArgsForCall(2)
 							logLines[source] = msg
-							Expect(logLines["test"]).To(MatchRegexp("Failed after 1\\d\\dms: readiness health check never passed."))
+							Expect(logLines["test"]).To(MatchRegexp("Failed after 1\\d\\dms: startup health check never passed."))
 						})
 
-						It("returns the readiness check output in the error", func() {
+						It("returns the startup check output in the error", func() {
 							Consistently(process.Ready()).ShouldNot(BeClosed())
 						})
 
-						It("returns the readiness check output in the error", func() {
-							Eventually(process.Wait()).Should(Receive(MatchError(MatchRegexp("Instance never healthy after 1\\d\\dms: readiness check starting\nreadiness check failed"))))
+						It("returns the startup check output in the error", func() {
+							Eventually(process.Wait()).Should(Receive(MatchError(MatchRegexp("Instance never healthy after 1\\d\\dms: startup check starting\nstartup check failed"))))
 						})
 					})
 
-					Context("when the readiness check passes", func() {
+					Context("when the startup check passes", func() {
 						JustBeforeEach(func() {
-							readinessCh <- 0
+							startupCh <- 0
 						})
 
 						It("starts the liveness check", func() {
@@ -1117,13 +1117,13 @@ var _ = Describe("Transformer", func() {
 							Expect(args).To(ContainElement([]string{
 								"-port=6432",
 								"-timeout=1000ms",
-								"-readiness-interval=1ms",
-								"-readiness-timeout=1s",
+								"-startup-interval=1ms",
+								"-startup-timeout=1s",
 							}))
 						})
 					})
 
-					It("uses the readiness check definition", func() {
+					It("uses the startup check definition", func() {
 						Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 						ids := []string{}
 						paths := []string{}
@@ -1135,19 +1135,19 @@ var _ = Describe("Transformer", func() {
 							args = append(args, spec.Args)
 						}
 
-						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "startup-healthcheck-0")))
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=5432",
 							"-timeout=100ms",
-							"-readiness-interval=1ms",
-							"-readiness-timeout=1s",
+							"-startup-interval=1ms",
+							"-startup-timeout=1s",
 						}))
 					})
 
-					Context("when the readiness check passes", func() {
+					Context("when the startup check passes", func() {
 						JustBeforeEach(func() {
-							readinessCh <- 0
+							startupCh <- 0
 						})
 
 						It("uses the liveness check definition", func() {
@@ -1233,10 +1233,10 @@ var _ = Describe("Transformer", func() {
 						Expect(sourceName).To(Equal("test"))
 
 						var io garden.ProcessIO
-						Eventually(readinessIO).Should(Receive(&io))
+						Eventually(startupIO).Should(Receive(&io))
 						io.Stdout.Write([]byte("failed"))
 
-						readinessCh <- 1
+						startupCh <- 1
 					})
 
 					It("should default to HEALTH for log source", func() {
@@ -1260,10 +1260,10 @@ var _ = Describe("Transformer", func() {
 
 				Context("and multiple check definitions exists", func() {
 					var (
-						otherReadinessProcess *gardenfakes.FakeProcess
-						otherReadinessCh      chan int
-						otherLivenessProcess  *gardenfakes.FakeProcess
-						otherLivenessCh       chan int
+						otherStartupProcess  *gardenfakes.FakeProcess
+						otherStartupCh       chan int
+						otherLivenessProcess *gardenfakes.FakeProcess
+						otherLivenessCh      chan int
 					)
 
 					BeforeEach(func() {
@@ -1271,8 +1271,8 @@ var _ = Describe("Transformer", func() {
 						processLock.Lock()
 						defer processLock.Unlock()
 
-						otherReadinessCh = make(chan int)
-						otherReadinessProcess = makeProcess(otherReadinessCh)
+						otherStartupCh = make(chan int)
+						otherStartupProcess = makeProcess(otherStartupCh)
 
 						otherLivenessCh = make(chan int)
 						otherLivenessProcess = makeProcess(otherLivenessCh)
@@ -1291,9 +1291,9 @@ var _ = Describe("Transformer", func() {
 								oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 								switch oldCount {
 								case 1:
-									return readinessProcess, nil
+									return startupProcess, nil
 								case 2:
-									return otherReadinessProcess, nil
+									return otherStartupProcess, nil
 								case 3:
 									return livenessProcess, nil
 								case 4:
@@ -1330,7 +1330,7 @@ var _ = Describe("Transformer", func() {
 					})
 
 					AfterEach(func() {
-						close(otherReadinessCh)
+						close(otherStartupCh)
 						close(otherLivenessCh)
 					})
 
@@ -1346,38 +1346,38 @@ var _ = Describe("Transformer", func() {
 							args = append(args, spec.Args)
 						}
 
-						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
-						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-1")))
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "startup-healthcheck-0")))
+						Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "startup-healthcheck-1")))
 
 						Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 						Expect(args).To(ContainElement([]string{
 							"-port=2222",
 							"-timeout=100ms",
-							"-readiness-interval=1ms",
-							"-readiness-timeout=1s",
+							"-startup-interval=1ms",
+							"-startup-timeout=1s",
 						}))
 						Expect(args).To(ContainElement([]string{
 							"-port=8080",
 							"-timeout=100ms",
 							"-uri=/",
-							"-readiness-interval=1ms",
-							"-readiness-timeout=1s",
+							"-startup-interval=1ms",
+							"-startup-timeout=1s",
 						}))
 					})
 
-					Context("when one of the readiness checks finish", func() {
+					Context("when one of the startup checks finish", func() {
 						JustBeforeEach(func() {
 							Eventually(gardenContainer.RunCallCount).Should(Equal(3))
-							readinessCh <- 0
+							startupCh <- 0
 						})
 
 						It("waits for both healthchecks to pass", func() {
 							Consistently(gardenContainer.RunCallCount).Should(Equal(3))
 						})
 
-						Context("and the other readiness check finish", func() {
+						Context("and the other startup check finish", func() {
 							JustBeforeEach(func() {
-								otherReadinessCh <- 0
+								otherStartupCh <- 0
 							})
 
 							It("starts the liveness checks", func() {
@@ -1456,13 +1456,13 @@ var _ = Describe("Transformer", func() {
 
 					It("does not run healthchecks for the envoy proxy ports", func() {
 						Consistently(specs).ShouldNot(Receive(Equal(garden.ProcessSpec{
-							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-readiness-healthcheck-0"),
+							ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-startup-healthcheck-0"),
 							Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 							Args: []string{
 								"-port=61001",
 								"-timeout=1000ms",
-								fmt.Sprintf("-readiness-interval=%s", unhealthyMonitoringInterval),
-								fmt.Sprintf("-readiness-timeout=%s", 1000*time.Millisecond),
+								fmt.Sprintf("-startup-interval=%s", unhealthyMonitoringInterval),
+								fmt.Sprintf("-startup-timeout=%s", 1000*time.Millisecond),
 							},
 							Env: []string{},
 							Limits: garden.ResourceLimits{
@@ -1716,7 +1716,7 @@ var _ = Describe("Transformer", func() {
 				JustBeforeEach(func() {
 					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
 
-					By("starting the readiness check")
+					By("starting the startup check")
 					clock.WaitForWatcherAndIncrement(1 * time.Second)
 					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 					Eventually(monitorProcess1.WaitCallCount).Should(Equal(1))

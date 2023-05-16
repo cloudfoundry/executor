@@ -19,17 +19,17 @@ func NewMonitor(
 	healthyInterval time.Duration,
 	unhealthyInterval time.Duration,
 	workPool *workpool.WorkPool,
-	proxyReadinessChecks ...ifrit.Runner,
+	proxyStartupChecks ...ifrit.Runner,
 ) ifrit.Runner {
 	throttledCheckFunc := func() ifrit.Runner {
 		return NewThrottle(checkFunc(), workPool)
 	}
 
-	readiness := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
+	startupCheck := NewEventuallySucceedsStep(throttledCheckFunc, unhealthyInterval, startTimeout, clock)
 	liveness := NewConsistentlySucceedsStep(throttledCheckFunc, healthyInterval, clock)
 
-	// add the proxy readiness checks (if any)
-	readiness = NewParallel(append(proxyReadinessChecks, readiness))
+	// add the proxy startup checks (if any)
+	startupCheck = NewParallel(append(proxyStartupChecks, startupCheck))
 
-	return NewHealthCheckStep(readiness, liveness, logger, clock, logStreamer, logStreamer, startTimeout)
+	return NewHealthCheckStep(startupCheck, liveness, logger, clock, logStreamer, logStreamer, startTimeout)
 }

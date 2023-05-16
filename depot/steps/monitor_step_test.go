@@ -259,7 +259,7 @@ var _ = Describe("MonitorStep", func() {
 					expectCheckAfterInterval(fakeStep1, unhealthyInterval)
 					expectCheckAfterInterval(fakeStep2, unhealthyInterval)
 					Eventually(fakeStreamer.Stderr().(*gbytes.Buffer)).Should(gbytes.Say(
-						"Failed after .*: readiness health check never passed.\n",
+						"Failed after .*: startup health check never passed.\n",
 					))
 				})
 			})

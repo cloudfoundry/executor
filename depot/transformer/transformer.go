@@ -435,30 +435,30 @@ func (t *transformer) StepsRunner(
 		))
 	}
 
-	var proxyReadinessChecks []ifrit.Runner
+	var proxyStartupChecks []ifrit.Runner
 
 	if t.useContainerProxy && t.useDeclarativeHealthCheck {
-		envoyReadinessLogger := logger.Session("envoy-readiness-check")
+		envoyStartupLogger := logger.Session("envoy-startup-check")
 
 		for idx, p := range config.ProxyTLSPorts {
-			// add envoy readiness checks
-			readinessSidecarName := fmt.Sprintf("%s-envoy-readiness-healthcheck-%d", gardenContainer.Handle(), idx)
+			// add envoy startup checks
+			startupSidecarName := fmt.Sprintf("%s-envoy-startup-healthcheck-%d", gardenContainer.Handle(), idx)
 
 			step := t.createCheck(
 				&container,
 				gardenContainer,
 				config.BindMounts,
 				"",
-				readinessSidecarName,
+				startupSidecarName,
 				int(p),
 				DefaultDeclarativeHealthcheckRequestTimeout,
 				false,
 				true,
 				t.unhealthyMonitoringInterval,
-				envoyReadinessLogger,
+				envoyStartupLogger,
 				"instance proxy failed to start",
 			)
-			proxyReadinessChecks = append(proxyReadinessChecks, step)
+			proxyStartupChecks = append(proxyStartupChecks, step)
 		}
 	}
 
@@ -468,7 +468,7 @@ func (t *transformer) StepsRunner(
 			gardenContainer,
 			logStreamer,
 			config.BindMounts,
-			proxyReadinessChecks,
+			proxyStartupChecks,
 		)
 		substeps = append(substeps, monitor)
 	} else if container.Monitor != nil {
@@ -494,7 +494,7 @@ func (t *transformer) StepsRunner(
 			t.healthyMonitoringInterval,
 			t.unhealthyMonitoringInterval,
 			t.healthCheckWorkPool,
-			proxyReadinessChecks...,
+			proxyStartupChecks...,
 		)
 		substeps = append(substeps, monitor)
 	}
@@ -539,7 +539,7 @@ func (t *transformer) createCheck(
 	port,
 	timeout int,
 	http,
-	readiness bool,
+	startupCheckEnabled bool,
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
@@ -561,9 +561,9 @@ func (t *transformer) createCheck(
 		args = append(args, fmt.Sprintf("-uri=%s", path))
 	}
 
-	if readiness {
-		args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
-		args = append(args, fmt.Sprintf("-readiness-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
+	if startupCheckEnabled {
+		args = append(args, fmt.Sprintf("-startup-interval=%s", interval))
+		args = append(args, fmt.Sprintf("-startup-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
 	} else {
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
 	}
@@ -610,9 +610,9 @@ func (t *transformer) transformCheckDefinition(
 	gardenContainer garden.Container,
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
-	proxyReadinessChecks []ifrit.Runner,
+	proxyStartupChecks []ifrit.Runner,
 ) ifrit.Runner {
-	var readinessChecks []ifrit.Runner
+	var startupChecks []ifrit.Runner
 	var livenessChecks []ifrit.Runner
 
 	sourceName := HealthLogSource
@@ -625,12 +625,12 @@ func (t *transformer) transformCheckDefinition(
 		logger.Info("transform-check-definitions-finished")
 	}()
 
-	readinessLogger := logger.Session("readiness-check")
+	startupLogger := logger.Session("startup-check")
 	livenessLogger := logger.Session("liveness-check")
 
 	for index, check := range container.CheckDefinition.Checks {
 
-		readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), index)
+		startupSidecarName := fmt.Sprintf("%s-startup-healthcheck-%d", gardenContainer.Handle(), index)
 		livenessSidecarName := fmt.Sprintf("%s-liveness-healthcheck-%d", gardenContainer.Handle(), index)
 
 		if err := check.Validate(); err != nil {
@@ -650,18 +650,18 @@ func (t *transformer) transformCheckDefinition(
 				interval = t.healthyMonitoringInterval
 			}
 
-			readinessChecks = append(readinessChecks, t.createCheck(
+			startupChecks = append(startupChecks, t.createCheck(
 				container,
 				gardenContainer,
 				bindMounts,
 				path,
-				readinessSidecarName,
+				startupSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
 				true,
 				true,
 				t.unhealthyMonitoringInterval,
-				readinessLogger,
+				startupLogger,
 				"",
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
@@ -690,18 +690,18 @@ func (t *transformer) transformCheckDefinition(
 				interval = t.healthyMonitoringInterval
 			}
 
-			readinessChecks = append(readinessChecks, t.createCheck(
+			startupChecks = append(startupChecks, t.createCheck(
 				container,
 				gardenContainer,
 				bindMounts,
 				"",
-				readinessSidecarName,
+				startupSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
 				false,
 				true,
 				t.unhealthyMonitoringInterval,
-				readinessLogger,
+				startupLogger,
 				"",
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
@@ -721,11 +721,11 @@ func (t *transformer) transformCheckDefinition(
 		}
 	}
 
-	readinessCheck := steps.NewParallel(append(proxyReadinessChecks, readinessChecks...))
+	startupCheck := steps.NewParallel(append(proxyStartupChecks, startupChecks...))
 	livenessCheck := steps.NewCodependent(livenessChecks, false, false)
 
 	return steps.NewHealthCheckStep(
-		readinessCheck,
+		startupCheck,
 		livenessCheck,
 		logger,
 		t.clock,
