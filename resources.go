@@ -362,49 +362,59 @@ const (
 )
 
 type LifecycleEvent interface {
+	TraceID() string
 	Container() Container
 	lifecycleEvent()
 }
 
 type ContainerCompleteEvent struct {
 	RawContainer Container `json:"container"`
+	traceID      string    `json:"trace_id"`
 }
 
-func NewContainerCompleteEvent(container Container) ContainerCompleteEvent {
+func NewContainerCompleteEvent(container Container, traceID string) ContainerCompleteEvent {
 	return ContainerCompleteEvent{
 		RawContainer: container,
+		traceID:      traceID,
 	}
 }
 
 func (ContainerCompleteEvent) EventType() EventType   { return EventTypeContainerComplete }
+func (e ContainerCompleteEvent) TraceID() string      { return e.traceID }
 func (e ContainerCompleteEvent) Container() Container { return e.RawContainer }
 func (ContainerCompleteEvent) lifecycleEvent()        {}
 
 type ContainerRunningEvent struct {
 	RawContainer Container `json:"container"`
+	traceID      string    `json:"trace_id"`
 }
 
-func NewContainerRunningEvent(container Container) ContainerRunningEvent {
+func NewContainerRunningEvent(container Container, traceID string) ContainerRunningEvent {
 	return ContainerRunningEvent{
 		RawContainer: container,
+		traceID:      traceID,
 	}
 }
 
 func (ContainerRunningEvent) EventType() EventType   { return EventTypeContainerRunning }
+func (e ContainerRunningEvent) TraceID() string      { return e.traceID }
 func (e ContainerRunningEvent) Container() Container { return e.RawContainer }
 func (ContainerRunningEvent) lifecycleEvent()        {}
 
 type ContainerReservedEvent struct {
 	RawContainer Container `json:"container"`
+	traceID      string    `json:"trace_id"`
 }
 
-func NewContainerReservedEvent(container Container) ContainerReservedEvent {
+func NewContainerReservedEvent(container Container, traceID string) ContainerReservedEvent {
 	return ContainerReservedEvent{
 		RawContainer: container,
+		traceID:      traceID,
 	}
 }
 
 func (ContainerReservedEvent) EventType() EventType   { return EventTypeContainerReserved }
+func (e ContainerReservedEvent) TraceID() string      { return e.traceID }
 func (e ContainerReservedEvent) Container() Container { return e.RawContainer }
 func (ContainerReservedEvent) lifecycleEvent()        {}
 

@@ -60,15 +60,16 @@ var _ = Describe("Container Store", func() {
 		metricMap     map[string]struct{}
 		metricMapLock sync.RWMutex
 
-		gardenClient      *gardenfakes.FakeClient
-		gardenContainer   *gardenfakes.FakeContainer
-		megatron          *faketransformer.FakeTransformer
-		dependencyManager *containerstorefakes.FakeDependencyManager
-		credManager       *containerstorefakes.FakeCredManager
-		proxyManager      *containerstorefakes.FakeProxyManager
-		volumeManager     *volmanfakes.FakeManager
-		logManager        *containerstorefakes.FakeLogManager
-		logStreamer       *fake_log_streamer.FakeLogStreamer
+		gardenClient        *gardenfakes.FakeClient
+		gardenClientFactory *containerstorefakes.FakeGardenClientFactory
+		gardenContainer     *gardenfakes.FakeContainer
+		megatron            *faketransformer.FakeTransformer
+		dependencyManager   *containerstorefakes.FakeDependencyManager
+		credManager         *containerstorefakes.FakeCredManager
+		proxyManager        *containerstorefakes.FakeProxyManager
+		volumeManager       *volmanfakes.FakeManager
+		logManager          *containerstorefakes.FakeLogManager
+		logStreamer         *fake_log_streamer.FakeLogStreamer
 
 		clock        *fakeclock.FakeClock
 		eventEmitter *eventfakes.FakeHub
@@ -101,7 +102,9 @@ var _ = Describe("Container Store", func() {
 		metricMap = map[string]struct{}{}
 
 		gardenContainer = &gardenfakes.FakeContainer{}
+		gardenClientFactory = &containerstorefakes.FakeGardenClientFactory{}
 		gardenClient = &gardenfakes.FakeClient{}
+		gardenClientFactory.NewGardenClientReturns(gardenClient)
 		dependencyManager = &containerstorefakes.FakeDependencyManager{}
 		credManager = &containerstorefakes.FakeCredManager{}
 		logManager = &containerstorefakes.FakeLogManager{}
@@ -143,7 +146,7 @@ var _ = Describe("Container Store", func() {
 		containerStore = containerstore.New(
 			containerConfig,
 			&totalCapacity,
-			gardenClient,
+			gardenClientFactory,
 			dependencyManager,
 			volumeManager,
 			credManager,
@@ -195,7 +198,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("returns a populated container", func() {
-			container, err := containerStore.Reserve(logger, req)
+			container, err := containerStore.Reserve(logger, "some-trace-id", req)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(container.Guid).To(Equal(containerGuid))
@@ -207,7 +210,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("tracks the container", func() {
-			container, err := containerStore.Reserve(logger, req)
+			container, err := containerStore.Reserve(logger, "some-trace-id", req)
 			Expect(err).NotTo(HaveOccurred())
 
 			found, err := containerStore.Get(logger, container.Guid)
@@ -216,19 +219,17 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("emits a reserved container event", func() {
-			container, err := containerStore.Reserve(logger, req)
+			container, err := containerStore.Reserve(logger, "some-trace-id", req)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(eventEmitter.EmitCallCount).Should(Equal(1))
 
 			event := eventEmitter.EmitArgsForCall(0)
-			Expect(event).To(Equal(executor.ContainerReservedEvent{
-				RawContainer: container,
-			}))
+			Expect(event).To(Equal(executor.NewContainerReservedEvent(container, "some-trace-id")))
 		})
 
 		It("decrements the remaining capacity", func() {
-			_, err := containerStore.Reserve(logger, req)
+			_, err := containerStore.Reserve(logger, "some-trace-id", req)
 			Expect(err).NotTo(HaveOccurred())
 
 			remainingCapacity := containerStore.RemainingResources(logger)
@@ -239,12 +240,12 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container guid is already reserved", func() {
 			BeforeEach(func() {
-				_, err := containerStore.Reserve(logger, req)
+				_, err := containerStore.Reserve(logger, "some-trace-id", req)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("fails with container guid not available", func() {
-				_, err := containerStore.Reserve(logger, req)
+				_, err := containerStore.Reserve(logger, "some-trace-id", req)
 				Expect(err).To(Equal(executor.ErrContainerGuidNotAvailable))
 			})
 		})
@@ -255,7 +256,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := containerStore.Reserve(logger, req)
+				_, err := containerStore.Reserve(logger, "some-trace-id", req)
 				Expect(err).To(Equal(executor.ErrInsufficientResourcesAvailable))
 			})
 		})
@@ -300,7 +301,7 @@ var _ = Describe("Container Store", func() {
 					Tags: executor.Tags{},
 				}
 
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -323,7 +324,7 @@ var _ = Describe("Container Store", func() {
 					Tags: executor.Tags{},
 				}
 
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = containerStore.Initialize(logger, req)
@@ -417,7 +418,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			JustBeforeEach(func() {
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = containerStore.Initialize(logger, runReq)
@@ -425,7 +426,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("sets the container state to created", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				container, err := containerStore.Get(logger, containerGuid)
@@ -434,7 +435,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("creates the container in garden with correct image parameters", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -451,7 +452,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("creates the container in garden with correct image credentials", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -469,7 +470,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -491,7 +492,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("creates the container in garden with the correct limits", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -513,7 +514,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("creates the container in garden with the correct limits", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -537,7 +538,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("creates the container in garden with a 0 disk limit", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -550,7 +551,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("downloads the correct cache dependencies", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dependencyManager.DownloadCachedDependenciesCallCount()).To(Equal(1))
 				_, mounts, _, _ := dependencyManager.DownloadCachedDependenciesArgsForCall(0)
@@ -568,7 +569,7 @@ var _ = Describe("Container Store", func() {
 					GardenBindMounts: []garden.BindMount{expectedMount},
 				}, nil)
 
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -577,7 +578,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("creates the container with the correct properties", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -596,7 +597,7 @@ var _ = Describe("Container Store", func() {
 					runReq.RunInfo.Network = nil
 				})
 				It("sets the owner property", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					containerSpec := gardenClient.CreateArgsForCall(0)
@@ -615,7 +616,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("sets the correct disk limit", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -627,7 +628,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("creates the container with the correct environment", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -641,20 +642,20 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("sets the correct external and internal ip", func() {
-				container, err := containerStore.Create(logger, containerGuid)
+				container, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(container.ExternalIP).To(Equal(externalIP))
 				Expect(container.InternalIP).To(Equal(internalIP))
 			})
 
 			It("emits metrics after creating the container", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationSucceededDuration))
 			})
 
 			It("sends a log after creating the container", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(metronClient.SendAppLogCallCount()).Should(Equal(2))
 				Eventually(func() string {
@@ -664,7 +665,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("generates container credential directory", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(credManager.CreateCredDirCallCount()).To(Equal(1))
@@ -673,7 +674,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("does not bind mount the healthcheck", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -691,7 +692,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -713,7 +714,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("bind mounts the healthcheck", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -741,14 +742,14 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("mounts the credential directory into the container", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					Expect(gardenClient.CreateArgsForCall(0).BindMounts).To(ContainElement(expectedBindMount))
 				})
 
 				It("add the instance identity environment variables to the container", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					Expect(gardenClient.CreateArgsForCall(0).Env).To(ContainElement("CF_INSTANCE_CERT=some-cert"))
@@ -760,7 +761,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("fails fast and completes the container", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).To(HaveOccurred())
 
 						container, err := containerStore.Get(logger, containerGuid)
@@ -793,7 +794,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("mounts the correct volumes via the volume manager", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(volumeManager.MountCallCount()).To(Equal(2))
 
@@ -811,7 +812,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("correctly maps container and host directories in garden", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 
@@ -828,7 +829,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("fails fast and completes the container", func() {
-							_, err := containerStore.Create(logger, containerGuid)
+							_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 							Expect(err).To(HaveOccurred())
 							Expect(volumeManager.MountCallCount()).To(Equal(1))
 
@@ -848,7 +849,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("fails fast and completes the container", func() {
-							_, err := containerStore.Create(logger, containerGuid)
+							_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 							Expect(err).To(HaveOccurred())
 							Expect(volumeManager.MountCallCount()).To(Equal(1))
 
@@ -881,7 +882,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("creates a bind mount", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -890,7 +891,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("creates a CF_SYSTEM_CERT_PATH env var", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						containerSpec := gardenClient.CreateArgsForCall(0)
@@ -900,7 +901,7 @@ var _ = Describe("Container Store", func() {
 
 				Context("and the desired LRP does not have a certificates path", func() {
 					It("does not create a bind mount", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -914,7 +915,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("does not create the CF_SYSTEM_CERT_PATH env var", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 						containerSpec := gardenClient.CreateArgsForCall(0)
 						Expect(containerSpec.Env).NotTo(ContainElement(ContainSubstring("CF_SYSTEM_CERT_PATH")))
@@ -928,7 +929,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("transitions to a completed state", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 
 					container, err := containerStore.Get(logger, containerGuid)
@@ -964,7 +965,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("calls NetOut for each egress rule", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -1008,7 +1009,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("returns an error", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).To(HaveOccurred())
 
 						Expect(gardenClient.CreateCallCount()).To(Equal(0))
@@ -1045,7 +1046,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("passes all port mappings to NetIn on container creation", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					containerSpec := gardenClient.CreateArgsForCall(0)
@@ -1064,7 +1065,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("de duplicate the exposed ports", func() {
-						container, err := containerStore.Create(logger, containerGuid)
+						container, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
@@ -1082,7 +1083,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("saves the actual port mappings on the container", func() {
-					container, err := containerStore.Create(logger, containerGuid)
+					container, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
@@ -1108,10 +1109,10 @@ var _ = Describe("Container Store", func() {
 							},
 						}
 
-						_, err := containerStore.Reserve(logger, allocationReq)
+						_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 						Expect(err).NotTo(HaveOccurred())
 
-						defer containerStore.Destroy(logger, containerGUID)
+						defer containerStore.Destroy(logger, "some-trace-id", containerGUID)
 
 						runReq = &executor.RunRequest{
 							Guid:    containerGUID,
@@ -1124,7 +1125,7 @@ var _ = Describe("Container Store", func() {
 						err = containerStore.Initialize(logger, runReq)
 						Expect(err).NotTo(HaveOccurred())
 
-						container, err := containerStore.Create(logger, containerGUID)
+						container, err := containerStore.Create(logger, "some-trace-id", containerGUID)
 						Expect(err).NotTo(HaveOccurred())
 						return container.Ports[0].ContainerPort
 					}).Should(Equal(uint16(8080)))
@@ -1180,7 +1181,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -1243,7 +1244,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("passes all port mappings to NetIn on container creation", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					containerSpec := gardenClient.CreateArgsForCall(0)
@@ -1270,7 +1271,7 @@ var _ = Describe("Container Store", func() {
 						containerStore = containerstore.New(
 							containerConfig,
 							&totalCapacity,
-							gardenClient,
+							gardenClientFactory,
 							dependencyManager,
 							volumeManager,
 							credManager,
@@ -1292,7 +1293,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("passes only proxied port mappings to NetIn on container creation", func() {
-						_, err := containerStore.Create(logger, containerGuid)
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						containerSpec := gardenClient.CreateArgsForCall(0)
@@ -1309,7 +1310,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("unproxied host ports are set to 0", func() {
-						container, err := containerStore.Create(logger, containerGuid)
+						container, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(container.Ports).To(ConsistOf(executor.PortMapping{
@@ -1332,7 +1333,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("each port gets an equivalent extra proxy port", func() {
-					container, err := containerStore.Create(logger, containerGuid)
+					container, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(container.Ports).To(ConsistOf(executor.PortMapping{
@@ -1354,19 +1355,19 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("passes the proxy ports in the config", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						return nil
 					}), nil)
-					Expect(containerStore.Run(logger, containerGuid)).NotTo(HaveOccurred())
+					Expect(containerStore.Run(logger, "some-trace-id", containerGuid)).NotTo(HaveOccurred())
 					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
 					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
 					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002), uint16(containerstore.C2CTLSPort)))
 				})
 
 				It("bind mounts envoy", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
@@ -1396,12 +1397,12 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("returns an error", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(errors.New("boom!")))
 				})
 
 				It("transitions to a completed state", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(errors.New("boom!")))
 
 					container, err := containerStore.Get(logger, containerGuid)
@@ -1414,13 +1415,13 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("emits a metric after failing to create the container", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerCreationFailedDuration))
 				})
 
 				It("logs that the reason the container failed to create", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 
 					Expect(metronClient.SendAppErrorLogCallCount()).To(Equal(1))
@@ -1432,13 +1433,13 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("logs the total time it took to create the container before it failed", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(logger).Should(gbytes.Say("container-setup-failed.*duration.*1000000000"))
 				})
 
 				It("emits metric on the total time it took to create the container before it failed", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 					Eventually(getMetrics).Should(HaveKey(steps.ContainerSetupFailedDuration))
 				})
@@ -1452,7 +1453,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("returns an error", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 
 					Expect(gardenClient.DestroyCallCount()).To(Equal(1))
@@ -1460,7 +1461,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("transitions to a completed state", func() {
-					_, err := containerStore.Create(logger, containerGuid)
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 
 					container, err := containerStore.Get(logger, containerGuid)
@@ -1476,19 +1477,19 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container does not exist", func() {
 			It("returns a conatiner not found error", func() {
-				_, err := containerStore.Create(logger, "bogus-guid")
+				_, err := containerStore.Create(logger, "some-trace-id", "bogus-guid")
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
 		Context("when the container is not initializing", func() {
 			BeforeEach(func() {
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("returns an invalid state transition error", func() {
-				_, err := containerStore.Create(logger, containerGuid)
+				_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).To(Equal(executor.ErrInvalidTransition))
 			})
 		})
@@ -1543,13 +1544,13 @@ var _ = Describe("Container Store", func() {
 			})
 
 			JustBeforeEach(func() {
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = containerStore.Initialize(logger, runReq)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = containerStore.Create(logger, containerGuid)
+				_, err = containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1600,11 +1601,11 @@ var _ = Describe("Container Store", func() {
 
 				AfterEach(func() {
 					close(cmFinishSetup)
-					Expect(containerStore.Destroy(logger, containerGuid)).To(Succeed())
+					Expect(containerStore.Destroy(logger, "some-trace-id", containerGuid)).To(Succeed())
 				})
 
 				It("does not start the container while cred manager is setting up", func() {
-					go containerStore.Run(logger, containerGuid)
+					go containerStore.Run(logger, "some-trace-id", containerGuid)
 					Consistently(containerRunnerCalled).ShouldNot(BeClosed())
 				})
 
@@ -1614,7 +1615,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("starts the container", func() {
-						go containerStore.Run(logger, containerGuid)
+						go containerStore.Run(logger, "some-trace-id", containerGuid)
 						Eventually(containerRunnerCalled).Should(BeClosed())
 					})
 				})
@@ -1628,7 +1629,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("destroys the container and returns an error", func() {
-					err := containerStore.Run(logger, containerGuid)
+					err := containerStore.Run(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func() executor.State {
@@ -1645,7 +1646,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("tranistions immediately to Completed state", func() {
-					err := containerStore.Run(logger, containerGuid)
+					err := containerStore.Run(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func() executor.State {
@@ -1692,7 +1693,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				AfterEach(func() {
-					containerStore.Destroy(logger, containerGuid)
+					containerStore.Destroy(logger, "some-trace-id", containerGuid)
 				})
 
 				Context("when the runner fails subsequent credential generation", func() {
@@ -1709,7 +1710,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("destroys the container and returns an error", func() {
-						err := containerStore.Run(logger, containerGuid)
+						err := containerStore.Run(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(func() executor.State {
@@ -1740,7 +1741,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("performs the step", func() {
-						err := containerStore.Run(logger, containerGuid)
+						err := containerStore.Run(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
@@ -1748,7 +1749,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("sets the container state to running once the healthcheck passes, and emits a running event", func() {
-						err := containerStore.Run(logger, containerGuid)
+						err := containerStore.Run(logger, "some-trace-id", containerGuid)
 						Expect(err).NotTo(HaveOccurred())
 
 						container, err := containerStore.Get(logger, containerGuid)
@@ -1768,7 +1769,7 @@ var _ = Describe("Container Store", func() {
 
 						Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
 						event := eventEmitter.EmitArgsForCall(1)
-						Expect(event).To(Equal(executor.ContainerRunningEvent{RawContainer: container}))
+						Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
 					})
 				})
 
@@ -1792,7 +1793,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("sets its state to completed", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							close(completeChan)
@@ -1805,7 +1806,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("emits a container completed event", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
@@ -1821,13 +1822,12 @@ var _ = Describe("Container Store", func() {
 							for i := 0; i < eventEmitter.EmitCallCount(); i++ {
 								emittedEvents = append(emittedEvents, eventEmitter.EmitArgsForCall(i))
 							}
-							Expect(emittedEvents).To(ContainElement(executor.ContainerCompleteEvent{
-								RawContainer: container,
-							}))
+
+							Expect(emittedEvents).To(ContainElement(executor.NewContainerCompleteEvent(container, "some-trace-id")))
 						})
 
 						It("sets the result on the container", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							close(completeChan)
@@ -1842,7 +1842,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("increments the ContainerCompletedCount metric", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							close(completeChan)
@@ -1864,7 +1864,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("sets the run result on the container", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1880,7 +1880,7 @@ var _ = Describe("Container Store", func() {
 						})
 
 						It("increments the ContainerCompletedCount metric", func() {
-							err := containerStore.Run(logger, containerGuid)
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
 							Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1899,7 +1899,7 @@ var _ = Describe("Container Store", func() {
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
-								err := containerStore.Run(logger, containerGuid)
+								err := containerStore.Run(logger, "some-trace-id", containerGuid)
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1920,7 +1920,7 @@ var _ = Describe("Container Store", func() {
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
-								err := containerStore.Run(logger, containerGuid)
+								err := containerStore.Run(logger, "some-trace-id", containerGuid)
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1951,7 +1951,7 @@ var _ = Describe("Container Store", func() {
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
-								err := containerStore.Run(logger, containerGuid)
+								err := containerStore.Run(logger, "some-trace-id", containerGuid)
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1977,7 +1977,7 @@ var _ = Describe("Container Store", func() {
 								})
 
 								It("only increments the graceful shutdown exceeded metric once", func() {
-									err := containerStore.Run(logger, containerGuid)
+									err := containerStore.Run(logger, "some-trace-id", containerGuid)
 									Expect(err).NotTo(HaveOccurred())
 
 									Eventually(containerState(containerGuid)).Should(Equal(executor.StateCompleted))
@@ -1994,7 +1994,7 @@ var _ = Describe("Container Store", func() {
 					})
 
 					It("returns an error", func() {
-						err := containerStore.Run(logger, containerGuid)
+						err := containerStore.Run(logger, "some-trace-id", containerGuid)
 						Expect(err).To(HaveOccurred())
 					})
 				})
@@ -2003,19 +2003,19 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container does not exist", func() {
 			It("returns an ErrContainerNotFound error", func() {
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
 
 		Context("When the container is not in the created state", func() {
 			JustBeforeEach(func() {
-				_, err := containerStore.Reserve(logger, allocationReq)
+				_, err := containerStore.Reserve(logger, "some-trace-id", allocationReq)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("returns a transition error", func() {
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).To(Equal(executor.ErrInvalidTransition))
 			})
 		})
@@ -2036,7 +2036,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 
 			runInfo := executor.RunInfo{
@@ -2051,7 +2051,7 @@ var _ = Describe("Container Store", func() {
 			err = containerStore.Initialize(logger, runReq)
 			Expect(err).NotTo(HaveOccurred())
 
-			go containerStore.Create(logger, containerGuid)
+			go containerStore.Create(logger, "some-trace-id", containerGuid)
 			Eventually(gardenClient.CreateCallCount).Should(Equal(1))
 		})
 
@@ -2063,7 +2063,7 @@ var _ = Describe("Container Store", func() {
 			JustBeforeEach(func() {
 				blockCh := make(chan error)
 				go func() {
-					blockCh <- containerStore.Destroy(logger, containerGuid)
+					blockCh <- containerStore.Destroy(logger, "some-trace-id", containerGuid)
 				}()
 				Consistently(blockCh, time.Second).ShouldNot(Receive())
 			})
@@ -2071,7 +2071,7 @@ var _ = Describe("Container Store", func() {
 			It("should return immediately", func() {
 				errCh := make(chan error)
 				go func() {
-					errCh <- containerStore.Destroy(logger, containerGuid)
+					errCh <- containerStore.Destroy(logger, "some-trace-id", containerGuid)
 				}()
 				Eventually(errCh).Should(Receive(BeNil()))
 			})
@@ -2081,7 +2081,7 @@ var _ = Describe("Container Store", func() {
 			JustBeforeEach(func() {
 				blockCh := make(chan error)
 				go func() {
-					blockCh <- containerStore.Stop(logger, containerGuid)
+					blockCh <- containerStore.Stop(logger, "some-trace-id", containerGuid)
 				}()
 				Consistently(blockCh, time.Second).ShouldNot(Receive())
 			})
@@ -2089,7 +2089,7 @@ var _ = Describe("Container Store", func() {
 			It("should return immediately", func() {
 				errCh := make(chan error)
 				go func() {
-					errCh <- containerStore.Stop(logger, containerGuid)
+					errCh <- containerStore.Stop(logger, "some-trace-id", containerGuid)
 				}()
 				Eventually(errCh).Should(Receive(BeNil()))
 			})
@@ -2142,20 +2142,20 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = containerStore.Initialize(logger, runReq)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Create(logger, containerGuid)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("when the container exists", func() {
 			JustBeforeEach(func() {
 
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -2243,7 +2243,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -2379,24 +2379,24 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = containerStore.Initialize(logger, runReq)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Create(logger, containerGuid)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("when the container has processes associated with it", func() {
 			JustBeforeEach(func() {
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("sets stopped to true on the run result", func() {
-				err := containerStore.Stop(logger, containerGuid)
+				err := containerStore.Stop(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				container, err := containerStore.Get(logger, containerGuid)
@@ -2406,7 +2406,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("logs that the container is stopping", func() {
-				err := containerStore.Stop(logger, containerGuid)
+				err := containerStore.Stop(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(metronClient.SendAppLogCallCount()).To(Equal(3))
 				msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
@@ -2419,7 +2419,7 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container does not have processes associated with it", func() {
 			It("transitions to the completed state", func() {
-				err := containerStore.Stop(logger, containerGuid)
+				err := containerStore.Stop(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				container, err := containerStore.Get(logger, containerGuid)
@@ -2433,7 +2433,7 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container does not exist", func() {
 			It("returns an ErrContainerNotFound", func() {
-				err := containerStore.Stop(logger, "")
+				err := containerStore.Stop(logger, "some-trace-id", "")
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
@@ -2465,18 +2465,18 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid, Resource: resource})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid, Resource: resource})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = containerStore.Initialize(logger, runReq)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Create(logger, containerGuid)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("cleans up the credentials dir", func() {
-			err := containerStore.Destroy(logger, containerGuid)
+			err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(credManager.RemoveCredDirCallCount()).To(Equal(1))
 		})
@@ -2500,7 +2500,7 @@ var _ = Describe("Container Store", func() {
 			})
 
 			It("removes mounted volumes on the host machine", func() {
-				err := containerStore.Destroy(logger, containerGuid)
+				err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 
@@ -2520,7 +2520,7 @@ var _ = Describe("Container Store", func() {
 					dependencyManager.ReleaseCachedDependenciesReturns(errors.New("oh noes!"))
 				})
 				It("still attempts to unmount our volumes", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 
@@ -2541,7 +2541,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("still attempts to unmount the remaining volumes", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 				})
@@ -2551,7 +2551,7 @@ var _ = Describe("Container Store", func() {
 					gardenClient.DestroyReturns(errors.New("destroy failed"))
 				})
 				It("should still unmount the volumes", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(MatchError("destroy failed"))
 					Expect(volumeManager.UnmountCallCount()).To(Equal(2))
 				})
@@ -2559,7 +2559,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("removes downloader cache references", func() {
-			err := containerStore.Destroy(logger, containerGuid)
+			err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dependencyManager.ReleaseCachedDependenciesCallCount()).To(Equal(1))
 			_, keys := dependencyManager.ReleaseCachedDependenciesArgsForCall(0)
@@ -2567,7 +2567,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("destroys the container", func() {
-			err := containerStore.Destroy(logger, containerGuid)
+			err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(gardenClient.DestroyCallCount()).To(Equal(1))
@@ -2578,14 +2578,14 @@ var _ = Describe("Container Store", func() {
 		})
 
 		It("emits a metric after destroying the container", func() {
-			err := containerStore.Destroy(logger, containerGuid)
+			err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionSucceededDuration))
 		})
 
 		It("frees the containers resources", func() {
-			err := containerStore.Destroy(logger, containerGuid)
+			err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 			Expect(err).NotTo(HaveOccurred())
 
 			remainingResources := containerStore.RemainingResources(logger)
@@ -2608,7 +2608,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("does not return an error", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -2619,12 +2619,12 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("does not return an error", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("logs the container is destroyed", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(metronClient.SendAppLogCallCount()).To(Equal(4))
 					msg, sourceType, tags := metronClient.SendAppLogArgsForCall(2)
@@ -2643,18 +2643,18 @@ var _ = Describe("Container Store", func() {
 
 			Context("for unknown reason", func() {
 				It("returns an error", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(destroyErr))
 				})
 
 				It("emits a metric after failing to destroy the container", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(destroyErr))
 					Eventually(getMetrics).Should(HaveKey(containerstore.GardenContainerDestructionFailedDuration))
 				})
 
 				It("does not remove the container from the container store", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(destroyErr))
 
 					Expect(gardenClient.DestroyCallCount()).To(Equal(1))
@@ -2666,7 +2666,7 @@ var _ = Describe("Container Store", func() {
 				})
 
 				It("does not free up the containers resources", func() {
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(Equal(destroyErr))
 
 					resources := containerStore.RemainingResources(logger)
@@ -2679,7 +2679,7 @@ var _ = Describe("Container Store", func() {
 
 		Context("when the container does not exist", func() {
 			It("returns a ErrContainerNotFound", func() {
-				err := containerStore.Destroy(logger, "")
+				err := containerStore.Destroy(logger, "some-trace-id", "")
 				Expect(err).To(Equal(executor.ErrContainerNotFound))
 			})
 		})
@@ -2713,14 +2713,14 @@ var _ = Describe("Container Store", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
-				err = containerStore.Stop(logger, containerGuid)
+				err = containerStore.Stop(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				destroyed = make(chan struct{})
 				go func(ch chan struct{}) {
-					containerStore.Destroy(logger, containerGuid)
+					containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					close(ch)
 				}(destroyed)
 			})
@@ -2773,12 +2773,12 @@ var _ = Describe("Container Store", func() {
 			})
 
 			JustBeforeEach(func() {
-				err := containerStore.Run(logger, containerGuid)
+				err := containerStore.Run(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 				Eventually(containerState(containerGuid)).Should(Equal(executor.StateRunning))
 				destroyed = make(chan struct{})
 				go func(ch chan struct{}) {
-					containerStore.Destroy(logger, containerGuid)
+					containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					close(ch)
 				}(destroyed)
 			})
@@ -2816,7 +2816,7 @@ var _ = Describe("Container Store", func() {
 					containerStore = containerstore.New(
 						containerConfig,
 						&totalCapacity,
-						gardenClient,
+						gardenClientFactory,
 						dependencyManager,
 						volumeManager,
 						credManager,
@@ -2865,7 +2865,7 @@ var _ = Describe("Container Store", func() {
 						if e.EventType() == executor.EventTypeContainerComplete {
 							// sleeping to avoid atomic destroying state
 							time.Sleep(time.Second)
-							err := containerStore.Destroy(logger, containerGuid)
+							err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 							Expect(err).To(HaveOccurred())
 						}
 					}
@@ -2877,7 +2877,7 @@ var _ = Describe("Container Store", func() {
 					event1 := eventEmitter.EmitArgsForCall(0)
 					Expect(event1.EventType()).To(Equal(executor.EventTypeContainerReserved))
 
-					err := containerStore.Destroy(logger, containerGuid)
+					err := containerStore.Destroy(logger, "some-trace-id", containerGuid)
 					Expect(err).To(HaveOccurred())
 
 					container, err := containerStore.Get(logger, containerGuid)
@@ -2885,9 +2885,7 @@ var _ = Describe("Container Store", func() {
 
 					Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
 					event2 := eventEmitter.EmitArgsForCall(1)
-					Expect(event2).To(Equal(executor.ContainerCompleteEvent{
-						RawContainer: container,
-					}))
+					Expect(event2).To(Equal(executor.NewContainerCompleteEvent(container, "some-trace-id")))
 
 					Consistently(eventEmitter.EmitCallCount).Should(Equal(2))
 				})
@@ -2897,7 +2895,7 @@ var _ = Describe("Container Store", func() {
 
 	Describe("Get", func() {
 		BeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -2920,9 +2918,8 @@ var _ = Describe("Container Store", func() {
 		var container1, container2 executor.Container
 
 		BeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{
-				Guid: containerGuid,
-			})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
+
 			Expect(err).NotTo(HaveOccurred())
 
 			err = containerStore.Initialize(logger, &executor.RunRequest{
@@ -2930,7 +2927,7 @@ var _ = Describe("Container Store", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{
 				Guid: containerGuid + "2",
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -2956,7 +2953,7 @@ var _ = Describe("Container Store", func() {
 			DiskMB:   10,
 		}
 		tags := executor.Tags{}
-		_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: guid, Tags: tags, Resource: resource})
+		_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: guid, Tags: tags, Resource: resource})
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -3030,13 +3027,13 @@ var _ = Describe("Container Store", func() {
 
 			gardenContainer.InfoReturns(garden.ContainerInfo{ExternalIP: "6.6.6.6"}, nil)
 			gardenClient.CreateReturns(gardenContainer, nil)
-			_, err := containerStore.Create(logger, containerGuid1)
+			_, err := containerStore.Create(logger, "some-trace-id", containerGuid1)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Create(logger, containerGuid2)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid2)
 			Expect(err).ToNot(HaveOccurred())
-			_, err = containerStore.Create(logger, containerGuid3)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid3)
 			Expect(err).ToNot(HaveOccurred())
-			_, err = containerStore.Create(logger, containerGuid4)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid4)
 			Expect(err).ToNot(HaveOccurred())
 
 			bulkMetrics := map[string]garden.ContainerMetricsEntry{
@@ -3144,7 +3141,7 @@ var _ = Describe("Container Store", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -3153,7 +3150,7 @@ var _ = Describe("Container Store", func() {
 				err := containerStore.Initialize(logger, &executor.RunRequest{Guid: containerGuid})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = containerStore.Create(logger, containerGuid)
+				_, err = containerStore.Create(logger, "some-trace-id", containerGuid)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -3199,13 +3196,13 @@ var _ = Describe("Container Store", func() {
 			resource = executor.NewResource(512, 512, 1024)
 			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
 
-			_, err := containerStore.Reserve(logger, &req)
+			_, err := containerStore.Reserve(logger, "some-trace-id", &req)
 			Expect(err).NotTo(HaveOccurred())
 
 			resource = executor.NewResource(512, 512, 1024)
 			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
 
-			_, err = containerStore.Reserve(logger, &req)
+			_, err = containerStore.Reserve(logger, "some-trace-id", &req)
 			Expect(err).NotTo(HaveOccurred())
 
 			runReq := executor.NewRunRequest("eventually-initialized", &executor.RunInfo{}, executor.Tags{})
@@ -3280,17 +3277,17 @@ var _ = Describe("Container Store", func() {
 			containerGuid6 = "container-guid-6"
 
 			// Reserve
-			_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid1})
+			_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid1})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid2})
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid2})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid3})
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid3})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid4})
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid4})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid5})
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid5})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Reserve(logger, &executor.AllocationRequest{Guid: containerGuid6})
+			_, err = containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: containerGuid6})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Initialize
@@ -3306,15 +3303,15 @@ var _ = Describe("Container Store", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create Containers
-			_, err = containerStore.Create(logger, containerGuid3)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid3)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Create(logger, containerGuid4)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid4)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = containerStore.Create(logger, containerGuid5)
+			_, err = containerStore.Create(logger, "some-trace-id", containerGuid5)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Stop One of the containers
-			err = containerStore.Stop(logger, containerGuid6)
+			err = containerStore.Stop(logger, "some-trace-id", containerGuid6)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(eventEmitter.EmitCallCount).Should(Equal(7))
@@ -3409,11 +3406,11 @@ var _ = Describe("Container Store", func() {
 				Eventually(gardenClient.ContainersCallCount).Should(Equal(2))
 
 				newContainerGuid := "new-container-guid"
-				_, err := containerStore.Reserve(logger, &executor.AllocationRequest{Guid: newContainerGuid})
+				_, err := containerStore.Reserve(logger, "some-trace-id", &executor.AllocationRequest{Guid: newContainerGuid})
 				Expect(err).NotTo(HaveOccurred())
 				err = containerStore.Initialize(logger, &executor.RunRequest{Guid: newContainerGuid})
 				Expect(err).NotTo(HaveOccurred())
-				_, err = containerStore.Create(logger, newContainerGuid)
+				_, err = containerStore.Create(logger, "some-trace-id", newContainerGuid)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(getContainerState(newContainerGuid)).Should(Equal(executor.StateCreated))

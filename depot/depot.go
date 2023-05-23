@@ -63,7 +63,7 @@ func (c *client) Cleanup(logger lager.Logger) {
 	c.containerStore.Cleanup(logger)
 }
 
-func (c *client) AllocateContainers(logger lager.Logger, requests []executor.AllocationRequest) []executor.AllocationFailure {
+func (c *client) AllocateContainers(logger lager.Logger, traceID string, requests []executor.AllocationRequest) []executor.AllocationFailure {
 	logger = logger.Session("allocate-containers")
 	failures := make([]executor.AllocationFailure, 0)
 
@@ -76,7 +76,7 @@ func (c *client) AllocateContainers(logger lager.Logger, requests []executor.All
 			continue
 		}
 
-		_, err = c.containerStore.Reserve(logger, req)
+		_, err = c.containerStore.Reserve(logger, traceID, req)
 		if err != nil {
 			logger.Error("failed-to-allocate-container", err, lager.Data{"guid": req.Guid})
 			failures = append(failures, executor.NewAllocationFailure(req, err.Error()))
@@ -100,7 +100,7 @@ func (c *client) GetContainer(logger lager.Logger, guid string) (executor.Contai
 	return container, err
 }
 
-func (c *client) RunContainer(logger lager.Logger, request *executor.RunRequest) error {
+func (c *client) RunContainer(logger lager.Logger, traceID string, request *executor.RunRequest) error {
 	logger = logger.Session("run-container", lager.Data{
 		"guid": request.Guid,
 	})
@@ -113,20 +113,20 @@ func (c *client) RunContainer(logger lager.Logger, request *executor.RunRequest)
 	}
 	logger.Debug("succeeded-initializing-container")
 
-	c.creationWorkPool.Submit(c.newRunContainerWorker(logger, request.Guid))
+	c.creationWorkPool.Submit(c.newRunContainerWorker(logger, traceID, request.Guid))
 	return nil
 }
 
-func (c *client) newRunContainerWorker(logger lager.Logger, guid string) func() {
+func (c *client) newRunContainerWorker(logger lager.Logger, traceID string, guid string) func() {
 	return func() {
 		logger.Info("creating-container")
-		_, err := c.containerStore.Create(logger, guid)
+		_, err := c.containerStore.Create(logger, traceID, guid)
 		if err != nil {
 			logger.Error("failed-creating-container", err)
 			return
 		}
 
-		err = c.containerStore.Run(logger, guid)
+		err = c.containerStore.Run(logger, traceID, guid)
 		if err != nil {
 			logger.Error("failed-running-container-in-garden", err)
 		}
@@ -196,15 +196,15 @@ func (c *client) UpdateContainer(logger lager.Logger, ur *executor.UpdateRequest
 	return c.containerStore.Update(logger, ur)
 }
 
-func (c *client) StopContainer(logger lager.Logger, guid string) error {
+func (c *client) StopContainer(logger lager.Logger, traceID string, guid string) error {
 	logger = logger.Session("stop-container")
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	return c.containerStore.Stop(logger, guid)
+	return c.containerStore.Stop(logger, traceID, guid)
 }
 
-func (c *client) DeleteContainer(logger lager.Logger, guid string) error {
+func (c *client) DeleteContainer(logger lager.Logger, traceID string, guid string) error {
 	logger = logger.Session("delete-container", lager.Data{"guid": guid})
 
 	logger.Info("starting")
@@ -212,7 +212,7 @@ func (c *client) DeleteContainer(logger lager.Logger, guid string) error {
 
 	errChannel := make(chan error, 1)
 	c.deletionWorkPool.Submit(func() {
-		errChannel <- c.containerStore.Destroy(logger, guid)
+		errChannel <- c.containerStore.Destroy(logger, traceID, guid)
 	})
 
 	err := <-errChannel

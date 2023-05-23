@@ -6,15 +6,16 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/lager/v3"
+	lager "code.cloudfoundry.org/lager/v3"
 )
 
 type FakeClient struct {
-	AllocateContainersStub        func(lager.Logger, []executor.AllocationRequest) []executor.AllocationFailure
+	AllocateContainersStub        func(lager.Logger, string, []executor.AllocationRequest) []executor.AllocationFailure
 	allocateContainersMutex       sync.RWMutex
 	allocateContainersArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 []executor.AllocationRequest
+		arg2 string
+		arg3 []executor.AllocationRequest
 	}
 	allocateContainersReturns struct {
 		result1 []executor.AllocationFailure
@@ -27,11 +28,12 @@ type FakeClient struct {
 	cleanupArgsForCall []struct {
 		arg1 lager.Logger
 	}
-	DeleteContainerStub        func(lager.Logger, string) error
+	DeleteContainerStub        func(lager.Logger, string, string) error
 	deleteContainerMutex       sync.RWMutex
 	deleteContainerArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	deleteContainerReturns struct {
 		result1 error
@@ -129,11 +131,12 @@ type FakeClient struct {
 		result1 executor.ExecutorResources
 		result2 error
 	}
-	RunContainerStub        func(lager.Logger, *executor.RunRequest) error
+	RunContainerStub        func(lager.Logger, string, *executor.RunRequest) error
 	runContainerMutex       sync.RWMutex
 	runContainerArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 *executor.RunRequest
+		arg2 string
+		arg3 *executor.RunRequest
 	}
 	runContainerReturns struct {
 		result1 error
@@ -147,11 +150,12 @@ type FakeClient struct {
 		arg1 lager.Logger
 		arg2 bool
 	}
-	StopContainerStub        func(lager.Logger, string) error
+	StopContainerStub        func(lager.Logger, string, string) error
 	stopContainerMutex       sync.RWMutex
 	stopContainerArgsForCall []struct {
 		arg1 lager.Logger
 		arg2 string
+		arg3 string
 	}
 	stopContainerReturns struct {
 		result1 error
@@ -214,24 +218,25 @@ type FakeClient struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeClient) AllocateContainers(arg1 lager.Logger, arg2 []executor.AllocationRequest) []executor.AllocationFailure {
-	var arg2Copy []executor.AllocationRequest
-	if arg2 != nil {
-		arg2Copy = make([]executor.AllocationRequest, len(arg2))
-		copy(arg2Copy, arg2)
+func (fake *FakeClient) AllocateContainers(arg1 lager.Logger, arg2 string, arg3 []executor.AllocationRequest) []executor.AllocationFailure {
+	var arg3Copy []executor.AllocationRequest
+	if arg3 != nil {
+		arg3Copy = make([]executor.AllocationRequest, len(arg3))
+		copy(arg3Copy, arg3)
 	}
 	fake.allocateContainersMutex.Lock()
 	ret, specificReturn := fake.allocateContainersReturnsOnCall[len(fake.allocateContainersArgsForCall)]
 	fake.allocateContainersArgsForCall = append(fake.allocateContainersArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 []executor.AllocationRequest
-	}{arg1, arg2Copy})
+		arg2 string
+		arg3 []executor.AllocationRequest
+	}{arg1, arg2, arg3Copy})
 	stub := fake.AllocateContainersStub
 	fakeReturns := fake.allocateContainersReturns
-	fake.recordInvocation("AllocateContainers", []interface{}{arg1, arg2Copy})
+	fake.recordInvocation("AllocateContainers", []interface{}{arg1, arg2, arg3Copy})
 	fake.allocateContainersMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -245,17 +250,17 @@ func (fake *FakeClient) AllocateContainersCallCount() int {
 	return len(fake.allocateContainersArgsForCall)
 }
 
-func (fake *FakeClient) AllocateContainersCalls(stub func(lager.Logger, []executor.AllocationRequest) []executor.AllocationFailure) {
+func (fake *FakeClient) AllocateContainersCalls(stub func(lager.Logger, string, []executor.AllocationRequest) []executor.AllocationFailure) {
 	fake.allocateContainersMutex.Lock()
 	defer fake.allocateContainersMutex.Unlock()
 	fake.AllocateContainersStub = stub
 }
 
-func (fake *FakeClient) AllocateContainersArgsForCall(i int) (lager.Logger, []executor.AllocationRequest) {
+func (fake *FakeClient) AllocateContainersArgsForCall(i int) (lager.Logger, string, []executor.AllocationRequest) {
 	fake.allocateContainersMutex.RLock()
 	defer fake.allocateContainersMutex.RUnlock()
 	argsForCall := fake.allocateContainersArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeClient) AllocateContainersReturns(result1 []executor.AllocationFailure) {
@@ -313,19 +318,20 @@ func (fake *FakeClient) CleanupArgsForCall(i int) lager.Logger {
 	return argsForCall.arg1
 }
 
-func (fake *FakeClient) DeleteContainer(arg1 lager.Logger, arg2 string) error {
+func (fake *FakeClient) DeleteContainer(arg1 lager.Logger, arg2 string, arg3 string) error {
 	fake.deleteContainerMutex.Lock()
 	ret, specificReturn := fake.deleteContainerReturnsOnCall[len(fake.deleteContainerArgsForCall)]
 	fake.deleteContainerArgsForCall = append(fake.deleteContainerArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.DeleteContainerStub
 	fakeReturns := fake.deleteContainerReturns
-	fake.recordInvocation("DeleteContainer", []interface{}{arg1, arg2})
+	fake.recordInvocation("DeleteContainer", []interface{}{arg1, arg2, arg3})
 	fake.deleteContainerMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -339,17 +345,17 @@ func (fake *FakeClient) DeleteContainerCallCount() int {
 	return len(fake.deleteContainerArgsForCall)
 }
 
-func (fake *FakeClient) DeleteContainerCalls(stub func(lager.Logger, string) error) {
+func (fake *FakeClient) DeleteContainerCalls(stub func(lager.Logger, string, string) error) {
 	fake.deleteContainerMutex.Lock()
 	defer fake.deleteContainerMutex.Unlock()
 	fake.DeleteContainerStub = stub
 }
 
-func (fake *FakeClient) DeleteContainerArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeClient) DeleteContainerArgsForCall(i int) (lager.Logger, string, string) {
 	fake.deleteContainerMutex.RLock()
 	defer fake.deleteContainerMutex.RUnlock()
 	argsForCall := fake.deleteContainerArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeClient) DeleteContainerReturns(result1 error) {
@@ -820,19 +826,20 @@ func (fake *FakeClient) RemainingResourcesReturnsOnCall(i int, result1 executor.
 	}{result1, result2}
 }
 
-func (fake *FakeClient) RunContainer(arg1 lager.Logger, arg2 *executor.RunRequest) error {
+func (fake *FakeClient) RunContainer(arg1 lager.Logger, arg2 string, arg3 *executor.RunRequest) error {
 	fake.runContainerMutex.Lock()
 	ret, specificReturn := fake.runContainerReturnsOnCall[len(fake.runContainerArgsForCall)]
 	fake.runContainerArgsForCall = append(fake.runContainerArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 *executor.RunRequest
-	}{arg1, arg2})
+		arg2 string
+		arg3 *executor.RunRequest
+	}{arg1, arg2, arg3})
 	stub := fake.RunContainerStub
 	fakeReturns := fake.runContainerReturns
-	fake.recordInvocation("RunContainer", []interface{}{arg1, arg2})
+	fake.recordInvocation("RunContainer", []interface{}{arg1, arg2, arg3})
 	fake.runContainerMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -846,17 +853,17 @@ func (fake *FakeClient) RunContainerCallCount() int {
 	return len(fake.runContainerArgsForCall)
 }
 
-func (fake *FakeClient) RunContainerCalls(stub func(lager.Logger, *executor.RunRequest) error) {
+func (fake *FakeClient) RunContainerCalls(stub func(lager.Logger, string, *executor.RunRequest) error) {
 	fake.runContainerMutex.Lock()
 	defer fake.runContainerMutex.Unlock()
 	fake.RunContainerStub = stub
 }
 
-func (fake *FakeClient) RunContainerArgsForCall(i int) (lager.Logger, *executor.RunRequest) {
+func (fake *FakeClient) RunContainerArgsForCall(i int) (lager.Logger, string, *executor.RunRequest) {
 	fake.runContainerMutex.RLock()
 	defer fake.runContainerMutex.RUnlock()
 	argsForCall := fake.runContainerArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeClient) RunContainerReturns(result1 error) {
@@ -915,19 +922,20 @@ func (fake *FakeClient) SetHealthyArgsForCall(i int) (lager.Logger, bool) {
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeClient) StopContainer(arg1 lager.Logger, arg2 string) error {
+func (fake *FakeClient) StopContainer(arg1 lager.Logger, arg2 string, arg3 string) error {
 	fake.stopContainerMutex.Lock()
 	ret, specificReturn := fake.stopContainerReturnsOnCall[len(fake.stopContainerArgsForCall)]
 	fake.stopContainerArgsForCall = append(fake.stopContainerArgsForCall, struct {
 		arg1 lager.Logger
 		arg2 string
-	}{arg1, arg2})
+		arg3 string
+	}{arg1, arg2, arg3})
 	stub := fake.StopContainerStub
 	fakeReturns := fake.stopContainerReturns
-	fake.recordInvocation("StopContainer", []interface{}{arg1, arg2})
+	fake.recordInvocation("StopContainer", []interface{}{arg1, arg2, arg3})
 	fake.stopContainerMutex.Unlock()
 	if stub != nil {
-		return stub(arg1, arg2)
+		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
 		return ret.result1
@@ -941,17 +949,17 @@ func (fake *FakeClient) StopContainerCallCount() int {
 	return len(fake.stopContainerArgsForCall)
 }
 
-func (fake *FakeClient) StopContainerCalls(stub func(lager.Logger, string) error) {
+func (fake *FakeClient) StopContainerCalls(stub func(lager.Logger, string, string) error) {
 	fake.stopContainerMutex.Lock()
 	defer fake.stopContainerMutex.Unlock()
 	fake.StopContainerStub = stub
 }
 
-func (fake *FakeClient) StopContainerArgsForCall(i int) (lager.Logger, string) {
+func (fake *FakeClient) StopContainerArgsForCall(i int) (lager.Logger, string, string) {
 	fake.stopContainerMutex.RLock()
 	defer fake.stopContainerMutex.RUnlock()
 	argsForCall := fake.stopContainerArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
 func (fake *FakeClient) StopContainerReturns(result1 error) {

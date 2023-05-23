@@ -175,6 +175,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	}
 
 	gardenClient := GardenClient.New(GardenConnection.New(config.GardenNetwork, config.GardenAddr))
+	gardenClientFactory := containerstore.NewGardenClientFactory(config.GardenNetwork, config.GardenAddr)
 	err = waitForGarden(logger, gardenClient, metronClient, clock)
 	if err != nil {
 		return nil, nil, nil, err
@@ -313,7 +314,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	containerStore := containerstore.New(
 		containerConfig,
 		&totalCapacity,
-		gardenClient,
+		gardenClientFactory,
 		containerstore.NewDependencyManager(cachedDownloader, downloadRateLimiter),
 		volmanClient,
 		credManager,

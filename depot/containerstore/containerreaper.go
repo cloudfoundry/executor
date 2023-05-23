@@ -30,6 +30,7 @@ func newContainerReaper(logger lager.Logger, config *ContainerConfig, clock cloc
 func (r *containerReaper) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	logger := r.logger.Session("container-reaper")
 	timer := r.clock.NewTimer(r.config.ReapInterval)
+	traceID := "" // requests to reap are not originated through API
 
 	close(ready)
 
@@ -41,7 +42,7 @@ func (r *containerReaper) Run(signals <-chan os.Signal, ready chan<- struct{}) e
 				logger.Error("failed-to-reap-extra-containers", err)
 			}
 
-			err = r.reapMissingGardenContainers(logger.Session("reap-missing-garden-containers"))
+			err = r.reapMissingGardenContainers(logger.Session("reap-missing-garden-containers"), traceID)
 			if err != nil {
 				logger.Error("failed-to-reap-missing-containers", err)
 			}
@@ -76,7 +77,7 @@ func (r *containerReaper) reapExtraGardenContainers(logger lager.Logger) error {
 	return nil
 }
 
-func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error {
+func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger, traceID string) error {
 	logger.Info("starting")
 	defer logger.Info("complete")
 
@@ -86,7 +87,7 @@ func (r *containerReaper) reapMissingGardenContainers(logger lager.Logger) error
 		return err
 	}
 
-	r.containers.CompleteMissing(logger, snapshotGuids, handles)
+	r.containers.CompleteMissing(logger, traceID, snapshotGuids, handles)
 
 	return nil
 }
