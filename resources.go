@@ -369,7 +369,7 @@ type LifecycleEvent interface {
 
 type ContainerCompleteEvent struct {
 	RawContainer Container `json:"container"`
-	traceID      string    `json:"trace_id"`
+	traceID      string
 }
 
 func NewContainerCompleteEvent(container Container, traceID string) ContainerCompleteEvent {
@@ -386,7 +386,7 @@ func (ContainerCompleteEvent) lifecycleEvent()        {}
 
 type ContainerRunningEvent struct {
 	RawContainer Container `json:"container"`
-	traceID      string    `json:"trace_id"`
+	traceID      string
 }
 
 func NewContainerRunningEvent(container Container, traceID string) ContainerRunningEvent {
@@ -403,7 +403,7 @@ func (ContainerRunningEvent) lifecycleEvent()        {}
 
 type ContainerReservedEvent struct {
 	RawContainer Container `json:"container"`
-	traceID      string    `json:"trace_id"`
+	traceID      string
 }
 
 func NewContainerReservedEvent(container Container, traceID string) ContainerReservedEvent {
