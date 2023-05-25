@@ -714,6 +714,355 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
+					Context("when there is a readiness check", func() {
+						Context("http readiness check", func() {
+							BeforeEach(func() {
+								container.CheckDefinition = &models.CheckDefinition{
+									ReadinessChecks: []*models.Check{
+										&models.Check{
+											HttpCheck: &models.HTTPCheck{
+												Port:             8989,
+												RequestTimeoutMs: 101,
+												Path:             "/neopets-readiness-check",
+												IntervalMs:       45000,
+											},
+										},
+									},
+								}
+							})
+							Context("when optional properties are not provided", func() {
+								BeforeEach(func() {
+									container.CheckDefinition = &models.CheckDefinition{
+										ReadinessChecks: []*models.Check{
+											&models.Check{
+												HttpCheck: &models.HTTPCheck{
+													Port: 8989,
+												},
+											},
+										},
+									}
+								})
+
+								It("uses sane defaults for the untilReadyCheck", func() {
+									Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+										ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+										// TODO why is gardenContainer.Handle empty string?
+										Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+										Args: []string{
+											"-port=8989",
+											"-timeout=1000ms",
+											"-uri=/",
+											fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
+										},
+										Env: []string{
+											"CF_INSTANCE_IP=",
+											"CF_INSTANCE_INTERNAL_IP=",
+											"CF_INSTANCE_PORT=",
+											"CF_INSTANCE_ADDR=",
+											"CF_INSTANCE_PORTS=[]",
+										},
+										Limits: garden.ResourceLimits{
+											Nofile: proto.Uint64(1024),
+										},
+										OverrideContainerLimits: &garden.ProcessLimits{},
+										Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
+										BindMounts: []garden.BindMount{
+											{
+												SrcPath: "/some/source",
+												DstPath: "/some/destintation",
+												Mode:    garden.BindMountModeRO,
+												Origin:  garden.BindMountOriginHost,
+											},
+											{
+												Origin:  garden.BindMountOriginHost,
+												SrcPath: declarativeHealthcheckSrcPath,
+												DstPath: transformer.HealthCheckDstPath,
+											},
+										},
+									})))
+								})
+							})
+
+							It("runs the untilReadyCheck in a sidecar container", func() {
+								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+									ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+									// TODO why is gardenContainer.Handle empty string?
+									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+									Args: []string{
+										"-port=8989",
+										"-timeout=101ms", // TODO see if this is respected in hc binary
+										"-uri=/neopets-readiness-check",
+										fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
+									},
+									Env: []string{
+										"CF_INSTANCE_IP=",
+										"CF_INSTANCE_INTERNAL_IP=",
+										"CF_INSTANCE_PORT=",
+										"CF_INSTANCE_ADDR=",
+										"CF_INSTANCE_PORTS=[]",
+									},
+									Limits: garden.ResourceLimits{
+										Nofile: proto.Uint64(1024),
+									},
+									OverrideContainerLimits: &garden.ProcessLimits{},
+									Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
+									BindMounts: []garden.BindMount{
+										{
+											SrcPath: "/some/source",
+											DstPath: "/some/destintation",
+											Mode:    garden.BindMountModeRO,
+											Origin:  garden.BindMountOriginHost,
+										},
+										{
+											Origin:  garden.BindMountOriginHost,
+											SrcPath: declarativeHealthcheckSrcPath,
+											DstPath: transformer.HealthCheckDstPath,
+										},
+									},
+								})))
+							})
+
+							Context("when the untilReadyCheck passes", func() {
+								var (
+									untilSuccessReadinessCh      chan int
+									untilSuccessReadinessProcess *gardenfakes.FakeProcess
+									untilFailureReadinessCh      chan int
+									untilFailureReadinessProcess *gardenfakes.FakeProcess
+								)
+
+								BeforeEach(func() {
+									untilSuccessReadinessCh = make(chan int)
+									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
+									untilFailureReadinessCh = make(chan int)
+									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
+
+									healthcheckCallCount := int64(0)
+
+									gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+										defer GinkgoRecover()
+										// get rid of race condition caused by write inside the BeforeEach
+										processLock.Lock()
+										defer processLock.Unlock()
+
+										switch spec.Path {
+										case "/action/path":
+											return actionProcess, nil
+										case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+											oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+											switch oldCount {
+											case 1:
+												return untilSuccessReadinessProcess, nil
+											case 2:
+												return untilFailureReadinessProcess, nil
+											}
+										}
+
+										err = errors.New("")
+										Fail("unexpected executable path: " + spec.Path)
+										return
+									}
+								})
+
+								JustBeforeEach(func() {
+									untilSuccessReadinessCh <- 0
+								})
+
+								AfterEach(func() {
+									close(untilSuccessReadinessCh)
+									close(untilFailureReadinessCh)
+								})
+
+								It("starts the untilFailureReadinessCheck", func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+									ids := []string{}
+									paths := []string{}
+									args := [][]string{}
+									for i := 0; i < gardenContainer.RunCallCount(); i++ {
+										spec, _ := gardenContainer.RunArgsForCall(i)
+										ids = append(ids, spec.ID)
+										paths = append(paths, spec.Path)
+										args = append(args, spec.Args)
+									}
+
+									Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
+
+									Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+									Expect(args).To(ContainElement([]string{
+										"-port=8989",
+										"-timeout=101ms",
+										"-uri=/neopets-readiness-check",
+										"-readiness-interval=45s",
+									}))
+								})
+							})
+						})
+
+						Context("tcp readiness check", func() {
+							BeforeEach(func() {
+								container.CheckDefinition = &models.CheckDefinition{
+									ReadinessChecks: []*models.Check{
+										&models.Check{
+											TcpCheck: &models.TCPCheck{
+												Port:             5432,
+												ConnectTimeoutMs: 101,
+												IntervalMs:       44000,
+											},
+										},
+									},
+								}
+							})
+							It("runs the untilReadyCheck in a sidecar container", func() {
+								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+									ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+									// TODO why is gardenContainer.Handle empty string?
+									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+									Args: []string{
+										"-port=5432",
+										"-timeout=101ms",
+										fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
+									},
+									Env: []string{
+										"CF_INSTANCE_IP=",
+										"CF_INSTANCE_INTERNAL_IP=",
+										"CF_INSTANCE_PORT=",
+										"CF_INSTANCE_ADDR=",
+										"CF_INSTANCE_PORTS=[]",
+									},
+									Limits: garden.ResourceLimits{
+										Nofile: proto.Uint64(1024),
+									},
+									OverrideContainerLimits: &garden.ProcessLimits{},
+									Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
+									BindMounts: []garden.BindMount{
+										{
+											SrcPath: "/some/source",
+											DstPath: "/some/destintation",
+											Mode:    garden.BindMountModeRO,
+											Origin:  garden.BindMountOriginHost,
+										},
+										{
+											Origin:  garden.BindMountOriginHost,
+											SrcPath: declarativeHealthcheckSrcPath,
+											DstPath: transformer.HealthCheckDstPath,
+										},
+									},
+								})))
+							})
+
+							Context("when the untilSuccessReadinessCheck passes", func() {
+								var (
+									untilSuccessReadinessCh      chan int
+									untilSuccessReadinessProcess *gardenfakes.FakeProcess
+									untilFailureReadinessCh      chan int
+									untilFailureReadinessProcess *gardenfakes.FakeProcess
+								)
+
+								BeforeEach(func() {
+									untilSuccessReadinessCh = make(chan int)
+									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
+									untilFailureReadinessCh = make(chan int)
+									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
+
+									healthcheckCallCount := int64(0)
+
+									gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+										defer GinkgoRecover()
+										// get rid of race condition caused by write inside the BeforeEach
+										processLock.Lock()
+										defer processLock.Unlock()
+
+										switch spec.Path {
+										case "/action/path":
+											return actionProcess, nil
+										case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+											oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+											switch oldCount {
+											case 1:
+												return untilSuccessReadinessProcess, nil
+											case 2:
+												return untilFailureReadinessProcess, nil
+											}
+										}
+
+										err = errors.New("")
+										Fail("unexpected executable path: " + spec.Path)
+										return
+									}
+								})
+
+								JustBeforeEach(func() {
+									untilSuccessReadinessCh <- 0
+								})
+
+								AfterEach(func() {
+									close(untilSuccessReadinessCh)
+									close(untilFailureReadinessCh)
+								})
+
+								It("starts the untilFailureReadinessCheck", func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+									ids := []string{}
+									paths := []string{}
+									args := [][]string{}
+									for i := 0; i < gardenContainer.RunCallCount(); i++ {
+										spec, _ := gardenContainer.RunArgsForCall(i)
+										ids = append(ids, spec.ID)
+										paths = append(paths, spec.Path)
+										args = append(args, spec.Args)
+									}
+
+									Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
+
+									Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+									Expect(args).To(ContainElement([]string{
+										"-port=5432",
+										"-timeout=101ms",
+										"-readiness-interval=44s",
+									}))
+								})
+								Context("when the readiness check does not include the optional properties", func() {
+									BeforeEach(func() {
+										container.CheckDefinition = &models.CheckDefinition{
+											ReadinessChecks: []*models.Check{
+												&models.Check{
+													TcpCheck: &models.TCPCheck{
+														Port: 5432,
+													},
+												},
+											},
+										}
+									})
+									It("uses sane defaults", func() {
+										Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+										ids := []string{}
+										paths := []string{}
+										args := [][]string{}
+										for i := 0; i < gardenContainer.RunCallCount(); i++ {
+											spec, _ := gardenContainer.RunArgsForCall(i)
+											ids = append(ids, spec.ID)
+											paths = append(paths, spec.Path)
+											args = append(args, spec.Args)
+										}
+
+										Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0")))
+
+										Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+										Expect(args).To(ContainElement([]string{
+											"-port=5432",
+											"-timeout=1000ms",
+											"-until-ready-interval=1ms",
+										}))
+										Expect(args).To(ContainElement([]string{
+											"-port=5432",
+											"-timeout=1000ms",
+											"-readiness-interval=1s",
+										}))
+									})
+								})
+							})
+						})
+					})
+
 					Context("and container proxy is enabled", func() {
 						BeforeEach(func() {
 							options = append(options, transformer.WithContainerProxy(time.Second))

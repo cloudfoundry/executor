@@ -24,6 +24,19 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
+type HealthcheckType int
+type CheckProtocol int
+
+const (
+	isStartupCheck HealthcheckType = iota
+	isLivenessCheck
+	isUntilSuccessReadinessCheck
+	isUntilFailureReadinessCheck
+
+	HTTPCheck CheckProtocol = iota
+	TCPCheck
+)
+
 const (
 	healthCheckNofiles                          uint64 = 1024
 	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond) // this is just 1000, transformed eventually into a str: "1000ms" or equivalently "1s"
@@ -363,7 +376,7 @@ func (t *transformer) StepsRunner(
 	logStreamer log_streamer.LogStreamer,
 	config Config,
 ) (ifrit.Runner, error) {
-	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
+	var setup, action, postSetup, monitor, readinessMonitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
 	if container.Setup != nil {
@@ -452,8 +465,8 @@ func (t *transformer) StepsRunner(
 				startupSidecarName,
 				int(p),
 				DefaultDeclarativeHealthcheckRequestTimeout,
-				false,
-				true,
+				TCPCheck,
+				isStartupCheck,
 				t.unhealthyMonitoringInterval,
 				envoyStartupLogger,
 				"instance proxy failed to start",
@@ -463,14 +476,26 @@ func (t *transformer) StepsRunner(
 	}
 
 	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
-		monitor = t.transformCheckDefinition(logger,
-			&container,
-			gardenContainer,
-			logStreamer,
-			config.BindMounts,
-			proxyStartupChecks,
-		)
-		substeps = append(substeps, monitor)
+		if container.CheckDefinition.Checks != nil {
+			monitor = t.transformCheckDefinition(logger,
+				&container,
+				gardenContainer,
+				logStreamer,
+				config.BindMounts,
+				proxyStartupChecks,
+			)
+			substeps = append(substeps, monitor)
+		}
+		if container.CheckDefinition.ReadinessChecks != nil {
+			readinessMonitor = t.transformReadinessCheckDefinition(logger,
+				&container,
+				gardenContainer,
+				logStreamer,
+				config.BindMounts,
+				proxyStartupChecks,
+			)
+			substeps = append(substeps, readinessMonitor)
+		}
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
 		monitor = steps.NewMonitor(
@@ -538,8 +563,8 @@ func (t *transformer) createCheck(
 	sidecarName string,
 	port,
 	timeout int,
-	http,
-	startupCheckEnabled bool,
+	checkProtocol CheckProtocol,
+	checkType HealthcheckType,
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
@@ -557,15 +582,25 @@ func (t *transformer) createCheck(
 		fmt.Sprintf("-timeout=%dms", timeout),
 	}
 
-	if http {
+	if checkProtocol == HTTPCheck {
 		args = append(args, fmt.Sprintf("-uri=%s", path))
 	}
 
-	if startupCheckEnabled {
+	if checkType == isStartupCheck {
 		args = append(args, fmt.Sprintf("-startup-interval=%s", interval))
 		args = append(args, fmt.Sprintf("-startup-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
-	} else {
+	}
+
+	if checkType == isLivenessCheck {
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
+	}
+
+	if checkType == isUntilSuccessReadinessCheck {
+		args = append(args, fmt.Sprintf("-until-ready-interval=%s", interval))
+	}
+
+	if checkType == isUntilFailureReadinessCheck {
+		args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
 	}
 
 	rl := models.ResourceLimits{}
@@ -604,6 +639,129 @@ func (t *transformer) createCheck(
 	return steps.NewOutputWrapper(runStep, buffer)
 }
 
+func (t *transformer) transformReadinessCheckDefinition(
+	logger lager.Logger,
+	container *executor.Container,
+	gardenContainer garden.Container,
+	logstreamer log_streamer.LogStreamer,
+	bindMounts []garden.BindMount,
+	proxyStartupChecks []ifrit.Runner,
+) ifrit.Runner {
+
+	// TODO
+	// sourceName := HealthLogSource
+	// if container.CheckDefinition.LogSource != "" {
+	// 	sourceName = container.CheckDefinition.LogSource
+	// }
+
+	logger.Info("transform-readiness-check-definitions-starting")
+	defer func() {
+		logger.Info("transform-readiness-check-definitions-finished")
+	}()
+
+	readinessLogger := logger.Session("readiness-check")
+	check := container.CheckDefinition.ReadinessChecks[0]
+	var untilSuccessReadinessCheck, untilFailureReadinessCheck ifrit.Runner
+
+	readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), 0)
+	// TODO add validation
+
+	if check.HttpCheck != nil {
+		timeout, interval, path := t.applyCheckDefaults(
+			int(check.HttpCheck.RequestTimeoutMs),
+			time.Duration(check.HttpCheck.IntervalMs)*time.Millisecond,
+			check.HttpCheck.Path,
+		)
+
+		untilSuccessReadinessCheck = t.createCheck(
+			container,
+			gardenContainer,
+			bindMounts,
+			path,
+			readinessSidecarName,
+			int(check.HttpCheck.Port),
+			timeout,
+			HTTPCheck,
+			isUntilSuccessReadinessCheck,
+			t.unhealthyMonitoringInterval,
+			readinessLogger,
+			"",
+		)
+
+		untilFailureReadinessCheck = t.createCheck(
+			container,
+			gardenContainer,
+			bindMounts,
+			path,
+			readinessSidecarName,
+			int(check.HttpCheck.Port),
+			timeout,
+			HTTPCheck,
+			isUntilFailureReadinessCheck,
+			interval,
+			readinessLogger,
+			"",
+		)
+	} else { // is tcp check
+		timeout, interval, _ := t.applyCheckDefaults(
+			int(check.TcpCheck.ConnectTimeoutMs), // TODO: Grab default if this doesn't exist??
+			time.Duration(check.TcpCheck.IntervalMs)*time.Millisecond,
+			"",
+		)
+
+		untilSuccessReadinessCheck = t.createCheck(
+			container,
+			gardenContainer,
+			bindMounts,
+			"",
+			readinessSidecarName,
+			int(check.TcpCheck.Port),
+			timeout,
+			TCPCheck,
+			isUntilSuccessReadinessCheck,
+			t.unhealthyMonitoringInterval,
+			readinessLogger,
+			"",
+		)
+
+		untilFailureReadinessCheck = t.createCheck(
+			container,
+			gardenContainer,
+			bindMounts,
+			"",
+			readinessSidecarName,
+			int(check.TcpCheck.Port),
+			timeout,
+			TCPCheck,
+			isUntilFailureReadinessCheck,
+			interval,
+			readinessLogger,
+			"",
+		)
+	}
+
+	return steps.NewReadinessHealthCheckStep(
+		untilSuccessReadinessCheck,
+		untilFailureReadinessCheck,
+		logstreamer,
+	)
+}
+
+func (t *transformer) applyCheckDefaults(timeout int, interval time.Duration, path string) (int, time.Duration, string) {
+	if timeout == 0 {
+		timeout = DefaultDeclarativeHealthcheckRequestTimeout
+	}
+	if path == "" {
+		path = "/"
+	}
+	// we can use the fact that time.Duration is an int64 to simplify creating the proper time.Duration object from desired number of Milliseconds
+	if interval == 0 {
+		interval = t.healthyMonitoringInterval
+	}
+
+	return timeout, interval, path
+}
+
 func (t *transformer) transformCheckDefinition(
 	logger lager.Logger,
 	container *executor.Container,
@@ -636,19 +794,11 @@ func (t *transformer) transformCheckDefinition(
 		if err := check.Validate(); err != nil {
 			logger.Error("invalid-check", err, lager.Data{"check": check})
 		} else if check.HttpCheck != nil {
-			timeout := int(check.HttpCheck.RequestTimeoutMs)
-			if timeout == 0 {
-				timeout = DefaultDeclarativeHealthcheckRequestTimeout
-			}
-			path := check.HttpCheck.Path
-			if path == "" {
-				path = "/"
-			}
-			// we can use the fact that time.Duration is an int64 to simplify creating the proper time.Duration object from desired number of Milliseconds
-			interval := time.Duration(check.HttpCheck.IntervalMs) * time.Millisecond
-			if interval == 0 {
-				interval = t.healthyMonitoringInterval
-			}
+			timeout, interval, path := t.applyCheckDefaults(
+				int(check.HttpCheck.RequestTimeoutMs),
+				time.Duration(check.HttpCheck.IntervalMs)*time.Millisecond,
+				check.HttpCheck.Path,
+			)
 
 			startupChecks = append(startupChecks, t.createCheck(
 				container,
@@ -658,8 +808,8 @@ func (t *transformer) transformCheckDefinition(
 				startupSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				true,
-				true,
+				HTTPCheck,
+				isStartupCheck,
 				t.unhealthyMonitoringInterval,
 				startupLogger,
 				"",
@@ -672,23 +822,20 @@ func (t *transformer) transformCheckDefinition(
 				livenessSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				true,
-				false,
+				HTTPCheck,
+				isLivenessCheck,
 				interval,
 				livenessLogger,
 				"",
 			))
 
 		} else if check.TcpCheck != nil {
-			timeout := int(check.TcpCheck.ConnectTimeoutMs)
-			if timeout == 0 {
-				timeout = DefaultDeclarativeHealthcheckRequestTimeout
-			}
-			// we can use the fact that time.Duration is an int64 to simplify creating the proper time.Duration object from desired number of Milliseconds
-			interval := time.Duration(check.TcpCheck.IntervalMs) * time.Millisecond
-			if interval == 0 {
-				interval = t.healthyMonitoringInterval
-			}
+
+			timeout, interval, _ := t.applyCheckDefaults(
+				int(check.TcpCheck.ConnectTimeoutMs),
+				time.Duration(check.TcpCheck.IntervalMs)*time.Millisecond,
+				"", // only needed for http checks
+			)
 
 			startupChecks = append(startupChecks, t.createCheck(
 				container,
@@ -698,8 +845,8 @@ func (t *transformer) transformCheckDefinition(
 				startupSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				false,
-				true,
+				TCPCheck,
+				isStartupCheck,
 				t.unhealthyMonitoringInterval,
 				startupLogger,
 				"",
@@ -712,8 +859,8 @@ func (t *transformer) transformCheckDefinition(
 				livenessSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				false,
-				false,
+				TCPCheck,
+				isLivenessCheck,
 				interval,
 				livenessLogger,
 				"",
