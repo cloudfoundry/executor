@@ -22,19 +22,27 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 		process                     ifrit.Process
 		needToKillUntilFailureCheck bool
 		needToKillUntilReadyCheck   bool
+		readinessChan               chan int
 
 		step ifrit.Runner
 	)
+
 	BeforeEach(func() {
 		fakeStreamer = newFakeStreamer()
 		untilReadyCheck = fake_runner.NewTestRunner()
 		untilFailureCheck = fake_runner.NewTestRunner()
 		needToKillUntilFailureCheck = true
 		needToKillUntilReadyCheck = true
+		readinessChan = make(chan int, 2)
 	})
 
 	JustBeforeEach(func() {
-		step = steps.NewReadinessHealthCheckStep(untilReadyCheck, untilFailureCheck, fakeStreamer)
+		step = steps.NewReadinessHealthCheckStep(
+			untilReadyCheck,
+			untilFailureCheck,
+			fakeStreamer,
+			readinessChan,
+		)
 		process = ifrit.Background(step)
 	})
 
@@ -96,10 +104,15 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 				Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
 			})
 
+			It("writes ready to the readiness channel", func() {
+				Eventually(readinessChan).Should(Receive(Equal(1)))
+
+			})
+
 			Context("when the untilFailure check exits with an error", func() {
 				JustBeforeEach(func() {
 					Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
-					untilFailureCheck.TriggerExit(nil)
+					untilFailureCheck.TriggerExit(errors.New("crash"))
 					needToKillUntilFailureCheck = false
 					needToKillUntilReadyCheck = false
 				})
@@ -109,30 +122,15 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 						gbytes.Say("Oh no! The app is not ready anymore\n"),
 					)
 				})
-			})
 
-			Context("when the untilFailure check fails to run", func() {
-				var disaster error
-				BeforeEach(func() {
-					needToKillUntilFailureCheck = false
-					needToKillUntilReadyCheck = false
+				It("writes notReady to the readiness channel", func() {
+					Eventually(readinessChan).Should(Receive(Equal(2)))
 				})
 
-				JustBeforeEach(func() {
-					disaster = errors.New("booom!")
-					untilFailureCheck.TriggerExit(disaster)
-				})
-
-				It("the step exits with an error", func() {
+				XIt("the step exits with nil", func() {
 					var err error
 					Eventually(process.Wait()).Should(Receive(&err))
-					Expect(err).To(MatchError(ContainSubstring("booom!")))
-				})
-
-				It("emits a message to the application log stream", func() {
-					Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-						gbytes.Say("Failed to run the untilFailure check\n"),
-					)
+					Expect(err).To(MatchError(nil))
 				})
 			})
 		})

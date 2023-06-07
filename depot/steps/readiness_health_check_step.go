@@ -8,21 +8,31 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
+type ReadinessState int
+
+const (
+	isReady ReadinessState = iota
+	isNotReady
+)
+
 type readinessHealthCheckStep struct {
 	untilReadyCheck   ifrit.Runner
 	untilFailureCheck ifrit.Runner
 	logStreamer       log_streamer.LogStreamer
+	readinessChan     chan int
 }
 
 func NewReadinessHealthCheckStep(
 	untilReadyCheck ifrit.Runner,
 	untilFailureCheck ifrit.Runner,
 	logStreamer log_streamer.LogStreamer,
+	readinessChan chan int,
 ) ifrit.Runner {
 	return &readinessHealthCheckStep{
 		untilReadyCheck:   untilReadyCheck,
 		untilFailureCheck: untilFailureCheck,
 		logStreamer:       logStreamer,
+		readinessChan:     readinessChan,
 	}
 }
 
@@ -52,6 +62,7 @@ func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Sig
 			fmt.Fprint(step.logStreamer.Stdout(), "Failed to run the untilReady check\n")
 			return err
 		}
+		step.readinessChan <- 1
 		fmt.Fprint(step.logStreamer.Stdout(), "App is ready!\n")
 		return nil
 	case s := <-signals:
@@ -67,6 +78,7 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 	case err := <-untilFailureProcess.Wait():
 		if err != nil {
 			fmt.Fprint(step.logStreamer.Stdout(), "Oh no! The app is not ready anymore\n")
+			step.readinessChan <- 2
 			return nil
 		}
 		return nil // TODO: would this case ever happen? how should we handle this?
@@ -76,11 +88,3 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 		return new(CancelledError)
 	}
 }
-
-// if err := dec.Decode(&val); err != nil {
-//     if serr, ok := err.(*json.SyntaxError); ok {
-//         line, col := findLine(f, serr.Offset)
-//         return fmt.Errorf("%s:%d:%d: %v", f.Name(), line, col, err)
-//     }
-//     return err
-// }V
