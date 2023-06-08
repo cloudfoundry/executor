@@ -22,7 +22,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 		process                     ifrit.Process
 		needToKillUntilFailureCheck bool
 		needToKillUntilReadyCheck   bool
-		readinessChan               chan int
+		readinessChan               chan steps.ReadinessState
 
 		step ifrit.Runner
 	)
@@ -33,7 +33,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 		untilFailureCheck = fake_runner.NewTestRunner()
 		needToKillUntilFailureCheck = true
 		needToKillUntilReadyCheck = true
-		readinessChan = make(chan int, 2)
+		readinessChan = make(chan steps.ReadinessState, 2)
 	})
 
 	JustBeforeEach(func() {
@@ -105,8 +105,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 			})
 
 			It("writes ready to the readiness channel", func() {
-				Eventually(readinessChan).Should(Receive(Equal(1)))
-
+				Eventually(readinessChan).Should(Receive(Equal(steps.IsReady)))
 			})
 
 			Context("when the untilFailure check exits with an error", func() {
@@ -124,7 +123,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 				})
 
 				It("writes notReady to the readiness channel", func() {
-					Eventually(readinessChan).Should(Receive(Equal(2)))
+					Eventually(readinessChan).Should(Receive(Equal(steps.IsNotReady)))
 				})
 
 				XIt("the step exits with nil", func() {

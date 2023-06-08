@@ -11,22 +11,22 @@ import (
 type ReadinessState int
 
 const (
-	isReady ReadinessState = iota
-	isNotReady
+	IsReady ReadinessState = iota
+	IsNotReady
 )
 
 type readinessHealthCheckStep struct {
 	untilReadyCheck   ifrit.Runner
 	untilFailureCheck ifrit.Runner
 	logStreamer       log_streamer.LogStreamer
-	readinessChan     chan int
+	readinessChan     chan ReadinessState
 }
 
 func NewReadinessHealthCheckStep(
 	untilReadyCheck ifrit.Runner,
 	untilFailureCheck ifrit.Runner,
 	logStreamer log_streamer.LogStreamer,
-	readinessChan chan int,
+	readinessChan chan ReadinessState,
 ) ifrit.Runner {
 	return &readinessHealthCheckStep{
 		untilReadyCheck:   untilReadyCheck,
@@ -62,7 +62,7 @@ func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Sig
 			fmt.Fprint(step.logStreamer.Stdout(), "Failed to run the untilReady check\n")
 			return err
 		}
-		step.readinessChan <- 1
+		step.readinessChan <- IsReady
 		fmt.Fprint(step.logStreamer.Stdout(), "App is ready!\n")
 		return nil
 	case s := <-signals:
@@ -78,7 +78,7 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 	case err := <-untilFailureProcess.Wait():
 		if err != nil {
 			fmt.Fprint(step.logStreamer.Stdout(), "Oh no! The app is not ready anymore\n")
-			step.readinessChan <- 2
+			step.readinessChan <- IsNotReady
 			return nil
 		}
 		return nil // TODO: would this case ever happen? how should we handle this?
