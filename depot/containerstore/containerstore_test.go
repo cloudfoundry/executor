@@ -1362,7 +1362,7 @@ var _ = Describe("Container Store", func() {
 					}), nil)
 					Expect(containerStore.Run(logger, "some-trace-id", containerGuid)).NotTo(HaveOccurred())
 					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
-					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
+					_, _, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
 					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002), uint16(containerstore.C2CTLSPort)))
 				})
 

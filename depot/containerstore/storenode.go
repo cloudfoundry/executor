@@ -526,7 +526,8 @@ func (n *storeNode) Run(logger lager.Logger, traceID string) error {
 		CreationStartTime: n.startTime,
 		MetronClient:      n.metronClient,
 	}
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, n.logStreamer, cfg)
+	readinessChan := make(chan steps.ReadinessState, 10) // todo replace buffer with reader for channel
+	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, readinessChan, n.logStreamer, cfg)
 	if err != nil {
 		return err
 	}

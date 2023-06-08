@@ -49,7 +49,7 @@ var HealthCheckDstPath string = filepath.Join(string(os.PathSeparator), "etc", "
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, chan steps.ReadinessState, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
 }
 
 type Config struct {
@@ -373,6 +373,7 @@ func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
 	gardenContainer garden.Container,
+	readinessChan chan steps.ReadinessState,
 	logStreamer log_streamer.LogStreamer,
 	config Config,
 ) (ifrit.Runner, error) {
@@ -490,6 +491,7 @@ func (t *transformer) StepsRunner(
 			readinessMonitor = t.transformReadinessCheckDefinition(logger,
 				&container,
 				gardenContainer,
+				readinessChan,
 				logStreamer,
 				config.BindMounts,
 				proxyStartupChecks,
@@ -643,6 +645,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 	logger lager.Logger,
 	container *executor.Container,
 	gardenContainer garden.Container,
+	readinessChan chan steps.ReadinessState,
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyStartupChecks []ifrit.Runner,
@@ -744,6 +747,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 		untilSuccessReadinessCheck,
 		untilFailureReadinessCheck,
 		logstreamer,
+		readinessChan,
 	)
 }
 
