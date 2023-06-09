@@ -1771,6 +1771,44 @@ var _ = Describe("Container Store", func() {
 						event := eventEmitter.EmitArgsForCall(1)
 						Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
 					})
+
+					FContext("when the container gets a message from the readinessChan", func() {
+						var readinessChan chan steps.ReadinessState
+						JustBeforeEach(func() {
+							err := containerStore.Run(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+							Eventually(readyChan).Should(Receive())
+
+							_, _, _, readinessChan, _, _ = megatron.StepsRunnerArgsForCall(0)
+
+							Eventually(logger).Should(gbytes.Say("healthcheck-passed"))
+						})
+
+						Context("when the message is IsNotReady", func() {
+							It("Logs", func() {
+								readinessChan <- steps.IsNotReady
+								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+							})
+						})
+						Context("when the message is IsReady", func() {
+							It("Logs", func() {
+								readinessChan <- steps.IsReady
+								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
+							})
+
+						})
+						Context("when the message is IsReady folloed by IsNotReady", func() {
+							It("Logs both (listener does not exit the channel", func() {
+								readinessChan <- steps.IsReady
+								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
+								readinessChan <- steps.IsNotReady
+								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+							})
+
+						})
+					})
 				})
 
 				Context("when the action exits", func() {

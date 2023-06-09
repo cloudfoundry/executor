@@ -537,7 +537,7 @@ func (n *storeNode) Run(logger lager.Logger, traceID string) error {
 		{Name: "runner", Runner: runner},
 	})
 	n.process = ifrit.Background(group)
-	go n.run(logger, n.logStreamer, traceID)
+	go n.run(logger, readinessChan, n.logStreamer, traceID)
 	return nil
 }
 
@@ -575,8 +575,25 @@ func (n *storeNode) completeWithError(logger lager.Logger, traceID string, err e
 	n.complete(logger, traceID, false, "", false)
 }
 
-func (n *storeNode) run(logger lager.Logger, logStreamer log_streamer.LogStreamer, traceID string) {
+func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps.ReadinessState, logStreamer log_streamer.LogStreamer) {
+	for {
+		select {
+		case msg := <-readinessCh: // This goroutine will automatically exit when it's calling function (run) exits.
+			if msg == steps.IsNotReady {
+				logger.Info("Got IsNotReady message")
+				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is not ready!\n")
+			}
+			if msg == steps.IsReady {
+				logger.Info("Got IsReady message")
+				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is ready!\n")
+			}
+		}
+	}
+}
+
+func (n *storeNode) run(logger lager.Logger, readinessCh chan steps.ReadinessState, logStreamer log_streamer.LogStreamer, traceID string) {
 	defer logStreamer.Stop()
+	go n.monitorReadiness(logger, readinessCh, logStreamer)
 	// wait for container runner to start
 	logger.Debug("execute-process")
 	defer n.metronClient.IncrementCounter(ContainerCompletedCount)
