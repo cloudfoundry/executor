@@ -582,10 +582,13 @@ func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps
 			if msg == steps.IsNotReady {
 				logger.Info("Got IsNotReady message")
 				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is not ready!\n")
+				n.infoLock.Lock()
+				n.eventEmitter.Emit(executor.NewContainerReservedEvent(n.info)) //TODO replace with condition. Also, does this need to be in a goroutine?
+				n.infoLock.Unlock()                                             // Does this need to be in a defer?
+				//	return return was needed when unlock() was in a defer
 			}
 			if msg == steps.IsReady {
 				logger.Info("Got IsReady message")
-				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is ready!\n")
 			}
 		}
 	}

@@ -1772,7 +1772,7 @@ var _ = Describe("Container Store", func() {
 						Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
 					})
 
-					FContext("when the container gets a message from the readinessChan", func() {
+					Context("when the container gets a message from the readinessChan", func() {
 						var readinessChan chan steps.ReadinessState
 						JustBeforeEach(func() {
 							err := containerStore.Run(logger, containerGuid)
@@ -1791,20 +1791,36 @@ var _ = Describe("Container Store", func() {
 								readinessChan <- steps.IsNotReady
 								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
 							})
+							It("emits a container not ready event", func() {
+							})
 						})
 						Context("when the message is IsReady", func() {
 							It("Logs", func() {
 								readinessChan <- steps.IsReady
 								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
 							})
+							It("does not emit an event", func() {
+							})
 
 						})
-						Context("when the message is IsReady folloed by IsNotReady", func() {
-							It("Logs both (listener does not exit the channel", func() {
+						Context("when the message is IsReady followed by IsNotReady", func() {
+							JustBeforeEach(func() {
 								readinessChan <- steps.IsReady
-								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
 								readinessChan <- steps.IsNotReady
+							})
+
+							It("Logs both (listener does not exit the channel)", func() {
+								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
 								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+							})
+							FIt("emits a container not ready event", func() {
+								// info := executor.Container{}
+								// info.State = executor.StateReserved // TODO replace me,
+								// implement info.Condition and executor.ConditionNotReady
+
+								Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
+								event := eventEmitter.EmitArgsForCall(2)
+								Expect(event.EventType()).To(Equal(executor.EventTypeContainerComplete))
 							})
 
 						})
