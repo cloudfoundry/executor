@@ -26,6 +26,13 @@ const (
 	StateCompleted    State = "completed"
 )
 
+type Condition int
+
+const (
+	ConditionNotReady = iota
+	ConditionReady    = 1
+)
+
 const (
 	HealthcheckTag      = "executor-healthcheck"
 	HealthcheckTagValue = "executor-healthcheck"
@@ -42,6 +49,7 @@ type Container struct {
 	RunInfo
 	Tags                                  Tags
 	State                                 State              `json:"state"`
+	Condition                             Condition          `json:"condition"`
 	AllocatedAt                           int64              `json:"allocated_at"`
 	ExternalIP                            string             `json:"external_ip"`
 	InternalIP                            string             `json:"internal_ip"`
@@ -359,6 +367,7 @@ const (
 	EventTypeContainerComplete EventType = "container_complete"
 	EventTypeContainerRunning  EventType = "container_running"
 	EventTypeContainerReserved EventType = "container_reserved"
+	EventTypeContainerNotReady EventType = "container_not_ready"
 )
 
 type LifecycleEvent interface {
@@ -378,6 +387,17 @@ func NewContainerCompleteEvent(container Container, traceID string) ContainerCom
 		traceID:      traceID,
 	}
 }
+
+type ContainerNotReadyEvent struct {
+	RawContainer Container `json:"container"`
+}
+
+func NewContainerNotReadyEvent(container Container) ContainerNotReadyEvent {
+	return ContainerNotReadyEvent{
+		RawContainer: container,
+	}
+}
+func (ContainerNotReadyEvent) EventType() EventType { return EventTypeContainerNotReady }
 
 func (ContainerCompleteEvent) EventType() EventType   { return EventTypeContainerComplete }
 func (e ContainerCompleteEvent) TraceID() string      { return e.traceID }

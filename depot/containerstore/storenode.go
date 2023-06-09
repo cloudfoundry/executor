@@ -583,7 +583,8 @@ func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps
 				logger.Info("Got IsNotReady message")
 				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is not ready!\n")
 				n.infoLock.Lock()
-				n.eventEmitter.Emit(executor.NewContainerReservedEvent(n.info)) //TODO replace with condition. Also, does this need to be in a goroutine?
+				n.info.Condition = executor.ConditionNotReady
+				n.eventEmitter.Emit(executor.NewContainerNotReadyEvent(n.info)) //TODO replace with condition. Also, does this need to be in a goroutine?
 				n.infoLock.Unlock()                                             // Does this need to be in a defer?
 				//	return return was needed when unlock() was in a defer
 			}
@@ -610,7 +611,7 @@ func (n *storeNode) run(logger lager.Logger, readinessCh chan steps.ReadinessSta
 	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
-	n.info.State = executor.StateRunning
+	n.info.Condition = executor.ConditionNotReady
 	info := n.info.Copy()
 	n.infoLock.Unlock()
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info, traceID))

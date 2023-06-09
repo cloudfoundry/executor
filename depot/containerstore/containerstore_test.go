@@ -1814,13 +1814,13 @@ var _ = Describe("Container Store", func() {
 								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
 							})
 							FIt("emits a container not ready event", func() {
-								// info := executor.Container{}
-								// info.State = executor.StateReserved // TODO replace me,
-								// implement info.Condition and executor.ConditionNotReady
+								container, err := containerStore.Get(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+								Expect(container.Condition).To(BeEquivalentTo(executor.ConditionNotReady))
 
 								Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
 								event := eventEmitter.EmitArgsForCall(2)
-								Expect(event.EventType()).To(Equal(executor.EventTypeContainerComplete))
+								Expect(event.EventType()).To(Equal(executor.EventTypeContainerNotReady))
 							})
 
 						})
