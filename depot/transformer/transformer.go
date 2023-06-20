@@ -49,7 +49,7 @@ var HealthCheckDstPath string = filepath.Join(string(os.PathSeparator), "etc", "
 //go:generate counterfeiter -o faketransformer/fake_transformer.go . Transformer
 
 type Transformer interface {
-	StepsRunner(lager.Logger, executor.Container, garden.Container, chan steps.ReadinessState, log_streamer.LogStreamer, Config) (ifrit.Runner, error)
+	StepsRunner(lager.Logger, executor.Container, garden.Container, log_streamer.LogStreamer, Config) (ifrit.Runner, chan steps.ReadinessState, error)
 }
 
 type Config struct {
@@ -195,7 +195,6 @@ func (t *transformer) stepFor(
 			t.uploadLimiter,
 			logger,
 		)
-
 	case *models.EmitProgressAction:
 		return steps.NewEmitProgress(
 			t.stepFor(
@@ -373,10 +372,10 @@ func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
 	gardenContainer garden.Container,
-	readinessChan chan steps.ReadinessState,
 	logStreamer log_streamer.LogStreamer,
 	config Config,
-) (ifrit.Runner, error) {
+	// ) (ifrit.Runner, chan steps.ReadinessState, error) {
+) (ifrit.Runner, chan steps.ReadinessState, error) {
 	var setup, action, postSetup, monitor, readinessMonitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
@@ -419,7 +418,7 @@ func (t *transformer) StepsRunner(
 	if container.Action == nil {
 		err := errors.New("container cannot have empty action")
 		logger.Error("steps-runner-empty-action", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	action = t.stepFor(
@@ -475,7 +474,7 @@ func (t *transformer) StepsRunner(
 			proxyStartupChecks = append(proxyStartupChecks, step)
 		}
 	}
-
+	var readinessChan chan steps.ReadinessState
 	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
 		if container.CheckDefinition.Checks != nil {
 			monitor = t.transformCheckDefinition(logger,
@@ -487,7 +486,9 @@ func (t *transformer) StepsRunner(
 			)
 			substeps = append(substeps, monitor)
 		}
+
 		if container.CheckDefinition.ReadinessChecks != nil {
+			readinessChan = make(chan steps.ReadinessState, 10) // todo replace buffer with reader for channel
 			readinessMonitor = t.transformReadinessCheckDefinition(logger,
 				&container,
 				gardenContainer,
@@ -554,7 +555,7 @@ func (t *transformer) StepsRunner(
 		}
 	}
 
-	return cumulativeStep, nil
+	return cumulativeStep, readinessChan, nil
 }
 
 func (t *transformer) createCheck(

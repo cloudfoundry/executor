@@ -1359,10 +1359,10 @@ var _ = Describe("Container Store", func() {
 					Expect(err).NotTo(HaveOccurred())
 					megatron.StepsRunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 						return nil
-					}), nil)
+					}), nil, nil)
 					Expect(containerStore.Run(logger, "some-trace-id", containerGuid)).NotTo(HaveOccurred())
 					Eventually(megatron.StepsRunnerCallCount).Should(Equal(1))
-					_, _, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
+					_, _, _, _, cfg := megatron.StepsRunnerArgsForCall(0)
 					Expect(cfg.ProxyTLSPorts).To(ConsistOf(uint16(61001), uint16(61002), uint16(containerstore.C2CTLSPort)))
 				})
 
@@ -1596,7 +1596,7 @@ var _ = Describe("Container Store", func() {
 						<-signals
 						containerRunnerSignalled <- struct{}{}
 						return nil
-					}), nil)
+					}), nil, nil)
 				})
 
 				AfterEach(func() {
@@ -1689,7 +1689,7 @@ var _ = Describe("Container Store", func() {
 						close(ready)
 						<-signals
 						return nil
-					}), nil)
+					}), nil, nil)
 				})
 
 				AfterEach(func() {
@@ -1737,7 +1737,7 @@ var _ = Describe("Container Store", func() {
 							<-signals
 							return nil
 						}
-						megatron.StepsRunnerReturns(testRunner, nil)
+						megatron.StepsRunnerReturns(testRunner, nil, nil)
 					})
 
 					It("performs the step", func() {
@@ -1772,59 +1772,129 @@ var _ = Describe("Container Store", func() {
 						Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
 					})
 
-					Context("when the container gets a message from the readinessChan", func() {
-						var readinessChan chan steps.ReadinessState
-						JustBeforeEach(func() {
-							err := containerStore.Run(logger, containerGuid)
+					Context("when there is no readiness check defined", func() {
+						BeforeEach(func() {
+							runReq.RunInfo.CheckDefinition = nil
+
+						})
+						FIt("Initializes routable as true", func() {
+
+							// err := containerStore.Run(logger, "some-trace-id", containerGuid)
+							// Expect(err).NotTo(HaveOccurred())
+
+							// container, err := containerStore.Get(logger, containerGuid)
+							// Expect(err).NotTo(HaveOccurred())
+							// Expect(container.Routable).To(Equal(true))
+							// Eventually(readyChan).Should(Receive())
+
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
-							Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+							// Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
 							Eventually(readyChan).Should(Receive())
-
-							_, _, _, readinessChan, _, _ = megatron.StepsRunnerArgsForCall(0)
-
-							Eventually(logger).Should(gbytes.Say("healthcheck-passed"))
+							container, err := containerStore.Get(logger, containerGuid)
+							fmt.Println(fmt.Sprintf("Does fetched container have routable true? %v", container.Routable))// prints "false"
+							Expect(err).NotTo(HaveOccurred())
+							Expect(container.Routable).To(BeTrue())
+							// Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
+							// event := eventEmitter.EmitArgsForCall(0)
+							// Expect(event.EventType()).To(Equal(executor.EventTypeContainerReserved))
+							// event = eventEmitter.EmitArgsForCall(1)
+							// Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
 						})
-
-						Context("when the message is IsNotReady", func() {
-							It("Logs", func() {
-								readinessChan <- steps.IsNotReady
-								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
-							})
-							It("emits a container not ready event", func() {
-							})
-						})
-						Context("when the message is IsReady", func() {
-							It("Logs", func() {
-								readinessChan <- steps.IsReady
-								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
-							})
-							It("does not emit an event", func() {
-							})
-
-						})
-						Context("when the message is IsReady followed by IsNotReady", func() {
-							JustBeforeEach(func() {
-								readinessChan <- steps.IsReady
-								readinessChan <- steps.IsNotReady
-							})
-
-							It("Logs both (listener does not exit the channel)", func() {
-								Eventually(logger).Should(gbytes.Say("Got IsReady message"))
-								Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
-							})
-							FIt("emits a container not ready event", func() {
-								container, err := containerStore.Get(logger, containerGuid)
-								Expect(err).NotTo(HaveOccurred())
-								Expect(container.Condition).To(BeEquivalentTo(executor.ConditionNotReady))
-
-								Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
-								event := eventEmitter.EmitArgsForCall(2)
-								Expect(event.EventType()).To(Equal(executor.EventTypeContainerNotReady))
-							})
+						It("Initializes the runner with no readiness channel", func() {
 
 						})
 					})
+
+					Context("When there is a readiness check defined", func() {
+						JustBeforeEach(func() {
+							runReq.RunInfo.CheckDefinition = &models.CheckDefinition{
+								ReadinessChecks: []*models.Check{
+									&models.Check{
+										HttpCheck: &models.HTTPCheck{
+											Port: 8989,
+										},
+									},
+								},
+							}
+
+						})
+						It("Initializes routable as false", func() {
+
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(readyChan).Should(Receive())
+
+							container, err := containerStore.Get(logger, containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(container.Routable).To(Equal(false))
+						})
+						It("initializes the runner with a readiness channel", func() {
+
+						})
+
+						Context("when the container gets a message from the readinessChan", func() {
+							var readinessChan chan steps.ReadinessState
+							JustBeforeEach(func() {
+								err := containerStore.Run(logger, "some-trace-id", containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+
+								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
+								Eventually(readyChan).Should(Receive())
+
+								_, _, _, _, _ = megatron.StepsRunnerArgsForCall(0) //probably not necessary?
+
+								Eventually(logger).Should(gbytes.Say("healthcheck-passed"))
+							})
+
+							Context("when the message is IsNotReady", func() {
+								It("Logs", func() {
+									readinessChan <- steps.IsNotReady
+									Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+								})
+								It("emits a container not ready event", func() {
+								})
+							})
+							Context("when the message is IsReady", func() {
+								It("Logs", func() {
+									readinessChan <- steps.IsReady
+									Eventually(logger).Should(gbytes.Say("Got IsReady message"))
+								})
+								It("does not emit an event", func() {
+								})
+
+							})
+							Context("when the message is IsReady followed by IsNotReady", func() {
+								JustBeforeEach(func() {
+									readinessChan <- steps.IsReady
+									readinessChan <- steps.IsNotReady
+								})
+
+								It("Logs both (listener does not exit the channel)", func() {
+									Eventually(logger).Should(gbytes.Say("Got IsReady message"))
+									Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+								})
+								It("emits a container not ready event", func() {
+									container, err := containerStore.Get(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(container.Routable).To(Equal(false))
+
+									Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
+									event := eventEmitter.EmitArgsForCall(2)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerNotReady))
+								})
+
+							})
+						})
+					})
+
+				})
+				Context("When there is no readiness check defined", func() {
+					It("Initializes the runner with no readiness channel", func() {
+
+					})
+
 				})
 
 				Context("when the action exits", func() {
@@ -1843,7 +1913,7 @@ var _ = Describe("Container Store", func() {
 								<-completeChan
 								return nil
 							}
-							megatron.StepsRunnerReturns(testRunner, nil)
+							megatron.StepsRunnerReturns(testRunner, nil, nil)
 						})
 
 						It("sets its state to completed", func() {
@@ -1914,7 +1984,7 @@ var _ = Describe("Container Store", func() {
 								close(ready)
 								return errors.New("BOOOOM!!!!")
 							}
-							megatron.StepsRunnerReturns(testRunner, nil)
+							megatron.StepsRunnerReturns(testRunner, nil, nil)
 						})
 
 						It("sets the run result on the container", func() {
@@ -1949,7 +2019,7 @@ var _ = Describe("Container Store", func() {
 									close(ready)
 									return new(steps.ExceededGracefulShutdownIntervalError)
 								}
-								megatron.StepsRunnerReturns(testRunner, nil)
+								megatron.StepsRunnerReturns(testRunner, nil, nil)
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
@@ -1970,7 +2040,7 @@ var _ = Describe("Container Store", func() {
 									close(ready)
 									return new(steps.ExitTimeoutError)
 								}
-								megatron.StepsRunnerReturns(testRunner, nil)
+								megatron.StepsRunnerReturns(testRunner, nil, nil)
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
@@ -2001,7 +2071,7 @@ var _ = Describe("Container Store", func() {
 										},
 									}
 								}
-								megatron.StepsRunnerReturns(testRunner, nil)
+								megatron.StepsRunnerReturns(testRunner, nil, nil)
 							})
 
 							It("increments the ContainerExitedOnTimeoutCount and ContainerCompletedCount metric", func() {
@@ -2027,7 +2097,7 @@ var _ = Describe("Container Store", func() {
 											},
 										}
 									}
-									megatron.StepsRunnerReturns(testRunner, nil)
+									megatron.StepsRunnerReturns(testRunner, nil, nil)
 								})
 
 								It("only increments the graceful shutdown exceeded metric once", func() {
@@ -2044,7 +2114,7 @@ var _ = Describe("Container Store", func() {
 
 				Context("when the transformer fails to generate steps", func() {
 					BeforeEach(func() {
-						megatron.StepsRunnerReturns(nil, errors.New("defeated by the auto bots"))
+						megatron.StepsRunnerReturns(nil, nil, errors.New("defeated by the auto bots"))
 					})
 
 					It("returns an error", func() {
@@ -2186,7 +2256,7 @@ var _ = Describe("Container Store", func() {
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
-			megatron.StepsRunnerReturns(testRunner, nil)
+			megatron.StepsRunnerReturns(testRunner, nil, nil)
 			internalRoutes = internalroutes.InternalRoutes{
 				{Hostname: "a.apps.internal"},
 				{Hostname: "b.apps.internal"},
@@ -2429,7 +2499,7 @@ var _ = Describe("Container Store", func() {
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
-			megatron.StepsRunnerReturns(testRunner, nil)
+			megatron.StepsRunnerReturns(testRunner, nil, nil)
 		})
 
 		JustBeforeEach(func() {
@@ -2757,7 +2827,7 @@ var _ = Describe("Container Store", func() {
 				}
 
 				signalled := credManagerRunnerSignalled
-				megatron.StepsRunnerReturns(testRunner, nil)
+				megatron.StepsRunnerReturns(testRunner, nil, nil)
 				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals
@@ -2817,7 +2887,7 @@ var _ = Describe("Container Store", func() {
 				}
 
 				signalled := credManagerRunnerSignalled
-				megatron.StepsRunnerReturns(testRunner, nil)
+				megatron.StepsRunnerReturns(testRunner, nil, nil)
 				credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 					close(ready)
 					<-signals

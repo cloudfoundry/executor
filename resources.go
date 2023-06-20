@@ -26,13 +26,6 @@ const (
 	StateCompleted    State = "completed"
 )
 
-type Condition int
-
-const (
-	ConditionNotReady = iota
-	ConditionReady    = 1
-)
-
 const (
 	HealthcheckTag      = "executor-healthcheck"
 	HealthcheckTagValue = "executor-healthcheck"
@@ -49,7 +42,7 @@ type Container struct {
 	RunInfo
 	Tags                                  Tags
 	State                                 State              `json:"state"`
-	Condition                             Condition          `json:"condition"`
+	Routable                              bool               `json:"routable"`
 	AllocatedAt                           int64              `json:"allocated_at"`
 	ExternalIP                            string             `json:"external_ip"`
 	InternalIP                            string             `json:"internal_ip"`

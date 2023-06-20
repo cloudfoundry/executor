@@ -526,8 +526,7 @@ func (n *storeNode) Run(logger lager.Logger, traceID string) error {
 		CreationStartTime: n.startTime,
 		MetronClient:      n.metronClient,
 	}
-	readinessChan := make(chan steps.ReadinessState, 10) // todo replace buffer with reader for channel
-	runner, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, readinessChan, n.logStreamer, cfg)
+	runner, readinessChan, err := n.transformer.StepsRunner(logger, n.info, n.gardenContainer, n.logStreamer, cfg)
 	if err != nil {
 		return err
 	}
@@ -575,7 +574,7 @@ func (n *storeNode) completeWithError(logger lager.Logger, traceID string, err e
 	n.complete(logger, traceID, false, "", false)
 }
 
-func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps.ReadinessState, logStreamer log_streamer.LogStreamer) {
+func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps.ReadinessState, traceID string, logStreamer log_streamer.LogStreamer) {
 	for {
 		select {
 		case msg := <-readinessCh: // This goroutine will automatically exit when it's calling function (run) exits.
@@ -583,13 +582,16 @@ func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps
 				logger.Info("Got IsNotReady message")
 				fmt.Fprint(logStreamer.Stdout(), "Store node sees that app is not ready!\n")
 				n.infoLock.Lock()
-				n.info.Condition = executor.ConditionNotReady
-				n.eventEmitter.Emit(executor.NewContainerNotReadyEvent(n.info)) //TODO replace with condition. Also, does this need to be in a goroutine?
-				n.infoLock.Unlock()                                             // Does this need to be in a defer?
-				//	return return was needed when unlock() was in a defer
+				n.info.Routable = false
+				n.eventEmitter.Emit(executor.NewContainerRunningEvent(n.info, traceID))
+
 			}
 			if msg == steps.IsReady {
 				logger.Info("Got IsReady message")
+				n.infoLock.Lock()
+				n.info.Routable = true
+				n.eventEmitter.Emit(executor.NewContainerRunningEvent(n.info, traceID))
+				n.infoLock.Unlock()
 			}
 		}
 	}
@@ -597,7 +599,10 @@ func (n *storeNode) monitorReadiness(logger lager.Logger, readinessCh chan steps
 
 func (n *storeNode) run(logger lager.Logger, readinessCh chan steps.ReadinessState, logStreamer log_streamer.LogStreamer, traceID string) {
 	defer logStreamer.Stop()
-	go n.monitorReadiness(logger, readinessCh, logStreamer)
+	if readinessCh != nil {
+		go n.monitorReadiness(logger, readinessCh, traceID, logStreamer)
+	}
+
 	// wait for container runner to start
 	logger.Debug("execute-process")
 	defer n.metronClient.IncrementCounter(ContainerCompletedCount)
@@ -611,9 +616,19 @@ func (n *storeNode) run(logger lager.Logger, readinessCh chan steps.ReadinessSta
 	logger.Debug("healthcheck-passed")
 
 	n.infoLock.Lock()
-	n.info.Condition = executor.ConditionNotReady
+	n.info.State = executor.StateRunning
+	if readinessCh == nil {
+		fmt.Println("readinessCh is nil")
+		n.info.Routable = true
+	} else {
+		fmt.Println("readinessCh is not nil")
+		n.info.Routable = false
+	}
 	info := n.info.Copy()
 	n.infoLock.Unlock()
+	// fmt.Println(fmt.Sprintf("Does info have routable true? %v", info))
+
+	fmt.Println(fmt.Sprintf("Does info by itself have routable true? %v", info.Routable)) // prints "true"
 	go n.eventEmitter.Emit(executor.NewContainerRunningEvent(info, traceID))
 
 	err := <-n.process.Wait()

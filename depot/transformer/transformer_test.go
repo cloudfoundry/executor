@@ -48,7 +48,9 @@ var _ = Describe("Transformer", func() {
 			healthCheckWorkPool         *workpool.WorkPool
 			cfg                         transformer.Config
 			options                     []transformer.Option
+			runner                      ifrit.Runner
 			readinessChan               chan steps.ReadinessState
+			err                         error
 		)
 
 		BeforeEach(func() {
@@ -81,7 +83,6 @@ var _ = Describe("Transformer", func() {
 					},
 				},
 			}
-			readinessChan = make(chan steps.ReadinessState, 10)
 
 			options = []transformer.Option{
 				transformer.WithSidecarRootfs("preloaded:cflinuxfs3"),
@@ -127,7 +128,8 @@ var _ = Describe("Transformer", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				_, readinessChan, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
+				Expect(readinessChan).To(BeNil())
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -170,7 +172,7 @@ var _ = Describe("Transformer", func() {
 					return &gardenfakes.FakeProcess{}, nil
 				}
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -225,7 +227,7 @@ var _ = Describe("Transformer", func() {
 			}
 
 			cfg.CreationStartTime = clock.Now()
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+			runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 			Expect(err).NotTo(HaveOccurred())
 			ifrit.Background(runner)
 
@@ -246,7 +248,7 @@ var _ = Describe("Transformer", func() {
 				}
 				return &gardenfakes.FakeProcess{}, nil
 			}
-			runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+			runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 			Expect(err).NotTo(HaveOccurred())
 			process := ifrit.Background(runner)
 			Consistently(process.Ready()).ShouldNot(BeClosed())
@@ -350,7 +352,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -604,7 +606,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, readinessChan, err = optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process = ifrit.Background(runner)
@@ -717,7 +719,12 @@ var _ = Describe("Transformer", func() {
 						}
 					})
 
-					Context("when there is a readiness check", func() {
+					Context("when readiness checks are not defined", func() {
+						It("does not return a readinessChan", func() {
+							Expect(readinessChan).To(BeNil())
+						})
+					})
+					Context("when the readiness check is defined", func() {
 						Context("http readiness check", func() {
 							BeforeEach(func() {
 								container.CheckDefinition = &models.CheckDefinition{
@@ -732,6 +739,10 @@ var _ = Describe("Transformer", func() {
 										},
 									},
 								}
+
+							})
+							It("returns a readinessChan", func() {
+								Expect(readinessChan).NotTo(BeNil())
 							})
 							Context("when optional properties are not provided", func() {
 								BeforeEach(func() {
@@ -1868,7 +1879,7 @@ var _ = Describe("Transformer", func() {
 			It("returns a codependent step for the action/monitor", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -1892,7 +1903,7 @@ var _ = Describe("Transformer", func() {
 			It("logs the container creation time", func() {
 				gardenContainer.RunReturns(&gardenfakes.FakeProcess{}, nil)
 				cfg.CreationStartTime = clock.Now()
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 				ifrit.Background(runner)
 
@@ -1917,7 +1928,7 @@ var _ = Describe("Transformer", func() {
 				}
 				gardenContainer.RunReturns(fakeGardenProcess, nil)
 
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				process := ifrit.Background(runner)
@@ -1936,7 +1947,7 @@ var _ = Describe("Transformer", func() {
 			)
 
 			JustBeforeEach(func() {
-				runner, err := optimusPrime.StepsRunner(logger, container, gardenContainer, readinessChan, logStreamer, cfg)
+				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())
 				process = ifrit.Background(runner)
 			})
