@@ -1729,15 +1729,21 @@ var _ = Describe("Container Store", func() {
 
 				Context("when the action runs indefinitely", func() {
 					var readyChan chan struct{}
+					var readinessCheckChan chan steps.ReadinessState
+
 					BeforeEach(func() {
 						readyChan = make(chan struct{})
+						readinessCheckChan = nil
+					})
+
+					JustBeforeEach(func() {
 						var testRunner ifrit.RunFunc = func(signals <-chan os.Signal, ready chan<- struct{}) error {
 							readyChan <- struct{}{}
 							close(ready)
 							<-signals
 							return nil
 						}
-						megatron.StepsRunnerReturns(testRunner, nil, nil)
+						megatron.StepsRunnerReturns(testRunner, readinessCheckChan, nil)
 					})
 
 					It("performs the step", func() {
@@ -1775,67 +1781,51 @@ var _ = Describe("Container Store", func() {
 					Context("when there is no readiness check defined", func() {
 						BeforeEach(func() {
 							runReq.RunInfo.CheckDefinition = nil
-
 						})
-						FIt("Initializes routable as true", func() {
 
-							// err := containerStore.Run(logger, "some-trace-id", containerGuid)
-							// Expect(err).NotTo(HaveOccurred())
-
-							// container, err := containerStore.Get(logger, containerGuid)
-							// Expect(err).NotTo(HaveOccurred())
-							// Expect(container.Routable).To(Equal(true))
-							// Eventually(readyChan).Should(Receive())
-
+						It("initializes routable as true", func() {
 							err := containerStore.Run(logger, "some-trace-id", containerGuid)
 							Expect(err).NotTo(HaveOccurred())
 
-							// Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
 							Eventually(readyChan).Should(Receive())
+
+							Eventually(func() executor.State {
+								container, err := containerStore.Get(logger, containerGuid)
+								Expect(err).NotTo(HaveOccurred())
+								return container.State
+							}).Should(Equal(executor.StateRunning))
+
 							container, err := containerStore.Get(logger, containerGuid)
-							fmt.Println(fmt.Sprintf("Does fetched container have routable true? %v", container.Routable))// prints "false"
 							Expect(err).NotTo(HaveOccurred())
 							Expect(container.Routable).To(BeTrue())
-							// Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
-							// event := eventEmitter.EmitArgsForCall(0)
-							// Expect(event.EventType()).To(Equal(executor.EventTypeContainerReserved))
-							// event = eventEmitter.EmitArgsForCall(1)
-							// Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
-						})
-						It("Initializes the runner with no readiness channel", func() {
 
+							Eventually(eventEmitter.EmitCallCount).Should(Equal(2))
+							event := eventEmitter.EmitArgsForCall(0)
+							Expect(event.EventType()).To(Equal(executor.EventTypeContainerReserved))
+							event = eventEmitter.EmitArgsForCall(1)
+							Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
+							Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
 						})
 					})
 
-					Context("When there is a readiness check defined", func() {
+					Context("when there is a readiness check defined", func() {
 						JustBeforeEach(func() {
 							runReq.RunInfo.CheckDefinition = &models.CheckDefinition{
 								ReadinessChecks: []*models.Check{
-									&models.Check{
+									{
 										HttpCheck: &models.HTTPCheck{
 											Port: 8989,
 										},
 									},
 								},
 							}
-
-						})
-						It("Initializes routable as false", func() {
-
-							err := containerStore.Run(logger, "some-trace-id", containerGuid)
-							Expect(err).NotTo(HaveOccurred())
-							Eventually(readyChan).Should(Receive())
-
-							container, err := containerStore.Get(logger, containerGuid)
-							Expect(err).NotTo(HaveOccurred())
-							Expect(container.Routable).To(Equal(false))
-						})
-						It("initializes the runner with a readiness channel", func() {
-
 						})
 
 						Context("when the container gets a message from the readinessChan", func() {
-							var readinessChan chan steps.ReadinessState
+							BeforeEach(func() {
+								readinessCheckChan = make(chan steps.ReadinessState)
+							})
+
 							JustBeforeEach(func() {
 								err := containerStore.Run(logger, "some-trace-id", containerGuid)
 								Expect(err).NotTo(HaveOccurred())
@@ -1843,58 +1833,92 @@ var _ = Describe("Container Store", func() {
 								Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
 								Eventually(readyChan).Should(Receive())
 
-								_, _, _, _, _ = megatron.StepsRunnerArgsForCall(0) //probably not necessary?
-
 								Eventually(logger).Should(gbytes.Say("healthcheck-passed"))
 							})
 
 							Context("when the message is IsNotReady", func() {
-								It("Logs", func() {
-									readinessChan <- steps.IsNotReady
-									Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
-								})
-								It("emits a container not ready event", func() {
-								})
-							})
-							Context("when the message is IsReady", func() {
-								It("Logs", func() {
-									readinessChan <- steps.IsReady
-									Eventually(logger).Should(gbytes.Say("Got IsReady message"))
-								})
-								It("does not emit an event", func() {
+								JustBeforeEach(func() {
+									readinessCheckChan <- steps.IsNotReady
 								})
 
+								It("logs", func() {
+									Eventually(logger).Should(gbytes.Say("readiness-healthcheck-failed"))
+								})
+
+								It("emits a container not ready event", func() {
+									Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
+									event := eventEmitter.EmitArgsForCall(0)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerReserved))
+									event = eventEmitter.EmitArgsForCall(1)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
+
+									container, err := containerStore.Get(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(container.Routable).To(BeFalse())
+
+									Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
+
+									event = eventEmitter.EmitArgsForCall(2)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
+									Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
+								})
 							})
+
+							Context("when the message is IsReady", func() {
+								JustBeforeEach(func() {
+									readinessCheckChan <- steps.IsReady
+								})
+
+								It("Logs", func() {
+									Eventually(logger).Should(gbytes.Say("readiness-healthcheck-passed"))
+								})
+
+								It("does not emit an event", func() {
+									Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
+									event := eventEmitter.EmitArgsForCall(0)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerReserved))
+									event = eventEmitter.EmitArgsForCall(1)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
+
+									container, err := containerStore.Get(logger, containerGuid)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(container.Routable).To(BeTrue())
+
+									firstContainerEvent := container.Copy()
+									firstContainerEvent.Routable = false
+
+									Expect(event).To(Equal(executor.NewContainerRunningEvent(firstContainerEvent, "some-trace-id")))
+
+									event = eventEmitter.EmitArgsForCall(2)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
+									Expect(event).To(Equal(executor.NewContainerRunningEvent(container, "some-trace-id")))
+								})
+							})
+
 							Context("when the message is IsReady followed by IsNotReady", func() {
 								JustBeforeEach(func() {
-									readinessChan <- steps.IsReady
-									readinessChan <- steps.IsNotReady
+									readinessCheckChan <- steps.IsReady
+									readinessCheckChan <- steps.IsNotReady
 								})
 
 								It("Logs both (listener does not exit the channel)", func() {
-									Eventually(logger).Should(gbytes.Say("Got IsReady message"))
-									Eventually(logger).Should(gbytes.Say("Got IsNotReady message"))
+									Eventually(logger).Should(gbytes.Say("readiness-healthcheck-passed"))
+									Eventually(logger).Should(gbytes.Say("readiness-healthcheck-failed"))
 								})
+
 								It("emits a container not ready event", func() {
 									container, err := containerStore.Get(logger, containerGuid)
 									Expect(err).NotTo(HaveOccurred())
 									Expect(container.Routable).To(Equal(false))
 
-									Eventually(eventEmitter.EmitCallCount).Should(Equal(3))
-									event := eventEmitter.EmitArgsForCall(2)
-									Expect(event.EventType()).To(Equal(executor.EventTypeContainerNotReady))
+									Eventually(eventEmitter.EmitCallCount).Should(Equal(4))
+									event := eventEmitter.EmitArgsForCall(3)
+									Expect(event.EventType()).To(Equal(executor.EventTypeContainerRunning))
 								})
 
 							})
 						})
 					})
-
-				})
-				Context("When there is no readiness check defined", func() {
-					It("Initializes the runner with no readiness channel", func() {
-
-					})
-
 				})
 
 				Context("when the action exits", func() {
