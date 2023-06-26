@@ -749,6 +749,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 		untilFailureReadinessCheck,
 		logstreamer,
 		readinessChan,
+		logger,
 	)
 }
 

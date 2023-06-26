@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer"
+	"code.cloudfoundry.org/lager/v3"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -18,6 +19,7 @@ const (
 type readinessHealthCheckStep struct {
 	untilReadyCheck   ifrit.Runner
 	untilFailureCheck ifrit.Runner
+	logger            lager.Logger
 	logStreamer       log_streamer.LogStreamer
 	readinessChan     chan ReadinessState
 }
@@ -27,43 +29,45 @@ func NewReadinessHealthCheckStep(
 	untilFailureCheck ifrit.Runner,
 	logStreamer log_streamer.LogStreamer,
 	readinessChan chan ReadinessState,
+	logger lager.Logger,
 ) ifrit.Runner {
 	return &readinessHealthCheckStep{
 		untilReadyCheck:   untilReadyCheck,
 		untilFailureCheck: untilFailureCheck,
 		logStreamer:       logStreamer,
 		readinessChan:     readinessChan,
+		logger:            logger,
 	}
 }
 
 func (step *readinessHealthCheckStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	fmt.Fprint(step.logStreamer.Stdout(), "Starting readiness health monitoring of container\n")
-
-	err := step.runUntilReadyProcess(signals)
-	if err != nil {
-		return err
-	}
-
 	close(ready)
 
-	err = step.runUntilFailureProcess(signals)
-	if err != nil {
-		return err
+	for {
+		err := step.runUntilReadyProcess(signals)
+		if err != nil {
+			return err
+		}
+		err = step.runUntilFailureProcess(signals)
+		if err != nil {
+			return err
+		}
 	}
-
-	return nil
 }
 
 func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Signal) error {
 	untilReadyProcess := ifrit.Background(step.untilReadyCheck)
+
 	select {
 	case err := <-untilReadyProcess.Wait():
 		if err != nil {
-			fmt.Fprint(step.logStreamer.Stdout(), "Failed to run the untilReady check\n")
+			fmt.Fprint(step.logStreamer.Stdout(), "Failed to run the readiness check\n")
 			return err
 		}
+		step.logger.Info("transitioned-to-ready")
 		step.readinessChan <- IsReady
-		fmt.Fprint(step.logStreamer.Stdout(), "App is ready!\n")
+		fmt.Fprint(step.logStreamer.Stdout(), "Container became ready\n")
 		return nil
 	case s := <-signals:
 		untilReadyProcess.Signal(s)
@@ -77,11 +81,13 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 	select {
 	case err := <-untilFailureProcess.Wait():
 		if err != nil {
-			fmt.Fprint(step.logStreamer.Stdout(), "Oh no! The app is not ready anymore\n")
+			step.logger.Info("transitioned-to-not-ready")
+			fmt.Fprint(step.logStreamer.Stdout(), "Container became not ready\n")
 			step.readinessChan <- IsNotReady
 			return nil
 		}
-		return nil // TODO: would this case ever happen? how should we handle this?
+		step.logger.Error("unexpected-until-failure-check-result", err)
+		return nil
 	case s := <-signals:
 		untilFailureProcess.Signal(s)
 		<-untilFailureProcess.Wait()

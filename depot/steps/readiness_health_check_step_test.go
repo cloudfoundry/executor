@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
 	"code.cloudfoundry.org/executor/depot/steps"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,11 +18,12 @@ import (
 var _ = Describe("NewReadinessHealthCheckStep", func() {
 	var (
 		fakeStreamer                *fake_log_streamer.FakeLogStreamer
+		logger                      *lagertest.TestLogger
 		untilReadyCheck             *fake_runner.TestRunner
 		untilFailureCheck           *fake_runner.TestRunner
-		process                     ifrit.Process
 		needToKillUntilFailureCheck bool
 		needToKillUntilReadyCheck   bool
+		process                     ifrit.Process
 		readinessChan               chan steps.ReadinessState
 
 		step ifrit.Runner
@@ -31,9 +33,10 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 		fakeStreamer = newFakeStreamer()
 		untilReadyCheck = fake_runner.NewTestRunner()
 		untilFailureCheck = fake_runner.NewTestRunner()
-		needToKillUntilFailureCheck = true
-		needToKillUntilReadyCheck = true
-		readinessChan = make(chan steps.ReadinessState, 2)
+		readinessChan = make(chan steps.ReadinessState)
+		needToKillUntilFailureCheck = false
+		needToKillUntilReadyCheck = false
+		logger = lagertest.NewTestLogger("test")
 	})
 
 	JustBeforeEach(func() {
@@ -42,40 +45,34 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 			untilFailureCheck,
 			fakeStreamer,
 			readinessChan,
+			logger,
 		)
 		process = ifrit.Background(step)
 	})
 
 	AfterEach(func() {
+		process.Signal(os.Interrupt)
 		if needToKillUntilReadyCheck == true {
-			Eventually(untilReadyCheck.RunCallCount).Should(Equal(1))
-			untilReadyCheck.TriggerExit(errors.New("booom!"))
+			Eventually(untilReadyCheck.RunCallCount).Should(Equal(2))
+			Eventually(func() <-chan os.Signal {
+				signal, _ := untilReadyCheck.RunArgsForCall(1)
+				return signal
+			}).Should(Receive(Equal(os.Interrupt)))
+			untilReadyCheck.TriggerExit(errors.New("boom"))
 		}
 		untilReadyCheck.EnsureExit()
-
 		if needToKillUntilFailureCheck == true {
 			Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
-			untilFailureCheck.TriggerExit(errors.New("booom!"))
+			Eventually(func() <-chan os.Signal {
+				signal, _ := untilFailureCheck.RunArgsForCall(0)
+				return signal
+			}).Should(Receive(Equal(os.Interrupt)))
+			untilFailureCheck.TriggerExit(errors.New("boom"))
 		}
 		untilFailureCheck.EnsureExit()
 	})
 
 	Describe("Run", func() {
-		BeforeEach(func() {
-			needToKillUntilReadyCheck = true
-			needToKillUntilFailureCheck = false
-		})
-
-		It("emits a message to the applications log stream", func() {
-			Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-				gbytes.Say("Starting readiness health monitoring of container\n"),
-			)
-		})
-
-		It("Runs the untilReady check", func() {
-			Eventually(untilReadyCheck.RunCallCount).Should(Equal(1))
-		})
-
 		Context("the untilReady check succeeds", func() {
 			BeforeEach(func() {
 				needToKillUntilReadyCheck = false
@@ -84,15 +81,27 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 
 			JustBeforeEach(func() {
 				Consistently(fakeStreamer.Stdout().(*gbytes.Buffer)).ShouldNot(
-					gbytes.Say("App is ready!\n"),
+					gbytes.Say("Container became ready\n"),
 				)
 
 				untilReadyCheck.TriggerExit(nil)
+				state := <-readinessChan
+				Expect(state).To(Equal(steps.IsReady))
+			})
+
+			It("emits a message to the applications log stream", func() {
+				Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+					gbytes.Say("Starting readiness health monitoring of container\n"),
+				)
+			})
+
+			It("runs the untilReady check", func() {
+				Eventually(untilReadyCheck.RunCallCount).Should(Equal(1))
 			})
 
 			It("emits a message to the application log stream", func() {
 				Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-					gbytes.Say("App is ready!\n"),
+					gbytes.Say("Container became ready\n"),
 				)
 			})
 
@@ -104,32 +113,27 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 				Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
 			})
 
-			It("writes ready to the readiness channel", func() {
-				Eventually(readinessChan).Should(Receive(Equal(steps.IsReady)))
-			})
-
 			Context("when the untilFailure check exits with an error", func() {
+				BeforeEach(func() {
+					needToKillUntilReadyCheck = true
+					needToKillUntilFailureCheck = false
+				})
+
 				JustBeforeEach(func() {
 					Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
 					untilFailureCheck.TriggerExit(errors.New("crash"))
-					needToKillUntilFailureCheck = false
-					needToKillUntilReadyCheck = false
+					state := <-readinessChan
+					Expect(state).To(Equal(steps.IsNotReady))
 				})
 
 				It("emits a message to the application log stream", func() {
 					Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-						gbytes.Say("Oh no! The app is not ready anymore\n"),
+						gbytes.Say("Container became not ready\n"),
 					)
 				})
 
-				It("writes notReady to the readiness channel", func() {
-					Eventually(readinessChan).Should(Receive(Equal(steps.IsNotReady)))
-				})
-
-				XIt("the step exits with nil", func() {
-					var err error
-					Eventually(process.Wait()).Should(Receive(&err))
-					Expect(err).To(MatchError(nil))
+				It("restarts untilReady check", func() {
+					Eventually(untilReadyCheck.RunCallCount).Should(Equal(2))
 				})
 			})
 		})
@@ -146,6 +150,20 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 				untilReadyCheck.TriggerExit(disaster)
 			})
 
+			It("becomes ready (process is running)", func() {
+				Eventually(process.Ready()).Should(BeClosed())
+			})
+
+			It("emits a message to the applications log stream", func() {
+				Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
+					gbytes.Say("Starting readiness health monitoring of container\n"),
+				)
+			})
+
+			It("runs the untilReady check", func() {
+				Eventually(untilReadyCheck.RunCallCount).Should(Equal(1))
+			})
+
 			It("the step exits with an error", func() {
 				var err error
 				Eventually(process.Wait()).Should(Receive(&err))
@@ -158,12 +176,8 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 
 			It("emits a message to the application log stream", func() {
 				Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-					gbytes.Say("Failed to run the untilReady check\n"),
+					gbytes.Say("Failed to run the readiness check\n"),
 				)
-			})
-
-			It("does not become ready", func() {
-				Consistently(process.Ready()).ShouldNot(BeClosed())
 			})
 		})
 	})
@@ -191,9 +205,11 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 			})
 		})
 
-		Context("while doing the  check", func() {
+		Context("while doing the untilFailure check", func() {
 			JustBeforeEach(func() {
 				untilReadyCheck.TriggerExit(nil)
+				state := <-readinessChan
+				Expect(state).To(Equal(steps.IsReady))
 				Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
 			})
 
