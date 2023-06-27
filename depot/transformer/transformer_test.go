@@ -55,6 +55,7 @@ var _ = Describe("Transformer", func() {
 
 		BeforeEach(func() {
 			gardenContainer = &gardenfakes.FakeContainer{}
+			gardenContainer.HandleReturns("some-container-handle")
 			fakeMetronClient = &mfakes.FakeIngressClient{}
 
 			logger = lagertest.NewTestLogger("test-container-store")
@@ -725,11 +726,27 @@ var _ = Describe("Transformer", func() {
 						})
 					})
 					Context("when the readiness check is defined", func() {
+						Context("when readiness check is not valid", func() {
+							BeforeEach(func() {
+								container.CheckDefinition = &models.CheckDefinition{
+									ReadinessChecks: []*models.Check{
+										{
+											HttpCheck: &models.HTTPCheck{},
+										},
+									},
+								}
+							})
+
+							It("does not return a readinessChan", func() {
+								Expect(readinessChan).To(BeNil())
+							})
+						})
+
 						Context("http readiness check", func() {
 							BeforeEach(func() {
 								container.CheckDefinition = &models.CheckDefinition{
 									ReadinessChecks: []*models.Check{
-										&models.Check{
+										{
 											HttpCheck: &models.HTTPCheck{
 												Port:             8989,
 												RequestTimeoutMs: 101,
@@ -739,16 +756,17 @@ var _ = Describe("Transformer", func() {
 										},
 									},
 								}
-
 							})
+
 							It("returns a readinessChan", func() {
 								Expect(readinessChan).NotTo(BeNil())
 							})
+
 							Context("when optional properties are not provided", func() {
 								BeforeEach(func() {
 									container.CheckDefinition = &models.CheckDefinition{
 										ReadinessChecks: []*models.Check{
-											&models.Check{
+											{
 												HttpCheck: &models.HTTPCheck{
 													Port: 8989,
 												},
@@ -759,8 +777,7 @@ var _ = Describe("Transformer", func() {
 
 								It("uses sane defaults for the untilReadyCheck", func() {
 									Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-										ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
-										// TODO why is gardenContainer.Handle empty string?
+										ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 										Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 										Args: []string{
 											"-port=8989",
@@ -799,12 +816,11 @@ var _ = Describe("Transformer", func() {
 
 							It("runs the untilReadyCheck in a sidecar container", func() {
 								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-									ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
-									// TODO why is gardenContainer.Handle empty string?
+									ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 									Args: []string{
 										"-port=8989",
-										"-timeout=101ms", // TODO see if this is respected in hc binary
+										"-timeout=101ms",
 										"-uri=/neopets-readiness-check",
 										fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
 									},
@@ -879,6 +895,8 @@ var _ = Describe("Transformer", func() {
 
 								JustBeforeEach(func() {
 									untilSuccessReadinessCh <- 0
+									state := <-readinessChan
+									Expect(state).To(Equal(steps.IsReady))
 								})
 
 								AfterEach(func() {
@@ -927,8 +945,7 @@ var _ = Describe("Transformer", func() {
 							})
 							It("runs the untilReadyCheck in a sidecar container", func() {
 								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-									ID: fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
-									// TODO why is gardenContainer.Handle empty string?
+									ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 									Args: []string{
 										"-port=5432",

@@ -488,16 +488,17 @@ func (t *transformer) StepsRunner(
 		}
 
 		if container.CheckDefinition.ReadinessChecks != nil {
-			readinessChan = make(chan steps.ReadinessState, 10) // todo replace buffer with reader for channel
-			readinessMonitor = t.transformReadinessCheckDefinition(logger,
+			var err error
+			readinessMonitor, readinessChan, err = t.transformReadinessCheckDefinition(logger,
 				&container,
 				gardenContainer,
-				readinessChan,
 				logStreamer,
 				config.BindMounts,
 				proxyStartupChecks,
 			)
-			substeps = append(substeps, readinessMonitor)
+			if err == nil {
+				substeps = append(substeps, readinessMonitor)
+			}
 		}
 	} else if container.Monitor != nil {
 		overrideSuppressLogOutput(container.Monitor)
@@ -646,17 +647,14 @@ func (t *transformer) transformReadinessCheckDefinition(
 	logger lager.Logger,
 	container *executor.Container,
 	gardenContainer garden.Container,
-	readinessChan chan steps.ReadinessState,
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyStartupChecks []ifrit.Runner,
-) ifrit.Runner {
-
-	// TODO
-	// sourceName := HealthLogSource
-	// if container.CheckDefinition.LogSource != "" {
-	// 	sourceName = container.CheckDefinition.LogSource
-	// }
+) (ifrit.Runner, chan steps.ReadinessState, error) {
+	sourceName := HealthLogSource
+	if container.CheckDefinition.LogSource != "" {
+		sourceName = container.CheckDefinition.LogSource
+	}
 
 	logger.Info("transform-readiness-check-definitions-starting")
 	defer func() {
@@ -668,7 +666,13 @@ func (t *transformer) transformReadinessCheckDefinition(
 	var untilSuccessReadinessCheck, untilFailureReadinessCheck ifrit.Runner
 
 	readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), 0)
-	// TODO add validation
+
+	if err := check.Validate(); err != nil {
+		logger.Error("invalid-readines-check", err, lager.Data{"check": check})
+		return nil, nil, err
+	}
+
+	readinessChan := make(chan steps.ReadinessState, 10)
 
 	if check.HttpCheck != nil {
 		timeout, interval, path := t.applyCheckDefaults(
@@ -708,7 +712,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 		)
 	} else { // is tcp check
 		timeout, interval, _ := t.applyCheckDefaults(
-			int(check.TcpCheck.ConnectTimeoutMs), // TODO: Grab default if this doesn't exist??
+			int(check.TcpCheck.ConnectTimeoutMs),
 			time.Duration(check.TcpCheck.IntervalMs)*time.Millisecond,
 			"",
 		)
@@ -747,10 +751,10 @@ func (t *transformer) transformReadinessCheckDefinition(
 	return steps.NewReadinessHealthCheckStep(
 		untilSuccessReadinessCheck,
 		untilFailureReadinessCheck,
-		logstreamer,
+		logstreamer.WithSource(sourceName),
 		readinessChan,
 		logger,
-	)
+	), readinessChan, nil
 }
 
 func (t *transformer) applyCheckDefaults(timeout int, interval time.Duration, path string) (int, time.Duration, string) {
