@@ -672,7 +672,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 		return nil, nil, err
 	}
 
-	readinessChan := make(chan steps.ReadinessState, 10)
+	readinessChan := make(chan steps.ReadinessState)
 
 	if check.HttpCheck != nil {
 		timeout, interval, path := t.applyCheckDefaults(

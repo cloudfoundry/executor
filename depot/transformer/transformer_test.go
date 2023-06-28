@@ -725,6 +725,7 @@ var _ = Describe("Transformer", func() {
 							Expect(readinessChan).To(BeNil())
 						})
 					})
+
 					Context("when the readiness check is defined", func() {
 						Context("when readiness check is not valid", func() {
 							BeforeEach(func() {
@@ -758,31 +759,122 @@ var _ = Describe("Transformer", func() {
 								}
 							})
 
-							It("returns a readinessChan", func() {
-								Expect(readinessChan).NotTo(BeNil())
-							})
+							Context("when the untilReadyCheck passes", func() {
+								var (
+									untilSuccessReadinessCh      chan int
+									untilSuccessReadinessProcess *gardenfakes.FakeProcess
+									untilFailureReadinessCh      chan int
+									untilFailureReadinessProcess *gardenfakes.FakeProcess
+								)
 
-							Context("when optional properties are not provided", func() {
 								BeforeEach(func() {
-									container.CheckDefinition = &models.CheckDefinition{
-										ReadinessChecks: []*models.Check{
-											{
-												HttpCheck: &models.HTTPCheck{
-													Port: 8989,
-												},
-											},
-										},
+									untilSuccessReadinessCh = make(chan int)
+									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
+									untilFailureReadinessCh = make(chan int)
+									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
+
+									healthcheckCallCount := int64(0)
+									specsCh := specs
+
+									gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+										specsCh <- spec
+										defer GinkgoRecover()
+										// get rid of race condition caused by write inside the BeforeEach
+										processLock.Lock()
+										defer processLock.Unlock()
+
+										switch spec.Path {
+										case "/action/path":
+											return actionProcess, nil
+										case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+											oldCount := atomic.AddInt64(&healthcheckCallCount, 1) % 2
+											switch oldCount {
+											case 1:
+												return untilSuccessReadinessProcess, nil
+											case 0:
+												return untilFailureReadinessProcess, nil
+											}
+										}
+
+										err = errors.New("")
+										Fail("unexpected executable path: " + spec.Path)
+										return
 									}
 								})
 
-								It("uses sane defaults for the untilReadyCheck", func() {
+								JustBeforeEach(func() {
+									untilSuccessReadinessCh <- 0
+									state := <-readinessChan
+									Expect(state).To(Equal(steps.IsReady))
+								})
+
+								AfterEach(func() {
+									close(untilSuccessReadinessCh)
+									close(untilFailureReadinessCh)
+								})
+
+								Context("when optional properties are not provided", func() {
+									BeforeEach(func() {
+										container.CheckDefinition = &models.CheckDefinition{
+											ReadinessChecks: []*models.Check{
+												{
+													HttpCheck: &models.HTTPCheck{
+														Port: 8989,
+													},
+												},
+											},
+										}
+									})
+
+									It("uses sane defaults for the untilReadyCheck", func() {
+										Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+										Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+											ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+											Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+											Args: []string{
+												"-port=8989",
+												"-timeout=1000ms",
+												"-uri=/",
+												fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
+											},
+											Env: []string{
+												"CF_INSTANCE_IP=",
+												"CF_INSTANCE_INTERNAL_IP=",
+												"CF_INSTANCE_PORT=",
+												"CF_INSTANCE_ADDR=",
+												"CF_INSTANCE_PORTS=[]",
+											},
+											Limits: garden.ResourceLimits{
+												Nofile: proto.Uint64(1024),
+											},
+											OverrideContainerLimits: &garden.ProcessLimits{},
+											Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
+											BindMounts: []garden.BindMount{
+												{
+													SrcPath: "/some/source",
+													DstPath: "/some/destintation",
+													Mode:    garden.BindMountModeRO,
+													Origin:  garden.BindMountOriginHost,
+												},
+												{
+													Origin:  garden.BindMountOriginHost,
+													SrcPath: declarativeHealthcheckSrcPath,
+													DstPath: transformer.HealthCheckDstPath,
+												},
+											},
+										})))
+									})
+								})
+
+								It("runs the untilReadyCheck in a sidecar container", func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 									Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
 										ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
 										Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 										Args: []string{
 											"-port=8989",
-											"-timeout=1000ms",
-											"-uri=/",
+											"-timeout=101ms",
+											"-uri=/neopets-readiness-check",
 											fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
 										},
 										Env: []string{
@@ -811,97 +903,6 @@ var _ = Describe("Transformer", func() {
 											},
 										},
 									})))
-								})
-							})
-
-							It("runs the untilReadyCheck in a sidecar container", func() {
-								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-									ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
-									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
-									Args: []string{
-										"-port=8989",
-										"-timeout=101ms",
-										"-uri=/neopets-readiness-check",
-										fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
-									},
-									Env: []string{
-										"CF_INSTANCE_IP=",
-										"CF_INSTANCE_INTERNAL_IP=",
-										"CF_INSTANCE_PORT=",
-										"CF_INSTANCE_ADDR=",
-										"CF_INSTANCE_PORTS=[]",
-									},
-									Limits: garden.ResourceLimits{
-										Nofile: proto.Uint64(1024),
-									},
-									OverrideContainerLimits: &garden.ProcessLimits{},
-									Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
-									BindMounts: []garden.BindMount{
-										{
-											SrcPath: "/some/source",
-											DstPath: "/some/destintation",
-											Mode:    garden.BindMountModeRO,
-											Origin:  garden.BindMountOriginHost,
-										},
-										{
-											Origin:  garden.BindMountOriginHost,
-											SrcPath: declarativeHealthcheckSrcPath,
-											DstPath: transformer.HealthCheckDstPath,
-										},
-									},
-								})))
-							})
-
-							Context("when the untilReadyCheck passes", func() {
-								var (
-									untilSuccessReadinessCh      chan int
-									untilSuccessReadinessProcess *gardenfakes.FakeProcess
-									untilFailureReadinessCh      chan int
-									untilFailureReadinessProcess *gardenfakes.FakeProcess
-								)
-
-								BeforeEach(func() {
-									untilSuccessReadinessCh = make(chan int)
-									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
-									untilFailureReadinessCh = make(chan int)
-									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
-
-									healthcheckCallCount := int64(0)
-
-									gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
-										defer GinkgoRecover()
-										// get rid of race condition caused by write inside the BeforeEach
-										processLock.Lock()
-										defer processLock.Unlock()
-
-										switch spec.Path {
-										case "/action/path":
-											return actionProcess, nil
-										case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
-											oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
-											switch oldCount {
-											case 1:
-												return untilSuccessReadinessProcess, nil
-											case 2:
-												return untilFailureReadinessProcess, nil
-											}
-										}
-
-										err = errors.New("")
-										Fail("unexpected executable path: " + spec.Path)
-										return
-									}
-								})
-
-								JustBeforeEach(func() {
-									untilSuccessReadinessCh <- 0
-									state := <-readinessChan
-									Expect(state).To(Equal(steps.IsReady))
-								})
-
-								AfterEach(func() {
-									close(untilSuccessReadinessCh)
-									close(untilFailureReadinessCh)
 								})
 
 								It("starts the untilFailureReadinessCheck", func() {
@@ -943,42 +944,6 @@ var _ = Describe("Transformer", func() {
 									},
 								}
 							})
-							It("runs the untilReadyCheck in a sidecar container", func() {
-								Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-									ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
-									Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
-									Args: []string{
-										"-port=5432",
-										"-timeout=101ms",
-										fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
-									},
-									Env: []string{
-										"CF_INSTANCE_IP=",
-										"CF_INSTANCE_INTERNAL_IP=",
-										"CF_INSTANCE_PORT=",
-										"CF_INSTANCE_ADDR=",
-										"CF_INSTANCE_PORTS=[]",
-									},
-									Limits: garden.ResourceLimits{
-										Nofile: proto.Uint64(1024),
-									},
-									OverrideContainerLimits: &garden.ProcessLimits{},
-									Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
-									BindMounts: []garden.BindMount{
-										{
-											SrcPath: "/some/source",
-											DstPath: "/some/destintation",
-											Mode:    garden.BindMountModeRO,
-											Origin:  garden.BindMountOriginHost,
-										},
-										{
-											Origin:  garden.BindMountOriginHost,
-											SrcPath: declarativeHealthcheckSrcPath,
-											DstPath: transformer.HealthCheckDstPath,
-										},
-									},
-								})))
-							})
 
 							Context("when the untilSuccessReadinessCheck passes", func() {
 								var (
@@ -995,8 +960,10 @@ var _ = Describe("Transformer", func() {
 									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
 
 									healthcheckCallCount := int64(0)
+									specsCh := specs
 
 									gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+										specsCh <- spec
 										defer GinkgoRecover()
 										// get rid of race condition caused by write inside the BeforeEach
 										processLock.Lock()
@@ -1006,11 +973,11 @@ var _ = Describe("Transformer", func() {
 										case "/action/path":
 											return actionProcess, nil
 										case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
-											oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+											oldCount := atomic.AddInt64(&healthcheckCallCount, 1) % 2
 											switch oldCount {
 											case 1:
 												return untilSuccessReadinessProcess, nil
-											case 2:
+											case 0:
 												return untilFailureReadinessProcess, nil
 											}
 										}
@@ -1023,11 +990,50 @@ var _ = Describe("Transformer", func() {
 
 								JustBeforeEach(func() {
 									untilSuccessReadinessCh <- 0
+									state := <-readinessChan
+									Expect(state).To(Equal(steps.IsReady))
 								})
 
 								AfterEach(func() {
 									close(untilSuccessReadinessCh)
 									close(untilFailureReadinessCh)
+								})
+
+								It("runs the untilReadyCheck in a sidecar container", func() {
+									Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
+										ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+										Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
+										Args: []string{
+											"-port=5432",
+											"-timeout=101ms",
+											fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
+										},
+										Env: []string{
+											"CF_INSTANCE_IP=",
+											"CF_INSTANCE_INTERNAL_IP=",
+											"CF_INSTANCE_PORT=",
+											"CF_INSTANCE_ADDR=",
+											"CF_INSTANCE_PORTS=[]",
+										},
+										Limits: garden.ResourceLimits{
+											Nofile: proto.Uint64(1024),
+										},
+										OverrideContainerLimits: &garden.ProcessLimits{},
+										Image:                   garden.ImageRef{URI: "preloaded:cflinuxfs3"},
+										BindMounts: []garden.BindMount{
+											{
+												SrcPath: "/some/source",
+												DstPath: "/some/destintation",
+												Mode:    garden.BindMountModeRO,
+												Origin:  garden.BindMountOriginHost,
+											},
+											{
+												Origin:  garden.BindMountOriginHost,
+												SrcPath: declarativeHealthcheckSrcPath,
+												DstPath: transformer.HealthCheckDstPath,
+											},
+										},
+									})))
 								})
 
 								It("starts the untilFailureReadinessCheck", func() {
