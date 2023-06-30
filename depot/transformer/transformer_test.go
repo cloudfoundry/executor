@@ -269,6 +269,24 @@ var _ = Describe("Transformer", func() {
 			return process
 		}
 
+		makeProcessWithSignal := func(waitCh chan int) *gardenfakes.FakeProcess {
+			process := &gardenfakes.FakeProcess{}
+			signalCh := make(chan struct{})
+			process.WaitStub = func() (int, error) {
+				select {
+				case r := <-waitCh:
+					return r, nil
+				case <-signalCh:
+					return 1, nil
+				}
+			}
+			process.SignalStub = func(garden.Signal) error {
+				close(signalCh)
+				return nil
+			}
+			return process
+		}
+
 		Describe("container proxy", func() {
 			var (
 				container    executor.Container
@@ -769,9 +787,9 @@ var _ = Describe("Transformer", func() {
 
 								BeforeEach(func() {
 									untilSuccessReadinessCh = make(chan int)
-									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
+									untilSuccessReadinessProcess = makeProcessWithSignal(untilSuccessReadinessCh)
 									untilFailureReadinessCh = make(chan int)
-									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
+									untilFailureReadinessProcess = makeProcessWithSignal(untilFailureReadinessCh)
 
 									healthcheckCallCount := int64(0)
 									specsCh := specs
@@ -806,11 +824,6 @@ var _ = Describe("Transformer", func() {
 									untilSuccessReadinessCh <- 0
 									state := <-readinessChan
 									Expect(state).To(Equal(steps.IsReady))
-								})
-
-								AfterEach(func() {
-									close(untilSuccessReadinessCh)
-									close(untilFailureReadinessCh)
 								})
 
 								Context("when optional properties are not provided", func() {
@@ -955,9 +968,9 @@ var _ = Describe("Transformer", func() {
 
 								BeforeEach(func() {
 									untilSuccessReadinessCh = make(chan int)
-									untilSuccessReadinessProcess = makeProcess(untilSuccessReadinessCh)
+									untilSuccessReadinessProcess = makeProcessWithSignal(untilSuccessReadinessCh)
 									untilFailureReadinessCh = make(chan int)
-									untilFailureReadinessProcess = makeProcess(untilFailureReadinessCh)
+									untilFailureReadinessProcess = makeProcessWithSignal(untilFailureReadinessCh)
 
 									healthcheckCallCount := int64(0)
 									specsCh := specs
@@ -992,11 +1005,6 @@ var _ = Describe("Transformer", func() {
 									untilSuccessReadinessCh <- 0
 									state := <-readinessChan
 									Expect(state).To(Equal(steps.IsReady))
-								})
-
-								AfterEach(func() {
-									close(untilSuccessReadinessCh)
-									close(untilFailureReadinessCh)
 								})
 
 								It("runs the untilReadyCheck in a sidecar container", func() {
@@ -1037,6 +1045,7 @@ var _ = Describe("Transformer", func() {
 								})
 
 								It("starts the untilFailureReadinessCheck", func() {
+									// 1 for the app process, 1 for until ready check and 1 for until failure
 									Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 									ids := []string{}
 									paths := []string{}
@@ -1057,6 +1066,7 @@ var _ = Describe("Transformer", func() {
 										"-readiness-interval=44s",
 									}))
 								})
+
 								Context("when the readiness check does not include the optional properties", func() {
 									BeforeEach(func() {
 										container.CheckDefinition = &models.CheckDefinition{
@@ -1069,6 +1079,7 @@ var _ = Describe("Transformer", func() {
 											},
 										}
 									})
+
 									It("uses sane defaults", func() {
 										Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 										ids := []string{}
@@ -1100,7 +1111,113 @@ var _ = Describe("Transformer", func() {
 						})
 					})
 
-					Context("and container proxy is enabled", func() {
+					Context("multiple readiness check definitions", func() {
+						var (
+							firstUntilSuccessReadinessCh       chan int
+							firstUntilSuccessReadinessProcess  *gardenfakes.FakeProcess
+							firstUntilFailureReadinessCh       chan int
+							firstUntilFailureReadinessProcess  *gardenfakes.FakeProcess
+							secondUntilSuccessReadinessCh      chan int
+							secondUntilSuccessReadinessProcess *gardenfakes.FakeProcess
+							secondUntilFailureReadinessCh      chan int
+							secondUntilFailureReadinessProcess *gardenfakes.FakeProcess
+						)
+
+						BeforeEach(func() {
+							firstUntilSuccessReadinessCh = make(chan int)
+							firstUntilSuccessReadinessProcess = makeProcessWithSignal(firstUntilSuccessReadinessCh)
+							firstUntilFailureReadinessCh = make(chan int)
+							firstUntilFailureReadinessProcess = makeProcessWithSignal(firstUntilFailureReadinessCh)
+							secondUntilSuccessReadinessCh = make(chan int)
+							secondUntilSuccessReadinessProcess = makeProcessWithSignal(secondUntilSuccessReadinessCh)
+							secondUntilFailureReadinessCh = make(chan int)
+							secondUntilFailureReadinessProcess = makeProcessWithSignal(secondUntilFailureReadinessCh)
+
+							healthcheckCallCount := int64(0)
+							specsCh := specs
+
+							gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+								specsCh <- spec
+								defer GinkgoRecover()
+								// get rid of race condition caused by write inside the BeforeEach
+								processLock.Lock()
+								defer processLock.Unlock()
+
+								switch spec.Path {
+								case "/action/path":
+									return actionProcess, nil
+
+								case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+									oldCount := atomic.AddInt64(&healthcheckCallCount, 1) % 4
+									switch oldCount {
+									case 1:
+										return firstUntilSuccessReadinessProcess, nil
+									case 2:
+										return secondUntilSuccessReadinessProcess, nil
+									case 3:
+										return firstUntilFailureReadinessProcess, nil
+									case 0:
+										return secondUntilFailureReadinessProcess, nil
+									}
+								}
+
+								err = errors.New("")
+								Fail("unexpected executable path: " + spec.Path)
+								return
+							}
+
+							container.CheckDefinition = &models.CheckDefinition{
+								ReadinessChecks: []*models.Check{
+									{
+										TcpCheck: &models.TCPCheck{
+											Port:             5432,
+											ConnectTimeoutMs: 101,
+											IntervalMs:       44000,
+										},
+									},
+									{
+										TcpCheck: &models.TCPCheck{
+											Port:             5433,
+											ConnectTimeoutMs: 101,
+											IntervalMs:       44000,
+										},
+									},
+								},
+							}
+						})
+
+						Context("when one untilSuccess check passes", func() {
+							JustBeforeEach(func() {
+								firstUntilSuccessReadinessCh <- 0
+							})
+
+							It("is not marked Routable until both untilReady checks pass", func() {
+								Consistently(readinessChan).ShouldNot(Receive())
+								secondUntilSuccessReadinessCh <- 0
+								state := <-readinessChan
+								Expect(state).To(Equal(steps.IsReady))
+							})
+						})
+
+						Context("when either untilFailure checks fail", func() {
+							JustBeforeEach(func() {
+								firstUntilSuccessReadinessCh <- 0
+								secondUntilSuccessReadinessCh <- 0
+								state := <-readinessChan
+								Expect(state).To(Equal(steps.IsReady))
+							})
+
+							It("marks the process not ready", func() {
+								Eventually(firstUntilFailureReadinessProcess.WaitCallCount).Should(Equal(1))
+								Eventually(secondUntilFailureReadinessProcess.WaitCallCount).Should(Equal(1))
+								secondUntilFailureReadinessCh <- 0
+								state := <-readinessChan
+								Expect(state).To(Equal(steps.IsNotReady))
+							})
+						})
+					})
+
+					Context("container proxy is enabled", func() {
 						BeforeEach(func() {
 							options = append(options, transformer.WithContainerProxy(time.Second))
 							cfg.ProxyTLSPorts = []uint16{61001}
