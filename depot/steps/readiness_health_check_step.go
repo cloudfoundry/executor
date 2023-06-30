@@ -62,7 +62,7 @@ func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Sig
 	select {
 	case err := <-untilReadyProcess.Wait():
 		if err != nil {
-			fmt.Fprint(step.logStreamer.Stdout(), "Failed to run the readiness check\n")
+			fmt.Fprint(step.logStreamer.Stdout(), "Container passed the readiness health check. Container marked ready and added to route pool.\n")
 			return err
 		}
 		step.logger.Info("transitioned-to-ready")
@@ -82,7 +82,7 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 	case err := <-untilFailureProcess.Wait():
 		if err != nil {
 			step.logger.Info("transitioned-to-not-ready")
-			fmt.Fprint(step.logStreamer.Stdout(), "Container became not ready\n")
+			fmt.Fprint(step.logStreamer.Stdout(), "Container failed the readiness health check. Container marked not ready and removed from route pool.\n")
 			step.readinessChan <- IsNotReady
 			return nil
 		}
