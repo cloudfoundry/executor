@@ -651,6 +651,9 @@ func (t *transformer) transformReadinessCheckDefinition(
 	bindMounts []garden.BindMount,
 	proxyStartupChecks []ifrit.Runner,
 ) (ifrit.Runner, chan steps.ReadinessState, error) {
+	var untilSuccessReadinessChecks []ifrit.Runner
+	var untilFailureReadinessChecks []ifrit.Runner
+
 	sourceName := HealthLogSource
 	if container.CheckDefinition.LogSource != "" {
 		sourceName = container.CheckDefinition.LogSource
@@ -662,92 +665,95 @@ func (t *transformer) transformReadinessCheckDefinition(
 	}()
 
 	readinessLogger := logger.Session("readiness-check")
-	check := container.CheckDefinition.ReadinessChecks[0]
-	var untilSuccessReadinessCheck, untilFailureReadinessCheck ifrit.Runner
 
-	readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), 0)
+	for index, check := range container.CheckDefinition.ReadinessChecks {
+		readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), index)
 
-	if err := check.Validate(); err != nil {
-		logger.Error("invalid-readines-check", err, lager.Data{"check": check})
-		return nil, nil, err
+		if err := check.Validate(); err != nil {
+			logger.Error("invalid-readines-check", err, lager.Data{"check": check})
+			continue
+		}
+
+		if check.HttpCheck != nil {
+			timeout, interval, path := t.applyCheckDefaults(
+				int(check.HttpCheck.RequestTimeoutMs),
+				time.Duration(check.HttpCheck.IntervalMs)*time.Millisecond,
+				check.HttpCheck.Path,
+			)
+
+			untilSuccessReadinessChecks = append(untilSuccessReadinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				path,
+				readinessSidecarName,
+				int(check.HttpCheck.Port),
+				timeout,
+				HTTPCheck,
+				isUntilSuccessReadinessCheck,
+				t.unhealthyMonitoringInterval,
+				readinessLogger,
+				"",
+			))
+
+			untilFailureReadinessChecks = append(untilFailureReadinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				path,
+				readinessSidecarName,
+				int(check.HttpCheck.Port),
+				timeout,
+				HTTPCheck,
+				isUntilFailureReadinessCheck,
+				interval,
+				readinessLogger,
+				"",
+			))
+		} else { // is tcp check
+			timeout, interval, _ := t.applyCheckDefaults(
+				int(check.TcpCheck.ConnectTimeoutMs),
+				time.Duration(check.TcpCheck.IntervalMs)*time.Millisecond,
+				"",
+			)
+
+			untilSuccessReadinessChecks = append(untilSuccessReadinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				"",
+				readinessSidecarName,
+				int(check.TcpCheck.Port),
+				timeout,
+				TCPCheck,
+				isUntilSuccessReadinessCheck,
+				t.unhealthyMonitoringInterval,
+				readinessLogger,
+				"",
+			))
+
+			untilFailureReadinessChecks = append(untilFailureReadinessChecks, t.createCheck(
+				container,
+				gardenContainer,
+				bindMounts,
+				"",
+				readinessSidecarName,
+				int(check.TcpCheck.Port),
+				timeout,
+				TCPCheck,
+				isUntilFailureReadinessCheck,
+				interval,
+				readinessLogger,
+				"",
+			))
+		}
 	}
-
+	if len(untilSuccessReadinessChecks) == 0 {
+		return nil, nil, errors.New("no-valid-readiness-checks")
+	}
 	readinessChan := make(chan steps.ReadinessState)
-
-	if check.HttpCheck != nil {
-		timeout, interval, path := t.applyCheckDefaults(
-			int(check.HttpCheck.RequestTimeoutMs),
-			time.Duration(check.HttpCheck.IntervalMs)*time.Millisecond,
-			check.HttpCheck.Path,
-		)
-
-		untilSuccessReadinessCheck = t.createCheck(
-			container,
-			gardenContainer,
-			bindMounts,
-			path,
-			readinessSidecarName,
-			int(check.HttpCheck.Port),
-			timeout,
-			HTTPCheck,
-			isUntilSuccessReadinessCheck,
-			t.unhealthyMonitoringInterval,
-			readinessLogger,
-			"",
-		)
-
-		untilFailureReadinessCheck = t.createCheck(
-			container,
-			gardenContainer,
-			bindMounts,
-			path,
-			readinessSidecarName,
-			int(check.HttpCheck.Port),
-			timeout,
-			HTTPCheck,
-			isUntilFailureReadinessCheck,
-			interval,
-			readinessLogger,
-			"",
-		)
-	} else { // is tcp check
-		timeout, interval, _ := t.applyCheckDefaults(
-			int(check.TcpCheck.ConnectTimeoutMs),
-			time.Duration(check.TcpCheck.IntervalMs)*time.Millisecond,
-			"",
-		)
-
-		untilSuccessReadinessCheck = t.createCheck(
-			container,
-			gardenContainer,
-			bindMounts,
-			"",
-			readinessSidecarName,
-			int(check.TcpCheck.Port),
-			timeout,
-			TCPCheck,
-			isUntilSuccessReadinessCheck,
-			t.unhealthyMonitoringInterval,
-			readinessLogger,
-			"",
-		)
-
-		untilFailureReadinessCheck = t.createCheck(
-			container,
-			gardenContainer,
-			bindMounts,
-			"",
-			readinessSidecarName,
-			int(check.TcpCheck.Port),
-			timeout,
-			TCPCheck,
-			isUntilFailureReadinessCheck,
-			interval,
-			readinessLogger,
-			"",
-		)
-	}
-
+	untilSuccessReadinessCheck := steps.NewParallel(untilSuccessReadinessChecks)
+	untilFailureReadinessCheck := steps.NewCodependent(untilFailureReadinessChecks, true, true)
 	return steps.NewReadinessHealthCheckStep(
 		untilSuccessReadinessCheck,
 		untilFailureReadinessCheck,

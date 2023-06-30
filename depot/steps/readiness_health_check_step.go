@@ -58,7 +58,6 @@ func (step *readinessHealthCheckStep) Run(signals <-chan os.Signal, ready chan<-
 
 func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Signal) error {
 	untilReadyProcess := ifrit.Background(step.untilReadyCheck)
-
 	select {
 	case err := <-untilReadyProcess.Wait():
 		if err != nil {
