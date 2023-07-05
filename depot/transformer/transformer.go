@@ -60,6 +60,8 @@ type transformer struct {
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 	gracefulShutdownInterval    time.Duration
+	extendedGracefulShutdownInterval time.Duration
+	extendedGracefulShutDownOrgs     []string
 	healthCheckWorkPool         *workpool.WorkPool
 
 	useContainerProxy bool
@@ -110,6 +112,8 @@ func NewTransformer(
 	healthyMonitoringInterval time.Duration,
 	unhealthyMonitoringInterval time.Duration,
 	gracefulShutdownInterval time.Duration,
+	extendedGracefulShutdownInterval time.Duration,
+	extendedGracefulShutDownOrgs []string,
 	healthCheckWorkPool *workpool.WorkPool,
 	opts ...Option,
 ) *transformer {
@@ -123,6 +127,8 @@ func NewTransformer(
 		healthyMonitoringInterval:   healthyMonitoringInterval,
 		unhealthyMonitoringInterval: unhealthyMonitoringInterval,
 		gracefulShutdownInterval:    gracefulShutdownInterval,
+		extendedGracefulShutdownInterval: extendedGracefulShutdownInterval,
+		extendedGracefulShutDownOrgs:     extendedGracefulShutDownOrgs,
 		healthCheckWorkPool:         healthCheckWorkPool,
 		clock:                       clock,
 	}
@@ -144,6 +150,7 @@ func (t *transformer) stepFor(
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
 	logger lager.Logger,
+	grace time.Duration,
 ) ifrit.Runner {
 	a := action.GetValue()
 	switch actionModel := a.(type) {
@@ -157,7 +164,7 @@ func (t *transformer) stepFor(
 			internalIP,
 			ports,
 			t.clock,
-			t.gracefulShutdownInterval,
+			grace,
 			suppressExitStatusCode,
 		)
 
@@ -195,6 +202,7 @@ func (t *transformer) stepFor(
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			actionModel.StartMessage,
 			actionModel.SuccessMessage,
@@ -215,6 +223,7 @@ func (t *transformer) stepFor(
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			time.Duration(actionModel.TimeoutMs)*time.Millisecond,
 			t.clock,
@@ -233,6 +242,7 @@ func (t *transformer) stepFor(
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			),
 			logger,
 		)
@@ -254,6 +264,7 @@ func (t *transformer) stepFor(
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				),
 					buffer,
 				)
@@ -268,6 +279,7 @@ func (t *transformer) stepFor(
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				)
 			}
 			subSteps[i] = subStep
@@ -291,6 +303,7 @@ func (t *transformer) stepFor(
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				),
 					buffer,
 				)
@@ -305,6 +318,7 @@ func (t *transformer) stepFor(
 					suppressExitStatusCode,
 					monitorOutputWrapper,
 					logger,
+					grace,
 				)
 			}
 			subSteps[i] = subStep
@@ -325,6 +339,7 @@ func (t *transformer) stepFor(
 				suppressExitStatusCode,
 				monitorOutputWrapper,
 				logger,
+				grace,
 			)
 		}
 		return steps.NewSerial(subSteps)
@@ -366,6 +381,8 @@ func (t *transformer) StepsRunner(
 	var setup, action, postSetup, monitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
 
+	grace := t.evalGracefulShutdownInterval(container.CertificateProperties)
+
 	if container.Setup != nil {
 		setup = t.stepFor(
 			logStreamer,
@@ -377,6 +394,7 @@ func (t *transformer) StepsRunner(
 			false,
 			false,
 			logger.Session("setup"),
+			grace,
 		)
 	}
 	setup = steps.NewTimedStep(logger, setup, config.MetronClient, t.clock, config.CreationStartTime)
@@ -397,7 +415,7 @@ func (t *transformer) StepsRunner(
 			container.InternalIP,
 			container.Ports,
 			t.clock,
-			t.gracefulShutdownInterval,
+			grace,
 			suppressExitStatusCode,
 		)
 	}
@@ -418,6 +436,7 @@ func (t *transformer) StepsRunner(
 		false,
 		false,
 		logger.Session("action"),
+		grace,
 	)
 
 	substeps = append(substeps, action)
@@ -432,6 +451,7 @@ func (t *transformer) StepsRunner(
 			false,
 			false,
 			logger.Session("sidecar"),
+			grace,
 		))
 	}
 
@@ -485,6 +505,7 @@ func (t *transformer) StepsRunner(
 					true,
 					true,
 					logger.Session("monitor-run"),
+					grace,
 				)
 			},
 			logger.Session("monitor"),
@@ -593,7 +614,7 @@ func (t *transformer) createCheck(
 		container.InternalIP,
 		container.Ports,
 		t.clock,
-		t.gracefulShutdownInterval,
+		t.evalGracefulShutdownInterval(container.CertificateProperties),
 		true,
 		sidecar,
 		container.Privileged,
@@ -768,9 +789,20 @@ func (t *transformer) transformContainerProxyStep(
 		execContainer.InternalIP,
 		execContainer.Ports,
 		t.clock,
-		t.gracefulShutdownInterval,
+		t.evalGracefulShutdownInterval(execContainer.CertificateProperties),
 		false,
 		sidecar,
 		execContainer.Privileged,
 	), proxyLogger)
+}
+
+func (t *transformer) evalGracefulShutdownInterval(certProps executor.CertificateProperties) time.Duration {
+	if len(certProps.OrganizationalUnit) > 0 {
+		for _, org := range t.extendedGracefulShutDownOrgs {
+			if ("organization:" + org) == certProps.OrganizationalUnit[0] {
+				return t.extendedGracefulShutdownInterval
+			}
+		}
+	}
+	return t.gracefulShutdownInterval
 }
