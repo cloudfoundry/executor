@@ -388,7 +388,7 @@ func (e ContainerCompleteEvent) Container() Container { return e.RawContainer }
 func (ContainerCompleteEvent) lifecycleEvent()        {}
 
 type ContainerRunningEvent struct {
-	RawContainer Container `json:"conptainer"`
+	RawContainer Container `json:"container"`
 	traceID      string
 }
 
