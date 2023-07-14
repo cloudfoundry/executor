@@ -113,6 +113,8 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 			AbsoluteCPUEntitlement: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
 			ContainerAge:           containerMetrics.ContainerAgeInNanoseconds,
 			Tags:                   metricsConfig.Tags,
+			RxBytes:                containerMetrics.RxInBytes,
+			TxBytes:                containerMetrics.TxInBytes,
 		})
 
 		if err != nil {
@@ -131,6 +133,8 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 		DiskQuotaBytes:   containerMetrics.DiskLimitInBytes,
 		MemoryUsageBytes: containerMetrics.MemoryUsageInBytes,
 		MemoryQuotaBytes: containerMetrics.MemoryLimitInBytes,
+		RxBytes:          containerMetrics.RxInBytes,
+		TxBytes:          containerMetrics.TxInBytes,
 	}, &currentInfo
 }
 

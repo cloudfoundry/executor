@@ -3050,6 +3050,10 @@ var _ = Describe("Container Store", func() {
 						},
 						Age:            1000000000,
 						CPUEntitlement: 100,
+						NetworkStat: garden.ContainerNetworkStat{
+							RxBytes: 42,
+							TxBytes: 43,
+						},
 					},
 				},
 				containerGuid2: garden.ContainerMetricsEntry{
@@ -3065,6 +3069,10 @@ var _ = Describe("Container Store", func() {
 						},
 						Age:            2000000000,
 						CPUEntitlement: 200,
+						NetworkStat: garden.ContainerNetworkStat{
+							RxBytes: 44,
+							TxBytes: 45,
+						},
 					},
 				},
 				containerGuid4: garden.ContainerMetricsEntry{
@@ -3110,6 +3118,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container1Metrics.TimeSpentInCPU).To(Equal(5 * time.Second))
 			Expect(container1Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(1000000000)))
 			Expect(container1Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(100)))
+			Expect(container1Metrics.RxInBytes).To(Equal(uint64(42)))
+			Expect(container1Metrics.TxInBytes).To(Equal(uint64(43)))
 
 			container2Metrics, ok := metrics[containerGuid2]
 			Expect(ok).To(BeTrue())
@@ -3120,6 +3130,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))
 			Expect(container2Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(2000000000)))
 			Expect(container2Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(200)))
+			Expect(container2Metrics.RxInBytes).To(Equal(uint64(44)))
+			Expect(container2Metrics.TxInBytes).To(Equal(uint64(45)))
 		})
 
 		Context("when fetching bulk metrics fails", func() {
@@ -3423,7 +3435,7 @@ var _ = Describe("Container Store", func() {
 			})
 		})
 
-		Context("when listing containers in garden fails", func() {
+		Context("when listing contaipcners in garden fails", func() {
 			BeforeEach(func() {
 				gardenClient.ContainersReturns([]garden.Container{}, errors.New("failed-to-list"))
 			})

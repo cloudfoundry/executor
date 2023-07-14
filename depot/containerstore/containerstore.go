@@ -367,6 +367,8 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 			TimeSpentInCPU:                      time.Duration(gardenMetric.CPUStat.Usage),
 			ContainerAgeInNanoseconds:           uint64(gardenMetric.Age),
 			AbsoluteCPUEntitlementInNanoseconds: gardenMetric.CPUEntitlement,
+			RxInBytes:                           gardenMetric.NetworkStat.RxBytes,
+			TxInBytes:                           gardenMetric.NetworkStat.TxBytes,
 		}
 	}
 
