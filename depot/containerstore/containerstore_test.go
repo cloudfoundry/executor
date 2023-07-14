@@ -3435,7 +3435,7 @@ var _ = Describe("Container Store", func() {
 			})
 		})
 
-		Context("when listing contaipcners in garden fails", func() {
+		Context("when listing containers in garden fails", func() {
 			BeforeEach(func() {
 				gardenClient.ContainersReturns([]garden.Container{}, errors.New("failed-to-list"))
 			})
