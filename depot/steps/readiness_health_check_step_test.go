@@ -101,7 +101,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 
 			It("emits a message to the application log stream", func() {
 				Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-					gbytes.Say("Container became ready\n"),
+					gbytes.Say("Container passed the readiness health check. Container marked ready and added to route pool.\n"),
 				)
 			})
 
@@ -128,7 +128,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 
 				It("emits a message to the application log stream", func() {
 					Eventually(fakeStreamer.Stdout().(*gbytes.Buffer)).Should(
-						gbytes.Say("Container became not ready\n"),
+						gbytes.Say("Container failed the readiness health check. Container marked not ready and removed from route pool.\n"),
 					)
 				})
 
