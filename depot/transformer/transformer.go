@@ -670,7 +670,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 		readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), index)
 
 		if err := check.Validate(); err != nil {
-			logger.Error("invalid-readines-check", err, lager.Data{"check": check})
+			logger.Error("invalid-readiness-check", err, lager.Data{"check": check})
 			continue
 		}
 
