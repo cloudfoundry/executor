@@ -3184,6 +3184,10 @@ var _ = Describe("Container Store", func() {
 			_, err = containerStore.Create(logger, "some-trace-id", containerGuid4)
 			Expect(err).ToNot(HaveOccurred())
 
+			networkStat1 := garden.ContainerNetworkStat{
+				RxBytes: uint64(42),
+				TxBytes: uint64(43),
+			}
 			bulkMetrics := map[string]garden.ContainerMetricsEntry{
 				containerGuid1: garden.ContainerMetricsEntry{
 					Metrics: garden.Metrics{
@@ -3198,10 +3202,7 @@ var _ = Describe("Container Store", func() {
 						},
 						Age:            1000000000,
 						CPUEntitlement: 100,
-						NetworkStat: garden.ContainerNetworkStat{
-							RxBytes: 42,
-							TxBytes: 43,
-						},
+						NetworkStat:    &networkStat1,
 					},
 				},
 				containerGuid2: garden.ContainerMetricsEntry{
@@ -3217,10 +3218,7 @@ var _ = Describe("Container Store", func() {
 						},
 						Age:            2000000000,
 						CPUEntitlement: 200,
-						NetworkStat: garden.ContainerNetworkStat{
-							RxBytes: 44,
-							TxBytes: 45,
-						},
+						NetworkStat:    nil,
 					},
 				},
 				containerGuid4: garden.ContainerMetricsEntry{
@@ -3266,8 +3264,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container1Metrics.TimeSpentInCPU).To(Equal(5 * time.Second))
 			Expect(container1Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(1000000000)))
 			Expect(container1Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(100)))
-			Expect(container1Metrics.RxInBytes).To(Equal(uint64(42)))
-			Expect(container1Metrics.TxInBytes).To(Equal(uint64(43)))
+			Expect(*container1Metrics.RxInBytes).To(Equal(uint64(42)))
+			Expect(*container1Metrics.TxInBytes).To(Equal(uint64(43)))
 
 			container2Metrics, ok := metrics[containerGuid2]
 			Expect(ok).To(BeTrue())
@@ -3278,8 +3276,8 @@ var _ = Describe("Container Store", func() {
 			Expect(container2Metrics.TimeSpentInCPU).To(Equal(1 * time.Millisecond))
 			Expect(container2Metrics.ContainerAgeInNanoseconds).To(Equal(uint64(2000000000)))
 			Expect(container2Metrics.AbsoluteCPUEntitlementInNanoseconds).To(Equal(uint64(200)))
-			Expect(container2Metrics.RxInBytes).To(Equal(uint64(44)))
-			Expect(container2Metrics.TxInBytes).To(Equal(uint64(45)))
+			Expect(container2Metrics.RxInBytes).To(BeNil())
+			Expect(container2Metrics.TxInBytes).To(BeNil())
 		})
 
 		Context("when fetching bulk metrics fails", func() {
