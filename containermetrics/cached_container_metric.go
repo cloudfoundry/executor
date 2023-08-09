@@ -7,6 +7,6 @@ type CachedContainerMetrics struct {
 	DiskQuotaBytes   uint64  `json:"disk_quota_bytes"`
 	MemoryUsageBytes uint64  `json:"memory_usage_bytes"`
 	MemoryQuotaBytes uint64  `json:"memory_quota_bytes"`
-	RxBytes          uint64  `json:"rx_bytes"`
-	TxBytes          uint64  `json:"tx_bytes"`
+	RxBytes          *uint64 `json:"rx_bytes"`
+	TxBytes          *uint64 `json:"tx_bytes"`
 }

@@ -359,6 +359,13 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 
 		rootFSSize := cs.rootFSSizer.RootFSSizeFromPath(nodeInfo.RootFSPath)
 		diskUsage := gardenMetric.DiskStat.TotalBytesUsed - rootFSSize
+
+		var rxInBytes, txInBytes *uint64
+		if gardenMetric.NetworkStat != nil {
+			rxInBytes = &gardenMetric.NetworkStat.RxBytes
+			txInBytes = &gardenMetric.NetworkStat.TxBytes
+		}
+
 		containerMetrics[guid] = executor.ContainerMetrics{
 			MemoryUsageInBytes:                  gardenMetric.MemoryStat.TotalUsageTowardLimit,
 			DiskUsageInBytes:                    diskUsage,
@@ -367,8 +374,8 @@ func (cs *containerStore) Metrics(logger lager.Logger) (map[string]executor.Cont
 			TimeSpentInCPU:                      time.Duration(gardenMetric.CPUStat.Usage),
 			ContainerAgeInNanoseconds:           uint64(gardenMetric.Age),
 			AbsoluteCPUEntitlementInNanoseconds: gardenMetric.CPUEntitlement,
-			RxInBytes:                           gardenMetric.NetworkStat.RxBytes,
-			TxInBytes:                           gardenMetric.NetworkStat.TxBytes,
+			RxInBytes:                           rxInBytes,
+			TxInBytes:                           txInBytes,
 		}
 	}
 
