@@ -234,8 +234,8 @@ type ContainerMetrics struct {
 	TimeSpentInCPU                      time.Duration `json:"time_spent_in_cpu"`
 	AbsoluteCPUEntitlementInNanoseconds uint64        `json:"absolute_cpu_entitlement_in_ns"`
 	ContainerAgeInNanoseconds           uint64        `json:"container_age_in_ns"`
-	RxInBytes                           uint64        `json:"rx_in_bytes"`
-	TxInBytes                           uint64        `json:"tx_in_bytes"`
+	RxInBytes                           *uint64       `json:"rx_in_bytes"`
+	TxInBytes                           *uint64       `json:"tx_in_bytes"`
 }
 
 type MetricsConfig struct {
