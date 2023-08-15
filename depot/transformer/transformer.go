@@ -667,6 +667,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 	readinessLogger := logger.Session("readiness-check")
 
 	for index, check := range container.CheckDefinition.ReadinessChecks {
+		untilReadySidecarName := fmt.Sprintf("%s-until-ready-healthcheck-%d", gardenContainer.Handle(), index)
 		readinessSidecarName := fmt.Sprintf("%s-readiness-healthcheck-%d", gardenContainer.Handle(), index)
 
 		if err := check.Validate(); err != nil {
@@ -686,7 +687,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 				gardenContainer,
 				bindMounts,
 				path,
-				readinessSidecarName,
+				untilReadySidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
 				HTTPCheck,

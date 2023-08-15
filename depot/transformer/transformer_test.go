@@ -842,7 +842,7 @@ var _ = Describe("Transformer", func() {
 									It("uses sane defaults for the untilReadyCheck", func() {
 										Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 										Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-											ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+											ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "until-ready-healthcheck-0"),
 											Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 											Args: []string{
 												"-port=8989",
@@ -882,7 +882,7 @@ var _ = Describe("Transformer", func() {
 								It("runs the untilReadyCheck in a sidecar container", func() {
 									Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 									Eventually(specs).Should(Receive(Equal(garden.ProcessSpec{
-										ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "readiness-healthcheck-0"),
+										ID:   fmt.Sprintf("%s-%s", gardenContainer.Handle(), "until-ready-healthcheck-0"),
 										Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 										Args: []string{
 											"-port=8989",
