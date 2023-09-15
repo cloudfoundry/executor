@@ -161,6 +161,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, traceID string, req *exec
 			cs.volumeManager,
 			cs.credManager,
 			cs.logManager,
+			req.GenerateLogMetrics,
 			cs.eventEmitter,
 			cs.transformer,
 			cs.trustedSystemCertificatesPath,

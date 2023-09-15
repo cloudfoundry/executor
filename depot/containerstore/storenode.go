@@ -74,6 +74,7 @@ type storeNode struct {
 	volumeManager                         volman.Manager
 	credManager                           CredManager
 	logManager                            LogManager
+	generateLogMetrics                    bool
 	logStreamer                           log_streamer.LogStreamer
 	instanceIdentityHandler               *InstanceIdentityHandler
 	eventEmitter                          event.Hub
@@ -109,6 +110,7 @@ func newStoreNode(
 	volumeManager volman.Manager,
 	credManager CredManager,
 	logManager LogManager,
+	generateLogMetrics bool,
 	eventEmitter event.Hub,
 	transformer transformer.Transformer,
 	hostTrustedCertificatesPath string,
@@ -131,6 +133,7 @@ func newStoreNode(
 		volumeManager:                         volumeManager,
 		credManager:                           credManager,
 		logManager:                            logManager,
+		generateLogMetrics:                    generateLogMetrics,
 		eventEmitter:                          eventEmitter,
 		transformer:                           transformer,
 		modifiedIndex:                         0,
@@ -512,7 +515,11 @@ func (n *storeNode) Run(logger lager.Logger, traceID string) error {
 		return executor.ErrInvalidTransition
 	}
 
-	n.logStreamer = n.logManager.NewLogStreamer(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.info.LogRateLimitBytesPerSecond, n.config.MetricReportInterval)
+	metricReportInverval := n.config.MetricReportInterval
+	if !n.generateLogMetrics {
+		metricReportInverval = 0
+	}
+	n.logStreamer = n.logManager.NewLogStreamer(n.info.LogConfig, n.metronClient, n.config.MaxLogLinesPerSecond, n.info.LogRateLimitBytesPerSecond, metricReportInverval)
 
 	credManagerRunner := n.credManager.Runner(logger, n, n.regenerateCertsCh)
 

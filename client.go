@@ -37,14 +37,16 @@ type EventSource interface {
 }
 
 type AllocationRequest struct {
-	Guid string
+	Guid               string
+	GenerateLogMetrics bool
 	Resource
 	Tags
 }
 
-func NewAllocationRequest(guid string, resource *Resource, tags Tags) AllocationRequest {
+func NewAllocationRequest(guid string, resource *Resource, generateLogMetrics bool, tags Tags) AllocationRequest {
 	return AllocationRequest{
 		Guid:     guid,
+		GenerateLogMetrics: generateLogMetrics,
 		Resource: *resource,
 		Tags:     tags,
 	}
