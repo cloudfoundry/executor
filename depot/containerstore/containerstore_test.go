@@ -141,6 +141,7 @@ var _ = Describe("Container Store", func() {
 			MaxCPUShares:           maxCPUShares,
 			ReapInterval:           20 * time.Millisecond,
 			ReservedExpirationTime: 20 * time.Millisecond,
+			MetricReportInterval:   30 * time.Second,
 		}
 
 		containerStore = containerstore.New(
@@ -191,9 +192,10 @@ var _ = Describe("Container Store", func() {
 			}
 
 			req = &executor.AllocationRequest{
-				Guid:     containerGuid,
-				Tags:     containerTags,
-				Resource: containerResource,
+				Guid:               containerGuid,
+				Tags:               containerTags,
+				GenerateLogMetrics: true,
+				Resource:           containerResource,
 			}
 		})
 
@@ -1503,7 +1505,8 @@ var _ = Describe("Container Store", func() {
 
 		BeforeEach(func() {
 			allocationReq = &executor.AllocationRequest{
-				Guid: containerGuid,
+				Guid:               containerGuid,
+				GenerateLogMetrics: true,
 			}
 
 			runProcess = &gardenfakes.FakeProcess{}
@@ -1752,6 +1755,34 @@ var _ = Describe("Container Store", func() {
 
 						Expect(megatron.StepsRunnerCallCount()).To(Equal(1))
 						Eventually(readyChan).Should(Receive())
+					})
+
+					It("sets the metric reporting interval", func() {
+						err := containerStore.Run(logger, "some-trace-id", containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(readyChan).Should(Receive())
+
+						Expect(logManager.NewLogStreamerCallCount()).To(Equal(1))
+						_, _, _, _, metricReportInterval := logManager.NewLogStreamerArgsForCall(0)
+						Expect(metricReportInterval).To(Equal(time.Duration(30 * time.Second)))
+					})
+
+					Context("when GenerateLogMetrics is false", func() {
+						BeforeEach(func() {
+							allocationReq.GenerateLogMetrics = false
+						})
+
+						It("sets the metricReportInterval to zero", func() {
+							err := containerStore.Run(logger, "some-trace-id", containerGuid)
+							Expect(err).NotTo(HaveOccurred())
+
+							Eventually(readyChan).Should(Receive())
+
+							Expect(logManager.NewLogStreamerCallCount()).To(Equal(1))
+							_, _, _, _, metricReportInterval := logManager.NewLogStreamerArgsForCall(0)
+							Expect(metricReportInterval).To(Equal(time.Duration(0 * time.Second)))
+						})
 					})
 
 					It("sets the container state to running once the healthcheck passes, and emits a running event", func() {
@@ -3352,13 +3383,13 @@ var _ = Describe("Container Store", func() {
 
 		BeforeEach(func() {
 			resource = executor.NewResource(512, 512, 1024)
-			req := executor.NewAllocationRequest("forever-reserved", &resource, nil)
+			req := executor.NewAllocationRequest("forever-reserved", &resource, true, nil)
 
 			_, err := containerStore.Reserve(logger, "some-trace-id", &req)
 			Expect(err).NotTo(HaveOccurred())
 
 			resource = executor.NewResource(512, 512, 1024)
-			req = executor.NewAllocationRequest("eventually-initialized", &resource, nil)
+			req = executor.NewAllocationRequest("eventually-initialized", &resource, true, nil)
 
 			_, err = containerStore.Reserve(logger, "some-trace-id", &req)
 			Expect(err).NotTo(HaveOccurred())
