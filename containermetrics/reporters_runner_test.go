@@ -2,6 +2,7 @@ package containermetrics_test
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -53,7 +54,7 @@ var _ = Describe("ReportersRunner", func() {
 	)
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("test")
+		logger = lagertest.NewTestLogger(fmt.Sprintf("test-%d", GinkgoParallelProcess()))
 
 		interval = 10 * time.Second
 		testStart = time.Now()
@@ -880,7 +881,7 @@ var _ = Describe("ReportersRunner", func() {
 				})
 
 				It("reports the error", func() {
-					Eventually(logger.Logs()).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
+					Eventually(logger.Logs(), 5*time.Second).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
 						"Data": HaveKeyWithValue("error", "send-error-1"),
 					})))
 				})
