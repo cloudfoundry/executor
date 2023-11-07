@@ -45,10 +45,10 @@ type AllocationRequest struct {
 
 func NewAllocationRequest(guid string, resource *Resource, generateLogMetrics bool, tags Tags) AllocationRequest {
 	return AllocationRequest{
-		Guid:     guid,
+		Guid:               guid,
 		GenerateLogMetrics: generateLogMetrics,
-		Resource: *resource,
-		Tags:     tags,
+		Resource:           *resource,
+		Tags:               tags,
 	}
 }
 
