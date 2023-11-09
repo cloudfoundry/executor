@@ -42,6 +42,8 @@ var _ = Describe("DependencyManager", func() {
 		var dependency2ReceivedCancel, dependency3ReceivedCancel bool
 
 		BeforeEach(func() {
+			downloadRateLimiter = make(chan struct{}, 3)
+			dependencyManager = containerstore.NewDependencyManager(cache, downloadRateLimiter)
 			dependencies = append(dependencies,
 				executor.CachedDependency{CacheKey: "cache-key-3", LogSource: "log-source-3", From: "https://example.com:8080/download-3", To: "/var/data/buildpack-3"},
 			)
