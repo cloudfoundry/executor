@@ -144,6 +144,8 @@ type ExecutorConfig struct {
 	ReadWorkPoolSize                      int                   `json:"read_work_pool_size,omitempty"`
 	ReservedExpirationTime                durationjson.Duration `json:"reserved_expiration_time,omitempty"`
 	SetCPUWeight                          bool                  `json:"set_cpu_weight,omitempty"`
+	MinInstanceMmemoryMB                  int                   `json:"min_instance_memory_mb,omitempty"`
+	MaxInstanceMmemoryMB                  int                   `json:"max_instance_memory_mb,omitempty"`
 	SkipCertVerify                        bool                  `json:"skip_cert_verify,omitempty"`
 	TempDir                               string                `json:"temp_dir,omitempty"`
 	TrustedSystemCertificatesPath         string                `json:"trusted_system_certificates_path"`
@@ -270,6 +272,8 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		INodeLimit:             config.ContainerInodeLimit,
 		MaxCPUShares:           config.ContainerMaxCpuShares,
 		SetCPUWeight:           config.SetCPUWeight,
+		MinInstanceMmemoryMB:   config.MinInstanceMmemoryMB,
+		MaxInstanceMmemoryMB:   config.MaxInstanceMmemoryMB,
 		ReservedExpirationTime: time.Duration(config.ReservedExpirationTime),
 		ReapInterval:           time.Duration(config.ContainerReapInterval),
 		MaxLogLinesPerSecond:   config.MaxLogLinesPerSecond,

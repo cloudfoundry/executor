@@ -386,6 +386,9 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, i
 		return nil, err
 	}
 
+	cpuWeight := n.calculateCpuWeight(info.MemoryMB)
+	logger.Info("setting-cpu-weight", lager.Data{"cpu-weight": cpuWeight})
+
 	containerSpec := garden.ContainerSpec{
 		Handle:     info.Guid,
 		Privileged: info.Privileged,
@@ -409,7 +412,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, i
 				Max: uint64(info.MaxPids),
 			},
 			CPU: garden.CPULimits{
-				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(info.CPUWeight) / 100.0),
+				LimitInShares: uint64(float64(n.config.MaxCPUShares) * float64(cpuWeight) / 100.0),
 			},
 		},
 		Properties: gardenProperties,
@@ -882,4 +885,16 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 		logger.Error("failed-to-send-duration", err, lager.Data{"metric-name": GardenContainerCreationSucceededDuration})
 	}
 	return container, nil
+}
+
+func (n *storeNode) calculateCpuWeight(memoryMB int) int {
+	if memoryMB > n.config.MaxInstanceMmemoryMB {
+		return 100
+	}
+
+	if memoryMB < n.config.MinInstanceMmemoryMB {
+		memoryMB = n.config.MinInstanceMmemoryMB
+	}
+
+	return 100 * memoryMB / n.config.MinInstanceMmemoryMB
 }

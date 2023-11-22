@@ -55,6 +55,9 @@ type ContainerConfig struct {
 	MaxCPUShares uint64
 	SetCPUWeight bool
 
+	MinInstanceMmemoryMB int
+	MaxInstanceMmemoryMB int
+
 	ReservedExpirationTime time.Duration
 	ReapInterval           time.Duration
 	MaxLogLinesPerSecond   int
