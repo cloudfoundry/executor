@@ -151,7 +151,7 @@ func (bm *dependencyManager) ReleaseCachedDependencies(logger lager.Logger, keys
 		key := &keys[i]
 		logger.Debug("releasing-cache-key", lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
 		err := bm.cache.CloseDirectory(logger, key.CacheKey, key.Dir)
-		if err != nil {
+		if err != nil && err != cacheddownloader.AlreadyClosed && err != cacheddownloader.EntryNotFound {
 			logger.Error("failed-releasing-cache-key", err, lager.Data{"cache-key": key.CacheKey, "dir": key.Dir})
 			return err
 		}
