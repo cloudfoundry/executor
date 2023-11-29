@@ -139,6 +139,9 @@ var _ = Describe("Container Store", func() {
 			OwnerName:              ownerName,
 			INodeLimit:             iNodeLimit,
 			MaxCPUShares:           maxCPUShares,
+			CPUWeight:              12,
+			MinInstanceMmemoryMB:   128,
+			MaxInstanceMmemoryMB:   8192,
 			ReapInterval:           20 * time.Millisecond,
 			ReservedExpirationTime: 20 * time.Millisecond,
 			MetricReportInterval:   30 * time.Second,
@@ -507,11 +510,113 @@ var _ = Describe("Container Store", func() {
 
 					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
 
-					expectedCPUShares := uint64(float64(maxCPUShares) * float64(runReq.CPUWeight) / 100.0)
+					expectedCPUShares := uint64(float64(maxCPUShares) * float64(containerConfig.CPUWeight) / 100.0)
 					Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
 
 					expectedCPUWeight := uint64(resource.MemoryMB)
 					Expect(containerSpec.Limits.CPU.Weight).To(Equal(expectedCPUWeight))
+				})
+			})
+
+			Context("when the requested memory is more than MaxInstanceMmemoryMB", func() {
+				BeforeEach(func() {
+					allocationReq.Resource.MemoryMB = 10240
+					resource.MemoryMB = 10240
+
+					containerConfig.CPUWeight = 100
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClientFactory,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						logManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						metronClient,
+						rootFSSizer,
+						false,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+						cellID,
+						true,
+						advertisePreferenceForInstanceAddress,
+						json.Marshal,
+					)
+				})
+
+				It("creates the container in garden with the correct limits ", func() {
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
+
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB * 1024 * 1024) + 1000))
+					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
+
+					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
+
+					expectedCPUShares := uint64(float64(maxCPUShares) * float64(containerConfig.CPUWeight) / 100.0)
+					Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
+					Expect(containerSpec.Limits.CPU.Weight).To(BeZero())
+
+				})
+			})
+
+			Context("when the requested memory is less than MaxInstanceMmemoryMB", func() {
+				BeforeEach(func() {
+					allocationReq.Resource.MemoryMB = 100
+					resource.MemoryMB = 100
+
+					containerConfig.CPUWeight = 1
+					containerStore = containerstore.New(
+						containerConfig,
+						&totalCapacity,
+						gardenClientFactory,
+						dependencyManager,
+						volumeManager,
+						credManager,
+						logManager,
+						clock,
+						eventEmitter,
+						megatron,
+						"/var/vcap/data/cf-system-trusted-certs",
+						metronClient,
+						rootFSSizer,
+						false,
+						"/var/vcap/packages/healthcheck",
+						proxyManager,
+						cellID,
+						true,
+						advertisePreferenceForInstanceAddress,
+						json.Marshal,
+					)
+				})
+
+				It("creates the container in garden with the correct limits", func() {
+					_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(gardenClient.CreateCallCount()).To(Equal(1))
+					containerSpec := gardenClient.CreateArgsForCall(0)
+					Expect(containerSpec.Limits.Memory.LimitInBytes).To(BeEquivalentTo(resource.MemoryMB * 1024 * 1024))
+
+					Expect(containerSpec.Limits.Disk.Scope).To(Equal(garden.DiskLimitScopeTotal))
+					Expect(containerSpec.Limits.Disk.ByteHard).To(BeEquivalentTo((resource.DiskMB * 1024 * 1024) + 1000))
+					Expect(containerSpec.Limits.Disk.InodeHard).To(Equal(iNodeLimit))
+
+					Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
+
+					expectedCPUShares := uint64(float64(maxCPUShares) * float64(containerConfig.CPUWeight) / 100.0)
+					Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
+					Expect(containerSpec.Limits.CPU.Weight).To(BeZero())
+
 				})
 			})
 
@@ -529,7 +634,7 @@ var _ = Describe("Container Store", func() {
 
 				Expect(int(containerSpec.Limits.Pid.Max)).To(Equal(resource.MaxPids))
 
-				expectedCPUShares := uint64(float64(maxCPUShares) * float64(runReq.CPUWeight) / 100.0)
+				expectedCPUShares := uint64(float64(maxCPUShares) * float64(containerConfig.CPUWeight) / 100.0)
 				Expect(containerSpec.Limits.CPU.LimitInShares).To(Equal(expectedCPUShares))
 				Expect(containerSpec.Limits.CPU.Weight).To(BeZero())
 			})

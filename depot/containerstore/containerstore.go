@@ -54,6 +54,7 @@ type ContainerConfig struct {
 	INodeLimit   uint64
 	MaxCPUShares uint64
 	SetCPUWeight bool
+	CPUWeight    int
 
 	MinInstanceMmemoryMB int
 	MaxInstanceMmemoryMB int
