@@ -225,4 +225,64 @@ var _ = Describe("DependencyManager", func() {
 			Eventually(done).Should(BeClosed())
 		})
 	})
+
+	Context("ReleaseCachedDependencies", func() {
+		It("closes cached directories", func() {
+			err := dependencyManager.ReleaseCachedDependencies(logger, []containerstore.BindMountCacheKey{
+				{
+					CacheKey: "some-cache-key-1",
+					Dir:      "some-cache-dir-1",
+				},
+				{
+					CacheKey: "some-cache-key-2",
+					Dir:      "some-cache-dir-2",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cache.CloseDirectoryCallCount()).To(Equal(2))
+			_, cacheKey, dir := cache.CloseDirectoryArgsForCall(0)
+			Expect(cacheKey).To(Equal("some-cache-key-1"))
+			Expect(dir).To(Equal("some-cache-dir-1"))
+			_, cacheKey, dir = cache.CloseDirectoryArgsForCall(1)
+			Expect(cacheKey).To(Equal("some-cache-key-2"))
+			Expect(dir).To(Equal("some-cache-dir-2"))
+		})
+
+		It("ignores not found error", func() {
+			cache.CloseDirectoryReturns(cacheddownloader.EntryNotFound)
+			err := dependencyManager.ReleaseCachedDependencies(logger, []containerstore.BindMountCacheKey{
+				{
+					CacheKey: "some-cache-key-1",
+					Dir:      "some-cache-dir-1",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cache.CloseDirectoryCallCount()).To(Equal(1))
+		})
+
+		It("ignores already closed error", func() {
+			cache.CloseDirectoryReturns(cacheddownloader.AlreadyClosed)
+			err := dependencyManager.ReleaseCachedDependencies(logger, []containerstore.BindMountCacheKey{
+				{
+					CacheKey: "some-cache-key-1",
+					Dir:      "some-cache-dir-1",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cache.CloseDirectoryCallCount()).To(Equal(1))
+		})
+
+		It("fails when closing directory fails", func() {
+			cache.CloseDirectoryReturns(errors.New("unknown-error"))
+			err := dependencyManager.ReleaseCachedDependencies(logger, []containerstore.BindMountCacheKey{
+				{
+					CacheKey: "some-cache-key-1",
+					Dir:      "some-cache-dir-1",
+				},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(cache.CloseDirectoryCallCount()).To(Equal(1))
+		})
+	})
 })
