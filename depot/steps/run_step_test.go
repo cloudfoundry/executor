@@ -278,6 +278,18 @@ var _ = Describe("RunAction", func() {
 
 				})
 			})
+
+			Context("when Garden Run errors out", func() {
+				BeforeEach(func() {
+					gardenClient.Connection.RunStub = func(string, garden.ProcessSpec, garden.ProcessIO) (garden.Process, error) {
+						return nil, errors.New("some-error-from-garden")
+					}
+				})
+
+				It("it receives an error from the streamer", func() {
+					Expect(fakeStreamer.Stdout()).To(gbytes.Say("failed-creating-process: some-error-from-garden"))
+				})
+			})
 		})
 
 		Context("CF_INSTANCE_* networking env vars", func() {
