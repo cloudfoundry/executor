@@ -164,7 +164,10 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	select {
 	case err := <-errChan:
 		if err != nil {
-			step.logger.Error("failed-creating-process", err, lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
+			processErrorMessage := "failed-creating-process"
+			step.logger.Error(processErrorMessage, err, lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
+			step.WriteToStdOut(fmt.Sprintf("%s: %s", processErrorMessage, err))
+
 			return err
 		}
 	case process = <-processChan:
@@ -227,10 +230,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				}
 			}
 
-			if !step.model.SuppressLogOutput {
-				step.streamer.Stdout().Write([]byte(exitErrorMessage))
-				step.streamer.Flush()
-			}
+			step.WriteToStdOut(exitErrorMessage)
 
 			if killed {
 				return new(ExceededGracefulShutdownIntervalError)
@@ -348,4 +348,11 @@ func (step *runStep) networkingEnvVars() []string {
 	}
 
 	return envVars
+}
+
+func (step *runStep) WriteToStdOut(message string) {
+	if !step.model.SuppressLogOutput {
+		step.streamer.Stdout().Write([]byte(message))
+		step.streamer.Flush()
+	}
 }
