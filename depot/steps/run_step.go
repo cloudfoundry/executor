@@ -166,7 +166,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 		if err != nil {
 			processErrorMessage := "failed-creating-process"
 			step.logger.Error(processErrorMessage, err, lager.Data{"duration": step.clock.Now().Sub(runStartTime)})
-			step.WriteToStdOut(fmt.Sprintf("%s: %s", processErrorMessage, err))
+			step.writeToStdOut(fmt.Sprintf("%s: %s", processErrorMessage, err))
 
 			return err
 		}
@@ -230,7 +230,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 				}
 			}
 
-			step.WriteToStdOut(exitErrorMessage)
+			step.writeToStdOut(exitErrorMessage)
 
 			if killed {
 				return new(ExceededGracefulShutdownIntervalError)
@@ -350,7 +350,7 @@ func (step *runStep) networkingEnvVars() []string {
 	return envVars
 }
 
-func (step *runStep) WriteToStdOut(message string) {
+func (step *runStep) writeToStdOut(message string) {
 	if !step.model.SuppressLogOutput {
 		step.streamer.Stdout().Write([]byte(message))
 		step.streamer.Flush()
