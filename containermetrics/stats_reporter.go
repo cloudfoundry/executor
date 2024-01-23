@@ -11,8 +11,9 @@ import (
 )
 
 type cpuInfo struct {
-	timeSpentInCPU time.Duration
-	timeOfSample   time.Time
+	timeSpentInCPU                      time.Duration
+	timeOfSample                        time.Time
+	absoluteCPUEntitlementInNanoseconds uint64
 }
 
 type StatsReporter struct {
@@ -84,7 +85,7 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	previousInfo *cpuInfo,
 	now time.Time,
 ) (*CachedContainerMetrics, *cpuInfo) {
-	currentInfo, cpuPercent := calculateInfo(containerMetrics, previousInfo, now)
+	currentInfo, cpuPercent, cpuEntitlementPercent := calculateInfo(containerMetrics, previousInfo, now)
 
 	if len(metricsConfig.Tags) == 0 {
 		metricsConfig.Tags = map[string]string{}
@@ -104,17 +105,18 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 
 	if applicationId != "" {
 		err := reporter.metronClient.SendAppMetrics(loggingclient.ContainerMetric{
-			CpuPercentage:          cpuPercent,
-			MemoryBytes:            containerMetrics.MemoryUsageInBytes,
-			DiskBytes:              containerMetrics.DiskUsageInBytes,
-			MemoryBytesQuota:       containerMetrics.MemoryLimitInBytes,
-			DiskBytesQuota:         containerMetrics.DiskLimitInBytes,
-			AbsoluteCPUUsage:       uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
-			AbsoluteCPUEntitlement: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-			ContainerAge:           containerMetrics.ContainerAgeInNanoseconds,
-			Tags:                   metricsConfig.Tags,
-			RxBytes:                containerMetrics.RxInBytes,
-			TxBytes:                containerMetrics.TxInBytes,
+			CpuPercentage:            cpuPercent,
+			CpuEntitlementPercentage: cpuEntitlementPercent,
+			MemoryBytes:              containerMetrics.MemoryUsageInBytes,
+			DiskBytes:                containerMetrics.DiskUsageInBytes,
+			MemoryBytesQuota:         containerMetrics.MemoryLimitInBytes,
+			DiskBytesQuota:           containerMetrics.DiskLimitInBytes,
+			AbsoluteCPUUsage:         uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
+			AbsoluteCPUEntitlement:   containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+			ContainerAge:             containerMetrics.ContainerAgeInNanoseconds,
+			Tags:                     metricsConfig.Tags,
+			RxBytes:                  containerMetrics.RxInBytes,
+			TxBytes:                  containerMetrics.TxInBytes,
 		})
 
 		if err != nil {
@@ -138,20 +140,23 @@ func (reporter *StatsReporter) calculateAndSendMetrics(
 	}, &currentInfo
 }
 
-func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64) {
+func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64, float64) {
 	timeOfSample := now
 	if containerMetrics.ContainerAgeInNanoseconds != 0 {
 		timeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
 	}
 
 	currentInfo := cpuInfo{
-		timeSpentInCPU: containerMetrics.TimeSpentInCPU,
-		timeOfSample:   timeOfSample,
+		timeSpentInCPU:                      containerMetrics.TimeSpentInCPU,
+		timeOfSample:                        timeOfSample,
+		absoluteCPUEntitlementInNanoseconds: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
 	}
 
 	var cpuPercent float64
+	var cpuEntitlementPercent float64
 	if previousInfo == nil {
 		cpuPercent = 0.0
+		cpuEntitlementPercent = 0.0
 	} else {
 		cpuPercent = computeCPUPercent(
 			previousInfo.timeSpentInCPU,
@@ -159,9 +164,19 @@ func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpu
 			previousInfo.timeOfSample,
 			currentInfo.timeOfSample,
 		)
+		cpuEntitlementPercent = computeCPUEntitlementPercent(
+			previousInfo.timeSpentInCPU,
+			currentInfo.timeSpentInCPU,
+			previousInfo.absoluteCPUEntitlementInNanoseconds,
+			currentInfo.absoluteCPUEntitlementInNanoseconds,
+		)
 	}
 
-	return currentInfo, cpuPercent
+	return currentInfo, cpuPercent, cpuEntitlementPercent
+}
+
+func computeCPUEntitlementPercent(previousTimeSpentInCPU, currentTimeSpentInCPU time.Duration, previousAbsoluteEntitlementInNanoseconds, currentAbsoluteEntitlementInNanoseconds uint64) float64 {
+	return (float64(currentTimeSpentInCPU-previousTimeSpentInCPU) / float64(currentAbsoluteEntitlementInNanoseconds-previousAbsoluteEntitlementInNanoseconds)) * 100.0
 }
 
 // scale from (0 - 100) * runtime.NumCPU()
