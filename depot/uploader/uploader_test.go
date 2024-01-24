@@ -2,6 +2,7 @@ package uploader_test
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -35,6 +36,7 @@ var _ = Describe("Uploader", func() {
 		file           *os.File
 		expectedBytes  int
 		expectedMD5    string
+		expectedSHA256 string
 		defaultTimeout time.Duration
 	)
 
@@ -49,6 +51,8 @@ var _ = Describe("Uploader", func() {
 		expectedBytes, _ = file.WriteString(contentString)
 		rawMD5 := md5.Sum([]byte(contentString))
 		expectedMD5 = base64.StdEncoding.EncodeToString(rawMD5[:])
+		rawSHA256 := sha256.Sum256([]byte(contentString))
+		expectedSHA256 = base64.StdEncoding.EncodeToString(rawSHA256[:])
 		file.Close()
 		defaultTimeout = 500 * time.Millisecond
 	})
@@ -88,7 +92,7 @@ var _ = Describe("Uploader", func() {
 				numBytes, err = upldr.Upload(file.Name(), url, nil)
 			})
 
-			It("uploads the file to the url", func() {
+			It("uploads the file to the url providing Content-MD5 and Content-Digest headers", func() {
 				Expect(len(serverRequests)).To(Equal(1))
 
 				request := serverRequests[0]
@@ -97,6 +101,7 @@ var _ = Describe("Uploader", func() {
 				Expect(request.URL.Path).To(Equal("/somepath"))
 				Expect(request.Header.Get("Content-Type")).To(Equal("application/octet-stream"))
 				Expect(request.Header.Get("Content-MD5")).To(Equal(expectedMD5))
+				Expect(request.Header.Get("Content-Digest")).To(Equal(fmt.Sprintf("sha-256=:%s:", expectedSHA256)))
 				Expect(strconv.Atoi(request.Header.Get("Content-Length"))).To(BeNumerically("==", 31))
 				Expect(string(data)).To(Equal("content that we can check later"))
 			})
