@@ -496,19 +496,17 @@ func destroyContainers(gardenClient garden.Client, containersFetcher *executorCo
 		}(container)
 	}
 
-	for _, _ = range containers {
-		select {
-		case result := <-errInfoChannel:
-			if result.err != nil {
-				logger.Error("executor-failed-to-destroy-container", result.err, lager.Data{
-					"handle": result.handle,
-				})
-				return result.err
-			} else {
-				logger.Info("executor-destroyed-stray-container", lager.Data{
-					"handle": result.handle,
-				})
-			}
+	for range containers {
+		result := <-errInfoChannel
+		if result.err != nil {
+			logger.Error("executor-failed-to-destroy-container", result.err, lager.Data{
+				"handle": result.handle,
+			})
+			return result.err
+		} else {
+			logger.Info("executor-destroyed-stray-container", lager.Data{
+				"handle": result.handle,
+			})
 		}
 	}
 

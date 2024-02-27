@@ -54,17 +54,13 @@ var _ = Describe("DependencyManager", func() {
 					time.Sleep(1 * time.Second)
 					return "", 0, errors.New("failed-to-fetch")
 				case "cache-key-2":
-					select {
-					case <-cancelChan:
-						dependency2ReceivedCancel = true
-						return "", 0, errors.New("canceled")
-					}
+					<-cancelChan
+					dependency2ReceivedCancel = true
+					return "", 0, errors.New("canceled")
 				case "cache-key-3":
-					select {
-					case <-cancelChan:
-						dependency3ReceivedCancel = true
-						return "", 0, errors.New("canceled")
-					}
+					<-cancelChan
+					dependency3ReceivedCancel = true
+					return "", 0, errors.New("canceled")
 				}
 				return "", 0, errors.New("unknown-cache-key")
 			}
