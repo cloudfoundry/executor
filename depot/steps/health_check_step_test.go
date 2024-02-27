@@ -2,7 +2,6 @@ package steps_test
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -153,7 +152,7 @@ var _ = Describe("NewHealthCheckStep", func() {
 
 				It("emits the healthcheck process response for the failure", func() {
 					Eventually(fakeHealthCheckStreamer.Stderr().(*gbytes.Buffer)).Should(
-						gbytes.Say(fmt.Sprintf("oh no!\n")),
+						gbytes.Say("oh no!\n"),
 					)
 				})
 
