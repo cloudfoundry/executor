@@ -48,7 +48,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 	completed := 0
 	mountChan := make(chan *cachedBindMount, total)
 	errChan := make(chan error, total)
-	cancelChan := make(chan struct{}, 0)
+	cancelChan := make(chan struct{})
 	bindMounts := NewBindMounts(total)
 
 	if total == 0 {
