@@ -13,8 +13,7 @@ var _ = Describe("EmittableError", func() {
 	wrappedError := errors.New("the wrapped error")
 
 	It("should satisfy the error interface", func() {
-		var err error
-		err = steps.NewEmittableError(wrappedError, "Fancy")
+		err := steps.NewEmittableError(wrappedError, "Fancy")
 		Expect(err).To(HaveOccurred())
 	})
 
