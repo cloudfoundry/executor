@@ -154,7 +154,7 @@ func newStoreNode(
 func (n *storeNode) acquireOpLock(logger lager.Logger) {
 	startTime := time.Now()
 	n.opLock.Lock()
-	logger.Debug("ops-lock-aquired", lager.Data{"lock-wait-time": time.Now().Sub(startTime).String()})
+	logger.Debug("ops-lock-aquired", lager.Data{"lock-wait-time": time.Since(startTime).String()})
 }
 
 func (n *storeNode) releaseOpLock(logger lager.Logger) {
@@ -774,7 +774,7 @@ func (n *storeNode) destroyContainer(logger lager.Logger, traceID string) error 
 
 	startTime := time.Now()
 	err := n.gardenClientFactory.NewGardenClient(logger, traceID).Destroy(n.info.Guid)
-	destroyDuration := time.Now().Sub(startTime)
+	destroyDuration := time.Since(startTime)
 
 	if err != nil {
 		if _, ok := err.(garden.ContainerNotFoundError); ok {
@@ -866,7 +866,7 @@ func createContainer(logger lager.Logger, spec garden.ContainerSpec, client gard
 	logger.Info("creating-container-in-garden")
 	startTime := time.Now()
 	container, err := client.Create(spec)
-	createDuration := time.Now().Sub(startTime)
+	createDuration := time.Since(startTime)
 	if err != nil {
 		logger.Error("failed-to-create-container-in-garden", err)
 		logger.Info("failed-to-create-container-in-garden", lager.Data{
