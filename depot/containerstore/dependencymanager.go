@@ -64,7 +64,7 @@ func (bm *dependencyManager) DownloadCachedDependencies(logger lager.Logger, mou
 
 			limiterStart := time.Now()
 			bm.downloadRateLimiter <- struct{}{}
-			limiterTime := time.Now().Sub(limiterStart)
+			limiterTime := time.Since(limiterStart)
 			logger.Info("cached-dependency-rate-limiter", lager.Data{"cache-key": mount.CacheKey, "duration-ns": limiterTime})
 
 			defer func() {
