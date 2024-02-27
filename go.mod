@@ -63,3 +63,5 @@ require (
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/cloudfoundry-incubator/cacheddownloader v0.0.0 => code.cloudfoundry.org/cacheddownloader v0.0.0
