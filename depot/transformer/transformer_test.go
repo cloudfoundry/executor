@@ -1432,6 +1432,7 @@ var _ = Describe("Transformer", func() {
 							var io garden.ProcessIO
 							Eventually(startupIO).Should(Receive(&io))
 							_, err := io.Stdout.Write([]byte("startup check starting\n"))
+							Expect(err).ToNot(HaveOccurred())
 							_, err = io.Stderr.Write([]byte("startup check failed\n"))
 							Expect(err).NotTo(HaveOccurred())
 
