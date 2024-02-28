@@ -174,7 +174,7 @@ func (step *downloadStep) emitError(format string, a ...interface{}) {
 		err_bytes = append(err_bytes[:truncation_length], []byte(" (error truncated)")...)
 	}
 
-	fmt.Fprintf(step.streamer.Stderr(), string(err_bytes))
+	fmt.Fprint(step.streamer.Stderr(), string(err_bytes))
 }
 
 type ReadSizer struct {
