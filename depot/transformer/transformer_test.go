@@ -548,7 +548,7 @@ var _ = Describe("Transformer", func() {
 				livenessIO                    chan garden.ProcessIO
 				processLock                   sync.Mutex
 				specs                         chan garden.ProcessSpec
-				declarativeHealthcheckSrcPath string = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
+				declarativeHealthcheckSrcPath = filepath.Join(string(os.PathSeparator), "dir", "healthcheck")
 			)
 
 			BeforeEach(func() {
