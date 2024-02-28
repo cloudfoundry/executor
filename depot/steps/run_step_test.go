@@ -42,7 +42,7 @@ var _ = Describe("RunAction", func() {
 		testLogSource            string
 		sidecar                  steps.Sidecar
 		privileged               bool
-		gracefulShutdownInterval time.Duration = 5 * time.Second
+		gracefulShutdownInterval = 5 * time.Second
 	)
 
 	BeforeEach(func() {
