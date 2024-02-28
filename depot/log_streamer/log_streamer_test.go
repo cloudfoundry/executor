@@ -470,7 +470,7 @@ var _ = Describe("LogStreamer", func() {
 					message += strings.Repeat("8", log_streamer.MAX_MESSAGE_SIZE)
 					message += strings.Repeat("9", log_streamer.MAX_MESSAGE_SIZE)
 					message += "hello\n"
-					fmt.Fprintf(streamer.Stdout(), message)
+					fmt.Fprint(streamer.Stdout(), message)
 				})
 
 				It("should break the message up and send multiple messages", func() {
@@ -494,7 +494,7 @@ var _ = Describe("LogStreamer", func() {
 				})
 
 				It("should break the message up and send multiple messages without sending error runes", func() {
-					fmt.Fprintf(streamer.Stdout(), message)
+					fmt.Fprint(streamer.Stdout(), message)
 					Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
 					ms, _, _ := fakeClient.SendAppLogArgsForCall(0)
@@ -535,7 +535,7 @@ var _ = Describe("LogStreamer", func() {
 					})
 
 					It("drops the last 3 bytes", func() {
-						fmt.Fprintf(streamer.Stdout(), message)
+						fmt.Fprint(streamer.Stdout(), message)
 
 						Expect(fakeClient.SendAppLogCallCount()).To(Equal(1))
 
@@ -548,8 +548,8 @@ var _ = Describe("LogStreamer", func() {
 			Context("while concatenating, if the message exceeds the emittable length", func() {
 				BeforeEach(func() {
 					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE-2)
-					fmt.Fprintf(streamer.Stdout(), message)
-					fmt.Fprintf(streamer.Stdout(), "778888\n")
+					fmt.Fprint(streamer.Stdout(), message)
+					fmt.Fprint(streamer.Stdout(), "778888\n")
 				})
 
 				It("should break the message up and send multiple messages", func() {
