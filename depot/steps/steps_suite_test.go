@@ -1,7 +1,6 @@
 package steps_test
 
 import (
-	"fmt"
 	"time"
 
 	multierror "github.com/hashicorp/go-multierror"
@@ -15,15 +14,7 @@ import (
 var (
 	goroutineErrors *multierror.Error
 	checkGoroutines bool
-	snapshot        []gleak.Goroutine
 )
-
-type errorReporter struct {
-}
-
-func (errorReporter) Errorf(format string, args ...interface{}) {
-	multierror.Append(goroutineErrors, fmt.Errorf(format, args...))
-}
 
 func TestSteps(t *testing.T) {
 	RegisterFailHandler(Fail)

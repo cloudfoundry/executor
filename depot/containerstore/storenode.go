@@ -37,8 +37,6 @@ const CredDirFailed = "failed to create credentials directory"
 const ContainerCompletedCount = "ContainerCompletedCount"
 const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
 
-const maxErrorMsgLength = 1024
-
 // To be deprecated
 const (
 	GardenContainerCreationSucceededDuration    = "GardenContainerCreationSucceededDuration"
@@ -76,7 +74,6 @@ type storeNode struct {
 	logManager                            LogManager
 	generateLogMetrics                    bool
 	logStreamer                           log_streamer.LogStreamer
-	instanceIdentityHandler               *InstanceIdentityHandler
 	eventEmitter                          event.Hub
 	transformer                           transformer.Transformer
 	process                               ifrit.Process
@@ -84,7 +81,6 @@ type storeNode struct {
 	rootFSSizer                           configuration.RootFSSizer
 	useDeclarativeHealthCheck             bool
 	declarativeHealthcheckPath            string
-	useContainerProxy                     bool
 	proxyConfigHandler                    ProxyManager
 	bindMounts                            []garden.BindMount
 	cellID                                string

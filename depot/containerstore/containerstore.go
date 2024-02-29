@@ -78,7 +78,6 @@ type containerStore struct {
 	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
 
-	ldsSourcePath      string
 	proxyConfigHandler ProxyManager
 
 	trustedSystemCertificatesPath string

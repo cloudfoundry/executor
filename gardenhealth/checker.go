@@ -42,7 +42,6 @@ type checker struct {
 	containerOwnerName string
 	retryInterval      time.Duration
 	healthcheckSpec    garden.ProcessSpec
-	executorClient     executor.Client
 	gardenClient       garden.Client
 	guidGenerator      guidgen.Generator
 }

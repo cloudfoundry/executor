@@ -26,9 +26,6 @@ type logRateLimiter struct {
 	maxLogBytesPerSecond        int64
 	maxLogLinesPerSecondLimiter *rate.Limiter
 	maxLogBytesPerSecondLimiter *rate.Limiter
-	metricReportLimiter         *rate.Limiter
-	logReportLimiter            *rate.Limiter
-	overReportLimiter           *rate.Limiter
 	logMetricsEmitInterval      time.Duration
 	lastOverage                 time.Time
 	bytesEmittedLastInterval    uint64

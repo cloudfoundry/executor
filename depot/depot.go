@@ -134,16 +134,6 @@ func (c *client) newRunContainerWorker(logger lager.Logger, traceID string, guid
 	}
 }
 
-func tagsMatch(needles, haystack executor.Tags) bool {
-	for k, v := range needles {
-		if haystack[k] != v {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (c *client) ListContainers(logger lager.Logger) ([]executor.Container, error) {
 	return c.containerStore.List(logger), nil
 }
