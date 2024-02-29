@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 
@@ -87,7 +86,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		return err
 	}
 
-	tempDir, err := ioutil.TempDir(step.tempDir, "upload")
+	tempDir, err := os.MkdirTemp(step.tempDir, "upload")
 	if err != nil {
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpDir)
@@ -116,7 +115,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		return NewEmittableError(err, errString)
 	}
 
-	tempFile, err := ioutil.TempFile(step.tempDir, "compressed")
+	tempFile, err := os.CreateTemp(step.tempDir, "compressed")
 	if err != nil {
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpFile)

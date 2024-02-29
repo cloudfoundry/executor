@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -73,7 +72,7 @@ var _ = Describe("UploadStep", func() {
 		uploadTarget = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			var err error
 
-			uploadedPayload, err = ioutil.ReadAll(req.Body)
+			uploadedPayload, err = io.ReadAll(req.Body)
 			Expect(err).NotTo(HaveOccurred())
 
 			w.WriteHeader(http.StatusOK)
@@ -85,7 +84,7 @@ var _ = Describe("UploadStep", func() {
 			User: "notroot",
 		}
 
-		tempDir, err = ioutil.TempDir("", "upload-step-tmpdir")
+		tempDir, err = os.MkdirTemp("", "upload-step-tmpdir")
 		Expect(err).NotTo(HaveOccurred())
 
 		gardenClient = fakes.NewGardenClient()
@@ -308,7 +307,7 @@ var _ = Describe("UploadStep", func() {
 					buffer = gbytes.NewBuffer()
 					writeTarContents(buffer)
 
-					brokenStream := ioutil.NopCloser(iotest.TimeoutReader(buffer))
+					brokenStream := io.NopCloser(iotest.TimeoutReader(buffer))
 
 					gardenClient.Connection.StreamOutReturns(brokenStream, nil)
 
@@ -337,7 +336,7 @@ var _ = Describe("UploadStep", func() {
 				It("clears out the temporary file", func() {
 					err := <-ifrit.Invoke(step).Wait()
 					Expect(err).To(HaveOccurred())
-					files, err := ioutil.ReadDir(tempDir)
+					files, err := os.ReadDir(tempDir)
 					Expect(err).NotTo(HaveOccurred())
 					for _, f := range files {
 						Expect(f.Name()).NotTo(HavePrefix("compressed"))

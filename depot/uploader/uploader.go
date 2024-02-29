@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -140,7 +139,7 @@ func (uploader *URLUploader) attemptUpload(
 		return err
 	}
 
-	request, err := http.NewRequest("POST", url, ioutil.NopCloser(sourceFile))
+	request, err := http.NewRequest("POST", url, io.NopCloser(sourceFile))
 	if err != nil {
 		logger.Error("somehow-failed-to-create-request", err)
 		return err

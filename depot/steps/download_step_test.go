@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -45,7 +44,7 @@ var _ = Describe("DownloadAction", func() {
 
 	BeforeEach(func() {
 		cache = &cdfakes.FakeCachedDownloader{}
-		cache.FetchReturns(ioutil.NopCloser(new(bytes.Buffer)), 42, nil)
+		cache.FetchReturns(io.NopCloser(new(bytes.Buffer)), 42, nil)
 
 		downloadAction = models.DownloadAction{
 			From:     "http://mr_jones",
@@ -539,7 +538,7 @@ var _ = Describe("DownloadAction", func() {
 
 			fetchCh := make(chan struct{}, 3)
 			barrier := make(chan struct{})
-			nopCloser := ioutil.NopCloser(new(bytes.Buffer))
+			nopCloser := io.NopCloser(new(bytes.Buffer))
 			cache.FetchStub = func(_ lager.Logger, urlToFetch *url.URL, cacheKey string, checksumInfo cacheddownloader.ChecksumInfoType, cancelChan <-chan struct{}) (io.ReadCloser, int64, error) {
 				fetchCh <- struct{}{}
 				<-barrier
@@ -583,7 +582,7 @@ var _ = Describe("ReadSizer", func() {
 })
 
 func createTempTar() *os.File {
-	tarFile, err := ioutil.TempFile("", "some-tar")
+	tarFile, err := os.CreateTemp("", "some-tar")
 	Expect(err).NotTo(HaveOccurred())
 
 	archiveHelper.CreateTarArchive(

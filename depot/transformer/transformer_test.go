@@ -3,7 +3,7 @@ package transformer_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -210,8 +210,8 @@ var _ = Describe("Transformer", func() {
 				processSpec, processIO := gardenContainer.RunArgsForCall(5)
 				Expect(processSpec.Path).To(Equal("/monitor/path"))
 				Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
-				Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
-				Expect(processIO.Stderr).ShouldNot(Equal(ioutil.Discard))
+				Expect(processIO.Stdout).ShouldNot(Equal(io.Discard))
+				Expect(processIO.Stderr).ShouldNot(Equal(io.Discard))
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
@@ -2149,8 +2149,8 @@ var _ = Describe("Transformer", func() {
 					processSpec, processIO := gardenContainer.RunArgsForCall(1)
 					Expect(processSpec.Path).To(Equal("/monitor/path"))
 					Expect(container.Monitor.RunAction.GetSuppressLogOutput()).Should(BeFalse())
-					Expect(processIO.Stdout).ShouldNot(Equal(ioutil.Discard))
-					Expect(processIO.Stderr).ShouldNot(Equal(ioutil.Discard))
+					Expect(processIO.Stdout).ShouldNot(Equal(io.Discard))
+					Expect(processIO.Stderr).ShouldNot(Equal(io.Discard))
 					monitorCh <- 0
 					monitorCh <- 0
 					Eventually(process.Ready()).Should(BeClosed())

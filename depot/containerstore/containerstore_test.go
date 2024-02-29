@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -1142,9 +1142,9 @@ var _ = Describe("Container Store", func() {
 				)
 
 				BeforeEach(func() {
-					envoySourceDir, err = ioutil.TempDir("", "envoy_dir")
+					envoySourceDir, err = os.MkdirTemp("", "envoy_dir")
 					Expect(err).NotTo(HaveOccurred())
-					envoyConfigDir, err = ioutil.TempDir("", "envoy_config_dir")
+					envoyConfigDir, err = os.MkdirTemp("", "envoy_config_dir")
 					Expect(err).NotTo(HaveOccurred())
 
 					bindMounts := []garden.BindMount{
@@ -1540,9 +1540,9 @@ var _ = Describe("Container Store", func() {
 				}
 
 				var err error
-				_, err = ioutil.TempDir("", "envoy_dir")
+				_, err = os.MkdirTemp("", "envoy_dir")
 				Expect(err).NotTo(HaveOccurred())
-				_, err = ioutil.TempDir("", "envoy_config_dir")
+				_, err = os.MkdirTemp("", "envoy_config_dir")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -3326,7 +3326,7 @@ var _ = Describe("Container Store", func() {
 	Describe("GetFiles", func() {
 		BeforeEach(func() {
 			gardenClient.CreateReturns(gardenContainer, nil)
-			gardenContainer.StreamOutReturns(ioutil.NopCloser(bytes.NewReader([]byte("this is the stream"))), nil)
+			gardenContainer.StreamOutReturns(io.NopCloser(bytes.NewReader([]byte("this is the stream"))), nil)
 		})
 
 		JustBeforeEach(func() {

@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -646,7 +645,7 @@ func TLSConfigFromConfig(logger lager.Logger, certsRetriever CertPoolRetriever, 
 func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.IngressClient, config ExecutorConfig, clock clock.Clock, handlers ...containerstore.CredentialHandler) (containerstore.CredManager, error) {
 	if config.InstanceIdentityCredDir != "" {
 		logger.Info("instance-identity-enabled")
-		keyData, err := ioutil.ReadFile(config.InstanceIdentityPrivateKeyPath)
+		keyData, err := os.ReadFile(config.InstanceIdentityPrivateKeyPath)
 		if err != nil {
 			return nil, err
 		}
@@ -659,7 +658,7 @@ func CredManagerFromConfig(logger lager.Logger, metronClient loggingclient.Ingre
 			return nil, err
 		}
 
-		certData, err := ioutil.ReadFile(config.InstanceIdentityCAPath)
+		certData, err := os.ReadFile(config.InstanceIdentityCAPath)
 		if err != nil {
 			return nil, err
 		}
@@ -734,7 +733,7 @@ func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 }
 
 func appendCACerts(caCertPool *x509.CertPool, pathToCA string) (*x509.CertPool, error) {
-	certBytes, err := ioutil.ReadFile(pathToCA)
+	certBytes, err := os.ReadFile(pathToCA)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to open CA cert bundle '%s'", pathToCA)
 	}

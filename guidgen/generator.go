@@ -2,7 +2,7 @@ package guidgen
 
 import (
 	"code.cloudfoundry.org/lager/v3"
-	"github.com/nu7hatch/gouuid"
+	uuid "github.com/nu7hatch/gouuid"
 )
 
 var DefaultGenerator Generator = &generator{}

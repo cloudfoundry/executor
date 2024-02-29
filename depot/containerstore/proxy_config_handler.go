@@ -5,7 +5,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -519,7 +518,7 @@ func writeProxyConfig(proxyConfig *envoy_bootstrap.Bootstrap, path string) error
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, yamlStr, 0666)
+	return os.WriteFile(path, yamlStr, 0666)
 }
 
 func generateListeners(container executor.Container, requireClientCerts, http2Enabled bool) ([]*envoy_listener.Listener, error) {
@@ -687,7 +686,7 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 	}
 
 	tmpPath := outPath + ".tmp"
-	if err := ioutil.WriteFile(tmpPath, yamlStr, 0666); err != nil {
+	if err := os.WriteFile(tmpPath, yamlStr, 0666); err != nil {
 		return err
 	}
 

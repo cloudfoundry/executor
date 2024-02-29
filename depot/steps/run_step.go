@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -124,8 +124,8 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	var processIO garden.ProcessIO
 	if step.model.SuppressLogOutput {
 		processIO = garden.ProcessIO{
-			Stdout: ioutil.Discard,
-			Stderr: ioutil.Discard,
+			Stdout: io.Discard,
+			Stderr: io.Discard,
 		}
 	} else {
 		processIO = garden.ProcessIO{
