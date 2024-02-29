@@ -7,7 +7,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -479,7 +478,7 @@ var _ = Describe("Initializer", func() {
 
 			fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool(), nil)
 
-			certBytes, err := ioutil.ReadFile(config.PathToTLSCACert)
+			certBytes, err := os.ReadFile(config.PathToTLSCACert)
 			Expect(err).NotTo(HaveOccurred())
 			block, _ := pem.Decode(certBytes)
 			caCert, err = x509.ParseCertificate(block.Bytes)
@@ -500,7 +499,7 @@ var _ = Describe("Initializer", func() {
 		})
 
 		It("adds any system certs to the CA pools", func() {
-			certBytes, err := ioutil.ReadFile("fixtures/systemcerts/extra-ca.crt")
+			certBytes, err := os.ReadFile("fixtures/systemcerts/extra-ca.crt")
 			Expect(err).NotTo(HaveOccurred())
 			block, _ := pem.Decode(certBytes)
 			caCert, err = x509.ParseCertificate(block.Bytes)
@@ -542,7 +541,7 @@ var _ = Describe("Initializer", func() {
 				config.PathToTLSCACert = ""
 				config.PathToCACertsForDownloads = "fixtures/downloader/ca.crt"
 
-				certBytes, err := ioutil.ReadFile(config.PathToCACertsForDownloads)
+				certBytes, err := os.ReadFile(config.PathToCACertsForDownloads)
 				Expect(err).NotTo(HaveOccurred())
 				block, _ := pem.Decode(certBytes)
 				caCert, err = x509.ParseCertificate(block.Bytes)

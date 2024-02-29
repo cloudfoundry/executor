@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +46,7 @@ var _ = Describe("Uploader", func() {
 		serverRequests = []*http.Request{}
 		logger = lagertest.NewTestLogger("test")
 
-		file, _ = ioutil.TempFile("", "foo")
+		file, _ = os.CreateTemp("", "foo")
 		contentString := "content that we can check later"
 		expectedBytes, _ = file.WriteString(contentString)
 		rawMD5 := md5.Sum([]byte(contentString))
@@ -75,7 +75,7 @@ var _ = Describe("Uploader", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					serverRequests = append(serverRequests, r)
 
-					data, err := ioutil.ReadAll(r.Body)
+					data, err := io.ReadAll(r.Body)
 					Expect(err).NotTo(HaveOccurred())
 					serverRequestBody = append(serverRequestBody, string(data))
 
@@ -240,7 +240,7 @@ var _ = Describe("Uploader", func() {
 				testServer = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					serverRequests = append(serverRequests, r)
 
-					data, err := ioutil.ReadAll(r.Body)
+					data, err := io.ReadAll(r.Body)
 					Expect(err).NotTo(HaveOccurred())
 					serverRequestBody = append(serverRequestBody, string(data))
 

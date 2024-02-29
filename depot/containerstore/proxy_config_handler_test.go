@@ -7,7 +7,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
@@ -78,10 +77,10 @@ var _ = Describe("ProxyConfigHandler", func() {
 			},
 		}
 
-		proxyConfigDir, err = ioutil.TempDir("", "proxymanager-config")
+		proxyConfigDir, err = os.MkdirTemp("", "proxymanager-config")
 		Expect(err).ToNot(HaveOccurred())
 
-		proxyDir, err = ioutil.TempDir("", "proxymanager-envoy")
+		proxyDir, err = os.MkdirTemp("", "proxymanager-envoy")
 		Expect(err).ToNot(HaveOccurred())
 
 		configPath = filepath.Join(proxyConfigDir, container.Guid)
@@ -583,7 +582,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("should ensure the sds-id-cert-and-key.yaml file is recreated when updating the config", func() {
-				Expect(ioutil.WriteFile(sdsIDCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(os.WriteFile(sdsIDCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
 				Expect(fileWatcher.Add(sdsIDCertAndKeyFile)).To(Succeed())
 				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
@@ -592,7 +591,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("should ensure the sds-c2c-cert-and-key.yaml file is recreated when updating the config", func() {
-				Expect(ioutil.WriteFile(sdsC2CCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(os.WriteFile(sdsC2CCertAndKeyFile, []byte("old-content"), 0666)).To(Succeed())
 				Expect(fileWatcher.Add(sdsC2CCertAndKeyFile)).To(Succeed())
 				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
@@ -601,7 +600,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			})
 
 			It("should ensure the sds-id-validation-context.yaml file is recreated when updating the config", func() {
-				Expect(ioutil.WriteFile(sdsIDValidationContextFile, []byte("old-content"), 0666)).To(Succeed())
+				Expect(os.WriteFile(sdsIDValidationContextFile, []byte("old-content"), 0666)).To(Succeed())
 				Expect(fileWatcher.Add(sdsIDValidationContextFile)).To(Succeed())
 				err := proxyConfigHandler.Update(credentials, container)
 				Expect(err).NotTo(HaveOccurred())
@@ -1021,7 +1020,7 @@ func generateCertAndKey() (string, string, *big.Int) {
 }
 
 func yamlFileToProto(path string, outputProto proto.Message) error {
-	yamlBytes, err := ioutil.ReadFile(path)
+	yamlBytes, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}

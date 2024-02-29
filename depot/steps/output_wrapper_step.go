@@ -3,7 +3,6 @@ package steps
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -38,7 +37,7 @@ func (step *outputWrapperStep) Run(signals <-chan os.Signal, ready chan<- struct
 		return nil
 	}
 
-	bytes, err := ioutil.ReadAll(step.reader)
+	bytes, err := io.ReadAll(step.reader)
 	if err != nil {
 		return fmt.Errorf("Error reading from process output buffer: %s", err)
 	}

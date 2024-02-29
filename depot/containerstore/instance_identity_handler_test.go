@@ -1,7 +1,6 @@
 package containerstore_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -27,7 +26,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 	BeforeEach(func() {
 		container = executor.Container{Guid: "some-guid"}
 		var err error
-		tmpdir, err = ioutil.TempDir("", "credsmanager")
+		tmpdir, err = os.MkdirTemp("", "credsmanager")
 		Expect(err).NotTo(HaveOccurred())
 		handler = containerstore.NewInstanceIdentityHandler(
 			tmpdir,
@@ -91,7 +90,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			certFile := filepath.Join(certPath, "instance.crt")
 			Expect(certFile).To(BeARegularFile())
 
-			data, err := ioutil.ReadFile(certFile)
+			data, err := os.ReadFile(certFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(data)).To(Equal("cert"))
@@ -99,7 +98,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			keyFile := filepath.Join(certPath, "instance.key")
 			Expect(keyFile).To(BeARegularFile())
 
-			data, err = ioutil.ReadFile(keyFile)
+			data, err = os.ReadFile(keyFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(Equal("key"))
 
@@ -108,11 +107,11 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("checking that the old Credential is still there")
-			data, err = ioutil.ReadFile(certFile)
+			data, err = os.ReadFile(certFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(Equal("cert"))
 
-			data, err = ioutil.ReadFile(keyFile)
+			data, err = os.ReadFile(keyFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(Equal("key"))
 		})
@@ -125,7 +124,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			keyFile := filepath.Join(certPath, "instance.key")
 			Expect(keyFile).To(BeARegularFile())
 
-			data, err := ioutil.ReadFile(keyFile)
+			data, err := os.ReadFile(keyFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(data)).To(Equal("key"))
@@ -139,7 +138,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			certFile := filepath.Join(certPath, "instance.crt")
 			Expect(certFile).To(BeARegularFile())
 
-			data, err := ioutil.ReadFile(certFile)
+			data, err := os.ReadFile(certFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(data)).To(Equal("cert"))
@@ -162,7 +161,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			keyFile := filepath.Join(certPath, "instance.key")
 			Expect(keyFile).To(BeARegularFile())
 
-			data, err := ioutil.ReadFile(keyFile)
+			data, err := os.ReadFile(keyFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(data)).NotTo(Equal("invalid-key"))
@@ -176,7 +175,7 @@ var _ = Describe("InstanceIdentityHandler", func() {
 			certFile := filepath.Join(certPath, "instance.crt")
 			Expect(certFile).To(BeARegularFile())
 
-			data, err := ioutil.ReadFile(certFile)
+			data, err := os.ReadFile(certFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(data)).NotTo(Equal("invalid-cert"))
