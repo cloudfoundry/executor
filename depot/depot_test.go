@@ -747,14 +747,6 @@ var _ = Describe("Depot", func() {
 	})
 })
 
-func convertSliceToMap(containers []executor.Container) map[string]executor.Container {
-	containersMap := map[string]executor.Container{}
-	for _, container := range containers {
-		containersMap[container.Guid] = container
-	}
-	return containersMap
-}
-
 func newAllocationRequest(guid string, tagses ...executor.Tags) executor.AllocationRequest {
 	resource := executor.NewResource(256, 256, -1)
 	var tags executor.Tags
@@ -773,11 +765,4 @@ func newRunRequest(guid string) *executor.RunRequest {
 func newUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes, metricTags map[string]string) *executor.UpdateRequest {
 	r := executor.NewUpdateRequest(guid, internalRoutes, metricTags)
 	return &r
-}
-
-func newRunningContainer(req *executor.RunRequest, res executor.Resource) executor.Container {
-	c := executor.NewContainerFromResource(req.Guid, &res, req.Tags)
-	c.State = executor.StateRunning
-	c.RunInfo = req.RunInfo
-	return c
 }

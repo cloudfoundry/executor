@@ -7,7 +7,6 @@ import (
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
-	"code.cloudfoundry.org/lager/v3"
 )
 
 type streamDestination struct {
@@ -19,7 +18,6 @@ type streamDestination struct {
 	processLock    sync.Mutex
 	metronClient   loggingclient.IngressClient
 	logRateLimiter *logRateLimiter
-	logger         lager.Logger
 }
 
 func newStreamDestination(

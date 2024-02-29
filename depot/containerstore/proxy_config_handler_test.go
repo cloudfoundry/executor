@@ -39,7 +39,6 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var _ = Describe("ProxyConfigHandler", func() {
@@ -1019,15 +1018,6 @@ func generateCertAndKey() (string, string, *big.Int) {
 	cert := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}))
 	key := string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: privateKeyBytes}))
 	return cert, key, template.SerialNumber
-}
-
-func yamlFileToStruct(path string, outputStruct interface{}) error {
-	yamlBytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	return yaml.Unmarshal(yamlBytes, outputStruct)
 }
 
 func yamlFileToProto(path string, outputProto proto.Message) error {

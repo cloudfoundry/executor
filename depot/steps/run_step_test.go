@@ -815,7 +815,3 @@ var _ = Describe("RunAction", func() {
 		})
 	})
 })
-
-type noOpWriter struct{}
-
-func (w noOpWriter) Write(b []byte) (int, error) { return len(b), nil }
