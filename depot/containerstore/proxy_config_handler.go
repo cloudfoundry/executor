@@ -674,13 +674,13 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 			resourceAny,
 		},
 	}
-	jsonMarshaler := protojson.Marshaler{OrigName: true, EmitDefaults: false}
-	fullJSON, err := jsonMarshaler.MarshalToString(dr)
+	jsonMarshaler := protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: false}
+	fullJSON, err := jsonMarshaler.Marshal(dr)
 	if err != nil {
 		return err
 	}
 
-	yamlStr, err := ghodss_yaml.JSONToYAML([]byte(fullJSON))
+	yamlStr, err := ghodss_yaml.JSONToYAML(fullJSON)
 	if err != nil {
 		return err
 	}
