@@ -495,6 +495,7 @@ var _ = Describe("Initializer", func() {
 			Expect(tlsConfig.MinVersion).To(BeEquivalentTo(tls.VersionTLS12))
 			Expect(tlsConfig.InsecureSkipVerify).To(Equal(config.SkipCertVerify))
 			Expect(tlsConfig.Certificates).To(ContainElement(tlsClientCert))
+			//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 		})
 
@@ -515,6 +516,7 @@ var _ = Describe("Initializer", func() {
 			Expect(tlsConfig).NotTo(BeNil())
 
 			Expect(fakeCertPoolRetriever.SystemCertsCallCount()).To(Equal(1))
+			//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 			Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 		})
 
@@ -552,6 +554,7 @@ var _ = Describe("Initializer", func() {
 				tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
 				Expect(err).To(Succeed())
 				Expect(tlsConfig).NotTo(BeNil())
+				//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 			})
 		})
@@ -567,6 +570,7 @@ var _ = Describe("Initializer", func() {
 				tlsConfig, err = initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
 				Expect(err).To(Succeed())
 				Expect(tlsConfig).NotTo(BeNil())
+				//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 				Expect(tlsConfig.RootCAs.Subjects()).To(ContainElement(caCert.RawSubject))
 			})
 		})
