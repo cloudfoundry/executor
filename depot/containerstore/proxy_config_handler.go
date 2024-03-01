@@ -27,12 +27,12 @@ import (
 	envoy_discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/golang/protobuf/ptypes/duration"
 	pstruct "github.com/golang/protobuf/ptypes/struct"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/tedsuo/ifrit"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -509,12 +509,12 @@ func splitHost(host string) (string, uint16, error) {
 }
 
 func writeProxyConfig(proxyConfig *envoy_bootstrap.Bootstrap, path string) error {
-	jsonMarshaler := jsonpb.Marshaler{OrigName: true, EmitDefaults: false}
-	jsonStr, err := jsonMarshaler.MarshalToString(proxyConfig)
+	marshaller := protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: true}
+	json, err := marshaller.Marshal(proxyConfig)
 	if err != nil {
 		return err
 	}
-	yamlStr, err := ghodss_yaml.JSONToYAML([]byte(jsonStr))
+	yamlStr, err := ghodss_yaml.JSONToYAML([]byte(json))
 	if err != nil {
 		return err
 	}
@@ -674,7 +674,7 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 			resourceAny,
 		},
 	}
-	jsonMarshaler := jsonpb.Marshaler{OrigName: true, EmitDefaults: false}
+	jsonMarshaler := protojson.Marshaler{OrigName: true, EmitDefaults: false}
 	fullJSON, err := jsonMarshaler.MarshalToString(dr)
 	if err != nil {
 		return err
