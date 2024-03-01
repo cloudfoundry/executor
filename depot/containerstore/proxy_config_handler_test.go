@@ -32,12 +32,12 @@ import (
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var _ = Describe("ProxyConfigHandler", func() {
@@ -545,7 +545,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(sdsCertificateDiscoveryResponse.Resources).To(HaveLen(1))
 
 			var secret envoy_tls.Secret
-			Expect(ptypes.UnmarshalAny(sdsCertificateDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+			Expect(anypb.UnmarshalTo(sdsCertificateDiscoveryResponse.Resources[0], &secret, proto.UnmarshalOptions{})).To(Succeed())
 
 			Expect(secret.Name).To(Equal("id-cert-and-key"))
 			Expect(secret.Type).To(Equal(&envoy_tls.Secret_TlsCertificate{
@@ -632,7 +632,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				Expect(sdsDiscoveryResponse.Resources).To(HaveLen(1))
 
 				var secret envoy_tls.Secret
-				Expect(ptypes.UnmarshalAny(sdsDiscoveryResponse.Resources[0], &secret)).To(Succeed())
+				Expect(anypb.UnmarshalTo(sdsDiscoveryResponse.Resources[0], &secret, proto.UnmarshalOptions{})).To(Succeed())
 
 				Expect(secret.Name).To(Equal("id-validation-context"))
 				Expect(secret.Type).To(Equal(&envoy_tls.Secret_ValidationContext{
@@ -1064,7 +1064,7 @@ type expectedListener struct {
 }
 
 func createListener(config expectedListener) *envoy_listener.Listener {
-	filterConfig, _ := ptypes.MarshalAny(&envoy_tcp_proxy.TcpProxy{
+	filterConfig, _ := anypb.New(&envoy_tcp_proxy.TcpProxy{
 		StatPrefix: config.statPrefix,
 		ClusterSpecifier: &envoy_tcp_proxy.TcpProxy_Cluster{
 			Cluster: config.clusterName,
@@ -1101,7 +1101,7 @@ func createListener(config expectedListener) *envoy_listener.Listener {
 			},
 		}
 	}
-	tlsContextAny, _ := ptypes.MarshalAny(tlsContext)
+	tlsContextAny, _ := anypb.New(tlsContext)
 	listener := &envoy_listener.Listener{
 		Name:    config.name,
 		Address: envoyAddr("0.0.0.0", config.listenPort),
