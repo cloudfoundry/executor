@@ -28,13 +28,13 @@ import (
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	ghodss_yaml "github.com/ghodss/yaml"
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/golang/protobuf/ptypes/duration"
 	pstruct "github.com/golang/protobuf/ptypes/struct"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/tedsuo/ifrit"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -528,7 +528,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 		filterName := TcpProxy
 		clusterName := fmt.Sprintf("service-cluster-%d", portMap.ContainerPort)
 
-		filterConfig, err := ptypes.MarshalAny(&envoy_tcp_proxy.TcpProxy{
+		filterConfig, err := anypb.New(&envoy_tcp_proxy.TcpProxy{
 			StatPrefix: fmt.Sprintf("stats-%d-%d", portMap.ContainerPort, portMap.ContainerTLSProxyPort),
 			ClusterSpecifier: &envoy_tcp_proxy.TcpProxy_Cluster{
 				Cluster: clusterName,
@@ -581,7 +581,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 			}
 		}
 
-		tlsContextAny, err := ptypes.MarshalAny(tlsContext)
+		tlsContextAny, err := anypb.New(tlsContext)
 		if err != nil {
 			return nil, err
 		}
@@ -664,7 +664,7 @@ func generateSDSCAResource(container executor.Container, creds Credential, trust
 }
 
 func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error {
-	resourceAny, err := ptypes.MarshalAny(resourceMsg)
+	resourceAny, err := anypb.New(resourceMsg)
 	if err != nil {
 		return err
 	}
