@@ -30,13 +30,13 @@ import (
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/fsnotify/fsnotify"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -1030,7 +1030,7 @@ func yamlFileToProto(path string, outputProto proto.Message) error {
 		return err
 	}
 
-	err = jsonpb.UnmarshalString(string(jsonBytes), outputProto)
+	err = protojson.Unmarshal(jsonBytes, outputProto)
 	if err != nil {
 		return err
 	}
