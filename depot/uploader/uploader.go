@@ -148,7 +148,7 @@ func (uploader *URLUploader) attemptUpload(
 
 	ctx, reqCancel := context.WithCancel(context.Background())
 	defer reqCancel()
-	request.WithContext(ctx)
+	request = request.WithContext(ctx)
 	request.ContentLength = bytesToUpload
 	request.Header.Set("Content-Type", "application/octet-stream")
 	request.Header.Set("Content-MD5", contentMD5)
@@ -165,6 +165,7 @@ func (uploader *URLUploader) attemptUpload(
 	select {
 	case <-cancelCh:
 		logger.Info("canceled-upload")
+		reqCancel()
 		<-reqComplete
 		return ErrUploadCancelled
 	case err := <-reqComplete:
