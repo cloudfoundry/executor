@@ -462,7 +462,6 @@ func generateProxyConfig(
 					LbEndpoints: adsEndpoints,
 				}},
 			},
-			Http2ProtocolOptions: &envoy_core.Http2ProtocolOptions{},
 		})
 
 		dynamicResources := &envoy_bootstrap.Bootstrap_DynamicResources{
