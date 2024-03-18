@@ -1165,8 +1165,5 @@ func createCluster(config expectedCluster) *envoy_cluster.Cluster {
 				{MaxRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
 			}}
 	}
-	if config.http2 {
-		cluster.Http2ProtocolOptions = &envoy_core.Http2ProtocolOptions{}
-	}
 	return cluster
 }
