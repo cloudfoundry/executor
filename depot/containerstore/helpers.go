@@ -32,28 +32,27 @@ func convertEnvVars(execEnv []executor.EnvironmentVariable) []string {
 }
 
 func convertEgressToNetOut(logger lager.Logger, egressRules []*models.SecurityGroupRule) ([]garden.NetOutRule, error) {
-	netOutRules := make([]garden.NetOutRule, len(egressRules))
-	for i, rule := range egressRules {
+	netOutRules := make([]garden.NetOutRule, 0, len(egressRules))
+	for _, rule := range egressRules {
 		if err := rule.Validate(); err != nil {
 			logger.Error("invalid-egress-rule", err)
 			return nil, err
 		}
 
-		netOutRule, err := securityGroupRuleToNetOutRule(rule)
+		nextNetOutRuleSet, err := securityGroupRuleToNetOutRules(rule)
 		if err != nil {
 			logger.Error("failed-to-convert-to-net-out-rule", err)
 			return nil, err
 		}
 
-		netOutRules[i] = netOutRule
+		netOutRules = append(netOutRules, nextNetOutRuleSet...)
 	}
 	return netOutRules, nil
 }
 
-func securityGroupRuleToNetOutRule(securityRule *models.SecurityGroupRule) (garden.NetOutRule, error) {
+func securityGroupRuleToNetOutRules(securityRule *models.SecurityGroupRule) ([]garden.NetOutRule, error) {
 	var protocol garden.Protocol
 	var portRanges []garden.PortRange
-	var networks []garden.IPRange
 	var icmp *garden.ICMPControl
 
 	switch securityRule.Protocol {
@@ -79,23 +78,34 @@ func securityGroupRuleToNetOutRule(securityRule *models.SecurityGroupRule) (gard
 		}
 	}
 
-	for _, dest := range securityRule.Destinations {
+	var destinations []string
+	for _, d := range securityRule.Destinations {
+		destinations = append(destinations, strings.Split(d, ",")...)
+	}
+
+	var netOutRules []garden.NetOutRule
+
+	for _, dest := range destinations {
 		ipRange, err := toIPRange(dest)
 		if err != nil {
-			return garden.NetOutRule{}, err
+			return nil, err
 		}
+
+		var networks []garden.IPRange
 		networks = append(networks, ipRange)
+
+		newRule := garden.NetOutRule{
+			Protocol: protocol,
+			Networks: networks,
+			Ports:    portRanges,
+			ICMPs:    icmp,
+			Log:      securityRule.Log,
+		}
+
+		netOutRules = append(netOutRules, newRule)
 	}
 
-	netOutRule := garden.NetOutRule{
-		Protocol: protocol,
-		Networks: networks,
-		Ports:    portRanges,
-		ICMPs:    icmp,
-		Log:      securityRule.Log,
-	}
-
-	return netOutRule, nil
+	return netOutRules, nil
 }
 
 func toIPRange(dest string) (garden.IPRange, error) {

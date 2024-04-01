@@ -1004,6 +1004,58 @@ var _ = Describe("Container Store", func() {
 					}))
 				})
 
+				Context("when a destination is a comma-delimited list", func() {
+					BeforeEach(func() {
+						egressRules := []*models.SecurityGroupRule{
+							{
+								Protocol:     "icmp",
+								Destinations: []string{"1.1.1.1,2.2.2.2"},
+								IcmpInfo: &models.ICMPInfo{
+									Type: 2,
+									Code: 17,
+								},
+							},
+						}
+						runReq.EgressRules = egressRules
+					})
+
+					It("calls NetOut for each rule in a comma-delimited list", func() {
+						_, err := containerStore.Create(logger, "some-trace-id", containerGuid)
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(gardenClient.CreateCallCount()).To(Equal(1))
+						containerSpec := gardenClient.CreateArgsForCall(0)
+						Expect(containerSpec.NetOut).To(HaveLen(2))
+						icmpCode := garden.ICMPCode(17)
+						Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+							Protocol: garden.Protocol(3),
+							Networks: []garden.IPRange{
+								{
+									Start: net.ParseIP("1.1.1.1"),
+									End:   net.ParseIP("1.1.1.1"),
+								},
+							},
+							ICMPs: &garden.ICMPControl{
+								Type: 2,
+								Code: &icmpCode,
+							},
+						}))
+						Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+							Protocol: garden.Protocol(3),
+							Networks: []garden.IPRange{
+								{
+									Start: net.ParseIP("2.2.2.2"),
+									End:   net.ParseIP("2.2.2.2"),
+								},
+							},
+							ICMPs: &garden.ICMPControl{
+								Type: 2,
+								Code: &icmpCode,
+							},
+						}))
+					})
+				})
+
 				Context("when a egress rule is not valid", func() {
 					BeforeEach(func() {
 						egressRule := &models.SecurityGroupRule{
