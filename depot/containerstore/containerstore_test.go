@@ -26,7 +26,7 @@ import (
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/garden/gardenfakes"
 	"code.cloudfoundry.org/garden/server"
-	loggregator "code.cloudfoundry.org/go-loggregator/v8"
+	loggregator "code.cloudfoundry.org/go-loggregator/v9"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/volman"

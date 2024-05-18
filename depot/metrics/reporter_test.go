@@ -14,8 +14,8 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/metrics"
 	"code.cloudfoundry.org/executor/fakes"
-	loggregator "code.cloudfoundry.org/go-loggregator/v8"
-	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
+	loggregator "code.cloudfoundry.org/go-loggregator/v9"
+	"code.cloudfoundry.org/go-loggregator/v9/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/v3/lagertest"
 	"github.com/tedsuo/ifrit"
 )
