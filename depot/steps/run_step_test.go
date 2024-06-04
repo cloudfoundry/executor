@@ -53,8 +53,8 @@ var _ = Describe("RunAction", func() {
 		sidecar = steps.Sidecar{}
 
 		rl := models.ResourceLimits{}
-		rl.SetNofile(fileDescriptorLimit)
-		rl.SetNproc(processesLimit)
+		rl.SetNofile(&fileDescriptorLimit)
+		rl.SetNproc(&processesLimit)
 
 		runAction = models.RunAction{
 			Path: "sudo",
