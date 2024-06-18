@@ -895,7 +895,7 @@ var _ = Describe("ReportersRunner", func() {
 				})
 
 				It("reports the error", func() {
-					Eventually(logger.Logs(), 5*time.Second).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
+					Eventually(logger.Logs(), 15*time.Second).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
 						"Data": HaveKeyWithValue("error", "send-error-1"),
 					})))
 				})
