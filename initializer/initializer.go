@@ -308,7 +308,11 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		return nil, nil, grouper.Members{}, err
 	}
 
-	// serviceBindingRootHandler := containerstore.NewServiceBindingRootHandler()
+	serviceBindingRootHandler := containerstore.NewServiceBindingRootHandler(
+		config.ServiceBindingRoot,
+		"/etc/cf-service-binding-root",
+	)
+
 	logManager := containerstore.NewLogManager()
 
 	containerStore := containerstore.New(
@@ -331,6 +335,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		cellID,
 		config.EnableUnproxiedPortMappings,
 		config.AdvertisePreferenceForInstanceAddress,
+		serviceBindingRootHandler,
 		json.Marshal,
 	)
 

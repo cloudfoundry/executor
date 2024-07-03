@@ -33,6 +33,7 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
+const ServiceBindingRootFailed = "failed to create service binding root"
 
 const ContainerCompletedCount = "ContainerCompletedCount"
 const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
@@ -92,6 +93,8 @@ type storeNode struct {
 	startTime         time.Time
 	regenerateCertsCh chan struct{}
 
+	serviceBindingRoot *ServiceBindingRootHandler
+
 	jsonMarshaller func(any) ([]byte, error)
 }
 
@@ -116,6 +119,7 @@ func newStoreNode(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
+	serviceBindingRoot *ServiceBindingRootHandler,
 	jsonMarshaller func(any) ([]byte, error),
 ) *storeNode {
 	return &storeNode{
@@ -143,6 +147,7 @@ func newStoreNode(
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
+		serviceBindingRoot:                    serviceBindingRoot,
 		jsonMarshaller:                        jsonMarshaller,
 	}
 }
@@ -242,7 +247,16 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			n.complete(logger, traceID, true, CredDirFailed, true)
 			return err
 		}
+
+		serviceBindingRoot, err := n.serviceBindingRoot.CreateDir(logger, n.info)
+		if err != nil {
+			n.complete(logger, traceID, true, ServiceBindingRootFailed, true)
+			return err
+		}
+
 		n.bindMounts = append(n.bindMounts, credMounts...)
+		n.bindMounts = append(n.bindMounts, serviceBindingRoot...)
+
 		info.Env = append(info.Env, envs...)
 
 		if n.useDeclarativeHealthCheck {
