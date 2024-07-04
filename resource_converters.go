@@ -19,3 +19,13 @@ func EnvironmentVariablesFromModel(envVars []*models.EnvironmentVariable) []Envi
 	}
 	return out
 }
+
+func FilesVariablesFromModel(envFiles []*models.Files) []FilesVariables {
+	out := make([]FilesVariables, len(envFiles))
+	for i, envFile := range envFiles {
+		out[i].Name = envFile.Name
+		out[i].Value = envFile.Value
+	}
+
+	return out
+}

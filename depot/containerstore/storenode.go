@@ -248,14 +248,17 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			return err
 		}
 
-		serviceBindingRoot, err := n.serviceBindingRoot.CreateDir(logger, n.info)
-		if err != nil {
-			n.complete(logger, traceID, true, ServiceBindingRootFailed, true)
-			return err
+		if len(n.info.FilesVariables) > 0 {
+			serviceBindingRoot, err := n.serviceBindingRoot.CreateDir(logger, info)
+			if err != nil {
+				n.complete(logger, traceID, true, ServiceBindingRootFailed, true)
+				return err
+			}
+
+			n.bindMounts = append(n.bindMounts, serviceBindingRoot...)
 		}
 
 		n.bindMounts = append(n.bindMounts, credMounts...)
-		n.bindMounts = append(n.bindMounts, serviceBindingRoot...)
 
 		info.Env = append(info.Env, envs...)
 
