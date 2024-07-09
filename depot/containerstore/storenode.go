@@ -762,6 +762,7 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
+	defer n.removeServiceBindingRoot(logger, info)
 
 	err := n.destroyContainer(logger, traceID)
 	if err != nil {
@@ -863,6 +864,13 @@ func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container)
 	err := n.credManager.RemoveCredDir(logger, info)
 	if err != nil {
 		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+}
+
+func (n *storeNode) removeServiceBindingRoot(logger lager.Logger, info executor.Container) {
+	err := n.serviceBindingRoot.RemoveDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-service-binding-root-config-dir", err)
 	}
 }
 

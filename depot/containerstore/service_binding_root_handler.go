@@ -73,7 +73,7 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 			continue
 		}
 
-		dirName = filepath.Join(dirName, containerDir)
+		dirName = filepath.Join(containerDir, dirName)
 
 		err := os.MkdirAll(dirName, 0755)
 		if err != nil {
