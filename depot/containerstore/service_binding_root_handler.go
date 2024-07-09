@@ -33,7 +33,7 @@ func (h *ServiceBindingRootHandler) CreateDir(logger lager.Logger, container exe
 
 	logger.Info("creating-dir - service binding root")
 
-	errServiceBinding := h.createBindingRootsForServices(logger, container)
+	errServiceBinding := h.createBindingRootsForServices(logger, containerDir, container)
 	if errServiceBinding != nil {
 		logger.Error("creating-dir-service-binding-root-failed", errServiceBinding)
 		return nil, err
@@ -49,7 +49,11 @@ func (h *ServiceBindingRootHandler) CreateDir(logger lager.Logger, container exe
 	}, nil
 }
 
-func (h *ServiceBindingRootHandler) createBindingRootsForServices(logger lager.Logger, containers executor.Container) error {
+func (h *ServiceBindingRootHandler) createBindingRootsForServices(
+	logger lager.Logger,
+	containerDir string,
+	containers executor.Container,
+) error {
 	var cleanupFiles []*os.File
 
 	for _, roots := range containers.RunInfo.FilesVariables {
@@ -68,6 +72,8 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(logger lager.L
 
 			continue
 		}
+
+		dirName = filepath.Join(dirName, containerDir)
 
 		err := os.MkdirAll(dirName, 0755)
 		if err != nil {
