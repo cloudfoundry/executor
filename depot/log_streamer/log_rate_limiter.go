@@ -2,6 +2,7 @@ package log_streamer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -78,14 +79,14 @@ func (r *logRateLimiter) Limit(sourceName string, logLength int) error {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d bytes/sec)", r.maxLogBytesPerSecond)
 		r.reportOverlimit(sourceName, reportMessage)
 		r.lastOverage = time.Now()
-		return fmt.Errorf(reportMessage)
+		return errors.New(reportMessage)
 	}
 
 	if !r.maxLogLinesPerSecondLimiter.Allow() {
 		reportMessage := fmt.Sprintf("app instance exceeded log rate limit (%d log-lines/sec) set by platform operator", r.maxLogLinesPerSecond)
 		r.reportOverlimit(sourceName, reportMessage)
 		r.lastOverage = time.Now()
-		return fmt.Errorf(reportMessage)
+		return errors.New(reportMessage)
 	}
 
 	atomic.AddUint64(&r.bytesEmittedLastInterval, uint64(logLength))
