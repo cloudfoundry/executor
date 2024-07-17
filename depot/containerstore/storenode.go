@@ -93,7 +93,7 @@ type storeNode struct {
 	startTime         time.Time
 	regenerateCertsCh chan struct{}
 
-	serviceBindingRoot *ServiceBindingRootHandler
+	serviceBindingRoot ServiceBindingRootImplementor
 
 	jsonMarshaller func(any) ([]byte, error)
 }
@@ -119,7 +119,7 @@ func newStoreNode(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
-	serviceBindingRoot *ServiceBindingRootHandler,
+	serviceBindingRoot ServiceBindingRootImplementor,
 	jsonMarshaller func(any) ([]byte, error),
 ) *storeNode {
 	return &storeNode{

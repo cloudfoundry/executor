@@ -87,7 +87,7 @@ type containerStore struct {
 	enableUnproxiedPortMappings           bool
 	advertisePreferenceForInstanceAddress bool
 
-	serviceBindingRoot *ServiceBindingRootHandler
+	serviceBindingRoot ServiceBindingRootImplementor
 
 	jsonMarshaller func(any) ([]byte, error)
 }
@@ -112,7 +112,7 @@ func New(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
-	serviceBindingRoot *ServiceBindingRootHandler,
+	serviceBindingRoot ServiceBindingRootImplementor,
 	jsonMarshaller func(any) ([]byte, error),
 ) ContainerStore {
 	return &containerStore{

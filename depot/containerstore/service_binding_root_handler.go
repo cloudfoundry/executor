@@ -1,13 +1,20 @@
 package containerstore
 
 import (
-	"code.cloudfoundry.org/executor"
-	"code.cloudfoundry.org/garden"
-	"code.cloudfoundry.org/lager/v3"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"code.cloudfoundry.org/executor"
+	"code.cloudfoundry.org/garden"
+	"code.cloudfoundry.org/lager/v3"
 )
+
+//go:generate counterfeiter -o containerstorefakes/fake_service_binding_root_handler.go . ServiceBindingRootImplementor
+type ServiceBindingRootImplementor interface {
+	CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error)
+	RemoveDir(logger lager.Logger, container executor.Container) error
+}
 
 type ServiceBindingRootHandler struct {
 	containerMountPath string
@@ -114,5 +121,12 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 }
 
 func (h *ServiceBindingRootHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
-	return os.RemoveAll(filepath.Join(h.bindingRootPath, container.Guid))
+	path := filepath.Join(h.bindingRootPath, container.Guid)
+
+	err := os.RemoveAll(path)
+	if err != nil {
+		logger.Error("failed-to-remove-service-binding-root-directory", err, lager.Data{"directory": path})
+	}
+
+	return err
 }
