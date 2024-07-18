@@ -381,7 +381,7 @@ var _ = Describe("Container Store", func() {
 					{Name: "beep", Value: "booop"},
 				}
 
-				filesVariables := []executor.FilesVariables{
+				filesVariables := []executor.FileBasedServiceBinding{
 					{Name: "/redis/username", Value: "redis_username"},
 				}
 
@@ -413,7 +413,7 @@ var _ = Describe("Container Store", func() {
 					},
 					EnableContainerProxy:       true,
 					LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
-					FilesVariables:             filesVariables,
+					FileBasedServiceBindings:   filesVariables,
 				}
 
 				runReq = &executor.RunRequest{

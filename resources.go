@@ -199,7 +199,7 @@ type RunInfo struct {
 	EnableContainerProxy          bool                          `json:"enable_container_proxy"`
 	Sidecars                      []Sidecar                     `json:"sidecars"`
 	LogRateLimitBytesPerSecond    int64                         `json:"log_rate_limit_bytes_per_second"`
-	FilesVariables                []FilesVariables              `json:"files_variables,omitempty"`
+	FileBasedServiceBindings      []FileBasedServiceBinding     `json:"file_based_service_bindings,omitempty"`
 }
 
 type BindMountMode uint8
@@ -228,7 +228,7 @@ type EnvironmentVariable struct {
 	Value string `json:"value"`
 }
 
-type FilesVariables struct {
+type FileBasedServiceBinding struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
