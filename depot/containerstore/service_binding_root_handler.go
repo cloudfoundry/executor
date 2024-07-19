@@ -63,7 +63,7 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 ) error {
 	var cleanupFiles []*os.File
 
-	for _, roots := range containers.RunInfo.FileBasedServiceBindings {
+	for _, roots := range containers.RunInfo.ServiceBindingFiles {
 		dirName := filepath.Dir(roots.Name)
 		if dirName == "" {
 			err := fmt.Errorf("failed to extract service bindig directory. format is: /serviceName/fileName")

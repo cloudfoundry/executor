@@ -31,8 +31,8 @@ var _ = Describe("Service Binding Root Handler", func() {
 
 		container = executor.Container{Guid: fakeContainerUUID}
 
-		var filesVars []executor.FileBasedServiceBinding
-		container.FileBasedServiceBindings = append(filesVars, executor.FileBasedServiceBinding{
+		var serviceBindingFiles []executor.ServiceBindingFiles
+		container.ServiceBindingFiles = append(serviceBindingFiles, executor.ServiceBindingFiles{
 			Name: "/redis/username", Value: "username",
 		})
 

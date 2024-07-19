@@ -248,7 +248,7 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			return err
 		}
 
-		if len(n.info.FileBasedServiceBindings) > 0 {
+		if len(n.info.ServiceBindingFiles) > 0 {
 			serviceBindingRoot, err := n.serviceBindingRoot.CreateDir(logger, info)
 			if err != nil {
 				n.complete(logger, traceID, true, ServiceBindingRootFailed, true)
