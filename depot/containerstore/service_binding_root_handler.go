@@ -33,7 +33,7 @@ func NewServiceBindingRootHandler(
 
 func (h *ServiceBindingRootHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
 	containerDir := filepath.Join(h.bindingRootPath, container.Guid)
-	err := os.MkdirAll(containerDir, 0755)
+	err := os.Mkdir(containerDir, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 
 		dirName = filepath.Join(containerDir, dirName)
 
-		err := os.MkdirAll(dirName, 0755)
+		err := os.Mkdir(dirName, 0755)
 		if err != nil {
 			logger.Error("failed-to-create-directory", err, lager.Data{"dirName": dirName})
 			return fmt.Errorf("failed to create directory %s: %w", dirName, err)

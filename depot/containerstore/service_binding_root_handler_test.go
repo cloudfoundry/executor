@@ -1,7 +1,6 @@
 package containerstore_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -74,7 +73,7 @@ var _ = Describe("Service Binding Root Handler", func() {
 			usernameFilePath := filepath.Join(tmpdir, fakeContainerUUID, "redis", "username")
 			Expect(usernameFilePath).To(BeAnExistingFile())
 
-			content, err := ioutil.ReadFile(usernameFilePath)
+			content, err := os.ReadFile(usernameFilePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(content)).To(Equal("username"))
 		})
