@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/containermetrics"
 	efakes "code.cloudfoundry.org/executor/fakes"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -895,9 +896,9 @@ var _ = Describe("ReportersRunner", func() {
 				})
 
 				It("reports the error", func() {
-					Eventually(logger.Logs(), 15*time.Second).Should(ContainElement(MatchFields(IgnoreExtras, Fields{
-						"Data": HaveKeyWithValue("error", "send-error-1"),
-					})))
+					Eventually(func() []lager.LogFormat {
+						return logger.Logs()
+					}, 5*time.Second).Should(ContainElement(MatchFields(IgnoreExtras, Fields{"Data": HaveKeyWithValue("error", "send-error-1")})))
 				})
 
 				It("does not send metrics for the other containers", func() {
