@@ -54,7 +54,7 @@ var _ = Describe("RunAction", func() {
 
 		rl := models.ResourceLimits{}
 		rl.SetNofile(&fileDescriptorLimit)
-		// lint:ignore SA1019 - testing deprecated functionality
+		//lint:ignore SA1019 - testing deprecated functionality
 		rl.SetNproc(&processesLimit)
 
 		runAction = models.RunAction{

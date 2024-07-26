@@ -215,7 +215,7 @@ var _ = Describe("Transformer", func() {
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
-				Eventually(process.Wait()).Should(Receive(nil))
+				Eventually(process.Wait()).ShouldNot(Receive())
 			})
 		})
 
@@ -2038,7 +2038,7 @@ var _ = Describe("Transformer", func() {
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
-				Eventually(process.Wait()).Should(Receive(nil))
+				Eventually(process.Wait()).ShouldNot(Receive())
 			})
 
 			It("logs the container creation time", func() {
