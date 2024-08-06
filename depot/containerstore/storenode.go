@@ -33,6 +33,7 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
+const ServiceBindingRootFailed = "failed to create service binding root"
 
 const ContainerCompletedCount = "ContainerCompletedCount"
 const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
@@ -92,6 +93,8 @@ type storeNode struct {
 	startTime         time.Time
 	regenerateCertsCh chan struct{}
 
+	serviceBindingRoot ServiceBindingRootImplementor
+
 	jsonMarshaller func(any) ([]byte, error)
 }
 
@@ -116,6 +119,7 @@ func newStoreNode(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
+	serviceBindingRoot ServiceBindingRootImplementor,
 	jsonMarshaller func(any) ([]byte, error),
 ) *storeNode {
 	return &storeNode{
@@ -143,6 +147,7 @@ func newStoreNode(
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
+		serviceBindingRoot:                    serviceBindingRoot,
 		jsonMarshaller:                        jsonMarshaller,
 	}
 }
@@ -242,7 +247,19 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			n.complete(logger, traceID, true, CredDirFailed, true)
 			return err
 		}
+
+		if len(n.info.ServiceBindingFiles) > 0 {
+			serviceBindingRoot, err := n.serviceBindingRoot.CreateDir(logger, info)
+			if err != nil {
+				n.complete(logger, traceID, true, ServiceBindingRootFailed, true)
+				return err
+			}
+
+			n.bindMounts = append(n.bindMounts, serviceBindingRoot...)
+		}
+
 		n.bindMounts = append(n.bindMounts, credMounts...)
+
 		info.Env = append(info.Env, envs...)
 
 		if n.useDeclarativeHealthCheck {
@@ -745,6 +762,7 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
+	defer n.removeServiceBindingRoot(logger, info)
 
 	err := n.destroyContainer(logger, traceID)
 	if err != nil {
@@ -846,6 +864,13 @@ func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container)
 	err := n.credManager.RemoveCredDir(logger, info)
 	if err != nil {
 		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+}
+
+func (n *storeNode) removeServiceBindingRoot(logger lager.Logger, info executor.Container) {
+	err := n.serviceBindingRoot.RemoveDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-service-binding-root-config-dir", err)
 	}
 }
 
