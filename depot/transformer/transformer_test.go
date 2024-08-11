@@ -1575,6 +1575,12 @@ var _ = Describe("Transformer", func() {
 							It("returns the liveness check output in the error", func() {
 								Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance became unhealthy: liveness check failed"))))
 							})
+
+							It("emits HTTPLivenessChecksFailedCount metric", func() {
+								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+								name := fakeMetronClient.IncrementCounterArgsForCall(0)
+								Expect(name).To(Equal("HTTPLivenessChecksFailedCount"))
+							})
 						})
 					})
 				})
@@ -1707,6 +1713,29 @@ var _ = Describe("Transformer", func() {
 									"-timeout=1000ms",
 									"-liveness-interval=1s",
 								}))
+							})
+						})
+
+						Context("when the liveness check exits", func() {
+							JustBeforeEach(func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+
+								By("waiting the action and liveness check processes to start")
+								var io garden.ProcessIO
+								Eventually(livenessIO).Should(Receive(&io))
+								_, err := io.Stdout.Write([]byte("liveness check failed"))
+								Expect(err).NotTo(HaveOccurred())
+
+								By("exiting the liveness check")
+								livenessCh <- 1
+								Eventually(actionProcess.SignalCallCount).Should(Equal(1))
+								actionCh <- 2
+							})
+
+							It("emits TCPLivenessChecksFailedCount metric", func() {
+								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+								name := fakeMetronClient.IncrementCounterArgsForCall(0)
+								Expect(name).To(Equal("TCPLivenessChecksFailedCount"))
 							})
 						})
 					})
