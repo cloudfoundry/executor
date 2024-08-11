@@ -24,19 +24,6 @@ import (
 	"github.com/tedsuo/ifrit"
 )
 
-type HealthcheckType int
-type CheckProtocol int
-
-const (
-	isStartupCheck HealthcheckType = iota
-	isLivenessCheck
-	isUntilSuccessReadinessCheck
-	isUntilFailureReadinessCheck
-
-	HTTPCheck CheckProtocol = iota
-	TCPCheck
-)
-
 const (
 	healthCheckNofiles                          uint64 = 1024
 	DefaultDeclarativeHealthcheckRequestTimeout        = int(1 * time.Second / time.Millisecond) // this is just 1000, transformed eventually into a str: "1000ms" or equivalently "1s"
@@ -465,11 +452,13 @@ func (t *transformer) StepsRunner(
 				startupSidecarName,
 				int(p),
 				DefaultDeclarativeHealthcheckRequestTimeout,
-				TCPCheck,
-				isStartupCheck,
+				executor.TCPCheck,
+				executor.IsStartupCheck,
 				t.unhealthyMonitoringInterval,
 				envoyStartupLogger,
 				"instance proxy failed to start",
+				config.MetronClient,
+				false,
 			)
 			proxyStartupChecks = append(proxyStartupChecks, step)
 		}
@@ -483,6 +472,7 @@ func (t *transformer) StepsRunner(
 				logStreamer,
 				config.BindMounts,
 				proxyStartupChecks,
+				config.MetronClient,
 			)
 			substeps = append(substeps, monitor)
 		}
@@ -495,6 +485,7 @@ func (t *transformer) StepsRunner(
 				logStreamer,
 				config.BindMounts,
 				proxyStartupChecks,
+				config.MetronClient,
 			)
 			if err == nil {
 				substeps = append(substeps, readinessMonitor)
@@ -567,11 +558,13 @@ func (t *transformer) createCheck(
 	sidecarName string,
 	port,
 	timeout int,
-	checkProtocol CheckProtocol,
-	checkType HealthcheckType,
+	checkProtocol executor.CheckProtocol,
+	checkType executor.HealthcheckType,
 	interval time.Duration,
 	logger lager.Logger,
 	prefix string,
+	metronClient loggingclient.IngressClient,
+	emitMetric bool,
 ) ifrit.Runner {
 
 	nofiles := healthCheckNofiles
@@ -586,24 +579,24 @@ func (t *transformer) createCheck(
 		fmt.Sprintf("-timeout=%dms", timeout),
 	}
 
-	if checkProtocol == HTTPCheck {
+	if checkProtocol == executor.HTTPCheck {
 		args = append(args, fmt.Sprintf("-uri=%s", path))
 	}
 
-	if checkType == isStartupCheck {
+	if checkType == executor.IsStartupCheck {
 		args = append(args, fmt.Sprintf("-startup-interval=%s", interval))
 		args = append(args, fmt.Sprintf("-startup-timeout=%s", time.Duration(container.StartTimeoutMs)*time.Millisecond))
 	}
 
-	if checkType == isLivenessCheck {
+	if checkType == executor.IsLivenessCheck {
 		args = append(args, fmt.Sprintf("-liveness-interval=%s", interval))
 	}
 
-	if checkType == isUntilSuccessReadinessCheck {
+	if checkType == executor.IsUntilSuccessReadinessCheck {
 		args = append(args, fmt.Sprintf("-until-ready-interval=%s", interval))
 	}
 
-	if checkType == isUntilFailureReadinessCheck {
+	if checkType == executor.IsUntilFailureReadinessCheck {
 		args = append(args, fmt.Sprintf("-readiness-interval=%s", interval))
 	}
 
@@ -637,10 +630,19 @@ func (t *transformer) createCheck(
 		sidecar,
 		container.Privileged,
 	)
+
+	var wrapperStep ifrit.Runner
 	if prefix != "" {
-		return steps.NewOutputWrapperWithPrefix(runStep, buffer, prefix)
+		wrapperStep = steps.NewOutputWrapperWithPrefix(runStep, buffer, prefix)
+	} else {
+		wrapperStep = steps.NewOutputWrapper(runStep, buffer)
 	}
-	return steps.NewOutputWrapper(runStep, buffer)
+
+	if emitMetric {
+		wrapperStep = steps.NewEmitCheckFailureMetricStep(wrapperStep, checkProtocol, checkType, metronClient)
+	}
+
+	return wrapperStep
 }
 
 func (t *transformer) transformReadinessCheckDefinition(
@@ -650,6 +652,7 @@ func (t *transformer) transformReadinessCheckDefinition(
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyStartupChecks []ifrit.Runner,
+	metronClient loggingclient.IngressClient,
 ) (ifrit.Runner, chan steps.ReadinessState, error) {
 	var untilSuccessReadinessChecks []ifrit.Runner
 	var untilFailureReadinessChecks []ifrit.Runner
@@ -690,11 +693,13 @@ func (t *transformer) transformReadinessCheckDefinition(
 				untilReadySidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				HTTPCheck,
-				isUntilSuccessReadinessCheck,
+				executor.HTTPCheck,
+				executor.IsUntilSuccessReadinessCheck,
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
+				metronClient,
+				false,
 			))
 
 			untilFailureReadinessChecks = append(untilFailureReadinessChecks, t.createCheck(
@@ -705,11 +710,13 @@ func (t *transformer) transformReadinessCheckDefinition(
 				readinessSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				HTTPCheck,
-				isUntilFailureReadinessCheck,
+				executor.HTTPCheck,
+				executor.IsUntilFailureReadinessCheck,
 				interval,
 				readinessLogger,
 				"",
+				metronClient,
+				false,
 			))
 		} else { // is tcp check
 			timeout, interval, _ := t.applyCheckDefaults(
@@ -726,11 +733,13 @@ func (t *transformer) transformReadinessCheckDefinition(
 				readinessSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				TCPCheck,
-				isUntilSuccessReadinessCheck,
+				executor.TCPCheck,
+				executor.IsUntilSuccessReadinessCheck,
 				t.unhealthyMonitoringInterval,
 				readinessLogger,
 				"",
+				metronClient,
+				false,
 			))
 
 			untilFailureReadinessChecks = append(untilFailureReadinessChecks, t.createCheck(
@@ -741,11 +750,13 @@ func (t *transformer) transformReadinessCheckDefinition(
 				readinessSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				TCPCheck,
-				isUntilFailureReadinessCheck,
+				executor.TCPCheck,
+				executor.IsUntilFailureReadinessCheck,
 				interval,
 				readinessLogger,
 				"",
+				metronClient,
+				false,
 			))
 		}
 	}
@@ -786,6 +797,7 @@ func (t *transformer) transformCheckDefinition(
 	logstreamer log_streamer.LogStreamer,
 	bindMounts []garden.BindMount,
 	proxyStartupChecks []ifrit.Runner,
+	metronClient loggingclient.IngressClient,
 ) ifrit.Runner {
 	var startupChecks []ifrit.Runner
 	var livenessChecks []ifrit.Runner
@@ -825,11 +837,13 @@ func (t *transformer) transformCheckDefinition(
 				startupSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				HTTPCheck,
-				isStartupCheck,
+				executor.HTTPCheck,
+				executor.IsStartupCheck,
 				t.unhealthyMonitoringInterval,
 				startupLogger,
 				"",
+				metronClient,
+				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -839,11 +853,13 @@ func (t *transformer) transformCheckDefinition(
 				livenessSidecarName,
 				int(check.HttpCheck.Port),
 				timeout,
-				HTTPCheck,
-				isLivenessCheck,
+				executor.HTTPCheck,
+				executor.IsLivenessCheck,
 				interval,
 				livenessLogger,
 				"",
+				metronClient,
+				true,
 			))
 
 		} else if check.TcpCheck != nil {
@@ -862,11 +878,13 @@ func (t *transformer) transformCheckDefinition(
 				startupSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				TCPCheck,
-				isStartupCheck,
+				executor.TCPCheck,
+				executor.IsStartupCheck,
 				t.unhealthyMonitoringInterval,
 				startupLogger,
 				"",
+				metronClient,
+				false,
 			))
 			livenessChecks = append(livenessChecks, t.createCheck(
 				container,
@@ -876,11 +894,13 @@ func (t *transformer) transformCheckDefinition(
 				livenessSidecarName,
 				int(check.TcpCheck.Port),
 				timeout,
-				TCPCheck,
-				isLivenessCheck,
+				executor.TCPCheck,
+				executor.IsLivenessCheck,
 				interval,
 				livenessLogger,
 				"",
+				metronClient,
+				true,
 			))
 		}
 	}
