@@ -128,6 +128,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		os.Remove(finalFileLocation)
 	}()
 
+	// #nosec - G110 - We're fine with unbounded file decompression here as we have container filesystem quotas that will prevent this from eating up the entire diego cell disk space
 	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
 		step.logger.Error("failed-to-copy-stream", err)
