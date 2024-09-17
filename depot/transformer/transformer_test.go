@@ -1576,10 +1576,22 @@ var _ = Describe("Transformer", func() {
 								Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance became unhealthy: liveness check failed"))))
 							})
 
-							It("emits HTTPLivenessChecksFailedCount metric", func() {
-								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
-								name := fakeMetronClient.IncrementCounterArgsForCall(0)
-								Expect(name).To(Equal("HTTPLivenessChecksFailedCount"))
+							Context("and emitting liveness check failures is enabled", func() {
+								BeforeEach(func() {
+									options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
+								})
+
+								It("emits HTTPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+									name := fakeMetronClient.IncrementCounterArgsForCall(0)
+									Expect(name).To(Equal("HTTPLivenessChecksFailedCount"))
+								})
+							})
+
+							Context("and emitting liveness check failures is disabled", func() {
+								It("does not emit HTTPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(0))
+								})
 							})
 						})
 					})
@@ -1732,10 +1744,22 @@ var _ = Describe("Transformer", func() {
 								actionCh <- 2
 							})
 
-							It("emits TCPLivenessChecksFailedCount metric", func() {
-								Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
-								name := fakeMetronClient.IncrementCounterArgsForCall(0)
-								Expect(name).To(Equal("TCPLivenessChecksFailedCount"))
+							Context("and emitting liveness check failures is enabled", func() {
+								BeforeEach(func() {
+									options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
+								})
+
+								It("emits TCPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+									name := fakeMetronClient.IncrementCounterArgsForCall(0)
+									Expect(name).To(Equal("TCPLivenessChecksFailedCount"))
+								})
+							})
+
+							Context("and emitting liveness check failures is disabled", func() {
+								It("does not emit TCPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(0))
+								})
 							})
 						})
 					})

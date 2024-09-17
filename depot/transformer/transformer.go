@@ -57,6 +57,7 @@ type transformer struct {
 
 	sidecarRootFS               string
 	useDeclarativeHealthCheck   bool
+	emitHealthCheckMetrics      bool
 	healthyMonitoringInterval   time.Duration
 	unhealthyMonitoringInterval time.Duration
 	gracefulShutdownInterval    time.Duration
@@ -96,6 +97,12 @@ func WithPostSetupHook(user string, hook []string) Option {
 	return func(t *transformer) {
 		t.postSetupUser = user
 		t.postSetupHook = hook
+	}
+}
+
+func WithDeclarativeHealthcheckFailureMetrics() Option {
+	return func(t *transformer) {
+		t.emitHealthCheckMetrics = true
 	}
 }
 
@@ -859,7 +866,7 @@ func (t *transformer) transformCheckDefinition(
 				livenessLogger,
 				"",
 				metronClient,
-				true,
+				t.emitHealthCheckMetrics,
 			))
 
 		} else if check.TcpCheck != nil {
@@ -900,7 +907,7 @@ func (t *transformer) transformCheckDefinition(
 				livenessLogger,
 				"",
 				metronClient,
-				true,
+				t.emitHealthCheckMetrics,
 			))
 		}
 	}
