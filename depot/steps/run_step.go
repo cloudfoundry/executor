@@ -352,7 +352,10 @@ func (step *runStep) networkingEnvVars() []string {
 
 func (step *runStep) writeToStdOut(message string) {
 	if !step.model.SuppressLogOutput {
-		step.streamer.Stdout().Write([]byte(message))
+		_, err := step.streamer.Stdout().Write([]byte(message))
+		if err != nil {
+			step.logger.Debug("failed-writing-to-stdout", lager.Data{"error": err})
+		}
 		step.streamer.Flush()
 	}
 }
