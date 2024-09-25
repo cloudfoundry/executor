@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"fmt"
 	"os"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -57,12 +56,18 @@ func (step *emitCheckFailureMetricStep) Run(signals <-chan os.Signal, ready chan
 }
 
 func (step *emitCheckFailureMetricStep) emitFailureMetric() {
-	metricName := constructMetricName(step.checkProtocol, step.checkType)
-	go step.metronClient.IncrementCounter(metricName)
-}
+	if step.checkType != executor.IsLivenessCheck {
+		return
+	}
 
-func constructMetricName(checkProtocol executor.CheckProtocol, checkType executor.HealthcheckType) string {
-	return fmt.Sprintf("%s%s%s", checkProtocol, checkType, CheckFailedCount)
+	if step.checkProtocol == executor.TCPCheck {
+		httpMetricName := "TCPLivenessChecksFailedCount"
+		go step.metronClient.IncrementCounter(httpMetricName)
+
+	} else if step.checkProtocol == executor.HTTPCheck {
+		tcpMetricName := "HTTPLivenessChecksFailedCount"
+		go step.metronClient.IncrementCounter(tcpMetricName)
+	}
 }
 
 func waitForReadiness(p ifrit.Process, ready chan<- struct{}, done <-chan struct{}) {

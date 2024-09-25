@@ -114,6 +114,17 @@ var _ = Describe("EmitCheckFailureMetricStep", func() {
 					Expect(name).To(Equal("TCPLivenessChecksFailedCount"))
 				})
 			})
+
+			Context("when HealthCheckType is not Liveness", func() {
+				BeforeEach(func() {
+					checkType = executor.IsUntilFailureReadinessCheck
+					checkProtocol = executor.TCPCheck
+				})
+
+				It("should not emit any metric", func() {
+					Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(0))
+				})
+			})
 		})
 	})
 
