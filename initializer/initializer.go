@@ -590,8 +590,11 @@ func closeHub(logger lager.Logger, hub event.Hub) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		signal := <-signals
-		hub.Close()
+		err := hub.Close()
 		hubLogger := logger.Session("close-hub")
+		if err != nil {
+			logger.Error("failed-to-close-hub", err)
+		}
 		hubLogger.Info("signalled", lager.Data{"signal": signal.String()})
 		return nil
 	})

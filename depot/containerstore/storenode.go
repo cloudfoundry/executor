@@ -255,14 +255,23 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 		}
 
 		sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
-		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+		metricErr := n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+		}
 		gardenContainer, err := n.createGardenContainer(logger, traceID, &info)
 		if err != nil {
-			n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
+			metricErr = n.metronClient.SendAppErrorLog(fmt.Sprintf("Cell %s failed to create container for instance %s: %s", n.cellID, n.Info().Guid, err.Error()), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-appErrorLog", lager.Data{"error": metricErr})
+			}
 			n.complete(logger, traceID, true, fmt.Sprintf("%s: %s", ContainerCreationFailedMessage, err.Error()), true)
 			return err
 		}
-		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully created container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+		metricErr = n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully created container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+		}
 
 		n.infoLock.Lock()
 		n.gardenContainer = gardenContainer
@@ -566,7 +575,10 @@ func (n *storeNode) completeWithError(logger lager.Logger, traceID string, err e
 	if err != nil {
 		errorStr = err.Error()
 		if errwrap.ContainsType(err, new(steps.ExceededGracefulShutdownIntervalError)) || errwrap.ContainsType(err, new(steps.ExitTimeoutError)) {
-			n.metronClient.IncrementCounter(ContainerExitedOnTimeoutCount)
+			metricErr := n.metronClient.IncrementCounter(ContainerExitedOnTimeoutCount)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-container-exited-on-timeout-metric", lager.Data{"error": metricErr})
+			}
 		}
 	}
 
@@ -707,7 +719,10 @@ func (n *storeNode) stop(logger lager.Logger, traceID string) {
 	if n.process != nil {
 		if !stopped {
 			sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
-			n.metronClient.SendAppLog(fmt.Sprintf("Cell %s stopping instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+			metricErr := n.metronClient.SendAppLog(fmt.Sprintf("Cell %s stopping instance %s", n.cellID, n.Info().Guid), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-app-log", lager.Data{"error": metricErr})
+			}
 		}
 
 		n.process.Signal(os.Interrupt)
@@ -741,17 +756,26 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 
 	sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 
-	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s destroying container for instance %s", n.cellID, info.Guid), sourceName, tags)
+	metricErr := n.metronClient.SendAppLog(fmt.Sprintf("Cell %s destroying container for instance %s", n.cellID, info.Guid), sourceName, tags)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-app-log", lager.Data{"error": metricErr})
+	}
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
 
 	err := n.destroyContainer(logger, traceID)
 	if err != nil {
-		n.metronClient.SendAppLog(fmt.Sprintf("Cell %s failed to destroy container for instance %s", n.cellID, info.Guid), sourceName, tags)
+		metricErr = n.metronClient.SendAppLog(fmt.Sprintf("Cell %s failed to destroy container for instance %s", n.cellID, info.Guid), sourceName, tags)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-app-log", lager.Data{"error": metricErr})
+		}
 		return err
 	}
-	n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", n.cellID, info.Guid), sourceName, tags)
+	metricErr = n.metronClient.SendAppLog(fmt.Sprintf("Cell %s successfully destroyed container for instance %s", n.cellID, info.Guid), sourceName, tags)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-app-log", lager.Data{"error": metricErr})
+	}
 
 	cacheKeys := n.bindMountCacheKeys
 
