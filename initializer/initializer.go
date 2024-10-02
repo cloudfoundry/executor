@@ -222,11 +222,14 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 	uploader := uploader.New(logger, 10*time.Minute, assetTLSConfig)
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
-	cachedDownloader := cacheddownloader.New(
+	cachedDownloader, err := cacheddownloader.New(
 		downloader,
 		cache,
 		cacheddownloader.TarTransform,
 	)
+	if err != nil {
+		return nil, nil, grouper.Members{}, err
+	}
 
 	err = cachedDownloader.RecoverState(logger.Session("downloader"))
 	if err != nil {
