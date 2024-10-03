@@ -157,9 +157,20 @@ var (
 	metricsWorkPool, readWorkPool      *workpool.WorkPool
 )
 
-func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
-	rootFSes map[string]string, metronClient loggingclient.IngressClient,
-	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
+func Initialize(
+	logger lager.Logger,
+	config ExecutorConfig,
+	cellID string,
+	zone string,
+	rootFSes map[string]string,
+	metronClient loggingclient.IngressClient,
+	clock clock.Clock,
+) (
+	executor.Client,
+	*containermetrics.StatsReporter,
+	grouper.Members,
+	error,
+) {
 
 	var gardenHealthcheckRootFS string
 	for _, rootFSPath := range rootFSes {
@@ -218,7 +229,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		return nil, nil, grouper.Members{}, err
 	}
 
-	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), assetTLSConfig)
+	downloader := cacheddownloader.NewDownloader(10*time.Minute, math.MaxInt8, assetTLSConfig)
 	uploader := uploader.New(logger, 10*time.Minute, assetTLSConfig)
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
