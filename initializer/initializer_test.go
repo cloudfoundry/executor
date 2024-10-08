@@ -1,7 +1,6 @@
 package initializer_test
 
 import (
-	"code.cloudfoundry.org/cacheddownloader"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
@@ -14,6 +13,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"code.cloudfoundry.org/cacheddownloader"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
@@ -703,15 +704,23 @@ var _ = Describe("Initializer", func() {
 
 	Describe("CachedDownloader", func() {
 		Context("when cacheddownloader.New receives a malformed cache.CachedPath", func() {
-			It("returns an error", func() {
-				logger := lagertest.NewTestLogger("executor")
-				fakeCertPoolRetriever := &fakes.FakeCertPoolRetriever{}
+			var (
+				logger                lager.Logger
+				fakeCertPoolRetriever *fakes.FakeCertPoolRetriever
+			)
+
+			BeforeEach(func() {
+				logger = lagertest.NewTestLogger("executor")
+				fakeCertPoolRetriever = &fakes.FakeCertPoolRetriever{}
 				config.PathToTLSCert = "fixtures/downloader/client.crt"
 				config.PathToTLSKey = "fixtures/downloader/client.key"
 				config.PathToTLSCACert = "fixtures/downloader/ca.crt"
 				config.CachePath = ""
 
 				fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool(), nil)
+
+			})
+			It("returns an error", func() {
 				certBytes, err := os.ReadFile(config.PathToTLSCACert)
 				Expect(err).NotTo(HaveOccurred())
 				block, _ := pem.Decode(certBytes)
