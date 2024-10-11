@@ -150,6 +150,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
+	ServiceBindingRoot                    string                `json:"service_binding_root"`
 }
 
 var (
@@ -323,6 +324,11 @@ func Initialize(
 		return nil, nil, grouper.Members{}, err
 	}
 
+	serviceBindingRootHandler := containerstore.NewServiceBindingRootHandler(
+		config.ServiceBindingRoot,
+		"/etc/cf-service-binding-root",
+	)
+
 	logManager := containerstore.NewLogManager()
 
 	containerStore := containerstore.New(
@@ -345,6 +351,7 @@ func Initialize(
 		cellID,
 		config.EnableUnproxiedPortMappings,
 		config.AdvertisePreferenceForInstanceAddress,
+		serviceBindingRootHandler,
 		json.Marshal,
 	)
 
