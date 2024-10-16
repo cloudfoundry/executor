@@ -7,11 +7,14 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"code.cloudfoundry.org/cacheddownloader"
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
@@ -24,7 +27,7 @@ import (
 	"code.cloudfoundry.org/executor/initializer/configuration"
 	"code.cloudfoundry.org/executor/initializer/fakes"
 	"code.cloudfoundry.org/garden"
-	loggregator "code.cloudfoundry.org/go-loggregator/v9"
+	"code.cloudfoundry.org/go-loggregator/v9"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,7 +48,7 @@ var _ = Describe("Initializer", func() {
 		logger           lager.Logger
 		fakeMetronClient *mfakes.FakeIngressClient
 		metricMap        map[string]time.Duration
-		m                sync.RWMutex
+		mutex            sync.RWMutex
 	)
 
 	BeforeEach(func() {
@@ -105,7 +108,7 @@ var _ = Describe("Initializer", func() {
 
 		fakeMetronClient = new(mfakes.FakeIngressClient)
 
-		m = sync.RWMutex{}
+		mutex = sync.RWMutex{}
 	})
 
 	AfterEach(func() {
@@ -114,8 +117,8 @@ var _ = Describe("Initializer", func() {
 	})
 
 	getMetrics := func() map[string]time.Duration {
-		m.Lock()
-		defer m.Unlock()
+		mutex.Lock()
+		defer mutex.Unlock()
 		m := make(map[string]time.Duration, len(metricMap))
 		for k, v := range metricMap {
 			m[k] = v
@@ -135,9 +138,9 @@ var _ = Describe("Initializer", func() {
 
 		metricMap = make(map[string]time.Duration)
 		fakeMetronClient.SendDurationStub = func(name string, time time.Duration, opts ...loggregator.EmitGaugeOption) error {
-			m.Lock()
+			mutex.Lock()
 			metricMap[name] = time
-			m.Unlock()
+			mutex.Unlock()
 			return nil
 		}
 
@@ -695,6 +698,50 @@ var _ = Describe("Initializer", func() {
 				It("fails", func() {
 					Eventually(err).Should(MatchError(ContainSubstring("instance ID validity period needs to be set and positive")))
 				})
+			})
+		})
+	})
+
+	Describe("CachedDownloader", func() {
+		Context("when cacheddownloader.New receives a malformed cache.CachedPath", func() {
+			var (
+				logger                lager.Logger
+				fakeCertPoolRetriever *fakes.FakeCertPoolRetriever
+			)
+
+			BeforeEach(func() {
+				logger = lagertest.NewTestLogger("executor")
+				fakeCertPoolRetriever = &fakes.FakeCertPoolRetriever{}
+				config.PathToTLSCert = "fixtures/downloader/client.crt"
+				config.PathToTLSKey = "fixtures/downloader/client.key"
+				config.PathToTLSCACert = "fixtures/downloader/ca.crt"
+				config.CachePath = ""
+
+				fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool(), nil)
+
+			})
+			It("returns an error", func() {
+				certBytes, err := os.ReadFile(config.PathToTLSCACert)
+				Expect(err).NotTo(HaveOccurred())
+				block, _ := pem.Decode(certBytes)
+				_, err = x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				tlsConfig, err := initializer.TLSConfigFromConfig(logger, fakeCertPoolRetriever, config)
+				Expect(err).To(Succeed())
+				Expect(tlsConfig).NotTo(BeNil())
+
+				newDownloader := cacheddownloader.NewDownloader(10*time.Minute, math.MaxInt8, tlsConfig)
+				newCache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
+
+				newCachedDownloader, err := cacheddownloader.New(
+					newDownloader,
+					newCache,
+					cacheddownloader.TarTransform,
+				)
+
+				Expect(newCachedDownloader).To(BeNil())
+				Expect(err.Error()).To(ContainSubstring("could not create cache path"))
 			})
 		})
 	})

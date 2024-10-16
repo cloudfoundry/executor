@@ -101,15 +101,22 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 	if mount.LogSource != "" {
 		sourceName = mount.LogSource
 	}
+	var metricErr error
 	if mount.Name != "" {
-		metronClient.SendAppLog(fmt.Sprintf("Downloading %s...", mount.Name), sourceName, tags)
+		metricErr = metronClient.SendAppLog(fmt.Sprintf("Downloading %s...", mount.Name), sourceName, tags)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+		}
 	}
 
 	downloadURL, err := url.Parse(mount.From)
 	if err != nil {
 		logger.Error("failed-parsing-bind-mount-download-url", err, lager.Data{"download-url": mount.From, "cache-key": mount.CacheKey})
 		if mount.Name != "" {
-			metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+			metricErr = metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+			}
 		}
 		return nil, err
 	}
@@ -128,7 +135,10 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 	if err != nil {
 		logger.Error("failed-fetching-cache-dependency", err, lager.Data{"download-url": downloadURL.String(), "cache-key": mount.CacheKey})
 		if mount.Name != "" {
-			metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+			metricErr = metronClient.SendAppLog(fmt.Sprintf("Downloading %s failed", mount.Name), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+			}
 		}
 		return nil, err
 	}
@@ -136,11 +146,17 @@ func (bm *dependencyManager) downloadCachedDependency(logger lager.Logger, mount
 
 	if downloadedSize != 0 {
 		if mount.Name != "" {
-			metronClient.SendAppLog(fmt.Sprintf("Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize))), sourceName, tags)
+			metricErr = metronClient.SendAppLog(fmt.Sprintf("Downloaded %s (%s)", mount.Name, bytefmt.ByteSize(uint64(downloadedSize))), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+			}
 		}
 	} else {
 		if mount.Name != "" {
-			metronClient.SendAppLog(fmt.Sprintf("Downloaded %s", mount.Name), sourceName, tags)
+			metricErr = metronClient.SendAppLog(fmt.Sprintf("Downloaded %s", mount.Name), sourceName, tags)
+			if metricErr != nil {
+				logger.Debug("failed-to-emit-appLog", lager.Data{"error": metricErr})
+			}
 		}
 	}
 	return newCachedBindMount(mount.CacheKey, newBindMount(dirPath, mount.To)), nil

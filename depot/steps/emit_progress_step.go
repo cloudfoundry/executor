@@ -39,18 +39,30 @@ func NewEmitProgress(
 
 func (step *emitProgressStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	if step.startMessage != "" {
-		step.streamer.Stdout().Write([]byte(step.startMessage + "\n"))
+		_, writeErr := step.streamer.Stdout().Write([]byte(step.startMessage + "\n"))
+		if writeErr != nil {
+			step.logger.Debug("failed-writing-to-stdout", lager.Data{"error": writeErr})
+		}
 	}
 
 	err := step.substep.Run(signals, ready)
 
 	if err != nil {
 		if step.failureMessage != "" {
-			step.streamer.Stderr().Write([]byte(step.failureMessage))
+			_, writeErr := step.streamer.Stderr().Write([]byte(step.failureMessage))
+			if writeErr != nil {
+				step.logger.Debug("failed-writing-to-stderr", lager.Data{"error": writeErr})
+			}
 
 			if emittableError, ok := err.(*EmittableError); ok {
-				step.streamer.Stderr().Write([]byte(": "))
-				step.streamer.Stderr().Write([]byte(emittableError.Error()))
+				_, writeErr := step.streamer.Stderr().Write([]byte(": "))
+				if writeErr != nil {
+					step.logger.Debug("failed-writing-to-stderr", lager.Data{"error": writeErr})
+				}
+				_, writeErr = step.streamer.Stderr().Write([]byte(emittableError.Error()))
+				if writeErr != nil {
+					step.logger.Debug("failed-writing-to-stderr", lager.Data{"error": writeErr})
+				}
 
 				wrappedMessage := ""
 				if emittableError.WrappedError() != nil {
@@ -63,11 +75,17 @@ func (step *emitProgressStep) Run(signals <-chan os.Signal, ready chan<- struct{
 				})
 			}
 
-			step.streamer.Stderr().Write([]byte("\n"))
+			_, writeErr = step.streamer.Stderr().Write([]byte("\n"))
+			if writeErr != nil {
+				step.logger.Debug("failed-writing-to-stderr", lager.Data{"error": writeErr})
+			}
 		}
 	} else {
 		if step.successMessage != "" {
-			step.streamer.Stdout().Write([]byte(step.successMessage + "\n"))
+			_, writeErr := step.streamer.Stdout().Write([]byte(step.successMessage + "\n"))
+			if writeErr != nil {
+				step.logger.Debug("failed-writing-to-stdout", lager.Data{"error": writeErr})
+			}
 		}
 	}
 

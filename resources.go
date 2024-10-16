@@ -430,3 +430,27 @@ func truncateString(s string, length int) string {
 	last := len(s) - length/2 + len(delimeter)/2
 	return fmt.Sprintf("%s%s%s", s[:((length/2-1)-len(delimeter)/2)], delimeter, s[last:])
 }
+
+type HealthcheckType int
+
+const (
+	IsStartupCheck HealthcheckType = iota
+	IsLivenessCheck
+	IsUntilSuccessReadinessCheck
+	IsUntilFailureReadinessCheck
+)
+
+func (h HealthcheckType) String() string {
+	return [...]string{"Startup", "Liveness", "UntilSuccessReadiness", "UntilFailureReadiness"}[h]
+}
+
+type CheckProtocol int
+
+const (
+	HTTPCheck CheckProtocol = iota
+	TCPCheck
+)
+
+func (c CheckProtocol) String() string {
+	return [...]string{"HTTP", "TCP"}[c]
+}

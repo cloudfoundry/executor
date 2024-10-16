@@ -267,7 +267,7 @@ func (c *credManager) Runner(logger lager.Logger, containerInfoProvider Containe
 
 				creds := Credentials{InstanceIdentityCredential: idCred, C2CCredential: c2cCred}
 				for _, h := range c.handlers {
-					h.Close(creds, container)
+					return h.Close(creds, container)
 				}
 				return nil
 			}
@@ -296,14 +296,24 @@ func (c *credManager) generateInstanceIdentityCred(logger lager.Logger, containe
 		certificateSAN{IPAddress: ipForCert, OrganizationalUnits: container.CertificateProperties.OrganizationalUnit},
 		certGUID,
 	)
+	var metricErr error
 	duration := c.clock.Since(start)
 	if err != nil {
 		logger.Error("failed-to-generate-instance-identity-credentials", err)
-		c.metronClient.IncrementCounter(CredCreationFailedCount)
+		metricErr = c.metronClient.IncrementCounter(CredCreationFailedCount)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-cred-creation-failed-count-metric", lager.Data{"error": metricErr})
+		}
 		return Credential{}, err
 	}
-	c.metronClient.IncrementCounter(CredCreationSucceededCount)
-	c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
+	metricErr = c.metronClient.IncrementCounter(CredCreationSucceededCount)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-cred-creation-succeeded-count-metric", lager.Data{"error": metricErr})
+	}
+	metricErr = c.metronClient.SendDuration(CredCreationSucceededDuration, duration)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-cred-creation-succeeded-duration-metric", lager.Data{"error": metricErr})
+	}
 
 	return idCred, nil
 }
@@ -318,13 +328,23 @@ func (c *credManager) generateC2cCred(logger lager.Logger, container executor.Co
 		certGUID,
 	)
 	duration := c.clock.Since(start)
+	var metricErr error
 	if err != nil {
 		logger.Error("failed-to-generate-c2c-credentials", err)
-		c.metronClient.IncrementCounter(C2CCredCreationFailedCount)
+		metricErr = c.metronClient.IncrementCounter(C2CCredCreationFailedCount)
+		if metricErr != nil {
+			logger.Debug("failed-to-emit-c2c-cred-creation-failed-metric", lager.Data{"error": metricErr})
+		}
 		return Credential{}, err
 	}
-	c.metronClient.IncrementCounter(C2CCredCreationSucceededCount)
-	c.metronClient.SendDuration(C2CCredCreationSucceededDuration, duration)
+	metricErr = c.metronClient.IncrementCounter(C2CCredCreationSucceededCount)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-c2c-cred-creation-succeeded-count-metric", lager.Data{"error": metricErr})
+	}
+	metricErr = c.metronClient.SendDuration(C2CCredCreationSucceededDuration, duration)
+	if metricErr != nil {
+		logger.Debug("failed-to-emit-c2c-cred-creation-succeeded-duration-metric", lager.Data{"error": metricErr})
+	}
 
 	return c2cCred, nil
 }
