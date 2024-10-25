@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -84,6 +85,7 @@ type storeNode struct {
 	proxyConfigHandler                    ProxyManager
 	bindMounts                            []garden.BindMount
 	cellID                                string
+	cellMemoryCapacity                    int
 	enableUnproxiedPortMappings           bool
 	advertisePreferenceForInstanceAddress bool
 
@@ -114,6 +116,7 @@ func newStoreNode(
 	proxyConfigHandler ProxyManager,
 	rootFSSizer configuration.RootFSSizer,
 	cellID string,
+	cellMemoryCapacity int,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
 	jsonMarshaller func(any) ([]byte, error),
@@ -140,6 +143,7 @@ func newStoreNode(
 		proxyConfigHandler:                    proxyConfigHandler,
 		rootFSSizer:                           rootFSSizer,
 		cellID:                                cellID,
+		cellMemoryCapacity:                    cellMemoryCapacity,
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
@@ -244,6 +248,9 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 		}
 		n.bindMounts = append(n.bindMounts, credMounts...)
 		info.Env = append(info.Env, envs...)
+
+		cellMemEnv := executor.EnvironmentVariable{Name: "CF_CELL_MEMORY_CAPACITY_MB", Value: strconv.Itoa(n.cellMemoryCapacity)}
+		info.Env = append(info.Env, cellMemEnv)
 
 		if n.useDeclarativeHealthCheck {
 			logger.Info("adding-healthcheck-bindmounts")

@@ -87,7 +87,8 @@ type containerStore struct {
 	enableUnproxiedPortMappings           bool
 	advertisePreferenceForInstanceAddress bool
 
-	jsonMarshaller func(any) ([]byte, error)
+	jsonMarshaller     func(any) ([]byte, error)
+	cellMemoryCapacity int
 }
 
 func New(
@@ -130,7 +131,8 @@ func New(
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 		proxyConfigHandler:            proxyConfigHandler,
 
-		cellID: cellID,
+		cellID:             cellID,
+		cellMemoryCapacity: totalCapacity.MemoryMB,
 
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
@@ -168,6 +170,7 @@ func (cs *containerStore) Reserve(logger lager.Logger, traceID string, req *exec
 			cs.proxyConfigHandler,
 			cs.rootFSSizer,
 			cs.cellID,
+			cs.cellMemoryCapacity,
 			cs.enableUnproxiedPortMappings,
 			cs.advertisePreferenceForInstanceAddress,
 			cs.jsonMarshaller,

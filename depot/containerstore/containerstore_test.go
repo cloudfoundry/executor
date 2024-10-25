@@ -642,6 +642,8 @@ var _ = Describe("Container Store", func() {
 				for _, envVar := range runReq.Env {
 					expectedEnv = append(expectedEnv, envVar.Name+"="+envVar.Value)
 				}
+
+				expectedEnv = append(expectedEnv, fmt.Sprintf("CF_CELL_MEMORY_CAPACITY_MB=%d", totalCapacity.MemoryMB))
 				Expect(containerSpec.Env).To(Equal(expectedEnv))
 			})
 
