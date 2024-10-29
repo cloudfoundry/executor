@@ -103,6 +103,7 @@ type ExecutorConfig struct {
 	DiskMB                                string                `json:"disk_mb,omitempty"`
 	EnableContainerProxy                  bool                  `json:"enable_container_proxy,omitempty"`
 	EnableDeclarativeHealthcheck          bool                  `json:"enable_declarative_healthcheck,omitempty"`
+	EnableHealtcheckMetrics               bool                  `json:"enable_healthcheck_metrics,omitempty"`
 	EnableUnproxiedPortMappings           bool                  `json:"enable_unproxied_port_mappings"`
 	EnvoyConfigRefreshDelay               durationjson.Duration `json:"envoy_config_refresh_delay"`
 	EnvoyConfigReloadDuration             durationjson.Duration `json:"envoy_config_reload_duration"`
@@ -157,9 +158,20 @@ var (
 	metricsWorkPool, readWorkPool      *workpool.WorkPool
 )
 
-func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
-	rootFSes map[string]string, metronClient loggingclient.IngressClient,
-	clock clock.Clock) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
+func Initialize(
+	logger lager.Logger,
+	config ExecutorConfig,
+	cellID string,
+	zone string,
+	rootFSes map[string]string,
+	metronClient loggingclient.IngressClient,
+	clock clock.Clock,
+) (
+	executor.Client,
+	*containermetrics.StatsReporter,
+	grouper.Members,
+	error,
+) {
 
 	var gardenHealthcheckRootFS string
 	for _, rootFSPath := range rootFSes {
@@ -218,15 +230,18 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		return nil, nil, grouper.Members{}, err
 	}
 
-	downloader := cacheddownloader.NewDownloader(10*time.Minute, int(math.MaxInt8), assetTLSConfig)
+	downloader := cacheddownloader.NewDownloader(10*time.Minute, math.MaxInt8, assetTLSConfig)
 	uploader := uploader.New(logger, 10*time.Minute, assetTLSConfig)
 
 	cache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
-	cachedDownloader := cacheddownloader.New(
+	cachedDownloader, err := cacheddownloader.New(
 		downloader,
 		cache,
 		cacheddownloader.TarTransform,
 	)
+	if err != nil {
+		return nil, nil, grouper.Members{}, err
+	}
 
 	err = cachedDownloader.RecoverState(logger.Session("downloader"))
 	if err != nil {
@@ -249,6 +264,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		postSetupHook,
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
+		config.EnableHealtcheckMetrics,
 		gardenHealthcheckRootFS,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
@@ -551,6 +567,7 @@ func initializeTransformer(
 	postSetupHook []string,
 	postSetupUser string,
 	useDeclarativeHealthCheck bool,
+	emitHealthCheckMetrics bool,
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
 	drainWait time.Duration,
@@ -562,6 +579,10 @@ func initializeTransformer(
 
 	if useDeclarativeHealthCheck {
 		options = append(options, transformer.WithDeclarativeHealthchecks())
+	}
+
+	if emitHealthCheckMetrics {
+		options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
 	}
 
 	if enableContainerProxy {
@@ -590,8 +611,11 @@ func closeHub(logger lager.Logger, hub event.Hub) ifrit.Runner {
 	return ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		close(ready)
 		signal := <-signals
-		hub.Close()
+		err := hub.Close()
 		hubLogger := logger.Session("close-hub")
+		if err != nil {
+			logger.Error("failed-to-close-hub", err)
+		}
 		hubLogger.Info("signalled", lager.Data{"signal": signal.String()})
 		return nil
 	})

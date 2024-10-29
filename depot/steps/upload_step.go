@@ -124,10 +124,17 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 	}
 	finalFileLocation := tempFile.Name()
 	defer func() {
-		tempFile.Close()
-		os.Remove(finalFileLocation)
+		deferErr := tempFile.Close()
+		if deferErr != nil {
+			step.logger.Debug("failed-to-close-file", lager.Data{"error": deferErr, "file": finalFileLocation})
+		}
+		deferErr = os.Remove(finalFileLocation)
+		if deferErr != nil {
+			step.logger.Debug("failed-to-remove-file", lager.Data{"error": deferErr, "file": finalFileLocation})
+		}
 	}()
 
+	// #nosec - G110 - We're fine with unbounded file decompression here as we have container filesystem quotas that will prevent this from eating up the entire diego cell disk space
 	_, err = io.Copy(tempFile, tarStream)
 	if err != nil {
 		step.logger.Error("failed-to-copy-stream", err)

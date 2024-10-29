@@ -105,6 +105,7 @@ func (r *logRateLimiter) emitMetrics() {
 		case <-t.C:
 			lastIntervalEmitted := atomic.SwapUint64(&r.bytesEmittedLastInterval, 0)
 			perSecondValue := float64(lastIntervalEmitted) / intervalDivider
+			// #nosec G104 - ignore error returned by sending metric here
 			r.metronClient.SendAppLogRate(perSecondValue, float64(r.maxLogBytesPerSecond), r.tags)
 		case <-r.ctx.Done():
 			return

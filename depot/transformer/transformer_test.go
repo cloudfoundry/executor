@@ -215,7 +215,8 @@ var _ = Describe("Transformer", func() {
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
-				Eventually(process.Wait()).Should(Receive(nil))
+				var nilObject interface{}
+				Eventually(process.Wait()).Should(Receive(&nilObject))
 			})
 		})
 
@@ -346,7 +347,7 @@ var _ = Describe("Transformer", func() {
 						},
 						CheckDefinition: &models.CheckDefinition{
 							Checks: []*models.Check{
-								&models.Check{
+								{
 									HttpCheck: &models.HTTPCheck{
 										Port:             5432,
 										RequestTimeoutMs: 100,
@@ -356,11 +357,11 @@ var _ = Describe("Transformer", func() {
 							},
 						},
 						Ports: []executor.PortMapping{
-							executor.PortMapping{
+							{
 								HostPort:      61001,
 								ContainerPort: 8080,
 							},
-							executor.PortMapping{
+							{
 								HostPort:      61002,
 								ContainerPort: 61001,
 							},
@@ -726,7 +727,7 @@ var _ = Describe("Transformer", func() {
 						})
 						container.CheckDefinition = &models.CheckDefinition{
 							Checks: []*models.Check{
-								&models.Check{
+								{
 									HttpCheck: &models.HTTPCheck{
 										Port:             5432,
 										RequestTimeoutMs: 100,
@@ -947,7 +948,7 @@ var _ = Describe("Transformer", func() {
 							BeforeEach(func() {
 								container.CheckDefinition = &models.CheckDefinition{
 									ReadinessChecks: []*models.Check{
-										&models.Check{
+										{
 											TcpCheck: &models.TCPCheck{
 												Port:             5432,
 												ConnectTimeoutMs: 101,
@@ -1071,7 +1072,7 @@ var _ = Describe("Transformer", func() {
 									BeforeEach(func() {
 										container.CheckDefinition = &models.CheckDefinition{
 											ReadinessChecks: []*models.Check{
-												&models.Check{
+												{
 													TcpCheck: &models.TCPCheck{
 														Port: 5432,
 													},
@@ -1376,7 +1377,7 @@ var _ = Describe("Transformer", func() {
 						BeforeEach(func() {
 							container.CheckDefinition = &models.CheckDefinition{
 								Checks: []*models.Check{
-									&models.Check{
+									{
 										HttpCheck: &models.HTTPCheck{
 											Port: 6432,
 										},
@@ -1507,7 +1508,7 @@ var _ = Describe("Transformer", func() {
 							BeforeEach(func() {
 								container.CheckDefinition = &models.CheckDefinition{
 									Checks: []*models.Check{
-										&models.Check{
+										{
 											HttpCheck: &models.HTTPCheck{
 												Port: 6432,
 											},
@@ -1537,7 +1538,6 @@ var _ = Describe("Transformer", func() {
 									"-liveness-interval=1s",
 								}))
 							})
-
 						})
 
 						Context("when the liveness check exits", func() {
@@ -1575,6 +1575,24 @@ var _ = Describe("Transformer", func() {
 							It("returns the liveness check output in the error", func() {
 								Eventually(process.Wait()).Should(Receive(MatchError(ContainSubstring("Instance became unhealthy: liveness check failed"))))
 							})
+
+							Context("and emitting liveness check failures is enabled", func() {
+								BeforeEach(func() {
+									options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
+								})
+
+								It("emits HTTPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+									name := fakeMetronClient.IncrementCounterArgsForCall(0)
+									Expect(name).To(Equal("HTTPLivenessChecksFailedCount"))
+								})
+							})
+
+							Context("and emitting liveness check failures is disabled", func() {
+								It("does not emit HTTPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(0))
+								})
+							})
 						})
 					})
 				})
@@ -1583,7 +1601,7 @@ var _ = Describe("Transformer", func() {
 					BeforeEach(func() {
 						container.CheckDefinition = &models.CheckDefinition{
 							Checks: []*models.Check{
-								&models.Check{
+								{
 									TcpCheck: &models.TCPCheck{
 										Port:             5432,
 										ConnectTimeoutMs: 100,
@@ -1598,7 +1616,7 @@ var _ = Describe("Transformer", func() {
 						BeforeEach(func() {
 							container.CheckDefinition = &models.CheckDefinition{
 								Checks: []*models.Check{
-									&models.Check{
+									{
 										TcpCheck: &models.TCPCheck{
 											Port: 6432,
 										},
@@ -1673,14 +1691,13 @@ var _ = Describe("Transformer", func() {
 								"-timeout=100ms",
 								"-liveness-interval=44ms",
 							}))
-
 						})
 
 						Context("and optional fields are missing", func() {
 							BeforeEach(func() {
 								container.CheckDefinition = &models.CheckDefinition{
 									Checks: []*models.Check{
-										&models.Check{
+										{
 											TcpCheck: &models.TCPCheck{
 												Port: 6432,
 											},
@@ -1711,6 +1728,40 @@ var _ = Describe("Transformer", func() {
 							})
 						})
 
+						Context("when the liveness check exits", func() {
+							JustBeforeEach(func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(3))
+
+								By("waiting the action and liveness check processes to start")
+								var io garden.ProcessIO
+								Eventually(livenessIO).Should(Receive(&io))
+								_, err := io.Stdout.Write([]byte("liveness check failed"))
+								Expect(err).NotTo(HaveOccurred())
+
+								By("exiting the liveness check")
+								livenessCh <- 1
+								Eventually(actionProcess.SignalCallCount).Should(Equal(1))
+								actionCh <- 2
+							})
+
+							Context("and emitting liveness check failures is enabled", func() {
+								BeforeEach(func() {
+									options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
+								})
+
+								It("emits TCPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(1))
+									name := fakeMetronClient.IncrementCounterArgsForCall(0)
+									Expect(name).To(Equal("TCPLivenessChecksFailedCount"))
+								})
+							})
+
+							Context("and emitting liveness check failures is disabled", func() {
+								It("does not emit TCPLivenessChecksFailedCount metric", func() {
+									Eventually(fakeMetronClient.IncrementCounterCallCount).Should(Equal(0))
+								})
+							})
+						})
 					})
 				})
 
@@ -1718,7 +1769,7 @@ var _ = Describe("Transformer", func() {
 					BeforeEach(func() {
 						container.CheckDefinition = &models.CheckDefinition{
 							Checks: []*models.Check{
-								&models.Check{
+								{
 									HttpCheck: &models.HTTPCheck{
 										Port:             5432,
 										RequestTimeoutMs: 2000,
@@ -1815,14 +1866,14 @@ var _ = Describe("Transformer", func() {
 
 						container.CheckDefinition = &models.CheckDefinition{
 							Checks: []*models.Check{
-								&models.Check{
+								{
 									TcpCheck: &models.TCPCheck{
 										Port:             2222,
 										ConnectTimeoutMs: 100,
 										IntervalMs:       50,
 									},
 								},
-								&models.Check{
+								{
 									HttpCheck: &models.HTTPCheck{
 										Port:             8080,
 										RequestTimeoutMs: 100,
@@ -2038,7 +2089,8 @@ var _ = Describe("Transformer", func() {
 
 				process.Signal(os.Interrupt)
 				clock.Increment(1 * time.Second)
-				Eventually(process.Wait()).Should(Receive(nil))
+				var nilObject interface{}
+				Eventually(process.Wait()).Should(Receive(&nilObject))
 			})
 
 			It("logs the container creation time", func() {
@@ -2083,9 +2135,7 @@ var _ = Describe("Transformer", func() {
 		})
 
 		Context("MonitorAction", func() {
-			var (
-				process ifrit.Process
-			)
+			var process ifrit.Process
 
 			JustBeforeEach(func() {
 				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
@@ -2114,9 +2164,7 @@ var _ = Describe("Transformer", func() {
 			})
 
 			Context("SuppressLogOutput", func() {
-				var (
-					monitorCh, actionCh chan int
-				)
+				var monitorCh, actionCh chan int
 
 				BeforeEach(func() {
 					monitorCh = make(chan int, 2)
