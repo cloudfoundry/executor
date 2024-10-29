@@ -10,39 +10,39 @@ import (
 	"code.cloudfoundry.org/lager/v3"
 )
 
-//go:generate counterfeiter -o containerstorefakes/fake_service_binding_root_handler.go . ServiceBindingRootImplementor
-type ServiceBindingRootImplementor interface {
+//go:generate counterfeiter -o containerstorefakes/fake_volume_mounted_files_handler.go . VolumeMountedFilesImplementor
+type VolumeMountedFilesImplementor interface {
 	CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error)
 	RemoveDir(logger lager.Logger, container executor.Container) error
 }
 
-type ServiceBindingRootHandler struct {
+type VolumeMountedFilesHandler struct {
 	containerMountPath string
-	bindingRootPath    string
+	volumeMountPath    string
 }
 
-func NewServiceBindingRootHandler(
-	bindingRoot string,
+func NewVolumeMountedFilesHandler(
+	volumeMountPath string,
 	containerMountPath string,
-) *ServiceBindingRootHandler {
-	return &ServiceBindingRootHandler{
-		bindingRootPath:    bindingRoot,
+) *VolumeMountedFilesHandler {
+	return &VolumeMountedFilesHandler{
+		volumeMountPath:    volumeMountPath,
 		containerMountPath: containerMountPath,
 	}
 }
 
-func (h *ServiceBindingRootHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
-	containerDir := filepath.Join(h.bindingRootPath, container.Guid)
+func (h *VolumeMountedFilesHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
+	containerDir := filepath.Join(h.volumeMountPath, container.Guid)
 	err := os.Mkdir(containerDir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Info("creating-dir - service binding root")
+	logger.Info("creating-dir - volume-mounted-files")
 
-	errServiceBinding := h.createBindingRootsForServices(logger, containerDir, container)
+	errServiceBinding := h.volumeMountedFilesForServices(logger, containerDir, container)
 	if errServiceBinding != nil {
-		logger.Error("creating-dir-service-binding-root-failed", errServiceBinding)
+		logger.Error("creating-dir-volume-mounted-files-failed", errServiceBinding)
 		return nil, err
 	}
 
@@ -56,23 +56,23 @@ func (h *ServiceBindingRootHandler) CreateDir(logger lager.Logger, container exe
 	}, nil
 }
 
-func (h *ServiceBindingRootHandler) createBindingRootsForServices(
+func (h *VolumeMountedFilesHandler) volumeMountedFilesForServices(
 	logger lager.Logger,
 	containerDir string,
 	containers executor.Container,
 ) error {
 	var cleanupFiles []*os.File
 
-	for _, roots := range containers.RunInfo.ServiceBindingFiles {
-		dirName := filepath.Dir(roots.Name)
+	for _, roots := range containers.RunInfo.VolumeMountedFiles {
+		dirName := filepath.Dir(roots.Path)
 		if dirName == "" {
-			err := fmt.Errorf("failed to extract service bindig directory. format is: /serviceName/fileName")
-			logger.Error("service binding directory is required", err, lager.Data{"dirName": "is empty"})
+			err := fmt.Errorf("failed to extract volume-mounted-files directory. format is: /serviceName/fileName")
+			logger.Error(" volume-mounted-files directory is required", err, lager.Data{"dirName": "is empty"})
 
 			continue
 		}
 
-		fileName := filepath.Base(roots.Name)
+		fileName := filepath.Base(roots.Path)
 		if fileName == "" {
 			err := fmt.Errorf("failed to extract service config file. format is: /serviceName/fileName")
 			logger.Error("service config file is required", err, lager.Data{"fileName": "is empty"})
@@ -82,7 +82,7 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 
 		dirName = filepath.Join(containerDir, dirName)
 
-		err := os.Mkdir(dirName, 0755)
+		err := os.MkdirAll(dirName, 0755)
 		if err != nil {
 			logger.Error("failed-to-create-directory", err, lager.Data{"dirName": dirName})
 			return fmt.Errorf("failed to create directory %s: %w", dirName, err)
@@ -98,7 +98,7 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 
 		cleanupFiles = append(cleanupFiles, serviceFile)
 
-		err = os.WriteFile(filePath, []byte(roots.Value), 0644)
+		err = os.WriteFile(filePath, []byte(roots.Content), 0644)
 		if err != nil {
 			logger.Error("failed-to-write-to-file", err, lager.Data{"filePath": filePath})
 			err := serviceFile.Close()
@@ -120,12 +120,12 @@ func (h *ServiceBindingRootHandler) createBindingRootsForServices(
 	return nil
 }
 
-func (h *ServiceBindingRootHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
-	path := filepath.Join(h.bindingRootPath, container.Guid)
+func (h *VolumeMountedFilesHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	path := filepath.Join(h.volumeMountPath, container.Guid)
 
 	err := os.RemoveAll(path)
 	if err != nil {
-		logger.Error("failed-to-remove-service-binding-root-directory", err, lager.Data{"directory": path})
+		logger.Error("failed-to-remove-volume-mounted-files-directory", err, lager.Data{"directory": path})
 	}
 
 	return err

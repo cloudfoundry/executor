@@ -75,7 +75,7 @@ var _ = Describe("Container Store", func() {
 		eventEmitter              *eventfakes.FakeHub
 		metronClient              *mfakes.FakeIngressClient
 		rootFSSizer               *configurationfakes.FakeRootFSSizer
-		serviceBindingRootHandler *containerstorefakes.FakeServiceBindingRootImplementor
+		volumeMountedFilesHandler *containerstorefakes.FakeVolumeMountedFilesImplementor
 	)
 
 	var containerState = func(guid string) func() executor.State {
@@ -114,7 +114,7 @@ var _ = Describe("Container Store", func() {
 		clock = fakeclock.NewFakeClock(time.Now())
 		eventEmitter = &eventfakes.FakeHub{}
 		rootFSSizer = new(configurationfakes.FakeRootFSSizer)
-		serviceBindingRootHandler = &containerstorefakes.FakeServiceBindingRootImplementor{}
+		volumeMountedFilesHandler = &containerstorefakes.FakeVolumeMountedFilesImplementor{}
 
 		credManager.RunnerReturns(ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 			close(ready)
@@ -166,7 +166,7 @@ var _ = Describe("Container Store", func() {
 			cellID,
 			true,
 			advertisePreferenceForInstanceAddress,
-			serviceBindingRootHandler,
+			volumeMountedFilesHandler,
 			json.Marshal,
 		)
 
@@ -381,8 +381,8 @@ var _ = Describe("Container Store", func() {
 					{Name: "beep", Value: "booop"},
 				}
 
-				serviceBindingFiles := []executor.ServiceBindingFiles{
-					{Name: "/redis/username", Value: "redis_username"},
+				volumeMountedFiles := []executor.VolumeMountedFiles{
+					{Path: "/redis/username", Content: "redis_username"},
 				}
 
 				logGuid = "log-guid-foo"
@@ -413,7 +413,7 @@ var _ = Describe("Container Store", func() {
 					},
 					EnableContainerProxy:       true,
 					LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
-					ServiceBindingFiles:        serviceBindingFiles,
+					VolumeMountedFiles:         volumeMountedFiles,
 				}
 
 				runReq = &executor.RunRequest{
@@ -497,7 +497,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
-						serviceBindingRootHandler,
+						volumeMountedFilesHandler,
 						json.Marshal,
 					)
 				})
@@ -742,7 +742,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
-						serviceBindingRootHandler,
+						volumeMountedFilesHandler,
 						json.Marshal,
 					)
 				})
@@ -1284,7 +1284,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
-						serviceBindingRootHandler,
+						volumeMountedFilesHandler,
 						json.Marshal,
 					)
 
@@ -1375,7 +1375,7 @@ var _ = Describe("Container Store", func() {
 							cellID,
 							false,
 							advertisePreferenceForInstanceAddress,
-							serviceBindingRootHandler,
+							volumeMountedFilesHandler,
 							json.Marshal,
 						)
 					})
@@ -2525,7 +2525,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
-						serviceBindingRootHandler,
+						volumeMountedFilesHandler,
 						fm.Marshal,
 					)
 				})
@@ -3099,7 +3099,7 @@ var _ = Describe("Container Store", func() {
 						cellID,
 						true,
 						advertisePreferenceForInstanceAddress,
-						serviceBindingRootHandler,
+						volumeMountedFilesHandler,
 						json.Marshal,
 					)
 

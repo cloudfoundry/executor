@@ -149,7 +149,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
-	ServiceBindingRoot                    string                `json:"service_binding_root"`
+	VolumeMountedFiles                    string                `json:"volume_mounted_files"`
 }
 
 var (
@@ -308,9 +308,9 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		return nil, nil, grouper.Members{}, err
 	}
 
-	serviceBindingRootHandler := containerstore.NewServiceBindingRootHandler(
-		config.ServiceBindingRoot,
-		"/etc/cf-service-binding-root",
+	volumeMountedFilesHandler := containerstore.NewVolumeMountedFilesHandler(
+		config.VolumeMountedFiles,
+		"/etc/cf-service-bindings",
 	)
 
 	logManager := containerstore.NewLogManager()
@@ -335,7 +335,7 @@ func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
 		cellID,
 		config.EnableUnproxiedPortMappings,
 		config.AdvertisePreferenceForInstanceAddress,
-		serviceBindingRootHandler,
+		volumeMountedFilesHandler,
 		json.Marshal,
 	)
 

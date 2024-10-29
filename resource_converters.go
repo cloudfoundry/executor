@@ -20,11 +20,11 @@ func EnvironmentVariablesFromModel(envVars []*models.EnvironmentVariable) []Envi
 	return out
 }
 
-func FilesBasedServiceBindingFromModel(envFiles []*models.Files) []ServiceBindingFiles {
-	out := make([]ServiceBindingFiles, len(envFiles))
+func VolumeMountedFilesFromModel(envFiles []*models.File) []VolumeMountedFiles {
+	out := make([]VolumeMountedFiles, len(envFiles))
 	for i, envFile := range envFiles {
-		out[i].Name = envFile.Name
-		out[i].Value = envFile.Value
+		out[i].Path = envFile.Path
+		out[i].Content = envFile.Content
 	}
 
 	return out

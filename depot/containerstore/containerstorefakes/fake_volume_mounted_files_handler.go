@@ -10,7 +10,7 @@ import (
 	lager "code.cloudfoundry.org/lager/v3"
 )
 
-type FakeServiceBindingRootImplementor struct {
+type FakeVolumeMountedFilesImplementor struct {
 	CreateDirStub        func(lager.Logger, executor.Container) ([]garden.BindMount, error)
 	createDirMutex       sync.RWMutex
 	createDirArgsForCall []struct {
@@ -41,7 +41,7 @@ type FakeServiceBindingRootImplementor struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDir(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, error) {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDir(arg1 lager.Logger, arg2 executor.Container) ([]garden.BindMount, error) {
 	fake.createDirMutex.Lock()
 	ret, specificReturn := fake.createDirReturnsOnCall[len(fake.createDirArgsForCall)]
 	fake.createDirArgsForCall = append(fake.createDirArgsForCall, struct {
@@ -61,26 +61,26 @@ func (fake *FakeServiceBindingRootImplementor) CreateDir(arg1 lager.Logger, arg2
 	return fakeReturns.result1, fakeReturns.result2
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDirCallCount() int {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDirCallCount() int {
 	fake.createDirMutex.RLock()
 	defer fake.createDirMutex.RUnlock()
 	return len(fake.createDirArgsForCall)
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDirCalls(stub func(lager.Logger, executor.Container) ([]garden.BindMount, error)) {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDirCalls(stub func(lager.Logger, executor.Container) ([]garden.BindMount, error)) {
 	fake.createDirMutex.Lock()
 	defer fake.createDirMutex.Unlock()
 	fake.CreateDirStub = stub
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDirArgsForCall(i int) (lager.Logger, executor.Container) {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDirArgsForCall(i int) (lager.Logger, executor.Container) {
 	fake.createDirMutex.RLock()
 	defer fake.createDirMutex.RUnlock()
 	argsForCall := fake.createDirArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDirReturns(result1 []garden.BindMount, result2 error) {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDirReturns(result1 []garden.BindMount, result2 error) {
 	fake.createDirMutex.Lock()
 	defer fake.createDirMutex.Unlock()
 	fake.CreateDirStub = nil
@@ -90,7 +90,7 @@ func (fake *FakeServiceBindingRootImplementor) CreateDirReturns(result1 []garden
 	}{result1, result2}
 }
 
-func (fake *FakeServiceBindingRootImplementor) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 error) {
+func (fake *FakeVolumeMountedFilesImplementor) CreateDirReturnsOnCall(i int, result1 []garden.BindMount, result2 error) {
 	fake.createDirMutex.Lock()
 	defer fake.createDirMutex.Unlock()
 	fake.CreateDirStub = nil
@@ -106,7 +106,7 @@ func (fake *FakeServiceBindingRootImplementor) CreateDirReturnsOnCall(i int, res
 	}{result1, result2}
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDir(arg1 lager.Logger, arg2 executor.Container) error {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDir(arg1 lager.Logger, arg2 executor.Container) error {
 	fake.removeDirMutex.Lock()
 	ret, specificReturn := fake.removeDirReturnsOnCall[len(fake.removeDirArgsForCall)]
 	fake.removeDirArgsForCall = append(fake.removeDirArgsForCall, struct {
@@ -126,26 +126,26 @@ func (fake *FakeServiceBindingRootImplementor) RemoveDir(arg1 lager.Logger, arg2
 	return fakeReturns.result1
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDirCallCount() int {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDirCallCount() int {
 	fake.removeDirMutex.RLock()
 	defer fake.removeDirMutex.RUnlock()
 	return len(fake.removeDirArgsForCall)
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDirCalls(stub func(lager.Logger, executor.Container) error) {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDirCalls(stub func(lager.Logger, executor.Container) error) {
 	fake.removeDirMutex.Lock()
 	defer fake.removeDirMutex.Unlock()
 	fake.RemoveDirStub = stub
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDirArgsForCall(i int) (lager.Logger, executor.Container) {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDirArgsForCall(i int) (lager.Logger, executor.Container) {
 	fake.removeDirMutex.RLock()
 	defer fake.removeDirMutex.RUnlock()
 	argsForCall := fake.removeDirArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDirReturns(result1 error) {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDirReturns(result1 error) {
 	fake.removeDirMutex.Lock()
 	defer fake.removeDirMutex.Unlock()
 	fake.RemoveDirStub = nil
@@ -154,7 +154,7 @@ func (fake *FakeServiceBindingRootImplementor) RemoveDirReturns(result1 error) {
 	}{result1}
 }
 
-func (fake *FakeServiceBindingRootImplementor) RemoveDirReturnsOnCall(i int, result1 error) {
+func (fake *FakeVolumeMountedFilesImplementor) RemoveDirReturnsOnCall(i int, result1 error) {
 	fake.removeDirMutex.Lock()
 	defer fake.removeDirMutex.Unlock()
 	fake.RemoveDirStub = nil
@@ -168,7 +168,7 @@ func (fake *FakeServiceBindingRootImplementor) RemoveDirReturnsOnCall(i int, res
 	}{result1}
 }
 
-func (fake *FakeServiceBindingRootImplementor) Invocations() map[string][][]interface{} {
+func (fake *FakeVolumeMountedFilesImplementor) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.createDirMutex.RLock()
@@ -182,7 +182,7 @@ func (fake *FakeServiceBindingRootImplementor) Invocations() map[string][][]inte
 	return copiedInvocations
 }
 
-func (fake *FakeServiceBindingRootImplementor) recordInvocation(key string, args []interface{}) {
+func (fake *FakeVolumeMountedFilesImplementor) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -194,4 +194,4 @@ func (fake *FakeServiceBindingRootImplementor) recordInvocation(key string, args
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ containerstore.ServiceBindingRootImplementor = new(FakeServiceBindingRootImplementor)
+var _ containerstore.VolumeMountedFilesImplementor = new(FakeVolumeMountedFilesImplementor)
