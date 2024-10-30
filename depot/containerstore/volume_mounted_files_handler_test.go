@@ -12,7 +12,7 @@ import (
 	"code.cloudfoundry.org/garden"
 )
 
-var _ = Describe("Service Binding Root Handler", func() {
+var _ = Describe("VolumeMountedFilesHandler", func() {
 	var (
 		tmpdir            string
 		fakeContainerUUID string
@@ -32,6 +32,24 @@ var _ = Describe("Service Binding Root Handler", func() {
 		err := os.MkdirAll(tmpdir, os.ModePerm)
 		Expect(err).NotTo(HaveOccurred())
 
+		container = executor.Container{Guid: fakeContainerUUID}
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/redis/username", Content: "username",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/redis/password", Content: "password",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/httpd/password", Content: "password",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/httpd/username", Content: "username",
+		})
+
 		handler = containerstore.NewVolumeMountedFilesHandler(
 			tmpdir,
 			fakeContainerUUID,
@@ -40,23 +58,6 @@ var _ = Describe("Service Binding Root Handler", func() {
 
 	Context("CreateDir", func() {
 		It("returns a valid bind mount", func() {
-			container = executor.Container{Guid: fakeContainerUUID}
-
-			container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
-				Path: "/redis/username", Content: "username",
-			})
-
-			container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
-				Path: "/redis/password", Content: "password",
-			})
-
-			container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
-				Path: "/httpd/password", Content: "password",
-			})
-
-			container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
-				Path: "/httpd/username", Content: "username",
-			})
 
 			mount, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
@@ -68,7 +69,7 @@ var _ = Describe("Service Binding Root Handler", func() {
 			Expect(mount[0].Origin).To(Equal(garden.BindMountOriginHost))
 		})
 
-		It("returns a valid service configuration directory", func() {
+		It("returns a valid volume mounted files configuration directory", func() {
 			_, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
 
@@ -143,7 +144,7 @@ var _ = Describe("Service Binding Root Handler", func() {
 			Eventually(volumeMountedFiles).ShouldNot(BeADirectory())
 		})
 
-		Context("when making directory fails", func() {
+		Context("when volume mounted files directory doesn't exist", func() {
 			BeforeEach(func() {
 				handler = containerstore.NewVolumeMountedFilesHandler(
 					"/some/fake/path",

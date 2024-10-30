@@ -32,8 +32,14 @@ func NewVolumeMountedFilesHandler(
 }
 
 func (h *VolumeMountedFilesHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
+	err := os.Chdir(h.volumeMountPath)
+	if err != nil {
+		return nil, err
+	}
+
 	containerDir := filepath.Join(h.volumeMountPath, container.Guid)
-	err := os.Mkdir(containerDir, 0755)
+
+	err = os.MkdirAll(container.Guid, 0755)
 	if err != nil {
 		return nil, err
 	}
