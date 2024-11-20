@@ -459,6 +459,7 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, i
 	info.Ports = n.portMappingFromContainerInfo(containerInfo, info.Ports, proxyPortMapping)
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
+	info.InternalIPv6 = containerInfo.ContainerIPv6
 	info.AdvertisePreferenceForInstanceAddress = n.advertisePreferenceForInstanceAddress
 
 	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
