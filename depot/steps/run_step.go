@@ -25,6 +25,7 @@ type runStep struct {
 	logger                   lager.Logger
 	externalIP               string
 	internalIP               string
+	internalIPv6             string
 	portMappings             []executor.PortMapping
 	clock                    clock.Clock
 	gracefulShutdownInterval time.Duration
@@ -46,6 +47,7 @@ func NewRun(
 	logger lager.Logger,
 	externalIP string,
 	internalIP string,
+	internalIPv6 string,
 	portMappings []executor.PortMapping,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
@@ -58,6 +60,7 @@ func NewRun(
 		logger,
 		externalIP,
 		internalIP,
+		internalIPv6,
 		portMappings,
 		clock,
 		gracefulShutdownInterval,
@@ -74,6 +77,7 @@ func NewRunWithSidecar(
 	logger lager.Logger,
 	externalIP string,
 	internalIP string,
+	internalIPv6 string,
 	portMappings []executor.PortMapping,
 	clock clock.Clock,
 	gracefulShutdownInterval time.Duration,
@@ -89,6 +93,7 @@ func NewRunWithSidecar(
 		logger:                   logger,
 		externalIP:               externalIP,
 		internalIP:               internalIP,
+		internalIPv6:             internalIPv6,
 		portMappings:             portMappings,
 		clock:                    clock,
 		gracefulShutdownInterval: gracefulShutdownInterval,
@@ -308,6 +313,7 @@ func (step *runStep) networkingEnvVars() []string {
 
 	envVars = append(envVars, "CF_INSTANCE_IP="+step.externalIP)
 	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IP="+step.internalIP)
+	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IPV6="+step.internalIPv6)
 
 	if len(step.portMappings) > 0 {
 		if step.portMappings[0].HostPort > 0 {

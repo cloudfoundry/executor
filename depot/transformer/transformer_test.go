@@ -332,8 +332,9 @@ var _ = Describe("Transformer", func() {
 				}
 
 				container = executor.Container{
-					ExternalIP: "10.0.0.1",
-					InternalIP: "11.0.0.1",
+					ExternalIP:   "10.0.0.1",
+					InternalIP:   "11.0.0.1",
+					InternalIPv6: "2000::1",
 					RunInfo: executor.RunInfo{
 						Action: &models.Action{
 							RunAction: &models.RunAction{
@@ -416,6 +417,7 @@ var _ = Describe("Transformer", func() {
 					Env: []string{
 						"CF_INSTANCE_IP=10.0.0.1",
 						"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+						"CF_INSTANCE_INTERNAL_IPV6=2000::1",
 						"CF_INSTANCE_PORT=61001",
 						"CF_INSTANCE_ADDR=10.0.0.1:61001",
 						"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
@@ -499,6 +501,7 @@ var _ = Describe("Transformer", func() {
 						Env: []string{
 							"CF_INSTANCE_IP=10.0.0.1",
 							"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+							"CF_INSTANCE_INTERNAL_IPV6=2000::1",
 							"CF_INSTANCE_PORT=61001",
 							"CF_INSTANCE_ADDR=10.0.0.1:61001",
 							"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
@@ -691,6 +694,7 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",
@@ -854,6 +858,7 @@ var _ = Describe("Transformer", func() {
 											Env: []string{
 												"CF_INSTANCE_IP=",
 												"CF_INSTANCE_INTERNAL_IP=",
+												"CF_INSTANCE_INTERNAL_IPV6=",
 												"CF_INSTANCE_PORT=",
 												"CF_INSTANCE_ADDR=",
 												"CF_INSTANCE_PORTS=[]",
@@ -894,6 +899,7 @@ var _ = Describe("Transformer", func() {
 										Env: []string{
 											"CF_INSTANCE_IP=",
 											"CF_INSTANCE_INTERNAL_IP=",
+											"CF_INSTANCE_INTERNAL_IPV6=",
 											"CF_INSTANCE_PORT=",
 											"CF_INSTANCE_ADDR=",
 											"CF_INSTANCE_PORTS=[]",
@@ -1020,6 +1026,7 @@ var _ = Describe("Transformer", func() {
 										Env: []string{
 											"CF_INSTANCE_IP=",
 											"CF_INSTANCE_INTERNAL_IP=",
+											"CF_INSTANCE_INTERNAL_IPV6=",
 											"CF_INSTANCE_PORT=",
 											"CF_INSTANCE_ADDR=",
 											"CF_INSTANCE_PORTS=[]",
@@ -1237,6 +1244,7 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",
@@ -1277,6 +1285,7 @@ var _ = Describe("Transformer", func() {
 							Env: []string{
 								"CF_INSTANCE_IP=",
 								"CF_INSTANCE_INTERNAL_IP=",
+								"CF_INSTANCE_INTERNAL_IPV6=",
 								"CF_INSTANCE_PORT=",
 								"CF_INSTANCE_ADDR=",
 								"CF_INSTANCE_PORTS=[]",
@@ -1321,6 +1330,7 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
+									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",

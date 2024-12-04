@@ -27,15 +27,15 @@ var _ = Describe("RunAction", func() {
 	var (
 		step ifrit.Runner
 
-		runAction                           models.RunAction
-		fakeStreamer                        *fake_log_streamer.FakeLogStreamer
-		gardenClient                        *fakes.FakeGardenClient
-		logger                              *lagertest.TestLogger
-		fileDescriptorLimit, processesLimit uint64
-		externalIP, internalIP              string
-		portMappings                        []executor.PortMapping
-		fakeClock                           *fakeclock.FakeClock
-		suppressExitStatusCode              bool
+		runAction                            models.RunAction
+		fakeStreamer                         *fake_log_streamer.FakeLogStreamer
+		gardenClient                         *fakes.FakeGardenClient
+		logger                               *lagertest.TestLogger
+		fileDescriptorLimit, processesLimit  uint64
+		externalIP, internalIP, internalIPv6 string
+		portMappings                         []executor.PortMapping
+		fakeClock                            *fakeclock.FakeClock
+		suppressExitStatusCode               bool
 
 		spawnedProcess           *gardenfakes.FakeProcess
 		runError                 error
@@ -85,6 +85,7 @@ var _ = Describe("RunAction", func() {
 
 		externalIP = "external-ip"
 		internalIP = "internal-ip"
+		internalIPv6 = "internal-ipv6"
 		portMappings = nil
 		fakeClock = fakeclock.NewFakeClock(time.Unix(123, 456))
 	})
@@ -104,6 +105,7 @@ var _ = Describe("RunAction", func() {
 			logger,
 			externalIP,
 			internalIP,
+			internalIPv6,
 			portMappings,
 			fakeClock,
 			gracefulShutdownInterval,
@@ -298,9 +300,10 @@ var _ = Describe("RunAction", func() {
 				Expect(spec.Env).To(ContainElement("CF_INSTANCE_IP=external-ip"))
 			})
 
-			It("sets CF_INSTANCE_INTERNAL_IP on the container", func() {
+			It("sets CF_INSTANCE_INTERNAL_IP and CF_INSTANCE_INTERNAL_IPV6 on the container", func() {
 				_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
 				Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IP=internal-ip"))
+				Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IPV6=internal-ipv6"))
 			})
 
 			Context("when the container has port mappings configured", func() {
