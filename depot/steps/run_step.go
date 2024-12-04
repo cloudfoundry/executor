@@ -313,7 +313,10 @@ func (step *runStep) networkingEnvVars() []string {
 
 	envVars = append(envVars, "CF_INSTANCE_IP="+step.externalIP)
 	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IP="+step.internalIP)
-	envVars = append(envVars, "CF_INSTANCE_INTERNAL_IPV6="+step.internalIPv6)
+
+	if len(step.internalIPv6) != 0 {
+		envVars = append(envVars, "CF_INSTANCE_INTERNAL_IPV6="+step.internalIPv6)
+	}
 
 	if len(step.portMappings) > 0 {
 		if step.portMappings[0].HostPort > 0 {
