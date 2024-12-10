@@ -1,5 +1,10 @@
 # Executor
 
+[![Go Report
+Card](https://goreportcard.com/badge/code.cloudfoundry.org/executor)](https://goreportcard.com/report/code.cloudfoundry.org/executor)
+[![Go
+Reference](https://pkg.go.dev/badge/code.cloudfoundry.org/executor.svg)](https://pkg.go.dev/code.cloudfoundry.org/executor)
+
 Let me run that for you.
 
 Executor is a logical process running inside the
