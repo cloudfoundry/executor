@@ -1,14 +1,16 @@
 package containerstore_test
 
 import (
+	"errors"
+	"fmt"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"os"
 	"path/filepath"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
+	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
 	"code.cloudfoundry.org/garden"
 )
 
@@ -17,8 +19,11 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 		tmpdir            string
 		fakeContainerUUID string
 
-		handler   *containerstore.VolumeMountedFilesHandler
-		container executor.Container
+		handler     *containerstore.VolumeMountedFilesHandler
+		fakeHandler *containerstore.VolumeMountedFilesHandler
+		container   executor.Container
+
+		fakeFSOperations *containerstorefakes.FakeFSOperator
 	)
 
 	AfterEach(func() {
@@ -50,7 +55,31 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 			Path: "/httpd/username", Content: "username",
 		})
 
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/kafka/domain.com/password", Content: "password",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/kafka/domain.com/username", Content: "username",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/kafka/domain.org/username", Content: "username",
+		})
+
+		container.VolumeMountedFiles = append(container.VolumeMountedFiles, executor.VolumeMountedFiles{
+			Path: "/kafka/domain.org/password", Content: "password",
+		})
+
 		handler = containerstore.NewVolumeMountedFilesHandler(
+			containerstore.NewFSOperations(),
+			tmpdir,
+			fakeContainerUUID,
+		)
+
+		fakeFSOperations = &containerstorefakes.FakeFSOperator{}
+		fakeHandler = containerstore.NewVolumeMountedFilesHandler(
+			fakeFSOperations,
 			tmpdir,
 			fakeContainerUUID,
 		)
@@ -88,55 +117,136 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 			Expect(filepath.Join(tmpdir, fakeContainerUUID, "httpd", "password")).To(BeARegularFile())
 		})
 
-		It("validates the content of the redis username file", func() {
-			_, err := handler.CreateDir(logger, container)
-			Expect(err).To(Succeed())
+		It("when CreateDir/Chdir return an error", func() {
+			fakeFSOperations.ChdirReturns(&os.PathError{Op: "chdir", Err: errors.New("directory doesn't exist")})
+			_, err := fakeHandler.CreateDir(logger, container)
 
-			usernameFilePath := filepath.Join(tmpdir, fakeContainerUUID, "redis", "username")
-			Expect(usernameFilePath).To(BeAnExistingFile())
+			Expect(err).To(HaveOccurred())
 
-			content, err := os.ReadFile(usernameFilePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(content)).To(Equal("username"))
+			var pathErr *os.PathError
+			Expect(errors.As(err, &pathErr)).To(BeTrue())
+
 		})
 
-		It("validates the content of the redis password file", func() {
-			_, err := handler.CreateDir(logger, container)
-			Expect(err).To(Succeed())
+		It("when CreateDir/Mkdir return an error", func() {
+			container.Guid = ""
+			fakeFSOperations.MkdirAllReturns(&os.PathError{Op: "mkdir", Err: errors.New("directory exists")})
 
-			usernameFilePath := filepath.Join(tmpdir, fakeContainerUUID, "redis", "password")
-			Expect(usernameFilePath).To(BeAnExistingFile())
+			_, err := fakeHandler.CreateDir(logger, container)
+			Expect(err).To(HaveOccurred())
 
-			content, err := os.ReadFile(usernameFilePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(content)).To(Equal("password"))
+			var pathErr *os.PathError
+			Expect(errors.As(err, &pathErr)).To(BeTrue())
+
 		})
 
-		It("validates the content of the httpd username file", func() {
+		It("when CreateDir/volumeMountedFilesForServices dirName/fileName return an error", func() {
+			container.VolumeMountedFiles = []executor.VolumeMountedFiles{{
+				Path:    "",
+				Content: "content",
+			}}
+
 			_, err := handler.CreateDir(logger, container)
-			Expect(err).To(Succeed())
-
-			usernameFilePath := filepath.Join(tmpdir, fakeContainerUUID, "httpd", "username")
-			Expect(usernameFilePath).To(BeAnExistingFile())
-
-			content, err := os.ReadFile(usernameFilePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(content)).To(Equal("username"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("failed to extract volume-mounted-files directory. format is: /serviceName/fileName"))
 		})
 
-		It("validates the content of the httpd password file", func() {
-			_, err := handler.CreateDir(logger, container)
-			Expect(err).To(Succeed())
+		Context("VolumeMountedFilesHandler Error Cases", func() {
+			type testCase struct {
+				description   string
+				setupMock     func()
+				expectedError string
+			}
 
-			usernameFilePath := filepath.Join(tmpdir, fakeContainerUUID, "httpd", "password")
-			Expect(usernameFilePath).To(BeAnExistingFile())
+			var testCases = []testCase{
+				{
+					description: "fails when os.WriteFile returns an error due to file being non-writable",
+					setupMock: func() {
+						fakeFSOperations.WriteFileReturns(errors.New("permission denied"))
+					},
+					expectedError: "permission denied",
+				},
+				{
+					description: "fails when os.Create returns an error due to file being non-writable",
+					setupMock: func() {
+						fakeFSOperations.CreateFileReturns(nil, errors.New("permission denied"))
+					},
+					expectedError: "permission denied",
+				},
+				{
+					description: "when CreateDir/volumeMountedFilesForServices MkdirAll returns an error",
+					setupMock: func() {
+						fakeFSOperations.MkdirAllReturns(errors.New("file name too long"))
+					},
+					expectedError: "file name too long",
+				},
+			}
 
-			content, err := os.ReadFile(usernameFilePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(content)).To(Equal("password"))
+			for _, tc := range testCases {
+				tc := tc // capture range variable
+				It(tc.description, func() {
+					tc.setupMock()
+
+					_, err := fakeHandler.CreateDir(logger, container)
+
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring(tc.expectedError))
+				})
+			}
 		})
 
-		It("removes volume-mounted-files directory", func() {
+		Context("File Content Validation", func() {
+			testCases := []struct {
+				service     string
+				fileName    string
+				fileContent string
+			}{
+				{"redis", "username", "username"},
+				{"redis", "password", "password"},
+				{"httpd", "username", "username"},
+				{"httpd", "password", "password"},
+			}
+
+			for _, tc := range testCases {
+				service := tc.service
+				fileType := tc.fileName
+				expected := tc.fileContent
+
+				It(fmt.Sprintf("validates the content of the %s %s file", service, fileType), func() {
+					_, err := handler.CreateDir(logger, container)
+					Expect(err).To(Succeed())
+
+					filePath := filepath.Join(tmpdir, fakeContainerUUID, service, fileType)
+					Expect(filePath).To(BeAnExistingFile())
+
+					content, err := os.ReadFile(filePath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(content)).To(Equal(expected))
+				})
+			}
+		})
+	})
+
+	Context("when volume mounted files directory doesn't exist", func() {
+		BeforeEach(func() {
+			handler = containerstore.NewVolumeMountedFilesHandler(
+				containerstore.NewFSOperations(),
+				"/some/fake/path",
+				"mount_path",
+			)
+		})
+
+		It("when trying to change directory to volume mount fail", func() {
+			_, err := handler.CreateDir(logger, container)
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("volume mount path doesn't exists"))
+
+		})
+	})
+
+	Context("RemoveDir volume mount directory", func() {
+		It("when removed succeed", func() {
 			err := handler.RemoveDir(logger, container)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -144,18 +254,13 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 			Eventually(volumeMountedFiles).ShouldNot(BeADirectory())
 		})
 
-		Context("when volume mounted files directory doesn't exist", func() {
-			BeforeEach(func() {
-				handler = containerstore.NewVolumeMountedFilesHandler(
-					"/some/fake/path",
-					"mount_path",
-				)
-			})
+		It("when removed fail", func() {
+			fakeFSOperations.RemoveAllReturns(errors.New("remove error"))
 
-			It("returns an error", func() {
-				_, err := handler.CreateDir(logger, executor.Container{Guid: "fake_guid"})
-				Expect(err).To(HaveOccurred())
-			})
+			err := fakeHandler.RemoveDir(logger, container)
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("failed-to-remove-volume-mounted-files-directory"))
 		})
 	})
 })

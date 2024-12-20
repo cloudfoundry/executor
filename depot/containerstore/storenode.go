@@ -33,7 +33,7 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
-const VolumeMountedFileFailed = "failed to create service binding root"
+const VolumeMountedFileFailed = "failed to create volume mounted files"
 
 const ContainerCompletedCount = "ContainerCompletedCount"
 const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
@@ -248,7 +248,7 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			return err
 		}
 
-		if len(n.info.VolumeMountedFiles) > 0 {
+		if len(info.VolumeMountedFiles) > 0 {
 			volumeMountedFile, err := n.volumeMountedFiles.CreateDir(logger, info)
 			if err != nil {
 				n.complete(logger, traceID, true, VolumeMountedFileFailed, true)

@@ -325,6 +325,7 @@ func Initialize(
 	}
 
 	volumeMountedFilesHandler := containerstore.NewVolumeMountedFilesHandler(
+		containerstore.NewFSOperations(),
 		config.VolumeMountedFiles,
 		"/etc/cf-service-bindings",
 	)
