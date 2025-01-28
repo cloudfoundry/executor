@@ -37,7 +37,7 @@ func NewVolumeMountedFilesHandler(
 func (h *VolumeMountedFilesHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, error) {
 	err := h.fsOperations.Chdir(h.volumeMountPath)
 	if err != nil {
-		return nil, fmt.Errorf("volume mount path doesn't exists %w", err)
+		return nil, fmt.Errorf("volume mount path does not exist %w", err)
 	}
 
 	containerDir := filepath.Join(h.volumeMountPath, container.Guid)

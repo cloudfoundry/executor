@@ -87,7 +87,6 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 
 	Context("CreateDir", func() {
 		It("returns a valid bind mount", func() {
-
 			mount, err := handler.CreateDir(logger, container)
 			Expect(err).To(Succeed())
 
@@ -118,7 +117,7 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 		})
 
 		It("when CreateDir/Chdir return an error", func() {
-			fakeFSOperations.ChdirReturns(&os.PathError{Op: "chdir", Err: errors.New("directory doesn't exist")})
+			fakeFSOperations.ChdirReturns(&os.PathError{Op: "chdir", Err: errors.New("directory does not exist")})
 			_, err := fakeHandler.CreateDir(logger, container)
 			Expect(err).To(HaveOccurred())
 
@@ -126,7 +125,7 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 			Expect(errors.As(err, &pathErr)).To(BeTrue())
 			Expect(pathErr).NotTo(BeNil())
 			Expect(pathErr.Op).To(Equal("chdir"))
-			Expect(pathErr.Err).To(MatchError("directory doesn't exist"))
+			Expect(pathErr.Err).To(MatchError("directory does not exist"))
 		})
 
 		It("when CreateDir/Mkdir return an error", func() {
@@ -138,7 +137,6 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 
 			var pathErr *os.PathError
 			Expect(errors.As(err, &pathErr)).To(BeTrue())
-
 		})
 
 		It("when CreateDir/volumeMountedFilesForServices dirName/fileName return an error", func() {
@@ -197,7 +195,7 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 			)
 		})
 
-		Context("when volume mounted files directory doesn't exist", func() {
+		Context("when volume mounted files directory does not exist", func() {
 			BeforeEach(func() {
 				handler = containerstore.NewVolumeMountedFilesHandler(
 					containerstore.NewFSOperations(),
@@ -210,8 +208,7 @@ var _ = Describe("VolumeMountedFilesHandler", func() {
 				_, err := handler.CreateDir(logger, container)
 				Expect(err).To(HaveOccurred())
 
-				Expect(err.Error()).To(ContainSubstring("volume mount path doesn't exists"))
-
+				Expect(err.Error()).To(ContainSubstring("volume mount path does not exist"))
 			})
 		})
 
