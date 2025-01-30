@@ -264,7 +264,7 @@ var _ = Describe("configuration", func() {
 	Describe("GetRootFSSizes", func() {
 		var (
 			logger   lager.Logger
-			rootFSes map[string]string
+			rootFSes []string
 
 			fakeGuidGen  *fakeguidgen.FakeGenerator
 			guidToRootFS map[string]string
@@ -275,9 +275,9 @@ var _ = Describe("configuration", func() {
 
 		BeforeEach(func() {
 			logger = lagertest.NewTestLogger("configuration")
-			rootFSes = map[string]string{
-				"rootFS1": "/rootFS1/path",
-				"rootFS2": "/rootFS2/path",
+			rootFSes = []string{
+				"/rootFS1/path",
+				"/rootFS2/path",
 			}
 
 			fakeGuidGen = new(fakeguidgen.FakeGenerator)
@@ -293,8 +293,8 @@ var _ = Describe("configuration", func() {
 		Context("when container with provided rootFS is created", func() {
 			BeforeEach(func() {
 				expectedMetrics := map[string]garden.ContainerMetricsEntry{
-					"rootfs-c-g1": garden.ContainerMetricsEntry{Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(150 * 1024 * 1024), ExclusiveBytesUsed: uint64(50 * 1024 * 1024)}}},
-					"rootfs-c-g2": garden.ContainerMetricsEntry{Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(32 * 1024 * 1024), ExclusiveBytesUsed: uint64(8*1024*1024 - 5)}}},
+					"rootfs-c-g1": {Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(150 * 1024 * 1024), ExclusiveBytesUsed: uint64(50 * 1024 * 1024)}}},
+					"rootfs-c-g2": {Metrics: garden.Metrics{DiskStat: garden.ContainerDiskStat{TotalBytesUsed: uint64(32 * 1024 * 1024), ExclusiveBytesUsed: uint64(8*1024*1024 - 5)}}},
 				}
 				gardenClient.Connection.BulkMetricsReturnsOnCall(0, expectedMetrics, nil)
 			})
@@ -346,8 +346,8 @@ var _ = Describe("configuration", func() {
 
 			Context("when the rootfs URI query string has been augmented with a query/scheme/host/etc.", func() {
 				BeforeEach(func() {
-					rootFSes = map[string]string{
-						"rootFS1": "/rootFS1/path",
+					rootFSes = []string{
+						"/rootFS1/path",
 					}
 				})
 
@@ -366,8 +366,8 @@ var _ = Describe("configuration", func() {
 
 			Context("when a preloaded rootfs URI is not just a simple path", func() {
 				BeforeEach(func() {
-					rootFSes = map[string]string{
-						"rootFS1": "somescheme:///rootFS1/path",
+					rootFSes = []string{
+						"somescheme:///rootFS1/path",
 					}
 				})
 
@@ -379,8 +379,8 @@ var _ = Describe("configuration", func() {
 
 			Context("when a preloaded rootfs URI is an invalid URI", func() {
 				BeforeEach(func() {
-					rootFSes = map[string]string{
-						"rootFS1": "/some/path/that/is/%invalid",
+					rootFSes = []string{
+						"/some/path/that/is/%invalid",
 					}
 				})
 

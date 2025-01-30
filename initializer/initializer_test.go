@@ -130,7 +130,7 @@ var _ = Describe("Initializer", func() {
 		config.GardenAddr = fakeGarden.HTTPTestServer.Listener.Addr().String()
 		config.GardenNetwork = "tcp"
 		go func() {
-			rootFSes := map[string]string{}
+			rootFSes := []string{}
 			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "some-zone", rootFSes, fakeMetronClient, fakeClock)
 			errCh <- err
 			close(done)
@@ -194,7 +194,7 @@ var _ = Describe("Initializer", func() {
 					if r.FormValue(healthcheckTagQueryParam) == gardenhealth.HealthcheckTagValue {
 						ghttp.RespondWithJSONEncoded(http.StatusOK, struct{}{})(w, r)
 					} else {
-						ghttp.RespondWithJSONEncoded(http.StatusOK, map[string][]string{"handles": []string{"cnr1", "cnr2"}})(w, r)
+						ghttp.RespondWithJSONEncoded(http.StatusOK, map[string][]string{"handles": {"cnr1", "cnr2"}})(w, r)
 					}
 				},
 			)
@@ -718,7 +718,6 @@ var _ = Describe("Initializer", func() {
 				config.CachePath = ""
 
 				fakeCertPoolRetriever.SystemCertsReturns(x509.NewCertPool(), nil)
-
 			})
 			It("returns an error", func() {
 				certBytes, err := os.ReadFile(config.PathToTLSCACert)

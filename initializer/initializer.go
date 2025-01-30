@@ -157,25 +157,13 @@ var (
 	metricsWorkPool, readWorkPool      *workpool.WorkPool
 )
 
-func Initialize(
-	logger lager.Logger,
-	config ExecutorConfig,
-	cellID string,
-	zone string,
-	rootFSes map[string]string,
-	metronClient loggingclient.IngressClient,
+func Initialize(logger lager.Logger, config ExecutorConfig, cellID, zone string,
+	rootFSes []string, metronClient loggingclient.IngressClient,
 	clock clock.Clock,
-) (
-	executor.Client,
-	*containermetrics.StatsReporter,
-	grouper.Members,
-	error,
-) {
-
+) (executor.Client, *containermetrics.StatsReporter, grouper.Members, error) {
 	var gardenHealthcheckRootFS string
-	for _, rootFSPath := range rootFSes {
-		gardenHealthcheckRootFS = rootFSPath
-		break
+	if len(rootFSes) > 0 {
+		gardenHealthcheckRootFS = rootFSes[len(rootFSes)-1]
 	}
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
