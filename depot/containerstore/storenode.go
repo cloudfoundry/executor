@@ -33,6 +33,7 @@ const ContainerMissingMessage = "missing garden container"
 const VolmanMountFailed = "failed to mount volume"
 const BindMountCleanupFailed = "failed to cleanup bindmount artifacts"
 const CredDirFailed = "failed to create credentials directory"
+const VolumeMountedFileFailed = "failed to create volume mounted files"
 
 const ContainerCompletedCount = "ContainerCompletedCount"
 const ContainerExitedOnTimeoutCount = "ContainerExitedOnTimeoutCount"
@@ -92,6 +93,8 @@ type storeNode struct {
 	startTime         time.Time
 	regenerateCertsCh chan struct{}
 
+	volumeMountedFiles VolumeMountedFilesImplementor
+
 	jsonMarshaller func(any) ([]byte, error)
 }
 
@@ -116,6 +119,7 @@ func newStoreNode(
 	cellID string,
 	enableUnproxiedPortMappings bool,
 	advertisePreferenceForInstanceAddress bool,
+	volumeMountedFiles VolumeMountedFilesImplementor,
 	jsonMarshaller func(any) ([]byte, error),
 ) *storeNode {
 	return &storeNode{
@@ -143,6 +147,7 @@ func newStoreNode(
 		enableUnproxiedPortMappings:           enableUnproxiedPortMappings,
 		advertisePreferenceForInstanceAddress: advertisePreferenceForInstanceAddress,
 		regenerateCertsCh:                     make(chan struct{}, 1),
+		volumeMountedFiles:                    volumeMountedFiles,
 		jsonMarshaller:                        jsonMarshaller,
 	}
 }
@@ -242,7 +247,19 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 			n.complete(logger, traceID, true, CredDirFailed, true)
 			return err
 		}
+
+		if len(info.VolumeMountedFiles) > 0 {
+			volumeMountedFile, err := n.volumeMountedFiles.CreateDir(logger, info)
+			if err != nil {
+				n.complete(logger, traceID, true, VolumeMountedFileFailed, true)
+				return err
+			}
+
+			n.bindMounts = append(n.bindMounts, volumeMountedFile...)
+		}
+
 		n.bindMounts = append(n.bindMounts, credMounts...)
+
 		info.Env = append(info.Env, envs...)
 
 		if n.useDeclarativeHealthCheck {
@@ -763,6 +780,7 @@ func (n *storeNode) Destroy(logger lager.Logger, traceID string) error {
 	// ensure these directories are removed even if the container fails to destroy
 	defer n.removeCredsDir(logger, info)
 	defer n.umountVolumeMounts(logger, info)
+	defer n.removeVolumeMountedFiles(logger, info)
 
 	err := n.destroyContainer(logger, traceID)
 	if err != nil {
@@ -870,6 +888,13 @@ func (n *storeNode) removeCredsDir(logger lager.Logger, info executor.Container)
 	err := n.credManager.RemoveCredDir(logger, info)
 	if err != nil {
 		logger.Error("failed-to-delete-container-proxy-config-dir", err)
+	}
+}
+
+func (n *storeNode) removeVolumeMountedFiles(logger lager.Logger, info executor.Container) {
+	err := n.volumeMountedFiles.RemoveDir(logger, info)
+	if err != nil {
+		logger.Error("failed-to-delete-volume-mounted-files-config-dir", err)
 	}
 }
 
