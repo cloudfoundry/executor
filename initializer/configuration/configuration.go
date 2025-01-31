@@ -63,7 +63,7 @@ func GetRootFSSizes(
 	gardenClient garden_client.Client,
 	guidGenerator guidgen.Generator,
 	containerOwnerName string,
-	rootFSes map[string]string,
+	rootFSes []string,
 ) (RootFSSizer, error) {
 	rootFSSizes := make(map[string]uint64)
 
