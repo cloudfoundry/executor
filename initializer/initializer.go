@@ -150,6 +150,7 @@ type ExecutorConfig struct {
 	UnhealthyMonitoringInterval           durationjson.Duration `json:"unhealthy_monitoring_interval,omitempty"`
 	UseSchedulableDiskSize                bool                  `json:"use_schedulable_disk_size,omitempty"`
 	VolmanDriverPaths                     string                `json:"volman_driver_paths"`
+	VolumeMountedFiles                    string                `json:"volume_mounted_files"`
 }
 
 var (
@@ -323,6 +324,12 @@ func Initialize(
 		return nil, nil, grouper.Members{}, err
 	}
 
+	volumeMountedFilesHandler := containerstore.NewVolumeMountedFilesHandler(
+		containerstore.NewFSOperations(),
+		config.VolumeMountedFiles,
+		"/etc/cf-service-bindings",
+	)
+
 	logManager := containerstore.NewLogManager()
 
 	containerStore := containerstore.New(
@@ -345,6 +352,7 @@ func Initialize(
 		cellID,
 		config.EnableUnproxiedPortMappings,
 		config.AdvertisePreferenceForInstanceAddress,
+		volumeMountedFilesHandler,
 		json.Marshal,
 	)
 
