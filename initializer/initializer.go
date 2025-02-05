@@ -164,6 +164,7 @@ func Initialize(
 	cellID string,
 	zone string,
 	rootFSes map[string]string,
+	gardenHealthcheckRootFS string,
 	metronClient loggingclient.IngressClient,
 	clock clock.Clock,
 ) (
@@ -172,13 +173,6 @@ func Initialize(
 	grouper.Members,
 	error,
 ) {
-
-	var gardenHealthcheckRootFS string
-	for _, rootFSPath := range rootFSes {
-		gardenHealthcheckRootFS = rootFSPath
-		break
-	}
-
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
 		logger.Error("failed-to-parse-post-setup-hook", err)
