@@ -131,8 +131,8 @@ var _ = Describe("Initializer", func() {
 		config.GardenNetwork = "tcp"
 		go func() {
 			rootFSes := map[string]string{}
-			sidecarFS := "some-fs"
-			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "some-zone", rootFSes, sidecarFS, fakeMetronClient, fakeClock)
+			sidecarRootFSPath := ""
+			_, _, _, err := initializer.Initialize(logger, config, "cell-id", "some-zone", rootFSes, sidecarRootFSPath, fakeMetronClient, fakeClock)
 			errCh <- err
 			close(done)
 		}()
