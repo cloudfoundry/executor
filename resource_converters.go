@@ -19,3 +19,13 @@ func EnvironmentVariablesFromModel(envVars []*models.EnvironmentVariable) []Envi
 	}
 	return out
 }
+
+func VolumeMountedFilesFromModel(envFiles []*models.File) []VolumeMountedFiles {
+	out := make([]VolumeMountedFiles, len(envFiles))
+	for i, envFile := range envFiles {
+		out[i].Path = envFile.Path
+		out[i].Content = envFile.Content
+	}
+
+	return out
+}
