@@ -462,6 +462,8 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, i
 	info.InternalIPv6 = containerInfo.ContainerIPv6
 	info.AdvertisePreferenceForInstanceAddress = n.advertisePreferenceForInstanceAddress
 
+	logger.Debug("container-created", lager.Data{"info": info})
+
 	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
 	info.DiskLimit = containerSpec.Limits.Disk.ByteHard
 
