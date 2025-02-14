@@ -306,6 +306,17 @@ var _ = Describe("RunAction", func() {
 				Expect(spec.Env).To(ContainElement("CF_INSTANCE_INTERNAL_IPV6=internal-ipv6"))
 			})
 
+			Context("when the container has no internal IPv6", func() {
+				BeforeEach(func() {
+					internalIPv6 = ""
+				})
+
+				It("does not set CF_INSTANCE_INTERNAL_IPV6 on the container", func() {
+					_, spec, _ := gardenClient.Connection.RunArgsForCall(0)
+					Expect(spec.Env).NotTo(ContainElement("CF_INSTANCE_INTERNAL_IPV6="))
+				})
+			})
+
 			Context("when the container has port mappings configured", func() {
 				BeforeEach(func() {
 					portMappings = []executor.PortMapping{

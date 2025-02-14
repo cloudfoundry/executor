@@ -694,7 +694,6 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
-									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",
@@ -858,7 +857,6 @@ var _ = Describe("Transformer", func() {
 											Env: []string{
 												"CF_INSTANCE_IP=",
 												"CF_INSTANCE_INTERNAL_IP=",
-												"CF_INSTANCE_INTERNAL_IPV6=",
 												"CF_INSTANCE_PORT=",
 												"CF_INSTANCE_ADDR=",
 												"CF_INSTANCE_PORTS=[]",
@@ -899,7 +897,6 @@ var _ = Describe("Transformer", func() {
 										Env: []string{
 											"CF_INSTANCE_IP=",
 											"CF_INSTANCE_INTERNAL_IP=",
-											"CF_INSTANCE_INTERNAL_IPV6=",
 											"CF_INSTANCE_PORT=",
 											"CF_INSTANCE_ADDR=",
 											"CF_INSTANCE_PORTS=[]",
@@ -1026,7 +1023,6 @@ var _ = Describe("Transformer", func() {
 										Env: []string{
 											"CF_INSTANCE_IP=",
 											"CF_INSTANCE_INTERNAL_IP=",
-											"CF_INSTANCE_INTERNAL_IPV6=",
 											"CF_INSTANCE_PORT=",
 											"CF_INSTANCE_ADDR=",
 											"CF_INSTANCE_PORTS=[]",
@@ -1244,7 +1240,6 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
-									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",
@@ -1285,7 +1280,6 @@ var _ = Describe("Transformer", func() {
 							Env: []string{
 								"CF_INSTANCE_IP=",
 								"CF_INSTANCE_INTERNAL_IP=",
-								"CF_INSTANCE_INTERNAL_IPV6=",
 								"CF_INSTANCE_PORT=",
 								"CF_INSTANCE_ADDR=",
 								"CF_INSTANCE_PORTS=[]",
@@ -1330,7 +1324,6 @@ var _ = Describe("Transformer", func() {
 								Env: []string{
 									"CF_INSTANCE_IP=",
 									"CF_INSTANCE_INTERNAL_IP=",
-									"CF_INSTANCE_INTERNAL_IPV6=",
 									"CF_INSTANCE_PORT=",
 									"CF_INSTANCE_ADDR=",
 									"CF_INSTANCE_PORTS=[]",
