@@ -164,6 +164,7 @@ func Initialize(
 	cellID string,
 	zone string,
 	rootFSes map[string]string,
+	sidecarRootFSPath string,
 	metronClient loggingclient.IngressClient,
 	clock clock.Clock,
 ) (
@@ -172,12 +173,16 @@ func Initialize(
 	grouper.Members,
 	error,
 ) {
-
 	var gardenHealthcheckRootFS string
-	for _, rootFSPath := range rootFSes {
-		gardenHealthcheckRootFS = rootFSPath
-		break
+	if sidecarRootFSPath == "" {
+		for _, rootFSPath := range rootFSes {
+			gardenHealthcheckRootFS = rootFSPath
+			break
+		}
+	} else {
+		gardenHealthcheckRootFS = sidecarRootFSPath
 	}
+	logger.Info("garden-healthcheck-rootfs", lager.Data{"rootfs": gardenHealthcheckRootFS})
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
