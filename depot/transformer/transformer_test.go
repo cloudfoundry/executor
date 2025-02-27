@@ -670,6 +670,7 @@ var _ = Describe("Transformer", func() {
 					Context("and container proxy is enabled", func() {
 						BeforeEach(func() {
 							options = append(options, transformer.WithContainerProxy(time.Second))
+							options = append(options, transformer.WithProxyLivenessChecks(time.Second))
 							cfg.BindMounts = append(cfg.BindMounts, garden.BindMount{
 								Origin:  garden.BindMountOriginHost,
 								SrcPath: declarativeHealthcheckSrcPath,
@@ -1502,6 +1503,112 @@ var _ = Describe("Transformer", func() {
 								"-uri=/some/path",
 								"-liveness-interval=427ms",
 							}))
+						})
+
+						Context("and container proxy is enabled", func() {
+							var (
+								otherStartupProcess  *gardenfakes.FakeProcess
+								otherStartupCh       chan int
+								otherLivenessProcess *gardenfakes.FakeProcess
+								otherLivenessCh      chan int
+							)
+
+							BeforeEach(func() {
+								options = append(options, transformer.WithContainerProxy(time.Second))
+								cfg.ProxyTLSPorts = []uint16{61001}
+
+								otherStartupCh = make(chan int)
+								otherStartupProcess = makeProcess(otherStartupCh)
+
+								otherLivenessCh = make(chan int)
+								otherLivenessProcess = makeProcess(otherLivenessCh)
+
+								healthcheckCallCount := int64(0)
+
+								gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+									defer GinkgoRecover()
+									// get rid of race condition caused by write inside the BeforeEach
+									processLock.Lock()
+									defer processLock.Unlock()
+
+									switch spec.Path {
+									case "/action/path":
+										return actionProcess, nil
+									case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+										oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+										switch oldCount {
+										case 1:
+											return startupProcess, nil
+										case 2:
+											return otherStartupProcess, nil
+										case 3:
+											return livenessProcess, nil
+										case 4:
+											return otherLivenessProcess, nil
+										}
+										return livenessProcess, nil
+									case "/monitor/path":
+										return monitorProcess, nil
+									}
+
+									err = errors.New("")
+									Fail("unexpected executable path: " + spec.Path)
+									return
+								}
+							})
+
+							JustBeforeEach(func() {
+								otherStartupCh <- 0
+							})
+
+							AfterEach(func() {
+								close(otherStartupCh)
+								close(otherLivenessCh)
+							})
+
+							Context("and proxy liveness check is enabled", func() {
+								BeforeEach(func() {
+									options = append(options, transformer.WithProxyLivenessChecks(time.Second*30))
+								})
+
+								It("starts the proxy liveness check", func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+									var ids []string
+									var args [][]string
+									for i := 0; i < gardenContainer.RunCallCount(); i++ {
+										spec, _ := gardenContainer.RunArgsForCall(i)
+										ids = append(ids, spec.ID)
+										args = append(args, spec.Args)
+									}
+
+									Expect(ids).To(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-liveness-healthcheck-0")))
+									Expect(args).To(ContainElement([]string{
+										"-port=61001",
+										"-timeout=1000ms",
+										"-liveness-interval=30s",
+									}))
+								})
+							})
+
+							Context("and proxy liveness check is disabled", func() {
+								It("starts the proxy liveness check", func() {
+									Eventually(gardenContainer.RunCallCount).Should(Equal(4))
+									var ids []string
+									var args [][]string
+									for i := 0; i < gardenContainer.RunCallCount(); i++ {
+										spec, _ := gardenContainer.RunArgsForCall(i)
+										ids = append(ids, spec.ID)
+										args = append(args, spec.Args)
+									}
+
+									Expect(ids).To(Not(ContainElement(fmt.Sprintf("%s-%s", gardenContainer.Handle(), "envoy-liveness-healthcheck-0"))))
+									Expect(args).To(Not(ContainElement([]string{
+										"-port=61001",
+										"-timeout=1000ms",
+										"-liveness-interval=30s",
+									})))
+								})
+							})
 						})
 
 						Context("when optional values are not provided in liveness check defintion", func() {
