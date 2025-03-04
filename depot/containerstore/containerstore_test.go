@@ -994,6 +994,14 @@ var _ = Describe("Container Store", func() {
 								Code: 10,
 							},
 						},
+						{
+							Protocol:     "icmpv6",
+							Destinations: []string{"2100::1"},
+							IcmpInfo: &models.ICMPInfo{
+								Type: 1,
+								Code: 10,
+							},
+						},
 					}
 					runReq.EgressRules = egressRules
 				})
@@ -1004,7 +1012,7 @@ var _ = Describe("Container Store", func() {
 
 					Expect(gardenClient.CreateCallCount()).To(Equal(1))
 					containerSpec := gardenClient.CreateArgsForCall(0)
-					Expect(containerSpec.NetOut).To(HaveLen(2))
+					Expect(containerSpec.NetOut).To(HaveLen(3))
 					icmpCode := garden.ICMPCode(10)
 					Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
 						Protocol: garden.Protocol(3),
@@ -1032,6 +1040,19 @@ var _ = Describe("Container Store", func() {
 							Code: &icmpCode,
 						},
 					}))
+					Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+						Protocol: garden.Protocol(4),
+						Networks: []garden.IPRange{
+							{
+								Start: net.ParseIP("2100::1"),
+								End:   net.ParseIP("2100::1"),
+							},
+						},
+						ICMPs: &garden.ICMPControl{
+							Type: 1,
+							Code: &icmpCode,
+						},
+					}))
 				})
 
 				Context("when a destination is a comma-delimited list", func() {
@@ -1045,6 +1066,14 @@ var _ = Describe("Container Store", func() {
 									Code: 17,
 								},
 							},
+							{
+								Protocol:     "icmpv6",
+								Destinations: []string{"2100::1,2100::2"},
+								IcmpInfo: &models.ICMPInfo{
+									Type: 3,
+									Code: 17,
+								},
+							},
 						}
 						runReq.EgressRules = egressRules
 					})
@@ -1055,7 +1084,7 @@ var _ = Describe("Container Store", func() {
 
 						Expect(gardenClient.CreateCallCount()).To(Equal(1))
 						containerSpec := gardenClient.CreateArgsForCall(0)
-						Expect(containerSpec.NetOut).To(HaveLen(2))
+						Expect(containerSpec.NetOut).To(HaveLen(4))
 						icmpCode := garden.ICMPCode(17)
 						Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
 							Protocol: garden.Protocol(3),
@@ -1080,6 +1109,32 @@ var _ = Describe("Container Store", func() {
 							},
 							ICMPs: &garden.ICMPControl{
 								Type: 2,
+								Code: &icmpCode,
+							},
+						}))
+						Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+							Protocol: garden.Protocol(4),
+							Networks: []garden.IPRange{
+								{
+									Start: net.ParseIP("2100::1"),
+									End:   net.ParseIP("2100::1"),
+								},
+							},
+							ICMPs: &garden.ICMPControl{
+								Type: 3,
+								Code: &icmpCode,
+							},
+						}))
+						Expect(containerSpec.NetOut).To(ContainElement(garden.NetOutRule{
+							Protocol: garden.Protocol(4),
+							Networks: []garden.IPRange{
+								{
+									Start: net.ParseIP("2100::2"),
+									End:   net.ParseIP("2100::2"),
+								},
+							},
+							ICMPs: &garden.ICMPControl{
+								Type: 3,
 								Code: &icmpCode,
 							},
 						}))
