@@ -173,16 +173,7 @@ func Initialize(
 	grouper.Members,
 	error,
 ) {
-	var gardenHealthcheckRootFS string
-	if sidecarRootFSPath == "" {
-		for _, rootFSPath := range rootFSes {
-			gardenHealthcheckRootFS = rootFSPath
-			break
-		}
-	} else {
-		gardenHealthcheckRootFS = sidecarRootFSPath
-	}
-	logger.Info("garden-healthcheck-rootfs", lager.Data{"rootfs": gardenHealthcheckRootFS})
+	logger.Info("garden-healthcheck-rootfs", lager.Data{"rootfs": sidecarRootFSPath})
 
 	postSetupHook, err := shlex.Split(config.PostSetupHook)
 	if err != nil {
@@ -270,7 +261,7 @@ func Initialize(
 		config.PostSetupUser,
 		config.EnableDeclarativeHealthcheck,
 		config.EnableHealtcheckMetrics,
-		gardenHealthcheckRootFS,
+		sidecarRootFSPath,
 		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
 	)
@@ -382,7 +373,7 @@ func Initialize(
 	}
 
 	gardenHealthcheck := gardenhealth.NewChecker(
-		gardenHealthcheckRootFS,
+		sidecarRootFSPath,
 		config.HealthCheckContainerOwnerName,
 		time.Duration(config.GardenHealthcheckCommandRetryPause),
 		healthcheckSpec,
