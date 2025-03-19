@@ -46,6 +46,7 @@ type Container struct {
 	AllocatedAt                           int64              `json:"allocated_at"`
 	ExternalIP                            string             `json:"external_ip"`
 	InternalIP                            string             `json:"internal_ip"`
+	InternalIPv6                          string             `json:"internal_ip_v6,omitempty"`
 	RunResult                             ContainerRunResult `json:"run_result"`
 	MemoryLimit                           uint64             `json:"memory_limit"`
 	DiskLimit                             uint64             `json:"disk_limit"`
