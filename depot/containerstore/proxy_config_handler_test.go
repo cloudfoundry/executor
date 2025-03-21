@@ -997,7 +997,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 
 func generateCertAndKey() (string, string, *big.Int) {
 	// generate a real cert
-	privateKey, err := rsa.GenerateKey(rand.Reader, 512)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).ToNot(HaveOccurred())
 	template := x509.Certificate{
 		SerialNumber: new(big.Int),
