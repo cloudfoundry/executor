@@ -449,7 +449,7 @@ var _ = Describe("RunAction", func() {
 
 				It("should return an emittable error with the exit code", func() {
 					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
-					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
+					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, "%s", errMsg))))
 				})
 			})
 
@@ -460,7 +460,7 @@ var _ = Describe("RunAction", func() {
 
 				It("should return an emittable error with the exit code", func() {
 					errMsg := fmt.Sprintf("%s: Exited with status 19", testLogSource)
-					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
+					Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, "%s", errMsg))))
 				})
 			})
 		})
@@ -534,7 +534,7 @@ var _ = Describe("RunAction", func() {
 
 			It("returns an emittable error", func() {
 				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
-				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
+				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, "%s", errMsg))))
 			})
 		})
 
@@ -552,7 +552,7 @@ var _ = Describe("RunAction", func() {
 
 			It("returns an emittable error", func() {
 				errMsg := fmt.Sprintf("%s: Exited with status 19 (out of memory)", testLogSource)
-				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, errMsg))))
+				Eventually(process.Wait()).Should(Receive(MatchError(steps.NewEmittableError(nil, "%s", errMsg))))
 			})
 		})
 
