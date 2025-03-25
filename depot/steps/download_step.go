@@ -91,8 +91,8 @@ func (step *downloadStep) perform() error {
 			errString = "Downloading failed"
 		}
 
-		step.emitError(fmt.Sprintf("%s\n", errString))
-		return NewEmittableError(err, errString)
+		step.emitError("%s\n", errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 
 	err = step.streamIn(step.model.To, downloadedFile)
@@ -103,8 +103,9 @@ func (step *downloadStep) perform() error {
 		} else {
 			errString = fmt.Sprintf("Copying into the container failed: %v", err)
 		}
-		step.emitError(fmt.Sprintf("%s\n", errString))
-		return NewEmittableError(err, errString)
+
+		step.emitError("%s\n", errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 
 	if downloadedSize != 0 {

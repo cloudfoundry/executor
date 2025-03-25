@@ -52,5 +52,5 @@ func (step *outputWrapperStep) Run(signals <-chan os.Signal, ready chan<- struct
 	if step.prefix != "" {
 		msg = step.prefix + ": " + msg
 	}
-	return NewEmittableError(subStepErr, msg)
+	return NewEmittableError(subStepErr, "%s", msg)
 }
