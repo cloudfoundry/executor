@@ -242,7 +242,7 @@ func (step *runStep) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 
 			if exitStatus != 0 {
 				logger.Error("run-step-failed-with-nonzero-status-code", errors.New(exitErrorMessage), lager.Data{"status-code": exitStatus})
-				return NewEmittableError(nil, emittableExitErrorMessage)
+				return NewEmittableError(nil, "%s", emittableExitErrorMessage)
 			}
 
 			return nil

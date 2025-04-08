@@ -46,7 +46,7 @@ func (step *timeoutStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (e
 			step.logger.Error("timed-out", nil)
 			subStepSignals <- os.Interrupt
 			err := <-resultCh
-			return NewEmittableError(err, emittableMessage(step.timeout, err))
+			return NewEmittableError(err, "%s", emittableMessage(step.timeout, err))
 		}
 	}
 }
