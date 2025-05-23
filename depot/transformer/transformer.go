@@ -55,13 +55,14 @@ type transformer struct {
 	tempDir          string
 	clock            clock.Clock
 
-	sidecarRootFS               string
-	useDeclarativeHealthCheck   bool
-	emitHealthCheckMetrics      bool
-	healthyMonitoringInterval   time.Duration
-	unhealthyMonitoringInterval time.Duration
-	gracefulShutdownInterval    time.Duration
-	healthCheckWorkPool         *workpool.WorkPool
+	sidecarRootFS                        string
+	useDeclarativeHealthCheck            bool
+	declarativeHealthCheckDefaultTimeout time.Duration
+	emitHealthCheckMetrics               bool
+	healthyMonitoringInterval            time.Duration
+	unhealthyMonitoringInterval          time.Duration
+	gracefulShutdownInterval             time.Duration
+	healthCheckWorkPool                  *workpool.WorkPool
 
 	useContainerProxy                bool
 	drainWait                        time.Duration
@@ -82,9 +83,10 @@ func WithSidecarRootfs(
 	}
 }
 
-func WithDeclarativeHealthchecks() Option {
+func WithDeclarativeHealthchecks(timeout time.Duration) Option {
 	return func(t *transformer) {
 		t.useDeclarativeHealthCheck = true
+		t.declarativeHealthCheckDefaultTimeout = timeout
 	}
 }
 
@@ -377,7 +379,6 @@ func (t *transformer) StepsRunner(
 	gardenContainer garden.Container,
 	logStreamer log_streamer.LogStreamer,
 	config Config,
-	// ) (ifrit.Runner, chan steps.ReadinessState, error) {
 ) (ifrit.Runner, chan steps.ReadinessState, error) {
 	var setup, action, postSetup, monitor, readinessMonitor, longLivedAction ifrit.Runner
 	var substeps []ifrit.Runner
@@ -820,9 +821,14 @@ func (t *transformer) transformReadinessCheckDefinition(
 }
 
 func (t *transformer) applyCheckDefaults(timeout int, interval time.Duration, path string) (int, time.Duration, string) {
-	if timeout == 0 {
+	if timeout <= 0 {
+		timeout = int(t.declarativeHealthCheckDefaultTimeout / time.Millisecond)
+	}
+	if timeout <= 0 {
+		// fallback to 1000 if still invalid
 		timeout = DefaultDeclarativeHealthcheckRequestTimeout
 	}
+
 	if path == "" {
 		path = "/"
 	}

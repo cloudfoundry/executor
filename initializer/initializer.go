@@ -104,6 +104,7 @@ type ExecutorConfig struct {
 	EnableContainerProxy                  bool                  `json:"enable_container_proxy,omitempty"`
 	EnableContainerProxyHealthChecks      bool                  `json:"enable_container_proxy_healthcheck,omitempty"`
 	EnableDeclarativeHealthcheck          bool                  `json:"enable_declarative_healthcheck,omitempty"`
+	DeclarativeHealthCheckDefaultTimeout  durationjson.Duration `json:"declarative_healthcheck_default_timeout,omitempty"`
 	EnableHealtcheckMetrics               bool                  `json:"enable_healthcheck_metrics,omitempty"`
 	EnableUnproxiedPortMappings           bool                  `json:"enable_unproxied_port_mappings"`
 	EnvoyConfigRefreshDelay               durationjson.Duration `json:"envoy_config_refresh_delay"`
@@ -268,6 +269,7 @@ func Initialize(
 		time.Duration(config.EnvoyDrainTimeout),
 		config.EnableContainerProxyHealthChecks,
 		time.Duration(config.ProxyHealthCheckInterval),
+		time.Duration(config.DeclarativeHealthCheckDefaultTimeout),
 	)
 
 	hub := event.NewHub()
@@ -574,6 +576,8 @@ func initializeTransformer(
 	drainWait time.Duration,
 	enableProxyHealthChecks bool,
 	proxyHealthCheckInterval time.Duration,
+	declarativeHealthCheckDefaultTimeout time.Duration,
+
 ) transformer.Transformer {
 	var options []transformer.Option
 	compressor := compressor.NewTgz()
@@ -581,7 +585,7 @@ func initializeTransformer(
 	options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
 
 	if useDeclarativeHealthCheck {
-		options = append(options, transformer.WithDeclarativeHealthchecks())
+		options = append(options, transformer.WithDeclarativeHealthchecks(declarativeHealthCheckDefaultTimeout))
 	}
 
 	if emitHealthCheckMetrics {

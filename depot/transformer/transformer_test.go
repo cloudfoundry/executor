@@ -642,7 +642,8 @@ var _ = Describe("Transformer", func() {
 
 			Context("when declarative healthchecks are enabled", func() {
 				BeforeEach(func() {
-					options = append(options, transformer.WithDeclarativeHealthchecks())
+					declarativeHealthCheckTimeout := 42 * time.Second
+					options = append(options, transformer.WithDeclarativeHealthchecks(declarativeHealthCheckTimeout))
 
 					container.StartTimeoutMs = 1000
 				})
@@ -848,7 +849,7 @@ var _ = Describe("Transformer", func() {
 											Path: filepath.Join(transformer.HealthCheckDstPath, "healthcheck"),
 											Args: []string{
 												"-port=8989",
-												"-timeout=1000ms",
+												"-timeout=42000ms",
 												"-uri=/",
 												fmt.Sprintf("-until-ready-interval=%s", unhealthyMonitoringInterval),
 											},
@@ -1099,12 +1100,12 @@ var _ = Describe("Transformer", func() {
 										Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 										Expect(args).To(ContainElement([]string{
 											"-port=5432",
-											"-timeout=1000ms",
+											"-timeout=42000ms",
 											"-until-ready-interval=1ms",
 										}))
 										Expect(args).To(ContainElement([]string{
 											"-port=5432",
-											"-timeout=1000ms",
+											"-timeout=42000ms",
 											"-readiness-interval=1s",
 										}))
 									})
@@ -1400,7 +1401,7 @@ var _ = Describe("Transformer", func() {
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=6432",
-								"-timeout=1000ms",
+								"-timeout=42000ms",
 								"-uri=/",
 								"-startup-interval=1ms",
 								"-startup-timeout=1s",
@@ -1640,7 +1641,7 @@ var _ = Describe("Transformer", func() {
 								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 								Expect(args).To(ContainElement([]string{
 									"-port=6432",
-									"-timeout=1000ms",
+									"-timeout=42000ms",
 									"-uri=/",
 									"-liveness-interval=1s",
 								}))
@@ -1745,7 +1746,7 @@ var _ = Describe("Transformer", func() {
 							Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 							Expect(args).To(ContainElement([]string{
 								"-port=6432",
-								"-timeout=1000ms",
+								"-timeout=42000ms",
 								"-startup-interval=1ms",
 								"-startup-timeout=1s",
 							}))
@@ -1829,7 +1830,7 @@ var _ = Describe("Transformer", func() {
 								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
 								Expect(args).To(ContainElement([]string{
 									"-port=6432",
-									"-timeout=1000ms",
+									"-timeout=42000ms",
 									"-liveness-interval=1s",
 								}))
 							})
