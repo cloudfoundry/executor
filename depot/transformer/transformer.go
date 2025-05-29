@@ -83,9 +83,13 @@ func WithSidecarRootfs(
 	}
 }
 
-func WithDeclarativeHealthchecks(timeout time.Duration) Option {
+func WithDeclarativeHealthChecks(timeout time.Duration) Option {
 	return func(t *transformer) {
 		t.useDeclarativeHealthCheck = true
+
+		if timeout <= 0 {
+			timeout = time.Duration(DefaultDeclarativeHealthcheckRequestTimeout) * time.Millisecond
+		}
 		t.declarativeHealthCheckDefaultTimeout = timeout
 	}
 }
@@ -823,10 +827,6 @@ func (t *transformer) transformReadinessCheckDefinition(
 func (t *transformer) applyCheckDefaults(timeout int, interval time.Duration, path string) (int, time.Duration, string) {
 	if timeout <= 0 {
 		timeout = int(t.declarativeHealthCheckDefaultTimeout / time.Millisecond)
-	}
-	if timeout <= 0 {
-		// fallback to 1000 if still invalid
-		timeout = DefaultDeclarativeHealthcheckRequestTimeout
 	}
 
 	if path == "" {

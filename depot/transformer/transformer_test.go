@@ -644,7 +644,7 @@ var _ = Describe("Transformer", func() {
 			Context("when declarative healthchecks are enabled", func() {
 				BeforeEach(func() {
 					declarativeHealthCheckTimeout := 42 * time.Second
-					options = append(options, transformer.WithDeclarativeHealthchecks(declarativeHealthCheckTimeout))
+					options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckTimeout))
 
 					container.StartTimeoutMs = 1000
 				})
@@ -1415,10 +1415,39 @@ var _ = Describe("Transformer", func() {
 								declarativeHealthCheckTimeout := time.Duration(emptyJsonTime)
 
 								// This option will override the previously configured default timeout
-								options = append(options, transformer.WithDeclarativeHealthchecks(declarativeHealthCheckTimeout))
+								options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckTimeout))
 							})
 
-							It("uses the hardcoded 1s default for the timeout", func() {
+							It("uses the 1s default for the timeout", func() {
+								Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+								paths := []string{}
+								args := [][]string{}
+								for i := 0; i < gardenContainer.RunCallCount(); i++ {
+									spec, _ := gardenContainer.RunArgsForCall(i)
+									paths = append(paths, spec.Path)
+									args = append(args, spec.Args)
+								}
+
+								Expect(paths).To(ContainElement(filepath.Join(transformer.HealthCheckDstPath, "healthcheck")))
+								Expect(args).To(ContainElement([]string{
+									"-port=6432",
+									"-timeout=1000ms",
+									"-uri=/",
+									"-startup-interval=1ms",
+									"-startup-timeout=1s",
+								}))
+							})
+						})
+
+						Context("and the declarative healthcheck timeout is set to a value <= 0", func() {
+							BeforeEach(func() {
+								declarativeHealthCheckTimeout, _ := time.ParseDuration("-24s")
+
+								// This option will override the previously configured default timeout
+								options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckTimeout))
+							})
+
+							It("uses the 1s default for the timeout", func() {
 								Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 								paths := []string{}
 								args := [][]string{}
