@@ -585,7 +585,7 @@ func initializeTransformer(
 	options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
 
 	if useDeclarativeHealthCheck {
-		options = append(options, transformer.WithDeclarativeHealthchecks(declarativeHealthCheckDefaultTimeout))
+		options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckDefaultTimeout))
 	}
 
 	if emitHealthCheckMetrics {
@@ -768,6 +768,11 @@ func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 
 	if config.PostSetupHook != "" && config.PostSetupUser == "" {
 		logger.Error("post-setup-hook-requires-a-user", nil)
+		valid = false
+	}
+
+	if config.EnableDeclarativeHealthcheck && time.Duration(config.DeclarativeHealthCheckDefaultTimeout) <= 0 {
+		logger.Error("declarative_healthcheck_default_timeout", nil)
 		valid = false
 	}
 
