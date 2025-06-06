@@ -91,7 +91,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpDir)
 		step.emitError(errString)
-		return NewEmittableError(err, errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 
 	defer os.RemoveAll(tempDir)
@@ -101,7 +101,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.logger.Error("failed-to-stream-out", err)
 		errString := step.artifactErrString(ErrEstablishStream)
 		step.emitError(errString)
-		return NewEmittableError(err, errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 	defer outStream.Close()
 
@@ -112,7 +112,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.logger.Error("failed-to-read-stream", err)
 		errString := step.artifactErrString(ErrReadTar)
 		step.emitError(errString)
-		return NewEmittableError(err, errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 
 	tempFile, err := os.CreateTemp(step.tempDir, "compressed")
@@ -120,7 +120,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.logger.Error("failed-to-create-tmp-dir", err)
 		errString := step.artifactErrString(ErrCreateTmpFile)
 		step.emitError(errString)
-		return NewEmittableError(err, errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 	finalFileLocation := tempFile.Name()
 	defer func() {
@@ -140,7 +140,7 @@ func (step *uploadStep) Run(signals <-chan os.Signal, ready chan<- struct{}) (er
 		step.logger.Error("failed-to-copy-stream", err)
 		errString := step.artifactErrString(ErrCopyStreamToTmp)
 		step.emitError(errString)
-		return NewEmittableError(err, errString)
+		return NewEmittableError(err, "%s", errString)
 	}
 
 	finished := make(chan struct{})

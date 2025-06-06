@@ -132,8 +132,8 @@ var _ = Describe("LogStreamer", func() {
 				maxLogLinesPerSecond, maxLogBytesPerSecond = 1, 100
 				streamer = log_streamer.New(logConfig, fakeClient, maxLogLinesPerSecond, maxLogBytesPerSecond, metricReportInterval)
 
-				fmt.Fprintf(streamer.Stdout(), strings.Repeat("a", 1000)+"\n")
-				fmt.Fprintf(streamer.Stdout(), "bbbbbbb\n")
+				fmt.Fprintln(streamer.Stdout(), strings.Repeat("a", 1000))
+				fmt.Fprintln(streamer.Stdout(), "bbbbbbb")
 			})
 
 			It("causes outages of logs", func() {
@@ -454,7 +454,7 @@ var _ = Describe("LogStreamer", func() {
 					message = strings.Repeat("7", log_streamer.MAX_MESSAGE_SIZE)
 					Expect([]byte(message)).To(HaveLen(log_streamer.MAX_MESSAGE_SIZE), "Ensure that the byte representation of our message is under the limit")
 
-					fmt.Fprintf(streamer.Stdout(), message+"\n")
+					fmt.Fprintln(streamer.Stdout(), message)
 				})
 
 				It("should not break the message up and send a single messages", func() {
@@ -512,8 +512,8 @@ var _ = Describe("LogStreamer", func() {
 					})
 
 					It("emits both messages correctly", func() {
-						fmt.Fprintf(streamer.Stdout(), message+utfChar[0:2])
-						fmt.Fprintf(streamer.Stdout(), utfChar+"\n")
+						fmt.Fprint(streamer.Stdout(), message+utfChar[0:2])
+						fmt.Fprintln(streamer.Stdout(), utfChar)
 
 						Expect(fakeClient.SendAppLogCallCount()).To(Equal(2))
 
@@ -579,7 +579,7 @@ var _ = Describe("LogStreamer", func() {
 		})
 
 		It("should handle long messages", func() {
-			fmt.Fprintf(streamer.Stderr(), strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE+1)+"\n")
+			fmt.Fprintln(streamer.Stderr(), strings.Repeat("e", log_streamer.MAX_MESSAGE_SIZE+1))
 			Expect(fakeClient.SendAppErrorLogCallCount()).To(Equal(2))
 
 			msg, _, _ := fakeClient.SendAppErrorLogArgsForCall(0)
