@@ -1,6 +1,7 @@
 package uploader
 
 import (
+	"bufio"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -110,17 +111,15 @@ func (uploader *URLUploader) prepareFileForUpload(fileLocation string, logger la
 		return nil, 0, "", "", err
 	}
 
-	contents, err := io.ReadAll(sourceFile)
+	md5Checksum := md5.New()
+	sha256Checksum := sha256.New()
+	_, err = io.Copy(io.MultiWriter(md5Checksum, sha256Checksum), bufio.NewReader(sourceFile))
 	if err != nil {
 		logger.Error("failed-read", err)
-		return nil, 0, "", "", err
 	}
 
-	md5Checksum := md5.Sum(contents)
-	sha256Checksum := sha256.Sum256(contents)
-
-	contentMD5 := base64.StdEncoding.EncodeToString(md5Checksum[:])
-	contentSHA256 := base64.StdEncoding.EncodeToString(sha256Checksum[:])
+	contentMD5 := base64.StdEncoding.EncodeToString(md5Checksum.Sum(nil))
+	contentSHA256 := base64.StdEncoding.EncodeToString(sha256Checksum.Sum(nil))
 
 	return sourceFile, fileInfo.Size(), contentMD5, contentSHA256, nil
 }
