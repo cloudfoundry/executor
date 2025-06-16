@@ -116,6 +116,7 @@ func (uploader *URLUploader) prepareFileForUpload(fileLocation string, logger la
 	_, err = io.Copy(io.MultiWriter(md5Checksum, sha256Checksum), bufio.NewReader(sourceFile))
 	if err != nil {
 		logger.Error("failed-read", err)
+		return nil, 0, "", "", err
 	}
 
 	contentMD5 := base64.StdEncoding.EncodeToString(md5Checksum.Sum(nil))
