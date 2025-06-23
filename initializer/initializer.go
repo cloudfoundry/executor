@@ -103,7 +103,6 @@ type ExecutorConfig struct {
 	DiskMB                                string                `json:"disk_mb,omitempty"`
 	EnableContainerProxy                  bool                  `json:"enable_container_proxy,omitempty"`
 	EnableContainerProxyHealthChecks      bool                  `json:"enable_container_proxy_healthcheck,omitempty"`
-	EnableDeclarativeHealthcheck          bool                  `json:"enable_declarative_healthcheck,omitempty"`
 	DeclarativeHealthCheckDefaultTimeout  durationjson.Duration `json:"declarative_healthcheck_default_timeout,omitempty"`
 	EnableHealtcheckMetrics               bool                  `json:"enable_healthcheck_metrics,omitempty"`
 	EnableUnproxiedPortMappings           bool                  `json:"enable_unproxied_port_mappings"`
@@ -262,7 +261,6 @@ func Initialize(
 		clock,
 		postSetupHook,
 		config.PostSetupUser,
-		config.EnableDeclarativeHealthcheck,
 		config.EnableHealtcheckMetrics,
 		sidecarRootFSPath,
 		config.EnableContainerProxy,
@@ -348,7 +346,6 @@ func Initialize(
 		config.TrustedSystemCertificatesPath,
 		metronClient,
 		rootFSSizer,
-		config.EnableDeclarativeHealthcheck,
 		config.DeclarativeHealthcheckPath,
 		proxyConfigHandler,
 		cellID,
@@ -569,7 +566,6 @@ func initializeTransformer(
 	clock clock.Clock,
 	postSetupHook []string,
 	postSetupUser string,
-	useDeclarativeHealthCheck bool,
 	emitHealthCheckMetrics bool,
 	declarativeHealthcheckRootFS string,
 	enableContainerProxy bool,
@@ -584,9 +580,7 @@ func initializeTransformer(
 
 	options = append(options, transformer.WithSidecarRootfs(declarativeHealthcheckRootFS))
 
-	if useDeclarativeHealthCheck {
-		options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckDefaultTimeout))
-	}
+	options = append(options, transformer.WithDeclarativeHealthChecks(declarativeHealthCheckDefaultTimeout))
 
 	if emitHealthCheckMetrics {
 		options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
@@ -771,7 +765,7 @@ func (config *ExecutorConfig) Validate(logger lager.Logger) bool {
 		valid = false
 	}
 
-	if config.EnableDeclarativeHealthcheck && time.Duration(config.DeclarativeHealthCheckDefaultTimeout) <= 0 {
+	if time.Duration(config.DeclarativeHealthCheckDefaultTimeout) <= 0 {
 		logger.Error("declarative_healthcheck_default_timeout", nil)
 		valid = false
 	}
