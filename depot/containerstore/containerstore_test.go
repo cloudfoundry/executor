@@ -160,7 +160,6 @@ var _ = Describe("Container Store", func() {
 			"/var/vcap/data/cf-system-trusted-certs",
 			metronClient,
 			rootFSSizer,
-			false,
 			"/var/vcap/packages/healthcheck",
 			proxyManager,
 			cellID,
@@ -491,7 +490,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						metronClient,
 						rootFSSizer,
-						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
@@ -712,7 +710,7 @@ var _ = Describe("Container Store", func() {
 
 				Expect(gardenClient.CreateCallCount()).To(Equal(1))
 				containerSpec := gardenClient.CreateArgsForCall(0)
-				Expect(containerSpec.BindMounts).NotTo(ContainElement(garden.BindMount{
+				Expect(containerSpec.BindMounts).To(ContainElement(garden.BindMount{
 					SrcPath: "/var/vcap/packages/healthcheck",
 					DstPath: "/etc/cf-assets/healthcheck",
 					Mode:    garden.BindMountModeRO,
@@ -736,7 +734,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						metronClient,
 						rootFSSizer,
-						true,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
@@ -1333,7 +1330,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						metronClient,
 						rootFSSizer,
-						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
@@ -1424,7 +1420,6 @@ var _ = Describe("Container Store", func() {
 							"/var/vcap/data/cf-system-trusted-certs",
 							metronClient,
 							rootFSSizer,
-							false,
 							"/var/vcap/packages/healthcheck",
 							proxyManager,
 							cellID,
@@ -2574,7 +2569,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						metronClient,
 						rootFSSizer,
-						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
@@ -3148,7 +3142,6 @@ var _ = Describe("Container Store", func() {
 						"/var/vcap/data/cf-system-trusted-certs",
 						metronClient,
 						rootFSSizer,
-						false,
 						"/var/vcap/packages/healthcheck",
 						proxyManager,
 						cellID,
