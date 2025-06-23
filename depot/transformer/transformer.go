@@ -2,13 +2,14 @@ package transformer
 
 import (
 	"bytes"
-	"code.cloudfoundry.org/lager/v3"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"code.cloudfoundry.org/lager/v3"
 
 	"code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/bbs/models"
@@ -56,7 +57,6 @@ type transformer struct {
 	clock            clock.Clock
 
 	sidecarRootFS                        string
-	useDeclarativeHealthCheck            bool
 	declarativeHealthCheckDefaultTimeout time.Duration
 	emitHealthCheckMetrics               bool
 	healthyMonitoringInterval            time.Duration
@@ -85,7 +85,6 @@ func WithSidecarRootfs(
 
 func WithDeclarativeHealthChecks(timeout time.Duration) Option {
 	return func(t *transformer) {
-		t.useDeclarativeHealthCheck = true
 
 		if timeout <= 0 {
 			timeout = time.Duration(DefaultDeclarativeHealthcheckRequestTimeout) * time.Millisecond
@@ -459,7 +458,7 @@ func (t *transformer) StepsRunner(
 	var proxyStartupChecks []ifrit.Runner
 	var proxyLivenessChecks []ifrit.Runner
 
-	if t.useContainerProxy && t.useDeclarativeHealthCheck {
+	if t.useContainerProxy {
 		envoyStartupLogger := logger.Session("envoy-startup-check")
 		envoyLivenessLogger := logger.Session("envoy-liveness-check")
 
@@ -511,7 +510,7 @@ func (t *transformer) StepsRunner(
 		}
 	}
 	var readinessChan chan steps.ReadinessState
-	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
+	if container.CheckDefinition != nil {
 		if container.CheckDefinition.Checks != nil {
 			monitor = t.transformCheckDefinition(logger,
 				&container,
