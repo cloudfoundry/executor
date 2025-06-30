@@ -30,14 +30,14 @@ import (
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/fsnotify/fsnotify"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 var _ = Describe("ProxyConfigHandler", func() {
@@ -1089,7 +1089,7 @@ func createListener(config expectedListener) *envoy_listener.Listener {
 		},
 	}
 	if config.requireClientCertificate {
-		tlsContext.RequireClientCertificate = &wrappers.BoolValue{Value: true}
+		tlsContext.RequireClientCertificate = &wrapperspb.BoolValue{Value: true}
 		tlsContext.CommonTlsContext.ValidationContextType = &envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
 			ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 				Name: "id-validation-context",
@@ -1146,7 +1146,7 @@ func createCluster(config expectedCluster) *envoy_cluster.Cluster {
 	}
 	cluster := &envoy_cluster.Cluster{
 		Name:                 config.name,
-		ConnectTimeout:       &duration.Duration{Nanos: 250000000},
+		ConnectTimeout:       &durationpb.Duration{Nanos: 250000000},
 		ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
 		LbPolicy:             envoy_cluster.Cluster_ROUND_ROBIN,
 		LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
@@ -1160,9 +1160,9 @@ func createCluster(config expectedCluster) *envoy_cluster.Cluster {
 	if config.maxConnections > 0 {
 		cluster.CircuitBreakers = &envoy_cluster.CircuitBreakers{
 			Thresholds: []*envoy_cluster.CircuitBreakers_Thresholds{
-				{MaxConnections: &wrappers.UInt32Value{Value: math.MaxUint32}},
-				{MaxPendingRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
-				{MaxRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
+				{MaxConnections: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
+				{MaxPendingRequests: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
+				{MaxRequests: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
 			}}
 	}
 	return cluster
