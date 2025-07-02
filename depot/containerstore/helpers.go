@@ -66,6 +66,13 @@ func securityGroupRuleToNetOutRules(securityRule *models.SecurityGroupRule) ([]g
 			Type: garden.ICMPType(securityRule.IcmpInfo.Type),
 			Code: garden.ICMPControlCode(uint8(securityRule.IcmpInfo.Code)),
 		}
+	case models.ICMPv6Protocol:
+		protocol = garden.ProtocolICMPv6
+		// Can reuse icmp because the fields are the same
+		icmp = &garden.ICMPControl{
+			Type: garden.ICMPType(securityRule.IcmpInfo.Type),
+			Code: garden.ICMPControlCode(uint8(securityRule.IcmpInfo.Code)),
+		}
 	case models.AllProtocol:
 		protocol = garden.ProtocolAll
 	}
