@@ -100,7 +100,6 @@ type storeNode struct {
 
 func newStoreNode(
 	config *ContainerConfig,
-	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClientFactory GardenClientFactory,
@@ -139,7 +138,6 @@ func newStoreNode(
 		modifiedIndex:                         0,
 		hostTrustedCertificatesPath:           hostTrustedCertificatesPath,
 		metronClient:                          metronClient,
-		useDeclarativeHealthCheck:             useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:            declarativeHealthcheckPath,
 		proxyConfigHandler:                    proxyConfigHandler,
 		rootFSSizer:                           rootFSSizer,
