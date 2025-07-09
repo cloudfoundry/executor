@@ -47,7 +47,6 @@ var _ = Describe("ReportersRunner", func() {
 		testStart time.Time
 		process   ifrit.Process
 
-		enableContainerProxy    bool
 		proxyMemoryAllocationMB int
 		reportersRunner         *containermetrics.ReportersRunner
 		statsReporter           *containermetrics.StatsReporter
@@ -64,14 +63,13 @@ var _ = Describe("ReportersRunner", func() {
 		fakeExecutorClient = new(efakes.FakeClient)
 		fakeMetronClient = new(mfakes.FakeIngressClient)
 
-		enableContainerProxy = false
 		proxyMemoryAllocationMB = 5
 
 		metricsCache = &atomic.Value{}
 	})
 
 	JustBeforeEach(func() {
-		statsReporter = containermetrics.NewStatsReporter(fakeMetronClient, enableContainerProxy, float64(proxyMemoryAllocationMB*1024*1024), metricsCache)
+		statsReporter = containermetrics.NewStatsReporter(fakeMetronClient, float64(proxyMemoryAllocationMB*1024*1024), metricsCache)
 		cpuSpikeReporter := containermetrics.NewCPUSpikeReporter(fakeMetronClient)
 		reportersRunner = containermetrics.NewReportersRunner(logger, interval, fakeClock, fakeExecutorClient, statsReporter, cpuSpikeReporter)
 		process = ifrit.Invoke(reportersRunner)
@@ -482,113 +480,77 @@ var _ = Describe("ReportersRunner", func() {
 			))
 		})
 
-		Context("when containers EnableContainerProxy is set", func() {
-			BeforeEach(func() {
-				containers := []executor.Container{
-					{
-						Guid:        "container-guid-without-index",
-						MemoryLimit: megsToBytes(200 + proxyMemoryAllocationMB),
-						RunInfo: executor.RunInfo{
-							EnableContainerProxy: true,
-							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
+		BeforeEach(func() {
+			containers := []executor.Container{
+				{
+					Guid:        "container-guid-without-index",
+					MemoryLimit: megsToBytes(200 + proxyMemoryAllocationMB),
+					RunInfo: executor.RunInfo{
+						MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-index"}},
+					},
+				},
+				{
+					Guid:        "container-guid-with-index",
+					MemoryLimit: megsToBytes(400 + proxyMemoryAllocationMB),
+					RunInfo: executor.RunInfo{
+						MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
+					},
+				},
+				{
+					Guid:        "container-guid-without-preloaded-rootfs",
+					MemoryLimit: megsToBytes(200),
+					RunInfo: executor.RunInfo{
+						MetricsConfig: executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
+					},
+				},
+			}
+			fakeExecutorClient.ListContainersReturnsOnCall(0, containers, nil)
+		})
+
+		It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
+			appMemory := megsToBytes(123)
+			expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
+			expectedMemoryLimitWithoutIndex := float64(metricsAtT0["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes) - float64(megsToBytes(proxyMemoryAllocationMB))
+			Eventually(sentMetrics).Should(ContainElement(
+				logging.ContainerMetric{
+					CpuPercentage:          0.0,
+					MemoryBytes:            uint64(expectedMemoryUsageWithoutIndex),
+					DiskBytes:              metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
+					MemoryBytesQuota:       uint64(expectedMemoryLimitWithoutIndex),
+					DiskBytesQuota:         metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
+					AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
+					AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+					ContainerAge:           metricsAtT0["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
+					RxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.RxInBytes,
+					TxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.TxInBytes,
+					Tags: map[string]string{
+						"source_id":   "source-id-without-index",
+						"instance_id": "0",
+					},
+				},
+			))
+		})
+
+		Context("when there is a container without preloaded rootfs", func() {
+			It("should emit memory usage that is not rescaled", func() {
+				Eventually(sentMetrics).Should(ContainElement(
+					logging.ContainerMetric{
+						CpuPercentage:          0.0,
+						MemoryBytes:            metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
+						DiskBytes:              metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
+						MemoryBytesQuota:       metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
+						DiskBytesQuota:         metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
+						AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
+						AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+						ContainerAge:           metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
+						RxBytes:                metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.RxInBytes,
+						TxBytes:                metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.TxInBytes,
+						Tags: map[string]string{
+							"source_id":   "source-id-without-preloaded-rootfs",
+							"instance_id": "0",
 						},
 					},
-					{
-						Guid:        "container-guid-with-index",
-						MemoryLimit: megsToBytes(400 + proxyMemoryAllocationMB),
-						RunInfo: executor.RunInfo{
-							EnableContainerProxy: true,
-							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-with-index", "instance_id": "1"}},
-						},
-					},
-					{
-						Guid:        "container-guid-without-preloaded-rootfs",
-						MemoryLimit: megsToBytes(200),
-						RunInfo: executor.RunInfo{
-							EnableContainerProxy: false,
-							MetricsConfig:        executor.MetricsConfig{Tags: map[string]string{"source_id": "source-id-without-preloaded-rootfs"}},
-						},
-					},
-				}
-				fakeExecutorClient.ListContainersReturnsOnCall(0, containers, nil)
-			})
-
-			Context("when enableContainerProxy not set", func() {
-				It("does not change the memory usage reported by garden", func() {
-					appMemory := megsToBytes(123)
-					expectedMemoryUsageWithoutIndex := float64(appMemory)
-					Eventually(sentMetrics).Should(ContainElement(
-						logging.ContainerMetric{
-							CpuPercentage:          0.0,
-							MemoryBytes:            uint64(expectedMemoryUsageWithoutIndex),
-							DiskBytes:              metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
-							MemoryBytesQuota:       metricsAtT0["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes,
-							DiskBytesQuota:         metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
-							AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
-							AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-							ContainerAge:           metricsAtT0["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
-							RxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.RxInBytes,
-							TxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.TxInBytes,
-							Tags: map[string]string{
-								"source_id":   "source-id-without-index",
-								"instance_id": "0",
-							},
-						},
-					))
-				})
-			})
-
-			Context("when enableContainerProxy is set", func() {
-				BeforeEach(func() {
-					enableContainerProxy = true
-				})
-
-				It("emits a rescaled memory usage based on the additional memory allocation for the proxy", func() {
-					appMemory := megsToBytes(123)
-					expectedMemoryUsageWithoutIndex := float64(appMemory) * 200.0 / (200.0 + float64(proxyMemoryAllocationMB))
-					expectedMemoryLimitWithoutIndex := float64(metricsAtT0["container-guid-without-index"].ContainerMetrics.MemoryLimitInBytes) - float64(megsToBytes(proxyMemoryAllocationMB))
-					Eventually(sentMetrics).Should(ContainElement(
-						logging.ContainerMetric{
-							CpuPercentage:          0.0,
-							MemoryBytes:            uint64(expectedMemoryUsageWithoutIndex),
-							DiskBytes:              metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskUsageInBytes,
-							MemoryBytesQuota:       uint64(expectedMemoryLimitWithoutIndex),
-							DiskBytesQuota:         metricsAtT0["container-guid-without-index"].ContainerMetrics.DiskLimitInBytes,
-							AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-index"].ContainerMetrics.TimeSpentInCPU),
-							AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-index"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-							ContainerAge:           metricsAtT0["container-guid-without-index"].ContainerMetrics.ContainerAgeInNanoseconds,
-							RxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.RxInBytes,
-							TxBytes:                metricsAtT0["container-guid-without-index"].ContainerMetrics.TxInBytes,
-							Tags: map[string]string{
-								"source_id":   "source-id-without-index",
-								"instance_id": "0",
-							},
-						},
-					))
-				})
-
-				Context("when there is a container without preloaded rootfs", func() {
-					It("should emit memory usage that is not rescaled", func() {
-						Eventually(sentMetrics).Should(ContainElement(
-							logging.ContainerMetric{
-								CpuPercentage:          0.0,
-								MemoryBytes:            metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryUsageInBytes,
-								DiskBytes:              metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskUsageInBytes,
-								MemoryBytesQuota:       metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.MemoryLimitInBytes,
-								DiskBytesQuota:         metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.DiskLimitInBytes,
-								AbsoluteCPUUsage:       uint64(metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.TimeSpentInCPU),
-								AbsoluteCPUEntitlement: metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-								ContainerAge:           metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.ContainerAgeInNanoseconds,
-								RxBytes:                metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.RxInBytes,
-								TxBytes:                metricsAtT0["container-guid-without-preloaded-rootfs"].ContainerMetrics.TxInBytes,
-								Tags: map[string]string{
-									"source_id":   "source-id-without-preloaded-rootfs",
-									"instance_id": "0",
-								},
-							},
-						))
-					})
-				})
+				))
 			})
 		})
 

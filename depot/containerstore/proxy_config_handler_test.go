@@ -72,9 +72,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 		container = executor.Container{
 			Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 			InternalIP: "10.0.0.1",
-			RunInfo: executor.RunInfo{
-				EnableContainerProxy: true,
-			},
+			RunInfo:    executor.RunInfo{},
 		}
 
 		proxyConfigDir, err = os.MkdirTemp("", "proxymanager-config")
@@ -197,53 +195,44 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	Describe("CreateDir", func() {
-		Context("the EnableContainerProxy is disabled on the container", func() {
-			BeforeEach(func() {
-				container.EnableContainerProxy = false
-			})
+	It("returns an empty bind mount", func() {
+		mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mounts).To(BeEmpty())
+	})
+	It("returns the appropriate bind mounts for container proxy", func() {
+		mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mounts).To(ConsistOf([]garden.BindMount{
+			{
+				Origin:  garden.BindMountOriginHost,
+				SrcPath: proxyDir,
+				DstPath: "/etc/cf-assets/envoy",
+			},
+			{
+				Origin:  garden.BindMountOriginHost,
+				SrcPath: filepath.Join(proxyConfigDir, container.Guid),
+				DstPath: "/etc/cf-assets/envoy_config",
+			},
+		}))
+	})
 
-			It("returns an empty bind mount", func() {
-				mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mounts).To(BeEmpty())
-			})
-		})
+	It("makes the proxy config directory on the host", func() {
+		_, _, err := proxyConfigHandler.CreateDir(logger, container)
+		Expect(err).NotTo(HaveOccurred())
+		proxyConfigDir := fmt.Sprintf("%s/%s", proxyConfigDir, container.Guid)
+		Expect(proxyConfigDir).To(BeADirectory())
+	})
 
-		It("returns the appropriate bind mounts for container proxy", func() {
-			mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
+	Context("when the manager fails to create the proxy config directory", func() {
+		BeforeEach(func() {
+			_, err := os.Create(configPath)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(mounts).To(ConsistOf([]garden.BindMount{
-				{
-					Origin:  garden.BindMountOriginHost,
-					SrcPath: proxyDir,
-					DstPath: "/etc/cf-assets/envoy",
-				},
-				{
-					Origin:  garden.BindMountOriginHost,
-					SrcPath: filepath.Join(proxyConfigDir, container.Guid),
-					DstPath: "/etc/cf-assets/envoy_config",
-				},
-			}))
 		})
 
-		It("makes the proxy config directory on the host", func() {
+		It("returns an error", func() {
 			_, _, err := proxyConfigHandler.CreateDir(logger, container)
-			Expect(err).NotTo(HaveOccurred())
-			proxyConfigDir := fmt.Sprintf("%s/%s", proxyConfigDir, container.Guid)
-			Expect(proxyConfigDir).To(BeADirectory())
-		})
-
-		Context("when the manager fails to create the proxy config directory", func() {
-			BeforeEach(func() {
-				_, err := os.Create(configPath)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("returns an error", func() {
-				_, _, err := proxyConfigHandler.CreateDir(logger, container)
-				Expect(err).To(HaveOccurred())
-			})
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -258,16 +247,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Expect(configPath).NotTo(BeADirectory())
 		})
 
-		Context("the EnableContainerProxy is disabled on the container", func() {
-			BeforeEach(func() {
-				container.EnableContainerProxy = false
-			})
-
-			It("does not return an error when deleting a non existing directory", func() {
-				err := proxyConfigHandler.RemoveDir(logger, container)
-				Expect(err).NotTo(HaveOccurred())
-			})
+		It("does not return an error when deleting a non existing directory", func() {
+			err := proxyConfigHandler.RemoveDir(logger, container)
+			Expect(err).NotTo(HaveOccurred())
 		})
+
 	})
 
 	Describe("ProxyPorts", func() {
@@ -277,17 +261,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			}
 		})
 
-		Context("the EnableContainerProxy is disabled on the container", func() {
-			BeforeEach(func() {
-				container.EnableContainerProxy = false
-			})
-
-			It("returns an empty proxy port mapping", func() {
-				ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(ports).To(BeEmpty())
-				Expect(extraPorts).To(BeEmpty())
-			})
+		It("returns an empty proxy port mapping", func() {
+			ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ports).To(BeEmpty())
+			Expect(extraPorts).To(BeEmpty())
 		})
 
 		Context("when there is a default HTTP port (8080)", func() {
@@ -429,17 +407,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			containerProxyRequireClientCerts = true
 		})
 
-		Context("the EnableContainerProxy is disabled on the container", func() {
-			BeforeEach(func() {
-				container.EnableContainerProxy = false
-			})
+		It("does not write a envoy config file", func() {
+			err := proxyConfigHandler.Update(credentials, container)
+			Expect(err).NotTo(HaveOccurred())
 
-			It("does not write a envoy config file", func() {
-				err := proxyConfigHandler.Update(credentials, container)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-			})
+			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
 		})
 
 		Context("with containerProxyRequireClientCerts set to false", func() {
@@ -969,29 +941,24 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Eventually(ch).Should(BeClosed())
 		})
 
-		Context("the EnableContainerProxy is disabled on the container", func() {
-			BeforeEach(func() {
-				container.EnableContainerProxy = false
-			})
+		It("does not write a envoy config file", func() {
+			err := proxyConfigHandler.Update(credentials, container)
+			Expect(err).NotTo(HaveOccurred())
 
-			It("does not write a envoy config file", func() {
-				err := proxyConfigHandler.Update(credentials, container)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(proxyConfigFile).NotTo(BeAnExistingFile())
-			})
-
-			It("doesn't wait until the proxy is serving the new cert", func() {
-				ch := make(chan struct{})
-				go func() {
-					defer GinkgoRecover()
-					proxyConfigHandler.Close(credentials, container)
-					close(ch)
-				}()
-
-				Eventually(ch).Should(BeClosed())
-			})
+			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
 		})
+
+		It("doesn't wait until the proxy is serving the new cert", func() {
+			ch := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				proxyConfigHandler.Close(credentials, container)
+				close(ch)
+			}()
+
+			Eventually(ch).Should(BeClosed())
+		})
+
 	})
 })
 
