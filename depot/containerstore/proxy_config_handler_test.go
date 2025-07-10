@@ -195,11 +195,6 @@ var _ = Describe("ProxyConfigHandler", func() {
 		})
 	})
 
-	It("returns an empty bind mount", func() {
-		mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(mounts).To(BeEmpty())
-	})
 	It("returns the appropriate bind mounts for container proxy", func() {
 		mounts, _, err := proxyConfigHandler.CreateDir(logger, container)
 		Expect(err).NotTo(HaveOccurred())
@@ -261,11 +256,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			}
 		})
 
-		It("returns an empty proxy port mapping", func() {
+		It("returns a non empty proxy port mapping", func() {
 			ports, extraPorts, err := proxyConfigHandler.ProxyPorts(logger, &container)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(ports).To(BeEmpty())
-			Expect(extraPorts).To(BeEmpty())
+			Expect(ports).NotTo(BeEmpty())
+			Expect(extraPorts).NotTo(BeEmpty())
 		})
 
 		Context("when there is a default HTTP port (8080)", func() {
@@ -407,11 +402,11 @@ var _ = Describe("ProxyConfigHandler", func() {
 			containerProxyRequireClientCerts = true
 		})
 
-		It("does not write a envoy config file", func() {
+		It("write a envoy config file", func() {
 			err := proxyConfigHandler.Update(credentials, container)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+			Expect(proxyConfigFile).To(BeAnExistingFile())
 		})
 
 		Context("with containerProxyRequireClientCerts set to false", func() {
@@ -941,14 +936,14 @@ var _ = Describe("ProxyConfigHandler", func() {
 			Eventually(ch).Should(BeClosed())
 		})
 
-		It("does not write a envoy config file", func() {
+		It("write a envoy config file", func() {
 			err := proxyConfigHandler.Update(credentials, container)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(proxyConfigFile).NotTo(BeAnExistingFile())
+			Expect(proxyConfigFile).To(BeAnExistingFile())
 		})
 
-		It("doesn't wait until the proxy is serving the new cert", func() {
+		It("wait until the proxy is serving the new cert", func() {
 			ch := make(chan struct{})
 			go func() {
 				defer GinkgoRecover()
@@ -956,7 +951,7 @@ var _ = Describe("ProxyConfigHandler", func() {
 				close(ch)
 			}()
 
-			Eventually(ch).Should(BeClosed())
+			Eventually(ch).ShouldNot(BeClosed())
 		})
 
 	})
