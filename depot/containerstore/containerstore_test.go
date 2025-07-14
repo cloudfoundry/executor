@@ -410,7 +410,6 @@ var _ = Describe("Container Store", func() {
 							"some-other-key": "some-other-value",
 						},
 					},
-					EnableContainerProxy:       true,
 					LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
 					VolumeMountedFiles:         volumeMountedFiles,
 				}

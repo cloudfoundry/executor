@@ -19,15 +19,13 @@ type cpuInfo struct {
 type StatsReporter struct {
 	cpuInfos              map[string]*cpuInfo
 	metronClient          loggingclient.IngressClient
-	enableContainerProxy  bool
 	proxyMemoryAllocation float64
 	metricsCache          *atomic.Value
 }
 
-func NewStatsReporter(metronClient loggingclient.IngressClient, enableContainerProxy bool, proxyMemoryAllocation float64, metricsCache *atomic.Value) *StatsReporter {
+func NewStatsReporter(metronClient loggingclient.IngressClient, proxyMemoryAllocation float64, metricsCache *atomic.Value) *StatsReporter {
 	return &StatsReporter{
 		cpuInfos:              make(map[string]*cpuInfo),
-		enableContainerProxy:  enableContainerProxy,
 		metronClient:          metronClient,
 		proxyMemoryAllocation: proxyMemoryAllocation,
 		metricsCache:          metricsCache,
@@ -57,10 +55,8 @@ func (reporter *StatsReporter) Report(logger lager.Logger, containers []executor
 
 		previousCPUInfo := cpuInfos[guid]
 
-		if reporter.enableContainerProxy && container.EnableContainerProxy {
-			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
-			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
-		}
+		metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
+		metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 
 		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, timeStamp)
 		if cpu != nil {
