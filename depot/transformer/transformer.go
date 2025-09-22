@@ -473,7 +473,7 @@ func (t *transformer) StepsRunner(
 	var proxyStartupChecks []ifrit.Runner
 	var proxyLivenessChecks []ifrit.Runner
 
-	if t.useContainerProxy {
+	if t.useContainerProxy && container.EnableContainerProxy {
 		envoyStartupLogger := logger.Session("envoy-startup-check")
 		envoyLivenessLogger := logger.Session("envoy-liveness-check")
 
@@ -589,7 +589,7 @@ func (t *transformer) StepsRunner(
 		longLivedAction = action
 	}
 
-	if t.useContainerProxy {
+	if t.useContainerProxy && container.EnableContainerProxy {
 		containerProxyStep := t.transformContainerProxyStep(
 			gardenContainer,
 			container,

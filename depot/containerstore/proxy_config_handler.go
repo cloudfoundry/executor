@@ -149,6 +149,9 @@ func NewProxyConfigHandler(
 
 // This modifies the container pointer in order to create garden NetIn rules in the storenode.Create
 func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor.Container) ([]executor.ProxyPortMapping, []uint16, error) {
+	if !container.EnableContainerProxy {
+		return nil, nil, nil
+	}
 
 	proxyPortMapping := []executor.ProxyPortMapping{}
 
@@ -199,6 +202,9 @@ func (p *ProxyConfigHandler) ProxyPorts(logger lager.Logger, container *executor
 }
 
 func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {
+	if !container.EnableContainerProxy {
+		return nil, nil, nil
+	}
 
 	logger.Info("adding-container-proxy-bindmounts")
 	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
@@ -224,6 +230,9 @@ func (p *ProxyConfigHandler) CreateDir(logger lager.Logger, container executor.C
 }
 
 func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
 
 	logger.Info("removing-container-proxy-config-dir")
 	proxyConfigDir := filepath.Join(p.containerProxyConfigPath, container.Guid)
@@ -231,11 +240,17 @@ func (p *ProxyConfigHandler) RemoveDir(logger lager.Logger, container executor.C
 }
 
 func (p *ProxyConfigHandler) Update(credentials Credentials, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
 
 	return p.writeConfig(credentials, container)
 }
 
 func (p *ProxyConfigHandler) Close(invalidCredentials Credentials, container executor.Container) error {
+	if !container.EnableContainerProxy {
+		return nil
+	}
 
 	err := p.writeConfig(invalidCredentials, container)
 	if err != nil {

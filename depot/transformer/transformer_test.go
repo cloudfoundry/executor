@@ -397,6 +397,7 @@ var _ = Describe("Transformer", func() {
 								ContainerPort: 61001,
 							},
 						},
+						EnableContainerProxy: true,
 					},
 				}
 			})
@@ -551,6 +552,22 @@ var _ = Describe("Transformer", func() {
 				})
 			})
 
+			Context("when the container proxy is disabled on the container", func() {
+				BeforeEach(func() {
+					container.EnableContainerProxy = false
+				})
+
+				It("does not run the container proxy", func() {
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					paths := []string{}
+					for i := 0; i < gardenContainer.RunCallCount(); i++ {
+						spec, _ := gardenContainer.RunArgsForCall(i)
+						paths = append(paths, spec.Path)
+					}
+
+					Expect(paths).NotTo(ContainElement("sh"))
+				})
+			})
 		})
 
 		Describe("declarative healthchecks", func() {
@@ -562,8 +579,6 @@ var _ = Describe("Transformer", func() {
 				livenessCh                    chan int
 				actionProcess                 *gardenfakes.FakeProcess
 				actionCh                      chan int
-				envoyProcess                  *gardenfakes.FakeProcess
-				envoyCh                       chan int
 				monitorProcess                *gardenfakes.FakeProcess
 				monitorCh                     chan int
 				startupIO                     chan garden.ProcessIO
@@ -595,9 +610,6 @@ var _ = Describe("Transformer", func() {
 				actionCh = make(chan int, 1)
 				actionProcess = makeProcess(actionCh)
 
-				envoyCh = make(chan int)
-				envoyProcess = makeProcess(envoyCh)
-
 				monitorCh = make(chan int)
 				monitorProcess = makeProcess(monitorCh)
 
@@ -614,8 +626,6 @@ var _ = Describe("Transformer", func() {
 					switch spec.Path {
 					case "/action/path":
 						return actionProcess, nil
-					case "sh":
-						return envoyProcess, nil
 					case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
 						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 						switch oldCount {
@@ -1620,8 +1630,6 @@ var _ = Describe("Transformer", func() {
 									switch spec.Path {
 									case "/action/path":
 										return actionProcess, nil
-									case "sh":
-										return envoyProcess, nil
 									case filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
 										oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
 										switch oldCount {
@@ -1660,7 +1668,7 @@ var _ = Describe("Transformer", func() {
 								})
 
 								It("starts the proxy liveness check", func() {
-									Eventually(gardenContainer.RunCallCount).Should(Equal(6))
+									Eventually(gardenContainer.RunCallCount).Should(Equal(5))
 									var ids []string
 									var args [][]string
 									for i := 0; i < gardenContainer.RunCallCount(); i++ {
@@ -1680,7 +1688,7 @@ var _ = Describe("Transformer", func() {
 
 							Context("and proxy liveness check is disabled", func() {
 								It("does not start the proxy liveness check", func() {
-									Eventually(gardenContainer.RunCallCount).Should(Equal(5))
+									Eventually(gardenContainer.RunCallCount).Should(Equal(4))
 									var ids []string
 									var args [][]string
 									for i := 0; i < gardenContainer.RunCallCount(); i++ {

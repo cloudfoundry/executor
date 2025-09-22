@@ -197,6 +197,7 @@ type RunInfo struct {
 	CertificateProperties         CertificateProperties         `json:"certificate_properties"`
 	ImageUsername                 string                        `json:"image_username"`
 	ImagePassword                 string                        `json:"image_password"`
+	EnableContainerProxy          bool                          `json:"enable_container_proxy"`
 	Sidecars                      []Sidecar                     `json:"sidecars"`
 	LogRateLimitBytesPerSecond    int64                         `json:"log_rate_limit_bytes_per_second"`
 	VolumeMountedFiles            []VolumeMountedFiles          `json:"volume_mounted_files,omitempty"`

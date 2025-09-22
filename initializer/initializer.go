@@ -101,6 +101,7 @@ type ExecutorConfig struct {
 	DeclarativeHealthcheckPath            string                `json:"declarative_healthcheck_path,omitempty"`
 	DeleteWorkPoolSize                    int                   `json:"delete_work_pool_size,omitempty"`
 	DiskMB                                string                `json:"disk_mb,omitempty"`
+	EnableContainerProxy                  bool                  `json:"enable_container_proxy,omitempty"`
 	EnableContainerProxyHealthChecks      bool                  `json:"enable_container_proxy_healthcheck,omitempty"`
 	DeclarativeHealthCheckDefaultTimeout  durationjson.Duration `json:"declarative_healthcheck_default_timeout,omitempty"`
 	EnableHealtcheckMetrics               bool                  `json:"enable_healthcheck_metrics,omitempty"`
@@ -262,6 +263,7 @@ func Initialize(
 		config.PostSetupUser,
 		config.EnableHealtcheckMetrics,
 		sidecarRootFSPath,
+		config.EnableContainerProxy,
 		time.Duration(config.EnvoyDrainTimeout),
 		config.EnableContainerProxyHealthChecks,
 		time.Duration(config.ProxyHealthCheckInterval),
@@ -294,18 +296,23 @@ func Initialize(
 	driverConfig.DriverPaths = filepath.SplitList(config.VolmanDriverPaths)
 	volmanClient, volmanDriverSyncer := vollocal.NewServer(logger, metronClient, driverConfig)
 
-	proxyConfigHandler := containerstore.NewProxyConfigHandler(
-		logger,
-		config.ContainerProxyPath,
-		config.ContainerProxyConfigPath,
-		config.ContainerProxyTrustedCACerts,
-		config.ContainerProxyVerifySubjectAltName,
-		config.ContainerProxyRequireClientCerts,
-		time.Duration(config.EnvoyConfigReloadDuration),
-		clock,
-		config.ContainerProxyADSServers,
-		config.ProxyEnableHttp2,
-	)
+	var proxyConfigHandler containerstore.ProxyManager
+	if config.EnableContainerProxy {
+		proxyConfigHandler = containerstore.NewProxyConfigHandler(
+			logger,
+			config.ContainerProxyPath,
+			config.ContainerProxyConfigPath,
+			config.ContainerProxyTrustedCACerts,
+			config.ContainerProxyVerifySubjectAltName,
+			config.ContainerProxyRequireClientCerts,
+			time.Duration(config.EnvoyConfigReloadDuration),
+			clock,
+			config.ContainerProxyADSServers,
+			config.ProxyEnableHttp2,
+		)
+	} else {
+		proxyConfigHandler = containerstore.NewNoopProxyConfigHandler()
+	}
 
 	instanceIdentityHandler := containerstore.NewInstanceIdentityHandler(
 		config.InstanceIdentityCredDir,
@@ -380,6 +387,7 @@ func Initialize(
 	metricsCache := &atomic.Value{}
 	containerStatsReporter := containermetrics.NewStatsReporter(
 		metronClient,
+		config.EnableContainerProxy,
 		float64(config.ProxyMemoryAllocationMB*megabytesToBytes),
 		metricsCache,
 	)
@@ -560,6 +568,7 @@ func initializeTransformer(
 	postSetupUser string,
 	emitHealthCheckMetrics bool,
 	declarativeHealthcheckRootFS string,
+	enableContainerProxy bool,
 	drainWait time.Duration,
 	enableProxyHealthChecks bool,
 	proxyHealthCheckInterval time.Duration,
@@ -577,10 +586,12 @@ func initializeTransformer(
 		options = append(options, transformer.WithDeclarativeHealthcheckFailureMetrics())
 	}
 
-	options = append(options, transformer.WithContainerProxy(drainWait))
+	if enableContainerProxy {
+		options = append(options, transformer.WithContainerProxy(drainWait))
 
-	if enableProxyHealthChecks {
-		options = append(options, transformer.WithProxyLivenessChecks(proxyHealthCheckInterval))
+		if enableProxyHealthChecks {
+			options = append(options, transformer.WithProxyLivenessChecks(proxyHealthCheckInterval))
+		}
 	}
 
 	options = append(options, transformer.WithPostSetupHook(postSetupUser, postSetupHook))

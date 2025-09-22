@@ -79,6 +79,7 @@ var _ = Describe("Initializer", func() {
 			CreateWorkPoolSize:                    32,
 			DeleteWorkPoolSize:                    32,
 			DiskMB:                                configuration.Automatic,
+			EnableContainerProxy:                  false,
 			GardenAddr:                            "/tmp/garden.sock",
 			GardenHealthcheckCommandRetryPause:    durationjson.Duration(1 * time.Second),
 			GardenHealthcheckEmissionInterval:     durationjson.Duration(30 * time.Second),
