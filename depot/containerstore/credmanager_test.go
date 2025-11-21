@@ -556,6 +556,11 @@ var _ = Describe("CredManager", func() {
 						Expect(cert.ExtKeyUsage).To(ContainElement(x509.ExtKeyUsageServerAuth))
 						Expect(cert.KeyUsage).To(Equal(x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageKeyAgreement))
 
+						By("has the expected key length")
+						rsaKey, ok := cert.PublicKey.(*rsa.PublicKey)
+						Expect(ok).To(BeTrue(), "expected RSA public key")
+						Expect(rsaKey.N.BitLen()).To(Equal(containerstore.RSAPrivateKeySize))
+
 						By("signed by the rep intermediate CA")
 						CaCertPool := x509.NewCertPool()
 						CaCertPool.AddCert(CaCert)
