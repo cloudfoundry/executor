@@ -2,6 +2,7 @@ package steps_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"code.cloudfoundry.org/executor/depot/log_streamer/fake_log_streamer"
@@ -205,6 +206,33 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 			})
 		})
 
+		Context("while waiting on the readines channel to receive", func() {
+			Context("while doing the untilReadyCheck", func() {
+				JustBeforeEach(func() {
+					Eventually(untilReadyCheck.RunCallCount).Should(Equal(1))
+					untilReadyCheck.TriggerExit(nil)
+				})
+				It("cancels the in-flight check", func() {
+					process.Signal(os.Interrupt)
+					Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
+				})
+			})
+			Context("while doing the untilFailureCheck", func() {
+				JustBeforeEach(func() {
+					untilReadyCheck.TriggerExit(nil)
+					state := <-readinessChan
+					Expect(state).To(Equal(steps.IsReady))
+					Eventually(untilFailureCheck.RunCallCount).Should(Equal(1))
+				})
+
+				It("cancels the in-flight check", func() {
+					untilFailureCheck.TriggerExit(fmt.Errorf("meow"))
+					process.Signal(os.Interrupt)
+					Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
+				})
+			})
+		})
+
 		Context("while doing the untilFailure check", func() {
 			JustBeforeEach(func() {
 				untilReadyCheck.TriggerExit(nil)
@@ -216,7 +244,7 @@ var _ = Describe("NewReadinessHealthCheckStep", func() {
 			It("cancels the in-flight check", func() {
 				process.Signal(os.Interrupt)
 				Eventually(untilFailureCheck.WaitForCall()).Should(Receive(Equal(os.Interrupt)))
-				untilFailureCheck.TriggerExit(nil)
+				untilFailureCheck.TriggerExit(fmt.Errorf("meow"))
 				Eventually(process.Wait()).Should(Receive(Equal(new(steps.CancelledError))))
 			})
 		})
