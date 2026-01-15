@@ -65,9 +65,13 @@ func (step *readinessHealthCheckStep) runUntilReadyProcess(signals <-chan os.Sig
 			return err
 		}
 		step.logger.Info("transitioned-to-ready")
-		step.readinessChan <- IsReady
-		fmt.Fprint(step.logStreamer.Stdout(), "Container passed the readiness health check. Container marked ready and added to route pool.\n")
-		return nil
+		select {
+		case step.readinessChan <- IsReady:
+			fmt.Fprint(step.logStreamer.Stdout(), "Container passed the readiness health check. Container marked ready and added to route pool.\n")
+			return nil
+		case <-signals:
+			return new(CancelledError)
+		}
 	case s := <-signals:
 		untilReadyProcess.Signal(s)
 		<-untilReadyProcess.Wait()
@@ -81,9 +85,13 @@ func (step *readinessHealthCheckStep) runUntilFailureProcess(signals <-chan os.S
 	case err := <-untilFailureProcess.Wait():
 		if err != nil {
 			step.logger.Info("transitioned-to-not-ready")
-			fmt.Fprint(step.logStreamer.Stdout(), "Container failed the readiness health check. Container marked not ready and removed from route pool.\n")
-			step.readinessChan <- IsNotReady
-			return nil
+			select {
+			case step.readinessChan <- IsNotReady:
+				fmt.Fprint(step.logStreamer.Stdout(), "Container failed the readiness health check. Container marked not ready and removed from route pool.\n")
+				return nil
+			case <-signals:
+				return new(CancelledError)
+			}
 		}
 		step.logger.Error("unexpected-until-failure-check-result", err)
 		return nil
