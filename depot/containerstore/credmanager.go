@@ -431,8 +431,12 @@ func createCertificateTemplate(guid string, certSAN certificateSAN, notBefore, n
 	} else {
 		ipaddr = []net.IP{net.ParseIP(certSAN.IPAddress)}
 	}
-	dnsNames := []string{guid}
+	var dnsNames []string
+	if guid != "" {
+		dnsNames = append(dnsNames, guid)
+	}
 	for _, route := range certSAN.InternalRoutes {
+
 		dnsNames = append(dnsNames, route.Hostname)
 	}
 
