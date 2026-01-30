@@ -27,14 +27,13 @@ import (
 	envoy_discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	envoy_matcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	ghodss_yaml "github.com/ghodss/yaml"
-	"github.com/golang/protobuf/ptypes/any"
-	"github.com/golang/protobuf/ptypes/duration"
-	pstruct "github.com/golang/protobuf/ptypes/struct"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/tedsuo/ifrit"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
@@ -354,7 +353,7 @@ func generateProxyConfig(
 		clusters = append(clusters, &envoy_cluster.Cluster{
 			Name:                 clusterName,
 			ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
-			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
+			ConnectTimeout:       &durationpb.Duration{Nanos: TimeOut},
 			LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
 				ClusterName: clusterName,
 				Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
@@ -369,9 +368,9 @@ func generateProxyConfig(
 			},
 			CircuitBreakers: &envoy_cluster.CircuitBreakers{
 				Thresholds: []*envoy_cluster.CircuitBreakers_Thresholds{
-					{MaxConnections: &wrappers.UInt32Value{Value: math.MaxUint32}},
-					{MaxPendingRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
-					{MaxRequests: &wrappers.UInt32Value{Value: math.MaxUint32}},
+					{MaxConnections: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
+					{MaxPendingRequests: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
+					{MaxRequests: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
 				}},
 		})
 	}
@@ -405,18 +404,18 @@ func generateProxyConfig(
 				{
 					Name: "static-layer",
 					LayerSpecifier: &envoy_bootstrap.RuntimeLayer_StaticLayer{
-						StaticLayer: &pstruct.Struct{
-							Fields: map[string]*pstruct.Value{
-								"envoy": &pstruct.Value{
-									Kind: &pstruct.Value_StructValue{
-										StructValue: &pstruct.Struct{
-											Fields: map[string]*pstruct.Value{
-												"reloadable_features": &pstruct.Value{
-													Kind: &pstruct.Value_StructValue{
-														StructValue: &pstruct.Struct{
-															Fields: map[string]*pstruct.Value{
-																"new_tcp_connection_pool": &pstruct.Value{
-																	Kind: &pstruct.Value_BoolValue{
+						StaticLayer: &structpb.Struct{
+							Fields: map[string]*structpb.Value{
+								"envoy": &structpb.Value{
+									Kind: &structpb.Value_StructValue{
+										StructValue: &structpb.Struct{
+											Fields: map[string]*structpb.Value{
+												"reloadable_features": &structpb.Value{
+													Kind: &structpb.Value_StructValue{
+														StructValue: &structpb.Struct{
+															Fields: map[string]*structpb.Value{
+																"new_tcp_connection_pool": &structpb.Value{
+																	Kind: &structpb.Value_BoolValue{
 																		BoolValue: false,
 																	},
 																},
@@ -455,7 +454,7 @@ func generateProxyConfig(
 		clusters = append(clusters, &envoy_cluster.Cluster{
 			Name:                 AdsClusterName,
 			ClusterDiscoveryType: &envoy_cluster.Cluster_Type{Type: envoy_cluster.Cluster_STATIC},
-			ConnectTimeout:       &duration.Duration{Nanos: TimeOut},
+			ConnectTimeout:       &durationpb.Duration{Nanos: TimeOut},
 			LoadAssignment: &envoy_endpoint.ClusterLoadAssignment{
 				ClusterName: AdsClusterName,
 				Endpoints: []*envoy_endpoint.LocalityLbEndpoints{{
@@ -567,7 +566,7 @@ func generateListeners(container executor.Container, requireClientCerts, http2En
 		}
 
 		if requireClientCerts && portMap.ContainerTLSProxyPort != C2CTLSPort {
-			tlsContext.RequireClientCertificate = &wrappers.BoolValue{Value: requireClientCerts}
+			tlsContext.RequireClientCertificate = &wrapperspb.BoolValue{Value: requireClientCerts}
 			tlsContext.CommonTlsContext.ValidationContextType = &envoy_tls.CommonTlsContext_ValidationContextSdsSecretConfig{
 				ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 					Name: "id-validation-context",
@@ -669,7 +668,7 @@ func writeDiscoveryResponseYAML(resourceMsg proto.Message, outPath string) error
 	}
 	dr := &envoy_discovery.DiscoveryResponse{
 		VersionInfo: "0",
-		Resources: []*any.Any{
+		Resources: []*anypb.Any{
 			resourceAny,
 		},
 	}

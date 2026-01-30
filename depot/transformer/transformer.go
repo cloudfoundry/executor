@@ -665,7 +665,7 @@ func (t *transformer) createCheck(
 	}
 
 	rl := models.ResourceLimits{}
-	rl.SetNofile(nofiles)
+	rl.SetNofile(&nofiles)
 	runAction := models.RunAction{
 		LogSource:      sourceName,
 		ResourceLimits: &rl,
