@@ -1,7 +1,6 @@
 package transformer_test
 
 import (
-	"code.cloudfoundry.org/durationjson"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"code.cloudfoundry.org/durationjson"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -291,12 +292,18 @@ var _ = Describe("Transformer", func() {
 
 		Describe("container proxy", func() {
 			var (
-				container    executor.Container
-				processLock  sync.Mutex
-				process      ifrit.Process
-				envoyProcess *gardenfakes.FakeProcess
-				actionCh     chan int
-				envoyCh      chan int
+				container       executor.Container
+				processLock     sync.Mutex
+				process         ifrit.Process
+				envoyProcess    *gardenfakes.FakeProcess
+				actionCh        chan int
+				envoyCh         chan int
+				startupIO       chan garden.ProcessIO
+				livenessIO      chan garden.ProcessIO
+				startupCh       chan int
+				startupProcess  *gardenfakes.FakeProcess
+				livenessProcess *gardenfakes.FakeProcess
+				livenessCh      chan int
 			)
 
 			BeforeEach(func() {
@@ -311,6 +318,18 @@ var _ = Describe("Transformer", func() {
 				envoyCh = make(chan int)
 				envoyProcess = makeProcess(envoyCh)
 
+				startupIO = make(chan garden.ProcessIO, 1)
+				livenessIO = make(chan garden.ProcessIO, 1)
+				startupIOCh := startupIO
+				livenessIOCh := livenessIO
+
+				startupCh = make(chan int)
+				startupProcess = makeProcess(startupCh)
+
+				livenessCh = make(chan int, 1)
+				livenessProcess = makeProcess(livenessCh)
+
+				healthcheckCallCount := int64(0)
 				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
 					defer GinkgoRecover()
 					// get rid of race condition caused by write inside the BeforeEach
@@ -325,6 +344,16 @@ var _ = Describe("Transformer", func() {
 						return envoyProcess, nil
 					case spec.Path == "/etc/cf-assets/envoy/envoy" && runtime.GOOS == "windows":
 						return envoyProcess, nil
+					case spec.Path == filepath.Join(transformer.HealthCheckDstPath, "healthcheck"):
+						oldCount := atomic.AddInt64(&healthcheckCallCount, 1)
+						switch oldCount {
+						case 1:
+							startupIOCh <- io
+							return startupProcess, nil
+						case 2:
+							livenessIOCh <- io
+							return livenessProcess, nil
+						}
 					}
 
 					err = errors.New("")
@@ -333,8 +362,9 @@ var _ = Describe("Transformer", func() {
 				}
 
 				container = executor.Container{
-					ExternalIP: "10.0.0.1",
-					InternalIP: "11.0.0.1",
+					ExternalIP:   "10.0.0.1",
+					InternalIP:   "11.0.0.1",
+					InternalIPv6: "2000::1",
 					RunInfo: executor.RunInfo{
 						Action: &models.Action{
 							RunAction: &models.RunAction{
@@ -382,11 +412,13 @@ var _ = Describe("Transformer", func() {
 			AfterEach(func() {
 				close(actionCh)
 				close(envoyCh)
+				close(startupCh)
+				livenessCh <- 1
 				ginkgomon.Interrupt(process)
 			})
 
 			It("runs the container proxy in a sidecar container", func() {
-				Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+				Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 				specs := []garden.ProcessSpec{}
 				for i := 0; i < gardenContainer.RunCallCount(); i++ {
 					spec, _ := gardenContainer.RunArgsForCall(i)
@@ -417,6 +449,7 @@ var _ = Describe("Transformer", func() {
 					Env: []string{
 						"CF_INSTANCE_IP=10.0.0.1",
 						"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+						"CF_INSTANCE_INTERNAL_IPV6=2000::1",
 						"CF_INSTANCE_PORT=61001",
 						"CF_INSTANCE_ADDR=10.0.0.1:61001",
 						"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
@@ -435,7 +468,7 @@ var _ = Describe("Transformer", func() {
 
 			Context("when the process is signalled", func() {
 				JustBeforeEach(func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 					process.Signal(os.Interrupt)
 				})
 
@@ -446,7 +479,7 @@ var _ = Describe("Transformer", func() {
 
 			Context("when the envoy process is signalled", func() {
 				JustBeforeEach(func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 					envoyCh <- 134
 				})
 
@@ -459,6 +492,7 @@ var _ = Describe("Transformer", func() {
 
 				It("process should fail with a descriptive error", func() {
 					actionCh <- 0
+					startupCh <- 0
 					Eventually(process.Wait()).Should(Receive(MatchError("PROXY: Exited with status 134")))
 				})
 			})
@@ -469,7 +503,7 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("runs the container proxy in a sidecar container", func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(3))
 					specs := []garden.ProcessSpec{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)
@@ -500,6 +534,7 @@ var _ = Describe("Transformer", func() {
 						Env: []string{
 							"CF_INSTANCE_IP=10.0.0.1",
 							"CF_INSTANCE_INTERNAL_IP=11.0.0.1",
+							"CF_INSTANCE_INTERNAL_IPV6=2000::1",
 							"CF_INSTANCE_PORT=61001",
 							"CF_INSTANCE_ADDR=10.0.0.1:61001",
 							"CF_INSTANCE_PORTS=[{\"external\":61001,\"internal\":8080},{\"external\":61002,\"internal\":61001}]",
@@ -523,7 +558,7 @@ var _ = Describe("Transformer", func() {
 				})
 
 				It("does not run the container proxy", func() {
-					Eventually(gardenContainer.RunCallCount).Should(Equal(1))
+					Eventually(gardenContainer.RunCallCount).Should(Equal(2))
 					paths := []string{}
 					for i := 0; i < gardenContainer.RunCallCount(); i++ {
 						spec, _ := gardenContainer.RunArgsForCall(i)

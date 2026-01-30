@@ -75,7 +75,6 @@ type containerStore struct {
 	rootFSSizer         configuration.RootFSSizer
 	logManager          LogManager
 
-	useDeclarativeHealthCheck  bool
 	declarativeHealthcheckPath string
 
 	proxyConfigHandler ProxyManager
@@ -106,7 +105,6 @@ func New(
 	trustedSystemCertificatesPath string,
 	metronClient loggingclient.IngressClient,
 	rootFSSizer configuration.RootFSSizer,
-	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	proxyConfigHandler ProxyManager,
 	cellID string,
@@ -129,7 +127,6 @@ func New(
 		metronClient:                  metronClient,
 		rootFSSizer:                   rootFSSizer,
 		trustedSystemCertificatesPath: trustedSystemCertificatesPath,
-		useDeclarativeHealthCheck:     useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:    declarativeHealthcheckPath,
 		proxyConfigHandler:            proxyConfigHandler,
 
@@ -155,7 +152,6 @@ func (cs *containerStore) Reserve(logger lager.Logger, traceID string, req *exec
 
 	err := cs.containers.Add(
 		newStoreNode(&cs.containerConfig,
-			cs.useDeclarativeHealthCheck,
 			cs.declarativeHealthcheckPath,
 			container,
 			cs.gardenClientFactory,

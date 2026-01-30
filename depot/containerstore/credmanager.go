@@ -31,6 +31,7 @@ const (
 	C2CCredCreationSucceededCount    = "C2CCredCreationSucceededCount"
 	C2CCredCreationSucceededDuration = "C2CCredCreationSucceededDuration"
 	C2CCredCreationFailedCount       = "C2CCredCreationFailedCount"
+	RSAPrivateKeySize                = 3072
 )
 
 type Credentials struct {
@@ -351,7 +352,7 @@ func (c *credManager) generateC2cCred(logger lager.Logger, container executor.Co
 
 func (c *credManager) generateCredForSAN(logger lager.Logger, certSAN certificateSAN, certGUID string) (Credential, error) {
 	logger.Debug("generating-private-key")
-	privateKey, err := rsa.GenerateKey(c.entropyReader, 2048)
+	privateKey, err := rsa.GenerateKey(c.entropyReader, RSAPrivateKeySize)
 	if err != nil {
 		return Credential{}, err
 	}

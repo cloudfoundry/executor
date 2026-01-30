@@ -80,7 +80,6 @@ type storeNode struct {
 	process                               ifrit.Process
 	config                                *ContainerConfig
 	rootFSSizer                           configuration.RootFSSizer
-	useDeclarativeHealthCheck             bool
 	declarativeHealthcheckPath            string
 	proxyConfigHandler                    ProxyManager
 	bindMounts                            []garden.BindMount
@@ -100,7 +99,6 @@ type storeNode struct {
 
 func newStoreNode(
 	config *ContainerConfig,
-	useDeclarativeHealthCheck bool,
 	declarativeHealthcheckPath string,
 	container executor.Container,
 	gardenClientFactory GardenClientFactory,
@@ -139,7 +137,6 @@ func newStoreNode(
 		modifiedIndex:                         0,
 		hostTrustedCertificatesPath:           hostTrustedCertificatesPath,
 		metronClient:                          metronClient,
-		useDeclarativeHealthCheck:             useDeclarativeHealthCheck,
 		declarativeHealthcheckPath:            declarativeHealthcheckPath,
 		proxyConfigHandler:                    proxyConfigHandler,
 		rootFSSizer:                           rootFSSizer,
@@ -262,14 +259,12 @@ func (n *storeNode) Create(logger lager.Logger, traceID string) error {
 
 		info.Env = append(info.Env, envs...)
 
-		if n.useDeclarativeHealthCheck {
-			logger.Info("adding-healthcheck-bindmounts")
-			n.bindMounts = append(n.bindMounts, garden.BindMount{
-				Origin:  garden.BindMountOriginHost,
-				SrcPath: n.declarativeHealthcheckPath,
-				DstPath: "/etc/cf-assets/healthcheck",
-			})
-		}
+		logger.Info("adding-healthcheck-bindmounts")
+		n.bindMounts = append(n.bindMounts, garden.BindMount{
+			Origin:  garden.BindMountOriginHost,
+			SrcPath: n.declarativeHealthcheckPath,
+			DstPath: "/etc/cf-assets/healthcheck",
+		})
 
 		sourceName, tags := n.info.LogConfig.GetSourceNameAndTagsForLogging()
 		metricErr := n.metronClient.SendAppLog(fmt.Sprintf("Cell %s creating container for instance %s", n.cellID, n.Info().Guid), sourceName, tags)
@@ -459,7 +454,10 @@ func (n *storeNode) createGardenContainer(logger lager.Logger, traceID string, i
 	info.Ports = n.portMappingFromContainerInfo(containerInfo, info.Ports, proxyPortMapping)
 	info.ExternalIP = containerInfo.ExternalIP
 	info.InternalIP = containerInfo.ContainerIP
+	info.InternalIPv6 = containerInfo.ContainerIPv6
 	info.AdvertisePreferenceForInstanceAddress = n.advertisePreferenceForInstanceAddress
+
+	logger.Debug("container-created", lager.Data{"info": info})
 
 	info.MemoryLimit = containerSpec.Limits.Memory.LimitInBytes
 	info.DiskLimit = containerSpec.Limits.Disk.ByteHard

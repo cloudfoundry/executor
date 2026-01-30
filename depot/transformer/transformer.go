@@ -2,13 +2,14 @@ package transformer
 
 import (
 	"bytes"
-	"code.cloudfoundry.org/lager/v3"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"code.cloudfoundry.org/lager/v3"
 
 	"code.cloudfoundry.org/archiver/compressor"
 	"code.cloudfoundry.org/bbs/models"
@@ -56,7 +57,6 @@ type transformer struct {
 	clock            clock.Clock
 
 	sidecarRootFS                        string
-	useDeclarativeHealthCheck            bool
 	declarativeHealthCheckDefaultTimeout time.Duration
 	emitHealthCheckMetrics               bool
 	healthyMonitoringInterval            time.Duration
@@ -85,7 +85,6 @@ func WithSidecarRootfs(
 
 func WithDeclarativeHealthChecks(timeout time.Duration) Option {
 	return func(t *transformer) {
-		t.useDeclarativeHealthCheck = true
 
 		if timeout <= 0 {
 			timeout = time.Duration(DefaultDeclarativeHealthcheckRequestTimeout) * time.Millisecond
@@ -162,6 +161,7 @@ func (t *transformer) stepFor(
 	container garden.Container,
 	externalIP string,
 	internalIP string,
+	internalIPv6 string,
 	ports []executor.PortMapping,
 	suppressExitStatusCode bool,
 	monitorOutputWrapper bool,
@@ -177,6 +177,7 @@ func (t *transformer) stepFor(
 			logger,
 			externalIP,
 			internalIP,
+			internalIPv6,
 			ports,
 			t.clock,
 			t.gracefulShutdownInterval,
@@ -212,6 +213,7 @@ func (t *transformer) stepFor(
 				container,
 				externalIP,
 				internalIP,
+				internalIPv6,
 				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
@@ -232,6 +234,7 @@ func (t *transformer) stepFor(
 				container,
 				externalIP,
 				internalIP,
+				internalIPv6,
 				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
@@ -250,6 +253,7 @@ func (t *transformer) stepFor(
 				container,
 				externalIP,
 				internalIP,
+				internalIPv6,
 				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
@@ -271,6 +275,7 @@ func (t *transformer) stepFor(
 					container,
 					externalIP,
 					internalIP,
+					internalIPv6,
 					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
@@ -285,6 +290,7 @@ func (t *transformer) stepFor(
 					container,
 					externalIP,
 					internalIP,
+					internalIPv6,
 					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
@@ -308,6 +314,7 @@ func (t *transformer) stepFor(
 					container,
 					externalIP,
 					internalIP,
+					internalIPv6,
 					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
@@ -322,6 +329,7 @@ func (t *transformer) stepFor(
 					container,
 					externalIP,
 					internalIP,
+					internalIPv6,
 					ports,
 					suppressExitStatusCode,
 					monitorOutputWrapper,
@@ -342,6 +350,7 @@ func (t *transformer) stepFor(
 				container,
 				externalIP,
 				internalIP,
+				internalIPv6,
 				ports,
 				suppressExitStatusCode,
 				monitorOutputWrapper,
@@ -377,6 +386,7 @@ func overrideSuppressLogOutput(monitorAction *models.Action) {
 		overrideSuppressLogOutput(monitorAction.TimeoutAction.Action)
 	}
 }
+
 func (t *transformer) StepsRunner(
 	logger lager.Logger,
 	container executor.Container,
@@ -394,6 +404,7 @@ func (t *transformer) StepsRunner(
 			gardenContainer,
 			container.ExternalIP,
 			container.InternalIP,
+			container.InternalIPv6,
 			container.Ports,
 			false,
 			false,
@@ -416,6 +427,7 @@ func (t *transformer) StepsRunner(
 			logger.Session("post-setup"),
 			container.ExternalIP,
 			container.InternalIP,
+			container.InternalIPv6,
 			container.Ports,
 			t.clock,
 			t.gracefulShutdownInterval,
@@ -435,6 +447,7 @@ func (t *transformer) StepsRunner(
 		gardenContainer,
 		container.ExternalIP,
 		container.InternalIP,
+		container.InternalIPv6,
 		container.Ports,
 		false,
 		false,
@@ -449,6 +462,7 @@ func (t *transformer) StepsRunner(
 			gardenContainer,
 			container.ExternalIP,
 			container.InternalIP,
+			container.InternalIPv6,
 			container.Ports,
 			false,
 			false,
@@ -459,7 +473,7 @@ func (t *transformer) StepsRunner(
 	var proxyStartupChecks []ifrit.Runner
 	var proxyLivenessChecks []ifrit.Runner
 
-	if t.useContainerProxy && t.useDeclarativeHealthCheck {
+	if t.useContainerProxy {
 		envoyStartupLogger := logger.Session("envoy-startup-check")
 		envoyLivenessLogger := logger.Session("envoy-liveness-check")
 
@@ -511,7 +525,7 @@ func (t *transformer) StepsRunner(
 		}
 	}
 	var readinessChan chan steps.ReadinessState
-	if container.CheckDefinition != nil && t.useDeclarativeHealthCheck {
+	if container.CheckDefinition != nil {
 		if container.CheckDefinition.Checks != nil {
 			monitor = t.transformCheckDefinition(logger,
 				&container,
@@ -550,6 +564,7 @@ func (t *transformer) StepsRunner(
 					gardenContainer,
 					container.ExternalIP,
 					container.InternalIP,
+					container.InternalIPv6,
 					container.Ports,
 					true,
 					true,
@@ -672,6 +687,7 @@ func (t *transformer) createCheck(
 		logger,
 		container.ExternalIP,
 		container.InternalIP,
+		container.InternalIPv6,
 		container.Ports,
 		t.clock,
 		t.gracefulShutdownInterval,
@@ -1002,6 +1018,7 @@ func (t *transformer) transformContainerProxyStep(
 		proxyLogger,
 		execContainer.ExternalIP,
 		execContainer.InternalIP,
+		execContainer.InternalIPv6,
 		execContainer.Ports,
 		t.clock,
 		t.gracefulShutdownInterval,
