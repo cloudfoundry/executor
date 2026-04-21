@@ -87,8 +87,6 @@ func (fake *FakeRootFSSizer) RootFSSizeFromPathReturnsOnCall(i int, result1 uint
 func (fake *FakeRootFSSizer) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.rootFSSizeFromPathMutex.RLock()
-	defer fake.rootFSSizeFromPathMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

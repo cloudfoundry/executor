@@ -28,6 +28,20 @@ type FakeCredManager struct {
 		result2 []executor.EnvironmentVariable
 		result3 error
 	}
+	GenerateInitialCredentialsStub        func(lager.Logger, executor.Container) (containerstore.Credentials, error)
+	generateInitialCredentialsMutex       sync.RWMutex
+	generateInitialCredentialsArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}
+	generateInitialCredentialsReturns struct {
+		result1 containerstore.Credentials
+		result2 error
+	}
+	generateInitialCredentialsReturnsOnCall map[int]struct {
+		result1 containerstore.Credentials
+		result2 error
+	}
 	RemoveCredDirStub        func(lager.Logger, executor.Container) error
 	removeCredDirMutex       sync.RWMutex
 	removeCredDirArgsForCall []struct {
@@ -123,6 +137,71 @@ func (fake *FakeCredManager) CreateCredDirReturnsOnCall(i int, result1 []garden.
 		result2 []executor.EnvironmentVariable
 		result3 error
 	}{result1, result2, result3}
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentials(arg1 lager.Logger, arg2 executor.Container) (containerstore.Credentials, error) {
+	fake.generateInitialCredentialsMutex.Lock()
+	ret, specificReturn := fake.generateInitialCredentialsReturnsOnCall[len(fake.generateInitialCredentialsArgsForCall)]
+	fake.generateInitialCredentialsArgsForCall = append(fake.generateInitialCredentialsArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 executor.Container
+	}{arg1, arg2})
+	stub := fake.GenerateInitialCredentialsStub
+	fakeReturns := fake.generateInitialCredentialsReturns
+	fake.recordInvocation("GenerateInitialCredentials", []interface{}{arg1, arg2})
+	fake.generateInitialCredentialsMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentialsCallCount() int {
+	fake.generateInitialCredentialsMutex.RLock()
+	defer fake.generateInitialCredentialsMutex.RUnlock()
+	return len(fake.generateInitialCredentialsArgsForCall)
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentialsCalls(stub func(lager.Logger, executor.Container) (containerstore.Credentials, error)) {
+	fake.generateInitialCredentialsMutex.Lock()
+	defer fake.generateInitialCredentialsMutex.Unlock()
+	fake.GenerateInitialCredentialsStub = stub
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentialsArgsForCall(i int) (lager.Logger, executor.Container) {
+	fake.generateInitialCredentialsMutex.RLock()
+	defer fake.generateInitialCredentialsMutex.RUnlock()
+	argsForCall := fake.generateInitialCredentialsArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentialsReturns(result1 containerstore.Credentials, result2 error) {
+	fake.generateInitialCredentialsMutex.Lock()
+	defer fake.generateInitialCredentialsMutex.Unlock()
+	fake.GenerateInitialCredentialsStub = nil
+	fake.generateInitialCredentialsReturns = struct {
+		result1 containerstore.Credentials
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeCredManager) GenerateInitialCredentialsReturnsOnCall(i int, result1 containerstore.Credentials, result2 error) {
+	fake.generateInitialCredentialsMutex.Lock()
+	defer fake.generateInitialCredentialsMutex.Unlock()
+	fake.GenerateInitialCredentialsStub = nil
+	if fake.generateInitialCredentialsReturnsOnCall == nil {
+		fake.generateInitialCredentialsReturnsOnCall = make(map[int]struct {
+			result1 containerstore.Credentials
+			result2 error
+		})
+	}
+	fake.generateInitialCredentialsReturnsOnCall[i] = struct {
+		result1 containerstore.Credentials
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeCredManager) RemoveCredDir(arg1 lager.Logger, arg2 executor.Container) error {
@@ -253,12 +332,6 @@ func (fake *FakeCredManager) RunnerReturnsOnCall(i int, result1 ifrit.Runner) {
 func (fake *FakeCredManager) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.createCredDirMutex.RLock()
-	defer fake.createCredDirMutex.RUnlock()
-	fake.removeCredDirMutex.RLock()
-	defer fake.removeCredDirMutex.RUnlock()
-	fake.runnerMutex.RLock()
-	defer fake.runnerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

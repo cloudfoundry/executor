@@ -79,8 +79,6 @@ func (fake *FakeContainerInfoProvider) InfoReturnsOnCall(i int, result1 executor
 func (fake *FakeContainerInfoProvider) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.infoMutex.RLock()
-	defer fake.infoMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

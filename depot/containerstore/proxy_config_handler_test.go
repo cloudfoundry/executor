@@ -1,3 +1,8 @@
+// @AI-Generated
+// Modified with AI assistance using Cursor with Claude Opus 4
+// Description:
+// 2026-03-12: Updated SDS config assertions to use PathConfigSource with WatchedDirectory.
+
 package containerstore_test
 
 import (
@@ -1077,8 +1082,11 @@ func createListener(config expectedListener) *envoy_listener.Listener {
 				{
 					Name: config.sdsSecretName,
 					SdsConfig: &envoy_core.ConfigSource{
-						ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-							Path: config.sdsFileName,
+						ConfigSourceSpecifier: &envoy_core.ConfigSource_PathConfigSource{
+							PathConfigSource: &envoy_core.PathConfigSource{
+								Path:             config.sdsFileName,
+								WatchedDirectory: &envoy_core.WatchedDirectory{Path: "/etc/cf-assets/envoy_config"},
+							},
 						},
 					},
 				},
@@ -1094,8 +1102,11 @@ func createListener(config expectedListener) *envoy_listener.Listener {
 			ValidationContextSdsSecretConfig: &envoy_tls.SdsSecretConfig{
 				Name: "id-validation-context",
 				SdsConfig: &envoy_core.ConfigSource{
-					ConfigSourceSpecifier: &envoy_core.ConfigSource_Path{
-						Path: "/etc/cf-assets/envoy_config/sds-id-validation-context.yaml",
+					ConfigSourceSpecifier: &envoy_core.ConfigSource_PathConfigSource{
+						PathConfigSource: &envoy_core.PathConfigSource{
+							Path:             "/etc/cf-assets/envoy_config/sds-id-validation-context.yaml",
+							WatchedDirectory: &envoy_core.WatchedDirectory{Path: "/etc/cf-assets/envoy_config"},
+						},
 					},
 				},
 			},

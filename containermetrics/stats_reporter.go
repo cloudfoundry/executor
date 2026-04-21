@@ -10,27 +10,33 @@ import (
 	"code.cloudfoundry.org/lager/v3"
 )
 
-type cpuInfo struct {
-	timeSpentInCPU                      time.Duration
-	timeOfSample                        time.Time
-	absoluteCPUEntitlementInNanoseconds uint64
+type CPUInfo struct {
+	TimeSpentInCPU                      time.Duration
+	TimeOfSample                        time.Time
+	AbsoluteCPUEntitlementInNanoseconds uint64
 }
 
 type StatsReporter struct {
-	cpuInfos              map[string]*cpuInfo
+	CPUInfos              map[string]*CPUInfo
 	metronClient          loggingclient.IngressClient
 	enableContainerProxy  bool
 	proxyMemoryAllocation float64
 	metricsCache          *atomic.Value
+	processor             MetricsProcessor
 }
 
 func NewStatsReporter(metronClient loggingclient.IngressClient, enableContainerProxy bool, proxyMemoryAllocation float64, metricsCache *atomic.Value) *StatsReporter {
+	return NewStatsReporterWithProcessor(metronClient, enableContainerProxy, proxyMemoryAllocation, metricsCache, &DefaultMetricsProcessor{})
+}
+
+func NewStatsReporterWithProcessor(metronClient loggingclient.IngressClient, enableContainerProxy bool, proxyMemoryAllocation float64, metricsCache *atomic.Value, processor MetricsProcessor) *StatsReporter {
 	return &StatsReporter{
-		cpuInfos:              make(map[string]*cpuInfo),
+		CPUInfos:              make(map[string]*CPUInfo),
 		enableContainerProxy:  enableContainerProxy,
 		metronClient:          metronClient,
 		proxyMemoryAllocation: proxyMemoryAllocation,
 		metricsCache:          metricsCache,
+		processor:             processor,
 	}
 }
 
@@ -42,7 +48,7 @@ func (reporter *StatsReporter) Metrics() map[string]*CachedContainerMetrics {
 }
 
 func (reporter *StatsReporter) Report(logger lager.Logger, containers []executor.Container, metrics map[string]executor.Metrics, timeStamp time.Time) error {
-	cpuInfos := map[string]*cpuInfo{}
+	CPUInfos := map[string]*CPUInfo{}
 	repMetricsMap := make(map[string]*CachedContainerMetrics)
 
 	for _, container := range containers {
@@ -53,19 +59,26 @@ func (reporter *StatsReporter) Report(logger lager.Logger, containers []executor
 			continue
 		}
 
-		cpuInfos[guid] = reporter.cpuInfos[guid]
+		CPUInfos[guid] = reporter.CPUInfos[guid]
 
-		previousCPUInfo := cpuInfos[guid]
+		previousCPUInfo := CPUInfos[guid]
 
 		if reporter.enableContainerProxy && container.EnableContainerProxy {
 			metric.MemoryUsageInBytes = uint64(float64(metric.MemoryUsageInBytes) * reporter.scaleMemory(container))
 			metric.MemoryLimitInBytes = uint64(float64(metric.MemoryLimitInBytes) - reporter.proxyMemoryAllocation)
 		}
 
-		repMetrics, cpu := reporter.calculateAndSendMetrics(logger, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, timeStamp)
-		if cpu != nil {
-			cpuInfos[guid] = cpu
+		if len(metric.MetricsConfig.Tags) == 0 {
+			metric.MetricsConfig.Tags = map[string]string{}
 		}
+
+		index := strconv.Itoa(metric.MetricsConfig.Index)
+		if _, ok := metric.MetricsConfig.Tags["instance_id"]; !ok {
+			metric.MetricsConfig.Tags["instance_id"] = index
+		}
+
+		cpu, repMetrics := reporter.processor.ProcessAndSend(logger, reporter.metronClient, metric.MetricsConfig, metric.ContainerMetrics, previousCPUInfo, timeStamp)
+		CPUInfos[guid] = &cpu
 
 		if repMetrics != nil {
 			repMetricsMap[guid] = repMetrics
@@ -73,83 +86,21 @@ func (reporter *StatsReporter) Report(logger lager.Logger, containers []executor
 
 	}
 
-	reporter.cpuInfos = cpuInfos
+	reporter.CPUInfos = CPUInfos
 	reporter.metricsCache.Store(repMetricsMap)
 	return nil
 }
 
-func (reporter *StatsReporter) calculateAndSendMetrics(
-	logger lager.Logger,
-	metricsConfig executor.MetricsConfig,
-	containerMetrics executor.ContainerMetrics,
-	previousInfo *cpuInfo,
-	now time.Time,
-) (*CachedContainerMetrics, *cpuInfo) {
-	currentInfo, cpuPercent, cpuEntitlementPercent := calculateInfo(containerMetrics, previousInfo, now)
-
-	if len(metricsConfig.Tags) == 0 {
-		metricsConfig.Tags = map[string]string{}
-	}
-
-	applicationId := metricsConfig.Guid
-	if sourceID, ok := metricsConfig.Tags["source_id"]; ok {
-		applicationId = sourceID
-	} else {
-		metricsConfig.Tags["source_id"] = applicationId
-	}
-
-	index := strconv.Itoa(metricsConfig.Index)
-	if _, ok := metricsConfig.Tags["instance_id"]; !ok {
-		metricsConfig.Tags["instance_id"] = index
-	}
-
-	if applicationId != "" {
-		err := reporter.metronClient.SendAppMetrics(loggingclient.ContainerMetric{
-			CpuPercentage:            cpuPercent,
-			CpuEntitlementPercentage: cpuEntitlementPercent,
-			MemoryBytes:              containerMetrics.MemoryUsageInBytes,
-			DiskBytes:                containerMetrics.DiskUsageInBytes,
-			MemoryBytesQuota:         containerMetrics.MemoryLimitInBytes,
-			DiskBytesQuota:           containerMetrics.DiskLimitInBytes,
-			AbsoluteCPUUsage:         uint64(containerMetrics.TimeSpentInCPU.Nanoseconds()),
-			AbsoluteCPUEntitlement:   containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
-			ContainerAge:             containerMetrics.ContainerAgeInNanoseconds,
-			Tags:                     metricsConfig.Tags,
-			RxBytes:                  containerMetrics.RxInBytes,
-			TxBytes:                  containerMetrics.TxInBytes,
-		})
-
-		if err != nil {
-			logger.Error("failed-to-send-container-metrics", err, lager.Data{
-				"metrics_guid":  applicationId,
-				"metrics_index": metricsConfig.Index,
-				"tags":          metricsConfig.Tags,
-			})
-		}
-	}
-
-	return &CachedContainerMetrics{
-		MetricGUID:       applicationId,
-		CPUUsageFraction: cpuPercent / 100,
-		DiskUsageBytes:   containerMetrics.DiskUsageInBytes,
-		DiskQuotaBytes:   containerMetrics.DiskLimitInBytes,
-		MemoryUsageBytes: containerMetrics.MemoryUsageInBytes,
-		MemoryQuotaBytes: containerMetrics.MemoryLimitInBytes,
-		RxBytes:          containerMetrics.RxInBytes,
-		TxBytes:          containerMetrics.TxInBytes,
-	}, &currentInfo
-}
-
-func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpuInfo, now time.Time) (cpuInfo, float64, float64) {
-	timeOfSample := now
+func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *CPUInfo, now time.Time) (CPUInfo, float64, float64) {
+	TimeOfSample := now
 	if containerMetrics.ContainerAgeInNanoseconds != 0 {
-		timeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
+		TimeOfSample = time.Unix(0, int64(containerMetrics.ContainerAgeInNanoseconds))
 	}
 
-	currentInfo := cpuInfo{
-		timeSpentInCPU:                      containerMetrics.TimeSpentInCPU,
-		timeOfSample:                        timeOfSample,
-		absoluteCPUEntitlementInNanoseconds: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
+	currentInfo := CPUInfo{
+		TimeSpentInCPU:                      containerMetrics.TimeSpentInCPU,
+		TimeOfSample:                        TimeOfSample,
+		AbsoluteCPUEntitlementInNanoseconds: containerMetrics.AbsoluteCPUEntitlementInNanoseconds,
 	}
 
 	var cpuPercent float64
@@ -159,16 +110,16 @@ func calculateInfo(containerMetrics executor.ContainerMetrics, previousInfo *cpu
 		cpuEntitlementPercent = 0.0
 	} else {
 		cpuPercent = computeCPUPercent(
-			previousInfo.timeSpentInCPU,
-			currentInfo.timeSpentInCPU,
-			previousInfo.timeOfSample,
-			currentInfo.timeOfSample,
+			previousInfo.TimeSpentInCPU,
+			currentInfo.TimeSpentInCPU,
+			previousInfo.TimeOfSample,
+			currentInfo.TimeOfSample,
 		)
 		cpuEntitlementPercent = computeCPUEntitlementPercent(
-			previousInfo.timeSpentInCPU,
-			currentInfo.timeSpentInCPU,
-			previousInfo.absoluteCPUEntitlementInNanoseconds,
-			currentInfo.absoluteCPUEntitlementInNanoseconds,
+			previousInfo.TimeSpentInCPU,
+			currentInfo.TimeSpentInCPU,
+			previousInfo.AbsoluteCPUEntitlementInNanoseconds,
+			currentInfo.AbsoluteCPUEntitlementInNanoseconds,
 		)
 	}
 

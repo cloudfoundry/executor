@@ -388,16 +388,6 @@ func (fake *FakeFSOperator) WriteFileReturnsOnCall(i int, result1 error) {
 func (fake *FakeFSOperator) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.chdirMutex.RLock()
-	defer fake.chdirMutex.RUnlock()
-	fake.createFileMutex.RLock()
-	defer fake.createFileMutex.RUnlock()
-	fake.mkdirAllMutex.RLock()
-	defer fake.mkdirAllMutex.RUnlock()
-	fake.removeAllMutex.RLock()
-	defer fake.removeAllMutex.RUnlock()
-	fake.writeFileMutex.RLock()
-	defer fake.writeFileMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

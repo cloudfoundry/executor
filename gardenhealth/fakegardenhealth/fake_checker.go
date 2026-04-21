@@ -125,10 +125,6 @@ func (fake *FakeChecker) HealthcheckReturnsOnCall(i int, result1 error) {
 func (fake *FakeChecker) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.cancelMutex.RLock()
-	defer fake.cancelMutex.RUnlock()
-	fake.healthcheckMutex.RLock()
-	defer fake.healthcheckMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

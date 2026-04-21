@@ -222,12 +222,6 @@ func (fake *FakeDependencyManager) StopArgsForCall(i int) lager.Logger {
 func (fake *FakeDependencyManager) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.downloadCachedDependenciesMutex.RLock()
-	defer fake.downloadCachedDependenciesMutex.RUnlock()
-	fake.releaseCachedDependenciesMutex.RLock()
-	defer fake.releaseCachedDependenciesMutex.RUnlock()
-	fake.stopMutex.RLock()
-	defer fake.stopMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

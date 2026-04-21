@@ -99,8 +99,6 @@ func (fake *FakeLogManager) NewLogStreamerReturnsOnCall(i int, result1 log_strea
 func (fake *FakeLogManager) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.newLogStreamerMutex.RLock()
-	defer fake.newLogStreamerMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

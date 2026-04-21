@@ -370,20 +370,6 @@ func (fake *FakeLogStreamer) WithSourceReturnsOnCall(i int, result1 log_streamer
 func (fake *FakeLogStreamer) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.flushMutex.RLock()
-	defer fake.flushMutex.RUnlock()
-	fake.sourceNameMutex.RLock()
-	defer fake.sourceNameMutex.RUnlock()
-	fake.stderrMutex.RLock()
-	defer fake.stderrMutex.RUnlock()
-	fake.stdoutMutex.RLock()
-	defer fake.stdoutMutex.RUnlock()
-	fake.stopMutex.RLock()
-	defer fake.stopMutex.RUnlock()
-	fake.updateTagsMutex.RLock()
-	defer fake.updateTagsMutex.RUnlock()
-	fake.withSourceMutex.RLock()
-	defer fake.withSourceMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

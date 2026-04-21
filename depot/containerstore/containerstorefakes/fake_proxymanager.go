@@ -408,16 +408,6 @@ func (fake *FakeProxyManager) UpdateReturnsOnCall(i int, result1 error) {
 func (fake *FakeProxyManager) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.closeMutex.RLock()
-	defer fake.closeMutex.RUnlock()
-	fake.createDirMutex.RLock()
-	defer fake.createDirMutex.RUnlock()
-	fake.proxyPortsMutex.RLock()
-	defer fake.proxyPortsMutex.RUnlock()
-	fake.removeDirMutex.RLock()
-	defer fake.removeDirMutex.RUnlock()
-	fake.updateMutex.RLock()
-	defer fake.updateMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

@@ -171,10 +171,6 @@ func (fake *FakeVolumeMountedFilesImplementor) RemoveDirReturnsOnCall(i int, res
 func (fake *FakeVolumeMountedFilesImplementor) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.createDirMutex.RLock()
-	defer fake.createDirMutex.RUnlock()
-	fake.removeDirMutex.RLock()
-	defer fake.removeDirMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

@@ -91,8 +91,6 @@ func (fake *FakeGardenClientFactory) NewGardenClientReturnsOnCall(i int, result1
 func (fake *FakeGardenClientFactory) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.newGardenClientMutex.RLock()
-	defer fake.newGardenClientMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

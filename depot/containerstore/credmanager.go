@@ -58,6 +58,8 @@ type CredManager interface {
 	CreateCredDir(lager.Logger, executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error)
 	RemoveCredDir(lager.Logger, executor.Container) error
 	Runner(lager.Logger, ContainerInfoProvider, <-chan struct{}) ifrit.Runner
+	// GenerateInitialCredentials generates one set of instance identity and C2C creds for the container
+	GenerateInitialCredentials(logger lager.Logger, container executor.Container) (Credentials, error)
 }
 
 type noopManager struct{}
@@ -80,6 +82,10 @@ func (c *noopManager) Runner(lager.Logger, ContainerInfoProvider, <-chan struct{
 		<-signals
 		return nil
 	})
+}
+
+func (c *noopManager) GenerateInitialCredentials(lager.Logger, executor.Container) (Credentials, error) {
+	return Credentials{}, nil
 }
 
 type credManager struct {
@@ -141,6 +147,19 @@ func calculateCredentialRotationPeriod(validityPeriod time.Duration) time.Durati
 
 	eighth := validityPeriod / 8
 	return validityPeriod - eighth
+}
+
+func (c *credManager) GenerateInitialCredentials(logger lager.Logger, container executor.Container) (Credentials, error) {
+	logger = logger.Session("generate-initial-credentials")
+	idCred, err := c.generateInstanceIdentityCred(logger, container, container.Guid)
+	if err != nil {
+		return Credentials{}, err
+	}
+	c2cCred, err := c.generateC2cCred(logger, container, container.Guid)
+	if err != nil {
+		return Credentials{}, err
+	}
+	return Credentials{InstanceIdentityCredential: idCred, C2CCredential: c2cCred}, nil
 }
 
 func (c *credManager) CreateCredDir(logger lager.Logger, container executor.Container) ([]garden.BindMount, []executor.EnvironmentVariable, error) {

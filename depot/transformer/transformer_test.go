@@ -194,16 +194,16 @@ var _ = Describe("Transformer", func() {
 			It("returns a step encapsulating setup, post-setup, action, sidecars and monitor", func() {
 				setupReceived := make(chan struct{})
 				postSetupReceived := make(chan struct{})
-			gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
-				if processSpec.Path == "/setup/path" {
-					setupReceived <- struct{}{}
-				} else if processSpec.Path == "/post-setup/path" {
-					postSetupReceived <- struct{}{}
-				} else if processSpec.Path == "/action/path" || strings.HasPrefix(processSpec.Path, "/sidecar-action") {
-					return makeProcessWithSignal(make(chan int)), nil // block forever but handle signal
+				gardenContainer.RunStub = func(processSpec garden.ProcessSpec, processIO garden.ProcessIO) (garden.Process, error) {
+					if processSpec.Path == "/setup/path" {
+						setupReceived <- struct{}{}
+					} else if processSpec.Path == "/post-setup/path" {
+						postSetupReceived <- struct{}{}
+					} else if processSpec.Path == "/action/path" || strings.HasPrefix(processSpec.Path, "/sidecar-action") {
+						return makeProcessWithSignal(make(chan int)), nil // block forever but handle signal
+					}
+					return &gardenfakes.FakeProcess{}, nil
 				}
-				return &gardenfakes.FakeProcess{}, nil
-			}
 
 				runner, _, err := optimusPrime.StepsRunner(logger, container, gardenContainer, logStreamer, cfg)
 				Expect(err).NotTo(HaveOccurred())

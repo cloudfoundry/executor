@@ -88,8 +88,6 @@ func (fake *FakeGenerator) GuidReturnsOnCall(i int, result1 string) {
 func (fake *FakeGenerator) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.guidMutex.RLock()
-	defer fake.guidMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value
