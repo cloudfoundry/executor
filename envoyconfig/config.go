@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
@@ -221,7 +222,7 @@ func generateProxyConfig(
 	}
 	config := &envoy_bootstrap.Bootstrap{
 		Admin: &envoy_bootstrap.Admin{
-			AccessLogPath: "/dev/null",
+			AccessLogPath: os.DevNull,
 			Address:       envoyAddr("127.0.0.1", adminPort),
 		},
 		StatsConfig: &envoy_metrics.StatsConfig{
