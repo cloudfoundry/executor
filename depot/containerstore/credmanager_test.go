@@ -34,6 +34,7 @@ var _ = Describe("CredManager", func() {
 		CaCert                *x509.Certificate
 		privateKey            *rsa.PrivateKey
 		reader                io.Reader
+		credManagerKeyGen     func(io.Reader, int) (*rsa.PrivateKey, error)
 		logger                lager.Logger
 		clock                 *fakeclock.FakeClock
 		fakeMetronClient      *mfakes.FakeIngressClient
@@ -56,6 +57,7 @@ var _ = Describe("CredManager", func() {
 		// using math/rand in the tests will make things less flaky. We are also
 		// suspicious that this is affecting cacheddownloader TLS tests
 		reader = rand.Reader
+		credManagerKeyGen = rsa.GenerateKey
 
 		logger = lagertest.NewTestLogger("credmanager")
 		// Truncate and set to UTC time because of parsing time from certificate
@@ -75,7 +77,8 @@ var _ = Describe("CredManager", func() {
 			clock,
 			CaCert,
 			privateKey,
-			fakeCredHandler,
+			[]containerstore.CredentialHandler{fakeCredHandler},
+			containerstore.WithKeyGenerator(credManagerKeyGen),
 		)
 	})
 
@@ -116,8 +119,7 @@ var _ = Describe("CredManager", func() {
 				clock,
 				CaCert,
 				privateKey,
-				fakeCredHandler1,
-				fakeCredHandler2,
+				[]containerstore.CredentialHandler{fakeCredHandler1, fakeCredHandler2},
 			)
 		})
 
@@ -172,8 +174,7 @@ var _ = Describe("CredManager", func() {
 				clock,
 				CaCert,
 				privateKey,
-				fakeCredHandler1,
-				fakeCredHandler2,
+				[]containerstore.CredentialHandler{fakeCredHandler1, fakeCredHandler2},
 			)
 		})
 
@@ -264,11 +265,14 @@ var _ = Describe("CredManager", func() {
 				Eventually(containerProcess.Wait()).Should(Receive())
 			})
 
-			// TODO: we cannot simulate failing to generate a certificate, but the
-			// following should be sufficient
+			// Since Go 1.26, crypto/rsa.GenerateKey ignores the passed-in rand
+			// reader and uses the system's internal CSPRNG, so we inject a
+			// failing key generator function to simulate this error path.
 			Context("when generating private key fails", func() {
 				BeforeEach(func() {
-					reader = io.LimitReader(rand.Reader, 0)
+					credManagerKeyGen = func(_ io.Reader, _ int) (*rsa.PrivateKey, error) {
+						return nil, io.EOF
+					}
 				})
 
 				It("returns an error", func() {
