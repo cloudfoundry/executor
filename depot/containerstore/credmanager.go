@@ -97,6 +97,7 @@ type credManager struct {
 	CaCert         *x509.Certificate
 	privateKey     *rsa.PrivateKey
 	handlers       []CredentialHandler
+	generateKey    func(random io.Reader, bits int) (*rsa.PrivateKey, error)
 }
 
 //go:generate counterfeiter -o containerstorefakes/fake_cred_handler.go . CredentialHandler
@@ -118,6 +119,18 @@ type CredentialHandler interface {
 	Close(invalidCredentials Credentials, container executor.Container) error
 }
 
+// CredManagerOption is a functional option for NewCredManager.
+type CredManagerOption func(*credManager)
+
+// WithKeyGenerator overrides the RSA key generation function used by the
+// CredManager. This is provided for testing only — production callers should
+// omit this option so the default crypto/rsa.GenerateKey is used.
+func WithKeyGenerator(fn func(random io.Reader, bits int) (*rsa.PrivateKey, error)) CredManagerOption {
+	return func(c *credManager) {
+		c.generateKey = fn
+	}
+}
+
 func NewCredManager(
 	logger lager.Logger,
 	metronClient loggingclient.IngressClient,
@@ -126,9 +139,10 @@ func NewCredManager(
 	clock clock.Clock,
 	CaCert *x509.Certificate,
 	privateKey *rsa.PrivateKey,
-	handlers ...CredentialHandler,
+	handlers []CredentialHandler,
+	opts ...CredManagerOption,
 ) CredManager {
-	return &credManager{
+	c := &credManager{
 		logger:         logger,
 		metronClient:   metronClient,
 		validityPeriod: validityPeriod,
@@ -137,7 +151,12 @@ func NewCredManager(
 		CaCert:         CaCert,
 		privateKey:     privateKey,
 		handlers:       handlers,
+		generateKey:    rsa.GenerateKey,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func calculateCredentialRotationPeriod(validityPeriod time.Duration) time.Duration {
@@ -371,7 +390,7 @@ func (c *credManager) generateC2cCred(logger lager.Logger, container executor.Co
 
 func (c *credManager) generateCredForSAN(logger lager.Logger, certSAN certificateSAN, certGUID string) (Credential, error) {
 	logger.Debug("generating-private-key")
-	privateKey, err := rsa.GenerateKey(c.entropyReader, RSAPrivateKeySize)
+	privateKey, err := c.generateKey(c.entropyReader, RSAPrivateKeySize)
 	if err != nil {
 		return Credential{}, err
 	}

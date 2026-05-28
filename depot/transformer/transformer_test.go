@@ -329,16 +329,20 @@ var _ = Describe("Transformer", func() {
 				startupIOCh := startupIO
 				livenessIOCh := livenessIO
 
-				startupCh = make(chan int)
-				startupProcess = makeProcess(startupCh)
+			startupCh = make(chan int)
+			startupProcess = makeProcess(startupCh)
 
-				livenessCh = make(chan int, 1)
-				livenessProcess = makeProcess(livenessCh)
+			livenessCh = make(chan int, 1)
+			// makeProcessWithSignal is required so that if the runner transitions
+			// to the liveness phase before the interrupt from a proxy failure
+			// reaches the healthCheckStep, the liveness process exits immediately
+			// on signal rather than blocking indefinitely on livenessCh.
+			livenessProcess = makeProcessWithSignal(livenessCh)
 
-				healthcheckCallCount := int64(0)
-				gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
-					defer GinkgoRecover()
-					// get rid of race condition caused by write inside the BeforeEach
+			healthcheckCallCount := int64(0)
+			gardenContainer.RunStub = func(spec garden.ProcessSpec, io garden.ProcessIO) (process garden.Process, err error) {
+				defer GinkgoRecover()
+				// get rid of race condition caused by write inside the BeforeEach
 
 					processLock.Lock()
 					defer processLock.Unlock()
