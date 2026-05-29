@@ -84,16 +84,45 @@ var _ = Describe("Runner", func() {
 
 	Describe("Run", func() {
 		Context("When garden is immediately unhealthy", func() {
-			Context("because the health check fails", func() {
+			Context("because the health check fails with a transient error", func() {
+				var checkErr = errors.New("transient")
+				BeforeEach(func() {
+					checker.HealthcheckReturns(checkErr)
+					executorClient.HealthyReturns(false)
+				})
+
+				It("becomes ready immediately and retries until the initial timeout fires", func() {
+					Eventually(process.Ready()).Should(BeClosed())
+					// Transient errors no longer cause an immediate fatal exit; the
+					// runner retries while marking the cell unhealthy.
+					Consistently(process.Wait()).ShouldNot(Receive())
+					// Only exits (with HealthcheckTimeoutError) once the timeout elapses.
+					fakeClock.WaitForWatcherAndIncrement(timeoutDuration)
+					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
+				})
+
+				It("emits a metric for unhealthy cell", func() {
+					// setUnhealthy is called on each failed retry attempt.
+					Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
+				})
+
+				It("emits the CellUnhealthy metric when it times out", func() {
+					fakeClock.WaitForWatcherAndIncrement(timeoutDuration)
+					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
+					Eventually(getMetrics).Should(HaveKeyWithValue(CellUnhealthyMetric, float64(1)))
+				})
+			})
+
+			Context("because the health check fails with an unrecoverable error", func() {
 				var checkErr = gardenhealth.UnrecoverableError("nope")
 				BeforeEach(func() {
 					checker.HealthcheckReturns(checkErr)
 					executorClient.HealthyReturns(false)
 				})
 
-				It("fails without becoming ready", func() {
+				It("becomes ready immediately and exits immediately with the error", func() {
+					Eventually(process.Ready()).Should(BeClosed())
 					Eventually(process.Wait()).Should(Receive(Equal(checkErr)))
-					Consistently(process.Ready()).ShouldNot(BeClosed())
 				})
 
 				It("emits a metric for unhealthy cell", func() {
@@ -118,20 +147,25 @@ var _ = Describe("Runner", func() {
 				})
 
 				AfterEach(func() {
-					// Send to the channel to eliminate the race
+					// Send to the channel to unblock the goroutine after the runner has exited
 					blockHealthcheck <- struct{}{}
 					close(blockHealthcheck)
 					blockHealthcheck = nil
 				})
 
-				It("fails without becoming ready", func() {
+				It("becomes ready immediately then exits with timeout error", func() {
+					Eventually(process.Ready()).Should(BeClosed())
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
-					Consistently(process.Ready()).ShouldNot(BeClosed())
 				})
 
 				It("emits a metric for unhealthy cell", func() {
 					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
 					Eventually(getMetrics).Should(HaveKeyWithValue(GardenHealthCheckFailed, float64(1)))
+				})
+
+				It("emits the CellUnhealthy metric", func() {
+					Eventually(process.Wait()).Should(Receive(Equal(gardenhealth.HealthcheckTimeoutError{})))
+					Eventually(getMetrics).Should(HaveKeyWithValue(CellUnhealthyMetric, float64(1)))
 				})
 
 				It("cancels the existing health check", func() {

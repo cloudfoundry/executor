@@ -72,6 +72,20 @@ func NewRunner(
 // intentionally do not kill the healthcheck process, and we don't spawn a new healthcheck
 // until the existing healthcheck exits. It may be necessary for an operator to
 // inspect the long running container to debug the problem.
+//
+// Startup behaviour: the ready signal is closed immediately so the ordered ifrit group
+// proceeds to start http_server (and /ping) without waiting for the first garden
+// healthcheck (~60-90s container creation overhead on a fresh VM). BOSH post-start
+// therefore completes in ~14s.
+//
+// During the initial healthcheck phase, transient errors (e.g. garden not yet ready
+// because rep and garden start simultaneously during a BOSH upgrade) cause a retry
+// rather than a fatal exit. The cell is marked unhealthy on each failure so BBS does
+// not schedule LRPs there. Only a timeout of the full GardenHealthcheckTimeout
+// (default 10m) is treated as a fatal error, ensuring permanently broken garden is
+// still detected without triggering a crash-restart loop on every upgrade.
+// Once the initial healthcheck succeeds, periodic failures are handled with the same
+// retry-until-timeout resilience, preserving runtime stability.
 func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	logger := r.logger.Session("garden-health")
 	healthcheckTimeout := r.clock.NewTimer(r.timeoutInterval)
@@ -79,31 +93,48 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	logger.Info("starting")
 
+	close(ready)
+	logger.Info("started")
+
 	go r.healthcheckCycle(logger, healthcheckComplete)
 
-	select {
-	case signal := <-signals:
-		logger.Info("signalled", lager.Data{"signal": signal.String()})
-		return nil
+	// Initial phase: retry on transient errors; fatal only on timeout.
+	// Garden and rep start simultaneously during BOSH upgrades; garden needs
+	// ~60-90s before it can create containers. Retrying here avoids the
+	// crash-restart loop (~121s) that occurred when any error was fatal.
+initialLoop:
+	for {
+		select {
+		case signal := <-signals:
+			logger.Info("signalled", lager.Data{"signal": signal.String()})
+			return nil
 
-	case <-healthcheckTimeout.C():
-		r.setUnhealthy(logger)
-		r.checker.Cancel(logger)
-		logger.Info("timed-out")
-		return HealthcheckTimeoutError{}
-
-	case err := <-healthcheckComplete:
-		if err != nil {
+		case <-healthcheckTimeout.C():
 			r.setUnhealthy(logger)
-			return err
+			r.checker.Cancel(logger)
+			err := r.metronClient.SendMetric(CellUnhealthyMetric, 1)
+			if err != nil {
+				logger.Debug("failed-to-emit-cell-unhealth-metric", lager.Data{"error": err})
+			}
+			logger.Info("initial-healthcheck-timed-out")
+			return HealthcheckTimeoutError{}
+
+		case err := <-healthcheckComplete:
+			if err != nil {
+				r.setUnhealthy(logger)
+				if _, ok := err.(UnrecoverableError); ok {
+					return err
+				}
+				logger.Info("initial-healthcheck-failed-retrying", lager.Data{"error": err})
+				go r.healthcheckCycle(logger, healthcheckComplete)
+			} else {
+				healthcheckTimeout.Stop()
+				break initialLoop
+			}
 		}
-		healthcheckTimeout.Stop()
 	}
 
 	r.setHealthy(logger)
-
-	close(ready)
-	logger.Info("started")
 
 	startHealthcheck := r.clock.NewTimer(r.checkInterval)
 	emitInterval := r.clock.NewTicker(r.emissionInterval)
