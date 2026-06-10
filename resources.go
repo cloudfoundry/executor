@@ -174,31 +174,31 @@ type Sidecar struct {
 }
 
 type RunInfo struct {
-	RootFSPath                    string                        `json:"rootfs"`
-	CPUWeight                     uint                          `json:"cpu_weight"`
-	Ports                         []PortMapping                 `json:"ports"`
-	InternalRoutes                models.InternalRoutes `json:"internal_routes"`
-	LogConfig                     LogConfig                     `json:"log_config"`
-	MetricsConfig                 MetricsConfig                 `json:"metrics_config"`
-	StartTimeoutMs                uint                          `json:"start_timeout_ms"`
-	Privileged                    bool                          `json:"privileged"`
-	CachedDependencies            []CachedDependency            `json:"cached_dependencies"`
-	Setup                         *models.Action                `json:"setup"`
-	Action                        *models.Action                `json:"run"`
-	Monitor                       *models.Action                `json:"monitor"`
-	CheckDefinition               *models.CheckDefinition       `json:"check_definition"`
-	EgressRules                   []*models.SecurityGroupRule   `json:"egress_rules,omitempty"`
-	Env                           []EnvironmentVariable         `json:"env,omitempty"`
-	TrustedSystemCertificatesPath string                        `json:"trusted_system_certificates_path,omitempty"`
-	VolumeMounts                  []VolumeMount                 `json:"volume_mounts"`
-	Network                       *Network                      `json:"network,omitempty"`
-	CertificateProperties         CertificateProperties         `json:"certificate_properties"`
-	ImageUsername                 string                        `json:"image_username"`
-	ImagePassword                 string                        `json:"image_password"`
-	EnableContainerProxy          bool                          `json:"enable_container_proxy"`
-	Sidecars                      []Sidecar                     `json:"sidecars"`
-	LogRateLimitBytesPerSecond    int64                         `json:"log_rate_limit_bytes_per_second"`
-	VolumeMountedFiles            []VolumeMountedFiles          `json:"volume_mounted_files,omitempty"`
+	RootFSPath                    string                      `json:"rootfs"`
+	CPUWeight                     uint                        `json:"cpu_weight"`
+	Ports                         []PortMapping               `json:"ports"`
+	InternalRoutes                models.InternalRoutes       `json:"internal_routes"`
+	LogConfig                     models.LogConfig            `json:"log_config"`
+	MetricsConfig                 MetricsConfig               `json:"metrics_config"`
+	StartTimeoutMs                uint                        `json:"start_timeout_ms"`
+	Privileged                    bool                        `json:"privileged"`
+	CachedDependencies            []CachedDependency          `json:"cached_dependencies"`
+	Setup                         *models.Action              `json:"setup"`
+	Action                        *models.Action              `json:"run"`
+	Monitor                       *models.Action              `json:"monitor"`
+	CheckDefinition               *models.CheckDefinition     `json:"check_definition"`
+	EgressRules                   []*models.SecurityGroupRule `json:"egress_rules,omitempty"`
+	Env                           []EnvironmentVariable       `json:"env,omitempty"`
+	TrustedSystemCertificatesPath string                      `json:"trusted_system_certificates_path,omitempty"`
+	VolumeMounts                  []VolumeMount               `json:"volume_mounts"`
+	Network                       *Network                    `json:"network,omitempty"`
+	CertificateProperties         CertificateProperties       `json:"certificate_properties"`
+	ImageUsername                 string                      `json:"image_username"`
+	ImagePassword                 string                      `json:"image_password"`
+	EnableContainerProxy          bool                        `json:"enable_container_proxy"`
+	Sidecars                      []Sidecar                   `json:"sidecars"`
+	LogRateLimitBytesPerSecond    int64                       `json:"log_rate_limit_bytes_per_second"`
+	VolumeMountedFiles            []VolumeMountedFiles        `json:"volume_mounted_files,omitempty"`
 }
 
 type BindMountMode uint8
@@ -254,10 +254,6 @@ type Metrics struct {
 	MetricsConfig
 	ContainerMetrics
 }
-
-// Deprecated: use code.cloudfoundry.org/bbs/models.LogConfig instead.
-// This alias will be removed once silk-release has migrated.
-type LogConfig = models.LogConfig
 
 type PortMapping struct {
 	ContainerPort         uint16 `json:"container_port"`
