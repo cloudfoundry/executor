@@ -3,11 +3,9 @@ package executor
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 const (
@@ -179,7 +177,7 @@ type RunInfo struct {
 	RootFSPath                    string                        `json:"rootfs"`
 	CPUWeight                     uint                          `json:"cpu_weight"`
 	Ports                         []PortMapping                 `json:"ports"`
-	InternalRoutes                internalroutes.InternalRoutes `json:"internal_routes"`
+	InternalRoutes                models.InternalRoutes `json:"internal_routes"`
 	LogConfig                     LogConfig                     `json:"log_config"`
 	MetricsConfig                 MetricsConfig                 `json:"metrics_config"`
 	StartTimeoutMs                uint                          `json:"start_timeout_ms"`
@@ -257,33 +255,9 @@ type Metrics struct {
 	ContainerMetrics
 }
 
-type LogConfig struct {
-	Guid       string            `json:"guid"`
-	Index      int               `json:"index"`
-	SourceName string            `json:"source_name"`
-	Tags       map[string]string `json:"tags"`
-}
-
-func (l LogConfig) GetSourceNameAndTagsForLogging() (string, map[string]string) {
-	sourceName := l.SourceName
-	if sourceName == "" {
-		sourceName = "LOG"
-	}
-
-	tags := map[string]string{}
-	for k, v := range l.Tags {
-		tags[k] = v
-	}
-
-	if _, ok := tags["source_id"]; !ok {
-		tags["source_id"] = l.Guid
-	}
-	sourceIndex := strconv.Itoa(l.Index)
-	if _, ok := tags["instance_id"]; !ok {
-		tags["instance_id"] = sourceIndex
-	}
-	return sourceName, tags
-}
+// Deprecated: use code.cloudfoundry.org/bbs/models.LogConfig instead.
+// This alias will be removed once silk-release has migrated.
+type LogConfig = models.LogConfig
 
 type PortMapping struct {
 	ContainerPort         uint16 `json:"container_port"`
