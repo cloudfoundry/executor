@@ -16,12 +16,12 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 
+	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/v3"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 const (
@@ -458,7 +458,7 @@ func pemEncode(bytes []byte, blockType string, writer io.Writer) error {
 
 type certificateSAN struct {
 	IPAddress           string
-	InternalRoutes      internalroutes.InternalRoutes
+	InternalRoutes      models.InternalRoutes
 	OrganizationalUnits []string
 }
 

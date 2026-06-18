@@ -28,7 +28,6 @@ import (
 	"code.cloudfoundry.org/garden/server"
 	loggregator "code.cloudfoundry.org/go-loggregator/v9"
 	"code.cloudfoundry.org/lager/v3"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 	multierror "github.com/hashicorp/go-multierror"
@@ -2415,7 +2414,7 @@ var _ = Describe("Container Store", func() {
 		var (
 			runReq         *executor.RunRequest
 			updateReq      *executor.UpdateRequest
-			internalRoutes internalroutes.InternalRoutes
+			internalRoutes models.InternalRoutes
 			metricTags     map[string]string
 		)
 
@@ -2441,14 +2440,14 @@ var _ = Describe("Container Store", func() {
 					},
 				},
 				LogRateLimitBytesPerSecond: logRateUnlimitedBytesPerSecond,
-				InternalRoutes: internalroutes.InternalRoutes{
+				InternalRoutes: models.InternalRoutes{
 					{Hostname: "old.apps.internal"},
 				},
 			}
 			runReq = &executor.RunRequest{Guid: containerGuid, RunInfo: runInfo}
 			gardenClient.CreateReturns(gardenContainer, nil)
 			megatron.StepsRunnerReturns(testRunner, nil, nil)
-			internalRoutes = internalroutes.InternalRoutes{
+			internalRoutes = models.InternalRoutes{
 				{Hostname: "a.apps.internal"},
 				{Hostname: "b.apps.internal"},
 			}
@@ -2615,7 +2614,7 @@ var _ = Describe("Container Store", func() {
 
 					container, err := containerStore.Get(logger, containerGuid)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(container.InternalRoutes).To(Equal(internalroutes.InternalRoutes{
+					Expect(container.InternalRoutes).To(Equal(models.InternalRoutes{
 						{Hostname: "old.apps.internal"},
 					}))
 				})
