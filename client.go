@@ -3,8 +3,8 @@ package executor
 import (
 	"io"
 
+	bbsmodels "code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/v3"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 )
 
 //go:generate counterfeiter -o fakes/fake_client.go . Client
@@ -91,11 +91,11 @@ func NewRunRequest(guid string, runInfo *RunInfo, tags Tags) RunRequest {
 
 type UpdateRequest struct {
 	Guid           string
-	InternalRoutes internalroutes.InternalRoutes
+	InternalRoutes bbsmodels.InternalRoutes
 	MetricTags     map[string]string
 }
 
-func NewUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes, metricTags map[string]string) UpdateRequest {
+func NewUpdateRequest(guid string, internalRoutes bbsmodels.InternalRoutes, metricTags map[string]string) UpdateRequest {
 	return UpdateRequest{
 		Guid:           guid,
 		InternalRoutes: internalRoutes,

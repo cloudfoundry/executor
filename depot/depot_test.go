@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	bbsmodels "code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot"
 	"code.cloudfoundry.org/executor/depot/containerstore/containerstorefakes"
@@ -12,7 +13,6 @@ import (
 	"code.cloudfoundry.org/executor/fakes"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/volman"
 	"code.cloudfoundry.org/volman/volmanfakes"
 	"code.cloudfoundry.org/workpool"
@@ -602,7 +602,7 @@ var _ = Describe("Depot", func() {
 		var updateRequest *executor.UpdateRequest
 
 		BeforeEach(func() {
-			irs := internalroutes.InternalRoutes{
+			irs := bbsmodels.InternalRoutes{
 				{Hostname: "a.apps.internal"},
 				{Hostname: "b.apps.internal"},
 			}
@@ -762,7 +762,7 @@ func newRunRequest(guid string) *executor.RunRequest {
 	return &r
 }
 
-func newUpdateRequest(guid string, internalRoutes internalroutes.InternalRoutes, metricTags map[string]string) *executor.UpdateRequest {
+func newUpdateRequest(guid string, internalRoutes bbsmodels.InternalRoutes, metricTags map[string]string) *executor.UpdateRequest {
 	r := executor.NewUpdateRequest(guid, internalRoutes, metricTags)
 	return &r
 }

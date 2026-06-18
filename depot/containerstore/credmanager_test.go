@@ -13,6 +13,7 @@ import (
 	"os"
 	"time"
 
+	bbsmodels "code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/executor"
@@ -21,7 +22,6 @@ import (
 	"code.cloudfoundry.org/garden"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
-	"code.cloudfoundry.org/routing-info/internalroutes"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
@@ -235,7 +235,7 @@ var _ = Describe("CredManager", func() {
 				Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 				InternalIP: "127.0.0.1",
 				RunInfo: executor.RunInfo{
-					InternalRoutes: internalroutes.InternalRoutes{
+					InternalRoutes: bbsmodels.InternalRoutes{
 						{Hostname: "a.apps.internal"},
 						{Hostname: "b.apps.internal"},
 					},
@@ -428,7 +428,7 @@ var _ = Describe("CredManager", func() {
 									Guid:       fmt.Sprintf("container-guid-%d", GinkgoParallelProcess()),
 									InternalIP: "127.0.0.1",
 									RunInfo: executor.RunInfo{
-										InternalRoutes: internalroutes.InternalRoutes{
+										InternalRoutes: bbsmodels.InternalRoutes{
 											{Hostname: "a.apps.internal"},
 											{Hostname: "b.apps.internal"},
 										},
@@ -446,7 +446,7 @@ var _ = Describe("CredManager", func() {
 								containerGuid := fmt.Sprintf("container-guid-%d", GinkgoParallelProcess())
 								Expect(c2cCert.DNSNames).To(ConsistOf(containerGuid, "a.apps.internal", "b.apps.internal"))
 
-								container.RunInfo.InternalRoutes = internalroutes.InternalRoutes{
+								container.RunInfo.InternalRoutes = bbsmodels.InternalRoutes{
 									{Hostname: "a.apps.internal"},
 									{Hostname: "c.apps.internal"},
 								}
