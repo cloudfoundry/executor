@@ -3,6 +3,7 @@ package depot
 import (
 	"io"
 	"sync"
+	"syscall"
 
 	"code.cloudfoundry.org/executor"
 	"code.cloudfoundry.org/executor/depot/containerstore"
@@ -17,6 +18,7 @@ const ContainerStoppedBeforeRunMessage = "Container stopped by user"
 
 type client struct {
 	totalCapacity    executor.ExecutorResources
+	diskPath         string
 	containerStore   containerstore.ContainerStore
 	gardenClient     garden.Client
 	volmanClient     volman.Manager
@@ -40,9 +42,11 @@ func NewClient(
 	deletionWorkPool *workpool.WorkPool,
 	readWorkPool *workpool.WorkPool,
 	metricsWorkPool *workpool.WorkPool,
+	diskPath string,
 ) executor.Client {
 	return &client{
 		totalCapacity:    totalCapacity,
+		diskPath:         diskPath,
 		containerStore:   containerStore,
 		gardenClient:     gardenClient,
 		volmanClient:     volmanClient,
@@ -224,12 +228,17 @@ func (c *client) Ping(logger lager.Logger) error {
 }
 
 func (c *client) TotalResources(logger lager.Logger) (executor.ExecutorResources, error) {
-	totalCapacity := c.totalCapacity
-
+	diskMB := c.totalCapacity.DiskMB
+	if c.diskPath != "" {
+		var stat syscall.Statfs_t
+		if err := syscall.Statfs(c.diskPath, &stat); err == nil {
+			diskMB = int(int64(stat.Bavail) * int64(stat.Bsize) / (1024 * 1024))
+		}
+	}
 	return executor.ExecutorResources{
-		MemoryMB:   totalCapacity.MemoryMB,
-		DiskMB:     totalCapacity.DiskMB,
-		Containers: totalCapacity.Containers,
+		MemoryMB:   c.totalCapacity.MemoryMB,
+		DiskMB:     diskMB,
+		Containers: c.totalCapacity.Containers,
 	}, nil
 }
 
