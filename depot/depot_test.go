@@ -699,50 +699,46 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("RemainingResources", func() {
-		var resources executor.ExecutorResources
+		var remainingResources executor.ExecutorResources
 
 		BeforeEach(func() {
-			resources = executor.NewExecutorResources(1024, 1024, 3)
-			containerStore.RemainingResourcesReturns(resources)
+			remainingResources = executor.NewExecutorResources(1024, 1024, 3)
+			containerStore.RemainingResourcesReturns(remainingResources)
 		})
 
 		It("should reduce resources used by allocated and running containers", func() {
 			actualResources, err := depotClient.RemainingResources(logger)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(actualResources).To(Equal(resources))
-		})
-	})
-
-	Describe("TotalResources", func() {
-		Context("when no disk path is configured", func() {
-			It("returns the frozen startup resources", func() {
-				Expect(depotClient.TotalResources(logger)).To(Equal(resources))
-			})
+			Expect(actualResources).To(Equal(remainingResources))
 		})
 
-		Context("when disk path is configured", func() {
+		Context("when disk path is configured and partition has less space than the store reports", func() {
 			var tmpDir string
 
 			BeforeEach(func() {
 				var err error
-				tmpDir, err = os.MkdirTemp("", "depot-disk-test")
+				tmpDir, err = os.MkdirTemp("", "depot-remaining-disk-test")
 				Expect(err).NotTo(HaveOccurred())
 				diskPath = tmpDir
-				resources.DiskMB = math.MaxInt32
+				containerStore.RemainingResourcesReturns(executor.NewExecutorResources(1024, math.MaxInt32, 3))
 			})
 
 			AfterEach(func() {
 				os.RemoveAll(tmpDir)
 			})
 
-			It("returns live disk capacity from syscall.Statfs instead of frozen startup value", func() {
-				result, err := depotClient.TotalResources(logger)
+			It("caps remaining disk at the live partition free space from syscall.Statfs", func() {
+				result, err := depotClient.RemainingResources(logger)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.MemoryMB).To(Equal(resources.MemoryMB))
-				Expect(result.Containers).To(Equal(resources.Containers))
 				Expect(result.DiskMB).NotTo(Equal(math.MaxInt32))
 				Expect(result.DiskMB).To(BeNumerically(">", 0))
 			})
+		})
+	})
+
+	Describe("TotalResources", func() {
+		It("returns the static startup resources", func() {
+			Expect(depotClient.TotalResources(logger)).To(Equal(resources))
 		})
 	})
 
