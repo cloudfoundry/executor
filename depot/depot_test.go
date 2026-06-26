@@ -3,6 +3,8 @@ package depot_test
 import (
 	"errors"
 	"io"
+	"math"
+	"os"
 	"time"
 
 	bbsmodels "code.cloudfoundry.org/bbs/models"
@@ -31,6 +33,7 @@ var _ = Describe("Depot", func() {
 		containerStore      *containerstorefakes.FakeContainerStore
 		resources           executor.ExecutorResources
 		volumeDrivers       []string
+		diskPath            string
 		CreateWorkPoolSize  int
 		DeleteWorkPoolSize  int
 		ReadWorkPoolSize    int
@@ -54,6 +57,7 @@ var _ = Describe("Depot", func() {
 		DeleteWorkPoolSize = 5
 		ReadWorkPoolSize = 5
 		MetricsWorkPoolSize = 5
+		diskPath = ""
 	})
 
 	JustBeforeEach(func() {
@@ -69,6 +73,7 @@ var _ = Describe("Depot", func() {
 		depotClient = depot.NewClient(
 			resources, containerStore, gardenClient, volmanClient, eventHub,
 			creationWorkPool, deletionWorkPool, readWorkPool, metricsWorkPool,
+			diskPath,
 		)
 	})
 
@@ -709,9 +714,34 @@ var _ = Describe("Depot", func() {
 	})
 
 	Describe("TotalResources", func() {
-		Context("when asked for total resources", func() {
-			It("should return the resources it was configured with", func() {
+		Context("when no disk path is configured", func() {
+			It("returns the frozen startup resources", func() {
 				Expect(depotClient.TotalResources(logger)).To(Equal(resources))
+			})
+		})
+
+		Context("when disk path is configured", func() {
+			var tmpDir string
+
+			BeforeEach(func() {
+				var err error
+				tmpDir, err = os.MkdirTemp("", "depot-disk-test")
+				Expect(err).NotTo(HaveOccurred())
+				diskPath = tmpDir
+				resources.DiskMB = math.MaxInt32
+			})
+
+			AfterEach(func() {
+				os.RemoveAll(tmpDir)
+			})
+
+			It("returns live disk capacity from syscall.Statfs instead of frozen startup value", func() {
+				result, err := depotClient.TotalResources(logger)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.MemoryMB).To(Equal(resources.MemoryMB))
+				Expect(result.Containers).To(Equal(resources.Containers))
+				Expect(result.DiskMB).NotTo(Equal(math.MaxInt32))
+				Expect(result.DiskMB).To(BeNumerically(">", 0))
 			})
 		})
 	})

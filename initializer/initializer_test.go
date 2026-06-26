@@ -731,7 +731,7 @@ var _ = Describe("Initializer", func() {
 				Expect(tlsConfig).NotTo(BeNil())
 
 				newDownloader := cacheddownloader.NewDownloader(10*time.Minute, math.MaxInt8, tlsConfig)
-				newCache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes))
+				newCache := cacheddownloader.NewCache(config.CachePath, int64(config.MaxCacheSizeInBytes), 0)
 
 				newCachedDownloader, err := cacheddownloader.New(
 					newDownloader,
