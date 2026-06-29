@@ -219,7 +219,16 @@ func Initialize(
 		"/etc/cf-instance-credentials",
 	)
 
-	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, proxyConfigHandler, instanceIdentityHandler)
+	// SPIFFE socket handler rides alongside instance identity: CredManagerFromConfig
+	// only activates these handlers when InstanceIdentityCredDir != "" (always true in
+	// this POC, since attestation depends on instance.crt), so it stays gated there.
+	handlers := []containerstore.CredentialHandler{proxyConfigHandler, instanceIdentityHandler}
+	if config.SpiffeSocketDir != "" {
+		logger.Info("spiffe-socket-enabled", lager.Data{"host-dir": config.SpiffeSocketDir})
+		handlers = append(handlers, containerstore.NewSpiffeSocketHandler(config.SpiffeSocketDir))
+	}
+
+	credManager, err := CredManagerFromConfig(logger, metronClient, config, clock, handlers...)
 	if err != nil {
 		return nil, nil, grouper.Members{}, err
 	}

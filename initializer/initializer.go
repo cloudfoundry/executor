@@ -83,6 +83,7 @@ type ExecutorConfig struct {
 	HealthyMonitoringInterval             durationjson.Duration `json:"healthy_monitoring_interval,omitempty"`
 	InstanceIdentityCAPath                string                `json:"instance_identity_ca_path,omitempty"`
 	InstanceIdentityCredDir               string                `json:"instance_identity_cred_dir,omitempty"`
+	SpiffeSocketDir                       string                `json:"spiffe_socket_dir,omitempty"`
 	InstanceIdentityPrivateKeyPath        string                `json:"instance_identity_private_key_path,omitempty"`
 	InstanceIdentityValidityPeriod        durationjson.Duration `json:"instance_identity_validity_period,omitempty"`
 	MaxCacheSizeInBytes                   uint64                `json:"max_cache_size_in_bytes,omitempty"`
