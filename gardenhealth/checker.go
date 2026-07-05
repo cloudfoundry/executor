@@ -16,6 +16,12 @@ const (
 	HealthcheckTag             = "tag:healthcheck-tag"
 	HealthcheckTagValue        = "healthcheck"
 	HealthcheckNetworkProperty = "network.healthcheck"
+
+	// CancelDeadline bounds how long Cancel() waits for container
+	// destruction. If a garden shim is dead (e.g. orphaned
+	// containerd-shim-runsc-v1), Destroy() hangs indefinitely.
+	// This deadline lets the runner proceed to its next retry.
+	CancelDeadline = 30 * time.Second
 )
 
 type UnrecoverableError string
@@ -73,16 +79,30 @@ func NewChecker(
 func (c *checker) Cancel(logger lager.Logger) {
 	logger = logger.Session("cancel")
 
-	containers, err := c.list(logger)
-	if err != nil {
-		logger.Error("failed-to-list-containers", err)
-		return
-	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
 
-	err = c.destroyContainers(logger, containers)
-	if err != nil {
-		logger.Error("failed-to-destroy-containers", err)
-		return
+		containers, err := c.list(logger)
+		if err != nil {
+			logger.Error("failed-to-list-containers", err)
+			return
+		}
+
+		err = c.destroyContainers(logger, containers)
+		if err != nil {
+			logger.Error("failed-to-destroy-containers", err)
+			return
+		}
+	}()
+
+	select {
+	case <-done:
+		logger.Info("cancel-completed")
+	case <-time.After(CancelDeadline):
+		logger.Error("cancel-deadline-exceeded", nil, lager.Data{
+			"deadline": CancelDeadline.String(),
+		})
 	}
 }
 

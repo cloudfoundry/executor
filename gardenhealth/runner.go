@@ -10,8 +10,21 @@ import (
 	"code.cloudfoundry.org/lager/v3"
 )
 
-const GardenHealthCheckFailedMetric = "GardenHealthCheckFailed"
-const CellUnhealthyMetric = "CellUnhealthy"
+const (
+	CellUnhealthyMetric           = "UnhealthyCell"
+	GardenHealthCheckFailedMetric = "GardenHealthCheckFailed"
+
+	// MaxInitialRetries is the number of times the initial healthcheck is
+	// retried on timeout before declaring the cell fatally unhealthy. This
+	// accommodates slow container runtimes (e.g. gVisor) where the first
+	// healthcheck container creation can take longer than the configured
+	// timeout due to one-time overlay filesystem setup.
+	MaxInitialRetries = 3
+
+	// initialRetryDelay is how long to wait after cancelling a timed-out
+	// initial healthcheck before spawning the next attempt.
+	initialRetryDelay = 5 * time.Second
+)
 
 type HealthcheckTimeoutError struct{}
 
@@ -19,28 +32,17 @@ func (HealthcheckTimeoutError) Error() string {
 	return "garden healthcheck timed out"
 }
 
-// Runner coordinates health checks against an executor client.  When checks fail or
-// time out, its executor will be marked as unhealthy until a successful check occurs.
-//
-// See NewRunner and Runner.Run for more details.
 type Runner struct {
-	failures         int
-	healthy          bool
 	checkInterval    time.Duration
-	emissionInterval time.Duration
 	timeoutInterval  time.Duration
+	emissionInterval time.Duration
 	logger           lager.Logger
 	checker          Checker
 	executorClient   executor.Client
-	metronClient     loggingclient.IngressClient
 	clock            clock.Clock
+	metronClient     loggingclient.IngressClient
 }
 
-// NewRunner constructs a healthcheck runner.
-//
-// The checkInterval parameter controls how often the healthcheck should run, and
-// the timeoutInterval sets the time to wait for the healthcheck to complete before
-// marking the executor as unhealthy.
 func NewRunner(
 	checkInterval time.Duration,
 	emissionInterval time.Duration,
@@ -53,20 +55,25 @@ func NewRunner(
 ) *Runner {
 	return &Runner{
 		checkInterval:    checkInterval,
-		emissionInterval: emissionInterval,
 		timeoutInterval:  timeoutInterval,
-		logger:           logger.Session("garden-healthcheck"),
+		emissionInterval: emissionInterval,
+		logger:           logger,
 		checker:          checker,
 		executorClient:   executorClient,
-		metronClient:     metronClient,
 		clock:            clock,
-		healthy:          false,
-		failures:         0,
+		metronClient:     metronClient,
 	}
 }
 
-// Run coordinates the execution of the healthcheck. It responds to incoming signals,
-// monitors the elapsed time to determine timeouts, and ensures the healthcheck runs periodically.
+// Once a healthcheck completes the runner will set the executor as healthy and
+// close the ready channel. If the healthcheck does not complete within a
+// timeout period, the runner will set the executor as unhealthy and the
+// executor will not register itself with the BBS.
+//
+// The healthcheck is run periodically on an interval once the executor is
+// healthy. If the periodic healthcheck fails, the executor is again set to
+// unhealthy. A new healthcheck cycle will not be started until the previous one
+// runs periodically.
 //
 // Note: If the healthcheck has not returned before the timeout expires, we
 // intentionally do not kill the healthcheck process, and we don't spawn a new healthcheck
@@ -79,25 +86,65 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	logger.Info("starting")
 
+	initialRetries := 0
+
 	go r.healthcheckCycle(logger, healthcheckComplete)
 
-	select {
-	case signal := <-signals:
-		logger.Info("signalled", lager.Data{"signal": signal.String()})
-		return nil
+	// Initial healthcheck phase — must pass once before we signal ready
+	for {
+		select {
+		case signal := <-signals:
+			logger.Info("signalled", lager.Data{"signal": signal.String()})
+			return nil
 
-	case <-healthcheckTimeout.C():
-		r.setUnhealthy(logger)
-		r.checker.Cancel(logger)
-		logger.Info("timed-out")
-		return HealthcheckTimeoutError{}
-
-	case err := <-healthcheckComplete:
-		if err != nil {
+		case <-healthcheckTimeout.C():
 			r.setUnhealthy(logger)
-			return err
+			r.checker.Cancel(logger)
+
+			initialRetries++
+			if initialRetries > MaxInitialRetries {
+				logger.Error("initial-healthcheck-exhausted-retries", nil, lager.Data{
+					"retries": initialRetries - 1,
+				})
+				return HealthcheckTimeoutError{}
+			}
+
+			logger.Info("initial-healthcheck-timeout-retrying", lager.Data{
+				"attempt": initialRetries,
+				"max":     MaxInitialRetries,
+			})
+
+			// Brief pause to let garden clean up, then retry
+			time.Sleep(initialRetryDelay)
+			healthcheckTimeout.Reset(r.timeoutInterval)
+			go r.healthcheckCycle(logger, healthcheckComplete)
+
+		case err := <-healthcheckComplete:
+			if err != nil {
+				initialRetries++
+				if initialRetries > MaxInitialRetries {
+					logger.Error("initial-healthcheck-failed-exhausted-retries", err, lager.Data{
+						"retries": initialRetries - 1,
+					})
+					r.setUnhealthy(logger)
+					return err
+				}
+
+				logger.Error("initial-healthcheck-failed-retrying", err, lager.Data{
+					"attempt": initialRetries,
+					"max":     MaxInitialRetries,
+				})
+
+				time.Sleep(initialRetryDelay)
+				healthcheckTimeout.Reset(r.timeoutInterval)
+				go r.healthcheckCycle(logger, healthcheckComplete)
+				continue
+			}
+			healthcheckTimeout.Stop()
 		}
-		healthcheckTimeout.Stop()
+
+		// Only reach here on successful healthcheck (err == nil, timeout stopped)
+		break
 	}
 
 	r.setHealthy(logger)
@@ -145,13 +192,11 @@ func (r *Runner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 }
 
 func (r *Runner) setHealthy(logger lager.Logger) {
-	r.logger.Info("set-state-healthy")
 	r.executorClient.SetHealthy(logger, true)
 	r.emitUnhealthyCellMetric(logger)
 }
 
 func (r *Runner) setUnhealthy(logger lager.Logger) {
-	r.logger.Error("set-state-unhealthy", nil)
 	r.executorClient.SetHealthy(logger, false)
 	r.emitUnhealthyCellMetric(logger)
 }
